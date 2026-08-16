@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+
+"""Check that the registry is internally consistent.
+
+Everything downstream treats these files as ground truth, so their keys have to
+resolve to each other first: a sampling profile a model names must exist in
+sampling.yaml, a sampler value must be in range, a quant must say which repo
+publishes it. A consumer checks its own config against the registry itself --
+what shape that config takes is not this repo's business.
+
+    models-validate          # human-readable
+    models-validate --json   # machine-readable findings
+
+Exit status is 1 if anything failed, so it drops straight into a precommit.
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REGISTRY = os.path.join(HERE, "..", "registry")
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("!!! pyyaml not found")
+
+
+def load(path):
+    with open(path) as f:
+        return yaml.safe_load(f)
+
+
+class Findings:
+    def __init__(self):
+        self.rows = []
+
+    def add(self, where, msg):
+        self.rows.append({"where": where, "error": msg})
+
+
+def check_registry(models, sampling, f):
+    """The registry has to be internally consistent before anything can lean on it."""
+    known_profiles = set(sampling.get("profiles") or {})
+    known_fields = set(sampling.get("fields") or {})
+    known_tags = set((sampling["fields"].get("tuned") or {}).get("of") or [])
+
+    if sampling.get("default") not in known_profiles:
+        f.add("sampling.yaml", "default profile %r is not defined"
+              % sampling.get("default"))
+
+    seen_short = {}
+    for repo, m in (models.get("models") or {}).items():
+        if repo.count("/") != 1:
+            f.add(repo, "key must be a huggingface repo, owner/name")
+
+        short = ((m.get("name") or {}).get("short") or "").strip()
+        if not short:
+            f.add(repo, "name.short is required; it is what tables print")
+        elif short in seen_short:
+            f.add(repo, "name.short %r already used by %s" % (short, seen_short[short]))
+        else:
+            seen_short[short] = repo
+
+        pattern = (m.get("name") or {}).get("match")
+        if pattern:
+            try:
+                re.compile(pattern)
+            except re.error as e:
+                f.add(repo, "name.match is not a valid regex: %s" % e)
+
+        kind = m.get("kind", "text")
+        quants = m.get("quants") or []
+        if not quants and kind == "text":
+            f.add(repo, "at least one quant is required")
+        for q in quants:
+            if not q.get("repo") or not q.get("quant"):
+                f.add(repo, "every quant needs both repo and quant: %r" % (q,))
+
+        # only text models have samplers to name; an image or speech server has
+        # no temperature to set
+        profiles = m.get("sampling") or {}
+        if not profiles and kind == "text":
+            f.add(repo, "at least one sampling profile is required")
+        prefix = sampling.get("upstream_prefix") or ""
+        for name, prof in profiles.items():
+            # `upstream-tool-use` is the vendor's set for a profile this registry
+            # deliberately departs from; it qualifies a known name rather than
+            # inventing one, so validate the part it qualifies
+            base = name[len(prefix):] if prefix and name.startswith(prefix) else name
+            if base not in known_profiles:
+                f.add("%s/%s" % (repo, name),
+                      "profile is not in sampling.yaml (known: %s)"
+                      % ", ".join(sorted(known_profiles)))
+            for field, val in (prof or {}).items():
+                if field not in known_fields:
+                    f.add("%s/%s" % (repo, name), "unknown sampler field %r" % field)
+                    continue
+                spec = sampling["fields"][field]
+                if field == "tuned":
+                    bad = [t for t in (val or []) if t not in known_tags]
+                    if bad:
+                        f.add("%s/%s" % (repo, name), "unknown tuned tags %s" % bad)
+                    continue
+                # a declared level has to be one the vocabulary knows, which is
+                # the check that catches sending a model the "high" its chat
+                # template raises an exception on
+                if field == "thinking":
+                    levels = spec.get("of") or []
+                    if val not in levels:
+                        f.add("%s/%s" % (repo, name),
+                              "thinking level %r is not one of %s"
+                              % (val, ", ".join(levels)))
+                    continue
+                if isinstance(val, bool) or not isinstance(val, (int, float)):
+                    f.add("%s/%s" % (repo, name), "%s must be a number, got %r"
+                          % (field, val))
+                    continue
+                lo, hi = spec.get("min"), spec.get("max")
+                if lo is not None and val < lo or hi is not None and val > hi:
+                    f.add("%s/%s" % (repo, name),
+                          "%s = %r outside [%s, %s]" % (field, val, lo, hi))
+
+
+# samplers the vendor ships, against the profiles somebody typed from a release
+# post. FIELDS maps our name to generation_config.json's
+FIELDS = {"temp": "temperature", "top_p": "top_p", "top_k": "top_k",
+          "min_p": "min_p", "repeat_penalty": "repetition_penalty",
+          "presence_penalty": "presence_penalty"}
+
+
+def report_samplers(models, facts):
+    """Which models have no profile matching the samplers they ship.
+
+    A mismatch is not an error: `instruct` is meant to differ from a thinking
+    default, and a vendor ships one set where the registry names several. It is
+    a prompt to go and look, so it prints rather than failing.
+    """
+    rows = []
+    for repo, m in sorted((models.get("models") or {}).items()):
+        shipped = (facts.get(repo) or {}).get("samplers_shipped") or {}
+        profiles = m.get("sampling") or {}
+        if not shipped or not profiles:
+            continue
+        best, agree = None, -1
+        for name, prof in profiles.items():
+            n = sum(1 for ours, theirs in FIELDS.items()
+                    if theirs in shipped and ours in (prof or {})
+                    and abs(float(prof[ours]) - float(shipped[theirs])) < 1e-9)
+            if n > agree:
+                best, agree = name, n
+        checkable = sum(1 for ours, theirs in FIELDS.items()
+                        if theirs in shipped and ours in (profiles[best] or {}))
+        if agree < checkable:
+            diff = ", ".join("%s ours=%s shipped=%s" % (ours, (profiles[best] or {}).get(ours),
+                                                        shipped[theirs])
+                             for ours, theirs in FIELDS.items()
+                             if theirs in shipped and ours in (profiles[best] or {})
+                             and float((profiles[best] or {})[ours]) != float(shipped[theirs]))
+            rows.append((repo, best, agree, checkable, diff))
+    print("\nsamplers: %d model(s) whose closest profile differs from what ships" % len(rows))
+    for repo, best, agree, checkable, diff in rows:
+        print("  %-46s %s matches %d/%d: %s" % (repo, best, agree, checkable, diff))
+    return rows
+
+
+PREFIX = "upstream-"
+
+
+def report_cards(models, cards):
+    """Registry profiles against the sampler sets the cards document.
+
+    Stronger evidence than generation_config.json, which ships ONE set where a
+    card documents several modes -- comparing against it alone made every
+    deliberate tool-use profile look wrong. Also reports where the quant repo
+    and the base repo disagree, since the quant is what actually gets run.
+    """
+    unmatched, diverged = [], []
+    for repo, m in sorted((models.get("models") or {}).items()):
+        c = cards.get(repo) or {}
+        sets = c.get("samplers") or []
+        profiles = m.get("sampling") or {}
+        for name, prof in sorted(profiles.items()):
+            if not sets or not prof:
+                continue
+            # a departure with an `upstream-` sibling is recorded rather than
+            # accidental, so the sibling is what has to match the card
+            if PREFIX + name in profiles:
+                continue
+            best, miss = None, None
+            for s in sets:
+                common = [k for k in s["values"] if k in prof]
+                bad = [k for k in common if float(prof[k]) != s["values"][k]]
+                if miss is None or len(bad) < len(miss):
+                    best, miss = s, bad
+            if miss:
+                unmatched.append((repo, name, best["label"],
+                                  ", ".join("%s ours=%s card=%s"
+                                            % (k, prof[k], best["values"][k]) for k in miss)))
+        base = {k: v for s in sets for k, v in s["values"].items()}
+        for s in c.get("quant_samplers") or []:
+            extra = {k: v for k, v in s["values"].items()
+                     if k in base and all(v != b["values"].get(k)
+                                          for b in sets if k in b["values"])}
+            if extra:
+                diverged.append((repo, c.get("quant_repo"), s["label"], extra))
+
+    print("\ncards: %d profile(s) matching no documented set" % len(unmatched))
+    for repo, name, label, diff in unmatched:
+        print("  %-40s %-9s vs %-46s %s" % (repo.split("/")[-1], name, label, diff))
+    print("\ncards: %d case(s) where the quant repo states a value the base never does"
+          % len(diverged))
+    for repo, qrepo, label, extra in diverged:
+        print("  %s -> %s" % (repo, qrepo))
+        print("     %s" % label)
+        print("     %s" % ", ".join("%s=%s" % kv for kv in sorted(extra.items())))
+    return unmatched, diverged
+
+
+def report_thinking(models, facts):
+    """Models whose knob grades levels that nothing states.
+
+    A template that validates its levels enumerates them, so they are derived.
+    One that interpolates the value verbatim cannot be read for a vocabulary --
+    the registry has to declare it under `thinking.accepts` or clients get no
+    gradation at all. This is the list of models still in that gap.
+    """
+    rows = []
+    for repo, m in sorted((models.get("models") or {}).items()):
+        t = (facts.get(repo) or {}).get("thinking") or {}
+        if not t.get("knob") or t.get("levels") or t.get("toggle"):
+            continue
+        if t.get("value_type") == "float":
+            continue  # a level name would fail the template's own assertion
+        if (m.get("thinking") or {}).get("accepts"):
+            continue
+        rows.append((repo, ",".join(t["knob"]), t.get("default") or "-"))
+    print("\nthinking: %d model(s) with a graded knob and no declared levels" % len(rows))
+    for repo, knob, dflt in rows:
+        print("  %-46s knob=%-20s template default=%s" % (repo, knob, dflt))
+    return rows
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--registry", default=REGISTRY)
+    ap.add_argument("--facts", default=os.path.join(HERE, "..", "research",
+                                                    "data", "model-facts.json"))
+    ap.add_argument("--samplers", action="store_true",
+                    help="report profiles that disagree with generation_config.json")
+    ap.add_argument("--thinking", action="store_true",
+                    help="report graded knobs whose levels nothing declares")
+    ap.add_argument("--cards", action="store_true",
+                    help="report profiles against the sampler sets cards document")
+    ap.add_argument("--model-cards", default=os.path.join(HERE, "..", "research",
+                                                          "data", "model-cards.json"))
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args()
+
+    models = load(os.path.join(args.registry, "models.yaml"))
+    sampling = load(os.path.join(args.registry, "sampling.yaml"))
+
+    f = Findings()
+    check_registry(models, sampling, f)
+    if args.samplers:
+        report_samplers(models, load(args.facts) or {})
+    if args.thinking:
+        report_thinking(models, load(args.facts) or {})
+    if args.cards:
+        report_cards(models, load(args.model_cards) or {})
+
+    if args.json:
+        json.dump(f.rows, sys.stdout, indent=1)
+        print()
+    else:
+        for row in f.rows:
+            print("!!! %s: %s" % (row["where"], row["error"]), file=sys.stderr)
+        print("registry: %d models, %d profiles, %d error(s)"
+              % (len(models.get("models") or {}),
+                 len(sampling.get("profiles") or {}), len(f.rows)))
+    sys.exit(1 if f.rows else 0)
+
+
+if __name__ == "__main__":
+    main()

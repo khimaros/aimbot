@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+
+"""What breaks, on what hardware, at what quant.
+
+The reddit corpus answers "is this model any good". These three sources answer
+a different and more actionable question: does it actually run here. They are
+worth reading together because each covers a gap the others have --
+
+  huggingface  per-repo discussions, the only place a failure is attached to a
+               specific quant of a specific file
+  github       llama.cpp issues, where backend and loader bugs get diagnosed
+  level1techs  a hardware forum, so the people posting own the machine
+
+Documents are scored by ./match-models, which supplies the shared alias tables
+for models, hardware and symptoms. `--strix` narrows to reports that name this
+box or a backend it runs, which is usually what you actually want: plenty of
+things are broken on cuda and irrelevant here.
+
+**A bug report is not a fact about the present.** This corpus is a pile of
+individual claims, most of them from one person, many since fixed -- one issue
+here was opened and closed on the same day and still reads like a live
+constraint if you only look at the title. So every report carries its state,
+its age, and how many people engaged with it, and `--open` drops the ones
+already closed. A single 30-day-old report with one comment is a lead to
+verify, not a finding: prefer the reader's own machine to anything here.
+
+    ./analyze-operational                 # model x symptom counts, all sources
+    ./analyze-operational --strix         # only reports naming this hardware
+    ./analyze-operational --model hy3     # the reports themselves, with state
+    ./analyze-operational --strix --open --min-engagement 2
+"""
+
+import argparse
+import collections
+import datetime
+import json
+import os
+import re
+import subprocess
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+# reports older than this are quoted with their date rather than as current
+# state; llama.cpp merges fast enough that a month is a long time
+STALE_DAYS = 30
+SOURCES = {
+    "hf": "data/hf-discussions.json",
+    "github": "data/github-issues.json",
+    "level1": "data/level1techs.json",
+}
+
+
+def lexicon():
+    out = subprocess.run([os.path.join(HERE, "match-models"), "--lexicon",
+                          "--hardware", "--symptoms"],
+                         stdout=subprocess.PIPE, text=True, check=True).stdout
+    d = json.loads(out)
+    return ({k: re.compile(v, re.I) for k, v in d["models"].items()},
+            {k: re.compile(v, re.I) for k, v in d["hardware"].items()},
+            {k: re.compile(v, re.I) for k, v in d["symptoms"].items()})
+
+
+def optional(path):
+    try:
+        return json.load(open(path))
+    except (IOError, ValueError):
+        return None
+
+
+def documents():
+    """Flatten all three corpora into (source, title, url, text) records.
+
+    Title and body are scored as one document: a github issue titled "Eval bug:
+    garbled output on Strix Halo" carries the symptom in the title and the
+    model in the body, and splitting them would match neither.
+    """
+    docs = []
+    hf = optional(SOURCES["hf"]) or {}
+    for repo, d in hf.items():
+        for x in d.get("discussions", []):
+            body = " ".join(c["text"] for c in x.get("thread") or [])
+            docs.append(dict(source="hf", where=repo, title=x.get("title") or "",
+                             url="https://huggingface.co/%s/discussions/%s" % (repo, x.get("num")),
+                             state=x.get("status"), created=(x.get("created") or "")[:10],
+                             closed=None, comments=x.get("comments", 0),
+                             engagement=x.get("comments", 0) + x.get("reaction_users", 0),
+                             text="%s\n%s\n%s" % (repo, x.get("title") or "", body)))
+
+    gh = optional(SOURCES["github"]) or {}
+    seen = {}
+    for q, d in (gh.get("queries") or {}).items():
+        for i in d.get("items", []):
+            seen[i["number"]] = i      # queries overlap; dedupe on issue number
+    for i in seen.values():
+        docs.append(dict(source="github", where="llama.cpp#%d" % i["number"],
+                         title=i.get("title") or "", url=i.get("html_url"),
+                         state=i.get("state"), created=(i.get("created_at") or "")[:10],
+                         closed=(i.get("closed_at") or "")[:10] or None,
+                         comments=i.get("comments") or 0,
+                         engagement=(i.get("comments") or 0) + (i.get("reactions") or 0),
+                         text="%s\n%s" % (i.get("title") or "", i.get("body") or "")))
+
+    l1 = optional(SOURCES["level1"]) or {}
+    for t in (l1.get("topics") or {}).values():
+        posts = t.get("posts") or []
+        if not posts:
+            continue
+        docs.append(dict(source="level1", where="t/%s" % t.get("id"),
+                         title=t.get("title") or "", url=t.get("url"),
+                         state=None, created=(t.get("created") or "")[:10],
+                         closed=None, comments=len(posts),
+                         engagement=sum(p.get("likes", 0) for p in posts),
+                         text="%s\n%s" % (t.get("title") or "",
+                                          "\n".join(p.get("text") or "" for p in posts))))
+    return docs
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--strix", action="store_true",
+                    help="only documents naming this hardware or a backend it runs")
+    ap.add_argument("--model", help="print the matching reports for one model")
+    ap.add_argument("--symptom", help="filter to one symptom")
+    ap.add_argument("--min", type=int, default=1)
+    ap.add_argument("--open", dest="only_open", action="store_true",
+                    help="drop reports that have already been closed")
+    ap.add_argument("--min-engagement", type=int, default=0, metavar="N",
+                    help="drop reports nobody but the author engaged with")
+    ap.add_argument("--asof", default="2026-08-11",
+                    help="date ages are computed against (the capture date)")
+    args = ap.parse_args()
+    asof = datetime.date.fromisoformat(args.asof)
+
+    def age(r):
+        try:
+            return (asof - datetime.date.fromisoformat(r["created"])).days
+        except (ValueError, TypeError):
+            return None
+
+    def status(r):
+        """A short, honest description of how much weight the report carries."""
+        bits = []
+        if r.get("state") == "closed":
+            same = r.get("closed") == r.get("created")
+            bits.append("CLOSED same day" if same else "closed %s" % r.get("closed"))
+        a = age(r)
+        if a is not None:
+            bits.append("%dd old%s" % (a, ", stale" if a > STALE_DAYS else ""))
+        if (r.get("comments") or 0) <= 1:
+            bits.append("single source")
+        return ", ".join(bits)
+
+    mre, hre, sre = lexicon()
+    docs = documents()
+    if not docs:
+        raise SystemExit("no source data; run fetch-hf-discussions, "
+                         "fetch-github-issues and fetch-level1techs first")
+
+    rows = []
+    for d in docs:
+        d["models"] = [k for k, r in mre.items() if r.search(d["text"])]
+        d["hardware"] = [k for k, r in hre.items() if r.search(d["text"])]
+        d["symptoms"] = [k for k, r in sre.items() if r.search(d["text"])]
+        rows.append(d)
+
+    scope = [r for r in rows if not args.strix or "strix halo" in r["hardware"]]
+    if args.symptom:
+        scope = [r for r in scope if args.symptom in r["symptoms"]]
+    if args.only_open:
+        scope = [r for r in scope if r.get("state") != "closed"]
+    if args.min_engagement:
+        scope = [r for r in scope if (r.get("engagement") or 0) >= args.min_engagement]
+
+    by_source = collections.Counter(r["source"] for r in rows)
+    strix = collections.Counter(r["source"] for r in rows if "strix halo" in r["hardware"])
+    print("documents: %d total (hf %d, github %d, level1 %d); "
+          "naming strix halo: %d (hf %d, github %d, level1 %d)"
+          % (len(rows), by_source["hf"], by_source["github"], by_source["level1"],
+             sum(strix.values()), strix["hf"], strix["github"], strix["level1"]))
+    print("scope: %d documents%s%s\n" % (len(scope), " (strix only)" if args.strix else "",
+                                         " (%s)" % args.symptom if args.symptom else ""))
+
+    if args.model:
+        key = args.model.lower()
+        name = next((k for k in mre if key in k), None)
+        if not name:
+            raise SystemExit("no such model; try one of: " + ", ".join(sorted(mre)))
+        hits = sorted((r for r in scope if name in r["models"]),
+                      key=lambda r: -r["engagement"])
+        print("## %d report(s) mentioning %s\n" % (len(hits), name))
+        for r in hits[:25]:
+            print("[%s, %s, engagement %d] %s" % (r["source"], r["where"],
+                                                  r["engagement"], r["title"][:90]))
+            print("   %s" % r["url"])
+            st = status(r)
+            if st:
+                print("   status:   %s" % st)
+            if r["symptoms"]:
+                print("   symptoms: %s" % ", ".join(r["symptoms"]))
+            if r["hardware"]:
+                print("   hardware: %s" % ", ".join(r["hardware"]))
+        return
+
+    syms = sorted({s for r in scope for s in r["symptoms"]})
+    counts = collections.Counter((m, s) for r in scope for m in r["models"] for s in r["symptoms"])
+    totals = collections.Counter(m for r in scope for m in r["models"])
+    models = [m for m, n in totals.most_common() if n >= args.min]
+    if not models:
+        print("nothing matched")
+        return
+
+    print("| model | reports | " + " | ".join(syms) + " |")
+    print("|---|--:|" + "--:|" * len(syms))
+    for m in models:
+        cells = [str(counts[(m, s)]) if counts[(m, s)] else "" for s in syms]
+        print("| %s | %d | %s |" % (m, totals[m], " | ".join(cells)))
+
+    closed = sum(1 for r in scope if r.get("state") == "closed")
+    stale = sum(1 for r in scope if (age(r) or 0) > STALE_DAYS)
+    single = sum(1 for r in scope if (r.get("comments") or 0) <= 1)
+    print("\na document counts once per symptom it mentions, so rows do not sum to")
+    print("`reports`. these are reports, not confirmed defects -- most github issues")
+    print("naming a model are asking for support for it, not reporting it broken.")
+    print("of the %d in scope: %d already closed, %d older than %d days, %d with no"
+          % (len(scope), closed, stale, STALE_DAYS, single))
+    print("engagement beyond the author. use --open --min-engagement 2 to see the rest.")
+
+
+if __name__ == "__main__":
+    main()

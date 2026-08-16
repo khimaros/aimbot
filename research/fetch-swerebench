@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+
+"""Fetch the swe-rebench leaderboard into data/swe-rebench.json.
+
+The reason to carry this alongside AA and gbench is contamination. SWE-bench
+Verified is a fixed, public, four-year-old set of github issues, so a model
+trained after it shipped may have seen the patches; that is the single most
+cited example in the benchmaxxing section. swe-rebench rebuilds its task set
+continuously from pull requests merged *after* the fact, and publishes results
+per task-date window rather than as one number.
+
+That makes a direct measurement possible instead of an accusation. Each model
+carries its release date and a cumulative series of (task window -> resolved
+rate), so its score on tasks that postdate its own training can be compared
+against its score on tasks that predate it. A model that only does well on the
+older window is telling on itself.
+
+Windows are also split per language (go, java, python, rust, typescript),
+which is the same cut gbench publishes, so the two can be checked against each
+other.
+
+Empty windows are dropped -- 69% of the published grid is zero-sample padding
+for date ranges a model was never run on, and keeping it would quadruple the
+file for no information. Everything with a sample in it is kept.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+
+URL = "https://swe-rebench.com/"
+
+
+def empty(v):
+    """A window nothing was run in, as opposed to one where everything failed."""
+    return not v.get("totalTokenUsage") and not v.get("resolvedRate") and not v.get("passN")
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--out", default="data/swe-rebench.json")
+    ap.add_argument("--url", default=URL)
+    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    args = ap.parse_args()
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    cmd = [os.path.join(here, "rsc-extract"), args.url, "--key", "swerebench",
+           "--match", '"modelId":', "--max-age", str(args.max_age)]
+    if args.refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    if proc.returncode:
+        sys.exit(proc.returncode)
+
+    models, dropped, kept = {}, 0, 0
+    for line in proc.stdout.splitlines():
+        r = json.loads(line)
+        mid = r.get("modelId")
+        if not mid:
+            continue
+        stats = {}
+        for group, windows in (r.get("rangeStats") or {}).items():
+            live = {k: v for k, v in windows.items() if not empty(v)}
+            dropped += len(windows) - len(live)
+            kept += len(live)
+            if live:
+                stats[group] = live
+        models[mid] = dict(
+            name=r.get("modelName"), developer=(r.get("meta") or {}).get("developer"),
+            agent=r.get("agentVersion"), release=(r.get("release") or {}).get("date"),
+            task_range=r.get("taskRangeTimestamp"), range_stats=stats)
+
+    if not models:
+        sys.exit("no model records found -- the page structure probably changed")
+
+    out = {"_provenance": {
+        "source": args.url,
+        "note": "zero-sample windows dropped; see fetch-swerebench",
+        "windows_kept": kept, "windows_dropped": dropped}, "models": models}
+    with open(args.out, "w") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+    langs = sorted({g for m in models.values() for g in m["range_stats"]})
+    print("wrote %s: %d models, %d windows (%d empty dropped), groups: %s"
+          % (args.out, len(models), kept, dropped, ", ".join(langs)))
+
+
+if __name__ == "__main__":
+    main()

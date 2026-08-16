@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+
+"""Fetch the Epoch AI benchmarking hub into data/epoch.json.
+
+Epoch publishes the whole hub as one CC-BY zip of CSVs, linked from
+/benchmarks/use-this-data. The dashboard itself is an Astro page that renders
+client side with no payload to read, which is why an earlier survey wrote this
+source off -- the download is the part worth having, and it is plain curl.
+
+Two kinds of data are in the zip and both are kept:
+
+- `epoch_capabilities_index.csv`, the ECI: a latent-ability score fitted across
+  benchmarks rather than a benchmark itself, so a model is placed even when the
+  individual suites it ran differ from everyone else's. The fit's per-benchmark
+  difficulties and slopes ship alongside it and are kept, because a fitted index
+  is only quotable next to the fit.
+- ~75 per-benchmark result files, split between Epoch's own runs (chess puzzles,
+  mystery games, FrontierMath, GPQA diamond) and external leaderboards it
+  mirrors (terminal-bench, DeepSWE, aider polyglot, METR time horizons).
+
+The internal runs are the reason to carry this at all: like GBENCH they are
+scored by Epoch on its own harness, so they are a check on numbers a lab
+published about itself.
+
+Housekeeping columns (log links, record ids, timestamps) are dropped; every
+scored field is kept, so a later question needs no refetch.
+"""
+
+import argparse
+import csv
+import io
+import json
+import os
+import re
+import subprocess
+import sys
+import zipfile
+
+ZIP = "https://epoch.ai/data/benchmark_data.zip"
+
+ECI_FILE = "epoch_capabilities_index.csv"
+ECI_FIT_FILE = "additional_eci_data/eci_benchmark_difficulties_and_slopes.csv"
+
+# airtable record ids, log viewer links and row timestamps say nothing about a
+# model's score and are most of the byte count
+DROP = {"id", "Logs", "Log viewer", "Started at", "Created", "Source link",
+        "Source Link", "Training compute notes"}
+
+MODEL = "Model version"
+
+# columns holding a comma-joined SET, which upstream emits in an arbitrary
+# order: one refresh moved GPT-J-6B between "United States of America,Germany"
+# and "Germany,United States of America" nine times and changed no score. the
+# capture is committed so a refresh reads as a reviewable diff, so sort them
+MULTI = {"Country", "Organization"}
+
+
+def rows_of(zf, name):
+    with zf.open(name) as f:
+        return list(csv.DictReader(io.TextIOWrapper(f, encoding="utf-8-sig")))
+
+
+def is_number(v):
+    return bool(re.fullmatch(r"-?\d+(\.\d+)?([eE][-+]?\d+)?", (v or "").strip()))
+
+
+def metric_column(rows, cols):
+    """The scored column, which is the first numeric one after the model name.
+
+    Every file leads with `Model version`, but what follows it is the metric in
+    most and a run parameter in a few (terminal-bench puts `Agent` there, gso
+    and posttrainbench put `Scaffold`), so position alone picks the wrong column
+    for those. Requiring numeric values gets all of them without a per-file map.
+    """
+    start = cols.index(MODEL) + 1 if MODEL in cols else 0
+    for col in cols[start:]:
+        if any(is_number(r.get(col)) for r in rows):
+            return col
+    return None
+
+
+def canon(col, val):
+    return ",".join(sorted(v.strip() for v in val.split(","))) if col in MULTI else val
+
+
+def clean(rows, cols):
+    """Drop housekeeping columns and rows carrying no model name."""
+    keep = [c for c in cols if c not in DROP]
+    out = []
+    for r in rows:
+        if not (r.get(MODEL) or "").strip():
+            continue
+        out.append({c: canon(c, r[c]) for c in keep if (r.get(c) or "").strip()})
+    return out
+
+
+def benchmark_name(path):
+    return re.sub(r"_external$", "", os.path.splitext(os.path.basename(path))[0])
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--url", default=ZIP)
+    ap.add_argument("--out", default="data/epoch.json")
+    # the zip carries an etag, so a repeat run revalidates to 304
+    ap.add_argument("--max-age", type=int, default=0)
+    ap.add_argument("--refresh", action="store_true")
+    args = ap.parse_args()
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    cmd = [os.path.join(here, "httpcache"), args.url, "--key", "epoch-benchmark-data",
+           "--max-age", str(args.max_age), "--path"]
+    if args.refresh:
+        cmd.append("--refresh")
+    path = subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout.strip()
+    if not path or not os.path.exists(path):
+        sys.exit("no zip from httpcache")
+
+    try:
+        zf = zipfile.ZipFile(path)
+    except zipfile.BadZipFile:
+        sys.exit("%s is not a zip; refetch with --refresh" % path)
+
+    names = [n for n in zf.namelist() if n.endswith(".csv")]
+    out = {"eci": [], "eci_fit": [], "benchmarks": {}}
+
+    eci = rows_of(zf, ECI_FILE)
+    out["eci"] = clean(eci, list(eci[0].keys()) if eci else [])
+    if ECI_FIT_FILE in names:
+        fit = rows_of(zf, ECI_FIT_FILE)
+        out["eci_fit"] = clean(fit, list(fit[0].keys()) if fit else [])
+
+    for name in sorted(names):
+        if name in (ECI_FILE, ECI_FIT_FILE):
+            continue
+        rows = rows_of(zf, name)
+        if not rows:
+            continue
+        cols = list(rows[0].keys())
+        out["benchmarks"][benchmark_name(name)] = {
+            # internal runs sit at the zip root, mirrored leaderboards are
+            # suffixed _external. which is which decides whether a number is
+            # Epoch's measurement or somebody else's, so record it
+            "source": "external" if name.endswith("_external.csv") else "epoch",
+            "metric": metric_column(rows, cols),
+            "results": clean(rows, cols),
+        }
+
+    with open(args.out, "w") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+
+    scored = sum(1 for r in out["eci"] if r.get("ECI Score"))
+    internal = sum(1 for b in out["benchmarks"].values() if b["source"] == "epoch")
+    results = sum(len(b["results"]) for b in out["benchmarks"].values())
+    nometric = [k for k, b in out["benchmarks"].items() if not b["metric"]]
+    print("wrote %s: %d eci rows (%d scored), %d benchmarks (%d epoch-run), %d results"
+          % (args.out, len(out["eci"]), scored, len(out["benchmarks"]), internal, results))
+    if nometric:
+        print("  no metric column detected: %s" % ", ".join(nometric), file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

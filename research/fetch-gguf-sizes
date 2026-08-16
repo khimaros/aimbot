@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+
+"""Resolve real GGUF quant sizes into data/gguf-sizes.json.
+
+Nominal parameter counts do not tell you what will fit: unsloth's UD-* quants
+mix precisions per tensor, sharded quants live in per-quant subdirectories, and
+natively-MXFP4 models like gpt-oss-120b are the same size at every quant tag.
+This sums the actual byte totals reported by the huggingface tree API, grouped
+by quant tag, so MODELS.md can compare against a real memory budget.
+
+Repos come from the registry's quants and components, unioned with repos.txt
+(one per line, '#' comments ignored) for models sized only as a comparison.
+"""
+
+import argparse
+import collections
+import json
+import os
+import re
+import subprocess
+import sys
+
+TREE = "https://huggingface.co/api/models/%s/tree/main?recursive=true"
+# A trailing -00001-of-000NN shard suffix is stripped so shards aggregate.
+# Some publishers emit `Motif3-Q5_K_M.gguf-00001-of-00005.gguf`, keeping the
+# .gguf of the unsharded name, so the separator before the shard index is
+# `-` or `.gguf-`. Without that alternative every shard tags as its own quant
+# and a 213gib model reads as five that each fit.
+QUANT = re.compile(r"-((?:UD-|AD-)?(?:IQ|Q|BF|F|MXFP|NVFP|TQ)[A-Za-z0-9_]*?)"
+                   r"(?:(?:\.gguf)?-\d{5}-of-\d{5})?\.gguf$")
+# Speculative-decoding sidecars are named after the *target* quant, so
+# `dspark-DeepSeek-V4-Flash-0731-Q8_0.gguf` otherwise tags as a 10gib "Q8_0"
+# quant of a 284b model.
+#
+# Position is what separates a sidecar from a main model that embeds the draft
+# head, and both naming styles are in use:
+#   dspark-DeepSeek-...-Q8_0.gguf   marker before the quant -> a 10gib drafter
+#   Bonsai-27B-dspark-Q4_1.gguf     marker before the quant -> a 1.7gib drafter
+#   Hy3-Q2_K_XL-mtp.gguf            marker after the quant  -> the 94gib model
+# A file with no recognisable quant token at all (dflash-kquant.gguf,
+# ...-dspark-bf16.gguf) is a sidecar whatever the position.
+SIDECAR = re.compile(r"\b(dspark|dflash|mtp|eagle3)\b", re.I)
+QUANT_AT = re.compile(r"(?:UD-|AD-)?(?:IQ|Q|BF|F|MXFP|NVFP|TQ)\d[A-Za-z0-9_]*")
+
+
+def is_sidecar(path):
+    m = SIDECAR.search(path)
+    if not m:
+        return False
+    q = QUANT_AT.search(path)
+    return m.start() < q.start() if q else True
+
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def tree(repo, max_age=0, refresh=False):
+    # the hub sends etags, so this usually revalidates to a 304
+    cmd = [os.path.join(HERE, "httpcache"), TREE % repo,
+           "--key", "hf-" + repo.replace("/", "_"), "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout
+    try:
+        t = json.loads(out)
+    except ValueError:
+        return None
+    return t if isinstance(t, list) else None
+
+
+def quants(repo, max_age=0, refresh=False):
+    t = tree(repo, max_age, refresh)
+    if t is None:
+        return None
+    agg = collections.defaultdict(int)
+    for e in t:
+        path = e.get("path", "")
+        if e.get("type") != "file" or not path.endswith(".gguf"):
+            continue
+        size = e.get("size") or (e.get("lfs") or {}).get("size") or 0
+        if "/" in path:
+            tag = path.split("/")[0]
+        else:
+            m = QUANT.search(path)
+            tag = m.group(1) if m else path
+        if "mmproj" in path.lower():
+            tag = "mmproj:" + tag
+        elif is_sidecar(path):
+            marker = SIDECAR.search(path).group(1).lower()
+            if not tag.lower().startswith(marker):
+                tag = "%s:%s" % (marker, tag)
+        agg[tag] += size
+    return dict(agg)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--repos", default="repos.txt")
+    ap.add_argument("--out", default="data/gguf-sizes.json")
+    ap.add_argument("--max-age", type=int, default=0,
+                    help="skip revalidation entirely below this age; 0 always revalidates")
+    ap.add_argument("--refresh", action="store_true")
+    args = ap.parse_args()
+
+    with open(args.repos) as f:
+        extra = [l.split("#")[0].strip() for l in f]
+    # the registry names every gguf repo a consumer can select; repos.txt adds
+    # the ones sized only to show they do NOT fit. union, so neither list has to
+    # be the complete one -- keyed case-insensitively because the hub resolves
+    # either spelling, and repos.txt's gemma-4-31b-it against the registry's
+    # gemma-4-31B-it was fetching one repo twice and storing it as two
+    repos = {r.lower(): r for r in extra if r}
+    try:
+        import yaml
+        reg = os.path.join(HERE, "..", "registry", "models.yaml")
+        for m in ((yaml.safe_load(open(reg)) or {}).get("models") or {}).values():
+            for q in (m.get("quants") or []) + (m.get("components") or []):
+                if q.get("repo"):
+                    repos[q["repo"].lower()] = q["repo"]
+    except (IOError, ImportError):
+        pass
+
+    out = {}
+    for repo in sorted(repos.values()):
+        q = quants(repo, args.max_age, args.refresh)
+        if q is None:
+            print("  %-52s unavailable" % repo, file=sys.stderr)
+            continue
+        out[repo] = {k: v for k, v in sorted(q.items(), key=lambda kv: kv[1])}
+        print("  %-52s %d quants" % (repo, len(q)), file=sys.stderr)
+
+    with open(args.out, "w") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+    print("wrote %s: %d repos" % (args.out, len(out)))
+
+
+if __name__ == "__main__":
+    main()

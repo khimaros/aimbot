@@ -1,0 +1,63 @@
+# named sampling profiles: the vocabulary, not the values.
+#
+# a profile name means the same thing for every model; the numbers behind it do
+# not, because vendors recommend different ones. so the names and their meaning
+# live here and each model fills them in under registry/models.yaml.
+#
+# a profile is NOT just samplers. it carries the capability claim that holds in
+# that mode, which is why `tuned` belongs to the profile rather than the model:
+# qwen3.6-27b at temp 0.6 is a tool-use model and at temp 1.0 it is a chat
+# model. consumers had been carrying that distinction as a commented-out
+# alternate line in their own configs, and a commented line is not a data model
+# -- nothing can validate it, nothing can select it, and the two repos that
+# need it picked different halves.
+
+version: 1
+
+# every field a profile may set. a profile that omits one inherits the model's
+# default, then this file's fallback. unknown fields are a validation error --
+# that is the point of enumerating them.
+fields:
+  temp:             {type: number, min: 0.0, max: 2.0, fallback: 0.8}
+  top_p:            {type: number, min: 0.0, max: 1.0, fallback: 0.9}
+  top_k:            {type: integer, min: 0, fallback: 40}
+  min_p:            {type: number, min: 0.0, max: 1.0, fallback: 0.1}
+  presence_penalty: {type: number, min: -2.0, max: 2.0, fallback: 0.0}
+  repeat_penalty:   {type: number, min: 0.0, max: 2.0, fallback: 1.0}
+  # what the model is good for AT THESE SAMPLERS. free of the samplers this is
+  # a marketing claim; with them it is a statement somebody can check.
+  tuned:            {type: tag-set, of: [base, instruct, chat, reason, code, fim, tools]}
+  # thinking level to request. graded from off to max; a model that only has an
+  # on/off toggle declares off and one other. must be a level the model accepts.
+  thinking:         {type: level, of: ["off", minimal, low, medium, high, xhigh, max]}
+
+profiles:
+  thinking:
+    summary: the vendor's reasoning-mode recommendation, usually the highest temperature
+    use_when: reasoning quality matters more than determinism or latency
+  instruct:
+    summary: the vendor's non-thinking recommendation
+    use_when: thinking is disabled or the task is a single-shot transform
+  tool-use:
+    summary: low temperature, for deterministic tool-call rendering
+    use_when: >
+      an agent harness parses the output. quantbench uses this for every sweep:
+      at a chat profile the gguf's embedded temp 1.0 applies and tool-call
+      rendering goes nondeterministic, which pollutes the benchmark rather than
+      measuring the quant
+  deterministic:
+    summary: greedy, for reproducing a specific run
+    use_when: bisecting a regression, or comparing two builds on identical output
+
+# WHERE A MODEL AND ITS VENDOR DISAGREE, record both rather than picking.
+# `upstream-<profile>` holds the vendor's documented set for <profile> in the
+# cases where the profile above deliberately departs from it -- nemotron 3 super
+# says to use temp 1.0 "across all tasks and serving backends, tool calling
+# included", and this box runs it colder anyway. a prose note could say that;
+# a profile lets a consumer select it, and lets the card check confirm it still
+# matches what the card says. any `upstream-` prefixed name is valid as long as
+# the profile it qualifies is.
+upstream_prefix: upstream-
+
+# a consumer that names no profile gets this one.
+default: tool-use

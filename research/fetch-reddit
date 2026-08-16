@@ -1,0 +1,331 @@
+#!/usr/bin/env python3
+
+"""Scrape r/LocalLLaMA searches, listings and comments into data/reddit-localllama.json.
+
+old.reddit serves real server-rendered HTML to plain curl -- comments, scores and
+all. Only two things are actually blocked: the `.json` endpoints (403) and
+`www.reddit.com` (SPA shell). Neither is needed, so this uses no browser.
+
+An earlier version drove a real chrome under xvfb, on the assumption that the
+403 from the json api applied to the whole site. It does not, and the browser
+turned out to be worse than unnecessary: reddit started failing those page loads
+with ERR_HTTP_RESPONSE_CODE_FAILURE partway through a long run, which looks like
+throttling of the automated client. curl has been steady.
+
+One gotcha survives: the bare /comments/<id>/ form 301s to the slugged URL, so
+requests follow redirects (-L via httpcache).
+
+Fetches go through ./httpcache, so a re-run revalidates with etags instead of
+refetching, and anything already captured and fresh in the output file is not
+requested at all.
+"""
+
+import argparse
+import html
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.parse
+from html.parser import HTMLParser
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+      "Chrome/140.0.0.0 Safari/537.36")
+SEARCH = "https://old.reddit.com/r/%s/search?q=%s&restrict_sr=on&sort=top&t=%s"
+THREAD = "https://old.reddit.com/r/%s/comments/%s/?sort=top&limit=200"
+LISTING = "https://old.reddit.com/r/%s/%s"
+
+# the search index only ever returns what QUERIES already asks about, and it lags
+# the sub by hours. the listings are the other half: they show what was actually
+# posted, so a release nobody thought to write a query for still turns up.
+LISTINGS = {"hot": "", "new": "new/", "top-week": "top/?sort=top&t=week"}
+
+QUERIES = [
+    "Qwen3.8 27B", "Qwen3.6 27B", "MiniMax M2.7", "DeepSeek V4 Flash", "Ling 3.0 Flash",
+    "Inkling Small", "Strix Halo 128GB", "benchmaxxing", "gpt-oss-120b",
+    "Muse Glimmer", "Hy3", "MiMo V2.5", "Qwen3 Coder Next",
+    "quantization agentic Q4 Q8", "best local model right now",
+]
+
+# threads where people say which model they use for which task. harvested in
+# bulk (--harvest) because task fit is the one question where a handful of
+# quotes proves nothing -- it needs a countable sample.
+TASK_QUERIES = [
+    # the monthly community highlight is the densest source of "model X for task
+    # Y" statements anywhere in the sub -- it is organised by category
+    "Best Local LLMs", "best local LLMs monthly", "community highlight models",
+    "best model this month", "best models of the month", "monthly roundup models",
+    "what are you actually using", "daily driver model", "what's in your stack",
+    "still using a month later", "best model for coding", "best model for writing",
+    "best model for translation", "best model for summarization",
+    "best model for debugging", "best model for vision OCR",
+    "best model for tool calling", "best model for RAG", "best model for rust",
+    "best model for python", "which model for agentic coding",
+    "favorite local model", "model recommendations 128GB",
+]
+
+# threads quoted in MODELS.md; comments are pulled for these specifically
+THREADS = [
+    "1vkmhyl",  # best local LLMs august 2026 (monthly community highlight)
+    "1ux9xze",  # the best model is the one you can actually run
+    "1va1zoc",  # what's still in your stack a month later
+    "1swfdbj",  # SWE Bench is now a benchmaxxed benchmark
+    "1vct09w",  # deepseek v4 flash 0731 still not holding up
+    "1usy9ie",  # tencent-hy3 is the real deal on 128gb
+    "1v6jlva",  # deepseek v4 flash / hy3 / qwen3.6 27b for agentic
+    "1vkn16q",  # muse-glimmer-30b quantization
+    "1reds0p",  # qwen 3.5 craters on hard coding tasks
+    "1t2ab5y",  # qwen3.6-27b vs coder-next
+    "1t4nkez",  # dense model shoot-off: gemma 4 31b vs qwen3.6 27b
+    "1u8kr2o",  # we need a 80-160b model urgently
+    "1vbajj8",  # inkling-small q2 vs qwen3.6-27b
+    "1uxm2d8",  # hy3 1bit 89-93 gb
+    "1v3dpsk",  # base64 encode bench vs AA intelligence index
+    "1vc4d23",  # 70-80b contenders
+    "1ve0psn",  # qwen3.8-27b announced
+]
+
+class Comments(HTMLParser):
+    """Walk the comment tree, recording each comment's reply depth.
+
+    Depth matters for reading scores: a reply three levels down is seen by a
+    fraction of the people who see a top-level comment, so it scores low
+    regardless of whether anyone agreed with it. Without depth, a buried
+    endorsement is indistinguishable from a rejected one.
+    """
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack, self.rows, self.cur, self.buf = [], [], None, []
+        self.grab = 0
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        cls = (a.get("class") or "").split()
+        if tag == "div":
+            kind = "child" if "child" in cls else \
+                   "thing" if ("thing" in cls and "comment" in cls) else "x"
+            self.stack.append(kind)
+            fn = a.get("data-fullname") or ""
+            if kind == "thing" and fn.startswith("t1_"):
+                self.cur = dict(id=fn, depth=sum(1 for x in self.stack if x == "child"),
+                                score=None, text="")
+                self.rows.append(self.cur)
+            if "md" in cls and self.cur and not self.cur["text"]:
+                self.grab, self.buf = len(self.stack), []
+        elif tag == "span" and "score" in cls and "unvoted" in cls and self.cur:
+            self.grab, self.buf = -1, []
+
+    def handle_endtag(self, tag):
+        if tag == "span" and self.grab == -1:
+            m = re.match(r"(-?[\d,]+)", "".join(self.buf).strip())
+            if self.cur and self.cur["score"] is None and m:
+                self.cur["score"] = int(m.group(1).replace(",", ""))
+            self.grab = 0
+        elif tag == "div":
+            if self.grab > 0 and len(self.stack) <= self.grab:
+                if self.cur and not self.cur["text"]:
+                    self.cur["text"] = re.sub(r"\s+", " ", "".join(self.buf)).strip()
+                self.grab = 0
+            if self.stack:
+                self.stack.pop()
+
+    def handle_data(self, d):
+        if self.grab:
+            self.buf.append(d)
+RESULT = re.compile(r'<div class="[^"]*search-result-link[^"]*"[^>]*data-fullname="t3_([^"]+)"'
+                    r'(.*?)(?=<div class="[^"]*search-result\b|</div>\s*</div>\s*<footer)', re.S)
+THING = re.compile(r'<div class="[^"]*\bthing\b[^"]*\bid-t3_(\w+)[^"]*"([^>]*)>')
+ATTR = re.compile(r'data-([\w-]+)="([^"]*)"')
+
+
+def get(url, key, refresh=False, max_age=0):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age), "--header", "User-Agent: " + UA]
+    if refresh:
+        cmd.append("--refresh")
+    return subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout
+
+
+def strip(s):
+    return re.sub(r"\s+", " ", html.unescape(re.sub("<[^>]+>", "", s or ""))).strip()
+
+
+def first(pat, s, flags=re.S):
+    m = re.search(pat, s, flags)
+    return m.group(1) if m else ""
+
+
+def parse_search(page):
+    hits = []
+    for tid, b in RESULT.findall(page):
+        hits.append(dict(
+            id=tid,
+            title=strip(first(r'class="search-title[^"]*"[^>]*>(.*?)</a>', b)),
+            score=strip(first(r'class="search-score">([^<]*)', b)),
+            when=strip(first(r'class="search-time">(.*?)</span>', b)),
+            comments=strip(first(r'class="search-comments[^"]*"[^>]*>([^<]*)', b)),
+            url="https://old.reddit.com" + first(r'href="(/r/[^"]+/comments/[^"]+)"', b),
+        ))
+    return hits
+
+
+def parse_listing(page):
+    """Read a hot/new/top listing.
+
+    Unlike search results, listing entries carry their metadata as data-*
+    attributes on the wrapping div, so score, comment count and post time come
+    out exactly rather than as the scraped strings search gives ("42 points").
+    """
+    posts, spans = [], [(m.group(1), m.group(2), m.end()) for m in THING.finditer(page)]
+    for i, (tid, attrs, end) in enumerate(spans):
+        b = page[end:spans[i + 1][2] if i + 1 < len(spans) else len(page)]
+        a = dict(ATTR.findall(attrs))
+        posts.append(dict(
+            id=tid,
+            title=strip(first(r'class="title may-blank[^"]*"[^>]*>(.*?)</a>', b)),
+            score=int(a.get("score") or 0),
+            comments=int(a.get("comments-count") or 0),
+            author=a.get("author", ""),
+            flair=strip(first(r'class="[^"]*linkflairlabel[^"]*"[^>]*><span>(.*?)</span>', b)),
+            created=first(r'<time[^>]*datetime="([^"]+)"', b),
+            url="https://old.reddit.com" + (a.get("permalink") or ""),
+        ))
+    return posts
+
+
+def parse_thread(page, tid, limit):
+    p = Comments()
+    p.feed(page)
+    out = [dict(score=c["score"], depth=c["depth"], text=c["text"][:1200])
+           for c in p.rows if len(c["text"]) >= 90]
+    out.sort(key=lambda c: -(c["score"] if c["score"] is not None else -999))
+    op = first(r'<div class="expando"[^>]*>(.*?)</div>\s*</div>', page)
+    return dict(id=tid, title=strip(first(r"<title>([^<]*)", page)).split(" : ")[0],
+                body=strip(first(r'<div class="md">(.*?)</div>', op))[:1200],
+                comments=out[:limit])
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--sub", default="LocalLLaMA")
+    ap.add_argument("--when", default="year", choices=["day", "week", "month", "year", "all"])
+    ap.add_argument("--comments", type=int, default=45)
+    ap.add_argument("--out", default="data/reddit-localllama.json")
+    ap.add_argument("--harvest", type=int, default=0, metavar="N",
+                    help="also scrape the top N threads of every TASK_QUERIES search")
+    ap.add_argument("--front", type=int, default=0, metavar="N",
+                    help="also scan the hot/new/top-week listings and scrape the N "
+                         "most-discussed posts they turn up that are not captured yet")
+    ap.add_argument("--max-age", type=int, default=7 * 86400, metavar="SECONDS",
+                    help="reuse a captured search or thread younger than this (default 7d)")
+    ap.add_argument("--refresh", action="store_true", help="refetch everything")
+    ap.add_argument("--delay", type=float, default=1.0,
+                    help="seconds between requests; reddit 429s a fast loop")
+    args = ap.parse_args()
+
+    out = {"searches": {}, "listings": {}, "threads": {}}
+    if os.path.exists(args.out) and not args.refresh:
+        try:
+            out = json.load(open(args.out))
+            out.setdefault("searches", {})
+            out.setdefault("listings", {})
+            out.setdefault("threads", {})
+        except ValueError:
+            print("  existing %s unreadable, starting fresh" % args.out, file=sys.stderr)
+    now = int(time.time())
+
+    def fresh(rec):
+        if args.refresh or not args.max_age or not isinstance(rec, dict):
+            return False
+        return bool(rec.get("fetched")) and (now - rec["fetched"]) < args.max_age
+
+    reused = fetched = failed = 0
+    for q in QUERIES + (TASK_QUERIES if args.harvest else []):
+        if fresh(out["searches"].get(q)):
+            reused += 1
+            continue
+        time.sleep(args.delay)
+        page = get(SEARCH % (args.sub, urllib.parse.quote(q), args.when),
+                   "rd-search-" + re.sub(r"\W+", "_", q), args.refresh)
+        hits = parse_search(page)
+        if not hits:
+            failed += 1
+            print("  search %-34s no hits" % q, file=sys.stderr)
+            continue
+        out["searches"][q] = dict(fetched=now, hits=hits)
+        fetched += 1
+        print("  search %-34s %d hits" % (q, len(hits)), file=sys.stderr)
+
+    # the listings are the freshness probe, so they are always refetched -- but the
+    # ids they turn up still go through the same per-thread freshness check below
+    seen_before = {p["id"] for l in out["listings"].values() for p in l.get("posts", [])}
+    front = []
+    for name, path in (LISTINGS.items() if args.front else []):
+        time.sleep(args.delay)
+        posts = parse_listing(get(LISTING % (args.sub, path), "rd-list-" + name, True))
+        if not posts:
+            failed += 1
+            print("  listing %-9s no posts parsed" % name, file=sys.stderr)
+            continue
+        out["listings"][name] = dict(fetched=now, posts=posts)
+        fetched += 1
+        front += posts
+        print("  listing %-9s %2d posts, %2d not seen before" %
+              (name, len(posts), sum(1 for p in posts if p["id"] not in seen_before)),
+              file=sys.stderr)
+
+    def hits_of(q):
+        rec = out["searches"].get(q)
+        return rec.get("hits", []) if isinstance(rec, dict) else (rec or [])
+
+    def hit_id(h):
+        # records captured before this collector was rewritten carry only a url
+        return h.get("id") or first(r"/comments/([a-z0-9]+)/", h.get("url") or "", 0)
+
+    wanted = list(THREADS)
+    if args.harvest:
+        for q in TASK_QUERIES:
+            wanted += [i for i in (hit_id(h) for h in hits_of(q)[:args.harvest]) if i]
+    if args.front:
+        # most-discussed first: a listing is mostly links and news posts, and the
+        # ones carrying opinion are the ones people argued in
+        pick = sorted({p["id"]: p for p in front}.values(), key=lambda p: -p["comments"])
+        wanted += [p["id"] for p in pick if p["id"] not in out["threads"]][:args.front]
+    seen = set()
+    wanted = [t for t in wanted if not (t in seen or seen.add(t))]
+
+    for tid in wanted:
+        if fresh(out["threads"].get(tid)):
+            reused += 1
+            continue
+        time.sleep(args.delay)
+        page = get(THREAD % (args.sub, tid), "rd-thread-" + tid, args.refresh)
+        t = parse_thread(page, tid, args.comments)
+        if not t["comments"]:
+            failed += 1
+            # keep whatever was captured before rather than dropping the thread
+            if tid in out["threads"]:
+                print("  thread %-10s fetch/parse empty, keeping cached copy" % tid,
+                      file=sys.stderr)
+            else:
+                print("  thread %-10s no comments parsed" % tid, file=sys.stderr)
+            continue
+        t["fetched"] = now
+        out["threads"][tid] = t
+        fetched += 1
+        print("  thread %-10s %3d comments  %s" % (tid, len(t["comments"]), t["title"][:52]),
+              file=sys.stderr)
+
+    with open(args.out, "w") as f:
+        json.dump(out, f, indent=1)
+    print("wrote %s: %d searches, %d listings, %d threads (reused %d, fetched %d, failed %d)"
+          % (args.out, len(out["searches"]), len(out["listings"]), len(out["threads"]),
+             reused, fetched, failed))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,373 @@
+#!/usr/bin/env python3
+
+"""How much do the tracked metrics actually disagree?
+
+MODELS.md ranks on a composite of four numbers drawn from three sources, and
+that only makes sense if the sources are measuring different things. This tests
+it, on two populations that must not be mixed:
+
+    --scope aa       every AA model carrying both fields (n up to ~600)
+    --scope roster   only what MODELS.md tracks, joined across every source
+
+The AA scope is where a correlation is actually estimable. It is also where the
+existing claim in build-tables comes from -- coding and agentic explain 98.4% of
+the intelligence index -- and this regenerates that from the data instead of
+leaving it as a comment nobody can re-run.
+
+The roster scope answers the question that decides the weights, and it answers
+it badly on purpose: with 6 to 18 models per pair the confidence interval is
+wide enough to drive a bus through. Every cell carries its n for that reason,
+and pairs below --min-n are dropped rather than printed as though they meant
+something.
+
+Spearman is the headline because the composite only ever uses these numbers to
+order models, and rank correlation is invariant to the scale each source
+invented. Pearson is printed alongside where a linear claim is being made.
+
+    ./analyze-correlations                      # roster, the decision-relevant view
+    ./analyze-correlations --scope aa           # AA internals, properly powered
+    ./analyze-correlations --scope aa --pair intelligenceIndex
+    ./analyze-correlations --markdown
+"""
+
+import argparse
+import json
+import math
+import os
+import subprocess
+import sys
+
+GIB = 2 ** 30
+
+# AA fields worth correlating: the two the composite uses, the index it excludes,
+# and the task-level scores that decide whether AA is one axis or several.
+AA_FIELDS = ["intelligenceIndex", "codingIndex", "agenticIndex", "terminalbenchV21",
+             "gpqa", "hle", "scicode", "ifbench", "tauBanking", "lcr", "mmmuPro",
+             "gdpvalNormalized", "critpt", "omniscienceAccuracy"]
+
+# how each non-AA source names its score, and where to dig it out
+LMARENA_BOARD = "text-overall-style_control"
+
+
+def rank(xs):
+    """Ranks with ties averaged, which is what makes this Spearman and not an
+    approximation of it -- ties are common here (AA reports 2 decimals)."""
+    order = sorted(range(len(xs)), key=lambda i: xs[i])
+    out = [0.0] * len(xs)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and xs[order[j + 1]] == xs[order[i]]:
+            j += 1
+        shared = (i + j) / 2.0 + 1
+        for k in range(i, j + 1):
+            out[order[k]] = shared
+        i = j + 1
+    return out
+
+
+def pearson(xs, ys):
+    n = len(xs)
+    if n < 3:
+        return None
+    mx, my = sum(xs) / n, sum(ys) / n
+    sx = math.sqrt(sum((x - mx) ** 2 for x in xs))
+    sy = math.sqrt(sum((y - my) ** 2 for y in ys))
+    if not sx or not sy:
+        return None
+    return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / (sx * sy)
+
+
+def spearman(xs, ys):
+    return pearson(rank(xs), rank(ys))
+
+
+def ci95(r, n):
+    """Fisher z interval. Printed because at n=8 an r of 0.8 is compatible with
+    0.2, and a table of bare coefficients invites forgetting that."""
+    if r is None or n < 5 or abs(r) >= 1:
+        return None
+    z = 0.5 * math.log((1 + r) / (1 - r))
+    se = 1 / math.sqrt(n - 3)
+    return tuple(math.tanh(z + s * 1.96 * se) for s in (-1, 1))
+
+
+def solve(a, b):
+    """Gauss-Jordan on a small symmetric system. Stdlib only, because pulling
+    numpy in for a 3x3 solve would be the largest dependency in the repo."""
+    n = len(a)
+    m = [row[:] + [b[i]] for i, row in enumerate(a)]
+    for i in range(n):
+        p = max(range(i, n), key=lambda r: abs(m[r][i]))
+        if abs(m[p][i]) < 1e-12:
+            return None
+        m[i], m[p] = m[p], m[i]
+        piv = m[i][i]
+        m[i] = [v / piv for v in m[i]]
+        for r in range(n):
+            if r != i and m[r][i]:
+                f = m[r][i]
+                m[r] = [v - f * w for v, w in zip(m[r], m[i])]
+    return [row[n] for row in m]
+
+
+def regress(y, xs):
+    """OLS of y on xs with an intercept; returns (coefficients, r2, n).
+
+    This is what tests whether a metric is worth carrying: a pairwise
+    correlation says two things agree, a regression says whether the second adds
+    anything once the first is known.
+    """
+    n = len(y)
+    k = len(xs)
+    cols = [[1.0] * n] + list(xs)
+    a = [[sum(ci[t] * cj[t] for t in range(n)) for cj in cols] for ci in cols]
+    b = [sum(ci[t] * y[t] for t in range(n)) for ci in cols]
+    coef = solve(a, b)
+    if coef is None:
+        return None, None, n
+    fit = [sum(c * col[t] for c, col in zip(coef, cols)) for t in range(n)]
+    my = sum(y) / n
+    ss_res = sum((y[t] - fit[t]) ** 2 for t in range(n))
+    ss_tot = sum((v - my) ** 2 for v in y)
+    return coef, (1 - ss_res / ss_tot if ss_tot else None), n
+
+
+def load(path):
+    with open(path) as f:
+        return json.load(f)
+
+
+def sources_table(here):
+    out = subprocess.run([os.path.join(here, "match-models"), "--sources"],
+                         stdout=subprocess.PIPE, text=True, check=True).stdout
+    return json.loads(out)["sources"]
+
+
+def aa_vectors(aa, fields):
+    """{field: {slug: value}} over every AA model, deprecated ones included --
+    a superseded entry is still a measurement, and dropping them would halve n."""
+    out = {f: {} for f in fields}
+    for slug, r in aa.items():
+        for f in fields:
+            v = r.get(f)
+            if isinstance(v, (int, float)):
+                out[f][slug] = float(v)
+    return out
+
+
+def epoch_eci(epoch):
+    """{model version base: ECI}. Epoch emits one row per thinking level and per
+    provider mirror, all sharing a score, so collapse to the base id."""
+    out = {}
+    for r in epoch.get("eci", []):
+        mv, score = r.get("Model version"), r.get("ECI Score")
+        if not mv or not score:
+            continue
+        base = mv.split("/")[-1].rsplit("_", 1)[0]
+        try:
+            out.setdefault(base, float(score))
+        except ValueError:
+            pass
+    return out
+
+
+def gbench_scores(gbench):
+    out = {}
+    for m in gbench.get("rankings", []):
+        mid = m.get("model_id")
+        # a gscore over a handful of games is noise; build-tables uses the same floor
+        if mid and (m.get("total_matches") or 0) >= 1000 and m.get("gscore") is not None:
+            out[mid] = float(m["gscore"])
+    return out
+
+
+def lmarena_ratings(lm):
+    board = (lm.get("boards") or {}).get(LMARENA_BOARD) or {}
+    return {e["modelDisplayName"]: float(e["rating"])
+            for e in (board.get("entries") or []) if e.get("rating") is not None}
+
+
+def swerebench_rates(sw):
+    """Overall resolved rate per model, averaged over windows with a real sample."""
+    out = {}
+    for m in (sw.get("models") or {}).values():
+        vals = [w["resolvedRate"] for w in ((m.get("range_stats") or {}).get("all") or {}).values()
+                if (w.get("passN") or 0) > 0]
+        if vals:
+            out.setdefault(m.get("name"), sum(vals) / len(vals))
+    return out
+
+
+def roster_vectors(here, aa, gbench, lm, sw, epoch, sentiment, sizes):
+    """One row per roster model, one column per tracked metric."""
+    srcs = sources_table(here)
+    gb, arena, swe, eci = (gbench_scores(gbench), lmarena_ratings(lm),
+                           swerebench_rates(sw), epoch_eci(epoch))
+    cols = {}
+    for name, ids in srcs.items():
+        rec = {}
+        a = aa.get(ids["aa"]) if ids["aa"] else None
+        if a:
+            for f in ("intelligenceIndex", "codingIndex", "agenticIndex",
+                      "terminalbenchV21", "gpqa", "hle"):
+                if isinstance(a.get(f), (int, float)):
+                    rec["aa " + {"intelligenceIndex": "II", "codingIndex": "coding",
+                                 "agenticIndex": "agentic", "terminalbenchV21": "tbench",
+                                 "gpqa": "gpqa", "hle": "hle"}[f]] = float(a[f])
+        if ids["gbench"] in gb:
+            rec["gbench"] = gb[ids["gbench"]]
+        if ids["lmarena"] in arena:
+            rec["lmarena"] = arena[ids["lmarena"]]
+        if ids["swerebench"] in swe:
+            rec["swe-rebench"] = swe[ids["swerebench"]]
+        if ids["epoch"] in eci:
+            rec["epoch ECI"] = eci[ids["epoch"]]
+        s = (sentiment or {}).get(name)
+        if s and s.get("mentions"):
+            # the composite's own formula, so this correlates the component that
+            # is actually weighted; the two halves are split out because they can
+            # disagree -- a model can be much discussed and coolly received
+            rel = (s["median_rel"] if s.get("median_rel") is not None else 50) / 50.0
+            rec["sentiment"] = math.log1p(s["mentions"]) * rel
+            rec["reddit mentions"] = float(s["mentions"])
+            rec["reddit reception"] = float(s.get("median_rel") or 50)
+        for m, v in rec.items():
+            cols.setdefault(m, {})[name] = v
+    return cols
+
+
+def pairs(cols, min_n):
+    names = list(cols)
+    out = []
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            shared = sorted(set(cols[a]) & set(cols[b]))
+            if len(shared) < min_n:
+                continue
+            xs = [cols[a][k] for k in shared]
+            ys = [cols[b][k] for k in shared]
+            out.append((a, b, len(shared), spearman(xs, ys), pearson(xs, ys)))
+    return sorted(out, key=lambda r: -(abs(r[3]) if r[3] is not None else -1))
+
+
+def fmt(r):
+    return "  -  " if r is None else "%+.2f" % r
+
+
+def print_pairs(rows, markdown, show_ci):
+    if markdown:
+        print("| metric a | metric b | n | spearman | pearson |%s" %
+              (" 95% ci (spearman) |" if show_ci else ""))
+        print("|---|---|--:|--:|--:|%s" % ("--:|" if show_ci else ""))
+    for a, b, n, s, p in rows:
+        ci = ci95(s, n)
+        citxt = ("%+.2f to %+.2f" % ci) if ci else "-"
+        if markdown:
+            print("| %s | %s | %d | %s | %s |%s" %
+                  (a, b, n, fmt(s), fmt(p), (" %s |" % citxt) if show_ci else ""))
+        else:
+            print("  %-22s %-22s n=%-4d rho=%s  r=%s%s" %
+                  (a, b, n, fmt(s), fmt(p), ("  ci %s" % citxt) if show_ci else ""))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--scope", choices=["roster", "aa"], default="roster")
+    ap.add_argument("--pair", help="only pairs involving this metric")
+    ap.add_argument("--regress", metavar="Y~X1,X2",
+                    help="least squares instead of a matrix, e.g. "
+                         "intelligenceIndex~codingIndex,agenticIndex")
+    ap.add_argument("--redundancy", action="store_true",
+                    help="rank every non-AA source by how much of it AA already explains")
+    ap.add_argument("--min-n", type=int, default=6,
+                    help="drop pairs with fewer shared models (default %(default)s)")
+    ap.add_argument("--markdown", action="store_true")
+    ap.add_argument("--no-ci", action="store_true", help="omit the confidence interval")
+    args = ap.parse_args()
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    aa = load("data/artificial-analysis.json")
+
+    if args.scope == "aa":
+        cols = aa_vectors(aa, AA_FIELDS)
+    else:
+        def optional(p):
+            try:
+                return load(p)
+            except (OSError, ValueError):
+                print("missing %s, its columns are dropped" % p, file=sys.stderr)
+                return {}
+        cols = roster_vectors(here, aa, optional("data/gbench.json"),
+                              optional("data/lmarena.json"), optional("data/swe-rebench.json"),
+                              optional("data/epoch.json"), optional("data/sentiment.json"),
+                              optional("data/gguf-sizes.json"))
+
+    if args.redundancy:
+        # AA is the reference because it is the widest source and the one the
+        # composite already spends half its weight on. what matters for a fourth
+        # or fifth source is not whether it agrees, but what is left over.
+        preds = ["aa coding", "aa agentic"]
+        if any(p not in cols for p in preds):
+            raise SystemExit("--redundancy needs the roster scope")
+        rows = []
+        for m in cols:
+            if m.startswith("aa "):
+                continue
+            shared = sorted(set(cols[m]).intersection(*(set(cols[p]) for p in preds)))
+            if len(shared) < args.min_n:
+                continue
+            _, r2, n = regress([cols[m][k] for k in shared],
+                               [[cols[p][k] for k in shared] for p in preds])
+            if r2 is not None:
+                rows.append((m, n, r2))
+        rows.sort(key=lambda r: -r[2])
+        if args.markdown:
+            print("| source | n | r2 vs AA coding+agentic | new information |")
+            print("|---|--:|--:|--:|")
+            for m, n, r2 in rows:
+                print("| %s | %d | %.3f | %.0f%% |" % (m, n, r2, 100 * (1 - r2)))
+        else:
+            for m, n, r2 in rows:
+                print("  %-20s n=%-4d r2=%.3f  new information %.0f%%"
+                      % (m, n, r2, 100 * (1 - r2)))
+        return
+
+    if args.regress:
+        target, _, preds = args.regress.partition("~")
+        target, preds = target.strip(), [p.strip() for p in preds.split(",") if p.strip()]
+        unknown = [m for m in [target] + preds if m not in cols]
+        if unknown:
+            raise SystemExit("unknown metric(s) %s; known: %s"
+                             % (", ".join(unknown), ", ".join(sorted(cols))))
+        shared = sorted(set(cols[target]).intersection(*(set(cols[p]) for p in preds)))
+        if len(shared) < args.min_n:
+            raise SystemExit("only %d models carry all of those" % len(shared))
+        coef, r2, n = regress([cols[target][k] for k in shared],
+                              [[cols[p][k] for k in shared] for p in preds])
+        if coef is None:
+            raise SystemExit("predictors are collinear; the fit is undefined")
+        terms = " + ".join("%.3f*%s" % (c, p) for c, p in zip(coef[1:], preds))
+        print("%s ~ %.3f + %s" % (target, coef[0], terms))
+        print("r2 = %.4f over n = %d" % (r2, n))
+        print("so the predictors leave %.1f%% of the variance unexplained"
+              % (100 * (1 - r2)))
+        return
+
+    rows = pairs(cols, args.min_n)
+    if args.pair:
+        rows = [r for r in rows if args.pair in (r[0], r[1])]
+        if not rows:
+            raise SystemExit("no pairs for %r; known: %s" % (args.pair, ", ".join(sorted(cols))))
+
+    print_pairs(rows, args.markdown, not args.no_ci)
+    if not args.markdown:
+        n = {m: len(v) for m, v in sorted(cols.items())}
+        print("\n%d metrics, %d pairs at n>=%d. models per metric: %s"
+              % (len(cols), len(rows), args.min_n,
+                 ", ".join("%s %d" % kv for kv in n.items())))
+
+
+if __name__ == "__main__":
+    main()

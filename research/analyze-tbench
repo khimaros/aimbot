@@ -1,0 +1,429 @@
+#!/usr/bin/env python3
+
+"""Which terminal-bench tasks agree with the sources we already trust?
+
+An aggregate leaderboard number hides that a suite is not one measurement: some
+of its tasks separate strong models from weak ones the way AA, Epoch and lmarena
+do, some are passed or failed by everybody, and some are decided by whether the
+harness timed out. `fetch-tbench` pulls the per-task rewards, and this ranks each
+task by how well its outcomes rank models the same way an external score does.
+
+Rows are models, pooled over every submission that ran that model, because the
+reference scores are per model. A submission naming several models is dropped:
+its result cannot be attributed to one of them. `--pool submissions` keeps the
+(agent x model) rows instead, which is the harness-confounded view -- the same
+model scores differently under different agents, and that variance is real but
+is not the model's.
+
+    ./analyze-tbench                    # every task, ranked by mean rho
+    ./analyze-tbench --ref 'epoch ECI'  # rank by one reference instead
+    ./analyze-tbench --task fix-git     # the models behind one row
+    ./analyze-tbench --unmatched        # tbench models no reference carries
+
+Two cautions the table carries in its own columns. A task with a pass rate at 0
+or 1 has no variance and correlates with nothing, which is a fact about the task
+and not a missing number. And ~90 tasks are tested at once, so the top of a
+ranking by correlation is partly the top of a ranking by luck: the footer prints
+what |rho| a single test and a multiplicity-corrected test would need.
+"""
+
+import argparse
+import json
+import math
+import os
+import re
+import statistics
+import sys
+
+LMARENA_BOARD = "text-overall-style_control"
+# reasoning-effort variants are separate entries in AA and lmarena but one model
+# in a terminal-bench submission, so an exact miss falls back to their mean
+EFFORT = {"high", "medium", "low", "xhigh", "max", "minimal", "thinking",
+          "reasoning", "non-reasoning", "adaptive"}
+# qualifiers one source appends and another does not: gbench says
+# gemini-3-pro-preview where AA says gemini-3-pro, and a submission says
+# Qwen3-Coder-480B-A35B-Instruct-FP8 where epoch says qwen3-coder-480b-a35b.
+# dropped one at a time from the right, only when the shorter name matches.
+QUALIFIER = ("preview", "instruct", "fp8", "latest", "reasoning")
+REFS = ["aa II", "aa coding", "aa agentic", "epoch ECI", "lmarena", "gbench"]
+# both orders are in use, sometimes within one source: AA carries
+# claude-4-5-sonnet next to claude-sonnet-4-6
+CLAUDE = re.compile(r"^claude-(\d+)-(\d+)-(opus|sonnet|haiku)$")
+
+
+def norm(name):
+    """One spelling for a model across five sources that each invented their own."""
+    n = re.sub(r"[^a-z0-9]+", "-", (name or "").split("/")[-1].lower()).strip("-")
+    m = CLAUDE.match(n)
+    return "claude-%s-%s-%s" % (m.group(3), m.group(1), m.group(2)) if m else n
+
+
+def rank(xs):
+    order = sorted(range(len(xs)), key=lambda i: xs[i])
+    out = [0.0] * len(xs)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and xs[order[j + 1]] == xs[order[i]]:
+            j += 1
+        shared = (i + j) / 2.0 + 1
+        for k in range(i, j + 1):
+            out[order[k]] = shared
+        i = j + 1
+    return out
+
+
+def pearson(xs, ys):
+    n = len(xs)
+    if n < 3:
+        return None
+    mx, my = sum(xs) / n, sum(ys) / n
+    sx = math.sqrt(sum((x - mx) ** 2 for x in xs))
+    sy = math.sqrt(sum((y - my) ** 2 for y in ys))
+    if not sx or not sy:
+        return None
+    return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / (sx * sy)
+
+
+def spearman(xs, ys):
+    return pearson(rank(xs), rank(ys))
+
+
+def rho_crit(n, alpha):
+    """The |rho| a sample of n needs to clear alpha, by the Fisher transform."""
+    if n < 5:
+        return None
+    z = statistics.NormalDist().inv_cdf(1 - alpha / 2)
+    return math.tanh(z / math.sqrt(n - 3))
+
+
+def load(path):
+    with open(path) as f:
+        return json.load(f)
+
+
+def optional(path):
+    try:
+        return load(path)
+    except (OSError, ValueError):
+        print("missing %s, its column is dropped" % path, file=sys.stderr)
+        return {}
+
+
+def index(pairs):
+    """{normalized name: value}, first spelling wins. Values arrive as numbers
+    from the json sources and as strings from epoch's csv bundle."""
+    out = {}
+    for name, value in pairs:
+        k = norm(name)
+        try:
+            if k and value is not None:
+                out.setdefault(k, float(value))
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+def lookup(idx, key):
+    while key:
+        if key in idx:
+            return idx[key]
+        # gpt-5.5 against AA's gpt-5-5-high / -medium / -low
+        vs = [v for k, v in idx.items()
+              if k.startswith(key + "-") and k[len(key) + 1:] in EFFORT]
+        if vs:
+            return sum(vs) / len(vs)
+        head, _, tail = key.rpartition("-")
+        key = head if tail in QUALIFIER else ""
+    return None
+
+
+def references(aa, epoch, lm, gbench):
+    idx = {
+        "aa II": index((s, r.get("intelligenceIndex")) for s, r in aa.items()),
+        "aa coding": index((s, r.get("codingIndex")) for s, r in aa.items()),
+        "aa agentic": index((s, r.get("agenticIndex")) for s, r in aa.items()),
+        "epoch ECI": index((r.get("Model name"), r.get("ECI Score"))
+                           for r in epoch.get("eci", [])),
+        "lmarena": index((e.get("modelDisplayName"), e.get("rating")) for e in
+                         ((lm.get("boards") or {}).get(LMARENA_BOARD) or {}).get("entries") or []),
+        # a gscore over a handful of games is noise; build-tables uses the same floor
+        "gbench": index((m.get("model_id"), m.get("gscore")) for m in gbench.get("rankings", [])
+                        if (m.get("total_matches") or 0) >= 1000),
+    }
+    return {k: v for k, v in idx.items() if v}
+
+
+def rows(tb, pool):
+    """{row key: {task: pass rate}} plus each row's overall accuracy."""
+    acc, tasks = {}, {}
+    for name, s in tb["submissions"].items():
+        models = s.get("models") or []
+        if pool == "models":
+            if len(models) != 1:
+                continue
+            key = norm(models[0])
+        else:
+            key = name if len(models) != 1 else "%s / %s" % (s["agent"], norm(models[0]))
+        for task, (n, reward) in s["tasks"].items():
+            t = tasks.setdefault(key, {}).setdefault(task, [0, 0.0])
+            t[0] += n
+            t[1] += reward
+    for key, ts in tasks.items():
+        trials = sum(t[0] for t in ts.values())
+        acc[key] = sum(t[1] for t in ts.values()) / trials if trials else None
+    return tasks, acc
+
+
+def task_column(tasks, task):
+    return {k: t[task][1] / t[task][0]
+            for k, t in tasks.items() if task in t and t[task][0]}
+
+
+def item_total(tasks, acc, task):
+    """Each row's accuracy with this task left out, so a task is not scored
+    against a total it is part of."""
+    out = {}
+    for k, t in tasks.items():
+        trials = sum(v[0] for v in t.values())
+        if task in t:
+            trials -= t[task][0]
+        if trials <= 0:
+            continue
+        reward = sum(v[1] for v in t.values()) - (t[task][1] if task in t else 0.0)
+        out[k] = reward / trials
+    return out
+
+
+def per_task(tb, tasks, ref, min_n, models=None):
+    """{task: rho} against one reference, over all rows or a subset of them."""
+    out = {}
+    if models is not None:
+        ref = {k: v for k, v in ref.items() if k in models}
+    for task in tb["tasks"]:
+        col = task_column(tasks, task)
+        if models is not None:
+            col = {k: v for k, v in col.items() if k in models}
+        r, _ = correlate(col, ref, min_n)
+        if r is not None:
+            out[task] = r
+    return out
+
+
+def subset_accuracy(tasks, chosen, models):
+    """Each row's accuracy over a chosen handful of tasks rather than all of them."""
+    out = {}
+    for m in models:
+        vals = [tasks[m][t] for t in chosen if t in tasks[m]]
+        trials = sum(v[0] for v in vals)
+        if trials:
+            out[m] = sum(v[1] for v in vals) / trials
+    return out
+
+
+def stability(tb, tasks, acc, resolved, names, min_n):
+    """Is 'which tasks discriminate' a property of the tasks, or of this sample?
+
+    Three answers. The references should agree with each other about the
+    ranking; a split of the models in half should reproduce it; and a subset
+    picked on one half should still beat the full suite on the other half,
+    which is the only version of the claim that is not fitted to its own data.
+    """
+    rhos = {n: per_task(tb, tasks, resolved[n], min_n) for n in names}
+    print("do the references agree about which tasks discriminate?")
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            sh = sorted(set(rhos[a]) & set(rhos[b]))
+            if len(sh) >= min_n:
+                print("  %-11s vs %-11s tasks=%-4d rho=%s"
+                      % (a, b, len(sh), fmt(spearman([rhos[a][t] for t in sh],
+                                                     [rhos[b][t] for t in sh]))))
+    ref = resolved[names[0]]
+    # alternating by score rather than at random keeps both halves spanning the
+    # whole range, so neither half is asked to rank models it cannot separate
+    order = sorted(ref, key=lambda k: -ref[k])
+    halves = (set(order[0::2]), set(order[1::2]))
+    a, b = (per_task(tb, tasks, ref, min_n, h) for h in halves)
+    sh = sorted(set(a) & set(b))
+    print("\nsplit-half over %d and %d models, on %s: rho=%s over %d tasks"
+          % (len(halves[0]), len(halves[1]), names[0],
+             fmt(spearman([a[t] for t in sh], [b[t] for t in sh])), len(sh)))
+    ranked = [sorted(h, key=lambda t: -h[t]) for h in (a, b)]
+    print("\npicked on one half, scored on the other:")
+    for k in (5, 10, 20):
+        got = []
+        for chosen, test in zip(ranked, halves[::-1]):
+            r, _ = correlate(subset_accuracy(tasks, chosen[:k], test),
+                             {m: ref[m] for m in test}, min_n)
+            full, _ = correlate({m: acc[m] for m in test}, {m: ref[m] for m in test}, min_n)
+            got.append((r, full))
+        print("  top %-3d tasks  subset rho=%s   full suite rho=%s"
+              % (k, fmt(sum(g[0] for g in got) / 2), fmt(sum(g[1] for g in got) / 2)))
+
+
+def emit(tb, tasks, acc, resolved, names, min_n, path):
+    """The whole table as json, for a consumer that wants the vector rather
+    than the ranking -- the same reason analyze-task-mentions has --json.
+
+    `discrimination` is the mean rho over whichever references carry enough
+    models, which is the single number to sort on; `rho` keeps the per-source
+    values because they do not all rest on the same n.
+    """
+    rhos = {n: per_task(tb, tasks, resolved[n], min_n) for n in names}
+    out = {}
+    for task, agg in tb["tasks"].items():
+        got = {n: rhos[n][task] for n in names if task in rhos[n]}
+        col = task_column(tasks, task)
+        tot, _ = correlate(col, item_total(tasks, acc, task), min_n)
+        out[task] = {
+            "trials": agg["trials"],
+            "pass_rate": agg["pass_rate"],
+            "models": len(col),
+            "rho": {n: round(v, 4) for n, v in got.items()},
+            "item_total": round(tot, 4) if tot is not None else None,
+            "discrimination": round(sum(got.values()) / len(got), 4) if got else None,
+        }
+    with open(path, "w") as f:
+        json.dump({"references": {n: len(set(resolved[n]) & set(tasks)) for n in names},
+                   "tasks": dict(sorted(out.items()))}, f, indent=1, sort_keys=True)
+    print("wrote %s: %d tasks" % (path, len(out)))
+
+
+def correlate(col, ref, min_n):
+    shared = sorted(set(col) & set(ref))
+    if len(shared) < min_n:
+        return None, len(shared)
+    xs = [col[k] for k in shared]
+    ys = [ref[k] for k in shared]
+    return spearman(xs, ys), len(shared)
+
+
+def fmt(r):
+    return "  -  " if r is None else "%+.2f" % r
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--data", default="data/tbench.json")
+    ap.add_argument("--pool", choices=["models", "submissions"], default="models")
+    ap.add_argument("--ref", help="rank by this reference instead of the mean")
+    ap.add_argument("--task", help="the per-model detail behind one task")
+    ap.add_argument("--min-n", type=int, default=8,
+                    help="drop a cell with fewer shared models (default %(default)s)")
+    ap.add_argument("--min-trials", type=int, default=20,
+                    help="drop a task with fewer trials overall (default %(default)s)")
+    ap.add_argument("--unmatched", action="store_true",
+                    help="list tbench models no reference carries")
+    ap.add_argument("--stability", action="store_true",
+                    help="is the ranking a property of the tasks or of this sample?")
+    ap.add_argument("--json", metavar="PATH",
+                    help="write the per-task vector to a file instead of a table")
+    ap.add_argument("--markdown", action="store_true")
+    args = ap.parse_args()
+
+    tb = load(args.data)
+    refs = references(load("data/artificial-analysis.json"), optional("data/epoch.json"),
+                      optional("data/lmarena.json"), optional("data/gbench.json"))
+    tasks, acc = rows(tb, args.pool)
+    # resolve every row against every reference once: the join is the expensive
+    # part and it does not change per task
+    resolved = {name: {k: lookup(idx, norm(k.split(" / ")[-1])) for k in tasks}
+                for name, idx in refs.items()}
+    resolved = {name: {k: v for k, v in col.items() if v is not None}
+                for name, col in resolved.items()}
+
+    if args.unmatched:
+        for k in sorted(tasks):
+            hits = [n for n, col in resolved.items() if k in col]
+            if len(hits) < len(refs):
+                print("  %-44s %s" % (k, ", ".join(hits) or "no reference"))
+        print("\n%d rows, %d fully matched"
+              % (len(tasks), sum(1 for k in tasks
+                                 if all(k in c for c in resolved.values()))))
+        return
+
+    names = [n for n in REFS if n in resolved]
+    if args.json:
+        emit(tb, tasks, acc, resolved, names, args.min_n, args.json)
+        return
+
+    if args.stability:
+        stability(tb, tasks, acc, resolved, names, args.min_n)
+        return
+
+    if args.task:
+        matches = sorted({t for ts in tasks.values() for t in ts if args.task in t})
+        if not matches:
+            raise SystemExit("no task matching %r" % args.task)
+        for task in matches:
+            col = task_column(tasks, task)
+            print("%s -- pass rate %.2f over %d rows"
+                  % (task, sum(col.values()) / len(col), len(col)))
+            print("  %-34s %-6s %s" % ("model", "pass", " ".join("%-9s" % n for n in names)))
+            order = sorted(col, key=lambda k: -(resolved.get("aa II", {}).get(k) or -1))
+            for k in order:
+                vals = " ".join("%-9s" % ("%.1f" % resolved[n][k] if k in resolved[n] else "-")
+                                for n in names)
+                print("  %-34s %-6.2f %s" % (k, col[k], vals))
+            print()
+        return
+
+    def row(label, col, pass_rate, total=None):
+        cells = {n: correlate(col, resolved[n], args.min_n) for n in names}
+        got = [r for r, _ in cells.values() if r is not None]
+        return (label, pass_rate, len(col), total, cells,
+                sum(got) / len(got) if got else None)
+
+    # the whole suite, as the baseline every single task is being compared
+    # against: one task of ninety cannot be expected to beat the aggregate
+    baseline = row("(suite accuracy)", acc,
+                   sum(acc.values()) / len(acc) if acc else 0)
+    table = []
+    for task, agg in sorted(tb["tasks"].items()):
+        if (agg.get("trials") or 0) < args.min_trials:
+            continue
+        col = task_column(tasks, task)
+        tot, _ = correlate(col, item_total(tasks, acc, task), args.min_n)
+        table.append(row(task, col, agg["pass_rate"], tot))
+
+    if args.ref:
+        if args.ref not in names:
+            raise SystemExit("unknown reference %r; known: %s" % (args.ref, ", ".join(names)))
+        table.sort(key=lambda r: -(r[4][args.ref][0] if r[4][args.ref][0] is not None else -9))
+    else:
+        table.sort(key=lambda r: -(r[5] if r[5] is not None else -9))
+
+    # each reference covers a different slice of the roster, and a column at
+    # n=11 is not the same evidence as one at n=25, so n rides in the header
+    cols = ["%s(%d)" % (x, len(set(resolved[x]) & set(tasks))) for x in names]
+    if args.markdown:
+        print("| %s |" % " | ".join(["task", "pass", "n", "tb total"] + cols + ["mean"]))
+        print("|---|--:|--:|--:|%s--:|" % ("--:|" * len(names)))
+        for task, pr, n, tot, cells, mean in [baseline] + table:
+            print("| %s | %.2f | %d | %s | %s | %s |"
+                  % (task, pr, n, fmt(tot),
+                     " | ".join(fmt(cells[x][0]) for x in names), fmt(mean)))
+    else:
+        print("  %-38s %-5s %-4s %-8s %s %s"
+              % ("task", "pass", "n", "tb total",
+                 " ".join("%-10s" % x for x in cols), "mean"))
+        for task, pr, n, tot, cells, mean in [baseline] + table:
+            print("  %-38s %-5.2f %-4d %-8s %s %s"
+                  % (task, pr, n, fmt(tot),
+                     " ".join("%-10s" % fmt(cells[x][0]) for x in names), fmt(mean)))
+
+    if args.markdown:
+        return
+    print("\n%d tasks over %d %s. models per reference: %s"
+          % (len(table), len(tasks), args.pool,
+             ", ".join("%s %d" % (n, len(set(resolved[n]) & set(tasks))) for n in names)))
+    n = max((len(set(resolved[x]) & set(tasks)) for x in names), default=0)
+    single, corrected = rho_crit(n, 0.05), rho_crit(n, 0.05 / max(len(table), 1))
+    if single:
+        print("at n=%d one test needs |rho| >= %.2f for p<0.05; across %d tasks the "
+              "bonferroni threshold is %.2f" % (n, single, len(table), corrected))
+
+
+if __name__ == "__main__":
+    main()

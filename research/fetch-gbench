@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+
+"""Fetch the Gert Labs GBENCH rankings into data/gbench.json.
+
+GBENCH scores models by making them play complex games against each other. That
+makes it a useful cross-check on artificial analysis: the task distribution is
+generated rather than curated, so there is no public problem set to train on,
+and outcomes are decided by play rather than by a grader.
+
+The site is client rendered, but it feeds from a public JSON API
+(/api/v1/global/rankings), which is what this reads. That is both simpler and
+richer than scraping the rendered compare view: the API carries every model's
+per-language and per-game breakdown at once, rather than two models at a time,
+and it exposes the `model_id` slugs the UI never puts in its HTML.
+
+Per-game detail is dropped (it is ~11mb and mostly game names), but the
+per-language and failure breakdowns are kept in full, so a later question about
+c++ or python needs no refetch.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+
+API = "https://gertlabs.com/api/v1/global/rankings"
+
+# per-mode sub-objects worth keeping, minus their per_game blobs
+MODES = ["agentic_coding", "oneshot_coding", "decision_making"]
+MODE_FIELDS = ["gscore", "ci_low", "ci_high", "avg_percentile", "median_percentile",
+               "success_rate", "gameplay_success_rate", "games_played", "total_matches",
+               "failure_breakdown", "by_language"]
+TOP_FIELDS = ["rank", "model_id", "model", "provider", "gscore", "ci_low", "ci_high",
+              "avg_percentile", "median_percentile", "success_rate",
+              "gameplay_success_rate", "games_played", "total_matches",
+              "failure_breakdown", "languages", "context_length", "tags"]
+
+
+def by_language(per_game):
+    """Roll per-game by_language counts up into a per-language success rate.
+
+    The API reports language outcomes per game; the UI's 'By Language' view is
+    this same aggregate. Recomputing it here keeps every language rather than
+    the eight the compare view happens to show.
+    """
+    agg = {}
+    for game in (per_game or {}).values():
+        for lang, c in (game.get("by_language") or {}).items():
+            a = agg.setdefault(lang, {"total": 0, "failed": 0, "gameplay_failed": 0,
+                                      "matches": 0})
+            a["total"] += c.get("total") or 0
+            a["failed"] += c.get("failed") or 0
+            a["gameplay_failed"] += c.get("gameplay_failed_count") or 0
+            a["matches"] += c.get("matches") or 0
+    for a in agg.values():
+        # the api reports success_rate per game; roll it up by submission count
+        # rather than averaging rates, so a 1-submission game cannot outvote a
+        # 40-submission one
+        a["success_rate"] = round((a["total"] - a["failed"]) / a["total"], 4) \
+            if a["total"] else None
+        a["gameplay_success_rate"] = round(
+            (a["total"] - a["gameplay_failed"]) / a["total"], 4) if a["total"] else None
+    return agg
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--url", default=API)
+    ap.add_argument("--out", default="data/gbench.json")
+    # the api sends no etag, so freshness is time-based
+    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    args = ap.parse_args()
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    cmd = [os.path.join(here, "httpcache"), args.url, "--key", "gbench-rankings",
+           "--max-age", str(args.max_age), "--header", "Accept: application/json"]
+    if args.refresh:
+        cmd.append("--refresh")
+    raw = subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout
+    try:
+        payload = json.loads(raw)
+    except ValueError:
+        sys.exit("api did not return json (%d bytes)" % len(raw))
+    rankings = payload.get("data", {}).get("rankings")
+    if not rankings:
+        sys.exit("no rankings in payload")
+
+    out = []
+    for r in rankings:
+        m = {k: r.get(k) for k in TOP_FIELDS if k in r}
+        m["by_language"] = by_language(r.get("per_game"))
+        for mode in MODES:
+            sub = r.get(mode)
+            if not isinstance(sub, dict):
+                continue
+            keep = {k: sub.get(k) for k in MODE_FIELDS if k in sub}
+            keep["by_language"] = by_language(sub.get("per_game"))
+            m[mode] = keep
+        out.append(m)
+
+    with open(args.out, "w") as f:
+        json.dump({"rankings": out}, f, indent=1)
+    langs = sorted({l for m in out for l in m.get("by_language", {})})
+    print("wrote %s: %d models, languages: %s" % (args.out, len(out), ", ".join(langs)))
+
+
+if __name__ == "__main__":
+    main()

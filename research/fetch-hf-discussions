@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+
+"""Fetch huggingface repo discussions into data/hf-discussions.json.
+
+This is the only source in this repo where breakage is reported against a
+*specific quant of a specific repo*. Reddit argues about whether a model is
+good; the discussion tab on unsloth/Laguna-S-2.1-GGUF is where someone says
+UD-Q5_K_XL emits no tokens under rocm on strix halo. MODELS.md and the roadmap
+already cite that kind of report by hand -- this collects it.
+
+Repos come from repos.txt, the same list fetch-gguf-sizes sizes, so the
+discussions line up one-to-one with the quants in the tables.
+
+The listing carries titles, comment counts and reactions but no bodies, so
+--bodies fetches the full thread for the most-discussed N per repo. Everything
+fetched is written out whole rather than trimmed to what today's analysis
+wants, so a later question needs no refetch.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+LIST = "https://huggingface.co/api/models/%s/discussions?p=%d"
+DETAIL = "https://huggingface.co/api/models/%s/discussions/%d"
+UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+      "Chrome/140.0.0.0 Safari/537.36")
+PER_PAGE = 50
+
+
+def get(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age), "--header", "User-Agent: " + UA]
+    if refresh:
+        cmd.append("--refresh")
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout
+    try:
+        return json.loads(out)
+    except ValueError:
+        return None
+
+
+def slug(repo):
+    return re.sub(r"\W+", "_", repo)
+
+
+def thread_text(detail):
+    """Flatten a discussion into its comments, oldest first."""
+    out = []
+    for e in detail.get("events") or []:
+        if e.get("type") != "comment":
+            continue
+        data = e.get("data") or {}
+        raw = (data.get("latest") or {}).get("raw") or ""
+        if not raw.strip():
+            continue
+        out.append(dict(
+            author=(e.get("author") or {}).get("name"),
+            created=e.get("createdAt"),
+            reactions=sum(r.get("count", 0) for r in (data.get("reactions") or [])),
+            text=raw.strip()))
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--repos", default="repos.txt")
+    ap.add_argument("--out", default="data/hf-discussions.json")
+    ap.add_argument("--bodies", type=int, default=12, metavar="N",
+                    help="pull full threads for the N most-discussed per repo (0 = titles only)")
+    ap.add_argument("--pages", type=int, default=2, help="listing pages per repo")
+    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--delay", type=float, default=0.3)
+    args = ap.parse_args()
+
+    with open(args.repos) as f:
+        repos = [l.split("#")[0].strip() for l in f]
+    repos = [r for r in repos if r]
+
+    out, threads = {}, 0
+    for repo in repos:
+        found = []
+        for p in range(args.pages):
+            d = get(LIST % (repo, p), "hfd-%s-p%d" % (slug(repo), p), args.max_age, args.refresh)
+            if not d or not d.get("discussions"):
+                break
+            found += d["discussions"]
+            if len(found) >= (d.get("count") or 0):
+                break
+            time.sleep(args.delay)
+        if not found:
+            print("  %-52s no discussions" % repo, file=sys.stderr)
+            continue
+
+        rows = []
+        for x in found:
+            rows.append(dict(
+                num=x.get("num"), title=x.get("title"), status=x.get("status"),
+                is_pr=x.get("isPullRequest"), created=x.get("createdAt"),
+                author=(x.get("author") or {}).get("name"),
+                comments=x.get("numComments") or 0,
+                reaction_users=x.get("numReactionUsers") or 0,
+                reactions={r["reaction"]: r["count"] for r in (x.get("topReactions") or [])}))
+
+        # bodies are where the useful detail is, and issues attract replies, so
+        # comment count is the cheapest proxy for "worth reading"
+        for r in sorted(rows, key=lambda r: -r["comments"])[:args.bodies]:
+            time.sleep(args.delay)
+            det = get(DETAIL % (repo, r["num"]), "hfd-%s-%d" % (slug(repo), r["num"]),
+                      args.max_age, args.refresh)
+            if det:
+                r["thread"] = thread_text(det)
+                threads += 1
+        out[repo] = dict(count=len(rows), discussions=rows)
+        print("  %-52s %3d discussions, %d bodies" %
+              (repo, len(rows), sum(1 for r in rows if "thread" in r)), file=sys.stderr)
+
+    with open(args.out, "w") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+    total = sum(v["count"] for v in out.values())
+    print("wrote %s: %d repos, %d discussions, %d full threads"
+          % (args.out, len(out), total, threads))
+
+
+if __name__ == "__main__":
+    main()

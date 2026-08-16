@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+
+"""Fetch a URL through a local etag/last-modified cache; write the body to stdout.
+
+    httpcache <url> [--key NAME] [--refresh] [--max-age SECONDS] [--path]
+
+Revalidates with If-None-Match / If-Modified-Since. On 304 the cached body is
+replayed and nothing is transferred. `--max-age` skips the network entirely
+while the cached copy is younger than that, which matters for the huggingface
+tree API: it does not always send an etag, and quant listings change rarely
+compared to how often the tables get rebuilt.
+
+Exit status is 0 whether the body came from the network or the cache. A stale
+cache plus a failed fetch is still a success -- the cached body is served and
+the reason goes to stderr, so a collector keeps working offline rather than
+writing a truncated data file.
+
+`--path` prints the cached file's path instead of its body, which is how a
+binary payload gets read: stdout is decoded as text with errors replaced, so a
+zip or an image survives the cache but not the pipe.
+
+Cache lives in research/.cache (gitignored). Status per request goes to stderr.
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import time
+
+CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache")
+
+
+def paths(url, key):
+    name = key or hashlib.sha256(url.encode()).hexdigest()[:20]
+    safe = "".join(c if c.isalnum() or c in "-._" else "_" for c in name)
+    return os.path.join(CACHE, safe + ".body"), os.path.join(CACHE, safe + ".meta")
+
+
+def load_meta(p):
+    try:
+        with open(p) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def cleanup(body_p, meta_p):
+    """Drop curl's scratch files. Only the 200 path used to, so a cache that
+    revalidated a lot accumulated one header dump per url and never swept."""
+    for p in (body_p + ".new", meta_p + ".hdr"):
+        os.path.exists(p) and os.remove(p)
+
+
+def emit(body_p, as_path):
+    if as_path:
+        print(body_p)
+    else:
+        sys.stdout.write(open(body_p, encoding="utf-8", errors="replace").read())
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("url")
+    ap.add_argument("--key", help="stable cache name; defaults to a hash of the url")
+    ap.add_argument("--refresh", action="store_true", help="ignore the cache, refetch")
+    ap.add_argument("--max-age", type=int, default=0,
+                    help="serve the cached body without revalidating if younger than this")
+    ap.add_argument("--timeout", default="90")
+    ap.add_argument("--header", action="append", default=[])
+    ap.add_argument("--path", action="store_true",
+                    help="print the cached file's path instead of its body (binary payloads)")
+    args = ap.parse_args()
+
+    os.makedirs(CACHE, exist_ok=True)
+    body_p, meta_p = paths(args.url, args.key)
+    meta = load_meta(meta_p)
+    have = os.path.exists(body_p)
+
+    if have and not args.refresh and args.max_age:
+        age = time.time() - os.path.getmtime(body_p)
+        if age < args.max_age:
+            print("cache fresh (%ds old) %s" % (age, args.url[:70]), file=sys.stderr)
+            emit(body_p, args.path)
+            return
+
+    cmd = ["curl", "-sL", "--max-time", args.timeout, "-o", body_p + ".new",
+           "-w", "%{http_code}", "-D", meta_p + ".hdr"]
+    for h in args.header:
+        cmd += ["-H", h]
+    if have and not args.refresh:
+        if meta.get("etag"):
+            cmd += ["-H", "If-None-Match: " + meta["etag"]]
+        if meta.get("last_modified"):
+            cmd += ["-H", "If-Modified-Since: " + meta["last_modified"]]
+    cmd.append(args.url)
+
+    # 429 means we are asking too fast; back off rather than losing the record
+    for attempt in range(4):
+        code = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+        if code != "429":
+            break
+        wait = 5 * (2 ** attempt)
+        print("429 rate limited, sleeping %ds (attempt %d/4) %s"
+              % (wait, attempt + 1, args.url[:50]), file=sys.stderr)
+        time.sleep(wait)
+
+    if code == "304" and have:
+        print("304 not modified %s" % args.url[:70], file=sys.stderr)
+        cleanup(body_p, meta_p)
+        # a 304 IS a confirmation the body is current, so restamp it. without
+        # this `--max-age` never short-circuits anything that has revalidated
+        # once, and the huggingface collectors pay 289 conditional requests a
+        # run to be told nothing changed
+        os.utime(body_p, None)
+        meta["fetched"] = int(time.time())
+        with open(meta_p, "w") as f:
+            json.dump(meta, f)
+        emit(body_p, args.path)
+        return
+
+    ok = code.startswith("2") and os.path.exists(body_p + ".new") \
+        and os.path.getsize(body_p + ".new") > 0
+    if not ok:
+        cleanup(body_p, meta_p)
+        if have:
+            print("fetch failed (%s), serving stale cache: %s" % (code, args.url[:60]),
+                  file=sys.stderr)
+            emit(body_p, args.path)
+            return
+        sys.exit("fetch failed (%s) and no cache: %s" % (code, args.url))
+
+    os.replace(body_p + ".new", body_p)
+    hdrs = {}
+    try:
+        for line in open(meta_p + ".hdr", encoding="utf-8", errors="replace"):
+            if ":" in line:
+                k, v = line.split(":", 1)
+                hdrs[k.strip().lower()] = v.strip()
+    except Exception:
+        pass
+    with open(meta_p, "w") as f:
+        json.dump({"url": args.url, "etag": hdrs.get("etag"),
+                   "last_modified": hdrs.get("last-modified"), "fetched": int(time.time())}, f)
+    cleanup(body_p, meta_p)
+    print("%s fetched %d bytes %s" % (code, os.path.getsize(body_p), args.url[:60]),
+          file=sys.stderr)
+    emit(body_p, args.path)
+
+
+if __name__ == "__main__":
+    main()

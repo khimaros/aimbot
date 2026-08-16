@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+
+"""How far a model's own card sits from a third party measuring the same thing.
+
+Cards are the only numbers a new model has, so they get collected -- but they
+cannot be worth as much as a measurement, and "not as much" needs a figure
+rather than a shrug. This joins data/model-cards.json to artificial analysis and
+epoch on (model, benchmark) and reports the delta.
+
+Read the sign, not just the size. A card that is uniformly a couple of points
+high is running a slightly kinder harness, which is ordinary and correctable. A
+card that is high on its headline benchmark and accurate elsewhere is telling
+you which number it optimised.
+
+    ./analyze-self-report              # every claim with a third-party match
+    ./analyze-self-report --markdown
+    ./analyze-self-report --by-model   # one row per model, mean delta
+"""
+
+import argparse
+import json
+import os
+import re
+import statistics
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+# card benchmark key -> where a third party measured the same thing.
+# (source, field, scale) -- AA reports some of these as 0-1 fractions.
+THIRD_PARTY = {
+    "terminalbench": [("aa", "terminalbenchV21", 100), ("epoch", "terminalbench", 100)],
+    "gpqa": [("aa", "gpqa", 100), ("epoch", "gpqa_diamond", 1)],
+    "hle": [("aa", "hle", 100), ("epoch", "hle", 100)],
+    "scicode": [("aa", "scicode", 100), ("epoch", "scicode", 1)],
+    "ifbench": [("aa", "ifbench", 100)],
+    "tau2": [("aa", "tau2", 100)],
+    "swebench_verified": [("epoch", "swe_bench_verified", 1)],
+    "aider_polyglot": [("epoch", "aider_polyglot", 100)],
+    "deepswe": [("epoch", "deepswe", 100)],
+}
+
+
+def norm(s):
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def load(name):
+    try:
+        return json.load(open("data/%s.json" % name))
+    except (IOError, ValueError):
+        return {}
+
+
+def epoch_value(epoch, bench, model_id):
+    b = (epoch.get("benchmarks") or {}).get(bench)
+    if not b or not model_id:
+        return None
+    metric = b.get("metric")
+    for row in b.get("results") or []:
+        mv = (row.get("Model version") or "").split("/")[-1].rsplit("_", 1)[0]
+        if mv == model_id and metric in row:
+            try:
+                return float(row[metric])
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--markdown", action="store_true")
+    ap.add_argument("--by-model", action="store_true")
+    ap.add_argument("--cross-card", action="store_true",
+                    help="where two cards report the same model and disagree")
+    args = ap.parse_args()
+
+    import yaml
+    reg = yaml.safe_load(
+        open(os.path.join(HERE, "..", "registry", "models.yaml"))).get("models") or {}
+    cards, aa, epoch = load("model-cards"), load("artificial-analysis"), load("epoch")
+
+    if args.cross_card:
+        # a card reports peers as well as itself. where a peer also publishes a
+        # card, the two numbers for the SAME model on the SAME benchmark should
+        # agree -- and where they do not, differencing two cards to get a
+        # generational delta is invalid. use the reporting card's own peer
+        # column instead, which is at least internally consistent.
+        short_by_name = {}
+        for r, m in reg.items():
+            n = (m.get("name") or {}).get("short") or r
+            short_by_name[norm(n)] = r
+            short_by_name[norm(r.split("/")[-1])] = r
+        out = []
+        for repo, card in cards.items():
+            for bench, peers in (card.get("others") or {}).items():
+                for peer_label, peer_val in peers.items():
+                    target = short_by_name.get(norm(peer_label))
+                    own = ((cards.get(target) or {}).get("claimed") or {}).get(bench)
+                    if own is None or target == repo:
+                        continue
+                    if abs(own - peer_val) < 0.05:
+                        continue
+                    out.append((repo, target, bench, peer_val, own,
+                                round(peer_val - own, 1)))
+        out.sort(key=lambda r: -abs(r[5]))
+        if args.markdown:
+            print("| reported by | about | benchmark | reporter says | own card says | gap |")
+            print("|---|---|---|--:|--:|--:|")
+            for r in out:
+                print("| %s | %s | %s | %.1f | %.1f | %+.1f |"
+                      % (r[0].split("/")[-1], r[1].split("/")[-1], r[2], r[3], r[4], r[5]))
+        else:
+            for r in out:
+                print("  %-22s about %-22s %-18s %6.1f vs own %6.1f  %+.1f"
+                      % (r[0].split("/")[-1], r[1].split("/")[-1], r[2], r[3], r[4], r[5]))
+        print("\n%d disagreements between cards about the same model" % len(out))
+        return
+
+    rows = []
+    for repo, card in cards.items():
+        ids = (reg.get(repo) or {}).get("ids") or {}
+        short = ((reg.get(repo) or {}).get("name") or {}).get("short", repo)
+        aa_rec = aa.get(ids.get("aa") or "") or {}
+        for bench, claimed in (card.get("claimed") or {}).items():
+            for source, field, scale in THIRD_PARTY.get(bench, []):
+                if source == "aa":
+                    v = aa_rec.get(field)
+                    measured = v * scale if isinstance(v, (int, float)) else None
+                else:
+                    v = epoch_value(epoch, field, ids.get("epoch"))
+                    measured = v * scale if isinstance(v, (int, float)) else None
+                if measured is None:
+                    continue
+                rows.append({"model": short, "benchmark": bench, "source": source,
+                             "claimed": claimed, "measured": round(measured, 1),
+                             "delta": round(claimed - measured, 1)})
+                break
+
+    if not rows:
+        sys.exit("no card claim has a third-party match yet")
+
+    if args.by_model:
+        per = {}
+        for r in rows:
+            per.setdefault(r["model"], []).append(r["delta"])
+        out = sorted(((m, statistics.mean(d), len(d)) for m, d in per.items()),
+                     key=lambda x: -x[1])
+        if args.markdown:
+            print("| model | mean delta | benchmarks |")
+            print("|---|--:|--:|")
+            for m, d, n in out:
+                print("| %s | %+.1f | %d |" % (m, d, n))
+        else:
+            for m, d, n in out:
+                print("  %-22s %+.1f over %d benchmarks" % (m, d, n))
+    elif args.markdown:
+        print("| model | benchmark | claimed | measured | delta |")
+        print("|---|---|--:|--:|--:|")
+        for r in sorted(rows, key=lambda r: -r["delta"]):
+            print("| %s | %s | %.1f | %.1f | %+.1f |"
+                  % (r["model"], r["benchmark"], r["claimed"], r["measured"], r["delta"]))
+    else:
+        for r in sorted(rows, key=lambda r: -r["delta"]):
+            print("  %-20s %-18s claimed %6.1f  measured %6.1f  %+.1f"
+                  % (r["model"], r["benchmark"], r["claimed"], r["measured"], r["delta"]))
+
+    deltas = [r["delta"] for r in rows]
+    print("\n%d claims matched, mean %+.1f, median %+.1f, %d of %d overstate"
+          % (len(deltas), statistics.mean(deltas), statistics.median(deltas),
+             sum(1 for d in deltas if d > 0), len(deltas)))
+
+
+if __name__ == "__main__":
+    main()

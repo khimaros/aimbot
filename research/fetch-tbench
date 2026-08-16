@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+
+"""Fetch terminal-bench 2.0 per-task outcomes into data/tbench.json.
+
+Every other source here scores a model with one number per benchmark. This one
+goes a level down: terminal-bench's leaderboard is backed by a huggingface
+dataset of the raw submissions, and each run's `result.json` lists which of the
+~89 tasks the agent passed by name. That is what makes a question like "which
+terminal-bench tasks track AA intelligence and which are noise" answerable at
+all -- an aggregate accuracy cannot tell you that.
+
+The dataset is 121gib of trajectories and verifier logs, so nothing here fetches
+a submission wholesale: the tree api gives the job directories, and only the
+job-level `result.json` (~7kb) is pulled.
+
+A row is a submission (agent x model), not a model: the same model appears under
+several harnesses, and the harness moves the score as much as the model does.
+Both keys are kept so the analysis can pool or separate them.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+DATASET = "harborframework/terminal-bench-2-leaderboard"
+TREE = "https://huggingface.co/api/datasets/%s/tree/main/%s"
+RAW = "https://huggingface.co/datasets/%s/resolve/main/%s"
+ROOT = "submissions/terminal-bench/%s"
+# task directories carry a per-task suffix (`fix-git__xLohgt5`) that is stable
+# across submissions; the base name is what the task is called everywhere else
+TASK = re.compile(r"^(.*?)__[A-Za-z0-9]{7}$")
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def fetch(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key, "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                         text=True).stdout
+    return out
+
+
+def fetch_json(url, key, max_age, refresh):
+    try:
+        return json.loads(fetch(url, key, max_age, refresh))
+    except ValueError:
+        return None
+
+
+def slug(path):
+    return re.sub(r"[^A-Za-z0-9]+", "-", path).strip("-").lower()
+
+
+def metadata(text):
+    """The agent and models out of a submission's metadata.yaml.
+
+    Parsed by hand rather than with pyyaml: the file is five keys and a list,
+    and every other collector here runs on the stdlib alone. Submitters leave
+    the template's `# Required: model identifier` comments in place, so a naive
+    read of the line gives a model called
+    `gemini-3-flash-preview # Required: model identifier`.
+    """
+    agent, org, models = None, None, []
+    for line in text.splitlines():
+        line = re.sub(r'\s+#.*$', "", line.strip())
+        m = re.match(r'^(?:- )?(\w+):\s*"?([^"]*?)"?$', line)
+        if not m:
+            continue
+        k, v = m.group(1), m.group(2).strip()
+        if k == "agent_display_name":
+            agent = v
+        elif k == "agent_org_display_name":
+            org = v
+        elif k == "model_name":
+            models.append(v)
+    return agent, org, models
+
+
+def rewards(result):
+    """{task: reward} for one job, flattened over however many evals it holds.
+
+    Errored trials (agent timeout, verifier timeout) already appear under reward
+    0.0, so they need no separate handling -- a task the agent could not finish
+    is a task it did not pass.
+    """
+    out = {}
+    for ev in ((result.get("stats") or {}).get("evals") or {}).values():
+        for value, tasks in ((ev.get("reward_stats") or {}).get("reward") or {}).items():
+            try:
+                r = float(value)
+            except ValueError:
+                continue
+            for t in tasks:
+                m = TASK.match(t)
+                out[m.group(1) if m else t] = r
+    return out
+
+
+def submission(name, version, max_age, refresh):
+    base = ROOT % version + "/" + name
+    tree = fetch_json(TREE % (DATASET, base), "tb-sub-" + slug(name), max_age, refresh)
+    if not isinstance(tree, list):
+        return None
+    # .yaml in the template, .yml in a few submissions
+    meta = ""
+    for e in tree:
+        f = e["path"].rsplit("/", 1)[-1]
+        if e.get("type") == "file" and f.startswith("metadata.y"):
+            meta = fetch(RAW % (DATASET, base + "/" + f), "tb-meta-" + slug(name),
+                         max_age, refresh)
+    agent, org, models = metadata(meta)
+    # the directory encodes agent__model, which is all there is to go on when a
+    # submission ships no metadata at all
+    if not models and "__" in name:
+        models = [name.split("__", 1)[1]]
+    tasks, jobs, errors = {}, [], 0
+    for e in tree:
+        if e.get("type") != "directory":
+            continue
+        job = e["path"].rsplit("/", 1)[-1]
+        res = fetch_json(RAW % (DATASET, base + "/" + job + "/result.json"),
+                         "tb-job-" + slug(name + "-" + job), max_age, refresh)
+        if not res:
+            continue
+        jobs.append(job)
+        errors += (res.get("stats") or {}).get("n_errors") or 0
+        for task, r in rewards(res).items():
+            t = tasks.setdefault(task, {"trials": 0, "reward": 0.0})
+            t["trials"] += 1
+            t["reward"] += r
+    if not tasks:
+        return None
+    trials = sum(t["trials"] for t in tasks.values())
+    return {
+        "agent": agent or name.split("__")[0],
+        "agent_org": org,
+        "models": models,
+        "jobs": len(jobs),
+        "trials": trials,
+        "errors": errors,
+        "accuracy": round(sum(t["reward"] for t in tasks.values()) / trials, 4),
+        "tasks": {k: [v["trials"], round(v["reward"], 3)] for k, v in sorted(tasks.items())},
+    }
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--version", default="2.0", help="terminal-bench version (default %(default)s)")
+    ap.add_argument("--out", default="data/tbench.json")
+    ap.add_argument("--max-age", type=int, default=0,
+                    help="skip revalidation below this age; 0 always revalidates")
+    ap.add_argument("--refresh", action="store_true")
+    args = ap.parse_args()
+
+    tree = fetch_json(TREE % (DATASET, ROOT % args.version), "tb-tree-" + args.version,
+                      args.max_age, args.refresh)
+    if not isinstance(tree, list):
+        raise SystemExit("no submission listing for terminal-bench %s" % args.version)
+    names = [e["path"].rsplit("/", 1)[-1] for e in tree if e.get("type") == "directory"]
+
+    subs = {}
+    for name in sorted(names):
+        s = submission(name, args.version, args.max_age, args.refresh)
+        if not s:
+            print("  %-52s no results" % name[:52], file=sys.stderr)
+            continue
+        subs[name] = s
+        print("  %-52s %2d jobs %4d trials  acc %.3f"
+              % (name[:52], s["jobs"], s["trials"], s["accuracy"]), file=sys.stderr)
+
+    # per-task difficulty over every trial in the capture, which is the
+    # denominator any per-task claim needs: a task nobody passes correlates with
+    # nothing, and so does one everybody passes
+    tasks = {}
+    for s in subs.values():
+        for task, (n, r) in s["tasks"].items():
+            t = tasks.setdefault(task, {"trials": 0, "reward": 0.0})
+            t["trials"] += n
+            t["reward"] += r
+    for t in tasks.values():
+        t["pass_rate"] = round(t["reward"] / t["trials"], 4) if t["trials"] else None
+        t["reward"] = round(t["reward"], 3)
+
+    out = {
+        "_provenance": {
+            "source": "https://huggingface.co/datasets/" + DATASET,
+            "leaderboard": "https://www.tbench.ai/leaderboard/terminal-bench/" + args.version,
+            "version": args.version,
+            "note": "per-submission task rewards; [trials, summed reward] per task",
+        },
+        "tasks": dict(sorted(tasks.items())),
+        "submissions": subs,
+    }
+    with open(args.out, "w") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+    print("wrote %s: %d submissions, %d tasks, %d trials"
+          % (args.out, len(subs), len(tasks),
+             sum(s["trials"] for s in subs.values())))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+
+"""Fetch hacker news stories and comments into data/hackernews.json.
+
+Unlike reddit, hn needs no browser: the algolia search api is open and returns
+comment bodies directly. Stories are matched per query, then the top comments
+of each matching story are pulled by story id.
+
+That is one request per query plus one per story, so fetches go through
+./httpcache and reuse anything younger than --max-age. Algolia sends no etag,
+so the revalidation path never fires and only the age check saves the request.
+"""
+
+import argparse
+import html
+import json
+import os
+import re
+import subprocess
+import urllib.parse
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+API = "https://hn.algolia.com/api/v1/search?%s"
+
+QUERIES = [
+    "Qwen 3.6", "GLM 5.2", "Kimi K3", "MiniMax", "DeepSeek V4",
+    "gpt-oss", "Strix Halo", "benchmaxxing", "local LLM 128GB",
+]
+
+
+def api(cache, refresh, max_age, **params):
+    url = API % urllib.parse.urlencode(params)
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", "hn-" + cache,
+           "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    try:
+        return json.loads(subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout)
+    except ValueError:
+        return {}
+
+
+def clean(s):
+    return re.sub(r"\s+", " ", html.unescape(re.sub("<[^>]+>", "", s or ""))).strip()
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--stories", type=int, default=6)
+    ap.add_argument("--comments", type=int, default=12)
+    ap.add_argument("--out", default="data/hackernews.json")
+    ap.add_argument("--max-age", type=int, default=6 * 3600, metavar="SECONDS",
+                    help="reuse a cached response younger than this (default 6h)")
+    ap.add_argument("--refresh", action="store_true", help="ignore the cache, refetch")
+    args = ap.parse_args()
+
+    def get(cache, **params):
+        return api(cache, args.refresh, args.max_age, **params)
+
+    out = {}
+    for q in QUERIES:
+        slug = re.sub(r"\W+", "_", q)
+        hits = get("q-" + slug, query=q, tags="story",
+                   hitsPerPage=args.stories).get("hits", [])
+        stories = []
+        for h in hits:
+            sid = h["objectID"]
+            cs = get("s-" + sid, tags="comment,story_%s" % sid, hitsPerPage=60).get("hits", [])
+            comments = [clean(c.get("comment_text"))[:1200] for c in cs]
+            comments = [c for c in comments if len(c) > 120][:args.comments]
+            stories.append(dict(id=sid, title=h.get("title"), points=h.get("points"),
+                                num_comments=h.get("num_comments"),
+                                created_at=(h.get("created_at") or "")[:10],
+                                url="https://news.ycombinator.com/item?id=%s" % sid,
+                                comments=comments))
+        out[q] = stories
+        print("  %-20s %d stories" % (q, len(stories)))
+
+    with open(args.out, "w") as f:
+        json.dump(out, f, indent=1)
+    print("wrote %s" % args.out)
+
+
+if __name__ == "__main__":
+    main()

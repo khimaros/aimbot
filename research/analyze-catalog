@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+
+"""What the hand-curated roster is missing, from data/hf-catalog.json.
+
+repos.txt was assembled by reading release announcements, which biases it
+toward models somebody wrote a post about. This asks the opposite question:
+of everything being downloaded in GGUF form, what is not tracked?
+
+Ranking by likes or downloads alone surfaces 2B models and month-old merges,
+so `--candidates` filters to what could plausibly matter here -- a size class
+this box can hold, a base model already on the roster, or a trending position
+high enough that ignoring it is a decision rather than an oversight.
+
+    ./analyze-catalog                    # trending repos not tracked
+    ./analyze-catalog --candidates       # filtered to plausible roster additions
+    ./analyze-catalog --publisher unsloth --grep GLM
+    ./analyze-catalog --coverage         # which roster models each publisher quantizes
+"""
+
+import argparse
+import collections
+import json
+import re
+import subprocess
+import os
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA = "data/hf-catalog.json"
+
+# a repo name that says "this is a variant, not a model" -- these are tracked
+# for discovery but are not roster candidates without independent evaluation
+VARIANT = re.compile(r"abliterat|uncensored|heretic|erotic|roleplay|\bnsfw\b|"
+                     r"horror|darkness|\bdau\b|neo-max|brainstorm", re.I)
+# parameter count in the repo name, e.g. Qwen3.6-27B or 35B-A3B
+PARAMS = re.compile(r"[-_/]?(\d+(?:\.\d+)?)\s*b\b", re.I)
+
+# roughly what a 128gb box can hold at a useful quant, in billions of total
+# params. above this a model only fits at precisions the quant curve says cost
+# real accuracy; below it the model is too small to compete on this roster.
+MIN_B, MAX_B = 20, 400
+
+
+def size_b(name):
+    """Largest B-number in the repo name; MoE repos carry two (total, active)."""
+    hits = [float(m.group(1)) for m in PARAMS.finditer(name)]
+    return max(hits) if hits else None
+
+
+def models(d):
+    seen = {}
+    for r in d.get("trending", []):
+        seen[r["id"]] = dict(r, source="trending")
+    for a, rows in (d.get("authors") or {}).items():
+        for r in rows:
+            seen.setdefault(r["id"], dict(r, source="author:" + a))
+    return seen
+
+
+def roster_bases():
+    """Model families already on the roster, from the shared alias table."""
+    out = subprocess.run([os.path.join(HERE, "match-models"), "--lexicon"],
+                         stdout=subprocess.PIPE, text=True, check=True).stdout
+    return {k: re.compile(v, re.I) for k, v in json.loads(out)["models"].items()}
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--data", default=DATA)
+    ap.add_argument("--candidates", action="store_true",
+                    help="filter to plausible roster additions")
+    ap.add_argument("--publisher", help="list one publisher's repos")
+    ap.add_argument("--grep", help="filter repo ids by regex")
+    ap.add_argument("--coverage", action="store_true",
+                    help="which roster models each publisher has quantized")
+    ap.add_argument("--top", type=int, default=30)
+    args = ap.parse_args()
+
+    d = json.load(open(args.data))
+    allm = models(d)
+    mre = roster_bases()
+
+    if args.coverage:
+        pubs = sorted(d.get("authors") or {})
+        print("| model | " + " | ".join(pubs) + " |")
+        print("|---|" + "---|" * len(pubs))
+        for name, r in mre.items():
+            cells = []
+            for p in pubs:
+                hit = any(r.search(x["id"].split("/", 1)[-1])
+                          for x in (d["authors"].get(p) or []))
+                cells.append("yes" if hit else "")
+            if any(cells):
+                print("| %s | %s |" % (name, " | ".join(cells)))
+        print("\nsearched %d repos across %d publishers. blank means no gguf repo whose"
+              % (sum(len(v) for v in d["authors"].values()), len(pubs)))
+        print("name matches that model, within the pages fetched (newest first).")
+        return
+
+    if args.publisher:
+        rows = d["authors"].get(args.publisher)
+        if rows is None:
+            raise SystemExit("no such publisher; try: " + ", ".join(sorted(d["authors"])))
+        if args.grep:
+            g = re.compile(args.grep, re.I)
+            rows = [r for r in rows if g.search(r["id"])]
+        print("%d repo(s) from %s%s\n" % (len(rows), args.publisher,
+                                          " matching %r" % args.grep if args.grep else ""))
+        for r in sorted(rows, key=lambda r: -(r.get("downloads") or 0))[:args.top]:
+            print("  %-64s dl=%-9s likes=%-5s %s%s" % (
+                r["id"][:64], r.get("downloads"), r.get("likes"),
+                (r.get("lastModified") or "")[:10], "  [tracked]" if r["tracked"] else ""))
+        return
+
+    rows = [r for r in allm.values() if not r["tracked"]]
+    if args.grep:
+        g = re.compile(args.grep, re.I)
+        rows = [r for r in rows if g.search(r["id"])]
+
+    if args.candidates:
+        keep = []
+        for r in rows:
+            name = r["id"].split("/", 1)[-1]
+            b = size_b(name)
+            if VARIANT.search(r["id"]):
+                continue
+            # either it is a size class this box cares about, or it is a
+            # requantization of something already on the roster
+            related = any(x.search(name) for x in mre.values())
+            if (b is not None and MIN_B <= b <= MAX_B) or related:
+                keep.append(dict(r, b=b, related=related))
+        rows = keep
+
+    rows.sort(key=lambda r: -(r.get("downloads") or 0))
+    print("| repo | size | downloads | likes | trending | updated |")
+    print("|---|--:|--:|--:|--:|---|")
+    for r in rows[:args.top]:
+        b = r.get("b") if args.candidates else size_b(r["id"].split("/", 1)[-1])
+        print("| `%s` | %s | %s | %s | %s | %s |" % (
+            r["id"], ("%gb" % b) if b else "-", format(r.get("downloads") or 0, ","),
+            r.get("likes"), r.get("trendingScore") or "-",
+            (r.get("lastModified") or "")[:10]))
+    print("\n%d untracked repo(s)%s, showing %d. downloads are lifetime and favour"
+          % (len(rows), " passing the candidate filter" if args.candidates else "",
+             min(args.top, len(rows))))
+    print("older repos; trending is the current signal.")
+
+
+if __name__ == "__main__":
+    main()

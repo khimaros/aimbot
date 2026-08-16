@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+
+"""Measure benchmark contamination from data/swe-rebench.json.
+
+swe-rebench draws its tasks from pull requests by merge date, so a model can be
+scored separately on tasks that predate its release and tasks that postdate
+it. A model that saw the older issues in training should do relatively better
+on them.
+
+Two things make the naive version of that comparison wrong, and both have to be
+corrected for:
+
+  * later windows are not equally hard. if every model drops on the newest
+    tasks, that is the task set moving, not any model cheating.
+  * models are not run over the same date ranges, so "its own average" is not
+    comparable to another model's average.
+
+Both are handled by scoring each measurement against its own window. For every
+(model, window) the residual is that model's resolved rate minus the mean of
+every model that ran that same window, and a model's drop-off is
+
+    excess = mean residual after its release - mean residual before it
+
+One correction is still needed on top of that. The field that ran an early
+window is not the field that ran a late one -- later windows are populated by
+newer, stronger models -- so the mean drifts upward with time and every model's
+excess comes out negative (the cohort median here is about -3). That drift is
+common to everyone, so the reported number is excess minus the cohort median:
+
+    relative = excess - median(excess)
+
+Zero now means "aged like the field". Strongly negative means the model loses
+ground specifically where the tasks could not have been in its training data,
+which is the shape contamination makes.
+
+This still cannot separate contamination from a model that just generalizes
+poorly to unfamiliar code -- it narrows the question, it does not settle it.
+Nor is it reliable at small window counts, which is why they are printed.
+
+    ./analyze-contamination                  # every model with enough windows
+    ./analyze-contamination --roster         # only what MODELS.md tracks
+    ./analyze-contamination --lang rust --markdown
+"""
+
+import argparse
+import datetime
+import json
+import statistics
+
+DATA = "data/swe-rebench.json"
+MIN_WINDOWS = 3     # per side; fewer than this is a coin flip
+
+# swe-rebench names models its own way. THE REGISTRY OWNS THAT MAPPING, under
+# `ids.swerebench`, so this is a lookup rather than a fourth copy -- the copy
+# that used to live here still mapped `MiMo V2.5 Pro` onto mimo v2.5, which is
+# a different model, months after the registry had it right.
+def roster():
+    import os
+    import yaml
+    here = os.path.dirname(os.path.abspath(__file__))
+    doc = yaml.safe_load(open(os.path.join(here, "..", "registry",
+                                           "models.yaml"))) or {}
+    out = {}
+    for m in (doc.get("models") or {}).values():
+        sid = (m.get("ids") or {}).get("swerebench")
+        short = (m.get("name") or {}).get("short")
+        if sid and short:
+            out[sid] = short
+    return out
+
+
+ROSTER = roster()
+
+
+def day(ms):
+    return datetime.datetime.fromtimestamp(int(ms) / 1000, datetime.timezone.utc).date()
+
+
+def usable(w):
+    """A window with an actual sample behind it, not a zero-filled cell."""
+    return (w.get("passN") or 0) > 0
+
+
+def collect(models, lang):
+    """(model, window) -> resolved rate, for windows with a real sample."""
+    obs = {}
+    for mid, m in models.items():
+        for key, w in ((m.get("range_stats") or {}).get(lang) or {}).items():
+            if usable(w):
+                obs[(mid, key)] = w["resolvedRate"]
+    return obs
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--data", default=DATA)
+    ap.add_argument("--lang", default="all", help="all, go, java, python, rust, typescript")
+    ap.add_argument("--roster", action="store_true", help="only models MODELS.md tracks")
+    ap.add_argument("--markdown", action="store_true")
+    args = ap.parse_args()
+
+    models = json.load(open(args.data))["models"]
+    obs = collect(models, args.lang)
+    if not obs:
+        raise SystemExit("no usable windows for lang=%s" % args.lang)
+
+    # window difficulty: what the field scored on this exact task range
+    per_window = {}
+    for (mid, key), v in obs.items():
+        per_window.setdefault(key, []).append(v)
+    mean = {k: sum(v) / len(v) for k, v in per_window.items()}
+
+    rows = []
+    for mid, m in models.items():
+        rel = m.get("release")
+        if not rel:
+            continue
+        rel = datetime.date.fromisoformat(rel)
+        pre, post = [], []
+        for (omid, key), v in obs.items():
+            if omid != mid or len(per_window[key]) < 2:
+                continue
+            start, end = (day(x) for x in key.split(":"))
+            resid = v - mean[key]
+            if end <= rel:
+                pre.append(resid)
+            elif start >= rel:
+                post.append(resid)
+        if len(pre) < MIN_WINDOWS or len(post) < MIN_WINDOWS:
+            continue
+        a, b = sum(pre) / len(pre), sum(post) / len(post)
+        # the same model is run under more than one agent scaffold, and the
+        # results differ enough that an unlabelled duplicate row is misleading
+        name = m.get("name") or mid
+        agent = m.get("agent")
+        rows.append(dict(name=name, label=name if agent == "tools" else "%s (%s)" % (name, agent),
+                         release=m.get("release"), pre=a, post=b, excess=b - a,
+                         n_pre=len(pre), n_post=len(post)))
+
+    if not rows:
+        raise SystemExit("no model has >=%d windows on both sides for lang=%s"
+                         % (MIN_WINDOWS, args.lang))
+    # the field grows stronger over time, so every excess is biased low by a
+    # constant. centre on the cohort before anyone is called out.
+    drift = statistics.median(r["excess"] for r in rows)
+    for r in rows:
+        r["relative"] = r["excess"] - drift
+
+    cohort = len(rows)
+    if args.roster:
+        rows = [r for r in rows if r["name"] in ROSTER]
+        if not rows:
+            raise SystemExit("no roster model qualifies for lang=%s" % args.lang)
+    rows.sort(key=lambda r: r["relative"])
+
+    print("swe-rebench %s: %d models with >=%d windows either side of release, "
+          "cohort drift %+.1f pts.\nresiduals are vs the field on the same "
+          "window; relative is vs the cohort." % (args.lang, cohort, MIN_WINDOWS, drift))
+    print()
+    if args.markdown:
+        print("| model | released | pre-release | post-release | relative | windows |")
+        print("|---|---|--:|--:|--:|--:|")
+        for r in rows:
+            print("| %s | %s | %+.1f | %+.1f | **%+.1f** | %d/%d |" % (
+                ROSTER.get(r["name"], r["label"]), r["release"], r["pre"], r["post"],
+                r["relative"], r["n_pre"], r["n_post"]))
+    else:
+        print("%-42s %-11s %8s %8s %9s %9s" %
+              ("model", "released", "pre", "post", "relative", "windows"))
+        for r in rows:
+            print("%-42s %-11s %+8.1f %+8.1f %+9.1f %5d/%-3d" % (
+                r["label"][:42], r["release"], r["pre"], r["post"], r["relative"],
+                r["n_pre"], r["n_post"]))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+
+"""Fetch llama.cpp issues into data/github-issues.json.
+
+The other sources say whether a model is good. This one says whether it runs.
+Every "confirm on strixhalo/vulkan" item in the roadmap is the kind of question
+llama.cpp's issue tracker has already answered for somebody: which quants abort
+the loader, which backends produce garbage on rdna3.5, which flags are not
+implemented yet.
+
+The search API returns full issue bodies inline, so one request per query
+captures the text as well as the metadata -- no per-issue follow-up.
+
+Unauthenticated search is capped at about 10 requests a minute, hence --delay.
+Results are cached, so re-running to adjust the analysis costs nothing.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.parse
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+API = "https://api.github.com/search/issues?%s"
+REPO = "ggml-org/llama.cpp"
+
+# hardware and backend terms first, because those are the reports that do not
+# turn up anywhere else; model terms after, to catch loader and template bugs
+QUERIES = [
+    "strix halo", "rdna3.5", "gfx1151", "ROCm garbled", "vulkan flash attention",
+    "unified memory allocation failed", "speculative decoding draft",
+    "dflash", "dspark", "MTP draft model",
+    "deepseek v4 flash", "qwen3.6", "qwen3.8", "hy3 hunyuan", "muse glimmer",
+    "gpt-oss mxfp4", "gemma 4", "minimax", "ling 3.0", "laguna",
+]
+
+FIELDS = ["number", "title", "state", "created_at", "updated_at", "closed_at",
+          "comments", "html_url", "author_association"]
+
+
+def get(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age),
+           "--header", "Accept: application/vnd.github+json",
+           "--header", "User-Agent: llama-tools-research"]
+    if refresh:
+        cmd.append("--refresh")
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout
+    try:
+        return json.loads(out)
+    except ValueError:
+        return None
+
+
+def shape(item):
+    d = {k: item.get(k) for k in FIELDS}
+    d["user"] = (item.get("user") or {}).get("login")
+    d["labels"] = [l.get("name") for l in (item.get("labels") or [])]
+    d["reactions"] = (item.get("reactions") or {}).get("total_count", 0)
+    d["is_pr"] = "pull_request" in item
+    # bodies run to tens of kb of pasted logs; keep enough to read the report
+    d["body"] = re.sub(r"\r\n", "\n", (item.get("body") or ""))[:6000]
+    return d
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--repo", default=REPO)
+    ap.add_argument("--out", default="data/github-issues.json")
+    ap.add_argument("--per-query", type=int, default=30)
+    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--delay", type=float, default=7.0,
+                    help="unauthenticated search allows ~10/min")
+    args = ap.parse_args()
+
+    out, seen = {}, {}
+    for q in QUERIES:
+        params = urllib.parse.urlencode({
+            "q": "repo:%s %s" % (args.repo, q),
+            "per_page": args.per_query, "sort": "updated", "order": "desc"})
+        d = get(API % params, "gh-" + re.sub(r"\W+", "_", q), args.max_age, args.refresh)
+        if d is None or "items" not in d:
+            print("  %-32s failed (%s)" % (q, (d or {}).get("message", "no items")),
+                  file=sys.stderr)
+            time.sleep(args.delay)
+            continue
+        rows = [shape(i) for i in d["items"]]
+        for r in rows:
+            seen[r["number"]] = r
+        out[q] = dict(total=d.get("total_count"), items=rows)
+        print("  %-32s %3d of %s" % (q, len(rows), d.get("total_count")), file=sys.stderr)
+        time.sleep(args.delay)
+
+    if not out:
+        sys.exit("no queries succeeded")
+    with open(args.out, "w") as f:
+        json.dump({"repo": args.repo, "queries": out}, f, indent=1, sort_keys=True)
+    print("wrote %s: %d queries, %d distinct issues"
+          % (args.out, len(out), len(seen)))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,310 @@
+#!/usr/bin/env python3
+
+"""Derive per-model facts into data/model-facts.json, keyed by huggingface repo.
+
+Everything here is discoverable, so none of it should be typed into the
+registry by hand. quantbench carried `weights_gb: 28.6` for qwen3.6-27b -- the
+plain gguf repo rather than the -MTP- one actually run -- and llama-tools
+carried a family guess for the thinking knob that was wrong for qwen3.8. Both
+are facts a fetch gets right every time.
+
+What it reads, per base repo:
+
+- `config.json`      architecture, layer count, hidden size, native context,
+                     whether an mtp/nextn head exists, whether there is a
+                     vision or audio tower
+- safetensors index  total parameter count, which the card usually rounds
+- `chat_template`    THE thinking knob, and the values it accepts. this is the
+                     one nobody derives and everybody guesses: the sweep found
+                     four different knobs in one roster -- `enable_thinking`
+                     (gemma 4, qwen3.5/3.6, laguna), a free-string
+                     `reasoning_effort` (gpt-oss), a validated low|medium|xhigh
+                     (qwen3.8) and `reasoning_strength` (muse glimmer)
+- `generation_config` the samplers the vendor SHIPS, to check the registry's
+                     hand-typed profiles against
+
+and, per GGUF repo, huggingface's own parse of the gguf header, for the context
+window. config.json cannot answer for two kinds of repo: a GATED one (the whole
+gemma family 401s unauthenticated, and a 401 is indistinguishable from a model
+that simply has no config) and a gguf-ONLY one that never had a config.json at
+all. It is fetched even where config.json answered, because the two disagree in
+BOTH directions -- poolside claims 1m for laguna where its gguf says 262144,
+nvidia's gguf claims 1m where the vendor says 262144 -- and a consumer that
+must not exceed the window wants to see both rather than be handed a guess.
+
+gguf byte sizes are deliberately NOT here: fetch-gguf-sizes already owns them,
+keyed by gguf repo, and two collectors writing the same fact is the problem
+this file exists to fix.
+
+Repos come from registry/models.yaml unless --repos names a file.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+RAW = "https://huggingface.co/%s/raw/main/%s"
+API = "https://huggingface.co/api/models/%s?expand[]=safetensors"
+# huggingface parses the gguf header itself and serves the result. this is the
+# only context source that answers for the two repos config.json cannot: a GATED
+# base repo (the whole gemma family 401s unauthenticated) and a gguf-ONLY repo
+# that never had a config.json (prism-ml's Bonsai, the qwen3-tts builds). it is
+# also the number llama.cpp itself loads, so it is worth carrying even where
+# config.json answered -- a disagreement means the conversion and the vendor
+# disagree about the window, which is a thing to see rather than to average.
+GGUF_API = "https://huggingface.co/api/models/%s?expand[]=gguf"
+
+# every thinking knob seen in the wild. the value is how a client sets it.
+KNOBS = {
+    "enable_thinking": "boolean",
+    "reasoning_effort": "level",
+    "reasoning_strength": "level",
+    "thinking_budget": "integer",
+}
+# templates guard graded knobs with a membership test naming the legal values
+LEVELS = re.compile(r"(reasoning_effort|reasoning_strength)\s+not\s+in\s*\(([^)]*)\)")
+QUOTED = re.compile(r"'([^']+)'")
+DEFAULT = re.compile(r"(reasoning_effort|reasoning_strength)\s*\|\s*default\('([^']+)'\)")
+# a numeric guard rather than a membership test: the knob takes a float
+FLOAT_RANGE = re.compile(r"(reasoning_effort|reasoning_strength)[^\n]{0,80}"
+                         r"(?:in\s*\[\s*\d|\d\.\d\s*(?:and|<=|<))")
+# some templates carry their vocabulary as a jinja map rather than a membership
+# test: inkling-small sets `effort_map = {"none": 0.0, "minimal": 0.1, ...}` and
+# looks the value up in it, which is a level list nothing else would find
+EFFORT_MAP = re.compile(r"set\s+(\w*(?:effort|reason|think)\w*)\s*=\s*\{([^}]*)\}", re.I)
+# name -> NUMBER, every entry. mistral's `think_chunk = {'type': 'thinking',
+# 'thinking': reasoning}` is a message shape, not a vocabulary, and matched the
+# key pattern until the values had to be numeric
+MAP_ENTRY = re.compile(r"[\"']([A-Za-z][\w-]*)[\"']\s*:\s*(-?\d+(?:\.\d+)?)\s*(?:,|$)")
+
+
+def effort_levels(tpl):
+    """Level names from a jinja map of name -> number, or []."""
+    for m in EFFORT_MAP.finditer(tpl):
+        body = m.group(2)
+        entries = MAP_ENTRY.findall(body)
+        if entries and len(entries) == len([c for c in body.split(",") if c.strip()]):
+            return [name for name, _ in entries]
+    return []
+
+
+def get(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key, "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    return r.stdout or None
+
+
+def slug(repo, what):
+    return "facts-%s-%s" % (repo.replace("/", "_"), what)
+
+
+def as_json(text):
+    try:
+        return json.loads(text) if text else None
+    except ValueError:
+        return None
+
+
+def gguf_context(gguf_repo, max_age, refresh):
+    """The context window from the gguf header, via huggingface's own parse.
+
+    Keyed by GGUF repo rather than base repo, so it goes through httpcache under
+    its own slug and is not confused with the base repo's `-info` response.
+    """
+    if not gguf_repo:
+        return None
+    info = as_json(get(GGUF_API % gguf_repo, slug(gguf_repo, "ggufmeta"),
+                       max_age, refresh))
+    return ((info or {}).get("gguf") or {}).get("context_length")
+
+
+def thinking_facts(repo, max_age, refresh):
+    """Which knob the chat template accepts, and its legal values."""
+    tpl = get(RAW % (repo, "chat_template.jinja"), slug(repo, "tpl"), max_age, refresh)
+    # a missing file is an empty body from httpcache. do NOT sniff the content:
+    # a jinja template legitimately starts with "{%", which an "is this json"
+    # check reads as json and silently discards
+    if not tpl:
+        cfg = as_json(get(RAW % (repo, "tokenizer_config.json"),
+                          slug(repo, "tokcfg"), max_age, refresh))
+        tpl = (cfg or {}).get("chat_template")
+        if isinstance(tpl, list):
+            tpl = json.dumps(tpl)
+    if not tpl:
+        return None
+    found = [k for k in KNOBS if re.search(r"\b%s\b" % k, tpl)]
+    if not found:
+        return {"knob": [], "note": "template names no thinking knob"}
+    # always a list, even at length one: it was a bare string for 25 models and a
+    # list for the one model with two knobs, so every consumer that iterated it
+    # got characters for the common case
+    out = {"knob": found, "toggle": "enable_thinking" in found}
+    m = LEVELS.search(tpl)
+    mapped = effort_levels(tpl)
+    if m:
+        out["levels"] = QUOTED.findall(m.group(2))
+        out["validated"] = True
+    elif mapped:
+        # the map IS the vocabulary, and the template raises on anything absent
+        out["levels"] = mapped
+        out["validated"] = True
+    elif any(k in found for k in ("reasoning_effort", "reasoning_strength")):
+        # no membership guard: the value is interpolated verbatim, so an
+        # unrecognised level is accepted silently rather than rejected
+        out["validated"] = False
+    # what the knob EATS. a numeric range guard alone means a float, but a
+    # template can accept BOTH -- inkling-small takes a name out of its map or a
+    # bare float, and only the names survive a client that substitutes strings
+    if out.get("levels"):
+        out["value_type"] = "level"
+    elif FLOAT_RANGE.search(tpl):
+        out["value_type"] = "float"
+    elif not out["toggle"]:
+        out["value_type"] = "level"
+    else:
+        out["value_type"] = "boolean"
+    d = DEFAULT.search(tpl)
+    if d:
+        out["default"] = d.group(2)
+    if "preserve_thinking" in tpl:
+        out["preserve"] = "preserve_thinking"
+    return out
+
+
+def sampler_facts(gen):
+    """The samplers the vendor actually ships, from generation_config.json.
+
+    The registry's sampling profiles are typed from release posts, and a post
+    and the shipped file do not always agree. This is the vendor's own number,
+    so `models-validate --samplers` can say which entries disagree with it
+    rather than anyone re-reading a blog. It is ONE set where a profile has
+    several, so it is evidence, not a replacement.
+    """
+    if not gen:
+        return {}
+    out = {k: gen.get(k) for k in ("temperature", "top_p", "top_k", "min_p",
+                                   "presence_penalty", "repetition_penalty")}
+    return {k: v for k, v in out.items() if isinstance(v, (int, float))}
+
+
+def shape_facts(cfg):
+    """Architecture and size, from config.json. Nested text_config on VL models."""
+    if not cfg:
+        return {}
+    text = cfg.get("text_config") or cfg
+    out = {
+        "arch": (cfg.get("architectures") or [None])[0],
+        "model_type": cfg.get("model_type"),
+        "layers": text.get("num_hidden_layers"),
+        "hidden": text.get("hidden_size"),
+        # most configs say max_position_embeddings; inkling-small says
+        # model_max_length for the same thing, and reporting no window at all
+        # meant the context check silently skipped it
+        "context_native": (text.get("max_position_embeddings")
+                           or text.get("model_max_length")),
+    }
+    # `max_position_embeddings` is the EFFECTIVE window: where a vendor ships a
+    # rope config the scaling is already folded in (deepseek 65536 x16, gpt-oss
+    # 4096 x32), and llama.cpp reads it out of the gguf without a flag. what the
+    # bare number hides is that the long window is BOUGHT with yarn rather than
+    # trained, which is worth recording next to it.
+    rope = text.get("rope_scaling") or {}
+    kind = rope.get("rope_type") or rope.get("type")
+    if kind and kind != "default":
+        out["rope"] = {k: v for k, v in (
+            ("type", kind),
+            ("factor", rope.get("factor")),
+            ("original", rope.get("original_max_position_embeddings")),
+        ) if v is not None}
+    mtp = text.get("mtp_num_hidden_layers") or text.get("num_nextn_predict_layers")
+    if mtp:
+        out["mtp_layers"] = mtp
+    experts = text.get("num_experts") or text.get("n_routed_experts")
+    if experts:
+        out["experts"] = experts
+        out["experts_active"] = text.get("num_experts_per_tok")
+    modes = ["text"]
+    if cfg.get("vision_config"):
+        modes.append("image")
+    if cfg.get("video_token_id") is not None:
+        modes.append("video")
+    if cfg.get("audio_config"):
+        modes.append("audio")
+    out["input"] = modes
+    return {k: v for k, v in out.items() if v is not None}
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--registry", default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--repos", help="newline-separated repos instead of the registry")
+    ap.add_argument("--out", default="data/model-facts.json")
+    # five files per model against 45 models, so always-revalidate costs ~2min
+    # of round trips to be told nothing changed. these facts change when a repo
+    # is re-uploaded, which is rare; --refresh is there for when it happens
+    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    args = ap.parse_args()
+
+    gguf_repos = {}
+    if args.repos:
+        repos = [l.split("#")[0].strip() for l in open(args.repos)]
+        repos = [r for r in repos if r]
+    else:
+        import yaml
+        models = yaml.safe_load(open(args.registry)).get("models") or {}
+        repos = list(models)
+        # the gguf that would actually be served, for the context fallback
+        gguf_repos = {r: (m.get("quants") or [{}])[0].get("repo")
+                      for r, m in models.items()}
+
+    out = {}
+    disagreed = []
+    for repo in repos:
+        cfg = as_json(get(RAW % (repo, "config.json"), slug(repo, "cfg"),
+                          args.max_age, args.refresh))
+        facts = shape_facts(cfg)
+        ctx = gguf_context(gguf_repos.get(repo), args.max_age, args.refresh)
+        if ctx:
+            facts["context_gguf"] = ctx
+            if not facts.get("context_native"):
+                facts["context_native"] = ctx
+            elif facts["context_native"] != ctx:
+                disagreed.append((repo, facts["context_native"], ctx))
+        info = as_json(get(API % repo, slug(repo, "info"), args.max_age, args.refresh))
+        total = ((info or {}).get("safetensors") or {}).get("total")
+        if total:
+            facts["params_total_b"] = round(total / 1e9, 2)
+        think = thinking_facts(repo, args.max_age, args.refresh)
+        if think:
+            facts["thinking"] = think
+        gen = sampler_facts(as_json(get(RAW % (repo, "generation_config.json"),
+                                        slug(repo, "gen"), args.max_age, args.refresh)))
+        if gen:
+            facts["samplers_shipped"] = gen
+        if not facts:
+            print("  %-40s unavailable" % repo, file=sys.stderr)
+            continue
+        out[repo] = facts
+        print("  %-40s %s%s" % (repo, facts.get("arch") or "?",
+                                "  knob=%s" % (think or {}).get("knob")), file=sys.stderr)
+
+    for repo, want, got in disagreed:
+        print("  !!! %-40s config says %d, its gguf says %d"
+              % (repo, want, got), file=sys.stderr)
+    with open(args.out, "w") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+    missing = [r for r in out if not out[r].get("context_native")]
+    print("wrote %s: %d models, %d without a context window"
+          % (args.out, len(out), len(missing)))
+
+
+if __name__ == "__main__":
+    main()

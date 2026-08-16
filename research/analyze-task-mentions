@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+
+"""Count which models people name for which tasks, from the scraped reddit data.
+
+Two quotes are an anecdote. This counts model/task co-occurrence across every
+captured comment so the task-fit claims in MODELS.md have a denominator.
+
+Matching is per sentence, not per comment: a comment that lists five models and
+five tasks would otherwise manufacture twenty-five pairings it never claimed.
+That makes the counts conservative -- a role split across two sentences is
+missed -- so read a cell as "at least this many people said it".
+
+    ./analyze-task-mentions                  # markdown tables
+    ./analyze-task-mentions --min 2          # lower the reporting threshold
+    ./analyze-task-mentions --task debugging # show the matching sentences
+    ./analyze-task-mentions --sentiment      # score-weighted approval per model
+    ./analyze-task-mentions --quotes hy3     # best and worst received mentions
+
+On comment scores. Treating an upvote as "agreement" is roughly right *within*
+a thread and badly wrong across threads. Measured on this corpus, the top
+comment scores 1943 in one thread and 10 in another -- and the 10 is the monthly
+"Best Local LLMs" thread, the single most on-topic one in the set. Raw score
+across threads mostly measures how much drama the thread had.
+
+So scores are compared only against comparable comments: each comment's
+percentile rank is computed within its own thread *and* its own reply depth
+(`rel`, 0-100). Depth matters as much as thread size -- a reply three levels
+down is seen by a fraction of the audience a top-level comment gets, so it
+scores low whatever it says. Checking laguna's lowest-scoring mentions found
+them to be ordinary positive comments buried in reply chains, not disagreement,
+which is what forced the depth control.
+
+Two limits worth keeping in mind. Reddit publishes a net score only -- the
+up/down split is private and the number is fuzzed -- so a controversial +5
+(105 up, 100 down) is indistinguishable from an ignored +5. And votes track
+visibility: early top-level comments accumulate far more of them than replies,
+whatever their content. Negative scores are the cleanest signal in the set
+precisely because they are rare (36 of 5506) and take deliberate effort.
+"""
+
+import argparse
+import collections
+import json
+import os
+import re
+import subprocess
+
+# the model alias table lives in ./match-models so that every analysis in this
+# directory shares one definition; a missing alias silently zeroes a model
+# rather than erroring, so there must not be two copies to drift apart.
+MODELS = json.loads(subprocess.run(
+    [os.path.join(os.path.dirname(os.path.abspath(__file__)), "match-models"), "--lexicon"],
+    stdout=subprocess.PIPE, text=True, check=True).stdout)["models"]
+
+TASKS = {
+    "coding": r"\bcodegen\b|writing code|\bcoding\b|write code",
+    "agentic": r"\bagentic\b|agent loop|tool[\s-]*call|\bmcp\b|opencode|claude code",
+    "debugging": r"\bdebug\w*\b|\bbug\w*\b|find(ing)? (the )?(bug|issue)|troubleshoot",
+    "planning": r"\bplanner?\b|\bplanning\b|\bspec\b|architect\w*|plan/act",
+    "review": r"\breview\w*\b|adversar\w+|red[\s-]*team|critique|verifier|second opinion",
+    "refactor": r"\brefactor\w*\b|\bmigrat\w+\b",
+    "frontend": r"\bfrontend\b|front-end|\bhtml\b|\bcss\b|\bui\b|\bweb ?dev\b",
+    "translation": r"\btranslat\w+\b",
+    "summarization": r"\bsummar\w+\b|\btldr\b",
+    "creative writing": r"creative writing|\bprose\b|\bfiction\b|\bstory\b|\brp\b|roleplay",
+    "vision / ocr": r"\bocr\b|\bvision\b|\bimage\b|\bmultimodal\b|screenshot|document process",
+    "long context": r"long[\s-]*context|\b\d+k context\b|compaction|needle",
+    "chat / assistant": r"\bchat\b|assistant|\bvoice\b",
+    "math / stem": r"\bmath\b|\bstem\b|\bphysics\b|\bchem\w*\b|\bbiochem\b",
+    "rag / search": r"\brag\b|retrieval|web search|deep research",
+    "autocomplete": r"autocomplete|\bfim\b|fill[\s-]*in[\s-]*the[\s-]*middle",
+}
+
+# a naive split on "." shreds every version number -- "Qwen3.6-27B" becomes
+# "Qwen3" and "6-27B" and the model is never matched. only break on terminators
+# that are not sitting between digits.
+# deliberately small and blunt. a bigger lexicon would not fix the real problem,
+# which is that "X is better than Y" scores positive for both X and Y; the
+# --quotes mode exists so claims get eyeballed rather than trusted.
+POS = re.compile(r"\b(best|great|excellent|amazing|impressive|solid|reliable|"
+                 r"love(d|s)?|favou?rite|recommend\w*|beats?|better|superior|"
+                 r"crushes|nails|works? (great|well)|daily driver|go.?to|"
+                 r"underrated|surprising(ly)? good|blows? \w+ (away|out))\b", re.I)
+NEG = re.compile(r"\b(worse|worst|bad|terrible|awful|useless|disappoint\w*|"
+                 r"unusable|broken|slop|benchmaxx\w*|overrated|hype[dsr]?|"
+                 r"struggl\w*|fails?|failed|garbage|meh|mediocre|"
+                 r"gave up|dropped it|uninstall\w*|not (great|good|worth))\b", re.I)
+
+SENT = re.compile(r"(?<!\d)[.!?]+(?!\d)\s+|[\n\r]+")
+
+
+def sentences(text):
+    return [s for s in SENT.split(text or "") if len(s.strip()) > 12]
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--data", default="data/reddit-localllama.json")
+    ap.add_argument("--min", type=int, default=3, help="minimum count to report")
+    ap.add_argument("--task", help="print the matching sentences for one task")
+    ap.add_argument("--sentiment", action="store_true",
+                    help="score-weighted approval per model")
+    ap.add_argument("--quotes", metavar="MODEL",
+                    help="best and worst received mentions of one model")
+    ap.add_argument("--json", metavar="PATH",
+                    help="write per-model sentiment to PATH for build-tables to consume")
+    args = ap.parse_args()
+
+    d = json.load(open(args.data))
+    mre = {k: re.compile(v, re.I) for k, v in MODELS.items()}
+    tre = {k: re.compile(v, re.I) for k, v in TASKS.items()}
+
+    pairs = collections.Counter()
+    mentions = collections.Counter()
+    examples = collections.defaultdict(list)
+    scores = collections.defaultdict(list)      # raw comment score per mention
+    rel = collections.defaultdict(list)   # percentile within (thread, depth)
+    toplevel = collections.defaultdict(list)    # scores of depth-0 mentions only
+    pol = collections.defaultdict(lambda: [0, 0])   # [positive, negative] sentences
+    weighted = collections.defaultdict(float)   # log-damped, signed
+    said = collections.defaultdict(list)        # (score, sentence) per model
+    n_sent = 0
+
+    for t in d.get("threads", {}).values():
+        # percentile within this thread, so a +40 in a quiet thread is not
+        # ranked below a +40 in one that hit the front page
+        # percentile within (thread, depth): compare a reply to sibling replies,
+        # not to the top-level comment that started the chain
+        buckets = collections.defaultdict(list)
+        for c in t.get("comments", []):
+            if c.get("score") is not None:
+                buckets[min(c.get("depth", 0), 2)].append(c["score"])
+        for v in buckets.values():
+            v.sort()
+
+        def pct(v, depth=0):
+            b = buckets.get(min(depth or 0, 2)) or []
+            if not b or v is None:
+                return None
+            return 100.0 * sum(1 for x in b if x < v) / len(b)
+        items = [(None, 0, t.get("body") or "")] + \
+                [(c.get("score"), c.get("depth", 0), c.get("text") or "")
+                 for c in t.get("comments", [])]
+        for score, depth, text in items:
+            for s in sentences(text):
+                n_sent += 1
+                ms = [m for m, r in mre.items() if r.search(s)]
+                ts = [k for k, r in tre.items() if r.search(s)]
+                p, n = len(POS.findall(s)), len(NEG.findall(s))
+                for m in ms:
+                    mentions[m] += 1
+                    if score is not None:
+                        scores[m].append(score)
+                        rel[m].append(pct(score, depth))
+                        if (depth or 0) == 0:
+                            toplevel[m].append(score)
+                        said[m].append((score, s.strip()[:260]))
+                    if p or n:
+                        pol[m][0] += 1 if p > n else 0
+                        pol[m][1] += 1 if n > p else 0
+                        # log damping: a +200 comment outweighs a +2 one, but not 100x
+                        # weight by thread-relative standing, not raw score
+                        w = (pct(score, depth) or 50.0) / 50.0
+                        weighted[m] += w * (1 if p > n else -1 if n > p else 0)
+                    for k in ts:
+                        pairs[(m, k)] += 1
+                        if len(examples[(m, k)]) < 6:
+                            examples[(m, k)].append((t.get("title", "")[:44], s.strip()[:200]))
+
+    print("sentences scanned: %d, threads: %d\n" % (n_sent, len(d.get("threads", {}))))
+
+    if args.json:
+        out = {}
+        for m, n in mentions.items():
+            ss = sorted(scores[m])
+            rr = sorted(x for x in rel[m] if x is not None)
+            out[m] = dict(mentions=n, top_level=len(toplevel[m]),
+                          median_rel=rr[len(rr) // 2] if rr else None,
+                          median_score=ss[len(ss) // 2] if ss else None,
+                          downvoted=sum(1 for x in ss if x < 0),
+                          positive=pol[m][0], negative=pol[m][1])
+        with open(args.json, "w") as f:
+            json.dump(out, f, indent=1, sort_keys=True)
+        print("wrote %s: %d models" % (args.json, len(out)))
+        return
+
+    if args.quotes:
+        key = args.quotes.lower()
+        m = next((k for k in MODELS if key in k), None)
+        if not m:
+            raise SystemExit("no such model; try one of: " + ", ".join(MODELS))
+        rows = sorted(said[m], reverse=True)
+        print("## best received mentions of %s\n" % m)
+        for sc, s in rows[:8]:
+            print("  [%+d] %s" % (sc, s))
+        print("\n## worst received\n")
+        for sc, s in rows[-8:]:
+            print("  [%+d] %s" % (sc, s))
+        return
+
+    if args.sentiment:
+        print("| model | mentions | top-level | median rel | median score | "
+              "downvoted | pos | neg |")
+        print("|---|--:|--:|--:|--:|--:|--:|--:|")
+        for m, n in mentions.most_common():
+            if n < args.min or not scores[m]:
+                continue
+            ss = sorted(scores[m])
+            rr = sorted(x for x in rel[m] if x is not None)
+            tl = sorted(toplevel[m])
+            print("| %s | %d | %d | %d | %d | %d | %d | %d |" % (
+                m, n, len(tl), rr[len(rr) // 2] if rr else -1, ss[len(ss) // 2],
+                sum(1 for x in ss if x < 0), pol[m][0], pol[m][1]))
+        print("\nmedian rel = median percentile against comments at the same depth in")
+        print("the same thread. 50 is unremarkable. 'top-level' counts mentions that")
+        print("were not buried in a reply chain, which is where a score means most.")
+        return
+
+    if args.task:
+        for (m, k), n in sorted(pairs.items(), key=lambda kv: -kv[1]):
+            if k != args.task:
+                continue
+            print("\n## %s (%d)" % (m, n))
+            for title, s in examples[(m, k)]:
+                print("  [%s] %s" % (title, s))
+        return
+
+    tasks = [k for k in TASKS if any(pairs[(m, k)] >= args.min for m in MODELS)]
+    models = [m for m, _ in mentions.most_common() if mentions[m] >= args.min]
+
+    print("| model | mentions | " + " | ".join(tasks) + " |")
+    print("|---|--:|" + "--:|" * len(tasks))
+    for m in models:
+        cells = [str(pairs[(m, k)]) if pairs[(m, k)] else "" for k in tasks]
+        print("| %s | %d | %s |" % (m, mentions[m], " | ".join(cells)))
+
+    print("\ntop model/task pairs (count >= %d):\n" % args.min)
+    for (m, k), n in sorted(pairs.items(), key=lambda kv: -kv[1]):
+        if n >= args.min:
+            print("  %-22s %-18s %d" % (m, k, n))
+
+
+if __name__ == "__main__":
+    main()

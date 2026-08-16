@@ -1,0 +1,1900 @@
+# the source of truth for model facts, keyed by huggingface base repo.
+#
+# the repo IS the name. an invented short name is a second thing to keep in sync,
+# and llama-tools grew four separate short-name tables before this file existed.
+#
+# WHAT BELONGS HERE: facts a human had to establish and a machine cannot fetch --
+# which quant to prefer and why, the sampling numbers a vendor recommends,
+# capability tags, the ids each benchmark source invented.
+#
+# WHAT DOES NOT: anything derivable. parameter counts, gguf byte sizes, native
+# context, architecture, mtp presence and which thinking knob a chat template
+# accepts are fetched into data/model-facts.json and joined by the same key.
+#
+# WHAT ALSO DOES NOT: host policy, including the name a consumer serves it
+# under. which of these to run, as what, at what context, is the consumer's.
+#
+# seeded from the pre-split llama-tools llama-swap config; prose notes are
+# hand-written.
+
+version: 1
+models:
+  MiniMaxAI/MiniMax-M2.5:
+    kind: text
+    name:
+      short: minimax-m2.5
+    quants:
+    - repo: unsloth/MiniMax-M2.5-GGUF
+      quant: UD-Q3_K_XL
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 40
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: minimax-m2-5
+      gbench: minimax/minimax-m2.5
+      lmarena: minimax-m2.5
+      swerebench: MiniMax M2.5
+      epoch: MiniMax-M2.5
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  MiniMaxAI/MiniMax-M2.7:
+    kind: text
+    name:
+      short: minimax m2.7
+      match: minimax[\s-]*m?2\.7|\bm2\.7\b
+    quants:
+    - repo: unsloth/MiniMax-M2.7-GGUF
+      quant: UD-IQ4_XS
+    ids:
+      aa: minimax-m2-7
+      gbench: minimax/minimax-m2.7
+      lmarena: minimax-m2.7
+      swerebench: MiniMax M2.7
+      epoch: MiniMax-M2.7
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 40
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  Qwen/Qwen-AgentWorld-35B-A3B:
+    kind: text
+    name:
+      short: qwen-agentworld 35b a3b
+      match: agent[\s-]*world
+    quants:
+    - repo: unsloth/Qwen-AgentWorld-35B-A3B-GGUF
+      quant: Q8_0
+    sampling:
+      tool-use:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  Qwen/Qwen3-Coder-30B-A3B-Instruct:
+    kind: text
+    name:
+      short: qwen3-coder-30b-a3b-instruct
+    quants:
+    - repo: unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF
+      quant: Q8_0
+    - repo: unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF
+      quant: UD-Q4_K_XL
+    sampling:
+      instruct:
+        temp: 0.7
+        top_p: 0.8
+        top_k: 20
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.05
+        tuned:
+        - instruct
+        - code
+        - fim
+        - tools
+    ids:
+      aa: qwen3-coder-30b-a3b-instruct
+      gbench: ''
+      lmarena: ''
+      swerebench: Qwen3-Coder-30B-A3B-Instruct
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  Qwen/Qwen3-Coder-Next:
+    kind: text
+    name:
+      short: qwen3 coder next
+      match: qwen3?[\s-]*coder[\s-]*next|coder-?next
+    quants:
+    - repo: unsloth/Qwen3-Coder-Next-GGUF
+      quant: Q8_0
+    ids:
+      aa: qwen3-coder-next
+      gbench: ''
+      lmarena: ''
+      swerebench: Qwen3-Coder-Next
+      epoch: qwen3-coder-next
+    sampling:
+      instruct:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 40
+        min_p: 0.01
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  Qwen/Qwen3.5-0.8B:
+    kind: text
+    name:
+      short: qwen3.5-0.8b
+    quants:
+    - repo: unsloth/Qwen3.5-0.8B-MTP-GGUF
+      quant: Q8_0
+    sampling:
+      tool-use:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+    ids:
+      aa: qwen3-5-0-8b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  Qwen/Qwen3.5-122B-A10B:
+    kind: text
+    name:
+      short: qwen3.5 122b a10b
+      match: qwen\s*-?3\.5[\s-]*122b|122b-?a10b
+    quants:
+    - repo: unsloth/Qwen3.5-122B-A10B-GGUF
+      quant: UD-Q4_K_XL
+    ids:
+      aa: qwen3-5-122b-a10b
+      gbench: ''
+      lmarena: qwen3.5-122b-a10b
+      swerebench: ''
+      epoch: ''
+    sampling:
+      tool-use:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  Qwen/Qwen3.5-27B:
+    kind: text
+    name:
+      short: qwen3.5-27b
+    quants:
+    - repo: unsloth/Qwen3.5-27B-GGUF
+      quant: Q8_0
+    - repo: unsloth/Qwen3.5-27B-MTP-GGUF
+      quant: UD-Q4_K_XL
+    sampling:
+      tool-use:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+    ids:
+      aa: qwen3-5-27b
+      gbench: qwen/qwen3.5-27b
+      lmarena: qwen3.5-27b
+      swerebench: Qwen3.5-27B
+      epoch: qwen3.5-27B
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    speculative:
+      draft_repo: unsloth/Qwen3.5-0.8B-GGUF:Q8_0
+  Qwen/Qwen3.5-35B-A3B:
+    kind: text
+    name:
+      short: qwen3.5-35b-a3b
+    quants:
+    - repo: unsloth/Qwen3.5-35B-A3B-GGUF
+      quant: Q8_0
+    sampling:
+      tool-use:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+    ids:
+      aa: qwen3-5-35b-a3b
+      gbench: qwen/qwen3.5-35b-a3b
+      lmarena: qwen3.5-35b-a3b
+      swerebench: Qwen3.5-35B-A3B
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  Qwen/Qwen3.5-9B:
+    kind: text
+    name:
+      short: qwen3.5-9b
+    quants:
+    - repo: unsloth/Qwen3.5-9B-MTP-GGUF
+      quant: Q8_0
+    sampling:
+      tool-use:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+    ids:
+      aa: qwen3-5-9b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: qwen3.5-9B
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  Qwen/Qwen3.6-27B:
+    kind: text
+    name:
+      short: qwen3.6 27b
+      match: qwen\s*-?3\.6[\s-]*27b|qwen3\.6-27b
+    quants:
+    - repo: unsloth/Qwen3.6-27B-GGUF
+      quant: UD-Q4_K_XL
+      # the nextn head lives in the -MTP- repo; this one cannot
+      # speculate, so the model-level draft-mtp does not apply here
+      speculative: false
+    - repo: unsloth/Qwen3.6-27B-GGUF
+      quant: Q8_0
+      note: the plain repo's Q8_0, which quantbench sweeps. 0.42gib smaller
+        than the -MTP- build of the same tag and cannot speculate
+      speculative: false
+    - repo: unsloth/Qwen3.6-27B-MTP-GGUF
+      quant: Q8_0
+      note: 'the -MTP- repo, NOT unsloth/Qwen3.6-27B-GGUF. identically-named files 0.42gib
+        apart: the mtp head is in the weights, so the plain repo cannot speculate at all'
+    ids:
+      aa: qwen3-6-27b
+      gbench: qwen/qwen3.6-27b
+      lmarena: ''
+      swerebench: Qwen3.6-27B
+      epoch: qwen3.6-27b
+    sampling:
+      tool-use:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+    speculative:
+      type: draft-mtp
+      n_max: 6
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  Qwen/Qwen3.6-35B-A3B:
+    kind: text
+    name:
+      short: qwen3.6 35b a3b
+      match: qwen\s*-?3\.6[\s-]*35b|3\.6[\s-]*35b-?a3b
+    quants:
+    - repo: unsloth/Qwen3.6-35B-A3B-GGUF
+      quant: UD-Q4_K_XL
+      # the nextn head lives in the -MTP- repo; this one cannot
+      # speculate, so the model-level draft-mtp does not apply here
+      speculative: false
+    - repo: unsloth/Qwen3.6-35B-A3B-GGUF
+      quant: Q8_0
+      note: the plain repo's Q8_0, which quantbench sweeps
+      speculative: false
+    - repo: unsloth/Qwen3.6-35B-A3B-MTP-GGUF
+      quant: Q8_0
+    ids:
+      aa: qwen3-6-35b-a3b
+      gbench: qwen/qwen3.6-35b-a3b
+      lmarena: ''
+      swerebench: Qwen3.6-35B-A3B
+      epoch: qwen3.6-35b-a3b
+    sampling:
+      tool-use:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+    speculative:
+      type: draft-mtp
+      n_max: 6
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  Qwen/Qwen3.8-27B:
+    kind: text
+    name:
+      short: qwen3.8 27b
+      match: qwen\s*-?3\.8[\s-]*27b|qwen3\.8-27b
+    quants:
+    - repo: unsloth/Qwen3.8-27B-GGUF
+      quant: Q8_0
+      note: measured +0.02% perplexity against bf16 over 580 chunks (ubergarm), so nothing
+        above it buys anything. non-UD quants shipped a broken chat template on release and
+        were patched in place -- a copy pulled on 2026-08-14 or earlier needs refetching
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    speculative:
+      type: draft-mtp
+      n_max: 3
+      note: reported draft acceptance 0.546 at mean accepted run 2.64, so drafting more than
+        3 spends compute on tokens that get discarded
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+        thinking: xhigh
+      instruct:
+        temp: 0.7
+        top_p: 0.8
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - code
+        - tools
+        thinking: 'off'
+    notes: 'qwen3.6-27b''s architecture retrained, not a new one: same 64 layers, hidden 5120,
+      27.8b dense. the template defaults thinking to xhigh, which costs 15k-52k thinking tokens
+      in reported traces against qwen3.6''s 3k.'
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  Tongyi-MAI/Z-Image-Turbo:
+    kind: image
+    name:
+      short: z-image-turbo
+    quants:
+    - repo: unsloth/Z-Image-Turbo-GGUF
+      quant: Q8_0
+      role: diffusion
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: Comfy-Org/z_image_turbo
+      quant: ae.safetensors
+      role: vae
+    - repo: unsloth/Qwen3-4B-Instruct-2507-GGUF
+      quant: Q8_0
+      role: llm
+  XiaomiMiMo/MiMo-V2.5:
+    kind: text
+    name:
+      short: mimo v2.5
+      match: mimo[\s-]*v?2\.5
+    quants:
+    - repo: unsloth/MiMo-V2.5-GGUF
+      quant: UD-Q2_K_XL
+      note: 95.9 gib, the largest that fits 105
+    - repo: unsloth/MiMo-V2.5-GGUF
+      quant: UD-IQ3_S
+      note: 107.0 gib, over a 105 gib host budget
+    ids:
+      aa: mimo-v2-5-0424
+      gbench: xiaomi/mimo-v2.5
+      lmarena: mimo-v2.5
+      swerebench: ''
+      epoch: mimo-v2.5
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 40
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  baidu/ERNIE-Image-Turbo:
+    kind: image
+    name:
+      short: ernie-image-turbo
+    quants:
+    - repo: unsloth/ERNIE-Image-Turbo-GGUF
+      quant: Q8_0
+      role: diffusion
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: unsloth/FLUX.2-VAE
+      quant: flux2-vae.safetensors
+      role: vae
+    - repo: unsloth/Ministral-3-3B-Instruct-2512-GGUF
+      quant: Q8_0
+      role: llm
+  deepreinforce-ai/Ornith-1.0-35B:
+    kind: text
+    name:
+      short: ornith 1.0 35b
+      match: ornith[\s-]*1?\.?0?[\s-]*35b|\bornith\b
+    quants:
+    - repo: unsloth/Ornith-1.0-35B-GGUF
+      quant: Q8_0
+    - repo: deepreinforce-ai/Ornith-1.0-35B-GGUF
+      quant: Q8_0
+      note: the vendor's own gguf repo
+    sampling:
+      tool-use:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      # the card recommends ONE set, temp 0.6 / top_p 0.95 / top_k 20, and
+      # notes temp 1.0 only "to reproduce the reported benchmark setup"
+      thinking:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  deepreinforce-ai/Ornith-1.0-9B:
+    kind: text
+    name:
+      short: ornith-1.0-9b
+    quants:
+    - repo: unsloth/Ornith-1.0-9B-GGUF
+      quant: Q8_0
+    sampling:
+      tool-use:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      # the card recommends ONE set, temp 0.6 / top_p 0.95 / top_k 20, and
+      # notes temp 1.0 only "to reproduce the reported benchmark setup"
+      thinking:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  deepseek-ai/DeepSeek-V4-Flash-0731:
+    kind: text
+    name:
+      short: deepseek v4 flash 0731
+      match: deepseek[\s-]*v?4[\s-]*flash|ds4[\s-]*f?|dsv4
+    quants:
+    - repo: unsloth/DeepSeek-V4-Flash-0731-GGUF
+      quant: UD-IQ3_XXS
+    ids:
+      aa: deepseek-v4-flash
+      gbench: deepseek/deepseek-v4-flash-0731
+      lmarena: deepseek-v4-flash
+      swerebench: DeepSeek-V4 Flash [high]
+      epoch: deepseek-v4-flash-0731
+    speculative:
+      type: draft-dspark
+      n_max: 3
+      draft_repo: unsloth/DeepSeek-V4-Flash-0731-GGUF:Q8_0
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 40
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - tools
+    notes: 'the card splits top_p by scenario: 0.95 for agentic, 1.0 otherwise. this
+      profile claims `tools`, so it takes the agentic number -- generation_config.json
+      ships the 1.0, which is the other case rather than a correction of this one.'
+    modalities:
+      input:
+      - text
+      - image
+      - audio
+      output:
+      - text
+  fishaudio/s2-pro:
+    kind: speech
+    name:
+      short: fish-s2-pro
+    quants:
+    - repo: rodrigomt/s2-pro-gguf
+      quant: Q8_0
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  google/embeddinggemma-300M:
+    kind: text
+    name:
+      short: embeddinggemma-300m
+    quants:
+    - repo: unsloth/embeddinggemma-300m-GGUF
+      quant: Q8_0
+    sampling:
+      instruct:
+        temp: 0.8
+        top_p: 0.9
+        top_k: 40
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - base
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - embeddings
+  google/functiongemma-270m-it:
+    kind: text
+    name:
+      short: functiongemma-270m-it
+    quants:
+    - repo: unsloth/functiongemma-270m-it-GGUF
+      quant: Q8_0
+    sampling:
+      instruct:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 64
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - tools
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  google/gemma-4-12B-it:
+    kind: text
+    name:
+      short: gemma 4 12b
+      match: gemma\s*-?4[\s-]*12b|gemma4[\s-]*12b
+    quants:
+    - repo: unsloth/gemma-4-12B-it-GGUF
+      quant: Q8_0
+    speculative:
+      type: draft-mtp
+      n_max: 6
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 64
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - tools
+    ids:
+      aa: gemma-4-12b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      - audio
+      output:
+      - text
+  google/gemma-4-26B-A4B-it:
+    kind: text
+    name:
+      short: gemma 4 26b a4b
+      match: gemma\s*-?4[\s-]*26b|gemma4[\s-]*26b|26b-?a4b
+    quants:
+    - repo: unsloth/gemma-4-26B-A4B-it-GGUF
+      quant: Q8_0
+    - repo: unsloth/gemma-4-26B-A4B-it-GGUF
+      quant: UD-Q4_K_XL
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 64
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    speculative:
+      type: draft-mtp
+      n_max: 6
+    ids:
+      aa: gemma-4-26b-a4b
+      gbench: google/gemma-4-26b-a4b-it
+      lmarena: gemma-4-26b-a4b
+      swerebench: ''
+      epoch: gemma-4-26b-a4b
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  google/gemma-4-31B-it:
+    kind: text
+    name:
+      short: gemma 4 31b
+      match: gemma\s*-?4[\s-]*31b|gemma4[\s-]*31b
+    quants:
+    - repo: unsloth/gemma-4-31B-it-GGUF
+      quant: Q8_0
+    - repo: unsloth/gemma-4-31B-it-GGUF
+      quant: UD-Q4_K_XL
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 64
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    speculative:
+      type: draft-mtp
+      n_max: 6
+    notes: enable_thinking defaults to FALSE in this template, unlike the qwen and laguna
+      families where it defaults true.
+    ids:
+      aa: gemma-4-31b
+      gbench: google/gemma-4-31b-it
+      lmarena: gemma-4-31b
+      swerebench: Gemma 4 31B
+      epoch: gemma-4-31b-it
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  google/gemma-4-E2B-it:
+    kind: text
+    name:
+      short: gemma-4-e2b-it
+    quants:
+    - repo: unsloth/gemma-4-E2B-it-GGUF
+      quant: Q8_0
+    speculative:
+      type: draft-mtp
+      n_max: 6
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 64
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - tools
+    ids:
+      aa: gemma-4-e2b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      - audio
+      output:
+      - text
+  google/gemma-4-E4B-it:
+    kind: text
+    name:
+      short: gemma-4-e4b-it
+    quants:
+    - repo: unsloth/gemma-4-E4B-it-GGUF
+      quant: Q8_0
+    speculative:
+      type: draft-mtp
+      n_max: 6
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 64
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - tools
+    ids:
+      aa: gemma-4-e4b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      - audio
+      output:
+      - text
+  hexgrad/Kokoro-82M:
+    kind: speech
+    name:
+      short: kokoro-v1
+    quants:
+    - repo: mmwillet2/Kokoro_GGUF
+      quant: Kokoro_espeak.gguf
+      role: model-path
+    - repo: mmwillet2/Kokoro_GGUF
+      quant: Kokoro_espeak_Q8.gguf
+      role: model-path
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  ideogram-ai/ideogram-4-fp8:
+    kind: image
+    name:
+      short: ideogram-4
+    quants:
+    - repo: leejet/ideogram-4-GGUF
+      quant: ideogram4-Q4_0.gguf
+      role: diffusion
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: unsloth/FLUX.2-VAE
+      quant: flux2-vae.safetensors
+      role: vae
+    - repo: unsloth/Qwen3-VL-8B-Instruct-GGUF
+      quant: Q8_0
+      role: llm
+    - repo: leejet/ideogram-4-GGUF
+      quant: ideogram4_uncond-Q4_0.gguf
+      role: uncond
+  khimaros/Qwen3-TTS-12Hz-0.6B-CustomVoice-GGUF:
+    kind: speech
+    name:
+      short: qwen3-tts-0.6b-customvoice
+    quants:
+    - repo: khimaros/Qwen3-TTS-12Hz-0.6B-CustomVoice-GGUF
+      quant: Q8_0
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  khimaros/Qwen3-TTS-12Hz-1.7B-Base-GGUF:
+    kind: speech
+    name:
+      short: qwen3-tts-1.7b-base
+    quants:
+    - repo: khimaros/Qwen3-TTS-12Hz-1.7B-Base-GGUF
+      quant: Q8_0
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  khimaros/Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF:
+    kind: speech
+    name:
+      short: qwen3-tts-1.7b-customvoice
+    quants:
+    - repo: khimaros/Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF
+      quant: Q8_0
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  khimaros/Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF:
+    kind: speech
+    name:
+      short: qwen3-tts-1.7b-voicedesign
+    quants:
+    - repo: khimaros/Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF
+      quant: Q8_0
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  krea/Krea-2-Raw:
+    kind: image
+    name:
+      short: krea-2-raw
+    quants:
+    - repo: vantagewithai/Krea-2-Raw-GGUF
+      quant: Q8_0
+      role: diffusion
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: Comfy-Org/Wan_2.1_ComfyUI_repackaged
+      quant: wan_2.1_vae.safetensors
+      role: vae
+    - repo: unsloth/Qwen3-VL-4B-Instruct-GGUF
+      quant: Q8_0
+      role: llm
+  krea/Krea-2-Turbo:
+    kind: image
+    name:
+      short: krea-2-turbo
+    quants:
+    - repo: vantagewithai/Krea-2-Turbo-GGUF
+      quant: Q8_0
+      role: diffusion
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: Comfy-Org/Wan_2.1_ComfyUI_repackaged
+      quant: wan_2.1_vae.safetensors
+      role: vae
+    - repo: unsloth/Qwen3-VL-4B-Instruct-GGUF
+      quant: Q8_0
+      role: llm
+  meta-models/Muse-Glimmer-30B:
+    kind: text
+    # "Muse Glimmer supports the following levels: low / medium / high / xhigh"
+    # -- the card, which is the only place they are written down. the template
+    # only defaults reasoning_strength to 'high' and validates nothing.
+    thinking:
+      accepts: [low, medium, high, xhigh]
+    name:
+      short: muse glimmer
+      match: muse[\s-]*glimmer|\bglimmer\b
+    quants:
+    - repo: unsloth/Muse-Glimmer-30B-GGUF
+      quant: Q8_0
+    speculative:
+      type: draft-dflash
+      n_max: 15
+      note: dflash denoises a 16-token block in place and yields at most block_size-1, so
+        llama.cpp's default of 3 leaves most of it unused
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 64
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    notes: 'the only model here whose thinking knob is `reasoning_strength` rather than enable_thinking
+      or reasoning_effort. llama.cpp #26941 translates reasoning_effort to it, so a client
+      that speaks the common knob works against a recent build and silently does nothing against
+      an older one.'
+    ids:
+      aa: muse-glimmer
+      gbench: ''
+      lmarena: muse-glimmer
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  mistralai/Voxtral-Mini-4B-Realtime-2602:
+    kind: speech
+    name:
+      short: voxtral-mini-4b-realtime-2602
+    quants:
+    - repo: andrijdavid/Voxtral-Mini-4B-Realtime-2602-GGUF
+      quant: Q8_0
+      role: model
+    modalities:
+      input:
+      - audio
+      output:
+      - text
+  nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16:
+    kind: text
+    name:
+      short: nemotron-3-nano-30b-a3b
+    quants:
+    - repo: unsloth/Nemotron-3-Nano-30B-A3B-GGUF
+      quant: Q8_0
+    sampling:
+      # the card names both sets and what each is FOR: "temperature=1.0 and
+      # top_p=1.0 are recommended for reasoning tasks, while temperature=0.6 and
+      # top_p=0.95 are recommended for tool calling". the 0.6/0.95 set was
+      # carried here as `instruct`, which is the wrong profile for it.
+      tool-use:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 40
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - tools
+      thinking:
+        temp: 1.0
+        top_p: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+    ids:
+      aa: nvidia-nemotron-3-nano-30b-a3b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16:
+    kind: text
+    name:
+      short: nemotron 3 super
+      match: nemotron[\s-]*3[\s-]*super
+    quants:
+    - repo: unsloth/Nemotron-3-Super-120B-A12B-GGUF
+      quant: UD-Q4_K_XL
+    sampling:
+      tool-use:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 40
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 40
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+      # the card says temp 1.0 / top_p 0.95 "across all tasks and serving
+      # backends -- reasoning, tool calling, and general chat alike". the
+      # tool-use profile above runs colder than that on purpose, so the vendor's
+      # own set is recorded here rather than only described in prose
+      upstream-tool-use:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 40
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: nvidia-nemotron-3-super-120b-a12b
+      gbench: nvidia/nemotron-3-super-120b-a12b
+      lmarena: nvidia-nemotron-3-super-120b-a12b
+      swerebench: ''
+      epoch: nemotron-3-super
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  openai/gpt-oss-120b:
+    kind: text
+    # natively MXFP4 with quantization-aware training: the shipped
+    # precision IS the trained one, so the retention curve does not apply
+    native_low_bpw: true
+    # the template interpolates reasoning_effort verbatim and only documents a
+    # default ("A string that describes the reasoning effort, defaults to
+    # medium"), so the levels cannot be derived from it. openai documents
+    # low/medium/high, and MODELS.md scores this model at high.
+    thinking:
+      accepts: [low, medium, high]
+    name:
+      short: gpt-oss-120b
+      match: gpt-?oss[\s-]*120b|oss[\s-]*120b
+    quants:
+    - repo: unsloth/gpt-oss-120b-GGUF
+      quant: Q8_0
+    ids:
+      aa: gpt-oss-120b
+      gbench: openai/gpt-oss-120b
+      lmarena: gpt-oss-120b
+      swerebench: gpt-oss-120b
+      epoch: gpt-oss-120b
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 1.0
+        top_k: 0
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    notes: 'its template interpolates reasoning_effort into the prompt verbatim ("Reasoning:
+      <effort>") with no validation and defaults to medium, so an unrecognised level is silently
+      accepted rather than rejected.'
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  openai/gpt-oss-20b:
+    kind: text
+    # natively MXFP4 with quantization-aware training: the shipped
+    # precision IS the trained one, so the retention curve does not apply
+    native_low_bpw: true
+    # the template interpolates reasoning_effort verbatim and only documents a
+    # default ("A string that describes the reasoning effort, defaults to
+    # medium"), so the levels cannot be derived from it. openai documents
+    # low/medium/high, and MODELS.md scores this model at high.
+    thinking:
+      accepts: [low, medium, high]
+    name:
+      short: gpt-oss-20b
+    quants:
+    - repo: unsloth/gpt-oss-20b-GGUF
+      quant: Q8_0
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 1.0
+        top_k: 0
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: gpt-oss-20b
+      gbench: ''
+      lmarena: ''
+      swerebench: gpt-oss-20b
+      epoch: gpt-oss-20b
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  openai/whisper-large-v3-turbo:
+    kind: speech
+    name:
+      short: whisper-large-v3-turbo
+    quants:
+    - repo: ggerganov/whisper.cpp
+      quant: ggml-large-v3-turbo.bin
+      role: model
+    - repo: ggerganov/whisper.cpp
+      quant: ggml-large-v3-turbo-q8_0.bin
+      role: model
+    modalities:
+      input:
+      - audio
+      output:
+      - text
+  poolside/Laguna-S-2.1:
+    kind: text
+    name:
+      short: laguna s 2.1
+      match: laguna[\s-]*s?[\s-]*2\.1|\blaguna\b
+    quants:
+    - repo: unsloth/Laguna-S-2.1-GGUF
+      quant: UD-Q6_K_XL
+    sampling:
+      tool-use:
+        temp: 0.7
+        top_p: 0.95
+        top_k: 0
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      # the vendor's own generation_config.json; only the fields it ships, so
+      # nothing here is invented. the tool-use profile above is the host's
+      # deliberate low-temperature variant, not a competing claim about defaults
+      thinking:
+        temp: 1.0
+        top_p: 1.0
+        top_k: 20
+        min_p: 0.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: ''
+      gbench: poolside/laguna-s-2.1
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  stepfun-ai/Step-3.7-Flash:
+    kind: text
+    # the card, in prose rather than beside the knob: "offers three selectable
+    # reasoning levels (low, medium, and high) so developers can easily balance
+    # speed, cost, and cognitive depth". the template interpolates the value into
+    # a system line -- `"Reasoning: " + reasoning_effort` -- and validates nothing
+    thinking:
+      accepts: [low, medium, high]
+    name:
+      short: step 3.7 flash
+      match: step[\s-]*3\.7
+    quants:
+    - repo: unsloth/Step-3.7-Flash-GGUF
+      quant: UD-IQ4_NL
+      note: 90.6 gib, the largest that fits 105
+    - repo: unsloth/Step-3.7-Flash-GGUF
+      quant: UD-Q4_K_S
+      note: 106.3 gib, over a 105 gib host budget
+    ids:
+      aa: step-3-7-flash
+      gbench: stepfun/step-3.7-flash
+      lmarena: ''
+      swerebench: ''
+      epoch: step-3.7-flash
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.9
+        top_k: 40
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  thinkingmachines/Inkling-Small:
+    kind: text
+    name:
+      short: inkling small
+      match: inkling[\s-]*small|inkling
+    quants:
+    - repo: unsloth/Inkling-Small-GGUF
+      quant: UD-IQ3_S
+      note: 100.1 gib, the largest that fits 105
+    - repo: unsloth/Inkling-Small-GGUF
+      quant: UD-Q3_K_XL
+      note: 111.3 gib, over a 105 gib host budget
+    ids:
+      aa: inkling-small
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: inkling-small
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 1.0
+        top_k: 40
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      - image
+      - audio
+      output:
+      - text
+  Qwen/Qwen3.5-397B-A17B:
+    kind: text
+    name:
+      short: qwen3.5 397b a17b
+      match: qwen\s*-?3\.5[\s-]*397b|397b-?a17b
+    quants:
+    - repo: unsloth/Qwen3.5-397B-A17B-GGUF
+      quant: UD-Q2_K_XL
+      note: nothing in this repo fits a 105gib budget at a bpw worth running; carried
+        because four sources measure it, so it sets the ceiling the local models are
+        being compared against
+    sampling:
+      # the vendor's generation_config.json
+      thinking:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: qwen3-5-397b-a17b
+      gbench: qwen/qwen3.5-397b-a17b
+      lmarena: qwen3.5-397b-a17b
+      swerebench: Qwen3.5-397B-A17B
+      epoch: qwen3.5-397b-a17b
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+  inclusionAI/Ling-3.0-flash:
+    kind: text
+    name:
+      short: ling 3.0 flash
+      match: ling[\s-]*3\.0
+    quants:
+    - repo: AtomicChat/Ling-3.0-flash-GGUF
+      quant: AD-Q6_K
+      note: no unsloth repo exists, so the AD-* quants are what there is
+    sampling:
+      # the card states one set and states it twice: "we recommend the sampling
+      # parameters temperature=0.6, top_p=0.95, top_k=20". thinking is on by
+      # default in both the chat template and the ling3 reasoning parser
+      thinking:
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: ling-3-0-flash
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  mistralai/Mistral-Medium-3.5-128B:
+    kind: text
+    # the card's Recommended Settings: 'none' -> no reasoning, 'high' -> reasoning
+    thinking:
+      accepts: [none, high]
+    name:
+      short: mistral medium 3.5
+      match: mistral[\s-]*medium[\s-]*3\.5
+    quants:
+    - repo: unsloth/Mistral-Medium-3.5-128B-GGUF
+      quant: UD-Q6_K_XL
+      note: dense 128b, so it fits at 101.7gib but generates at dense-model speed
+    sampling:
+      # the card: temperature 0.7 and top_p 0.95 for reasoning_effort=high. it
+      # documents no top_k or min_p, so those fall back rather than be invented
+      thinking:
+        temp: 0.7
+        top_p: 0.95
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: mistral-medium-3-5
+      gbench: mistral/mistral-medium-3-5
+      lmarena: mistral-medium-3.5
+      swerebench: ''
+      epoch: mistral-medium-2604
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  moonshotai/Kimi-K3:
+    kind: text
+    name:
+      short: kimi k3
+      match: kimi[\s-]*k3
+    quants:
+    - repo: unsloth/Kimi-K3-GGUF
+      quant: UD-IQ1_S
+      note: 2.78t parameters; no quant of it fits this box. carried because all four
+        third-party sources score it, which makes it the reference point
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 40
+        min_p: 0.1
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: kimi-k3
+      gbench: moonshot/kimi-k3
+      lmarena: ''
+      swerebench: ''
+      epoch: kimi-k3
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+  nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16:
+    kind: text
+    name:
+      short: nemotron 3.5 lightning
+      match: nemotron[\s-]*3\.5[\s-]*lightning|3\.5[\s-]*lightning
+    quants:
+    - repo: bartowski/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF
+      quant: Q8_0
+      note: no unsloth repo yet
+    sampling:
+      # the vendor's generation_config.json
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        tuned:
+        - instruct
+        - chat
+        - reason
+    ids:
+      aa: nemotron-3-5-lightning
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  prism-ml/Bonsai-27B-gguf:
+    kind: text
+    name:
+      short: bonsai 27b
+      match: \bternary[\s-]*bonsai\b|\bbonsai\b
+    quants:
+    - repo: prism-ml/Bonsai-27B-gguf
+      quant: F16
+      note: keyed by the gguf repo because prism-ml publishes no base weights; the
+        card names Qwen/Qwen3.6-27B as its base, so it is dense and the same shape
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  prism-ml/Ternary-Bonsai-27B-gguf:
+    kind: text
+    name:
+      short: ternary bonsai 27b
+      match: ternary[\s-]*bonsai[\s-]*27b
+    quants:
+    - repo: prism-ml/Ternary-Bonsai-27B-gguf
+      quant: F16
+      note: ternary weights, which the bpw retention curve in build-tables does not
+        model; treat its quant-adjusted scores as unreliable
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  tencent/Hy3:
+    kind: text
+    # the card: reasoning_effort "no_think" (default, direct response), "low",
+    # "high" (deep chain-of-thought). the template interpolates it verbatim.
+    thinking:
+      accepts: [no_think, low, high]
+    name:
+      short: hy3
+      match: \bhy3\b|hunyuan\s*3
+    quants:
+    - repo: AngelSlim/Hy3-GGUF
+      quant: Q2_K_XL-mtp
+      note: tencent's own quant team. the -mtp files embed the draft head, so the
+        tag carries the suffix rather than naming a sidecar
+    sampling:
+      # the vendor's generation_config.json, minus its top_k -1 (vllm's "disabled",
+      # which is llama.cpp's 0 -- not translated here rather than guessed at)
+      thinking:
+        temp: 0.9
+        top_p: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: hy3
+      gbench: tencent/hy3
+      lmarena: hy3
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - text
+  upstage/Solar-Open2-250B:
+    kind: text
+    # the card: reasoning_effort="high" for reasoning, "none" for a direct
+    # response. no middle level is documented.
+    thinking:
+      accepts: [none, high]
+    name:
+      short: solar open2 250b
+      match: solar[\s-]*open2|solar[\s-]*open[\s-]*2
+    quants:
+    - repo: prometheusAIR/Solar-Open2-250B-GGUF
+      quant: Q2_K
+      note: dense 250b, so Q2_K is the only tag under budget and the bpw penalty at
+        that depth is most of why it ranks where it does
+    sampling:
+      thinking:
+        temp: 1.0
+        top_p: 0.95
+        top_k: 40
+        min_p: 0.1
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: solar-open2-250b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - text

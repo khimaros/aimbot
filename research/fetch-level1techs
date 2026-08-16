@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+
+"""Fetch level1techs forum threads into data/level1techs.json.
+
+A second community sample, and one that skews the right way: level1techs is a
+hardware forum, so the people posting about strix halo own one. r/LocalLLaMA is
+much larger but mostly discusses models in the abstract or on nvidia cards --
+measured on the captured corpus, only a handful of its comments come from
+someone who has actually run the model on this box.
+
+Discourse ships a public JSON API, so `search.json` gives topics and `t/<id>.json`
+gives every post in one. Search only returns a truncated blurb per post, so the
+topics themselves are fetched for the full text.
+"""
+
+import argparse
+import html
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.parse
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+BASE = "https://forum.level1techs.com"
+SEARCH = BASE + "/search.json?q=%s"
+TOPIC = BASE + "/t/%d.json"
+UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+      "Chrome/140.0.0.0 Safari/537.36")
+
+QUERIES = [
+    "strix halo llm", "strix halo llama.cpp", "ryzen ai max 395 llm",
+    "strix halo tokens per second", "128gb unified memory model",
+    "local llm coding model", "llama.cpp rocm vulkan benchmark",
+    "gpt-oss 120b local", "qwen3 local inference",
+]
+
+
+def get(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age), "--header", "User-Agent: " + UA]
+    if refresh:
+        cmd.append("--refresh")
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout
+    try:
+        return json.loads(out)
+    except ValueError:
+        return None
+
+
+def strip(cooked):
+    """Discourse serves rendered HTML; keep the text and the code blocks."""
+    s = re.sub(r"<br\s*/?>|</p>|</li>|</pre>", "\n", cooked or "")
+    s = re.sub(r"<[^>]+>", "", s)
+    return re.sub(r"\n{3,}", "\n\n", html.unescape(s)).strip()
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--out", default="data/level1techs.json")
+    ap.add_argument("--topics", type=int, default=30, metavar="N",
+                    help="pull full posts for the N most-replied topics found")
+    ap.add_argument("--max-age", type=int, default=7 * 86400)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--delay", type=float, default=1.0)
+    args = ap.parse_args()
+
+    searches, found = {}, {}
+    for q in QUERIES:
+        d = get(SEARCH % urllib.parse.quote(q), "l1-q-" + re.sub(r"\W+", "_", q),
+                args.max_age, args.refresh)
+        if not d or not d.get("topics"):
+            print("  search %-34s no topics" % q, file=sys.stderr)
+            time.sleep(args.delay)
+            continue
+        searches[q] = [t["id"] for t in d["topics"]]
+        for t in d["topics"]:
+            found[t["id"]] = dict(
+                id=t["id"], title=t.get("title"), slug=t.get("slug"),
+                posts_count=t.get("posts_count") or 0, created=t.get("created_at"),
+                last_posted=t.get("last_posted_at"), tags=t.get("tags") or [],
+                url="%s/t/%s/%d" % (BASE, t.get("slug"), t["id"]))
+        print("  search %-34s %d topics" % (q, len(d["topics"])), file=sys.stderr)
+        time.sleep(args.delay)
+
+    if not found:
+        sys.exit("no topics found")
+
+    wanted = sorted(found.values(), key=lambda t: -t["posts_count"])[:args.topics]
+    posts = 0
+    for t in wanted:
+        time.sleep(args.delay)
+        d = get(TOPIC % t["id"], "l1-t-%d" % t["id"], args.max_age, args.refresh)
+        if not d:
+            print("  topic %-8d unavailable" % t["id"], file=sys.stderr)
+            continue
+        t["posts"] = [dict(
+            n=p.get("post_number"), author=p.get("username"),
+            created=p.get("created_at"), likes=p.get("like_count") or 0,
+            reads=p.get("reads") or 0, text=strip(p.get("cooked"))[:6000])
+            for p in (d.get("post_stream") or {}).get("posts") or []]
+        posts += len(t["posts"])
+        print("  topic %-8d %3d posts  %s" % (t["id"], len(t["posts"]), t["title"][:48]),
+              file=sys.stderr)
+
+    out = {"searches": searches, "topics": {str(t["id"]): t for t in found.values()}}
+    with open(args.out, "w") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+    print("wrote %s: %d searches, %d topics, %d posts fetched"
+          % (args.out, len(searches), len(found), posts))
+
+
+if __name__ == "__main__":
+    main()

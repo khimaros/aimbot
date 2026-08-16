@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+
+"""The model-name lexicon, and a filter that applies it.
+
+Every analysis in this directory has to answer "which model is this sentence
+about", and the answer is a pile of aliases: nobody writes `Qwen3.6-27B` twice
+in a thread, they write `3.6 27b` or `qwen27`. Keeping that lexicon in one
+place matters more than it looks -- a missing alias silently zeroes a model
+rather than erroring, which is how the sentence splitter bug once dropped the
+most-discussed model in the corpus to nothing.
+
+    match-models --lexicon              # the alias table as json
+    match-models --hardware             # the strix halo / backend alias table
+    match-models --sources              # the same models keyed per data source
+    echo '{"text": "..."}' | match-models   # annotate json lines
+
+As a filter it reads json lines with a `text` field and adds `models`,
+`hardware` and `symptoms`, passing everything else through untouched. That
+keeps it composable with jq and with the analyze-* scripts, none of which
+import each other.
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+# the free-text lexicon: which model a sentence is ABOUT. THE REGISTRY OWNS THIS
+# -- `name.match` beside `name.short`, so the alias and the model are one record
+# and a rename cannot leave them disagreeing. what stays here is the residue:
+# models the community discusses that this registry does not carry facts for, so
+# there is nowhere else to put them.
+_REG = None
+
+
+def registry():
+    global _REG
+    if _REG is None:
+        import yaml
+        _REG = yaml.safe_load(open(os.path.join(HERE, "..", "registry",
+                                                "models.yaml"))) or {}
+    return _REG
+
+
+DISCUSSED_ONLY = {
+    "minimax m3": r"minimax[\s-]*m3|\bm3\b",
+    "glm-4.5-air": r"glm[\s-]*4\.5[\s-]*air",
+    "glm-5.2": r"glm[\s-]*5\.2",
+    "fable-fusion 711": r"fable[\s-]*fusion",
+    "motif 3": r"\bmotif[\s-]*3\b",
+}
+
+
+def lexicon():
+    """{name: alias regex}, registry first and the discussed-only residue after."""
+    out = {}
+    for repo, m in (registry().get("models") or {}).items():
+        name = m.get("name") or {}
+        if name.get("short") and name.get("match"):
+            out[name["short"]] = name["match"]
+    out.update(DISCUSSED_ONLY)
+    return out
+
+# the same models, keyed the way each collected source keys them. THE REGISTRY
+# OWNS THIS TOO, under `ids`, filled by ../scripts/resolve-ids. it lived here as
+# a literal until the two copies drifted and the tables read the wrong one --
+# crediting inkling-small with the flagship inkling's gbench score and mimo v2.5
+# with mimo v2.5 Pro's swe-rebench score. keyed on `name.short`, which is the
+# same string the lexicon above uses, so the sentiment join lines up.
+def sources():
+    out = {}
+    for repo, m in (registry().get("models") or {}).items():
+        ids = m.get("ids")
+        short = (m.get("name") or {}).get("short")
+        if ids and short:
+            out[short] = {k: (v or "") for k, v in ids.items()}
+    return out
+
+
+
+
+HARDWARE = {
+    "strix halo": r"strix[\s-]*halo|ryzen\s*ai\s*max|gfx1151|395\+?\b|rdna\s*3\.5",
+    "rocm": r"\brocm\b|\bhip\b|hipblas",
+    "vulkan": r"\bvulkan\b|\bkompute\b",
+    "cuda": r"\bcuda\b|\bnvidia\b|\brtx\b|\b30[789]0\b|\b40[789]0\b|\b50[789]0\b",
+    "apple": r"\bmetal\b|\bm[1-4]\s*(max|ultra|pro)\b|apple\s*silicon",
+}
+
+# what actually went wrong. deliberately about observable failures rather than
+# opinions -- "slow" is here, "bad at coding" is analyze-task-mentions' job
+SYMPTOMS = {
+    "crash / abort": r"\bcrash\w*|\babort\w*|segfault|\bsegv\b|GGML_ASSERT|assert\w* fail|"
+                     r"\bterminate\b|core dumped|exits? (with )?[1-9]|failed to load",
+    "garbage output": r"garbl\w+|gibberish|nonsense|\bnan\b|repeat\w+ (itself|forever|loop)|"
+                      r"empty (output|response)|no tokens|outputs? nothing|broken output",
+    "out of memory": r"out of memory|\boom\b|allocation failed|cannot allocate|"
+                     r"failed to allocate|not enough (vram|memory)",
+    "template / tools": r"chat template|\bjinja\b|tool[\s-]*call\w*|\bgrammar\b|"
+                        r"stop token|\beos\b|\beog\b|special token",
+    "speed": r"\bslow\b|\btok/s\b|tokens per second|throughput|prompt processing|"
+             r"\bt/s\b|degrad\w+ (speed|performance)",
+    "quantization": r"\b(?:UD-|AD-)?(?:IQ|Q)\d(?:_[A-Z0-9_]+)?\b|imatrix|\bbpw\b|mxfp4",
+    "speculative": r"speculative|draft model|\bmtp\b|dflash|dspark|eagle3",
+}
+
+
+def compile_all(d):
+    return {k: re.compile(v, re.I) for k, v in d.items()}
+
+
+def annotate(text, mre, hre, sre):
+    return dict(
+        models=[k for k, r in mre.items() if r.search(text)],
+        hardware=[k for k, r in hre.items() if r.search(text)],
+        symptoms=[k for k, r in sre.items() if r.search(text)])
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--lexicon", action="store_true", help="print the model alias table")
+    ap.add_argument("--hardware", action="store_true", help="print the hardware alias table")
+    ap.add_argument("--symptoms", action="store_true", help="print the symptom table")
+    ap.add_argument("--sources", action="store_true",
+                    help="print each model's id in every collected data source")
+    args = ap.parse_args()
+
+    if args.lexicon or args.hardware or args.symptoms or args.sources:
+        out = {}
+        if args.lexicon:
+            out["models"] = lexicon()
+        if args.hardware:
+            out["hardware"] = HARDWARE
+        if args.symptoms:
+            out["symptoms"] = SYMPTOMS
+        if args.sources:
+            out["sources"] = sources()
+        json.dump(out, sys.stdout, indent=1, sort_keys=True)
+        print()
+        return
+
+    mre, hre, sre = compile_all(lexicon()), compile_all(HARDWARE), compile_all(SYMPTOMS)
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        rec.update(annotate(rec.get("text") or "", mre, hre, sre))
+        print(json.dumps(rec, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

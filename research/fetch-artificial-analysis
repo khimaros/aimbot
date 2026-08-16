@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+
+"""Fetch the artificial analysis model table into data/artificial-analysis.json.
+
+Artificial analysis has no free API (api/v2 returns 401 without a key), but
+their leaderboard page is a next.js app that ships the whole dataset inline as
+an RSC flight payload. ./rsc-extract pulls the records out; this shapes them.
+
+Only the fields MODELS.md actually cites are kept, so the committed file stays
+small enough to diff. Scores are as artificial analysis measured them: third
+party, one harness across every model, which is the reason MODELS.md prefers
+them to self-reported model card numbers.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+
+URL = "https://artificialanalysis.ai/leaderboards/models"
+UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+      "Chrome/140.0.0.0 Safari/537.36")
+
+# the subset MODELS.md cites. dropping the rest takes the file from 3.7mb to ~200kb
+FIELDS = [
+    "name", "slug", "modelCreatorName", "releaseDate", "licenseName",
+    "isOpenWeights", "deprecated", "isReasoning",
+    "totalParameters", "activeParameters", "contextWindowTokens",
+    "intelligenceIndex", "codingIndex", "agenticIndex",
+    "terminalbenchV21", "terminalbenchHard", "tau2", "tauBanking",
+    "scicode", "gpqa", "hle", "lcr", "ifbench", "critpt",
+    "itbenchSre", "gdpvalNormalized", "analystAgent", "apexAgents", "mmmuPro",
+    "omniscience", "omniscienceAccuracy", "omniscienceNonHallucination",
+    "opennessIndex", "medianOutputTokensPerSecond", "huggingfaceUrl",
+]
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--out", default="data/artificial-analysis.json")
+    ap.add_argument("--url", default=URL)
+    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    args = ap.parse_args()
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    cmd = [os.path.join(here, "rsc-extract"), args.url, "--key", "aa-leaderboard",
+           "--match", '"intelligenceIndex":', "--max-age", str(args.max_age),
+           "--header", "User-Agent: " + UA]
+    if args.refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    if proc.returncode:
+        sys.exit(proc.returncode)
+
+    models = {}
+    for line in proc.stdout.splitlines():
+        d = json.loads(line)
+        key = d.get("slug") or d.get("name")
+        if key and "intelligenceIndex" in d:
+            models[key] = {k: d.get(k) for k in FIELDS if k in d}
+
+    if not models:
+        sys.exit("no model records found -- the page structure probably changed")
+
+    with open(args.out, "w") as f:
+        json.dump(models, f, indent=1, sort_keys=True)
+    ow = sum(1 for d in models.values() if d.get("isOpenWeights"))
+    print("wrote %s: %d models (%d open weights)" % (args.out, len(models), ow))
+
+
+if __name__ == "__main__":
+    main()

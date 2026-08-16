@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+
+"""Fetch GGUF repos from the hub into data/hf-catalog.json -- for discovery.
+
+Every other collector here is asked about models this document already chose:
+repos.txt is hand-curated and each fetcher goes and looks up what is on it.
+That can never surface anything new. This one runs the other way and asks the
+hub what exists, two ways:
+
+  trending   the GGUF text-generation repos being downloaded right now, which
+             is how a release, a requantization or a fine-tune that nobody
+             added to repos.txt gets noticed
+  authors    every GGUF repo from the publishers in publishers.txt, which is
+             how "has unsloth shipped a quant of X yet" stops being a manual
+             check
+
+Most of what comes back is not roster material -- the trending list is thick
+with abliterated merges, 2B models and architectures llama.cpp cannot load.
+That is expected. The report marks which repos are already tracked and leaves
+the judgement to a human.
+
+Three API notes, all learned the hard way. `sort=trending` is a 400; the field
+is `trendingScore`. `apps=llama.cpp`, which the website URL carries, is
+accepted but ignored -- results are byte-identical with and without it, so it
+is not sent. And the listing omits `author` unless `full` is set, so the author
+is taken from the repo id instead of trusting the field.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.parse
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+API = "https://huggingface.co/api/models?%s"
+UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+      "Chrome/140.0.0.0 Safari/537.36")
+PER_PAGE = 100
+
+FIELDS = ["id", "likes", "downloads", "trendingScore", "lastModified",
+          "createdAt", "pipeline_tag", "gated", "tags"]
+
+
+def get(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age), "--header", "User-Agent: " + UA]
+    if refresh:
+        cmd.append("--refresh")
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout
+    try:
+        d = json.loads(out)
+    except ValueError:
+        return None
+    return d if isinstance(d, list) else None
+
+
+def base_model(tags):
+    """`base_model:Qwen/Qwen3.6-27B` -- what this was built from, if declared."""
+    for t in tags or []:
+        if t.startswith("base_model:") and not t.startswith("base_model:quantized"):
+            return t.split(":", 1)[1]
+    return None
+
+
+def shape(m, tracked):
+    r = {k: m.get(k) for k in FIELDS}
+    r["author"] = (m.get("id") or "/").split("/")[0]
+    r["base_model"] = base_model(m.get("tags"))
+    r["tracked"] = m.get("id") in tracked
+    return r
+
+
+def page(params, key, args):
+    """Walk a listing until it runs out or --pages is reached."""
+    rows = []
+    for p in range(args.pages):
+        q = dict(params, limit=PER_PAGE, skip=p * PER_PAGE)
+        d = get(API % urllib.parse.urlencode(q), "%s-p%d" % (key, p),
+                args.max_age, args.refresh)
+        if not d:
+            break
+        rows += d
+        if len(d) < PER_PAGE:
+            break
+        time.sleep(args.delay)
+    return rows
+
+
+def read_list(path):
+    try:
+        with open(path) as f:
+            return [l.split("#")[0].strip() for l in f if l.split("#")[0].strip()]
+    except IOError:
+        return []
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default="data/hf-catalog.json")
+    ap.add_argument("--repos", default="repos.txt")
+    ap.add_argument("--authors", default="publishers.txt")
+    ap.add_argument("--pages", type=int, default=3, help="%d repos per page" % PER_PAGE)
+    # `created` in the website URL is `createdAt` in the api, and is the one
+    # sort that surfaces a model on its release day rather than after it has
+    # accumulated enough downloads to trend
+    ap.add_argument("--sort", default="trendingScore",
+                    choices=["trendingScore", "downloads", "likes",
+                             "lastModified", "createdAt"])
+    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--delay", type=float, default=0.5)
+    args = ap.parse_args()
+
+    tracked = set(read_list(args.repos))
+
+    trending = [shape(m, tracked) for m in page(
+        {"filter": "gguf", "pipeline_tag": "text-generation",
+         "sort": args.sort, "direction": -1}, "hfc-%s" % args.sort, args)]
+    if not trending:
+        sys.exit("no trending repos returned -- the hub api probably changed")
+    print("  trending  %3d repos, %d already tracked"
+          % (len(trending), sum(1 for r in trending if r["tracked"])), file=sys.stderr)
+
+    authors = {}
+    for a in read_list(args.authors):
+        time.sleep(args.delay)
+        rows = page({"author": a, "filter": "gguf", "sort": "lastModified",
+                     "direction": -1}, "hfc-author-" + a, args)
+        authors[a] = [shape(m, tracked) for m in rows]
+        print("  %-14s %3d gguf repos%s" % (a, len(rows),
+              " (capped at --pages)" if len(rows) == args.pages * PER_PAGE else ""),
+              file=sys.stderr)
+
+    out = {"sort": args.sort, "trending": trending, "authors": authors}
+    with open(args.out, "w") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+    total = len(trending) + sum(len(v) for v in authors.values())
+    print("wrote %s: %d trending + %d author repos across %d publishers"
+          % (args.out, len(trending), total - len(trending), len(authors)))
+
+
+if __name__ == "__main__":
+    main()

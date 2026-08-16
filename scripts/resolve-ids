@@ -1,0 +1,250 @@
+#!/usr/bin/env python3
+
+"""Match registry models against each source's own key space, and fill in
+`ids`.
+
+Every source names models its own way and there are five of them, so filling
+this by hand is 100+ strings that no one will re-check. This searches each
+source's actual key space and reports what it matched, what was ambiguous, and
+what it could not find -- a miss recorded as "" is a fact (the source does not
+carry the model), which is different from a lookup nobody attempted.
+
+Matching is deliberately conservative. It normalizes away punctuation and
+compares against the repo basename and the registry short name, and it only
+accepts a candidate when exactly one survives. Anything ambiguous is printed
+for a human rather than guessed, because a wrong id silently scores one model
+with another's numbers.
+
+    resolve-ids                # report only
+    resolve-ids --write        # update registry/models.yaml
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA = os.path.join(HERE, "..", "research", "data")
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("!!! pyyaml not found")
+
+
+def norm(s):
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def load(name):
+    try:
+        return json.load(open(os.path.join(DATA, "%s.json" % name)))
+    except (IOError, ValueError):
+        return {}
+
+
+def key_spaces():
+    """{source: {normalized name: real id}} for every source that names models."""
+    out = {}
+
+    aa = load("artificial-analysis")
+    out["aa"] = {}
+    for slug, r in aa.items():
+        # skip the non-reasoning twins: the roster scores reasoning mode
+        if slug.endswith("-non-reasoning"):
+            continue
+        out["aa"].setdefault(norm(r.get("name")), slug)
+        out["aa"].setdefault(norm(slug), slug)
+
+    gb = load("gbench")
+    out["gbench"] = {}
+    for m in gb.get("rankings") or []:
+        mid = m.get("model_id") or ""
+        out["gbench"].setdefault(norm(mid.split("/")[-1]), mid)
+        out["gbench"].setdefault(norm(m.get("model")), mid)
+
+    lm = load("lmarena")
+    out["lmarena"] = {}
+    for board in (lm.get("boards") or {}).values():
+        for e in board.get("entries") or []:
+            n = e.get("modelDisplayName")
+            if n:
+                out["lmarena"].setdefault(norm(n), n)
+
+    sw = load("swe-rebench")
+    out["swerebench"] = {}
+    for m in (sw.get("models") or {}).values():
+        n = m.get("name")
+        if n:
+            out["swerebench"].setdefault(norm(n), n)
+
+    ep = load("epoch")
+    out["epoch"] = {}
+    for r in ep.get("eci") or []:
+        mv = (r.get("Model version") or "").split("/")[-1].rsplit("_", 1)[0]
+        if mv:
+            out["epoch"].setdefault(norm(mv), mv)
+        dn = r.get("Display name") or r.get("Model name")
+        if dn:
+            out["epoch"].setdefault(norm(dn), mv or dn)
+    return out
+
+
+# a trailing parameter count, which sources drop as often as they keep: AA and
+# lmarena both call meta-models/Muse-Glimmer-30B just `muse-glimmer`
+SIZE = re.compile(r"[-_](\d+(?:\.\d+)?)b(?:[-_]a\d+(?:\.\d+)?b)?$", re.I)
+
+# words that name a DIFFERENT model in the same family rather than the same one
+# spelled longer. `kimi-k3` fuzzy-matched lmarena's `kimi-k3-max`, which is the
+# hosted flagship and not the open weights this registry tracks -- AA lists both
+# and scores them apart. an effort level does the same: gpt-oss-120b at `high`
+# is not gpt-oss-120b at `low`
+TIER = ("max", "pro", "ultra", "turbo", "mini", "nano", "lite", "plus", "air",
+        "preview", "instant", "low", "high", "medium", "xhigh", "thinking",
+        "reasoning", "instruct", "chat", "base")
+
+
+def tiered(want, key):
+    """True if `key` is `want` plus a qualifier that names a different model."""
+    if not key.startswith(want):
+        return False
+    return key[len(want):] in TIER
+
+
+def candidates(space, wants, sized=()):
+    """Exact normalized hit first; else a unique substring hit.
+
+    `sized` are the same names with the parameter count removed, and they are
+    tried EXACT only. Substring matching them would be reckless -- `gemma-4`
+    is inside `gemma-4-31b`, so gemma-4-12b would silently take the 31b's
+    scores, which is the one failure this whole script is written to avoid.
+    """
+    for w in wants:
+        if w and w in space:
+            return space[w], "exact"
+    hits = set()
+    for w in wants:
+        if len(w) < 6:
+            continue
+        for k, v in space.items():
+            if w == k or (w in k and abs(len(w) - len(k)) <= 4 and not tiered(w, k)):
+                hits.add(v)
+    if len(hits) == 1:
+        return hits.pop(), "fuzzy"
+    if len(hits) > 1:
+        return None, "ambiguous:%d" % len(hits)
+    sized_hits = {space[w] for w in sized if w in space}
+    if len(sized_hits) == 1:
+        return sized_hits.pop(), "sized"
+    if len(sized_hits) > 1:
+        return None, "ambiguous:%d" % len(sized_hits)
+    return None, "miss"
+
+
+MODEL_KEY = re.compile(r"^  (\S.*?):\s*$")
+IDS_KEY = re.compile(r"^    ids:\s*$")
+
+
+def patch_ids(path, reg):
+    """Rewrite each model's `ids:` block in place, touching nothing else.
+
+    Dumping the parsed document back would be shorter and would delete every
+    comment in the file -- the quant notes and sampler provenance are the part
+    of this registry a human wrote, and a script that fills in benchmark ids
+    has no business reformatting them. So this edits the lines it owns.
+    """
+    lines = open(path).read().split("\n")
+    out, i, n = [], 0, 0
+    while i < len(lines):
+        m = MODEL_KEY.match(lines[i])
+        out.append(lines[i])
+        i += 1
+        if not m or m.group(1) not in reg:
+            continue
+        ids = reg[m.group(1)].get("ids")
+        # copy the model's body, replacing its ids block; the body ends at the
+        # next line that is not deeper than the model key
+        while i < len(lines) and (not lines[i].strip() or lines[i].startswith("    ")):
+            if IDS_KEY.match(lines[i]) and ids:
+                out.append(lines[i])
+                i += 1
+                while i < len(lines) and lines[i].startswith("      "):
+                    i += 1
+                # dumped as a pair, not a bare scalar: safe_dump of a scalar
+                # appends a `...` document-end marker that breaks the file
+                out.extend("      " + yaml.safe_dump({k: v}).strip()
+                           for k, v in ids.items())
+                n += 1
+                continue
+            out.append(lines[i])
+            i += 1
+    open(path, "w").write("\n".join(out))
+    return n
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--registry", default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--write", action="store_true")
+    args = ap.parse_args()
+
+    doc = yaml.safe_load(open(args.registry))
+    reg = doc.get("models") or {}
+    spaces = key_spaces()
+    print("key spaces: %s" % ", ".join("%s %d" % (k, len(v)) for k, v in spaces.items()))
+
+    filled, kept, amb = 0, 0, 0
+    for repo, m in reg.items():
+        if m.get("kind", "text") != "text":
+            continue
+        # sources drop or keep trailing qualifiers inconsistently: AA writes
+        # `gemma-4-31b` where the repo is `gemma-4-31B-it`, and nvidia's repo
+        # carries a `-BF16` precision suffix no benchmark uses
+        raw = [repo.split("/")[-1], (m.get("name") or {}).get("short"), ""]
+        variants = []
+        for cand in raw:
+            if not cand:
+                continue
+            variants.append(cand)
+            for suffix in ("-it", "-instruct", "-bf16", "-chat", "-base"):
+                if cand.lower().endswith(suffix):
+                    variants.append(cand[: -len(suffix)])
+        wants, sized = [], []
+        for v in variants:
+            n = norm(v)
+            if n and n not in wants:
+                wants.append(n)
+            s = norm(SIZE.sub("", v))
+            if s and s != n and s not in sized:
+                sized.append(s)
+        ids = m.setdefault("ids", {})
+        marks = []
+        for source, space in spaces.items():
+            if ids.get(source):
+                kept += 1
+                marks.append("%s=kept" % source)
+                continue
+            found, how = candidates(space, wants, sized)
+            if found:
+                ids[source] = found
+                filled += 1
+                marks.append("%s=%s" % (source, how))
+            else:
+                ids.setdefault(source, "")
+                if how.startswith("ambiguous"):
+                    amb += 1
+                    marks.append("%s=%s" % (source, how))
+        print("  %-46s %s" % (repo, " ".join(marks)))
+
+    print("\nfilled %d, kept %d already set, %d ambiguous left empty"
+          % (filled, kept, amb))
+    if args.write:
+        n = patch_ids(args.registry, reg)
+        print("wrote %s: %d ids block(s) rewritten" % (args.registry, n))
+
+
+if __name__ == "__main__":
+    main()

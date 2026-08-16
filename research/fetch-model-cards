@@ -1,0 +1,320 @@
+#!/usr/bin/env python3
+
+"""Extract the benchmark numbers models claim about themselves, into
+data/model-cards.json.
+
+These are the weakest evidence in the corpus and they are collected anyway,
+because they are often the ONLY numbers a new model has -- artificial analysis
+took weeks to score qwen3.8-27b, and in the meantime the card was all there was.
+
+They are weak for a reason that is measurable rather than cynical. On the
+qwen3.8-27b card, the three benchmarks where a competitor's score could be
+checked against artificial analysis matched AA to the decimal (muse glimmer's
+terminal-bench 51.7, GPQA 83.5, HLE 22.0), while the vendor's own two models
+came in 0.3 to 3.6 points ABOVE their AA scores on the same benchmarks. So the
+competitor column was copied and the home column was re-run, on a harness that
+is a little kinder. That is not fraud, it is a house harness -- but it means a
+card's own numbers are not comparable to the numbers beside them.
+
+So this stores `claimed` (the model's own column) separately from `others` (what
+the card says about everyone else), and analyze-self-report measures the gap
+against third-party sources. A card claim should never be worth as much as a
+measured one, and now there is a number for how much less.
+
+Cards are wildly heterogeneous -- markdown tables, HTML tables with inline
+styles, prose -- so extraction is best-effort and records what it could not
+parse rather than silently dropping it.
+"""
+
+import argparse
+import html
+import json
+import os
+import re
+import subprocess
+import sys
+from html.parser import HTMLParser
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+RAW = "https://huggingface.co/%s/raw/main/README.md"
+
+# benchmark names as cards write them -> the key third-party sources use, so a
+# claim can be put beside a measurement. the left side is matched loosely
+# (lowercased, punctuation stripped); anything unmatched is kept verbatim under
+# `unmatched` so the table grows from evidence rather than guesswork.
+BENCH = {
+    "terminalbench": "terminalbench", "terminalbench21": "terminalbench",
+    "terminalbench20": "terminalbench", "terminusterminalbench": "terminalbench",
+    "gpqa": "gpqa", "gpqadiamond": "gpqa",
+    "hle": "hle", "humanityslastexam": "hle",
+    "swebenchverified": "swebench_verified", "swebench": "swebench_verified",
+    "swebenchpro": "swebench_pro",
+    "livecodebench": "livecodebench", "livecodebenchv6": "livecodebench",
+    "aime": "aime", "aime2025": "aime", "aime2024": "aime",
+    "scicode": "scicode",
+    "ifbench": "ifbench", "ifeval": "ifeval",
+    "aiderpolyglot": "aider_polyglot",
+    "deepswe": "deepswe", "deepswe11": "deepswe",
+    "mmlu": "mmlu", "mmlupro": "mmlu_pro", "mmmu": "mmmu", "mmmupro": "mmmu_pro",
+    "arcagi": "arc_agi", "arcagi2": "arc_agi_2",
+    "tau2": "tau2", "tau2bench": "tau2", "taubench": "tau2",
+    "osworld": "osworld", "osworldverified": "osworld",
+    "gdpval": "gdpval", "critpt": "critpt", "weirdml": "weirdml",
+}
+NUM = re.compile(r"^-?\d+(?:\.\d+)?$")
+# longest alias first: "swebench" is a substring of "swebenchpro", and a card
+# that nests the benchmark inside a capability label ("Agentic terminal coding
+# / Terminal Bench 2.1 (Terminus)") flattens to one cell containing both
+BENCH_BY_LEN = None
+
+
+def match_bench(label):
+    global BENCH_BY_LEN
+    if BENCH_BY_LEN is None:
+        BENCH_BY_LEN = sorted(BENCH, key=len, reverse=True)
+    n = norm(label)
+    if not n:
+        return None
+    for alias in BENCH_BY_LEN:
+        if alias in n:
+            return BENCH[alias]
+    return None
+
+
+def norm(s):
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+class Tables(HTMLParser):
+    """Collect HTML tables as rows of cell text. Cards use them with heavy
+    inline styling and nested divs, so cell text is flattened."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.tables, self._t, self._row, self._cell, self._depth = [], None, None, None, 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "table":
+            self._t = []
+        elif tag == "tr" and self._t is not None:
+            self._row = []
+        elif tag in ("td", "th") and self._row is not None:
+            self._cell = []
+            self._depth = int(dict(attrs).get("colspan", 1) or 1)
+
+    def handle_data(self, data):
+        if self._cell is not None:
+            self._cell.append(data)
+
+    def handle_endtag(self, tag):
+        if tag in ("td", "th") and self._cell is not None:
+            self._row.append(" ".join(" ".join(self._cell).split()))
+            self._cell = None
+        elif tag == "tr" and self._row is not None:
+            if self._row:
+                self._t.append(self._row)
+            self._row = None
+        elif tag == "table" and self._t is not None:
+            if self._t:
+                self.tables.append(self._t)
+            self._t = None
+
+
+def markdown_tables(text):
+    out, cur = [], []
+    for line in text.split("\n"):
+        if line.strip().startswith("|") and line.count("|") >= 3:
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if all(set(c) <= set("-: ") for c in cells):
+                continue
+            cur.append(cells)
+        elif cur:
+            if len(cur) > 1:
+                out.append(cur)
+            cur = []
+    if len(cur) > 1:
+        out.append(cur)
+    return out
+
+
+def own_column(header, repo, names):
+    """Which column is this model? Cards put the subject first as often as not,
+    but never reliably, so match the header against the repo and known names."""
+    want = [norm(repo.split("/")[-1])] + [norm(n) for n in names if n]
+    best, score = None, 0
+    for i, cell in enumerate(header):
+        c = norm(cell)
+        if not c:
+            continue
+        for w in want:
+            if not w:
+                continue
+            if c == w:
+                return i
+            if (w in c or c in w) and len(c) > score:
+                best, score = i, len(c)
+    return best
+
+
+def parse_tables(tables, repo, names):
+    claimed, others, unmatched = {}, {}, []
+    for t in tables:
+        if len(t) < 2:
+            continue
+        header = t[0]
+        col = own_column(header, repo, names)
+        if col is None:
+            continue
+        for row in t[1:]:
+            if len(row) <= col or not row[0]:
+                continue
+            key = match_bench(row[0])
+            val = row[col].replace("%", "").strip().strip("*")
+            val = val.split()[0] if val else ""
+            if not NUM.match(val):
+                continue
+            if not key:
+                unmatched.append({"label": row[0], "value": float(val)})
+                continue
+            claimed[key] = float(val)
+            peers = {}
+            for i, cell in enumerate(header):
+                if i in (0, col) or len(row) <= i:
+                    continue
+                v = row[i].replace("%", "").strip().strip("*")
+                v = v.split()[0] if v else ""
+                if NUM.match(v):
+                    peers[cell] = float(v)
+            if peers:
+                others.setdefault(key, {}).update(peers)
+    return claimed, others, unmatched
+
+
+
+# sampler recommendations, which cards state as prose rather than in a table.
+# both formats are in use: one line of `temperature=1.0, top_p=0.95, ...`, or a
+# bulleted list with one setting per line, so consecutive lines are joined.
+SAMPLER_KV = re.compile(r"\b(temperature|temp|top_p|top_k|min_p|presence_penalty|"
+                        r"repetition_penalty|repeat_penalty)\b\s*[=:]\s*`?(\d+(?:\.\d+)?)")
+SAMPLER_FIELD = {"temperature": "temp", "temp": "temp", "top_p": "top_p",
+                 "top_k": "top_k", "min_p": "min_p",
+                 "presence_penalty": "presence_penalty",
+                 "repetition_penalty": "repeat_penalty",
+                 "repeat_penalty": "repeat_penalty"}
+
+
+# a card states settings for two different reasons: what to RUN the model at,
+# and what a benchmark was evaluated at. ornith's only numbers are a
+# Terminal-Bench harness description, which is not a recommendation.
+HARNESS = re.compile(r"\b(bench|harness|evaluat|protocol|scaffold|we (?:run|report)|"
+                     r"terminus|swe-bench|arena)\b", re.I)
+# a line break, or the conjunction that separates two recommendations in one
+# sentence. splitting on it is what stops the second mode overwriting the first.
+CLAUSE = re.compile(r",?\s+(?:while|whereas)\s+", re.I)
+
+
+def sampler_sets(text):
+    """Labelled sampler sets a card documents, in document order.
+
+    A python snippet counts as one: unsloth ships `presence_penalty=2.0` only in
+    a code sample for qwen3.6, where the prose never mentions it, and that is
+    exactly the kind of divergence worth recording rather than smoothing over.
+
+    A sentence documenting TWO modes is split on its conjunction: nemotron 3
+    nano writes "temperature=1.0 and top_p=1.0 are recommended for reasoning
+    tasks, while temperature=0.6 and top_p=0.95 are recommended for tool
+    calling", which is two recommendations rather than one contradictory set.
+    """
+    out, cur, label = [], {}, ""
+
+    def flush():
+        nonlocal cur, label
+        if len(cur) >= 2 and not HARNESS.search(label):
+            out.append({"label": label, "values": cur})
+        cur, label = {}, ""
+
+    for line in (text or "").split("\n"):
+        parts = CLAUSE.split(line)
+        for n, part in enumerate(parts):
+            found = SAMPLER_KV.findall(part)
+            if found:
+                # a conjunction starts a NEW recommendation, so the one being
+                # accumulated has to close before it rather than merge with it
+                if n and cur:
+                    flush()
+                if not cur:
+                    label = part.strip().strip("*->` ")[:80]
+                for k, v in found:
+                    cur.setdefault(SAMPLER_FIELD[k], float(v))
+            elif cur:
+                flush()
+    flush()
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--registry", default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--out", default="data/model-cards.json")
+    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    args = ap.parse_args()
+
+    import yaml
+    reg = yaml.safe_load(open(args.registry)).get("models") or {}
+
+    out = {}
+    for repo, m in reg.items():
+        if m.get("kind", "text") != "text" or "/" not in repo:
+            continue
+        cmd = [os.path.join(HERE, "httpcache"), RAW % repo,
+               "--key", "card-%s" % repo.replace("/", "_"),
+               "--max-age", str(args.max_age)]
+        if args.refresh:
+            cmd.append("--refresh")
+        text = subprocess.run(cmd, stdout=subprocess.PIPE,
+                              stderr=subprocess.DEVNULL, text=True).stdout
+        if not text:
+            print("  %-40s no card" % repo, file=sys.stderr)
+            continue
+        p = Tables()
+        try:
+            p.feed(text)
+        except Exception:
+            pass
+        names = [(m.get("name") or {}).get("short")]
+        claimed, others, unmatched = parse_tables(
+            p.tables + markdown_tables(text), repo, names)
+        if not claimed and not unmatched:
+            print("  %-40s no benchmark table found" % repo, file=sys.stderr)
+            continue
+        out[repo] = {"claimed": claimed, "others": others,
+                     "unmatched": unmatched[:20],
+                     "samplers": sampler_sets(text)}
+        # the quant repo is what actually gets run, and it does not always say
+        # the same thing as the base repo
+        qrepo = ((m.get("quants") or [{}])[0]).get("repo")
+        if qrepo:
+            qcmd = [os.path.join(HERE, "httpcache"), RAW % qrepo,
+                    "--key", "qcard-%s" % qrepo.replace("/", "_"),
+                    "--max-age", str(args.max_age)]
+            if args.refresh:
+                qcmd.append("--refresh")
+            qtext = subprocess.run(qcmd, stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL, text=True).stdout
+            qsets = sampler_sets(qtext)
+            if qsets:
+                out[repo]["quant_repo"] = qrepo
+                out[repo]["quant_samplers"] = qsets
+        print("  %-40s %d claimed, %d unmatched"
+              % (repo, len(claimed), len(unmatched)), file=sys.stderr)
+
+    with open(args.out, "w") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+    print("wrote %s: %d cards, %d with claims"
+          % (args.out, len(out), sum(1 for v in out.values() if v["claimed"])))
+
+
+if __name__ == "__main__":
+    main()

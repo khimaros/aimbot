@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+
+"""Fetch the lmarena leaderboards into data/lmarena.json.
+
+Worth carrying next to artificial analysis and gbench because it measures a
+third thing. AA grades answers against a fixed problem set, gbench decides them
+by play, and lmarena counts which of two blind responses a human preferred.
+None of that can be trained against directly, and it is the only source here
+that reflects what people like rather than what scores well.
+
+The known weakness is the mirror image of that strength: preference rewards
+formatting, length and agreeableness, so a chatty model can outrank a terse
+correct one. lmarena's answer is to publish some boards style-controlled --
+the rating with those presentation effects regressed out -- and the board id
+says which (`-style_control` vs `-raw`), so the distinction is never guessed.
+
+Every board is kept, media ones included, because they cost little and the
+alternative is refetching when the question changes.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+
+URL = "https://lmarena.ai/leaderboard"
+UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+      "Chrome/140.0.0.0 Safari/537.36")
+
+ENTRY = ["modelDisplayName", "rank", "rankUpper", "rankLower", "rating",
+         "ratingUpper", "ratingLower", "votes", "modelOrganization", "license",
+         "contextLength", "releaseType"]
+
+# lmarena carries a license string but no open-weights flag, so this is an
+# allowlist of the families whose weights are actually downloadable. anything
+# unmatched (including "Proprietary") is treated as closed.
+OPEN_LICENSES = ("mit", "apache", "gemma", "llama", "qwen", "deepseek", "nvidia open",
+                 "openrail", "cc-by", "gpl", "bsd", "falcon", "mrl", "tongyi")
+
+BOARD_PREFIX = "leaderboard-sets/public/leaderboards/"
+BOARD_SUFFIX = "/leaderboard-snapshots/latest"
+
+
+def board_name(rec):
+    """`.../text-overall-style_control/...` -> `text-overall-style_control`."""
+    bid = rec.get("id") or ""
+    if bid.startswith(BOARD_PREFIX):
+        bid = bid[len(BOARD_PREFIX):]
+    if bid.endswith(BOARD_SUFFIX):
+        bid = bid[:-len(BOARD_SUFFIX)]
+    return bid
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--out", default="data/lmarena.json")
+    ap.add_argument("--url", default=URL)
+    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    args = ap.parse_args()
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    cmd = [os.path.join(here, "rsc-extract"), args.url, "--key", "lmarena",
+           "--match", '"leaderboardSlug":', "--max-age", str(args.max_age),
+           "--header", "User-Agent: " + UA]
+    if args.refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    if proc.returncode:
+        sys.exit(proc.returncode)
+
+    boards, models = {}, {}
+    for line in proc.stdout.splitlines():
+        rec = json.loads(line)
+        name, entries = board_name(rec), rec.get("entries") or []
+        if not name or not entries:
+            continue
+        boards[name] = dict(
+            total_votes=rec.get("totalVotes"), total_models=rec.get("totalModels"),
+            style_control=(rec.get("params") or {}).get("styleControl"),
+            entries=[{k: e[k] for k in ENTRY if e.get(k) is not None} for e in entries])
+        for e in entries:
+            m = e.get("modelDisplayName")
+            if m:
+                models.setdefault(m, {}).update(
+                    organization=e.get("modelOrganization"), license=e.get("license"))
+
+    if not boards:
+        sys.exit("no leaderboards found -- the page structure probably changed")
+
+    for m in models.values():
+        lic = (m.get("license") or "").lower()
+        m["openWeights"] = any(t in lic for t in OPEN_LICENSES)
+
+    out = {"boards": boards, "models": models}
+    with open(args.out, "w") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+    ow = sum(1 for m in models.values() if m["openWeights"])
+    print("wrote %s: %d boards, %d models (%d open weights)"
+          % (args.out, len(boards), len(models), ow))
+    for n in sorted(boards):
+        print("  %-32s %4d entries, %s votes" % (n, len(boards[n]["entries"]),
+                                                 boards[n]["total_votes"]))
+
+
+if __name__ == "__main__":
+    main()
