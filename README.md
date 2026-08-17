@@ -40,6 +40,7 @@ registry/models.yaml      per-model facts, keyed by huggingface base repo
 registry/sampling.yaml    the named sampling profiles, and what each one means
 scripts/models-validate   check that the registry is internally consistent
 scripts/resolve-ids       match registry models to each source's own ids
+scripts/resolve-turns     fill turns/thinking from the executed chat template
 research/                 the collectors and analysis (see research/README.md)
 research/data/            committed point-in-time captures
 MODELS.md                 the comparison, generated from research/data
@@ -64,15 +65,84 @@ because vendors recommend different numbers for the same idea. it also owns the
 vocabularies those values are drawn from -- the `tuned` tags and the thinking
 levels -- so a level no chat template accepts fails validation here.
 
-a model may also carry `thinking.accepts`, which is the one thinking fact that
-is NOT derivable. a template that validates its levels enumerates them and
-`fetch-model-facts` reads them off, whether the guard is a membership test or a
-jinja map; one that interpolates the value verbatim states only a default, so
-the vendor's documented vocabulary has to be declared with a note saying where
-it came from -- gpt-oss `low/medium/high`, hy3 `no_think/low/high`, muse glimmer
-`low/medium/high/xhigh` on `reasoning_strength`. `models-validate --thinking`
-lists the models still missing one; `--cards` checks the sampling profiles
-against the sets the cards document, base repo and quant repo alike.
+a model may also carry `thinking.accepts` and `thinking.knob`, and most of it
+is derived now: `analyze-chat-templates` sets each candidate level and compares
+the render against a deliberately invalid control, which separates a level the
+template ENFORCES from one it recognises from one it accepts and ignores. that
+turned up a real error -- upstage's card documents `reasoning_effort="none"`
+for a direct response and the template branches on `medium|high|xhigh`, so
+`none` changed nothing and the registry had recorded it. `knob` is derived the
+same way and is not always the name everyone assumes: kimi k3's is
+`thinking_effort`, whose guard rejects the `medium` its own injected prose
+tells the model is supported.
+
+levels that render byte-identically are ONE level under two names, and listing
+both would invent a gradation, so they collapse into `aliases`:
+
+```yaml
+    thinking:
+      knob: reasoning_effort
+      accepts: [low, medium, xhigh]
+      aliases: {high: xhigh}
+```
+
+this is what a widened guard usually turns out to be. unsloth's qwen3.8 build
+accepts a `high` that upstream rejects, which looks like a fourth level the
+model was never trained for -- and is not: the template maps `high` onto
+`xhigh` before the same guard runs, so both spellings produce the identical
+prompt and the model still only ever sees three. inkling-small's added `xhigh`
+is `max` the same way. once the aliases collapse, the base repo and the gguf
+agree about the vocabulary in both cases, which is the useful way to say it.
+
+upstage collapses `medium|high|xhigh` into a single branch in its OWN template,
+so that knob has one effective setting under three names rather than a
+gradation, and `none` -- which its card documents for a direct response --
+changes nothing at all.
+
+what stays typed is the templates that interpolate the value verbatim, which
+genuinely accept any string and state only a default -- gpt-oss
+`low/medium/high`, step 3.7 flash the same, muse glimmer
+`low/medium/high/xhigh` on `reasoning_strength`. those keep a note saying where
+the vocabulary came from. `models-validate --thinking` lists the models still
+missing one; `--cards` checks the sampling profiles against the sets the cards
+document, base repo and quant repo alike.
+
+## turns
+
+`turns:` is what the chat template does with the roles a client sends, derived
+by executing it rather than by reading it:
+
+```yaml
+    turns:
+      source: unsloth/Qwen3.6-27B-GGUF
+      developer: as-system          # own | as-system | dropped | rejected
+      leading_system_max: 2
+      mid_system: dropped           # ok | dropped | rejected | reordered
+      mid_developer: dropped
+      upstream_differs: [developer, leading_system_max, mid_developer, mid_system]
+```
+
+`upstream_differs` names the fields where the base repo's own template answers
+differently, which is a fact about the QUANT rather than the model: on this
+entry every one of them, because the vendor's template rejects a developer
+message outright and unsloth's accepts it. a consumer that cares whether a
+behaviour was designed or patched in has the list; one that does not can
+ignore it.
+
+`source` is not decoration. the base repo and the gguf disagree for 11 of the
+39 models carrying both, because unsloth patches developer-role handling into
+the conversion that upstream does not have, so the facts are taken from the
+gguf a consumer actually serves and the repo they came from is recorded beside
+them. `resolve-turns --check-quants` lists the models whose OTHER quant repos
+contradict the recorded one -- `unsloth/Qwen3.5-27B-GGUF` and
+`unsloth/Qwen3.5-27B-MTP-GGUF` are the same model from the same publisher and
+only the MTP build accepts a developer message.
+
+`dropped` is the value to design around. the template renders, the server
+returns 200, and the message is not in the prompt; 9 of the 41 unsloth gguf
+templates do this to a developer message and 9 more silently discard a THIRD
+leading system message after merging the first two. `make turns` regenerates
+the blocks and `make lint` fails if the registry is behind the probe data.
 
 ## using it from a consumer
 
@@ -120,11 +190,13 @@ a host file that lists only choices.
 
 derived rather than typed: `research/fetch-model-facts` covers all 41 text
 models with arch, params, native context, mtp presence, the thinking knob and
-the samplers the vendor ships;
-`scripts/resolve-ids` filled 97 source ids with zero ambiguous matches;
+the samplers the vendor ships; `fetch-chat-templates` commits the 84 templates
+themselves and `analyze-chat-templates` executes them, which filled `turns:`
+for 41 models and `thinking.accepts` for 11;
+`scripts/resolve-ids` filled 99 source ids with zero ambiguous matches;
 `research/fetch-model-cards` extracts what models claim about themselves and
 `analyze-self-report` measures the discount (median +0.9 over third-party
-measurement across 64 matched claims).
+measurement across 70 matched claims).
 
 not done yet, in the order it should happen:
 
@@ -149,5 +221,5 @@ not done yet, in the order it should happen:
    nothing appears in both.
 3. gguf sizes join by repo but nothing enforces a consumer's memory budget with
    them yet; that check belongs to the consumer, and llama-tools has the TODO.
-4. card claims cover 21 of 41 text models; gpt-oss, laguna, inkling, step and
+4. card claims cover 22 of 41 text models; gpt-oss, laguna, inkling, step and
    minimax m2.7 publish no parseable benchmark table.

@@ -1,0 +1,337 @@
+#!/usr/bin/env python3
+
+"""Fill each model's `turns:` block from the executed chat template.
+
+Which roles a model accepts, in what order, and how many of each, is a fact
+about its chat template, and `research/analyze-chat-templates` derives it by
+RUNNING that template rather than by reading a card. This carries the result
+into the registry so a consumer gets it from the same file it already reads for
+quants and sampling.
+
+    resolve-turns              # what would change
+    resolve-turns --write      # update registry/models.yaml
+
+The facts are taken from the gguf repo a consumer actually serves -- the
+model's first `quants[]` entry -- and `source:` records which repo that was,
+because the two sides disagree far too often to leave implicit: 11 of the 39
+models with both carry a gguf template that accepts a developer message where
+the base repo rejects it, unsloth having patched the role in on the way through
+the conversion. Where a model has no gguf template, the base repo answers and
+`source:` says so.
+
+That choice has an edge the schema cannot express: `unsloth/Qwen3.5-27B-GGUF`
+and `unsloth/Qwen3.5-27B-MTP-GGUF` are the same model from the same publisher
+and disagree with each other -- only the MTP build carries the developer fix.
+`--check-quants` lists every model whose other quant repos contradict the one
+recorded here, so the gap is visible rather than silent.
+
+Fields, all four derived:
+
+  developer            own | as-system | dropped | rejected -- what a leading
+                       developer message renders as. `dropped` is the one to
+                       fear: the template renders, the server returns 200, and
+                       the message is not in the prompt
+  leading_system_max   how many leading system messages survive. 9 templates
+                       merge exactly two and silently drop the third
+  mid_system           ok | dropped | rejected | reordered, for a system
+                       message arriving after an assistant turn
+  mid_developer        the same for a developer message
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+PROBES = os.path.join(HERE, "..", "research", "data", "template-probes.json")
+MODEL_KEY = re.compile(r"^  (\S.*?):\s*$")
+FIELDS = {"turns": ["source", "developer", "leading_system_max", "mid_system",
+                    "mid_developer", "upstream_differs"],
+          "thinking": ["knob", "accepts", "aliases"]}
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("!!! pyyaml not found")
+
+
+def placement(status):
+    """One probe status as a turn outcome."""
+    if status == "ok":
+        return "ok"
+    if status == "rejected":
+        return "rejected"
+    if "reorder" in status:
+        return "reordered"
+    return "dropped"
+
+
+def turns_for(probe):
+    """The four facts, from one template's probe results."""
+    p = probe["probes"]
+    if p["sys x4"] == "ok":
+        most = "unlimited"
+    elif p["sys x3"] == "ok":
+        most = 3
+    elif p["sys x2"] == "ok":
+        most = 2
+    else:
+        most = 1
+    return {"developer": probe["roles"]["developer"].replace(" ", "-"),
+            "leading_system_max": most,
+            "mid_system": placement(p["mid sys"]),
+            "mid_developer": placement(p["mid dev"])}
+
+
+def served(model, probes):
+    """(repo, probe) for the template a consumer actually gets, or (None, None).
+
+    The first quant entry is what a consumer serves, so it answers before the
+    base repo does. Falling back the other way would describe a template nobody
+    runs.
+    """
+    for q in (model.get("quants") or []):
+        if q.get("repo") in probes:
+            return q["repo"], probes[q["repo"]]
+    return None, None
+
+
+def canonical(group, base_accepts, typed):
+    """Which spelling of one level to keep, from the strongest evidence there is.
+
+    The base repo decides when it accepts exactly one of them: unsloth maps
+    qwen3.8's `high` onto `xhigh` and inkling's `xhigh` onto `max`, so the name
+    upstream never took is the added alias. Where upstream collapses them too
+    -- upstage branches on `medium|high|xhigh` at once, so its knob has one
+    effective on-state under three names -- the template cannot say which name
+    is meant and whatever the registry already declared wins.
+    """
+    from_base = [g for g in group if g in (base_accepts or [])]
+    if len(from_base) == 1:
+        return from_base[0]
+    from_typed = [g for g in group if g in (typed or [])]
+    if len(from_typed) == 1:
+        return from_typed[0]
+    return group[0]
+
+
+def collapse(levels, base_levels, typed):
+    """(accepts, aliases) with each equivalence group reduced to one name."""
+    aliases = {}
+    accepts = list(levels["accepts"])
+    base_accepts = (base_levels or {}).get("accepts")
+    for group in levels.get("equivalent") or []:
+        keep = canonical(group, base_accepts, typed)
+        for name in group:
+            if name != keep:
+                aliases[name] = keep
+                if name in accepts:
+                    accepts.remove(name)
+    return accepts, aliases
+
+
+def level_knob(probe):
+    """(knob, facts) for the template's real level control, or (None, None)."""
+    levels = {k: v for k, v in (probe.get("thinking") or {}).items()
+              if v.get("type") == "level"}
+    if not levels:
+        return None, None
+    # a template may read several level-shaped names; the one with a raise
+    # guard is the real knob. kimi k3 reads `reasoning_effort` in passing and
+    # enforces `thinking_effort`
+    order = {"validated": 0, "partial": 1, "verbatim": 2}
+    knob = sorted(levels, key=lambda k: (order.get(levels[k]["kind"], 3), k))[0]
+    return knob, levels[knob]
+
+
+def thinking_for(probe, base, existing):
+    """The thinking block, deriving what the template can answer for.
+
+    A template that enforces a vocabulary (raises on anything outside it) or
+    reacts to only part of one states its own levels, and the derived set beats
+    a typed one -- upstage's card documents `none` for a direct response and
+    the template branches on `medium|high|xhigh`, so `none` was a no-op nobody
+    had noticed.
+
+    A template that interpolates the value VERBATIM states nothing: gpt-oss
+    takes any string at all, and its levels exist only in openai's docs. Those
+    keep whatever was typed, and the comment above them keeps saying where it
+    came from. `knob` is derivable either way, and is not always the name
+    everyone assumes -- kimi k3's is `thinking_effort`.
+    """
+    knob, levels = level_knob(probe)
+    if not knob:
+        return None
+    out = dict(existing or {})
+    out["knob"] = knob
+    if levels["kind"] != "verbatim":
+        _, base_levels = level_knob(base or {})
+        accepts, aliases = collapse(levels, base_levels, (existing or {}).get("accepts"))
+        out["accepts"] = accepts
+        if aliases:
+            out["aliases"] = aliases
+    return out if out.get("accepts") else None
+
+
+def resolve(reg, probes):
+    """{repo: {block: fields}}, for every model a template could be found for."""
+    out = {}
+    for repo, model in reg.items():
+        source, probe = served(model, probes)
+        base = probes.get(repo)
+        if not probe:
+            if not base:
+                continue
+            source, probe = repo, base
+        turns = dict(turns_for(probe), source=source)
+        # the served gguf is not always the template the vendor shipped, and
+        # where they disagree that is a fact about the QUANT rather than the
+        # model. naming the fields keeps it checkable instead of a bare bool
+        if base is not probe and base:
+            upstream = turns_for(base)
+            differs = sorted(k for k in upstream if upstream[k] != turns[k])
+            if differs:
+                turns["upstream_differs"] = differs
+        blocks = {"turns": turns}
+        thinking = thinking_for(probe, base, model.get("thinking"))
+        if thinking:
+            blocks["thinking"] = thinking
+        out[repo] = blocks
+    return out
+
+
+def contradictions(reg, probes, resolved):
+    """Models whose other quant repos disagree with the one recorded."""
+    rows = []
+    for repo, model in reg.items():
+        if repo not in resolved:
+            continue
+        want = {k: v for k, v in resolved[repo]["turns"].items() if k != "source"}
+        for q in (model.get("quants") or []):
+            other = q.get("repo")
+            if not other or other == resolved[repo]["turns"]["source"] or other not in probes:
+                continue
+            got = turns_for(probes[other])
+            diff = [k for k in want if want[k] != got[k]]
+            if diff:
+                rows.append((repo, resolved[repo]["source"], other,
+                             {k: (want[k], got[k]) for k in diff}))
+    return rows
+
+
+def render_block(name, fields):
+    """`name:` and its values, in the file's existing style."""
+    def scalar(v):
+        if isinstance(v, list):
+            return "[%s]" % ", ".join(str(x) for x in v)
+        if isinstance(v, dict):
+            return "{%s}" % ", ".join("%s: %s" % kv for kv in sorted(v.items()))
+        return str(v)
+    keys = [k for k in FIELDS[name] if k in fields]
+    keys += [k for k in fields if k not in keys]
+    return ["    %s:" % name] + ["      %s: %s" % (k, scalar(fields[k])) for k in keys]
+
+
+def patch(path, resolved):
+    """Rewrite the blocks this script owns in place, touching nothing else.
+
+    Dumping the parsed document back would delete every comment in the file,
+    and the sampler provenance and quant notes are the part a human wrote. A
+    model with no such block yet gets one appended to the end of its body,
+    which is the only position that cannot separate a comment from the key it
+    explains.
+    """
+    lines = open(path).read().split("\n")
+    out, i, n = [], 0, 0
+    while i < len(lines):
+        m = MODEL_KEY.match(lines[i])
+        out.append(lines[i])
+        i += 1
+        if not m or m.group(1) not in resolved:
+            continue
+        blocks = resolved[m.group(1)]
+        body, seen = [], set()
+        while i < len(lines) and (not lines[i].strip() or lines[i].startswith("    ")):
+            key = re.match(r"^    (\S+):\s*$", lines[i])
+            if key and key.group(1) in blocks:
+                seen.add(key.group(1))
+                i += 1
+                while i < len(lines) and lines[i].startswith("      "):
+                    i += 1
+                body.extend(render_block(key.group(1), blocks[key.group(1)]))
+                continue
+            body.append(lines[i])
+            i += 1
+        # a trailing blank line belongs to the next model, not to this body
+        tail = []
+        while body and not body[-1].strip():
+            tail.insert(0, body.pop())
+        for name in FIELDS:
+            if name not in seen and name in blocks:
+                body.extend(render_block(name, blocks[name]))
+        out.extend(body + tail)
+        n += 1
+    open(path, "w").write("\n".join(out))
+    return n
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--registry", default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--probes", default=PROBES)
+    ap.add_argument("--check-quants", action="store_true",
+                    help="models whose other quant repos disagree with the recorded one")
+    ap.add_argument("--check", action="store_true",
+                    help="exit 1 if the registry is behind the probe data")
+    ap.add_argument("--write", action="store_true")
+    args = ap.parse_args()
+
+    if not os.path.exists(args.probes):
+        sys.exit("no %s -- run research/analyze-chat-templates --json first" % args.probes)
+    reg = yaml.safe_load(open(args.registry)).get("models") or {}
+    probes = json.load(open(args.probes))
+    resolved = resolve(reg, probes)
+
+    if args.check:
+        stale = []
+        for repo, blocks in sorted(resolved.items()):
+            for name, want in blocks.items():
+                got = reg[repo].get(name) or {}
+                bad = {k: (got.get(k), v) for k, v in want.items() if got.get(k) != v}
+                if bad:
+                    stale.append((repo, name, bad))
+        for repo, name, bad in stale:
+            print("!!! %s %s: %s" % (repo, name, ", ".join(
+                "%s %r->%r" % (k, a, b) for k, (a, b) in sorted(bad.items()))),
+                file=sys.stderr)
+        print("turns: %d of %d models behind the probe data" % (len(stale), len(resolved)))
+        sys.exit(1 if stale else 0)
+
+    if args.check_quants:
+        rows = contradictions(reg, probes, resolved)
+        for repo, source, other, diff in rows:
+            print("%s\n  recorded from %s\n  but %s says %s"
+                  % (repo, source, other,
+                     ", ".join("%s %s->%s" % (k, a, b) for k, (a, b) in diff.items())))
+        print("\n%d models have a quant repo contradicting the recorded one" % len(rows))
+        return
+
+    for repo in sorted(resolved):
+        t = resolved[repo]["turns"]
+        th = resolved[repo].get("thinking") or {}
+        print("  %-46s %-10s sys<=%-9s mid_sys=%-9s mid_dev=%-9s %s"
+              % (repo, t["developer"], t["leading_system_max"], t["mid_system"],
+                 t["mid_developer"],
+                 "%s=%s" % (th["knob"], ",".join(th["accepts"])) if th else ""))
+    missing = [r for r in reg if r not in resolved]
+    print("\n%d models resolved, %d without any template (%s)"
+          % (len(resolved), len(missing), ", ".join(sorted(missing)[:3]) + " ..."))
+    if args.write:
+        print("patched %d models in %s" % (patch(args.registry, resolved), args.registry))
+
+
+if __name__ == "__main__":
+    main()

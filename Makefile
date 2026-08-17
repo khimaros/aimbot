@@ -5,6 +5,7 @@ help:
 
 lint:
 	./scripts/models-validate
+	./scripts/resolve-turns --check
 	./research/refresh-tables --check
 .PHONY: lint
 
@@ -15,3 +16,8 @@ tables:
 ids:
 	./scripts/resolve-ids --write
 .PHONY: ids
+
+turns:
+	cd research && ./analyze-chat-templates --json data/template-probes.json
+	./scripts/resolve-turns --write
+.PHONY: turns

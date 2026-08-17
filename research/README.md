@@ -11,26 +11,29 @@ date is in each file's provenance below.
 
 | file | captured | source |
 |---|---|---|
-| `data/artificial-analysis.json` | 2026-08-16 | artificialanalysis.ai leaderboard |
-| `data/gbench.json` | 2026-08-16 | gertlabs.com/rankings |
-| `data/gguf-sizes.json` | 2026-08-16 | huggingface hub tree api |
+| `data/artificial-analysis.json` | 2026-08-17 | artificialanalysis.ai leaderboard |
+| `data/gbench.json` | 2026-08-17 | gertlabs.com/rankings |
+| `data/gguf-sizes.json` | 2026-08-17 | huggingface hub tree api |
 | `data/gbench-compare-observed.json` | 2026-08-10 | gertlabs compare view |
-| `data/reddit-localllama.json` | 2026-08-16 | old.reddit.com r/LocalLLaMA |
+| `data/reddit-localllama.json` | 2026-08-17 | old.reddit.com r/LocalLLaMA |
 | `data/sentiment.json` | derived | analyze-task-mentions --json |
-| `data/hackernews.json` | 2026-08-16 | hn.algolia.com |
-| `data/lmarena.json` | 2026-08-16 | lmarena.ai/leaderboard |
-| `data/swe-rebench.json` | 2026-08-16 | swe-rebench.com |
-| `data/tbench.json` | 2026-08-16 | hf datasets, harborframework/terminal-bench-2-leaderboard |
-| `data/epoch.json` | 2026-08-16 | epoch.ai benchmarking hub (csv bundle) |
-| `data/model-facts.json` | 2026-08-16 | derived: hf config.json, safetensors index, chat template |
-| `data/model-cards.json` | 2026-08-16 | huggingface model card benchmark tables (self-reported) |
-| `data/hf-discussions.json` | 2026-08-16 | huggingface per-repo discussion tabs |
-| `data/github-issues.json` | 2026-08-16 | api.github.com, ggml-org/llama.cpp |
-| `data/level1techs.json` | 2026-08-16 | forum.level1techs.com discourse api |
-| `data/hf-catalog.json` | 2026-08-16 | huggingface hub model listing (trending) |
-| `data/hf-catalog-new.json` | 2026-08-16 | huggingface hub model listing (newest) |
+| `data/hackernews.json` | 2026-08-17 | hn.algolia.com |
+| `data/lmarena.json` | 2026-08-17 | lmarena.ai/leaderboard |
+| `data/swe-rebench.json` | 2026-08-17 | swe-rebench.com |
+| `data/tbench.json` | 2026-08-17 | hf datasets, harborframework/terminal-bench-2-leaderboard |
+| `data/epoch.json` | 2026-08-17 | epoch.ai benchmarking hub (csv bundle) |
+| `data/model-facts.json` | 2026-08-17 | derived: hf config.json, safetensors index, chat template |
+| `data/chat-templates/` | 2026-08-17 | the chat templates themselves, verbatim, base repo and gguf header |
+| `data/chat-templates.json` | 2026-08-17 | the index over them: source, size, hash, base/gguf pairing |
+| `data/template-probes.json` | derived | analyze-chat-templates --json |
+| `data/model-cards.json` | 2026-08-17 | huggingface model card benchmark tables (self-reported) |
+| `data/hf-discussions.json` | 2026-08-17 | huggingface per-repo discussion tabs |
+| `data/github-issues.json` | 2026-08-17 | api.github.com, ggml-org/llama.cpp |
+| `data/level1techs.json` | 2026-08-17 | forum.level1techs.com discourse api |
+| `data/hf-catalog.json` | 2026-08-17 | huggingface hub model listing (trending) |
+| `data/hf-catalog-new.json` | 2026-08-17 | huggingface hub model listing (newest) |
 
-`artificial-analysis.json` is keyed by model slug. it carries 608 models, 348
+`artificial-analysis.json` is keyed by model slug. it carries 609 models, 349
 of them open weights, trimmed to the 34 fields MODELS.md cites. scores are
 third party and run on one harness across every model, which is why MODELS.md
 prefers them to self-reported model card numbers.
@@ -125,6 +128,40 @@ plus every GGUF repo from the publishers in publishers.txt, which is how the
 `-MTP-GGUF` repos got noticed -- they are separate repos with identically-named
 files 0.42gib larger, and the roster had been sizing the wrong one.
 
+`data/chat-templates/` holds the templates themselves, one `.jinja` per repo,
+byte for byte. Everything else here is a summary of a source; this is the
+source, so a later question is asked of the file rather than of the network.
+It carries both sides, because they are not the same file: the base repo's
+`chat_template.jinja` and huggingface's parse of the gguf header, which is what
+llama.cpp actually loads. 41 of 48 gguf repos ship a template that differs from
+its base repo's, and the differences are not cosmetic -- unsloth patches a
+`{#- Unsloth fixes - developer role, tool calling #}` block into the qwen
+family that upstream has no trace of.
+
+`template-probes.json` is what those templates say when you RUN them.
+`analyze-chat-templates` renders each one against 18 fixed conversations, every
+message carrying a unique marker, and reads the outcome off the result: the
+template raised, or it rendered and the marker is there, or it rendered and the
+marker is gone. That last case is the one worth having a corpus for -- 9 of the
+41 unsloth gguf templates silently drop a developer message, and a consumer
+sees a 200 and a model that never saw its instruction.
+
+The same execution answers the thinking vocabulary, which is why
+`thinking.accepts` is now derived for 11 models rather than typed off a card.
+Setting each candidate level and comparing against a deliberately invalid
+control separates three cases a reader cannot: the level raises (the template
+enforces a vocabulary), it renders differently from the control (recognised),
+or it renders identically (accepted and ignored). Upstage's card documents
+`reasoning_effort="none"` for a direct response; the template branches on
+`medium|high|xhigh` and does nothing whatever for `none`. Only the verbatim
+templates still need a typed list, because they genuinely accept any string.
+
+Levels that render byte-identically are reported as `equivalent`, because two
+names for one prompt are not two levels. That is what a widened guard is in
+every case here: unsloth's qwen3.8 accepts a `high` upstream rejects, and maps
+it onto `xhigh` before the guard, so the model sees three levels either way and
+nobody is reaching an untrained setting by asking for it.
+
 `gguf-sizes.json` is keyed by repo, then by quant tag, with values in bytes.
 these are summed byte totals of the real files, so sharded quants aggregate and
 `mmproj:` entries are kept separate. nominal parameter counts are not a
@@ -159,11 +196,16 @@ substitute: UD-* quants mix precisions per tensor, and gpt-oss-120b is within
 ./analyze-correlations             # do the tracked sources disagree at all?
 ./analyze-correlations --redundancy        # what each source adds over AA
 ./analyze-correlations --scope aa          # AA internals, where n is large
-./analyze-correlations --regress 'intelligenceIndex~codingIndex,agenticIndex'
+./analyze-correlations --scope aa --regress 'intelligenceIndex~codingIndex,agenticIndex'
 ./analyze-tbench                   # which terminal-bench tasks track the other sources
 ./analyze-tbench --ref 'epoch ECI' # rank by one reference instead of the mean
 ./analyze-tbench --task fix-git    # the models behind one row
 ./analyze-tbench --stability       # is that ranking real, or fitted to 25 models?
+./analyze-chat-templates           # role support, base repo vs gguf
+./analyze-chat-templates --sequences   # all 18 ordering probes, per template
+./analyze-chat-templates --thinking    # the level vocabulary each knob takes
+./analyze-chat-templates --diverged    # where a gguf disagrees with its base
+./analyze-chat-templates --render REPO --probe 'mid dev'   # the prompt itself
 ./match-models --lexicon           # the shared model alias table
 ./match-models --sources           # the same models keyed per data source
 ```
@@ -174,7 +216,7 @@ normalized and weighted by the `WEIGHTS` dict at the top of `build-tables`
 (0.25 / 0.25 / 0.15 / 0.10 / 0.10 / 0.15 / 0.05).
 
 AA's *intelligence index* is deliberately not a component. regressed over the
-160 AA models carrying all three, `II ~ 0.403*coding + 0.418*agentic` with
+161 AA models carrying all three, `II ~ 0.406*coding + 0.413*agentic` with
 R^2 = 0.9845, so including it would double-count for 1.5% of new information.
 the same check puts most other AA fields at >=0.82 correlation with those two
 (terminal-bench 0.99, GDPval 0.99), which is why AA is treated as one axis of
@@ -223,15 +265,16 @@ intelligence index (n=25), +0.85 against epoch ECI, +0.71 against GBENCH; the
 best single tasks -- `circuit-fibsqrt`, `torch-pipeline-parallelism`,
 `large-scale-text-editing`, `write-compressor`, `make-mips-interpreter` -- match
 that on their own, 11 of them clear a bonferroni-corrected threshold against AA
-alone, and 34 of the 89 land within 0.20 of zero, most of them because 23 tasks
+alone, and 26 of the 89 land within 0.20 of zero, most of them because 21 tasks
 are passed by more than 90% of runs and cannot separate anybody.
 `configure-git-webserver` is inverted at -0.37: gpt-5.2 and claude opus 4.6 fail
 it where qwen3.5-9b and gpt-5-nano pass.
 
-`--stability` is the part worth running before quoting any of that. the five
-references agree with each other about the ranking (rho +0.74 to +0.87 over the
-89-task vectors), so the pattern is a property of the tasks rather than of one
-leaderboard. but the models are the sample here, and there are 25 of them: a
+`--stability` is the part worth running before quoting any of that. five of the
+six references agree with each other about the ranking (rho +0.74 to +0.87 over
+the 89-task vectors), so the pattern is largely a property of the tasks rather
+than of one leaderboard; AA's agentic index is the dissenter, pairing at +0.44
+to +0.72. but the models are the sample here, and there are 25 of them: a
 split-half over models reproduces the ranking at only +0.48, and 89 tasks tested
 at once need |rho| >= 0.63 for a bonferroni-corrected p<0.05. what does survive
 out of sample is the set rather than the order -- a top-10 chosen on half the
@@ -239,8 +282,8 @@ models scores +0.73 on the other half against the full suite's +0.72, and a
 top-20 scores +0.77. a quarter of terminal-bench carries what all of it says.
 
 `analyze-operational` carries each report's state, age and engagement, because
-a bug report is not a fact about the present: of the 94 strix-halo documents,
-28 are already closed, 50 are over 30 days old and 13 have no engagement beyond
+a bug report is not a fact about the present: of the 98 strix-halo documents,
+26 are already closed, 46 are over 30 days old and 13 have no engagement beyond
 the author. one issue in this capture was opened and closed the same day and
 still reads as a live constraint from its title alone. `--open
 --min-engagement 2` is the filter that makes the corpus quotable.
@@ -260,7 +303,7 @@ LLMs" thread. reply depth matters as much -- laguna's lowest-scoring mentions
 turned out to be ordinary endorsements buried three levels deep, not
 disagreement. so scores are ranked as percentiles within (thread, depth), and
 `--quotes MODEL` prints the best and worst received mentions so any claim can
-be eyeballed before it is believed. the rare negative score (165 of 10,877) is
+be eyeballed before it is believed. the rare negative score (223 of 13,534) is
 the cleanest signal in the set.
 
 ## refreshing
@@ -276,6 +319,7 @@ cd research
 ./fetch-tbench                     # per-task rewards, ~250 small files behind an etag
 ./fetch-epoch                      # one cc-by zip; etag revalidates to 304
 ./fetch-model-facts                # derived: arch, params, ctx, mtp, thinking knob
+./fetch-chat-templates             # the templates themselves, base repo and gguf header
 ./fetch-model-cards                # what models claim about themselves
 ./fetch-hf-discussions             # repos.txt again, so it lines up with the sizes
 ./fetch-github-issues              # ~7s/query: unauthenticated search is 10/min
@@ -285,7 +329,11 @@ cd research
 ./fetch-reddit --harvest 10 --comments 120 --front 14
 ```
 
-everything needs only curl and python3. no browser, no api keys.
+everything needs only curl and python3. no browser, no api keys. the one
+exception is `analyze-chat-templates`, which needs jinja2, because a jinja
+template cannot be executed by reimplementing jinja. `fetch-chat-templates`
+reuses the cache keys `fetch-model-facts` already writes, so whichever of the
+two runs second transfers nothing.
 
 reddit is worth a note, because the obvious approach fails and the working one
 is not obvious. `www.reddit.com` returns an SPA shell, the `.json` endpoints
@@ -364,6 +412,20 @@ pass `--refresh` to any collector to ignore all of it.
   `Ante__Gemini-3.1-Pro-Preview` submission names gemini-3-pro-preview inside.
   `fetch-tbench` records what the metadata says rather than what the directory
   is called, so a mislabelled submission pools with the wrong model.
+- a template's answer about the developer role is not the SERVER's answer.
+  llama.cpp rewrites `developer` to `system` before rendering, for every
+  template whose source does not contain `<|channel|>` -- that is, everything
+  except gpt-oss (`common/chat.cpp`, `workaround::map_developer_role_to_system`).
+  So under llama-server the developer handling unsloth patched in is
+  unreachable, and what actually decides the outcome is whatever the template
+  does with an extra SYSTEM message.
+- probes run under jinja2, which is what transformers uses. llama.cpp has its
+  own jinja (`common/jinja/`) and the two need not agree on every edge; where a
+  template only renders under a mutable sandbox that is recorded rather than
+  reported as broken. llama.cpp probes its own templates the same way, by
+  rendering them and watching which values get read (`common/jinja/caps.cpp`).
+- `leading_system_max: unlimited` means a fourth leading system message
+  survived, not that a hundredth would.
 - `analyze-tbench` joins terminal-bench model names to the other sources by
   normalized spelling, averaging AA's reasoning-effort variants when only the
   base name is given. fine-tunes nobody else measures (TermiGen-32B,

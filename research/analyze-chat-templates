@@ -1,0 +1,519 @@
+#!/usr/bin/env python3
+
+"""Execute every collected chat template against probe conversations.
+
+Which roles a model accepts, in which order, and how many of each, is not
+written down anywhere. Cards say "supports system prompts" and stop; the
+registry's `thinking.accepts` had to be typed by hand off release posts with a
+note saying which post. Both are answerable by RUNNING the template, because
+the template IS the contract: it either renders a developer message, silently
+drops it, or calls `raise_exception`.
+
+So each template is rendered against a fixed set of conversations, every
+message carrying a unique marker, and the outcome read off the result:
+
+  error     the template refused -- `raise_exception`, or a real jinja error
+  dropped   it rendered, and the message is not in the output. the worst case,
+            because a client sees a 200 and a model that never saw its system
+            prompt
+  as system rendered byte-identical to the same conversation with that message
+            sent as `system`, which is what "supports developer" usually means
+  own       rendered, and not identically to system or user: the template has
+            distinct handling for that role
+
+The thinking vocabulary comes out the same way, and better than reading it off
+the source: `fetch-model-facts` can only find a level list a template spells
+out as a membership test or a map, and reports `validated: false` for the ones
+that interpolate the value verbatim. Setting each candidate level and comparing
+the render against a deliberately invalid control separates the three real
+cases -- the level is rejected (raises), recognised (renders differently from
+the control), or ignored (renders the same as the control, so the knob is
+decoration at that value).
+
+The environment matches transformers': an immutable sandbox, `trim_blocks` and
+`lstrip_blocks` on, `raise_exception` and `strftime_now` as globals, `tojson`
+as a filter, and `loopcontrols` enabled. A template that needs a MUTABLE
+sandbox is recorded as such rather than reported as broken, since llama.cpp's
+own jinja allows what jinja2's immutable sandbox does not.
+
+    analyze-chat-templates                # role support, base vs gguf
+    analyze-chat-templates --sequences    # every ordering probe, per template
+    analyze-chat-templates --thinking     # the level vocabulary each knob takes
+    analyze-chat-templates --diverged     # gguf templates that patched a role
+    analyze-chat-templates --model qwen3.6-27b        # one model, everything
+    analyze-chat-templates --render REPO --probe NAME # the rendered text itself
+    analyze-chat-templates --json data/template-probes.json
+
+Reads data/chat-templates.json, so `fetch-chat-templates` runs first. Needs
+jinja2, which is the only thing here that does: a jinja template cannot be
+executed by reimplementing jinja.
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+INDEX = "data/chat-templates.json"
+
+# every message carries one of these, so "did the template keep it" is a
+# substring test rather than a guess about how the content got wrapped
+MARK = "<<m%d>>"
+
+# a probe is a conversation shape. `call` is an assistant turn with a tool
+# call, `tool` its result -- the two only mean anything together
+PROBES = [
+    ("system", ["system", "user"]),
+    ("developer", ["developer", "user"]),
+    ("sys+dev", ["system", "developer", "user"]),
+    ("dev+sys", ["developer", "system", "user"]),
+    ("sys x2", ["system", "system", "user"]),
+    ("dev x2", ["developer", "developer", "user"]),
+    ("sys x3", ["system", "system", "system", "user"]),
+    # a fourth is what separates "merges three" from "merges any number".
+    # without it `leading_system_max` would be inferred from x3 rather than
+    # measured, and gemma 4 takes as many as it is given
+    ("sys x4", ["system", "system", "system", "system", "user"]),
+    ("mid sys", ["user", "assistant", "system", "user"]),
+    ("mid dev", ["user", "assistant", "developer", "user"]),
+    ("sys/user/asst/dev/user", ["system", "user", "assistant", "developer", "user"]),
+    ("dev/user/asst/dev", ["developer", "user", "assistant", "developer"]),
+    ("asst first", ["assistant", "user"]),
+    ("user x2", ["user", "user"]),
+    ("asst x2", ["user", "assistant", "assistant"]),
+    ("no user", ["system"]),
+    ("empty", []),
+    ("tool call", ["user", "call", "tool", "assistant", "user"]),
+]
+
+# candidate thinking levels, every value seen across the roster's cards and
+# templates plus the obvious neighbours, so a template that accepts one nobody
+# documented still shows up
+LEVELS = ["none", "off", "minimal", "no_think", "low", "medium", "default",
+          "high", "xhigh", "max", "think", "auto", "dynamic"]
+# deliberately not a level. a template that raises on this and not on `high`
+# validates its input; one that renders both the same ignores the knob
+CONTROL = "zzz-not-a-level"
+# knob names are DISCOVERED rather than listed. a fixed list is how kimi k3 got
+# read wrong: its knob is `thinking_effort`, which is in nobody's table, and
+# probing the `reasoning_effort` that also appears in its text reported a
+# vocabulary the model does not actually have
+KNOB_RE = re.compile(r"think|reason|effort|budget", re.I)
+
+TOOLS = [{"type": "function", "function": {
+    "name": "get_weather", "description": "weather for a place",
+    "parameters": {"type": "object", "properties": {"place": {"type": "string"}},
+                   "required": ["place"]}}}]
+
+
+def generation_extension():
+    """`{% generation %}` support, which is a transformers extension, not jinja.
+
+    transformers wraps the assistant turn in one so it can return a token mask
+    for training. It has no effect on the rendered text, but a template
+    carrying one fails to PARSE without the tag registered -- poolside's laguna
+    does, and read as a jinja failure rather than as a missing extension.
+    """
+    from jinja2.ext import Extension
+    from jinja2 import nodes
+
+    class Generation(Extension):
+        tags = {"generation"}
+
+        def parse(self, parser):
+            lineno = next(parser.stream).lineno
+            body = parser.parse_statements(("name:endgeneration",), drop_needle=True)
+            return nodes.CallBlock(self.call_method("_noop", []), [], [], body).set_lineno(lineno)
+
+        def _noop(self, caller):
+            return caller()
+
+    return Generation
+
+
+_ENVS, _COMPILED = {}, {}
+
+
+def environment(immutable=True):
+    """The transformers environment, built once. A probe run renders one
+    template ~60 times and there are 84 of them, so rebuilding the sandbox and
+    recompiling the source per render dominated the runtime."""
+    if immutable not in _ENVS:
+        _ENVS[immutable] = build_environment(immutable)
+    return _ENVS[immutable]
+
+
+def compiled(text, immutable):
+    # keyed by the source itself, not by id(): a freed temporary's id gets
+    # reused and would hand back another model's compiled template
+    key = (text, immutable)
+    if key not in _COMPILED:
+        _COMPILED[key] = environment(immutable).from_string(text)
+    return _COMPILED[key]
+
+
+def build_environment(immutable=True):
+    import jinja2
+    from jinja2.sandbox import ImmutableSandboxedEnvironment, SandboxedEnvironment
+
+    def raise_exception(message):
+        raise jinja2.exceptions.TemplateError(message)
+
+    def strftime_now(fmt):
+        # a fixed date rather than today's: a probe result that changes
+        # overnight is not a fact about the template
+        import datetime
+        return datetime.datetime(2026, 1, 1).strftime(fmt)
+
+    cls = ImmutableSandboxedEnvironment if immutable else SandboxedEnvironment
+    env = cls(trim_blocks=True, lstrip_blocks=True,
+              extensions=["jinja2.ext.loopcontrols", generation_extension()])
+    env.filters["tojson"] = lambda o, **kw: json.dumps(o, **kw)
+    env.globals["raise_exception"] = raise_exception
+    env.globals["strftime_now"] = strftime_now
+    return env
+
+
+def messages(roles):
+    """A probe conversation, each message marked so it can be found afterwards."""
+    out = []
+    for i, role in enumerate(roles):
+        mark = MARK % i
+        if role == "call":
+            out.append({"role": "assistant", "content": "",
+                        "tool_calls": [{"id": "call_%d" % i, "type": "function",
+                                        "function": {"name": "get_weather",
+                                                     "arguments": {"place": mark}}}]})
+        elif role == "tool":
+            out.append({"role": "tool", "content": "result " + mark,
+                        "tool_call_id": "call_%d" % (i - 1), "name": "get_weather"})
+        else:
+            out.append({"role": role, "content": "message %s" % mark})
+    return out
+
+
+def render(text, msgs, **extra):
+    """(output, error, kind). Falls back to a mutable sandbox before calling it broken."""
+    ctx = {"messages": msgs, "add_generation_prompt": True, "bos_token": "",
+           "eos_token": "", "tools": extra.pop("tools", None), "date_string": "01 Jan 2026"}
+    ctx.update(extra)
+    err = kind = None
+    for immutable in (True, False):
+        try:
+            return compiled(text, immutable).render(**ctx), None, None
+        except Exception as e:
+            kind = type(e).__name__
+            err = "%s: %s" % (kind, e)
+            if kind != "SecurityError":
+                break
+    return None, err, kind
+
+
+def refused(kind):
+    """A template's OWN refusal, not a failure to run it.
+
+    `raise_exception` is the only thing that produces a bare TemplateError;
+    every jinja failure is a subclass with its own name. The distinction is the
+    whole point -- "this model rejects a second system message" and "this
+    template needs an extension we did not register" are different facts.
+    """
+    return "rejected" if kind == "TemplateError" else "err"
+
+
+def outcome(text, roles):
+    """How one probe went: 'ok', 'drop:1', 'reorder', 'rejected', or 'err'.
+
+    Reordering is the quiet one. A template that HOISTS a mid-conversation
+    system or developer message to the front keeps every message -- nothing is
+    dropped, nothing raises -- while silently moving an instruction relative to
+    the turns it was meant to qualify.
+    """
+    out, err, kind = render(text, messages(roles),
+                            tools=TOOLS if "call" in roles else None)
+    if err is not None:
+        return refused(kind), err, out
+    gone = [str(i) for i in range(len(roles)) if (MARK % i) not in out]
+    at = [out.index(MARK % i) for i in range(len(roles)) if (MARK % i) in out]
+    status = ("drop:" + ",".join(gone)) if gone else "ok"
+    if at != sorted(at):
+        status = "reorder" if not gone else status + "+reorder"
+    return status, None, out
+
+
+def role_support(text, role):
+    """Whether a leading `role` message survives, and what it renders as."""
+    out, err, kind = render(text, messages([role, "user"]))
+    if err is not None:
+        return refused(kind)
+    if (MARK % 0) not in out:
+        return "dropped"
+    for other in ("system", "user"):
+        if other == role:
+            continue
+        alt, alt_err, _ = render(text, messages([other, "user"]))
+        if alt_err is None and alt == out:
+            return "as " + other
+    return "own"
+
+
+def knob_names(text):
+    """Every variable the template READS whose name suggests a thinking control.
+
+    Parsing for undeclared variables rather than grepping the source: a name
+    only matters if the template actually reads it, and `reasoning_effort`
+    appears in kimi k3's prose without being the knob.
+    """
+    from jinja2 import meta
+    try:
+        found = meta.find_undeclared_variables(environment().parse(text))
+    except Exception:
+        return []
+    return sorted(n for n in found if KNOB_RE.search(n))
+
+
+def probe_knob(text, knob, gate):
+    """What kind of control one variable is, and which values it reacts to.
+
+    The control value is what separates the three level cases: a template that
+    raises on it but renders `high` enforces a vocabulary, one that renders
+    both identically is not reading the knob at that value, and one that
+    renders every value distinctly is interpolating whatever it is handed.
+    """
+    def at(value):
+        ctx = dict(gate)
+        ctx[knob] = value
+        return render(text, messages(["user"]), **ctx)
+
+    ctl, ctl_err, _ = at(CONTROL)
+    accepts, rejects, ignored, seen = [], [], [], {}
+    for level in LEVELS:
+        got, err, _ = at(level)
+        if err is not None:
+            rejects.append(level)
+        elif ctl_err is None and got == ctl:
+            ignored.append(level)
+        else:
+            accepts.append(level)
+            seen.setdefault(got, []).append(level)
+    if accepts:
+        # "accepts everything" is the case a level list misrepresents: gpt-oss
+        # takes any string at all, so reporting its accepts as the probed 13
+        # would invent a vocabulary it does not have
+        kind = "validated" if rejects else ("partial" if ignored else "verbatim")
+        out = {"type": "level", "kind": kind, "accepts": accepts,
+               "rejects": rejects, "ignored": ignored,
+               "control_rejected": ctl_err is not None}
+        # levels that render byte-identically are ONE level under two names, and
+        # listing both invents a gradation. unsloth maps qwen3.8's `high` onto
+        # `xhigh` before the guard runs, so a client picking `high` over `xhigh`
+        # is choosing between two spellings of the same prompt
+        groups = [sorted(v, key=LEVELS.index) for v in seen.values() if len(v) > 1]
+        if groups and kind != "verbatim":
+            out["equivalent"] = sorted(groups, key=lambda g: LEVELS.index(g[0]))
+        return out
+    # no level moved the output, so it is not a level knob. a boolean gate sees
+    # every string as true, which is exactly why it lands here
+    on, on_err, _ = at(True)
+    off, off_err, _ = at(False)
+    if on_err is None and off_err is None and on != off:
+        return {"type": "boolean", "kind": "boolean"}
+    lo, lo_err, _ = at(0)
+    hi, hi_err, _ = at(8192)
+    if lo_err is None and hi_err is None and lo != hi:
+        return {"type": "integer", "kind": "integer"}
+    return {"type": "none", "kind": "inert"}
+
+
+def thinking_probe(text):
+    """Every thinking knob the template reads, and what each one accepts."""
+    names = knob_names(text)
+    # most templates gate the graded knob behind the boolean one, so a level
+    # probe run with thinking off measures nothing
+    gate = {"enable_thinking": True} if "enable_thinking" in names else {}
+    return {n: probe_knob(text, n, gate if n != "enable_thinking" else {})
+            for n in names}
+
+
+def analyze(text):
+    """Everything one template says about itself."""
+    res = {"roles": {r: role_support(text, r) for r in
+                     ("system", "developer", "user", "assistant")},
+           "probes": {}, "errors": {}}
+    for name, roles in PROBES:
+        status, err, _ = outcome(text, roles)
+        res["probes"][name] = status
+        if err:
+            res["errors"][name] = err
+    res["thinking"] = thinking_probe(text)
+    return res
+
+
+def load(args):
+    """{repo: (index entry, template text)} for everything collected."""
+    index = json.load(open(args.index))
+    out = {}
+    for key, entry in sorted(index.items()):
+        path = os.path.join(args.outdir, entry["file"])
+        if os.path.exists(path):
+            out[key] = (entry, open(path).read())
+    return out
+
+
+def shorten(keys):
+    """{repo: display name}, dropping the org only where it is not load bearing.
+
+    Two publishers ship a gguf of the same model under the same basename and
+    do NOT agree: `deepreinforce-ai/Ornith-1.0-35B-GGUF` rejects a developer
+    message where `unsloth/Ornith-1.0-35B-GGUF` accepts it. A table keyed on
+    the basename alone shows that as one model contradicting itself.
+    """
+    counts = {}
+    for k in keys:
+        counts[k.split("/")[-1]] = counts.get(k.split("/")[-1], 0) + 1
+    return {k: (k if counts[k.split("/")[-1]] > 1 else k.split("/")[-1]) for k in keys}
+
+
+def table(rows, headers):
+    widths = [max(len(str(r[i])) for r in [headers] + rows) for i in range(len(headers))]
+    line = "  ".join(h.ljust(w) for h, w in zip(headers, widths))
+    print(line)
+    print("  ".join("-" * w for w in widths))
+    for r in rows:
+        print("  ".join(str(c).ljust(w) for c, w in zip(r, widths)))
+
+
+def report_roles(results, index):
+    name = shorten(results)
+    rows = []
+    for key, res in results.items():
+        r = res["roles"]
+        rows.append([name[key], index[key]["kind"], r["system"], r["developer"],
+                     res["probes"]["sys x2"], res["probes"]["dev x2"],
+                     res["probes"]["mid sys"], res["probes"]["mid dev"],
+                     res["probes"]["sys/user/asst/dev/user"]])
+    table(rows, ["template", "kind", "system", "developer", "sys x2", "dev x2",
+                 "mid sys", "mid dev", "s/u/a/d/u"])
+
+
+def report_sequences(results, index):
+    name = shorten(results)
+    probes = [n for n, _ in PROBES]
+    rows = [[name[k]] + [res["probes"][n] for n in probes] for k, res in results.items()]
+    table(rows, ["template"] + probes)
+
+
+def report_thinking(results, index):
+    name = shorten(results)
+    rows = []
+    for key, res in results.items():
+        for knob, t in res["thinking"].items():
+            # discovery finds every think/reason-shaped variable a template
+            # reads, and most of them are message fields or dead options that
+            # move nothing. they stay in --json and out of the table
+            if t["kind"] == "inert":
+                continue
+            if t["type"] != "level":
+                rows.append([name[key], knob, t["kind"], "-", "-", "-"])
+            else:
+                rows.append([name[key], knob, t["kind"],
+                             "(any string)" if t["kind"] == "verbatim"
+                             else ",".join(t["accepts"]) or "-",
+                             ",".join(t["rejects"]) or "-",
+                             ",".join(t["ignored"]) or "-"])
+    table(rows, ["template", "knob", "kind", "accepts", "rejects", "ignored"])
+
+
+def report_diverged(results, index):
+    """gguf templates whose role or thinking answer differs from their base."""
+    name = shorten(results)
+    by_base = {}
+    for key, entry in index.items():
+        if entry["kind"] == "base":
+            by_base[entry["base"]] = key
+    rows = []
+    for key, res in results.items():
+        entry = index[key]
+        base_key = by_base.get(entry["base"])
+        if entry["kind"] != "gguf" or not base_key or base_key not in results:
+            continue
+        base = results[base_key]
+        for field in ("system", "developer"):
+            if base["roles"][field] != res["roles"][field]:
+                rows.append([name[base_key], name[key], field,
+                             base["roles"][field], res["roles"][field]])
+        for probe in ("sys x2", "dev x2", "mid dev", "sys/user/asst/dev/user", "tool call"):
+            if base["probes"][probe] != res["probes"][probe]:
+                rows.append([name[base_key], name[key], probe,
+                             base["probes"][probe], res["probes"][probe]])
+    table(rows, ["base", "gguf", "differs on", "base says", "gguf says"])
+
+
+def show(loaded, want, probe):
+    """Print one template's rendered prompt for one probe, for eyeballing."""
+    # two orgs publish a gguf under the same basename and disagree about the
+    # developer role, so an ambiguous match must not silently pick one
+    hits = [k for k in loaded if want.lower() in k.lower()]
+    key = want if want in loaded else (hits[0] if len(hits) == 1 else None)
+    roles = dict(PROBES).get(probe)
+    if len(hits) > 1 and key is None:
+        sys.exit("%r matches %d templates: %s" % (want, len(hits), ", ".join(hits)))
+    if not key or roles is None:
+        sys.exit("no such template or probe (probes: %s)"
+                 % ", ".join(n for n, _ in PROBES))
+    status, err, out = outcome(loaded[key][1], roles)
+    print("# %s -- probe %r -- %s" % (key, probe, err or status))
+    print(out or "")
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--index", default=INDEX)
+    ap.add_argument("--outdir", default="data/chat-templates")
+    ap.add_argument("--model", help="substring of a repo, for one template")
+    ap.add_argument("--sequences", action="store_true", help="every ordering probe")
+    ap.add_argument("--thinking", action="store_true", help="the level vocabulary")
+    ap.add_argument("--diverged", action="store_true", help="gguf vs its base repo")
+    ap.add_argument("--render", help="print the rendered text for one repo")
+    ap.add_argument("--probe", default="sys/user/asst/dev/user", help="which probe to --render")
+    ap.add_argument("--json", help="write the full result here")
+    args = ap.parse_args()
+
+    try:
+        import jinja2  # noqa: F401
+    except ImportError:
+        sys.exit("analyze-chat-templates needs jinja2 (apt install python3-jinja2)")
+
+    loaded = load(args)
+    if args.model:
+        loaded = {k: v for k, v in loaded.items() if args.model.lower() in k.lower()}
+        if not loaded:
+            sys.exit("no template matches %r" % args.model)
+
+    if args.render:
+        show(loaded, args.render, args.probe)
+        return
+
+    index = {k: e for k, (e, _) in loaded.items()}
+    results = {k: analyze(t) for k, (_, t) in loaded.items()}
+
+    if args.sequences:
+        report_sequences(results, index)
+    elif args.thinking:
+        report_thinking(results, index)
+    elif args.diverged:
+        report_diverged(results, index)
+    else:
+        report_roles(results, index)
+
+    if args.json:
+        with open(args.json, "w") as f:
+            json.dump({k: dict(results[k], **{"entry": index[k]}) for k in results},
+                      f, indent=1, sort_keys=True)
+        print("\nwrote %s: %d templates" % (args.json, len(results)), file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

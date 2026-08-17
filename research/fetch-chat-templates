@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+
+"""Collect the exact chat template text for every base repo and every gguf repo.
+
+`fetch-model-facts` already reads the base repo's template, but it keeps only
+the thinking knob it derived and throws the source away. That is the wrong thing
+to throw away: the template is the ONLY authority on which roles a model
+accepts, in what order, and how many of each -- none of which any model card
+states, and all of which `analyze-chat-templates` can answer by executing it.
+So the text is committed here, verbatim, and every later question is asked of
+the file rather than of the network.
+
+The gguf side is not a copy of the base side. huggingface serves its own parse
+of the gguf header, and the template in there is what llama.cpp actually loads
+-- a quantizer is free to patch it on the way through, and unsloth does:
+`unsloth/Qwen3.6-27B-GGUF` carries a `{#- Unsloth fixes - developer role, tool
+calling #}` block that upstream `Qwen/Qwen3.6-27B` has no trace of. 17 gguf
+repos here mention the developer role against 7 base repos. A consumer serving
+the gguf and reading the base repo's card is reading the wrong file.
+
+Two templates per model, then, keyed by the repo each came from:
+
+- base repo   `chat_template.jinja`, else `tokenizer_config.json`'s
+              `chat_template`, which is where the older repos still keep it. a
+              value there may be a LIST of named templates (`default`,
+              `tool_use`), and each name is written out separately
+- gguf repo   huggingface's parse of the gguf header. this is deliberately
+              preferred over any `chat_template.jinja` sitting in the same gguf
+              repo: llama.cpp reads the header, so a loose file beside it is
+              documentation rather than behaviour
+
+Every fetch goes through httpcache under the SAME keys `fetch-model-facts`
+uses, so the two collectors share one cached copy and running this after that
+one transfers nothing.
+
+Writes `data/chat-templates/<repo>.jinja` (verbatim, so it greps) and
+`data/chat-templates.json` (the index: source, size, hash, and which base repo
+a gguf template belongs to).
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+RAW = "https://huggingface.co/%s/raw/main/%s"
+GGUF_API = "https://huggingface.co/api/models/%s?expand[]=gguf"
+OUTDIR = "data/chat-templates"
+
+
+def get(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key, "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    return r.stdout or None
+
+
+def slug(repo, what):
+    # `facts-` rather than a prefix of our own: same url, same cached body as
+    # fetch-model-facts, so whichever collector runs second pays nothing
+    return "facts-%s-%s" % (repo.replace("/", "_"), what)
+
+
+def as_json(text):
+    try:
+        return json.loads(text) if text else None
+    except ValueError:
+        return None
+
+
+def named(tpl):
+    """[(name, text)] from whatever shape a chat_template field is in.
+
+    A string is the whole template. A list is huggingface's multi-template
+    form, `[{"name": "tool_use", "template": ...}]`, which mistral and a few
+    others ship and which a consumer selects by name.
+    """
+    if isinstance(tpl, str):
+        return [(None, tpl)]
+    if isinstance(tpl, dict):
+        return sorted(tpl.items())
+    if isinstance(tpl, list):
+        return [(e.get("name"), e.get("template")) for e in tpl
+                if isinstance(e, dict) and e.get("template")]
+    return []
+
+
+def base_template(repo, max_age, refresh):
+    """(source, [(name, text)]) for a base repo, or (None, [])."""
+    tpl = get(RAW % (repo, "chat_template.jinja"), slug(repo, "tpl"), max_age, refresh)
+    # a missing file is an empty body. do NOT sniff the content: a jinja
+    # template legitimately starts with "{%", which an "is this json" check
+    # reads as json and silently discards
+    if tpl:
+        return "chat_template.jinja", [(None, tpl)]
+    cfg = as_json(get(RAW % (repo, "tokenizer_config.json"), slug(repo, "tokcfg"),
+                      max_age, refresh))
+    got = named((cfg or {}).get("chat_template"))
+    return ("tokenizer_config.json", got) if got else (None, [])
+
+
+def gguf_template(repo, max_age, refresh):
+    """(source, [(name, text)]) for a gguf repo, from the header huggingface parsed."""
+    info = as_json(get(GGUF_API % repo, slug(repo, "ggufmeta"), max_age, refresh))
+    got = named(((info or {}).get("gguf") or {}).get("chat_template"))
+    if got:
+        return "gguf-header", got
+    # a repo whose header huggingface did not parse may still ship the source
+    tpl = get(RAW % (repo, "chat_template.jinja"), slug(repo, "tpl"), max_age, refresh)
+    return ("chat_template.jinja", [(None, tpl)]) if tpl else (None, [])
+
+
+def write(outdir, repo, name, text):
+    """The template verbatim. Returns (filename, sha256, bytes, lines)."""
+    fn = repo.replace("/", "_") + ("@" + name if name else "") + ".jinja"
+    with open(os.path.join(outdir, fn), "w") as f:
+        f.write(text)
+    return fn, hashlib.sha256(text.encode()).hexdigest()[:16], len(text), text.count("\n") + 1
+
+
+def repo_pairs(args):
+    """[(base repo, [gguf repos])], deduped -- a model may list one repo twice
+    under two quant tags, and the template is a property of the repo."""
+    if args.repos:
+        repos = [l.split("#")[0].strip() for l in open(args.repos)]
+        return [(r, []) for r in repos if r]
+    import yaml
+    models = yaml.safe_load(open(args.registry)).get("models") or {}
+    out = []
+    for repo, m in models.items():
+        seen, ggufs = set(), []
+        for q in (m.get("quants") or []) + (m.get("components") or []):
+            r = q.get("repo")
+            if r and r not in seen:
+                seen.add(r)
+                ggufs.append(r)
+        out.append((repo, ggufs))
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--registry", default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--repos", help="newline-separated base repos instead of the registry")
+    ap.add_argument("--out", default="data/chat-templates.json")
+    ap.add_argument("--outdir", default=OUTDIR)
+    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    args = ap.parse_args()
+
+    os.makedirs(args.outdir, exist_ok=True)
+    index, patched = {}, []
+    for base, ggufs in repo_pairs(args):
+        by_hash = {}
+        for repo, kind, fetch in ([(base, "base", base_template)]
+                                  + [(g, "gguf", gguf_template) for g in ggufs]):
+            source, got = fetch(repo, args.max_age, args.refresh)
+            if not got:
+                print("  %-46s %s no template" % (repo, kind), file=sys.stderr)
+                continue
+            for name, text in got:
+                fn, digest, size, lines = write(args.outdir, repo, name, text)
+                entry = {"kind": kind, "base": base, "source": source, "file": fn,
+                         "sha256": digest, "bytes": size, "lines": lines}
+                if name:
+                    entry["name"] = name
+                if kind == "base":
+                    by_hash[name] = digest
+                else:
+                    entry["same_as_base"] = digest == by_hash.get(name, by_hash.get(None))
+                    if entry["same_as_base"] is False:
+                        patched.append(repo)
+                index[repo + ("@" + name if name else "")] = entry
+                print("  %-46s %-5s %-22s %6d bytes" % (repo, kind, source, size),
+                      file=sys.stderr)
+
+    with open(args.out, "w") as f:
+        json.dump(index, f, indent=1, sort_keys=True)
+    n_gguf = sum(1 for e in index.values() if e["kind"] == "gguf")
+    print("wrote %s: %d templates (%d base, %d gguf), %d gguf repos patched theirs"
+          % (args.out, len(index), len(index) - n_gguf, n_gguf, len(set(patched))))
+
+
+if __name__ == "__main__":
+    main()

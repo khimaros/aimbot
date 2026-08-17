@@ -1,81 +1,104 @@
 # MODEL COMPARISON
 
 open weights models for a 128gb strix halo, ranked for overall intelligence,
-agentic use and coding. every source captured 2026-08-16.
+agentic use and coding. every source captured 2026-08-17.
 
 ## the short version
 
-the size ladder mostly does not pay on this box. squeezed into the same ~105gib
-weight budget, everything from 124b to 310b converges: on quant-adjusted
-intelligence, ranks 2 through 6 span 38.8 to 37.1, a spread well inside the
-error of the estimate. two findings come out of that.
+**the size ladder has stopped paying on this box.** the best model here is a
+27.8b dense model in a 27.1gib file, and it beats everything from 124b to 310b
+squeezed into the same ~105gib weight budget.
 
-- **deepseek v4 flash 0731 escapes the convergence.** it tops every scored component
-  and leads the composite at 90.5 against 68.3 for the next model, even after
-  the 8 percent it pays at 2.94 bpw. first place under every weighting tried.
-  the only case here where cramming a large model in at low precision wins.
-- **qwen3.6 27b is much the cheapest, and second or third depending on the
-  weighting.** it sits 3rd at 67.6 to minimax m2.7's 68.3 -- 0.7 points, still
-  inside the noise floor -- and which of the two leads turns on one number:
-  swe-rebench, whose tasks postdate both models, scores minimax 51.8 against its
-  34.3. qwen3.6 27b takes second under four of the seven weightings tried. what
-  does not move is the value case -- 27.1gib against 103.1, at 3.8x the
-  effective intelligence per gigabyte of anything near it. below the top three
-  the order is weight-dependent and should not be read as a ranking.
+- **qwen3.8 27b tops effective coding (67.4), effective agentic (50.4) and
+  effective intelligence (51.5)**, against deepseek v4 flash 0731's 63.6, 44.5
+  and 47.6 at 97.1gib. it also leads tau2-banking, the hardest and least
+  saturated eval carried here, 48.0 to 39.4. it costs 1% to quantize where
+  deepseek costs 8%.
+- **deepseek v4 flash 0731 leads the composite, 84.3 to 82.6, on coverage
+  alone.** it is measured on all seven components; qwen3.8 27b is measured on
+  four and leads every one of them. GBENCH, lmarena and swe-rebench -- 35% of
+  the weight -- have not scored qwen3.8 27b and are imputed at the set median
+  for it. renormalize instead of imputing (`--missing renormalize`) and qwen3.8
+  27b takes first at 99.8; so does weighting coding or agentic at 0.45. **read
+  the 1.7-point gap as "not yet measured", not as "second best"** -- gaps under
+  ~2 points are noise in the set membership.
+- **qwen3.6 27b is 4th, superseded by its own successor** at an identical 27.8b
+  dense shape, an identical 27.1gib at Q8_0, and the same box. it is worth
+  running only while qwen3.8 27b's operational story is unproven.
 
-so run both, and let the 97gib and 27gib footprints decide which is resident.
-they fit together; two of the ~100gib models do not.
+so run deepseek v4 flash 0731 at 97.1gib and a 27gib qwen alongside it, and let
+the footprints decide which is resident. they fit together; two of the ~100gib
+models do not.
 
 the models that look strongest on raw AA scores are the ones this box can only
-run badly. inkling small leads the cluster on effective intelligence and lands 6th once
-coverage is counted: four of the seven components do not measure it at all.
-hy3 drops from 2nd on paper to 6th on quant-adjusted intelligence because 2.72
-bpw costs it 12 percent.
+run badly. inkling small leads the ~100gib cluster on effective intelligence and
+lands 7th once coverage is counted: four of the seven components do not measure
+it at all. hy3 drops from 3rd on paper to 7th on quant-adjusted intelligence
+because 2.72 bpw costs it 12 percent.
 
 ### what to run
 
-1. **deepseek v4 flash 0731 at UD-IQ3_XXS (97.1gib)** as the primary model for
-   anything that matters, with the dspark drafter alongside it. the ~10gib
-   sidecar fits at this quant: UD-IQ3_XXS was already the step down from
-   UD-IQ3_S (108.1gib) taken to make room for it, and the two options cost
-   about the same resident memory. deepseek's compressed attention makes its kv
-   cache far cheaper than the generic reserve below assumes, which is what
-   leaves the headroom.
-2. **qwen3.6 27b at Q8_0 (27.1gib) with MTP** as the daily driver. 3rd on the
-   composite and 5th on quant-adjusted intelligence, from a quarter the memory
-   of anything above it, so it stays resident alongside deepseek rather than
-   replacing it. it trails minimax m2.7 by 0.2 points and passes it under four
-   of seven weightings; minimax needs 103.1gib either way, which on this box
-   makes it deepseek's competitor, not this one's. dense, so it needs the MTP drafter to be usable here: 7.4 t/s
-   without, 18.1 t/s with. **take the quant from
-   `unsloth/Qwen3.6-27B-MTP-GGUF`, not `unsloth/Qwen3.6-27B-GGUF`.** the two
+1. **qwen3.8 27b at Q8_0 (27.1gib).** first on every capability axis anything
+   has measured. Q8_0 is the pin for the same reason every other dense model
+   here is pinned there -- the memory is available and its own perplexity sweep
+   puts Q8_0 within 0.02% of BF16 -- but there is one reproducible benchmark on
+   this exact silicon showing lower quants are meaningfully faster: 12.74 t/s at
+   Q8_0 against 16.68 at UD-Q5_K_XL, with MTP at 4 draft tokens under vulkan.
+   that is one reporter on one box, so treat it as a reason to test UD-Q5_K_XL
+   rather than as a recommendation to run it. two things to fix before the model
+   is usable: `reasoning_effort` defaults to `xhigh` and burns roughly ten times
+   qwen3.6's context on the same prompt -- set `medium`, which reports say only
+   partly fixes it -- and the plain (non-`UD-`) quants shipped a broken chat
+   template that was patched in place, so a copy pulled in the repo's first day
+   needs refetching.
+2. **deepseek v4 flash 0731 at UD-IQ3_XXS (97.1gib)** alongside it, with the
+   dspark drafter. it is not the best model here on any measured axis, but it is
+   the best-corroborated one -- seven of seven components against qwen3.8's four
+   -- and it is the only model here with a 1m context. the ~10gib sidecar fits
+   at this quant: UD-IQ3_XXS was already the step down from UD-IQ3_S (108.1gib)
+   taken to make room for it, and the two options cost about the same resident
+   memory. deepseek's compressed attention makes its kv cache far cheaper than
+   the generic reserve below assumes, which is what leaves the headroom.
+3. **keep qwen3.6 27b only until qwen3.8 27b is proven on this box.** the two
+   are the same 27.8b dense architecture at the same 27.1gib at Q8_0, and the
+   successor beats the incumbent on every component both are measured on. what
+   qwen3.6 27b has instead is a year of operational reports against two weeks
+   and a known template bug. **take the qwen3.6 quant from
+   `unsloth/Qwen3.6-27B-MTP-GGUF`, not `unsloth/Qwen3.6-27B-GGUF`** -- the two
    repos ship identically-named files, but the MTP head is inside the weights
    rather than in a sidecar, so the plain repo is 0.42gib smaller and cannot
-   speculate at all. earlier versions of this document sized the plain repo and
-   quoted 26.6gib; the number that matters is 27.1. **its successor is ranked
-   here but barely measured**: qwen3.8 27b is the same 27.8b dense shape at the
-   same 27.1gib, and only two of the seven components carry it -- its own card
-   and reddit. see [what is coming](#what-is-coming).
-3. **ling 3.0 flash, somewhere between AD-Q4_K_M (73.9gib) and AD-Q6_K
-   (100.1gib)**, if agentic tool use is the priority. it is the one model here
-   that fits at a precision where quantization is free -- even the 73.9gib quant
-   is 5.12 bpw, against deepseek's 2.94 -- and its tau2-banking of 27.2 is
-   second only to deepseek's. 5.1b active makes it the fastest of the ~100gib
-   models at 36 t/s, and there is a ROCmFP4-STRIX-MTP build tuned for this
-   hardware. two caveats: no unsloth or bartowski quant, and only 9 mentions
-   across 161 reddit threads, so almost nobody has stress-tested it.
-4. **retire qwen3 coder next.** superseded on every measured axis by
-   qwen3.6 27b at a third of the size.
-5. **treat gpt-oss-120b as a speed tier, not a capability tier.** it is the
+   speculate at all. qwen3.8 27b has one repo, with the nextn head in `blk.64`.
+4. **ling 3.0 flash, somewhere between AD-Q4_K_M (73.9gib) and AD-Q6_K
+   (100.1gib)**, if agentic tool use is the priority and the box is running one
+   large model rather than two. it fits at a precision where quantization is
+   free -- even the 73.9gib quant is 5.12 bpw, against deepseek's 2.94 -- and
+   its tau2-banking of 27.2 is third behind qwen3.8 27b's 48.0 and deepseek's
+   39.4. 5.1b active makes it the fastest of the ~100gib models at 36 t/s, and
+   there is a ROCmFP4-STRIX-MTP build tuned for this hardware. two caveats: no
+   unsloth or bartowski quant, and only 12 mentions across 175 reddit threads,
+   so almost nobody has stress-tested it.
+5. **retire qwen3 coder next.** superseded on every measured axis by either
+   27b at a third of the size.
+6. **treat gpt-oss-120b as a speed tier, not a capability tier.** it is the
    fastest large model here and near the bottom on capability.
+7. **on a linux-7.x kernel, set `amdgpu.lockup_timeout=10000,60000,10000,10000`
+   before judging any of the above.** the driver's compute timeout default fell
+   from 60s to 2s, which cancels long vulkan ops and surfaces as
+   `vk::DeviceLostError` or garbled output on exactly the two models recommended
+   here. see [does it actually run here](#does-it-actually-run-here).
 
-three caveats before the detail:
+four caveats before the detail:
 
-- **the ties are decided by axes these tables do not measure** -- context
-  length, tokens-to-completion, tool-calling reliability. hy3 is the clearest
-  case: it ranks sixth here, and the handful of people who have actually run it
-  on a 128gb box rate it far higher. that is three voices against a number, so
-  weigh it accordingly.
+- **the top of this table is decided by coverage, not by capability.** qwen3.8
+  27b leads every component it has and is missing three of seven; deepseek leads
+  the composite on the strength of having been measured. the honest reading is
+  that they are not separated yet, and a GBENCH or swe-rebench result for
+  qwen3.8 27b would settle it in either direction.
+- **the ties below the top are decided by axes these tables do not measure** --
+  context length, tokens-to-completion, tool-calling reliability. hy3 is the
+  clearest case: it ranks fifth here, and the handful of people who have
+  actually run it on a 128gb box rate it far higher. that is three voices
+  against a number, so weigh it accordingly.
 - **harness choice swings terminal-bench results by more than 50 percent** for
   the same model, which is larger than every gap below. test two candidates in
   your own harness before trusting any ranking, including this one.
@@ -92,34 +115,42 @@ fits a 105gib weight budget** rather than at full precision.
 
 | model | score | quant | size (gib) | eff coding | eff agentic | gbench | arena | swe-reb | sentiment | card | data | (eff II) |
 |---|--:|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| deepseek v4 flash 0731 | **90.5** | UD-IQ3_XXS | 97.1 | 63.6 | 44.5 | 0.585 | 1435 | 38.5 | 4.7 | 68 | 7/7 | 47.6 |
-| minimax m2.7 | **68.3** | UD-IQ4_NL | 103.1 | 50.6 | 24.9 | 0.459 | 1416 | 51.8 | 4.7 | - | 6/7 | 37.4 |
-| qwen3.6 27b | **67.6** | Q8_0 | 27.1 | 53.2 | 27.2 | 0.452 | - | 34.3 | 4.9 | 78 | 6/7 | 37.3 |
-| hy3 | **61.7** | Q2_K_XL-mtp | 94.6 | 51.7 | 27.6 | - | 1457 | - | 4.1 | - | 4/7 | 37.1 |
-| muse glimmer | **57.2** | Q8_0 | 27.6 | 48.5 | 22.7 | - | 1426 | - | 5.2 | - | 4/7 | 34.7 |
-| inkling small | **56.9** | UD-IQ3_S | 100.1 | 49.9 | 30.1 | - | - | - | 3.2 | - | 3/7 | 38.8 |
-| ling 3.0 flash | **56.4** | AD-Q6_K | 100.1 | 50.1 | 29.0 | - | - | - | 3.3 | - | 3/7 | 37.4 |
-| qwen3.8 27b | **55.3** | Q8_0 | 27.1 | - | - | - | - | - | 5.3 | 80 | 2/7 | - |
-| mimo v2.5 | **53.8** | UD-Q2_K_XL | 95.9 | 49.2 | 21.2 | 0.400 | 1434 | - | 3.1 | - | 5/7 | 33.0 |
-| qwen3.5 122b a10b | **50.5** | UD-Q6_K_XL | 104.7 | 45.2 | 21.0 | - | 1417 | - | 4.3 | 77 | 5/7 | 32.5 |
-| solar open2 250b | **50.4** | Q2_K | 88.9 | 41.5 | 25.8 | - | - | - | - | - | 2/7 | 34.8 |
-| qwen3.6 35b a3b | **45.5** | Q8_0 | 35.2 | 41.5 | 21.4 | 0.271 | - | 30.1 | 4.0 | 71 | 6/7 | 31.8 |
-| step 3.7 flash | **41.6** | UD-IQ4_NL | 90.6 | 38.1 | 20.9 | 0.322 | - | - | 2.5 | - | 4/7 | 29.7 |
-| mistral medium 3.5 | **39.6** | UD-Q6_K_XL | 101.7 | 46.4 | 19.0 | 0.298 | 1427 | - | 0.9 | - | 5/7 | 30.0 |
-| qwen3 coder next | **39.3** | Q8_0 | 79.0 | 35.9 | 8.8 | - | - | 47.7 | 3.7 | - | 4/7 | 21.1 |
-| gemma 4 31b | **36.7** | UD-Q8_K_XL | 32.6 | 43.1 | 14.3 | 0.145 | 1451 | 22.4 | 3.4 | 81 | 7/7 | 29.4 |
-| gemma 4 26b a4b | **35.6** | Q8_0 | 25.0 | 38.9 | 10.9 | 0.126 | 1438 | - | 4.1 | 73 | 6/7 | 25.8 |
-| nemotron 3.5 lightning | **28.8** | Q8_0 | 32.6 | 26.5 | 13.7 | - | - | - | - | 35 | 3/7 | 23.4 |
-| gpt-oss-120b | **19.8** | UD-Q8_K_XL | 60.0 | 30.4 | 13.4 | 0.131 | 1352 | 26.8 | 3.6 | - | 6/7 | 24.1 |
-| nemotron 3 super | **16.4** | UD-Q5_K_XL | 100.2 | 37.3 | 8.7 | 0.196 | 1360 | - | 0.9 | 59 | 6/7 | 25.4 |
+| deepseek v4 flash 0731 | **84.3** | UD-IQ3_XXS | 97.1 | 63.6 | 44.5 | 0.585 | 1435 | 38.5 | 4.8 | 68 | 7/7 | 47.6 |
+| qwen3.8 27b | **82.6** | Q8_0 | 27.1 | 67.4 | 50.4 | - | - | - | 5.7 | 80 | 4/7 | 51.5 |
+| minimax m2.7 | **64.5** | UD-IQ4_NL | 103.1 | 50.6 | 24.9 | 0.459 | 1416 | 51.8 | 4.7 | - | 6/7 | 37.4 |
+| qwen3.6 27b | **63.1** | Q8_0 | 27.1 | 53.2 | 27.2 | 0.452 | - | 34.3 | 4.8 | 78 | 6/7 | 37.3 |
+| hy3 | **57.7** | Q2_K_XL-mtp | 94.6 | 51.7 | 27.6 | - | 1457 | - | 4.1 | - | 4/7 | 37.1 |
+| muse glimmer | **53.2** | Q8_0 | 27.6 | 48.5 | 22.7 | - | 1426 | - | 5.1 | - | 4/7 | 34.7 |
+| inkling small | **52.9** | UD-IQ3_S | 100.1 | 49.9 | 30.1 | - | - | - | 3.2 | - | 3/7 | 38.8 |
+| ling 3.0 flash | **52.9** | AD-Q6_K | 100.1 | 50.1 | 29.0 | - | - | - | 3.4 | - | 3/7 | 37.4 |
+| mimo v2.5 | **50.7** | UD-Q2_K_XL | 95.9 | 49.2 | 21.2 | 0.400 | 1434 | - | 3.1 | - | 5/7 | 33.0 |
+| qwen3.5 122b a10b | **47.5** | UD-Q6_K_XL | 104.7 | 45.2 | 21.0 | - | 1417 | - | 4.3 | 77 | 5/7 | 32.5 |
+| solar open2 250b | **47.0** | Q2_K | 88.9 | 41.5 | 25.8 | - | - | - | - | - | 2/7 | 34.8 |
+| qwen3.6 35b a3b | **42.7** | Q8_0 | 35.2 | 41.5 | 21.4 | 0.271 | - | 30.1 | 4.0 | 71 | 6/7 | 31.8 |
+| step 3.7 flash | **39.4** | UD-IQ4_NL | 90.6 | 38.1 | 20.9 | 0.322 | - | - | 2.5 | - | 4/7 | 29.7 |
+| qwen3 coder next | **38.2** | Q8_0 | 79.0 | 35.9 | 8.8 | - | - | 47.7 | 3.7 | - | 4/7 | 21.1 |
+| mistral medium 3.5 | **37.4** | UD-Q6_K_XL | 101.7 | 46.4 | 19.0 | 0.298 | 1427 | - | 0.9 | - | 5/7 | 30.0 |
+| gemma 4 31b | **34.7** | UD-Q8_K_XL | 32.6 | 43.1 | 14.3 | 0.145 | 1451 | 22.4 | 3.4 | 81 | 7/7 | 29.4 |
+| gemma 4 26b a4b | **32.8** | Q8_0 | 25.0 | 38.9 | 10.9 | 0.126 | 1438 | - | 3.8 | 73 | 6/7 | 25.8 |
+| nemotron 3.5 lightning | **27.4** | Q8_0 | 32.6 | 26.5 | 13.7 | - | - | - | - | 35 | 3/7 | 23.4 |
+| gpt-oss-120b | **18.5** | UD-Q8_K_XL | 60.0 | 30.4 | 13.4 | 0.131 | 1352 | 26.8 | 3.6 | - | 6/7 | 24.1 |
+| nemotron 3 super | **15.8** | UD-Q5_K_XL | 100.2 | 37.3 | 8.7 | 0.197 | 1360 | - | 0.9 | 59 | 6/7 | 25.4 |
 
 **read `data` before the score.** it is how many of the seven components were
 actually measured; the rest are imputed at the set median. that keeps a model
 from being rewarded or punished for going unmeasured, but it also means a
-low-coverage row is mostly reporting the middle of the set: qwen3.8 27b's 55.3
-rests on two real numbers and five imputed ones, and nothing below 4/7 should be
-read as a ranking position. `eff II` is shown for reference and is deliberately
-**not** part of the score; see below.
+low-coverage row is partly reporting the middle of the set, and nothing below
+4/7 should be read as a ranking position. `eff II` is shown for reference and is
+deliberately **not** part of the score; see below.
+
+**the top two rows are what that costs.** qwen3.8 27b beats deepseek v4 flash
+0731 on all four components it carries -- effective coding 67.4 to 63.6,
+effective agentic 50.4 to 44.5, sentiment 5.7 to 4.8, card 80 to 68 -- and
+finishes 1.7 points behind it, because the three components it lacks carry 0.35
+of the weight. `--missing renormalize` drops the imputation and puts qwen3.8 27b
+first at 99.8. neither number is the truth: one says "second until measured",
+the other "first on what has been measured", and the gap between them is the
+size of the hole.
 
 ### how the score is built
 
@@ -127,29 +158,29 @@ read as a ranking position. `eff II` is shown for reference and is deliberately
 |---|--:|---|--:|
 | effective coding | 0.25 | AA coding index x quant retention | - |
 | effective agentic | 0.25 | AA agentic index x quant retention | - |
-| GBENCH | 0.15 | gert labs, agentic coding board where played | 8% |
-| lmarena | 0.10 | style-controlled arena, human preference | 32% |
-| swe-rebench | 0.10 | resolved rate on post-release task windows | 78% |
-| sentiment | 0.15 | r/LocalLLaMA mention volume x reception | 85% |
+| GBENCH | 0.15 | gert labs, agentic coding board where played | 4% |
+| lmarena | 0.10 | style-controlled arena, human preference | 45% |
+| swe-rebench | 0.10 | resolved rate on post-release task windows | 52% |
+| sentiment | 0.15 | r/LocalLLaMA mention volume x reception | 82% |
 | model card | 0.05 | what the vendor claims, bias-corrected | - |
 
 each component is min-max normalized across this set, then averaged by weight.
 **the weights come from the last column**, which is measured rather than
 asserted -- see [how independent the sources
 are](#how-independent-the-sources-actually-are). GBENCH was on 0.35 until that
-check found AA already predicts 94% of it; it keeps a premium over its 6%
+check found AA already predicts 96% of it; it keeps a premium over its 4%
 because being played rather than graded is a real anti-contamination property,
 but it no longer outvotes the sources it agrees with.
 
 **the intelligence index is excluded, and that is the load-bearing decision
-here.** regressed across the 159 AA models that carry all three:
+here.** regressed across the 161 AA models that carry all three:
 
 ```
-II ~ 5.60 + 0.411*coding + 0.408*agentic        R^2 = 0.9846
+II ~ 5.68 + 0.406*coding + 0.413*agentic        R^2 = 0.9845
 ```
 
-coding and agentic explain 98.4% of the intelligence index. including it as a
-third component would count the same measurement twice in exchange for 1.5% of
+coding and agentic explain 98.5% of the intelligence index. including it as a
+third component would count the same measurement twice in exchange for 1.6% of
 new information. every other AA field lands 0.82 or higher against the index on
 the same check -- see [how independent the sources
 are](#how-independent-the-sources-actually-are), which regenerates all of this
@@ -158,41 +189,40 @@ rather than quoting it.
 so **artificial analysis contributes one axis of evidence, not several.** the
 other choices:
 
-- **a missing component is imputed, not dropped.** this decides more than the
-  weights do. dropping it and renormalizing the rest looks neutral and is not:
-  it pushes the missing weight onto whatever the model *does* have, so a model
-  measured twice has each measurement counted harder than a model measured six
-  times. that is precisely how a partial-coverage source moves ranks on absence,
-  and it is measurable here -- under renormalization qwen3.8 27b takes **first
-  place outright** on 2/7 coverage, on nothing but its own card and a reddit
-  score, ahead of the model measured on all seven; hy3 rises to 3rd on 4/7,
-  carried by the highest arena rating in the set. under median imputation they
-  sit 8th and 4th. `--missing renormalize` reproduces the old behaviour.
-  imputation has its own bias in the other direction, flattering a model whose
-  measured components are bad, which is why `data` is in the table and
-  low-coverage rows should not be read as ranked.
+- **a missing component is imputed, not dropped**, and this decides first place
+  here. dropping a missing component and renormalizing the rest looks neutral
+  and is not: it pushes the missing weight onto whatever the model *does* have,
+  so a model measured four times has each measurement counted harder than one
+  measured seven times. under renormalization qwen3.8 27b takes **first at
+  99.8** on 4/7 coverage. imputation is biased the other way, flattering a model
+  whose measured components are bad: nemotron 3.5 lightning holds 18th at 27.4
+  under imputation and falls to last at 5.5 under renormalization, because the
+  median it borrows for four components beats anything it actually scored.
+  neither is neutral, which is why `data` is in the table and low-coverage rows
+  should not be read as ranked.
 
 - **everything is quant-adjusted first.** scoring models at a precision this
   box cannot run them at is the error the rest of this document is about.
 - **GBENCH is still weighted above its independent contribution** because it is
   the only measurement here that is played rather than graded: there is no
   public problem set to train against. a gscore is ignored below 1000 matches --
-  hy3 has 24 against deepseek's 46,372, so hy3 is imputed there rather than
-  scored on noise.
+  hy3 has 25 against deepseek's 46,378, so hy3 is imputed there rather than
+  scored on noise. muse glimmer is on the board with 8 matches, decision-making
+  only, and no agentic coding result at all.
 - **lmarena and swe-rebench enter at 0.10 each.** they were excluded for
-  coverage, 8 and 13 of the 20 missing, and that has not changed -- what changed
+  coverage, 9 and 13 of the 20 missing, and that has not changed -- what changed
   is knowing they are the two sources that disagree with AA most. a low weight
   plus median imputation bounds how far their gaps can move a rank.
 - **sentiment is capped at 0.15.** real-world validation, and also a popularity
   contest with a 5-to-216 sample range. volume is log-scaled and multiplied by
   reception, so widely discussed *and* well received beats either alone.
 - **the score is a position within this set, not an absolute.** min-max means
-  the leader approaches 100 by construction. deepseek's 90.5 says it tops every
-  component, not that it is 34% better than qwen3.6 27b. it also means **a
-  component re-scales when the set changes**, with no model's measurement
-  moving: an earlier capture extended card coverage from 18 models to 21, which
-  alone took deepseek's card column from 95 to 68 and shifted every score that
-  depends on it. treat gaps under ~2 points as noise in the membership, not a
+  the leader approaches 100 by construction. deepseek's 84.3 says it is at or
+  near the top of seven components, not that it is 33% better than qwen3.6 27b.
+  it also means **a component re-scales when the set changes**, with no model's
+  measurement moving: deepseek scored 90.5 before qwen3.8 27b was scored and
+  84.3 after, while every measurement behind it held except a 0.1 move in
+  sentiment. treat gaps under ~2 points as noise in the membership, not a
   finding about the models.
 
 `research/build-tables --table score` regenerates it, and `--weights` overrides
@@ -201,25 +231,36 @@ any component, e.g. `--weights gbench=0.55,sentiment=0.10`.
 ### what a model says about itself
 
 model cards are the weakest evidence here and are carried anyway, because they
-are often the only numbers a new model has: qwen3.8 27b shipped with nine
-benchmark claims and nothing else, and scoring it purely on imputation said less
-than its own card does. so `card` is a component, at 0.05 -- half the weight of
-anything else.
+are often the only numbers a new model has: qwen3.8 27b spent two weeks as a row
+with nothing else, and scoring it purely on imputation said less than its own
+card did. so `card` is a component, at 0.05 -- half the weight of anything
+else.
 
 the discount is measured rather than assumed. `research/analyze-self-report`
 joins card claims to artificial analysis and epoch on (model, benchmark):
 
-- **67 claims have a third-party match. the median claim runs +1.0 over the
-  measurement and 42 of 67 overstate.** the median is used rather than the mean
-  (+3.5): a handful of benchmark-variant mismatches -- "HLE" is published both
+- **70 claims have a third-party match. the median claim runs +0.9 over the
+  measurement and 42 of 70 overstate.** the median is used rather than the mean
+  (+3.2): a handful of benchmark-variant mismatches -- "HLE" is published both
   with and without tools -- put a long tail on the distribution that is
-  measurement noise rather than overstatement. 1.0 is subtracted from every
-  claim before it is scored.
+  measurement noise rather than overstatement. a round 1.0 is subtracted from
+  every claim before it is scored; the measured median has sat between +0.9 and
+  +1.0 across captures and the constant is not chased.
 - that figure reproduces what the qwen3.8 card shows directly: all three of its
   numbers for a rival lab's model (muse glimmer, on gpqa, HLE and
   terminal-bench) match AA to the decimal, while its five numbers for qwen's own
   qwen3.6 27b run +0.9 to +10.6 above AA. the competitor column was copied and
   the home column was re-run.
+
+**qwen3.8 27b is the exception, in the useful direction.** all three of its
+matched claims are *under* what AA measured: gpqa 89.2 claimed against 90.5, HLE
+30.8 against 33.9, and terminal-bench 73.0 against 79.8 -- a 6.8-point
+understatement on the benchmark labs are most often accused of gaming. that is
+the largest under-claim in the set after nemotron 3 super's +7.6, and the
+strongest single piece of
+evidence here that the model is not benchmaxxed: a lab optimising for the
+leaderboard does not publish a terminal-bench number seven points below what an
+independent harness gets.
 
 a claim is normalized against the other models claiming *the same* benchmark,
 so a model cannot gain by choosing easy ground -- only by beating the models
@@ -246,12 +287,12 @@ as "how much of this source AA does not already tell you":
 | source | n | r2 vs AA coding+agentic | new information |
 |---|--:|--:|--:|
 | epoch ECI | 7 | 0.985 | 1% |
-| gbench | 13 | 0.961 | 4% |
+| gbench | 13 | 0.964 | 4% |
 | lmarena | 12 | 0.547 | 45% |
 | swe-rebench | 9 | 0.476 | 52% |
-| reddit mentions | 19 | 0.121 | 88% |
-| sentiment | 19 | 0.089 | 91% |
-| reddit reception | 19 | 0.036 | 96% |
+| reddit mentions | 20 | 0.220 | 78% |
+| sentiment | 20 | 0.182 | 82% |
+| reddit reception | 20 | 0.034 | 97% |
 
 **this is what moved the weighting.** GBENCH held 0.35, the largest single
 weight, on the argument that it is played rather than graded. that argument is
@@ -293,19 +334,19 @@ the same tool on AA's own fields, where n is large enough to trust:
 
 | metric a | metric b | n | spearman | pearson |
 |---|---|--:|--:|--:|
-| intelligenceIndex | agenticIndex | 160 | +0.98 | +0.98 |
-| intelligenceIndex | terminalbenchV21 | 200 | +0.98 | +0.97 |
-| intelligenceIndex | codingIndex | 220 | +0.97 | +0.98 |
-| intelligenceIndex | gdpvalNormalized | 198 | +0.97 | +0.97 |
-| intelligenceIndex | gpqa | 573 | +0.95 | +0.86 |
-| intelligenceIndex | tauBanking | 166 | +0.94 | +0.91 |
-| intelligenceIndex | scicode | 565 | +0.93 | +0.87 |
-| intelligenceIndex | mmmuPro | 240 | +0.93 | +0.87 |
-| intelligenceIndex | lcr | 498 | +0.93 | +0.88 |
-| intelligenceIndex | hle | 565 | +0.85 | +0.92 |
-| intelligenceIndex | omniscienceAccuracy | 477 | +0.84 | +0.85 |
+| intelligenceIndex | agenticIndex | 161 | +0.98 | +0.98 |
+| intelligenceIndex | terminalbenchV21 | 201 | +0.98 | +0.97 |
+| intelligenceIndex | codingIndex | 221 | +0.97 | +0.98 |
+| intelligenceIndex | gdpvalNormalized | 199 | +0.97 | +0.97 |
+| intelligenceIndex | gpqa | 574 | +0.95 | +0.86 |
+| intelligenceIndex | tauBanking | 167 | +0.94 | +0.91 |
+| intelligenceIndex | scicode | 566 | +0.93 | +0.87 |
+| intelligenceIndex | mmmuPro | 241 | +0.93 | +0.87 |
+| intelligenceIndex | lcr | 499 | +0.93 | +0.88 |
+| intelligenceIndex | hle | 566 | +0.85 | +0.92 |
+| intelligenceIndex | omniscienceAccuracy | 478 | +0.84 | +0.85 |
 | intelligenceIndex | ifbench | 448 | +0.82 | +0.78 |
-| intelligenceIndex | critpt | 477 | +0.82 | +0.76 |
+| intelligenceIndex | critpt | 478 | +0.82 | +0.76 |
 
 nothing in AA falls below +0.82. a benchmark suite that scores 14 things and
 ranks models the same way on all 14 is reporting one thing, and that is the
@@ -335,8 +376,8 @@ does passing it order models the way AA, epoch, lmarena and GBENCH do?
 **a quarter of the suite carries what all of it says.** the best single tasks
 match the whole suite's agreement with every external source, and they are the
 mid-difficulty long-horizon ones: build an interpreter, shard a training job,
-implement a compressor. 34 of the 89 scorable tasks land within 0.20 of zero,
-mostly because 23 of them are passed by more than 90% of runs and cannot
+implement a compressor. 26 of the 89 scorable tasks land within 0.20 of zero,
+mostly because 21 of them are passed by more than 90% of runs and cannot
 separate anybody -- `fix-git`, `git-leak-recovery` and `nginx-request-logging`
 are three sysadmin one-liners contributing nothing but runtime.
 `configure-git-webserver` is worse than nothing: it is inverted, and the models
@@ -344,14 +385,17 @@ failing it are gpt-5.2 and claude opus 4.6 while qwen3.5-9b and gpt-5-nano pass,
 which is the signature of a brittle verifier rather than a hard task.
 
 **believe the set, not the order.** `analyze-tbench --stability` runs the checks
-that matter. the five references agree with each other about the ranking
-(rho +0.74 to +0.87 across the 89-task vectors), so this is a property of the
-tasks and not of one leaderboard. but the models are the sample here and there
-are only 25 of them: a split-half over models reproduces the ranking at +0.48,
-and 89 simultaneous tests need |rho| >= 0.63 to clear a corrected threshold,
-which 11 tasks do. what survives out of sample is the *set* -- a top-10 chosen
-on half the models scores +0.73 on the other half against the full suite's
-+0.72, a top-20 scores +0.77.
+that matter. the six references mostly agree with each other about the ranking
+(rho +0.44 to +0.87 across the 89-task vectors), so this is largely a property
+of the tasks and not of one leaderboard -- the exception is AA's agentic index,
+which is the one reference that disagrees with the others, pairing at +0.44 to
++0.72 where every pair not involving it sits at +0.74 or above. the models are
+the sample here and
+there are only 25 carrying AA's intelligence index: a split-half over models
+reproduces the ranking at +0.48, and 89 simultaneous tests need |rho| >= 0.63 to
+clear a corrected threshold, which 11 tasks do. what survives out of sample is
+the *set* -- a top-10 chosen on half the models scores +0.73 on the other half
+against the full suite's +0.72, a top-20 scores +0.77.
 
 **what this does and does not license.** it is a caveat about the benchmark,
 not a re-scoring of anything above: the terminal-bench leaderboard is mostly
@@ -374,7 +418,7 @@ and a high rank correlation does not mean the sources agree about any
 particular model. this capture is itself the argument: GBENCH used to put mimo
 v2.5 at 0.480 against qwen3.6 27b's 0.402, and now has them the other way round
 at 0.350 and 0.411, on a quarter of a million matches each. hy3 has no
-admissible gscore at all, on 24. the 4% is where the individual disagreements
+admissible gscore at all, on 25. the 4% is where the individual disagreements
 live, and they move between captures -- worth reading one at a time rather than
 averaging away.
 
@@ -386,33 +430,34 @@ evidence that removing the double-count was right:
 <!-- generated by research/build-tables --table weights -->
 | weighting | top four |
 |---|---|
-| default | deepseek v4 flash 0731 > **minimax m2.7** > qwen3.6 27b > hy3 |
-| the old weights (gbench 0.35, no arena/swe-reb) | deepseek v4 flash 0731 > **qwen3.6 27b** > minimax m2.7 > hy3 |
-| coding-focused (0.45) | deepseek v4 flash 0731 > **qwen3.6 27b** > minimax m2.7 > hy3 |
-| agentic-focused (0.45) | deepseek v4 flash 0731 > **qwen3.6 27b** > minimax m2.7 > hy3 |
-| swe-rebench-heavy (0.25) | deepseek v4 flash 0731 > **minimax m2.7** > qwen3.6 27b > hy3 |
-| arena-heavy (0.25) | deepseek v4 flash 0731 > **qwen3.6 27b** > minimax m2.7 > hy3 |
-| sentiment dropped | deepseek v4 flash 0731 > **minimax m2.7** > qwen3.6 27b > hy3 |
+| default | deepseek v4 flash 0731 > **qwen3.8 27b** > minimax m2.7 > qwen3.6 27b |
+| the old weights (gbench 0.35, no arena/swe-reb) | deepseek v4 flash 0731 > **qwen3.8 27b** > qwen3.6 27b > minimax m2.7 |
+| coding-focused (0.45) | qwen3.8 27b > **deepseek v4 flash 0731** > minimax m2.7 > qwen3.6 27b |
+| agentic-focused (0.45) | qwen3.8 27b > **deepseek v4 flash 0731** > minimax m2.7 > qwen3.6 27b |
+| swe-rebench-heavy (0.25) | deepseek v4 flash 0731 > **qwen3.8 27b** > minimax m2.7 > qwen3.6 27b |
+| arena-heavy (0.25) | deepseek v4 flash 0731 > **qwen3.8 27b** > qwen3.6 27b > minimax m2.7 |
+| sentiment dropped | deepseek v4 flash 0731 > **qwen3.8 27b** > minimax m2.7 > qwen3.6 27b |
 
-**deepseek v4 flash 0731 is first under every weighting tried.** below it the second
-place is genuinely undecided: qwen3.6 27b takes it under four of the seven and
-minimax m2.7 under three, on a default gap of 0.2 points.
+**the top two swap on which capability you weight, and nothing else moves
+them.** deepseek v4 flash 0731 leads under five of the seven weightings and
+qwen3.8 27b under two -- and the two are exactly the ones that lean on what
+qwen3.8 27b has actually been measured on. push coding to 0.45 or agentic to
+0.45 and it takes first; every other weighting redistributes toward components
+it does not have, where it scores the set median by construction.
 
-that mechanism is worth stating plainly, because it is one number.
+first place turns on an absence, and the absence is three-sevenths of the
+evidence. **the default gap is 1.7 points on a scale where gaps under ~2 points
+are membership noise**, so the default ordering is not a verdict either.
+
+minimax m2.7 and qwen3.6 27b trade 3rd and 4th on one number instead:
 **swe-rebench scores minimax m2.7 at 51.8 against qwen3.6 27b's 34.3** -- and
 swe-rebench is the one source here whose tasks are rebuilt from pull requests
 merged *after* these models shipped, so it is the hardest of the seven to have
 trained against. weighting it heavily is what promotes minimax; dropping
-sentiment does the same thing from the other side, by removing the component
-qwen3.6 27b leads on.
-
-the caution runs the same way whichever is second. the gap is 0.2 points on a
-scale where **gaps under ~2 points are membership noise**, so neither ordering
-is a verdict. and minimax m2.7 costs 103.1gib against 27.1 -- whatever it does
+sentiment does the same from the other side, by removing the component qwen3.6
+27b leads on. minimax m2.7 also costs 103.1gib against 27.1, so whatever it does
 on the composite it loses [effective intelligence per
 gigabyte](#effective-intelligence-at-this-budget) by a factor of four.
-**qwen3.6 27b is the value pick either way**, which was always a different
-claim from being second on the composite.
 
 below the top two the order is not stable, and should not be read as one. use
 the composite to rule models out; for choosing between neighbours, the
@@ -420,18 +465,21 @@ the composite to rule models out; for choosing between neighbours, the
 
 ### what the composite changes
 
-against the plain quant-adjusted intelligence ranking, two models move a long
+against the plain quant-adjusted intelligence ranking, three models move a long
 way:
 
-- **qwen3.6 27b rises to 2nd** from 5th. it is 2nd on effective coding and the
-  most-discussed model in the corpus, from a file a quarter the size of its
-  neighbours.
-- **inkling small falls to 6th** from 2nd. it leads the cluster on effective
-  intelligence and then has almost nothing corroborating it: GBENCH and lmarena
-  list the flagship `inkling` rather than Small, swe-rebench does not carry it,
-  and it publishes no card claims, so four of seven components are imputed at
-  the set median, on 14 reddit mentions. this is the clearest case of a rank
-  resting on one axis.
+- **qwen3.6 27b rises to 4th** from 6th, on being the second most-discussed
+  model in the corpus and carrying six of seven components from a 27.1gib file.
+- **qwen3.8 27b falls to 2nd** from 1st, and it is the only model here whose
+  composite rank is *worse* than its capability rank purely because nobody has
+  finished measuring it.
+- **inkling small falls to 7th** from 3rd. it leads the ~100gib cluster on
+  effective intelligence and then has almost nothing corroborating it: GBENCH
+  and lmarena list the flagship `inkling` rather than Small, swe-rebench does
+  not carry it, and it publishes no card claims, so four of seven components are
+  imputed at the set median, on 14 reddit mentions. this is the clearest case of
+  a rank resting on one axis. ling 3.0 flash makes the same fall for the same
+  reason, 4th to 8th.
 
 ### three late additions
 
@@ -445,20 +493,21 @@ above:
   mid-table because it is a **dense 128b** -- it fits at UD-Q6_K_XL (101.7gib)
   but reads every parameter per token, which the bandwidth model puts at about
   **1 t/s**. it is the slowest thing on this roster by a wide margin.
-- **nemotron 3.5 lightning** (18th, 28.8, on 3/7 components). released the day
+- **nemotron 3.5 lightning** (18th, 27.4, on 3/7 components). released the day
   it was first captured, so it still has no GBENCH result and no community
   mentions, and its score comes from AA and its own card with the rest imputed.
   at 31.6b total / 3.6b active with a 1m context it is structurally interesting
-  and thinly evidenced; revisit it rather than reading 28.8 as a verdict.
+  and thinly evidenced; revisit it rather than reading 27.4 as a verdict.
 
-- **solar open2 250b** (11th, 50.4, on 2/7 components). released 2026-08-12,
-  so like nemotron it has no GBENCH result and no mentions yet. it is here as a
-  deliberate edge case: it is the only model on the roster that **fits without
-  being runnable**. Q2_K is 88.9gib, comfortably inside the budget, but it is
-  **dense 250b**, so it reads every parameter per token and the speed table
-  puts it near 2 t/s. the composite has no speed term and ranks it 11th; that
-  is the clearest example in this document of why the [speed](#speed) table is
-  not optional reading.
+- **solar open2 250b** (11th, 47.0, on 2/7 components). released 2026-08-12,
+  so like nemotron it has no GBENCH result and no mentions yet. it is also the
+  one entry here built on a **wrong** third-party field rather than a missing
+  one: artificial analysis published `activeParameters: 250`, which read as a
+  dense 250b at about 2 t/s and made it the roster's "fits without being
+  runnable" case. the corrected figure is **15**, so it is a sparse MoE at an
+  estimated **28 t/s**, ahead of hy3 and every dense model here. the arithmetic
+  was never wrong; the input was, which is the argument for the [speed](#speed)
+  table's measured anchors.
 
 there is no unsloth quant for nemotron 3.5 lightning or solar open2 250b, so
 the roster points at bartowski and prometheusAIR respectively -- both a step
@@ -479,30 +528,40 @@ be extrapolation.
 | model | coding | agentic | TB2.1 | tau-bank | gdpval | hallu |
 |---|--:|--:|--:|--:|--:|--:|
 | deepseek v4 flash 0731 | 63.6 | 44.5 | 78.7 | 39.4 | 52.9 | -14.3 |
+| qwen3.8 27b | 67.4 | 50.4 | 79.8 | 48.0 | 52.3 | -10.0 |
 | minimax m2.7 | 50.6 | 24.9 | 55.4 | 9.9 | 33.0 | 0.8 |
 | qwen3.6 27b | 53.2 | 27.2 | 60.7 | 16.7 | 32.0 | -20.0 |
 | hy3 | 51.7 | 27.6 | 64.4 | 22.9 | 35.7 | -18.5 |
 | muse glimmer | 48.5 | 22.7 | 51.7 | 23.5 | 22.7 | -32.9 |
 | inkling small | 49.9 | 30.1 | 55.1 | 18.8 | 38.4 | -8.9 |
 | ling 3.0 flash | 50.1 | 29.0 | 55.4 | 27.2 | 30.4 | -17.9 |
-| qwen3.8 27b | - | - | - | - | - | - |
 | mimo v2.5 | 49.2 | 21.2 | 63.7 | 8.7 | 32.5 | -9.8 |
 | qwen3.5 122b a10b | 45.2 | 21.0 | 47.6 | 15.3 | 24.4 | -41.5 |
 | solar open2 250b | 41.5 | 25.8 | 44.2 | 21.6 | 31.1 | -1.8 |
 | qwen3.6 35b a3b | 41.5 | 21.4 | 44.9 | 9.3 | 27.8 | -22.2 |
 | step 3.7 flash | 38.1 | 20.9 | 39.3 | 12.0 | 25.9 | -37.3 |
-| mistral medium 3.5 | 46.4 | 19.0 | 50.6 | 15.1 | 21.7 | -36.8 |
 | qwen3 coder next | 35.9 | 8.8 | 38.2 | 5.4 | 10.8 | -62.4 |
+| mistral medium 3.5 | 46.4 | 19.0 | 50.6 | 15.1 | 21.7 | -36.8 |
 | gemma 4 31b | 43.1 | 14.3 | 43.4 | 14.8 | 15.5 | -47.9 |
 | gemma 4 26b a4b | 38.9 | 10.9 | 39.0 | 12.0 | 13.4 | -50.8 |
 | nemotron 3.5 lightning | 26.5 | 13.7 | 24.3 | 8.9 | 16.2 | -17.7 |
 | gpt-oss-120b | 30.4 | 13.4 | 26.2 | 12.8 | 15.0 | -49.2 |
 | nemotron 3 super | 37.3 | 8.7 | 38.6 | 10.3 | 9.9 | -41.5 |
 
-adjusting changes who wins at coding. on paper hy3 (58.8) and mimo v2.5 (56.8)
-beat qwen3.6 27b (53.7); at the quants that fit, **qwen3.6 27b comes second at
-53.2**, ahead of hy3 at 51.7 and mimo at 49.2, out of a file a quarter their
-size. only deepseek v4 flash 0731 stays clear of the pack.
+adjusting changes who wins at coding. **qwen3.8 27b takes coding at 67.4 and
+agentic at 50.4**, both from a 27.1gib file that gives up 1% to the quantizer,
+against deepseek's 63.6 and 44.5 after its 8%. on paper hy3 (58.8) and mimo v2.5
+(56.8) beat qwen3.6 27b (53.7); at the quants that fit, qwen3.6 27b comes fourth
+at 53.2, ahead of hy3 at 51.7 and mimo at 49.2, out of a file a quarter their
+size.
+
+**the tau-bank column is where the generational gap is widest.** tau2-bench
+banking is the hardest and least saturated eval carried here, and qwen3.8 27b
+scores 48.0 on it against qwen3.6 27b's 16.7 -- a threefold move between two
+models with the same architecture, parameter count and file size. it also clears
+deepseek's 39.4, which nothing else here comes near. if one number in this
+document is worth reproducing in your own harness before believing, it is that
+one.
 
 ## picks
 
@@ -510,12 +569,20 @@ every pick below is read off the quant-adjusted table, not the paper scores.
 where the two disagree it is called out, because the disagreements are the
 useful part.
 
-**overall intelligence: deepseek v4 flash 0731 at UD-IQ3_XXS.** 47.6 effective
-against 38.8 for the next model, a lead of nearly 9 points that survives the 8%
-it pays at 2.94 bpw. it also leads GDPval-AA at 52.9 where nothing else clears
-39. GBENCH, which is played rather than graded, puts it second on its
-open-weights agentic coding board behind kimi k3, which does not fit here, so
-the lead is not an artifact of one scoring method.
+**overall intelligence: qwen3.8 27b, with deepseek v4 flash 0731 as the
+corroborated alternative.** 51.5 effective against deepseek's 47.6 and 38.8 for
+the next model. the 27.8b dense shape pays only 1% at Q8_0 where deepseek pays
+8% at 2.94 bpw, so a model with half deepseek's paper intelligence would still
+not be close -- but qwen3.8 27b does not have half, it has more: 52.0 raw
+against 51.8. the two are separated by 3.9 points of effective intelligence and
+70gib of memory.
+
+the case for still running deepseek is corroboration and context, not
+capability. it is measured by seven independent sources against qwen3.8's four;
+GBENCH, which is played rather than graded, puts it second on its open-weights
+agentic coding board behind kimi k3, which does not fit here; and it carries a
+1m context against qwen3.8's 262k. it leads GDPval-AA at 52.9, though qwen3.8
+27b is now within 0.6 of that at 52.3.
 
 284b total but 13b active, so it decodes at roughly the speed of a 13b dense
 model. MIT licensed. the `dspark` drafter fits alongside it at this quant.
@@ -541,28 +608,31 @@ output layer while dropping the routed experts to IQ2_XXS. 13.7k downloads.
 that buys 16gib of context headroom for 2-bit routed experts. see
 [forum sentiment](#deepseek-v4-flash-strong-with-a-real-complaint).
 
-**agentic use: deepseek v4 flash 0731, then ling 3.0 flash.** the agentic column
-separates these models far more than the intelligence column does: 44.5 adjusted
-for deepseek against 30.1 for the next. below it the ordering is decided by
-tau2-banking, the hardest and least saturated eval here, where ling 3.0 flash
+**agentic use: qwen3.8 27b, then deepseek v4 flash 0731, then ling 3.0 flash.**
+the agentic column separates these models far more than the intelligence column
+does: 50.4 adjusted for qwen3.8 27b and 44.5 for deepseek against 30.1 for the
+next. below them the ordering is decided by tau2-banking, where ling 3.0 flash
 scores 27.2 against minimax m2.7's 9.9 and mimo v2.5's 8.7 -- a gap far wider
-than their near-identical effective II suggests.
+than their near-identical effective II suggests. qwen3.8 27b's 48.0 on that same
+eval is the outlier of the whole table and the reason it takes this pick outright
+rather than sharing it.
 
-**coding: deepseek v4 flash 0731 (63.6 adjusted), then qwen3.6 27b (53.2).** this is
-where adjusting changes the answer. on paper hy3 (58.8) and mimo v2.5 (56.8)
-both beat qwen3.6 27b (53.7), and an earlier version of this document
-recommended them on that basis. at the quants that actually fit, they land at
-51.7 and 49.2 while qwen3.6 27b barely moves, out of a file a quarter the size.
-on raw terminal-bench 2.1 it scores 60.7, behind deepseek (78.7), hy3 (64.4)
-and mimo v2.5 (63.7) -- all of them ~95gib models, so it is the best of what
-can share the box. the paper ranking is an artifact of scoring models at a
-precision this box cannot run them at.
+**coding: qwen3.8 27b (67.4 adjusted), then deepseek v4 flash 0731 (63.6), then
+qwen3.6 27b (53.2).** this is where adjusting changes the answer. on paper hy3
+(58.8) and mimo v2.5 (56.8) both beat qwen3.6 27b (53.7), and an earlier version
+of this document recommended them on that basis. at the quants that actually
+fit, they land at 51.7 and 49.2 while qwen3.6 27b barely moves, out of a file a
+quarter the size. on raw terminal-bench 2.1 qwen3.8 27b scores 79.8, first in
+the set and ahead of deepseek's 78.7; qwen3.6 27b's 60.7 sits behind deepseek,
+hy3 (64.4) and mimo v2.5 (63.7). the paper ranking is an artifact of scoring
+models at a precision this box cannot run them at, and the 27gib slot now wins
+on both readings.
 
-**the hy3 disagreement.** hy3 is 6th on quant-adjusted intelligence because
-Q2_K_XL costs it 12%, and 4th on the composite -- but on 4/7 components, since
+**the hy3 disagreement.** hy3 is 7th on quant-adjusted intelligence because
+Q2_K_XL costs it 12%, and 5th on the composite -- but on 4/7 components, since
 its GBENCH result is excluded for sample size and swe-rebench never ran it. it
 holds the single highest arena rating in the set (1457), which is why it rises
-to 3rd the moment missing components are renormalized away instead of imputed. a small number of people running it on 128gb machines
+to 4th the moment missing components are renormalized away instead of imputed. a small number of people running it on 128gb machines
 rate it first for coding -- three clearly positive reports, against a similar
 number who found it slow or preferred deepseek (counted in
 [forum sentiment](#hy3-has-loud-advocates-on-128gb-and-not-many-of-them)):
@@ -579,17 +649,20 @@ deepseek's 1m, and throughput that "drops off brutally as context grows".
 worth testing directly rather than trusting either ranking, and nobody in that
 thread had run it on strix halo.
 
-**best value: qwen3.6 27b at Q8_0.** 27.1gib for 37.3 effective puts it within
-1.5 points of models four to ten times its size. it beats qwen3.5 397b a17b
-(34.3), a model fourteen times larger from the same lab two releases earlier.
-it also leaves 70gib free, which is enough to keep a second model resident or
-to run a 262k context without thinking about it.
+**best value: qwen3.8 27b at Q8_0.** 27.1gib for 51.5 effective beats every
+~100gib model on the roster from a quarter of their footprint -- where the
+previous holder of this pick only kept up with them. it leaves 78gib free, which
+is enough to keep deepseek resident alongside it or to run a 262k context
+without thinking about it. the one strix halo benchmark suggests UD-Q5_K_XL
+(18.8gib) is 31% faster for a negligible quality cost, which is worth testing
+against your own workload rather than adopting on one report.
 
 **speed: qwen3.6 35b a3b or gpt-oss-120b.** 3b and 5.1b active respectively.
-see the speed table below.
+see the speed table below. solar open2 250b belongs in this tier too, at an
+estimated 28 t/s on a corrected active-parameter count.
 
 **avoid: qwen3 coder next.** an II of 21.3, the worst hallucination score in
-the set at -62.4, and 79gib at Q8. qwen3.6 27b is better on every axis at a
+the set at -62.4, and 79gib at Q8. both 27b models are better on every axis at a
 third of the size. the coder-specific line has been overtaken by the general
 models.
 
@@ -598,8 +671,8 @@ models.
 the benchmark tables rank models on one axis. the people running them daily do
 not use them that way: they assign roles.
 
-this section is from r/LocalLLaMA -- 161 threads, 12,822 comments, captured
-2026-08-16. it is opinion rather than measurement, but it is counted opinion:
+this section is from r/LocalLLaMA -- 175 threads, 13,614 comments, captured
+2026-08-17. it is opinion rather than measurement, but it is counted opinion:
 `research/analyze-task-mentions` counts how often each model is named in the
 same sentence as each task, so a claim here has a denominator.
 
@@ -607,30 +680,30 @@ same sentence as each task, so a claim here has a denominator.
 
 | model | mentions | top-level | median rel | agentic | planning | long ctx |
 |---|--:|--:|--:|--:|--:|--:|
-| qwen3.6 27b | 307 | 138 | 42 | 18 | 20 | 6 |
-| deepseek v4 flash 0731 | 267 | 97 | 42 | 14 | 11 | 6 |
-| qwen3.8 27b | 171 | 89 | 51 | 6 | 16 | 4 |
+| qwen3.6 27b | 311 | 140 | 41 | 18 | 20 | 7 |
+| deepseek v4 flash 0731 | 304 | 110 | 42 | 15 | 12 | 8 |
+| qwen3.8 27b | 208 | 111 | 53 | 8 | 18 | 10 |
 | qwen3.6 35b a3b | 141 | 61 | 40 | 11 | 8 | 11 |
-| muse glimmer | 108 | 43 | 55 | 9 | 9 | 1 |
-| glm-5.2 | 104 | 46 | 51 | 1 | 1 | 1 |
+| glm-5.2 | 113 | 49 | 50 | 1 | 1 | 1 |
+| muse glimmer | 111 | 44 | 53 | 9 | 9 | 1 |
 | qwen3.5 122b a10b | 82 | 35 | 48 | 2 | 1 |  |
-| gemma 4 31b | 65 | 33 | 40 | 2 |  |  |
+| gemma 4 31b | 66 | 33 | 40 | 2 |  |  |
+| gemma 4 26b a4b | 65 | 28 | 45 | 4 | 1 | 1 |
 | laguna s 2.1 | 64 | 16 | 31 | 2 | 4 |  |
-| gemma 4 26b a4b | 61 | 28 | 50 | 4 | 1 | 1 |
-| kimi k3 | 58 | 26 | 41 |  |  |  |
-| qwen3 coder next | 52 | 28 | 46 | 4 | 2 | 1 |
+| kimi k3 | 63 | 26 | 36 |  |  |  |
+| qwen3 coder next | 54 | 28 | 46 | 4 | 2 | 1 |
 | hy3 | 48 | 25 | 52 | 4 | 5 | 1 |
 | gpt-oss-120b | 47 | 23 | 46 |  | 1 | 1 |
 | minimax m3 | 46 | 20 | 25 | 2 |  | 1 |
 | bonsai 27b | 34 | 10 | 34 | 1 |  | 1 |
-| gemma 4 12b | 27 | 11 | 38 | 1 | 2 | 1 |
+| gemma 4 12b | 28 | 11 | 38 | 1 | 2 | 1 |
 | minimax m2.7 | 24 | 12 | 73 | 1 | 1 |  |
 | glm-4.5-air | 17 | 7 | 42 | 1 |  |  |
 | qwen3.5 397b a17b | 17 | 10 | 56 | 1 |  |  |
 | mimo v2.5 | 14 | 5 | 56 | 1 | 1 | 1 |
 | inkling small | 14 | 4 | 60 |  |  |  |
 | ornith 1.0 35b | 13 | 6 | 29 | 2 | 1 |  |
-| ling 3.0 flash | 9 | 6 | 71 | 1 |  |  |
+| ling 3.0 flash | 12 | 7 | 66 | 1 |  |  |
 | step 3.7 flash | 8 | 5 | 57 |  | 1 |  |
 | nemotron 3 super | 6 | 4 | 24 |  |  |  |
 | qwen-agentworld 35b a3b | 6 | 0 | 84 | 1 |  | 1 |
@@ -650,26 +723,35 @@ read the mentions and top-level columns first; they are the robust ones. the
 task columns are sparse because people name a model in one sentence and the
 task in the next, which sentence-scoped matching deliberately does not join.
 
-three things stand out:
+four things stand out:
 
-- **qwen3.6 27b is discussed more than anything else that fits, by 15%**, and
-  has the most top-level mentions, 1.42x the next model. deepseek v4 flash 0731 has
-  been closing that gap across the last four captures (43% -> 28% -> 18% -> 15%).
+- **the qwen3.6 27b lead has essentially closed.** it is still first at 311
+  mentions, but deepseek v4 flash 0731 is at 304 -- 2%, where the gap ran 43% ->
+  28% -> 18% -> 15% across the previous four captures. on top-level mentions
+  qwen3.6 27b still leads 140 to 110.
+- **qwen3.8 27b is the fastest-growing entry and the best received of the
+  three.** it went from 171 mentions to 208 in a day and its top-level count
+  from 89 to 111, so 53% of its mentions start a thread against qwen3.6 27b's
+  45% -- people are posting about it rather than answering about it. its median
+  percentile of 53 is the highest of any model with more than 50 mentions. the
+  benchmark result and the reception arrived in the same capture and are
+  independent of each other.
 - **laguna s 2.1 and minimax m3 are the outliers on reception.** laguna has 64
   mentions but only 16 top-level and a median percentile of 31; minimax m3 is
   lower still at 25. their advocates are mostly replying to someone else rather
   than being upvoted in their own right.
-- **the models the tables rank highly are barely discussed.** ling 3.0 flash
-  has 9 mentions, inkling small 14, mimo v2.5 14, minimax m2.7 24. either the
-  community has not caught up with them, or they do not hold up in use. nothing
-  here distinguishes those two, and it is the single biggest gap between the
-  benchmark ranking and the lived one.
+- **the models the tables rank highly are still barely discussed.** ling 3.0
+  flash has 12 mentions, inkling small 14, mimo v2.5 14, minimax m2.7 24. either
+  the community has not caught up with them, or they do not hold up in use.
+  nothing here distinguishes those two, and it is the single biggest gap between
+  the benchmark ranking and the lived one.
 
 a caveat on all of it: reddit publishes a net score only, so a controversial +5
 and an ignored +5 are indistinguishable. the cleanest signal in the corpus is
-the negative score, precisely because it is rare -- 188 of 12,745 scored
-comments. qwen3.6 27b and hy3 carry three each, the most of any model here,
-which for qwen3.6 27b is what being the most-discussed model also buys.
+the negative score, precisely because it is rare -- 223 of 13,534 scored
+comments. deepseek v4 flash 0731 and qwen3.8 27b carry five downvoted mentions
+each and qwen3.6 27b four, the most of any models here, which is mostly what
+being the three most-discussed models buys.
 
 ### the monthly community highlight
 
@@ -750,7 +832,7 @@ with a plausible reconciliation from a third commenter: laguna is weaker
 zero-shot but better at matching an existing codebase, "It understands how
 developers work, where they want their code". someone else runs laguna XS 2.1
 on a 64gb strix halo and reports it trading blows with qwen3.6 27b. GBENCH
-rates laguna s 2.1 at 0.239, 88th of 97 on that board, which is more consistent
+rates laguna s 2.1 at 0.239, 89th of 98 on that board, which is more consistent
 with the sceptics than the enthusiasts.
 
 ### the caveat that undercuts all of it
@@ -834,7 +916,7 @@ also from that comparison, and relevant to running either locally: deepseek was
 faster (58s against 70s per task) and emitted 2.5x more code (33.0 KB against
 13.3 KB), which is worth knowing if you have opinions about diff size.
 
-the full per-language and per-game data for all 97 models is committed at
+the full per-language and per-game data for all 98 models is committed at
 `research/data/gbench.json`, and the published compare values at
 `research/data/gbench-compare-observed.json`, so a later question about c++ or
 java needs no refetch.
@@ -854,20 +936,20 @@ model over a terse correct one.
 | model | composite rank | text elo | votes | webdev elo |
 |---|--:|--:|--:|--:|
 | deepseek v4 flash 0731 | 1 | 1435 | 49,112 | - |
-| minimax m2.7 | 2 | 1416 | 58,418 | 1397 |
-| qwen3.6 27b | 3 | - | - | - |
-| hy3 | 4 | 1457 | 4,664 | 1522 |
-| muse glimmer | 5 | 1426 | 3,733 | 1359 |
-| inkling small | 6 | - | - | - |
-| ling 3.0 flash | 7 | - | - | - |
-| qwen3.8 27b | 8 | - | - | - |
+| qwen3.8 27b | 2 | - | - | - |
+| minimax m2.7 | 3 | 1416 | 58,418 | 1397 |
+| qwen3.6 27b | 4 | - | - | - |
+| hy3 | 5 | 1457 | 4,664 | 1522 |
+| muse glimmer | 6 | 1426 | 3,733 | 1359 |
+| inkling small | 7 | - | - | - |
+| ling 3.0 flash | 8 | - | - | - |
 | mimo v2.5 | 9 | 1434 | 44,647 | 1438 |
 | qwen3.5 122b a10b | 10 | 1417 | 28,449 | 1358 |
 | solar open2 250b | 11 | - | - | - |
 | qwen3.6 35b a3b | 12 | - | - | - |
 | step 3.7 flash | 13 | - | - | - |
-| mistral medium 3.5 | 14 | 1427 | 11,022 | 1265 |
-| qwen3 coder next | 15 | - | - | - |
+| qwen3 coder next | 14 | - | - | - |
+| mistral medium 3.5 | 15 | 1427 | 11,022 | 1265 |
 | gemma 4 31b | 16 | 1451 | 5,899 | 1364 |
 | gemma 4 26b a4b | 17 | 1438 | 5,812 | 1362 |
 | nemotron 3.5 lightning | 18 | - | - | - |
@@ -918,14 +1000,14 @@ about 20-30% against the measured anchors.
 | inkling small | 12b | 3.23 | 4.85 | 33 |  |
 | mimo v2.5 | 15b | 2.66 | 4.98 | 32 |  |
 | step 3.7 flash | 11b | 3.93 | 5.41 | 30 |  |
+| solar open2 250b | 15b | 3.05 | 5.73 | 28 |  |
 | hy3 | 21b | 2.72 | 7.13 | 22 |  |
 | qwen3.5 122b a10b | 10b | 7.19 | 8.99 | 18 |  |
 | nemotron 3 super | 12.7b | 7.14 | 11.33 | 14 |  |
 | qwen3.6 27b (dense) | 27.8b | 8.36 | 29.05 | 6 | 7.4 |
-| qwen3.8 27b (dense) | 27.8b | 8.36 | 29.05 | 6 |  |
+| qwen3.8 27b (dense) | 27b | 8.61 | 29.05 | 6 |  |
 | muse glimmer (dense) | 30b | 7.90 | 29.61 | 5 |  |
 | gemma 4 31b (dense) | 30.7b | 9.13 | 35.02 | 5 |  |
-| solar open2 250b (dense) | 250b | 3.05 | 95.43 | 2 |  |
 | mistral medium 3.5 (dense) | 128b | 6.82 | 109.16 | 1 |  |
 
 the dense entries are the warning. qwen3.6 27b has the best score-per-byte in
@@ -959,14 +1041,14 @@ everything above measures how good a model is. this section is about whether
 it works on this hardware, which is a separate question and the one that has
 actually cost time. it is drawn from three sources the benchmark tables cannot
 see: huggingface per-repo discussions, llama.cpp issues, and the level1techs
-forum -- 851 documents, of which **90 name strix halo, rdna3.5 or gfx1151**.
+forum -- 917 documents, of which **98 name strix halo, rdna3.5 or gfx1151**.
 `research/analyze-operational --strix` regenerates the counts.
 
 **read this section more sceptically than the rest of the document.** the other
 sources aggregate: a benchmark runs every model through one harness, and the
 reddit counts have a denominator. this one is a pile of individual claims, most
-from one person, on one configuration, at one moment. of the 90 strix-halo
-documents, **24 are already closed, 46 are more than 30 days old, and 14 have
+from one person, on one configuration, at one moment. of the 98 strix-halo
+documents, **26 are already closed, 46 are more than 30 days old, and 13 have
 no engagement beyond the person who filed them.** an unreplicated bug report is
 a lead to verify on your own machine, not a finding.
 
@@ -983,19 +1065,45 @@ they are worth keeping visible as calibration:
   build obstacle does not.
 
 what is left after filtering to reports that are still open and that somebody
-other than the author engaged with (`--open --min-engagement 2`, 47 of 90):
+other than the author engaged with (`--open --min-engagement 2`, 53 of 98):
 
 | model | report | state | source |
 |---|---|---|---|
 | deepseek v4 flash 0731 | garbled output under rocm on strix halo | open 34d, 27 comments | [#25436](https://github.com/ggml-org/llama.cpp/issues/25436) |
-| deepseek v4 flash 0731 | `vk::DeviceLostError` after 2-3 turns on vulkan (RADV_STRIXHALO); qwen3.6 27b and gemma 4 31b on the same box are fine | open 28d, 19 comments | [#25664](https://github.com/ggml-org/llama.cpp/issues/25664) |
+| deepseek v4 flash 0731, qwen3.8 27b | `vk::DeviceLostError` after 2-3 turns on vulkan (RADV_STRIXHALO) -- **a kernel/driver problem, not a model one**, see below | open 28d, 23 comments | [#25664](https://github.com/ggml-org/llama.cpp/issues/25664) |
+| deepseek v4 flash 0731 | ROCm gfx1151 RPC worker crashes in `GGML_OP_TOP_K` during v4 prefill | open 4d, 8 comments | [#26746](https://github.com/ggml-org/llama.cpp/issues/26746) |
 | deepseek v4 flash 0731 | the dspark drafter fails to load on recent llama-server; unsloth replied "still experimental" | open 8d, 6 comments | [hf 26](https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF/discussions/26) |
-| laguna s 2.1 | UD-Q5_K_L emits no tokens under rocm | open 12d, 1 comment | [hf 23](https://huggingface.co/unsloth/Laguna-S-2.1-GGUF/discussions/23) |
+| deepseek v4 flash 0731 | garbled output again, this time with RPC vulkan | open 5d, 4 comments | [#26685](https://github.com/ggml-org/llama.cpp/issues/26685) |
+| laguna s 2.1 | tool call errors | open 19d, 5 comments | [hf 11](https://huggingface.co/unsloth/Laguna-S-2.1-GGUF/discussions/11) |
 
-the deepseek rows are the only ones with real corroboration, and even there the
-`DeviceLostError` has a known manual patch -- so the honest summary is that
-deepseek v4 flash 0731 is the model on this roster most likely to need you to fix
-something before it runs, not that it cannot run.
+**the `DeviceLostError` is the row to read carefully, because it is filed
+against models and caused by the kernel.** on linux-7.x the AMD driver's compute
+`lockup_timeout` default dropped from 60s to 2s, so any vulkan op that takes
+longer than two seconds is cancelled and the context is lost. linux-6.x users do
+not see it. that is why it looks model-specific -- deepseek v4 flash 0731 and
+qwen3.8 27b are the two models on this box with ops long enough to trip a 2s
+timeout, while qwen3.6 27b and gemma 4 31b on the same installation are fine.
+the fix is a kernel cmdline parameter, not a model change or a llama.cpp patch:
+
+```
+amdgpu.lockup_timeout=10000,60000,10000,10000
+```
+
+**this is the single most useful thing in this section**, and it inverts what
+the table appears to say. the models are not fragile; the host default changed
+under them. anyone on a linux-7.x kernel should set this before concluding
+anything about a model's stability -- and the rest of the deepseek rows here
+deserve re-reading in that light, since a cancelled context can surface as
+garbled output rather than as a clean error.
+
+with that accounted for, the remaining deepseek rows are RPC-specific or
+drafter-specific rather than blockers for the recommended configuration.
+
+one laguna report is worth naming for what the filter excludes: "UD-Q5_K_L emits
+no tokens under rocm"
+([hf 23](https://huggingface.co/unsloth/Laguna-S-2.1-GGUF/discussions/23)) is
+open and specific but has only ever drawn one comment, so it does not clear the
+engagement threshold.
 
 ### hy3 on strix halo, which nobody had tried
 
@@ -1058,10 +1166,10 @@ lmarena or swe-rebench. there is no benchmark number to quote for any of them.
 
 | model | quant | size (gib) | total / active | downloads | likes | note |
 |---|---|--:|---|--:|--:|---|
-| ornith 1.0 35b | Q8_0 | 34.4 | 35b / ? | 255,448 | 143 | qwen3.5-moe arch despite the bare 35B; active params not published |
-| qwen-agentworld 35b a3b | Q8_0 | 34.4 | 34.7b / 3b | 403,800 | 226 | moe, 34.7b total confirmed from the base repo |
-| bonsai 27b | F16 | 50.1 | 27.8b / 27.8b | 1,638,186 | 778 | a qwen3.6-27b derivative, so dense and the same shape |
-| ternary bonsai 27b | F16 | 50.1 | 27.8b / 27.8b | 698,543 | 1217 | ternary weights; the quant curve here does not model that |
+| ornith 1.0 35b | Q8_0 | 34.4 | 35b / ? | 241,103 | 143 | qwen3.5-moe arch despite the bare 35B; active params not published |
+| qwen-agentworld 35b a3b | Q8_0 | 34.4 | 34.7b / 3b | 399,974 | 227 | moe, 34.7b total confirmed from the base repo |
+| bonsai 27b | F16 | 50.1 | 27.8b / 27.8b | 1,538,172 | 778 | a qwen3.6-27b derivative, so dense and the same shape |
+| ternary bonsai 27b | F16 | 50.1 | 27.8b / 27.8b | 616,062 | 1219 | ternary weights; the quant curve here does not model that |
 
 what the columns are worth: size and parameter counts are file facts, and
 downloads and likes measure adoption, which is not quality -- `bonsai 27b` has
@@ -1069,13 +1177,13 @@ more downloads than most of the ranked roster and no published evaluation
 whatsoever. treat the table as an inventory of what exists, and the reason to
 run your own harness.
 
-#### qwen3.8 27b, from the only evidence that exists
+#### qwen3.8 27b
 
-it **is** in [the ranking](#the-ranking), at 55.3 on 2/7 components -- reddit
-sentiment and its own model card, with the other five imputed at the set median.
-no independent suite has measured it, so everything below is a file fact, a
-first-week report, or a vendor claim carrying the discount
-[measured for vendor claims](#what-a-model-says-about-itself).
+unscored by anything for its first two weeks, which is why it is written up
+here. artificial analysis now carries it at II 52.0, coding 68.1, agentic 50.9,
+terminal-bench 2.1 79.8, tau2-banking 48.0, GDPval 52.3, omniscience -10.0 --
+2nd on the composite and 1st on every component it has. GBENCH, lmarena and
+swe-rebench carry nothing for it.
 
 **its card claims a large generational gain, and the comparison has to be read
 within one card.** these are qwen's numbers for both models, taken from the
@@ -1109,10 +1217,16 @@ feature -- "broader support for popular harnesses" -- is the likelier
 explanation for the agentic rows, and that is a real usability gain rather than
 a measurement of intelligence.
 
-**it lands in exactly the slot qwen3.6 27b holds.** 27.8b dense against 27.8b
-dense, 27.1gib at Q8_0 against 27.1gib -- the same box, the same budget, the
-same quant. the incumbent keeps the recommendation until something measures the
-successor.
+**the independent measurement backs the agentic claim rather than deflating
+it.** AA runs one harness across every model it scores, so it cannot benefit
+from "broader support for popular harnesses" the way a lab-run agentic eval can.
+on that harness the agentic index goes from qwen3.6 27b's 27.5 to 50.9 and
+tau2-banking from 16.7 to 48.0. the jump on agentic work is real and roughly the
+size the card claimed.
+
+**it lands in exactly the slot qwen3.6 27b holds, and takes it.** 27.8b dense
+against 27.8b dense, 27.1gib at Q8_0 against 27.1gib -- the same box, the same
+budget, the same quant.
 
 **it is qwen3.6 27b's architecture, retrained.** `config.json` is the same
 `Qwen3_5ForConditionalGeneration`, 64 layers, hidden 5120, 27.8b dense, same
@@ -1123,9 +1237,8 @@ below are surprising.
 
 **the packaging trap is gone.** the nextn head ships inside the main gguf (65
 blocks against 64 hidden layers, `blk.64` carrying `nextn.eh_proj` and its
-norms) rather than in a separate `-MTP-GGUF`. for qwen3.6 that split was two
-repos with identically-named files 0.42gib apart, and this document sized the
-wrong one until it was caught; here there is only one repo to get right.
+norms) rather than in a separate `-MTP-GGUF`. qwen3.6's split was two repos with
+identically-named files 0.42gib apart; here there is one repo to get right.
 
 **quantization is nearly free at Q8_0, measured.** ubergarm published
 perplexity over the same 580 chunks of wiki.test.raw at three precisions:
@@ -1136,19 +1249,58 @@ perplexity over the same 580 chunks of wiki.test.raw at three precisions:
 | Q8_0 | 27.0 | 8.50 | 6.9554 | +0.02% |
 | IQ4_KS | 15.7 | 4.73 | 6.9938 | +0.57% |
 
-that is the first retention measurement in this document taken on the model it
-describes rather than transferred from [the deepseek v3.1
-curve](#the-arithmetic), and it agrees with it: Q8_0 costs essentially nothing.
+that is measured on the model it describes rather than transferred from [the
+deepseek v3.1 curve](#the-arithmetic), and it agrees with it: Q8_0 costs
+essentially nothing, and even IQ4_KS costs little.
 
-**the default reasoning effort is unusable here, and that is the headline.**
-the chat template defaults `reasoning_effort` to `xhigh`, and reports of what
-that costs are consistent across hardware: 15,000 thinking words where qwen3.6
-spent 3,000 on the same prompt; a flappy-bird clone at 21k tokens against
-qwen3.6's 4.5k; one trace of 52k thinking tokens; another user hitting the
-262144 window at xhigh and having to drop to medium. at the 7-18 t/s this box
-gets on a 27b dense, 52k thinking tokens is between 48 minutes and 2 hours.
-`reasoning_effort: medium` is the fix, and medium is also the neutral setting:
-xhigh and low each inject a system instruction, medium injects nothing.
+**the default reasoning effort is unusable here, and `medium` is a partial fix
+rather than a fix.** the chat template defaults `reasoning_effort` to `xhigh`,
+and reports of what that costs are consistent across hardware: 15,000 thinking
+words where qwen3.6 spent 3,000 on the same prompt; a flappy-bird clone at 21k
+tokens against qwen3.6's 4.5k; one trace of 52k thinking tokens; another user
+hitting the 262144 window at xhigh and having to drop to medium. at the 12-17
+t/s this box measures on it, 52k thinking tokens is over an hour. `medium` is
+the neutral setting -- xhigh and low each inject a system instruction, medium
+injects nothing -- but one report has context use still running "about 10 times
+higher than in Qwen 3.6-27b" *at* medium, and another says medium answers some
+logic questions wrong where max answers them right after tens of thousands of
+tokens. the token-efficiency complaint the community has
+aimed at qwen generally is sharper for this model than for its predecessor, and
+it is the one axis on which qwen3.6 27b is still clearly ahead.
+
+**the level vocabulary is narrower than the clients advertise.** the same thread
+quotes a seven-level menu -- off, minimal, low, medium, high, xhigh, max --
+which is pi-agent's list, not the model's. executing the template (see
+`registry/models.yaml` and `research/analyze-chat-templates --thinking`) shows
+the base repo validates `reasoning_effort` against exactly **low, medium,
+xhigh** and raises on everything else, `off`, `minimal`, `max` and `none`
+included. unsloth's gguf additionally accepts `high` and maps it onto `xhigh`
+before the same guard, so it is a fourth spelling rather than a fourth level.
+setting a level this model does not take is not a soft failure.
+
+**one reproducible benchmark exists on this exact hardware.** a GMKtec EVO-X2 --
+Ryzen AI Max+ 395, Radeon 8060S, 128gb unified -- running llama.cpp b10436 under
+vulkan with full GPU offload, q8_0 kv, flash attention and the embedded MTP
+predictor, with the flags and a reproduction repo published:
+
+| quant | size (gib) | context | generation | prompt | TTFT | working set |
+|---|--:|--:|--:|--:|--:|--:|
+| UD-Q5_K_XL, MTP 4 | 18.8 | 64k | **16.68 t/s** | 33.87 t/s | 2.85 s | 41.3 gib |
+| UD-Q5_K_XL, MTP 4 | 18.8 | 128k | **16.45 t/s** | 31.44 t/s | 3.06 s | 44.2 gib |
+| Q6_K, MTP 4 | 21.3 | 64k | 14.24 t/s | 28.93 t/s | 3.33 s | 46.1 gib |
+| Q8_0, MTP 4 | 27.1 | 64k | 12.74 t/s | 31.44 t/s | 3.06 s | 57.0 gib |
+
+it is one machine and one reporter, so read it as a lead rather than a
+calibration. four things in it are worth testing. **the quant ladder costs real
+speed**: Q8_0 runs 31% slower than UD-Q5_K_XL for a retention difference the
+perplexity sweep above puts at a fraction of a percent, which is an argument for
+trying UD-Q5_K_XL rather than for assuming it. **doubling the context is nearly
+free** -- 64k to 128k costs 1.4% of generation speed and 2.85gib. **four draft
+tokens was fastest**: the MTP sweep runs 2 at 15.54 t/s (87.8% acceptance), 3 at
+15.77 (80.1%), 4 at 16.68 (83.8%) and 5 at 15.28 (82.1%). and **vulkan beat rocm
+by 37%** -- 16.68 against 12.04 through LM Studio's rocm runtime, with the direct
+llama.cpp rocm binary failing to enumerate gfx1151 at all, which matches the
+general strix halo picture below.
 
 **it is slower than qwen3.6 27b at the same quant, despite the same
 architecture.** two independent reports: 45 t/s to 35 t/s on a 2080ti at
@@ -1156,7 +1308,9 @@ UD-Q4_K_XL with MTP, and 45-50 t/s to 30 t/s on a 3060 Ti + 4070 Ti Super.
 a third reporter with R9700s says the speeds are identical. the likely
 reconciliation is MTP draft acceptance -- one full log shows 0.546 acceptance
 at mean accepted run 2.64, which is also why the config drafts 3 tokens rather
-than the 6 it uses for qwen3.6.
+than the 6 it uses for qwen3.6. the strix halo run above reports much higher
+acceptance (0.80-0.88) at 4 drafts, so this looks harness- and
+context-dependent rather than a property of the model.
 
 **a chat-template bug shipped and was fixed in place.** llama.cpp raised
 `Jinja Exception: System message must be at the beginning` against any harness
@@ -1170,15 +1324,17 @@ so a copy pulled before the fix needs refetching.
 qwen3.6 wrote a bug-free minesweeper in one prompt where 3.8 "takes about twenty
 times longer to think and constantly produces bugs". both are single trials.
 
-**two llama.cpp issues name it.** [#26941](https://github.com/ggml-org/llama.cpp/issues/26941)
+**three llama.cpp issues name it.** [#26941](https://github.com/ggml-org/llama.cpp/issues/26941)
 (merged) added `reasoning_effort` to the jinja template inputs -- before it,
 llama.cpp handled only `none` and *discarded every other value*, which is why
 first-week reports on whether the effort control worked contradicted each other.
 [#27076](https://github.com/ggml-org/llama.cpp/issues/27076) (open, no comments)
-is a `ggml_vulkan: device lost` running Q4_K_M under pi on an RX 6900 XT. that
-is RDNA2 rather than this box, but it is the same backend and the same failure
-class as [#25664](https://github.com/ggml-org/llama.cpp/issues/25664), the
-deepseek device-lost already tracked below.
+is a `ggml_vulkan: device lost` running Q4_K_M under pi on an RX 6900 XT -- RDNA2
+rather than this box, but the same backend and the same failure class as
+[#25664](https://github.com/ggml-org/llama.cpp/issues/25664), which names
+qwen3.8 27b alongside deepseek and turns out to be the
+[amdgpu lockup timeout](#does-it-actually-run-here) rather than a model fault.
+if this model is the one that crashes your box, check the kernel cmdline first.
 
 three things the table itself says:
 
@@ -1210,19 +1366,21 @@ three things the table itself says:
 | minimax m3 | 428b / 23b | 45.4 | UD-IQ2_M, 125.0gib | 15gib over; iq1 only |
 | motif 3 | 314b / 13.2b | 47.4 | Q3_K_M-mixed, 132.5gib | 13gib over the machine; no q2 published |
 | qwen3.8 2.4t a95b | 2400b / 95b | 57.7 | - | 20x over budget |
-| nex-n2-pro | 397b / 17b | 42.1 | - | over at any usable quant |
+| nex-n2-pro | 397b / 17b | 41.7 | - | over at any usable quant |
 | nemotron 3 ultra 550b | 550b / 55b | 38.3 | - | far over |
 | qwen3.5 397b a17b | 397b / 17b | 34.3 | - | over at any usable quant |
 
-**motif 3 is the new painful one, and it arrived during this capture.**
+**motif 3 is still the painful one, and it has got less painful.**
 released 2026-08-12 with open weights, 314b total on 13.2b active -- almost
 exactly deepseek v4 flash 0731's shape, which fits here at 97.1gib -- and an
-intelligence index of 47.4, which would place it second on this roster. it
-misses only because nobody has published a small enough quant: the smallest is
-Q3_K_M-mixed at 132.5gib, over the 119.2gib the machine physically has, and
-there is no unsloth, bartowski or ggml-org repo at all yet, only a community
-one. a UD-IQ3_XXS of a 314b model would land near 107gib on deepseek's ratio.
-this is the roster entry most likely to change in the next week.
+intelligence index of 47.4, which would have placed it second on this roster a
+capture ago and now places it third. it misses only because nobody has published
+a small enough quant: the smallest is Q3_K_M-mixed at 132.5gib, over the
+119.2gib the machine physically has, and there is no unsloth, bartowski or
+ggml-org repo at all yet, only a community one. a UD-IQ3_XXS of a 314b model
+would land near 107gib on deepseek's ratio. it is worth less effort than it was:
+qwen3.8 27b already beats what motif 3 would score after the ~8% a 3-bit quant
+would cost it, from a quarter of the memory.
 
 a second same-day release worth naming: **deepseek v4 pro** was refreshed on
 2026-08-13 to an intelligence index of 53.2, up from the 45.3 of the april
@@ -1361,13 +1519,14 @@ ordering as meaningful and the absolute values as indicative.
 
 | model | total / active | quant | size (gib) | bpw | AA II | retention | effective II |
 |---|---|---|--:|--:|--:|--:|--:|
+| qwen3.8 27b | 27b / 27b | Q8_0 | 27.1 | 8.61 | 52.0 | 0.991 | **51.5** |
 | deepseek v4 flash 0731 | 284b / 13b | UD-IQ3_XXS | 97.1 | 2.94 | 51.8 | 0.920 | **47.6** |
 | inkling small | 266b / 12b | UD-IQ3_S | 100.1 | 3.23 | 41.2 | 0.943 | **38.8** |
 | ling 3.0 flash | 124b / 5.1b | AD-Q6_K | 100.1 | 6.94 | 37.8 | 0.988 | **37.4** |
 | minimax m2.7 | 230b / 10b | UD-IQ4_NL | 103.1 | 3.85 | 38.9 | 0.962 | **37.4** |
 | qwen3.6 27b | 27.8b / 27.8b | Q8_0 | 27.1 | 8.36 | 37.7 | 0.990 | **37.3** |
 | hy3 | 299b / 21b | Q2_K_XL-mtp | 94.6 | 2.72 | 42.2 | 0.879 | **37.1** |
-| solar open2 250b | 250b / 250b | Q2_K | 88.9 | 3.05 | 37.4 | 0.929 | **34.8** |
+| solar open2 250b | 250b / 15b | Q2_K | 88.9 | 3.05 | 37.4 | 0.929 | **34.8** |
 | muse glimmer | 30b / 30b | Q8_0 | 27.6 | 7.90 | 35.1 | 0.990 | **34.7** |
 | mimo v2.5 | 310b / 15b | UD-Q2_K_XL | 95.9 | 2.66 | 38.0 | 0.867 | **33.0** |
 | qwen3.5 122b a10b | 125b / 10b | UD-Q6_K_XL | 104.7 | 7.19 | 32.8 | 0.989 | **32.5** |
@@ -1380,7 +1539,6 @@ ordering as meaningful and the absolute values as indicative.
 | gpt-oss-120b | 117b / 5.1b | UD-Q8_K_XL | 60.0 | 4.41 | 24.1 | 1.000 | **24.1** |
 | nemotron 3.5 lightning | 31.6b / 3.6b | Q8_0 | 32.6 | 8.86 | 23.6 | 0.991 | **23.4** |
 | qwen3 coder next | 79.7b / 3b | Q8_0 | 79.0 | 8.51 | 21.3 | 0.990 | **21.1** |
-| qwen3.8 27b | 27.8b / 27.8b | Q8_0 | 27.1 | 8.36 | - | 0.990 | **-** |
 
 gpt-oss-120b takes no penalty because it is natively MXFP4 with
 quantization-aware training. its 4.41 bpw is the trained precision, not a
@@ -1388,14 +1546,20 @@ lossy conversion, which is also why every quant of it in the unsloth repo is
 within 2gib of every other. kimi k3 uses the same approach.
 
 the ordering changes in two places once quantization is accounted for. **hy3
-drops from 2nd on paper to 6th**, because 2.72 bpw costs it 12%. **mimo v2.5
-drops from 5th to 9th** for the same reason. both are models large enough that
-this box can only run them badly. meanwhile ling 3.0 flash and qwen3.6 27b
-climb, because they fit at a precision where quantization is nearly free.
+drops from 3rd on paper to 7th**, because 2.72 bpw costs it 12%. **mimo v2.5
+drops from 6th to 10th** for the same reason. both are models large enough that
+this box can only run them badly. meanwhile ling 3.0 flash and the two 27b
+models climb, because they fit at a precision where quantization is nearly free.
 
-ranks 2 through 6 land within 1.7 points of each other, which is well inside
-the error of a retention curve transferred from another model. read that band
-as a tie and pick on the other axes: context, speed, tool-calling reliability.
+**this table is the whole argument of the document in one row pair.** qwen3.8
+27b and deepseek v4 flash 0731 are separated by 0.2 points of raw intelligence
+index -- 52.0 against 51.8 -- and by 3.9 points of *effective* intelligence,
+entirely because one fits at 8.61 bpw and the other at 2.94.
+
+below them, ranks 3 through 7 land within 1.7 points of each other, which is
+well inside the error of a retention curve transferred from another model. read
+that band as a tie and pick on the other axes: context, speed, tool-calling
+reliability.
 
 ### the floor scales with active parameters
 
@@ -1478,19 +1642,24 @@ run of terminal-bench 2.1:
 | qwen3.6 35b a3b | 51.5 | 44.9 | -6.6 |
 | qwen3.5 122b a10b | 49.4 | 47.6 | -1.8 |
 | qwen3.5 397b a17b | 52.5 | 51.3 | -1.2 |
+| qwen3.8 27b | 73.0 | 79.8 | +6.8 |
 | nemotron 3 super | 31.0 | 38.6 | +7.6 |
 | nemotron 3.5 lightning | 24.6 | 24.3 | -0.2 |
 
 the honest conclusion is that these gaps are small. claimed numbers on this
 particular benchmark hold up reasonably. the largest overstatement is
 qwen3.6 35b a3b at -6.6, and part of that is the 2.0 to 2.1 version
-difference; the largest gap in either direction is nemotron 3 super at +7.6,
-where the lab *under*-claimed. anyone expecting the card numbers to collapse
-under third-party testing will not find that here.
+difference; the two largest gaps in either direction are *under*-claims, nemotron
+3 super at +7.6 and qwen3.8 27b at +6.8. anyone expecting the card numbers to
+collapse under third-party testing will not find that here.
+
+**qwen3.8 27b points the wrong way for the benchmaxxing thesis**: AA measures
+it seven points *above* what qwen published. a lab writing for the leaderboard
+does not do that.
 
 every row is a card that publishes terminal-bench and a model AA has measured,
-which is what the joined data supports: six of the fourteen cards carrying a
-terminal-bench claim have no AA counterpart, including qwen3.8 27b's 73.0.
+which is what the joined data supports: five of the fourteen cards carrying a
+terminal-bench claim still have no AA counterpart.
 
 ### where it actually happened
 
@@ -1571,7 +1740,7 @@ long to realize it is benchmaxxed." this is contested by several people who
 rate it highly (see
 [laguna is genuinely disputed](#laguna-s-21-is-genuinely-disputed)), but the
 third-party numbers side with the sceptic: laguna s 2.1 sits at 0.239 gscore on
-GBENCH, 88th of 97 models on that board, while poolside's own materials put it
+GBENCH, 89th of 98 models on that board, while poolside's own materials put it
 far higher.
 of everything in the strixhalo.yaml roster, this is the model whose paper
 claims are least corroborated.
@@ -1608,6 +1777,7 @@ than it knows:
 | minimax m2.7 | +0.8 | 52.6 | calibrated |
 | inkling small | -8.9 | 52.9 | calibrated |
 | mimo v2.5 | -9.8 | 56.8 | calibrated |
+| qwen3.8 27b | -10.0 | 68.1 | best in set for its score |
 | deepseek v4 flash 0731 | -14.3 | 69.1 | good for its score |
 | ling 3.0 flash | -17.9 | 50.6 | fine |
 | hy3 | -18.5 | 58.8 | fine |
@@ -1621,6 +1791,13 @@ than it knows:
 | gpt-oss-120b | -49.2 | 30.4 | very overconfident |
 | gemma 4 26b a4b | -50.8 | 39.3 | very overconfident |
 | qwen3 coder next | -62.4 | 36.2 | worst in set |
+
+**qwen3.8 27b passes the check this section proposes.** the detector is a high
+coding score next to a bad hallucination score, and it posts the second-highest
+coding score in the set at 68.1 with the fourth-*best* calibration at -10.0 --
+better than deepseek's -14.3 and half its predecessor's -20.0 at an identical
+size. a model tuned to score buys coding points with confident wrong answers;
+this one improved on both axes at once.
 
 the models with a decent coding score and a terrible hallucination score are
 the ones to be suspicious of. **gemma 4 26b a4b** posts 39.3 coding and 39.0
@@ -1686,7 +1863,7 @@ user runs it not as the main agent but as an adversarial reviewer against a
 frontier model, where it "catches his cowboy-asserted style bullshit better"
 than deepseek or qwen [4].
 
-**how thin is this?** across 134 threads there are 47 sentences mentioning hy3,
+**how thin is this?** across 175 threads there are 48 sentences mentioning hy3,
 of which roughly three are both positive and specific to a 128gb machine -- the
 OP above (running a macbook m5 max, not a strix halo), the video reviewer, and
 one person calling it "by far the best model under 500b, and easily the best
@@ -1804,28 +1981,34 @@ painful to use and made a ton of mistakes Laguna would never make" [9], and
 complaints are common ("Glimmer seems pretty censored?", 145 points). with
 dflash it is reported at 60-150 t/s decode on a 3090 against 40 t/s without.
 
-**its reception fell as the sample grew, even though its volume tripled**,
+**its reception fell as the sample grew, even though its volume quadrupled**,
 which is the clearest argument in this document for not scoring a model on its
-launch week. tracked across three captures a day apart:
+launch week. tracked across five captures:
 
 | capture | mentions | median rel | composite |
 |---|--:|--:|--:|
 | 2026-08-10 | 27 | 68 | 57.4 (5th) |
 | 2026-08-11 (first pass) | 43 | 54 | 53.5 (6th) |
 | 2026-08-11 (with listings) | 79 | 56 | 58.5 (5th) |
+| 2026-08-16 | 108 | 55 | 57.2 (5th) |
+| 2026-08-17 | 111 | 53 | 53.2 (6th) |
 
-the launch-day cohort liked it distinctly more than everyone who arrived after.
-the composite recovered only because *volume* nearly tripled -- more people
-discussing it at a lower reception percentile -- so the two inputs moved in
-opposite directions and largely cancelled. reading the launch-day 68 as its
-reception would have been wrong by 12 points.
+the launch-day cohort liked it distinctly more than everyone who arrived after,
+and the drift has not reversed in the week since: 68 to 53 on reception while
+mentions went 27 to 111. reading the launch-day 68 as its reception would have
+been wrong by 15 points.
 
-artificial analysis now scores it too: 35.1 intelligence, 49.0 coding, 22.9
-agentic, which is mid-pack rather than front-running, against a day-one thread
-titled "Muse-Glimmer-30B finally beats 3.6-27B for the size" (290 points, 150
-comments). the thread is worth reading; the claim in its title is not yet
-supported by anything measured here -- qwen3.6 27b is ahead on effective
-coding (53.2 vs 48.5), agentic (27.2 vs 22.7) and composite, at a similar size.
+artificial analysis scores it at 35.1 intelligence, 49.0 coding, 22.9 agentic,
+which is mid-pack rather than front-running, against a day-one thread titled
+"Muse-Glimmer-30B finally beats 3.6-27B for the size" (290 points, 150
+comments). the thread is worth reading; the claim in its title is still not
+supported by anything measured here -- qwen3.6 27b is ahead on effective coding
+(53.2 vs 48.5), agentic (27.2 vs 22.7) and composite, at a similar size, and
+qwen3.8 27b is now ahead of both by a wide margin at the same size again.
+
+it is on GBENCH now, which says nothing: 8 matches, decision-making only, no
+agentic coding result. that is well under the 1000-match floor the composite
+applies, so it is imputed rather than scored, as hy3's 25 matches are.
 
 ### on benchmarks generally
 
@@ -1862,31 +2045,35 @@ the community reads the box as an MoE machine that disappoints on dense
 models, which matches the speed table above. published measurements include
 gpt-oss-120b at 55 t/s, qwen3-30b-a3b at ~100 t/s, and a 109b model at
 18.3 t/s. rocm remains rough as of april 2026 first-impressions reports;
-vulkan is slower but more reliable. unsloth added AMD support 21 days ago
-(669 points), and vllm rocm landed in lemonade as an experimental backend.
+vulkan is slower but more reliable, though the one reproducible benchmark on
+this box has vulkan 37% *faster* than rocm. unsloth added AMD support 21 days
+ago (669 points), and vllm rocm landed in lemonade as an experimental backend.
 nobody in the hy3 thread itself had tried it on strix halo, though a user in
 another thread mentions running hy3 there alongside laguna and ds4 flash, in
 passing and without a quality judgement.
 
+the sharpest hardware finding is not in the forum data at all: on linux-7.x the
+amdgpu compute `lockup_timeout` default fell from 60s to 2s, which cancels any
+long vulkan op and surfaces as `vk::DeviceLostError` or garbled output. see
+[does it actually run here](#does-it-actually-run-here) for the cmdline fix. it
+reads as a model bug and is not one.
+
 ## what is coming
 
-one release will likely date this document within weeks, and one already has.
+**qwen3.8-27b has landed and taken first place on capability.** announced
+2026-08-02 alongside qwen3.8-max (2729 points), ggufs filled out on 2026-08-14,
+and now scored -- see [the ranking](#the-ranking) and
+[qwen3.8 27b](#qwen38-27b). GBENCH, lmarena and swe-rebench still carry nothing
+for it, which is why it is 2nd on the composite and 1st on everything measured.
+uptake runs ahead of measurement: `unsloth/Qwen3.8-27B-GGUF` is at 2.7m
+downloads, bartowski and ggml-org shipped their own on 2026-08-14, and a dozen
+abliterated derivatives followed within two days. the top of the line, **qwen3.8
+2.4t a95b** (II 57.7), landed open on 2026-08-12 and is twenty times too large
+for this box; **qwen3.8 max** (II 58.1) is not open weights at all.
 
-**qwen3.8-27b** landed while this capture was being written. announced
-2026-08-02 alongside qwen3.8-max (2729 points), the ggufs were still empty
-placeholder repos on 2026-08-13 -- `barozp/Qwen3.8-27B-GGUF` and a matching
-`-MTP-GGUF`, zero files between them -- and `unsloth/Qwen3.8-27B-GGUF` was
-created that same day and filled out on 2026-08-14 with the full quant ladder
-from UD-IQ2_XXS to BF16 plus an mmproj for vision. it is sized in [models nothing has scored](#models-nothing-has-scored)
-and in `registry/models.yaml` at Q8_0, the right
-place for it: **artificial analysis, GBENCH, lmarena and swe-rebench have all
-still scored nothing**, so it has no ranking here and cannot get one from this
-document's own sources. what it has instead is uptake --
-`unsloth/Qwen3.8-27B-GGUF` is at 1.9m downloads, bartowski and ggml-org both
-shipped their own on 2026-08-14, and a dozen abliterated derivatives followed
-within two days. treat the qwen3.6 27b recommendation as standing until one of
-them measures the successor. the top of the line, **qwen3.8 2.4t a95b**
-(II 57.7), landed open on 2026-08-12 and is twenty times too large for this box.
+what to watch, in the order it matters: a GBENCH or swe-rebench result for
+qwen3.8 27b, which would settle first place either way; and a small quant of
+motif 3, the only unfitted model whose shape suits this box.
 
 **longcat-flash-lite-sparse** (meituan) is a 69b-a3b with a ~983k context
 window, weights up but no ggufs yet. that is squarely in the 80-160b gap this
@@ -1929,12 +2116,16 @@ alongside it, for reasons given in each section.
 **a note on comparing captures.** between 2026-08-10 and 2026-08-11 artificial
 analysis set `agenticIndex` to null for 38 models, dropping the sample behind
 the double-counting regression from 181 models to 143; by 2026-08-14 it had
-recovered to 159. the fit barely moves across all of that (R^2 0.9856 ->
-0.9838 -> 0.9846, coefficients 0.415/0.407 -> 0.413/0.406 -> 0.411/0.408), so
-the conclusion stands, but a reader diffing two captures of
-`research/data/artificial-analysis.json` should expect the sample size to move.
-no model on this roster lost its agentic score; the nulled entries are
-non-reasoning variants and small models.
+recovered to 159 and by 2026-08-17 to 161. the fit barely moves across all of
+that (R^2 0.9856 -> 0.9838 -> 0.9846 -> 0.9845, coefficients 0.415/0.407 ->
+0.413/0.406 -> 0.411/0.408 -> 0.406/0.413), so the conclusion stands, but a
+reader diffing two captures of `research/data/artificial-analysis.json` should
+expect the sample size to move. no model on this roster lost its agentic score;
+the nulled entries are non-reasoning variants and small models.
+
+**AA corrects published fields as well as adding them.** `activeParameters` for
+solar open2 250b changed from 250 to 15, moving it from 2 t/s to 28 in the
+[speed](#speed) table. diff two captures for changed values, not only new rows.
 
 ### the memory envelope
 
@@ -2011,7 +2202,7 @@ two hardware facts drive every recommendation below:
 | mistral medium 3.5 |  |  |  |  |  | yes |  |  |  |  |  |  | yes |
 | muse glimmer |  | yes |  |  |  | yes |  |  | yes | yes |  |  | yes |
 | nemotron 3 super |  |  |  |  |  | yes | yes |  |  |  |  |  | yes |
-| nemotron 3.5 lightning |  | yes |  |  |  | yes | yes |  |  | yes |  |  | yes |
+| nemotron 3.5 lightning |  | yes |  |  |  | yes | yes |  |  |  |  |  | yes |
 | ornith 1.0 35b |  | yes |  |  |  | yes |  | yes |  |  | yes |  | yes |
 | qwen-agentworld 35b a3b |  | yes |  |  |  |  |  |  |  |  |  |  | yes |
 | qwen3 coder next |  | yes |  |  |  | yes | yes |  |  |  |  |  | yes |
@@ -2019,11 +2210,11 @@ two hardware facts drive every recommendation below:
 | qwen3.5 397b a17b |  |  |  |  |  | yes |  | yes |  |  |  |  | yes |
 | qwen3.6 27b |  | yes | yes |  |  | yes | yes | yes |  | yes |  |  | yes |
 | qwen3.6 35b a3b |  | yes |  |  |  | yes | yes | yes |  | yes |  |  | yes |
-| qwen3.8 27b |  | yes |  |  |  | yes | yes | yes |  | yes |  |  | yes |
+| qwen3.8 27b |  | yes | yes |  |  | yes | yes | yes |  | yes |  |  | yes |
 | step 3.7 flash |  |  |  |  |  | yes |  |  |  |  |  |  | yes |
 | ternary bonsai 27b |  |  |  |  |  |  |  |  |  |  |  | yes |  |
 
-generated by searching 1,410 GGUF repos from 13 publishers, so a blank means no
+generated by searching 1,412 GGUF repos from 13 publishers, so a blank means no
 repo whose name matches, not a verified absence. the four columns to trust are
 unsloth, bartowski, mradermacher and ggml-org; the rest publish either their own
 model (AngelSlim ships hy3, AtomicChat ling 3.0) or community variants.
@@ -2037,7 +2228,7 @@ the least benchmarked of the three.
 **two roster models have no unsloth quant at all**: hy3 (AngelSlim, tencent's
 own team, plus bartowski) and ling 3.0 flash (AtomicChat only, and nothing
 else in the table). ling 3.0 flash is recommended third in this document on
-one publisher's quant, with 8 reddit mentions -- that is the thinnest evidence
+one publisher's quant, with 12 reddit mentions -- that is the thinnest evidence
 base behind any pick here.
 
 ### what the roster is missing
@@ -2131,22 +2322,25 @@ committed, so the comparison can be audited or re-derived without refetching:
 
 | file | contents |
 |---|---|
-| `research/data/artificial-analysis.json` | 608 models, 348 open weights, scores and params |
-| `research/data/gbench.json` | 97 models, per-language and per-mode game results |
+| `research/data/artificial-analysis.json` | 609 models, 349 open weights, scores and params |
+| `research/data/gbench.json` | 98 models, per-language and per-mode game results |
 | `research/data/gbench-compare-observed.json` | published per-language compare values |
 | `research/data/gguf-sizes.json` | real byte totals per quant tag for 70 repos |
-| `research/data/reddit-localllama.json` | 38 searches, 3 listings, 161 threads, 12,822 comments with reply depth |
+| `research/data/reddit-localllama.json` | 38 searches, 3 listings, 175 threads, 13,614 comments with reply depth |
 | `research/data/hackernews.json` | 9 queries, 54 stories with top comments |
 | `research/data/lmarena.json` | 11 boards, 456 models, elo with vote counts |
 | `research/data/swe-rebench.json` | 116 models, 12,440 task-date windows, 5 languages |
 | `research/data/tbench.json` | terminal-bench 2.0: 73 submissions x 90 tasks, 14,340 per-task trials |
-| `research/data/hf-discussions.json` | 542 discussions across 28 repos, 256 with full threads |
-| `research/data/github-issues.json` | 321 llama.cpp issues with bodies, 20 queries |
+| `research/data/hf-discussions.json` | 548 discussions across 28 repos, 256 with full threads |
+| `research/data/github-issues.json` | 339 llama.cpp issues with bodies, 20 queries |
 | `research/data/level1techs.json` | 165 topics, 600 posts from 9 searches |
-| `research/data/hf-catalog.json` | 300 trending + 1411 publisher repos, for discovery |
+| `research/data/hf-catalog.json` | 300 trending + 1412 publisher repos, for discovery |
 | `research/data/hf-catalog-new.json` | the same listing by creation date, for same-day releases |
 | `research/data/epoch.json` | epoch.ai: 819 ECI rows and 74 benchmarks, 10 of them epoch's own runs |
 | `research/data/model-facts.json` | derived per-model facts: arch, params, native ctx, mtp, thinking knob |
+| `research/data/model-cards.json` | 24 cards, 22 carrying benchmark claims |
+| `research/data/chat-templates/` | 84 chat templates verbatim, 36 base repo and 48 gguf header |
+| `research/data/template-probes.json` | what those templates do when executed: roles, ordering, thinking levels |
 
 the tables in this document are generated from those files by
 `research/build-tables`. the collection scripts and refresh instructions are in
