@@ -103,6 +103,10 @@ models:
     name:
       short: qwen-agentworld 35b a3b
       match: agent[\s-]*world
+    notes: >-
+      a world model for agent environments rather than an assistant: it predicts the
+      next environment state. no benchmark in this corpus measures that, so it is
+      unranked rather than unrated.
     quants:
     - repo: unsloth/Qwen-AgentWorld-35B-A3B-GGUF
       quant: Q8_0
@@ -156,7 +160,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   Qwen/Qwen3-Coder-30B-A3B-Instruct:
     kind: text
     name:
@@ -292,7 +296,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: False
+      default: false
   Qwen/Qwen3.5-122B-A10B:
     kind: text
     name:
@@ -350,7 +354,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   Qwen/Qwen3.5-27B:
     kind: text
     name:
@@ -409,7 +413,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   Qwen/Qwen3.5-35B-A3B:
     kind: text
     name:
@@ -466,7 +470,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   Qwen/Qwen3.5-9B:
     kind: text
     name:
@@ -524,7 +528,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   Qwen/Qwen3.6-27B:
     kind: text
     name:
@@ -598,7 +602,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   Qwen/Qwen3.6-35B-A3B:
     kind: text
     name:
@@ -669,7 +673,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   Qwen/Qwen3.8-27B:
     kind: text
     name:
@@ -742,7 +746,7 @@ models:
     thinking:
       knob: reasoning_effort
       gate: enable_thinking
-      gate_default: True
+      gate_default: true
       accepts: [low, medium, xhigh]
       default: xhigh
       aliases: {high: xhigh}
@@ -816,7 +820,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   baidu/ERNIE-Image-Turbo:
     kind: image
     name:
@@ -842,6 +846,9 @@ models:
     name:
       short: ornith 1.0 35b
       match: ornith[\s-]*1?\.?0?[\s-]*35b|\bornith\b
+    notes: >-
+      qwen3.5-moe architecture despite the bare 35B in the name, and the vendor
+      publishes no active parameter count, so its speed cannot be estimated.
     quants:
     - repo: unsloth/Ornith-1.0-35B-GGUF
       quant: Q8_0
@@ -900,11 +907,14 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   deepreinforce-ai/Ornith-1.0-9B:
     kind: text
     name:
       short: ornith-1.0-9b
+    notes: >-
+      the dense sibling of the 35b. no third-party suite carries either of them; the
+      hub download count is the only evidence there is.
     quants:
     - repo: unsloth/Ornith-1.0-9B-GGUF
       quant: Q8_0
@@ -960,12 +970,12 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   deepseek-ai/DeepSeek-V4-Flash-0731:
     kind: text
     name:
       short: deepseek v4 flash 0731
-      match: deepseek[\s-]*v?4[\s-]*flash|ds4[\s-]*f?|dsv4
+      match: deepseek[\s-]*v?4[\s-]*flash|ds4[\s-]*f?\b|dsv4(?![\s-]*pro)
     quants:
     - repo: unsloth/DeepSeek-V4-Flash-0731-GGUF
       quant: UD-IQ3_XXS
@@ -1009,7 +1019,7 @@ models:
     thinking:
       knob: reasoning_effort
       gate: enable_thinking
-      gate_default: False
+      gate_default: false
       accepts: [high, max]
   fishaudio/s2-pro:
     kind: speech
@@ -1032,11 +1042,15 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   google/embeddinggemma-300M:
     kind: text
     name:
       short: embeddinggemma-300m
+    notes: >-
+      an embedding model: no chat template, no generative benchmark, and nothing here
+      scores it. carried so a consumer reading this registry for a retrieval slot
+      finds the repo and the quant rather than a gap.
     quants:
     - repo: unsloth/embeddinggemma-300m-GGUF
       quant: Q8_0
@@ -1067,6 +1081,9 @@ models:
     kind: text
     name:
       short: functiongemma-270m-it
+    notes: >-
+      270m parameters, below the floor of every suite carried here. it emits function
+      calls and nothing else, which is why no coding index applies to it.
     quants:
     - repo: unsloth/functiongemma-270m-it-GGUF
       quant: Q8_0
@@ -1147,7 +1164,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: False
+      default: false
   google/gemma-4-26B-A4B-it:
     kind: text
     name:
@@ -1198,7 +1215,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: False
+      default: false
   google/gemma-4-31B-it:
     kind: text
     name:
@@ -1251,7 +1268,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: False
+      default: false
   google/gemma-4-E2B-it:
     kind: text
     name:
@@ -1299,7 +1316,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: False
+      default: false
   google/gemma-4-E4B-it:
     kind: text
     name:
@@ -1347,7 +1364,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: False
+      default: false
   hexgrad/Kokoro-82M:
     kind: speech
     name:
@@ -1551,6 +1568,9 @@ models:
     kind: text
     name:
       short: nemotron-3-nano-30b-a3b
+    notes: >-
+      only nvidia's own card measures the nano; no third party in this corpus carries
+      it, which is why it is sized rather than ranked.
     quants:
     - repo: unsloth/Nemotron-3-Nano-30B-A3B-GGUF
       quant: Q8_0
@@ -1600,7 +1620,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16:
     kind: text
     name:
@@ -1675,7 +1695,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   openai/gpt-oss-120b:
     kind: text
     # natively MXFP4 with quantization-aware training: the shipped
@@ -1858,7 +1878,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   stepfun-ai/Step-3.7-Flash:
     kind: text
     # the card, in prose rather than beside the knob: "offers three selectable
@@ -1920,7 +1940,7 @@ models:
     quants:
     - repo: unsloth/Inkling-Small-GGUF
       quant: UD-IQ3_S
-      note: 100.1 gib, the largest that fits 105
+      note: the rung the dashboard's default fit lands on for a 128gb box
     - repo: unsloth/Inkling-Small-GGUF
       quant: UD-Q3_K_XL
       note: 111.3 gib, over a 105 gib host budget
@@ -2011,12 +2031,12 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   inclusionAI/Ling-3.0-flash:
     kind: text
     name:
       short: ling 3.0 flash
-      match: ling[\s-]*3\.0
+      match: ling[\s-]*3\.0(?![\s-]*tiny)
     quants:
     - repo: AtomicChat/Ling-3.0-flash-GGUF
       quant: AD-Q6_K
@@ -2057,7 +2077,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   mistralai/Mistral-Medium-3.5-128B:
     kind: text
     # the card's Recommended Settings: 'none' -> no reasoning, 'high' -> reasoning
@@ -2149,7 +2169,7 @@ models:
     thinking:
       knob: thinking_effort
       gate: enable_thinking
-      gate_default: True
+      gate_default: true
       accepts: [low, high, max]
       default: max
   nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16:
@@ -2191,12 +2211,15 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   prism-ml/Bonsai-27B-gguf:
     kind: text
     name:
       short: bonsai 27b
       match: \bternary[\s-]*bonsai\b|\bbonsai\b
+    notes: >-
+      a qwen3.6-27b derivative, so dense and the same shape. the repo publishes two
+      rungs and nothing between them: Q1_0 at 1.13 bpw and F16 at 15.94.
     quants:
     - repo: prism-ml/Bonsai-27B-gguf
       quant: F16
@@ -2236,12 +2259,15 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   prism-ml/Ternary-Bonsai-27B-gguf:
     kind: text
     name:
       short: ternary bonsai 27b
       match: ternary[\s-]*bonsai[\s-]*27b
+    notes: >-
+      ternary weights, which the bits-per-weight retention curve does not model, so
+      any quant-adjusted score for it would be an extrapolation rather than a fit.
     quants:
     - repo: prism-ml/Ternary-Bonsai-27B-gguf
       quant: F16
@@ -2281,7 +2307,7 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
-      default: True
+      default: true
   tencent/Hy3:
     kind: text
     # the card: reasoning_effort "no_think" (default, direct response), "low",
@@ -2384,3 +2410,313 @@ models:
       leading_system_max: unlimited
       mid_system: reordered
       mid_developer: dropped
+  Qwen/Qwen3.8-2.4T-A95B:
+    kind: text
+    name:
+      short: qwen3.8 2.4t a95b
+      match: qwen\s*-?3\.8[\s-]*2\.4t|2\.4t-?a95b
+    quants:
+    - repo: unsloth/Qwen3.8-2.4T-A95B-GGUF
+      quant: UD-Q1_0
+      note: the smallest rung published is 370 gib, so no quant of this fits any local box.
+        carried because it tops the open-weights board on both AA indices, which makes it the
+        ceiling the runnable models are measured against
+    ids:
+      aa: qwen3-8-2-4t-a95b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+        thinking: xhigh
+    notes: 'thinking cannot be turned off: the card states every response begins with a `<think>`
+      block and the template ships no gate, so there is no `instruct` profile to declare. `reasoning_effort`
+      grades it low/medium/xhigh.'
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: unsloth/Qwen3.8-2.4T-A95B-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: reasoning_effort
+      accepts: [low, medium, xhigh]
+      default: xhigh
+  deepseek-ai/DeepSeek-V4-Pro-0813:
+    kind: text
+    name:
+      short: deepseek v4 pro 0813
+      match: deepseek[\s-]*v?4[\s-]*pro|dsv4[\s-]*pro
+    quants:
+    - repo: unsloth/DeepSeek-V4-Pro-0813-GGUF
+      quant: UD-Q4_K_XL
+      note: unsloth has published two rungs so far and the smaller is 791 gib. sized to show
+        the gap between the flagship and the flash release beside it
+    ids:
+      aa: deepseek-v4-pro
+      gbench: deepseek/deepseek-v4-pro-0813
+      lmarena: deepseek-v4-pro
+      swerebench: DeepSeek-V4 Pro [high]
+      epoch: ''
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    notes: 'same split as the flash release: the card recommends top_p 0.95 for agentic use
+      and 1.0 otherwise, and this profile claims `tools`, so it takes the agentic number. generation_config.json
+      ships the 1.0, which is the other case rather than a correction of this one.'
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: unsloth/DeepSeek-V4-Pro-0813-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: reordered
+      mid_developer: ok
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: false
+      accepts: [high, max]
+  MiniMaxAI/MiniMax-M3:
+    kind: text
+    name:
+      short: minimax m3
+      match: minimax[\s-]*m3|\bmm3\b
+    quants:
+    - repo: unsloth/MiniMax-M3-GGUF
+      quant: UD-IQ1_M
+      note: 428b total; the smallest rung is 120 gib, so it clears a 128gb box only with nothing
+        left for context. the roster carries it for the comparison rather than to run
+    ids:
+      aa: minimax-m3
+      gbench: minimax/minimax-m3
+      lmarena: minimax-m3
+      swerebench: MiniMax M3
+      epoch: MiniMax-M3
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 40
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    turns:
+      source: unsloth/MiniMax-M3-GGUF
+      developer: as-system
+      leading_system_max: 1
+      mid_system: dropped
+      mid_developer: dropped
+  zai-org/GLM-5.2:
+    kind: text
+    name:
+      short: glm-5.2
+      match: glm[\s-]*5\.2
+    quants:
+    - repo: unsloth/GLM-5.2-GGUF
+      quant: UD-IQ1_S
+      note: 753b total and the smallest rung is 202 gib. the second most discussed model in
+        this corpus after the qwen3.x line, and nothing here runs it
+    ids:
+      aa: glm-5-2
+      gbench: z.ai/glm-5.2
+      lmarena: ''
+      swerebench: ''
+      epoch: glm-5.2
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: unsloth/GLM-5.2-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [high]
+  zai-org/GLM-4.5-Air:
+    kind: text
+    name:
+      short: glm-4.5-air
+      match: glm[\s-]*4\.5[\s-]*air
+    quants:
+    - repo: unsloth/GLM-4.5-Air-GGUF
+      quant: UD-Q6_K_XL
+      note: 106b/12b and a year old, still discussed as the model that fits when the newer ones
+        do not
+    ids:
+      aa: glm-4-5-air
+      gbench: ''
+      lmarena: glm-4.5-air
+      swerebench: GLM-4.5 Air
+      epoch: GLM-4.5-Air
+    sampling:
+      thinking:
+        source: tuned-here
+        note: neither zai's card nor unsloth's documents a sampler set for this model and its
+          generation_config.json carries none, so these are the family numbers GLM-5.2's card
+          publishes
+        temp: 1.0
+        top_p: 0.95
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: unsloth/GLM-4.5-Air-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  Motif-Technologies/Motif-3:
+    kind: text
+    name:
+      short: motif 3
+      match: \bmotif[\s-]*3\b
+    quants:
+    - repo: avar6/Motif-3-gguf
+      quant: Q3_K_M-mixed
+      note: no unsloth or bartowski repo exists, so the five hand-rolled rungs here are what
+        there is; the mixed Q3 is the only one under 145 gib
+    ids:
+      aa: motif-3
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: generation-config
+        temp: 1.0
+        top_p: 0.95
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: avar6/Motif-3-gguf
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  inclusionAI/Ling-3.0-tiny:
+    kind: text
+    name:
+      short: ling 3.0 tiny
+      match: ling[\s-]*3\.0[\s-]*tiny
+    quants:
+    - repo: bartowski/Ling-3.0-tiny-GGUF
+      quant: Q8_0
+      note: 7.9b total and 1.3b active, the smallest moe on the roster. q8 is 7.8 gib, so the
+        whole ladder fits and the question is only whether it is worth the slot
+    ids:
+      aa: ling-3-0-tiny
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: bartowski/Ling-3.0-tiny-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true

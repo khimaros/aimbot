@@ -30,52 +30,66 @@ GIB = 2 ** 30
 # run at ~109 gib. use --budget to test the sensitivity of the ranking.
 BUDGET_GIB = 105.0
 
-# AA model name -> gguf repo, and the quant to actually operate at. dense and
-# small-moe models cap at Q8: past that the bytes buy nothing and cost decode.
-# where a -MTP- repo exists the roster points at it, because that is what
-# etc/llama-swap/strixhalo.yaml runs: the MTP head ships inside the weights
-# rather than as a sidecar, so the plain repo is 0.42gib smaller and cannot
-# speculate. sizing the plain repo would understate what is actually resident.
-ROSTER = [
-    ("DeepSeek V4 Flash 0731 (Reasoning, Max Effort)", "unsloth/DeepSeek-V4-Flash-0731-GGUF", None),
-    ("Hy3", "AngelSlim/Hy3-GGUF", None),
-    ("Inkling Small", "unsloth/Inkling-Small-GGUF", None),
-    ("MiniMax-M2.7", "unsloth/MiniMax-M2.7-GGUF", None),
-    ("MiMo-V2.5", "unsloth/MiMo-V2.5-GGUF", None),
-    ("Ling 3.0 Flash", "AtomicChat/Ling-3.0-flash-GGUF", None),
-    ("Qwen3.6 27B (Reasoning)", "unsloth/Qwen3.6-27B-MTP-GGUF", "Q8_0"),
-    ("Muse Glimmer (high)", "unsloth/Muse-Glimmer-30B-GGUF", "Q8_0"),
-    ("Qwen3.5 122B A10B (Reasoning)", "unsloth/Qwen3.5-122B-A10B-GGUF", None),
-    ("Qwen3.6 35B A3B (Reasoning)", "unsloth/Qwen3.6-35B-A3B-MTP-GGUF", "Q8_0"),
-    ("Step 3.7 Flash", "unsloth/Step-3.7-Flash-GGUF", None),
-    ("Gemma 4 31B (Reasoning)", "unsloth/gemma-4-31B-it-GGUF", "UD-Q8_K_XL"),
-    ("Gemma 4 26B A4B (Reasoning)", "unsloth/gemma-4-26B-A4B-it-GGUF", "Q8_0"),
-    ("Nemotron 3 Super 120B A12B (Reasoning)", "unsloth/Nemotron-3-Super-120B-A12B-GGUF", None),
-    ("gpt-oss-120b (high)", "unsloth/gpt-oss-120b-GGUF", "UD-Q8_K_XL"),
-    ("Qwen3 Coder Next", "unsloth/Qwen3-Coder-Next-GGUF", "Q8_0"),
-    ("Nemotron 3.5 Lightning", "bartowski/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF", "Q8_0"),
-    ("Mistral Medium 3.5", "unsloth/Mistral-Medium-3.5-128B-GGUF", None),
-    ("Solar Open2 250B", "prometheusAIR/Solar-Open2-250B-GGUF", None),
-    # no AA entry yet, so it declares its own shape; see MODELS.md
-    ("Qwen3.8 27B", "unsloth/Qwen3.8-27B-GGUF", "Q8_0", (27.8, 27.8)),
-]
+# MODELS.md ranks a model at the quant that fits the budget above, and caps
+# some of them below it: past Q8 the extra bytes buy nothing measurable and cost
+# decode, so every dense model and small moe is pinned there. that is a POLICY --
+# "what to run at 105 gib" is a choice this document makes, and the registry
+# holds facts -- so it lives here, keyed by the registry's own `name.short`.
+# everything else about the roster is derived: which models, from which repo,
+# with which ids, comes from registry/models.yaml. it used to be a table here,
+# and adding a model to the registry then left this document silently unaware
+# of it.
+PINS = {
+    "qwen3.6 27b": "Q8_0",
+    "qwen3.6 35b a3b": "Q8_0",
+    "qwen3.8 27b": "Q8_0",
+    "muse glimmer": "Q8_0",
+    "gemma 4 31b": "UD-Q8_K_XL",
+    "gemma 4 26b a4b": "Q8_0",
+    "gpt-oss-120b": "UD-Q8_K_XL",
+    "qwen3 coder next": "Q8_0",
+    "nemotron 3.5 lightning": "Q8_0",
+}
 
-# Models with no artificial analysis entry, and none in GBENCH, lmarena or
-# swe-rebench either -- checked, not assumed. No composite score is possible
-# for them, so they are sized and counted rather than ranked. They are here
-# because etc/llama-swap/strixhalo.yaml runs two of them and the hub says the
-# others are downloaded more than most of the roster.
-#   (display, repo, quant pin, total b, active b or None, note)
-UNSCORED = [
-    ("ornith 1.0 35b", "unsloth/Ornith-1.0-35B-GGUF", "Q8_0", 35.0, None,
-     "qwen3.5-moe arch despite the bare 35B; active params not published"),
-    ("qwen-agentworld 35b a3b", "unsloth/Qwen-AgentWorld-35B-A3B-GGUF", "Q8_0", 34.7, 3.0,
-     "moe, 34.7b total confirmed from the base repo"),
-    ("bonsai 27b", "prism-ml/Bonsai-27B-gguf", None, 27.8, 27.8,
-     "a qwen3.6-27b derivative, so dense and the same shape"),
-    ("ternary bonsai 27b", "prism-ml/Ternary-Bonsai-27B-gguf", None, 27.8, 27.8,
-     "ternary weights; the quant curve here does not model that"),
-]
+
+def default_repo(m):
+    """Which repo a model is READ from -- the same rule the viewer applies.
+
+    Where a model ships two builds the registry says which one can speculate:
+    qwen3.6-27b's plain repo is marked `speculative: false` and only the -MTP-
+    one carries the nextn head, and taking whichever was listed first sized the
+    build that cannot draft.
+    """
+    repos = []
+    for q in m.get("quants") or []:
+        if q["repo"] not in repos:
+            repos.append(q["repo"])
+    if (m.get("speculative") or {}).get("type"):
+        for r in repos:
+            if any(q["repo"] == r and q.get("speculative") is not False
+                   for q in m.get("quants") or []):
+                return r
+    return repos[0] if repos else None
+
+
+def roster():
+    """Every text model in the registry, with the repo and ids to read it by.
+
+    Yields (short, repo, pin, aa_slug, model). A model with no gguf repo is
+    skipped; everything else is filtered downstream, by whether a source
+    measured it and by whether a quant of it fits.
+    """
+    out = []
+    for repo, m in registry_models().items():
+        if m.get("kind", "text") != "text":
+            continue
+        gguf = default_repo(m)
+        if not gguf:
+            continue
+        short = (m.get("name") or {}).get("short") or repo.lower()
+        out.append((short, gguf, PINS.get(short), (m.get("ids") or {}).get("aa"), m))
+    return out
+
 
 # a gscore over a handful of games is noise. hy3 has 24 matches against
 # deepseek's 46372, so it is excluded rather than compared.
@@ -140,6 +154,13 @@ WEIGHTS = {"eff_coding": 0.30, "eff_agentic": 0.30,
            "gbench": 0.15, "lmarena": 0.10, "swerebench": 0.10,
            "sentiment": 0.05, "card": 0.05}
 CARD_BIAS = 1.0
+
+# the components that are somebody MEASURING the model. a model carrying none of
+# them cannot be ranked: the composite imputes what is missing, so a row with
+# only a sentiment count comes out at the set median wearing a model's name.
+# `card` is the model measuring itself and `sentiment` is people talking, so
+# neither qualifies on its own.
+THIRD_PARTY = ("eff_coding", "eff_agentic", "gbench", "lmarena", "swerebench")
 
 # retention vs bits-per-weight, fitted to unsloth's aider polyglot sweep of
 # deepseek v3.1 (671b): bf16 71.6 -> 5bit 70.7 -> 4bit 69.7 -> 3bit 68.4 ->
@@ -338,64 +359,98 @@ def sentiment_score(ids, name):
     return volume * rel
 
 
+def model_facts():
+    """Derived per-model facts: parameter counts, for a model AA has not scored."""
+    d = optional("data/model-facts.json")
+    return d.get("models") or {k: v for k, v in d.items() if not k.startswith("_")}
+
+
+# a repo carries more than quants: vision projectors, drafter heads and imatrix
+# files all sit beside the weights. a full filename is NOT excluded here, unlike
+# in the viewer -- AngelSlim publishes hy3's mtp build as `Hy3-Q2_K_XL-mtp.gguf`
+# and that build is the one this document sizes, so the ceiling below is what
+# keeps a repo's stray bf16 upload out rather than its file extension.
+NOT_A_QUANT = re.compile(r"^(mmproj|mtp|dspark|dflash|eagle3)|imatrix", re.I)
+
+# past q8 the extra bytes buy nothing measurable and cost decode speed, so the
+# fit stops there rather than handing a small model bf16 because it happened to
+# fit. same ceiling the viewer opens on, in the same units.
+CAP_BPW = 11.0
+
+
+def quant_at(repo, sizes, pin, budget, params_b):
+    """The quant this document ranks a model at: the pin, or the largest that fits.
+
+    "Fits" is two limits, not one -- the memory budget and the q8 ceiling --
+    and a pin is honoured only where it clears both, so a stale pin cannot put
+    a model on a rung this document says nothing runs at.
+    """
+    real = {k: v for k, v in (sizes.get(repo) or {}).items()
+            if not NOT_A_QUANT.search(k)}
+    bpw = lambda b: b * 8 / (params_b * 1e9) if params_b else 0
+    ok = {k: v for k, v in real.items()
+          if v / GIB <= budget and bpw(v) <= CAP_BPW}
+    if not ok:
+        return None, None
+    if pin and pin in ok:
+        return pin, ok[pin] / GIB
+    gib, quant = sorted((v / GIB, k) for k, v in ok.items())[-1]
+    return quant, gib
+
+
 def load(budget=BUDGET_GIB):
+    """Every registry text model with a quant that fits, joined to its scores.
+
+    A model no source has measured and whose shape nothing publishes cannot be
+    placed at all, so it drops out here and `--table unscored` says so instead.
+    """
     aa = json.load(open("data/artificial-analysis.json"))
-    by_name = {v["name"]: v for v in aa.values()}
     sizes = json.load(open("data/gguf-sizes.json"))
+    facts = model_facts()
     srcs = source_ids()
-    canon_by_aa = {i["aa"]: n for n, i in srcs.items() if i.get("aa")}
     rows = []
-    for entry in ROSTER:
-        name, repo, pin = entry[:3]
-        # a roster entry may declare (total b, active b) for a model artificial
-        # analysis has not scored. it then ranks on whatever else measured it,
-        # with the rest imputed -- which is the only way a model this box runs
-        # can appear here at all before AA gets to it
-        declared = entry[3] if len(entry) > 3 else None
-        d, quants = by_name.get(name), sizes.get(repo, {})
+    for short, repo, pin, aa_slug, m in roster():
         # a roster repo the sizes do not carry drops the model from every table
         # without a word, which is how canonicalising two gemma repo spellings
         # silently deleted two rows. say so instead
-        if not quants:
-            print("!!! %-32s no sizes for %s" % (name, repo), file=sys.stderr)
+        if not sizes.get(repo):
+            print("!!! %-32s no sizes for %s" % (short, repo), file=sys.stderr)
             continue
-        if not d and not declared:
-            continue
+        d = aa.get(aa_slug) if aa_slug else None
+        f = facts.get(next(iter(k for k, v in registry_models().items() if v is m))) or {}
+        total = (d or {}).get("totalParameters") or f.get("params_total_b")
+        # AA has not scored it, but the weights say what shape it is, so it can
+        # still rank on whatever else measured it with the rest imputed
         if d is None:
-            d = {"name": name, "slug": "", "totalParameters": declared[0],
-                 "activeParameters": declared[1], "intelligenceIndex": None,
-                 "codingIndex": None, "agenticIndex": None}
-        # drop non-weight files: vision projectors and speculative drafters both
-        # live in the repo but are not a quant of the model
-        real = {k: v for k, v in quants.items()
-                if not k.startswith("mmproj:")
-                and not re.match(r"(dspark|dflash|mtp|eagle3)\b", k, re.I)}
-        if pin and pin in real:
-            quant, gib = pin, real[pin] / GIB
-        else:
-            fit = sorted(((v / GIB, k) for k, v in real.items() if v / GIB <= budget))
-            if not fit:
+            if not total:
                 continue
-            gib, quant = fit[-1]
-        bpw = gib * GIB * 8 / (d["totalParameters"] * 1e9)
-        rm = by_gguf_repo().get(repo) or {}
-        ret = 1.0 if rm.get("native_low_bpw") else retention(bpw)
-        short = (rm.get("name") or {}).get("short") or name.lower()
-        canon = canon_by_aa.get(d.get("slug")) or (short if short in srcs else "")
-        key = card_repo(short)
-        ids = srcs.get(canon, {})
+            d = {"name": short, "slug": "", "totalParameters": total,
+                 "activeParameters": f.get("params_active_b"),
+                 "intelligenceIndex": None, "codingIndex": None,
+                 "agenticIndex": None}
+        quant, gib = quant_at(repo, sizes, pin, budget, total)
+        if quant is None:
+            continue
+        bpw = gib * GIB * 8 / (total * 1e9)
+        ret = 1.0 if m.get("native_low_bpw") else retention(bpw)
+        ids = srcs.get(short, {})
         # an unmeasured component stays None so the composite imputes it; scoring
         # it 0 would read as "measured, and bad"
         scale = lambda v: v * ret if isinstance(v, (int, float)) else None
-        rows.append(dict(name=short, d=d, repo=repo, quant=quant,
+        row = dict(name=short, d=d, repo=repo, quant=quant,
                          gib=gib, bpw=bpw, ret=ret,
                          eff=scale(d.get("intelligenceIndex")),
                          eff_coding=scale(d.get("codingIndex")),
                          eff_agentic=scale(d.get("agenticIndex")),
                          gbench=gbench_score(ids), lmarena=lmarena_score(ids),
                          swerebench=swerebench_score(ids),
-                         sentiment=sentiment_score(ids, canon),
-                         card=card_score(key), ids=ids))
+                   sentiment=sentiment_score(ids, short),
+                   card=card_score(card_repo(short)), ids=ids)
+        # nothing measured it on any weighted component, so a composite would be
+        # the set median wearing a model's name. `--table unscored` says so
+        # instead of ranking it
+        if any(row[k] is not None for k in THIRD_PARTY):
+            rows.append(row)
     return rows
 
 
@@ -569,14 +624,66 @@ def table_effective(rows):
     # bottom rather than being dropped: its size and retention are still facts
     for r in sorted(rows, key=lambda r: (r["eff"] is not None, r["eff"] or 0), reverse=True):
         d = r["d"]
-        print("| %s | %gb / %gb | %s | %.1f | %.2f | %s | %.3f | **%s** |" % (
-            r["name"], d["totalParameters"], d["activeParameters"],
-            quant_label(r["quant"]), r["gib"], r["bpw"],
+        shape = "%gb / %s" % (d["totalParameters"],
+                              "%gb" % d["activeParameters"]
+                              if d.get("activeParameters") else "?")
+        print("| %s | %s | %s | %.1f | %.2f | %s | %.3f | **%s** |" % (
+            r["name"], shape, quant_label(r["quant"]), r["gib"], r["bpw"],
             num(d["intelligenceIndex"]), r["ret"], num(r["eff"])))
 
 
 # t/s measured on a 128gb strix halo, for calibration against the estimate
 MEASURED = {"gpt-oss-120b": "55", "qwen3.6 27b": "7.4"}
+
+
+def hub_popularity():
+    """repo -> its hub listing row, for downloads and likes."""
+    cat = optional("data/hf-catalog.json")
+    pop = {r["id"]: r for r in (cat.get("trending") or [])}
+    for rows_ in (cat.get("authors") or {}).values():
+        for r in rows_:
+            pop.setdefault(r["id"], r)
+    return pop
+
+
+def unranked(budget=BUDGET_GIB):
+    """(short, repo, quant, gib, facts, model) for every roster model not ranked.
+
+    Two reasons a model is here and they are different questions, so the caller
+    splits them: nothing measured it, or nothing that fits measures it.
+    """
+    sizes = json.load(open("data/gguf-sizes.json"))
+    facts = model_facts()
+    ranked = {r["name"] for r in load(budget)}
+    out = []
+    for short, repo, pin, aa_slug, m in roster():
+        if short in ranked:
+            continue
+        f = facts.get(next(iter(k for k, v in registry_models().items() if v is m))) or {}
+        # the registry's own pin, not this document's budget rule: a model that
+        # does not fit is being SIZED here rather than ranked, and the size to
+        # report is the one the registry recommends
+        rp = next((q["quant"] for q in m.get("quants") or [] if q["repo"] == repo), None)
+        b = (sizes.get(repo) or {}).get(rp or "")
+        if b is None:
+            quant, gib = quant_at(repo, sizes, pin, budget, f.get("params_total_b"))
+        else:
+            quant, gib = rp, b / GIB
+        out.append((short, repo, quant, gib, f, m))
+    return out
+
+
+def size_row(short, repo, quant, gib, f, m, pop):
+    p = pop.get(repo) or {}
+    note = (m.get("quants") or [{}])[0].get("note") or m.get("notes") or ""
+    return "| %s | %s | %s | %s / %s | %s | %s | %s |" % (
+        short, quant_label(quant) if quant else "-",
+        "%.1f" % gib if gib else "?",
+        "%gb" % f["params_total_b"] if f.get("params_total_b") else "?",
+        "%gb" % f["params_active_b"] if f.get("params_active_b") else "?",
+        format(p.get("downloads") or 0, ",") if p else "-",
+        p.get("likes") if p else "-",
+        note.replace("\n", " ").strip())
 
 
 def table_unscored(_rows, budget=BUDGET_GIB):
@@ -588,36 +695,28 @@ def table_unscored(_rows, budget=BUDGET_GIB):
     -- leaving them out -- silently implies the roster is exhaustive when two
     of these are running on the target machine right now.
     """
-    sizes = json.load(open("data/gguf-sizes.json"))
-    cat = optional("data/hf-catalog.json")
-    pop = {}
-    for r in (cat.get("trending") or []):
-        pop[r["id"]] = r
-    for rows_ in (cat.get("authors") or {}).values():
-        for r in rows_:
-            pop.setdefault(r["id"], r)
+    pop = hub_popularity()
     print("| model | quant | size (gib) | total / active | downloads | likes | note |")
     print("|---|---|--:|---|--:|--:|---|")
-    for name, repo, pin, tot, act, note in UNSCORED:
-        quants = sizes.get(repo) or {}
-        real = {k: v for k, v in quants.items()
-                if not k.startswith("mmproj:")
-                and not re.match(r"(dspark|dflash|mtp|eagle3)\b", k, re.I)}
-        if not real:
+    for short, repo, quant, gib, f, m in unranked(budget):
+        if gib and gib > budget:
             continue
-        if pin and pin in real:
-            quant, gib = pin, real[pin] / GIB
-        else:
-            fit = sorted(((v / GIB, k) for k, v in real.items() if v / GIB <= budget))
-            if not fit:
-                continue
-            gib, quant = fit[-1]
-        p = pop.get(repo) or {}
-        print("| %s | %s | %.1f | %s / %s | %s | %s | %s |" % (
-            name, quant_label(quant), gib, "%gb" % tot,
-            ("%gb" % act) if act else "?",
-            format(p.get("downloads") or 0, ",") if p else "-",
-            p.get("likes") if p else "-", note))
+        print(size_row(short, repo, quant, gib, f, m, pop))
+
+
+def table_oversize(_rows, budget=BUDGET_GIB):
+    """The models this box cannot hold, sized so the gap is a number.
+
+    They are carried because they are what the runnable models are being
+    compared against: dropping them would leave the roster looking like the
+    whole of open weights rather than the part of it that fits.
+    """
+    pop = hub_popularity()
+    print("| model | smallest quant | size (gib) | total / active | downloads | likes | note |")
+    print("|---|---|--:|---|--:|--:|---|")
+    rows = [r for r in unranked(budget) if r[3] and r[3] > budget]
+    for short, repo, quant, gib, f, m in sorted(rows, key=lambda r: r[3]):
+        print(size_row(short, repo, quant, gib, f, m, pop))
 
 
 def table_speed(rows, eff_bw=160e9):
@@ -626,7 +725,12 @@ def table_speed(rows, eff_bw=160e9):
     print("|---|--:|--:|--:|--:|---|")
     out = []
     for r in rows:
-        b = r["d"]["activeParameters"] * 1e9 * r["bpw"] / 8
+        # no published active count, so there is nothing to divide the bandwidth
+        # by. a guess here would read like a measurement, so the row is absent
+        active = r["d"].get("activeParameters")
+        if not active:
+            continue
+        b = active * 1e9 * r["bpw"] / 8
         out.append((eff_bw / b, r, b))
     for ts, r, b in sorted(out, reverse=True):
         d = r["d"]
@@ -642,7 +746,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--table",
                     choices=["score", "fit", "effective", "arena", "weights",
-                             "speed", "unscored", "all"],
+                             "speed", "unscored", "oversize", "all"],
                     default="all")
     ap.add_argument("--budget", type=float, default=BUDGET_GIB,
                     help="gib available for weights (default %(default)s)")
@@ -662,7 +766,7 @@ def main():
     for name, fn in [("score", table_score), ("fit", table_fit),
                      ("effective", table_effective), ("arena", table_arena),
                      ("weights", table_weights), ("speed", table_speed),
-                     ("unscored", table_unscored)]:
+                     ("unscored", table_unscored), ("oversize", table_oversize)]:
         if args.table in (name, "all"):
             if args.table == "all":
                 print("\n## %s\n" % name)

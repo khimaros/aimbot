@@ -6,6 +6,9 @@ help:
 	@echo "to refresh published quant sweeps, run 'make curves'"
 	@echo "to rebuild the github pages viewer, run 'make site'"
 	@echo "to test the viewer end to end, run 'make test-e2e'"
+	@echo "to run the whole research sweep, run 'make sweep'"
+	@echo "to see what a sweep left for a human, run 'make sweep-report'"
+	@echo "to check everything before committing, run 'make precommit'"
 .PHONY: help
 
 lint:
@@ -60,3 +63,16 @@ test-e2e: site
 
 test: test-e2e
 .PHONY: test
+
+# the whole research sweep: collect, derive, build, check, then the punch list
+sweep:
+	./scripts/sweep
+.PHONY: sweep
+
+# what the last sweep found that only a human can decide
+sweep-report:
+	./scripts/sweep --report
+.PHONY: sweep-report
+
+precommit: lint test-e2e
+.PHONY: precommit

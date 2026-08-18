@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+
+"""Run the whole research sweep: collect, derive, build, check.
+
+Every capture here is point-in-time and every generated file is downstream of
+several of them, so a partial refresh is how MODELS.md ends up quoting one
+capture and docs/ another. This runs the documented order in one command.
+
+    scripts/sweep                # everything
+    scripts/sweep --stage collect    # just the fetchers
+    scripts/sweep --stage derive     # registry blocks from the captures
+    scripts/sweep --stage build      # MODELS.md, usecase, docs/
+    scripts/sweep --stage check      # lint and the e2e test
+    scripts/sweep --report           # only the punch list, fetch nothing
+
+The stages are ordered and each depends on the one before it:
+
+  collect  the fetchers. leaderboards first because they are cheap and etagged,
+           forums second because they are slow, discovery last. the forum
+           collectors take their discovery flags here rather than in a comment
+           somewhere -- `--front` is what turns up a release nobody wrote a
+           query for, and a sweep that omits it only ever finds what the
+           previous sweep already knew about
+  derive   the registry blocks that are executed rather than typed: turns and
+           thinking from the chat templates, source ids, sampler provenance
+  build    the rollups and documents. sentiment before usecase because usecase
+           joins it, usecase before tables because the tables read the rollup
+  check    lint and the shipped viewer, booted against the data just written
+
+`--report` is the part worth reading after a sweep. Nothing here decides that a
+model belongs on the roster or writes a judgement about it, so the run ends by
+listing what a human still has to look at: trending repos the registry does not
+carry, models no benchmark has scored, and every field a collector could not
+fill.
+"""
+
+import argparse
+import os
+import subprocess
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.join(HERE, "..")
+RESEARCH = os.path.join(ROOT, "research")
+
+# (label, argv, cwd). the fetchers, in the order the data depends on: nothing
+# here reads another's output, but the slow ones are last so a failure in a
+# cheap one surfaces in seconds rather than in twenty minutes.
+COLLECT = [
+    ("artificial analysis", ["./fetch-artificial-analysis"]),
+    ("gbench", ["./fetch-gbench"]),
+    ("lmarena", ["./fetch-lmarena"]),
+    ("swe-rebench", ["./fetch-swerebench"]),
+    ("terminal-bench", ["./fetch-tbench"]),
+    ("epoch", ["./fetch-epoch"]),
+    # discovery: the only collectors that can surface a model nobody added
+    ("hub catalog (trending)", ["./fetch-hf-catalog"]),
+    ("hub catalog (newest)", ["./fetch-hf-catalog", "--sort", "createdAt",
+                              "--out", "data/hf-catalog-new.json"]),
+    # registry-driven: these read registry/models.yaml, so a model added since
+    # the last sweep gets its facts here
+    ("gguf sizes", ["./fetch-gguf-sizes"]),
+    ("model facts", ["./fetch-model-facts"]),
+    ("chat templates", ["./fetch-chat-templates"]),
+    ("model cards", ["./fetch-model-cards"]),
+    # forums. --front is the half that finds new threads: the search index only
+    # returns what QUERIES already asks about, and lags the sub by hours
+    ("reddit", ["./fetch-reddit", "--harvest", "10", "--comments", "120",
+                "--front", "14"]),
+    ("hacker news", ["./fetch-hackernews"]),
+    ("level1techs", ["./fetch-level1techs"]),
+    ("huggingface discussions", ["./fetch-hf-discussions"]),
+    ("github issues", ["./fetch-github-issues"]),
+]
+
+DERIVE = [
+    ("template probes", ["./analyze-chat-templates", "--json",
+                         "data/template-probes.json"], RESEARCH),
+    ("turns + thinking", ["./scripts/resolve-turns", "--write"], ROOT),
+    ("source ids", ["./scripts/resolve-ids", "--write"], ROOT),
+    ("sampler provenance", ["./scripts/resolve-samplers", "--write"], ROOT),
+    ("quant sweeps", ["./fetch-quant-sweeps"], RESEARCH),
+]
+
+BUILD = [
+    ("sentiment", ["./analyze-task-mentions", "--json", "data/sentiment.json"], RESEARCH),
+    ("usecase rollup", ["./analyze-usecase"], RESEARCH),
+    ("MODELS.md tables", ["./refresh-tables"], RESEARCH),
+    ("viewer", ["./scripts/build-viewer"], ROOT),
+]
+
+CHECK = [
+    ("lint", ["make", "lint"], ROOT),
+    ("e2e", ["make", "test-e2e"], ROOT),
+]
+
+# what no collector can decide. each is (heading, argv, cwd); a sweep ends by
+# printing them, because "which of these belongs on the roster" is a judgement
+REPORT = [
+    ("trending repos the registry does not carry",
+     ["./analyze-catalog", "--candidates", "--top", "25"], RESEARCH),
+    ("roster models no benchmark suite has scored",
+     ["./build-tables", "--table", "unscored"], RESEARCH),
+    ("models with a graded thinking knob and no declared levels",
+     ["./scripts/models-validate", "--thinking"], ROOT),
+    ("modalities disagreeing with the model's own config",
+     ["./scripts/models-validate", "--modalities"], ROOT),
+    ("models with no written judgement",
+     ["./analyze-usecase", "--missing"], RESEARCH),
+]
+
+
+def run(label, argv, cwd, keep_going):
+    """Run one step, timing it. A collector that fails degrades to its cache."""
+    print("\n=== %s ===" % label, flush=True)
+    t = time.time()
+    code = subprocess.run(argv, cwd=cwd).returncode
+    print("--- %s: exit %d in %.0fs ---" % (label, code, time.time() - t), flush=True)
+    if code and not keep_going:
+        sys.exit("%s failed" % label)
+    return code
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--stage", choices=["collect", "derive", "build", "check", "all"],
+                    default="all")
+    ap.add_argument("--refresh", action="store_true",
+                    help="pass --refresh to every collector, ignoring the http cache")
+    ap.add_argument("--report", action="store_true",
+                    help="print the punch list and exit without fetching anything")
+    ap.add_argument("--keep-going", action="store_true",
+                    help="carry on after a failing step instead of stopping")
+    args = ap.parse_args()
+
+    if args.report:
+        return report()
+
+    failed = []
+    if args.stage in ("collect", "all"):
+        for label, argv in COLLECT:
+            if run(label, argv + (["--refresh"] if args.refresh else []),
+                   RESEARCH, args.keep_going):
+                failed.append(label)
+    for stage, steps in (("derive", DERIVE), ("build", BUILD), ("check", CHECK)):
+        if args.stage in (stage, "all"):
+            for label, argv, cwd in steps:
+                if run(label, argv, cwd, args.keep_going):
+                    failed.append(label)
+
+    if args.stage in ("collect", "all"):
+        report()
+    if failed:
+        sys.exit("\n%d step(s) failed: %s" % (len(failed), ", ".join(failed)))
+
+
+def report():
+    """What the sweep found that only a human can act on."""
+    print("\n" + "=" * 72)
+    print("what still needs a decision")
+    print("=" * 72)
+    for heading, argv, cwd in REPORT:
+        print("\n## %s\n" % heading, flush=True)
+        subprocess.run(argv, cwd=cwd)
+
+
+if __name__ == "__main__":
+    main()

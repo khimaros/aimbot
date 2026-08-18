@@ -1,0 +1,140 @@
+# contributing
+
+this repo publishes facts about models and the research behind them. almost
+everything in it is derived, so the first question about any change is **which
+file is the source**. get that right and the rest regenerates.
+
+## the source files
+
+only these are written by hand. everything else is output.
+
+```
+registry/models.yaml            per-model facts. the quant to prefer and why,
+                                the sampling numbers, capability tags, notes
+registry/sampling.yaml          the profile names and what each one means
+research/usecase-assessed.json  the written judgement about each model
+research/repos.txt              gguf repos to size and read discussions from
+research/publishers.txt         publishers whose listings are worth watching
+research/build-tables           the memory policy: what to run at what budget
+MODELS.md                       the prose between the generated blocks
+```
+
+`registry/models.yaml` is fact and `usecase-assessed.json` is judgement, and
+the split is deliberate: `make usecase` recomputes every number and never
+touches the judgement, so a diff shows measurement and opinion moving
+separately.
+
+## the sweep
+
+one command runs the whole thing:
+
+```
+make sweep            # collect, derive, build, check, then the punch list
+make sweep-report     # only the punch list, fetching nothing
+```
+
+it has four stages and they are ordered, because each reads what the one before
+it wrote. run them individually with `scripts/sweep --stage <name>`:
+
+**collect** every fetcher. leaderboards first because they are cheap and
+etagged, then the hub, then the forums, which are slow. the forum collectors
+get their discovery flags here rather than in somebody's shell history --
+`fetch-reddit --front 14` is the half that finds threads nobody wrote a query
+for, and a sweep without it only ever rediscovers what the last sweep knew.
+
+the registry-driven collectors (`fetch-model-facts`, `fetch-chat-templates`,
+`fetch-model-cards`, `fetch-gguf-sizes`) read `registry/models.yaml`, so a
+model added since the last sweep gets its facts in this stage.
+
+**derive** the registry blocks that are executed rather than typed:
+`turns:` and `thinking:` from the chat templates, `ids:` from each source's key
+space, and each sampling profile's `source:` from what it still agrees with.
+these WRITE to `registry/models.yaml`; that is expected, and the diff is the
+review.
+
+**build** the rollups and the documents: sentiment, then `usecase.json` (which
+joins it), then MODELS.md, then `docs/`.
+
+**check** `make lint` and `make test-e2e`.
+
+nothing refetches what it already has -- `research/httpcache` keeps an
+etag/last-modified cache in `research/.cache` -- so a re-run costs minutes
+rather than an hour. `scripts/sweep --refresh` ignores all of it.
+
+## after a sweep: the punch list
+
+the sweep ends by printing what no collector can decide. it is the part worth
+reading:
+
+- **trending repos the registry does not carry.** most are abliterated merges
+  and 2b models; occasionally one is a flagship nobody added.
+- **roster models no benchmark suite has scored.**
+- **models with a graded thinking knob and no declared levels.**
+- **modalities disagreeing with the model's own config.**
+- **models with no written judgement.**
+
+## adding a model
+
+1. add the base repo as a key in `registry/models.yaml` with `kind`,
+   `name.short`, `name.match`, at least one `quants[]` entry and `modalities`.
+   write the sampling profile's values from the card; leave `source` off and
+   `ids` empty.
+2. add its gguf repo to `research/repos.txt` if a consumer would size it.
+3. run `scripts/sweep --stage collect` then `--stage derive`. that fills
+   `turns`, `thinking`, `ids` and each profile's `source`.
+4. `./scripts/models-validate --modalities` will tell you if the input
+   modalities you typed disagree with the model's own `config.json`. fix the
+   registry, not the check.
+5. write its block in `research/usecase-assessed.json`. `analyze-usecase
+   --missing` lists what is unassessed; the numbers to ground it in are in
+   `research/data/usecase.json` under the same repo key.
+6. `scripts/sweep --stage build --stage check`.
+
+**`name.match` is a regex over forum prose and it must not overlap another
+model's.** `ling[\s-]*3\.0` swallowed `ling 3.0 tiny` for the flash entry, and a
+bare `\bm3\b` for minimax m3 matched forty mentions of an apple m3 max. every
+matching model counts a sentence, so an overlap silently inflates both.
+
+## conventions
+
+- ASCII only, everywhere.
+- documentation, comments and command output are lowercase; CAPS for acronyms
+  or emphasis.
+- comments say **why**, not what. no changelog comments, no commented-out code.
+- magic values are named constants at the top of the file that uses them, or in
+  a shared file if more than one does.
+- prefer extending an existing script to adding one.
+- keep functions under 50 lines and prefer pure ones.
+
+## before committing
+
+```
+make precommit
+```
+
+which is `make lint` plus `make test-e2e`. lint fails if any generated file is
+behind its source, which is the check that matters: a capture refreshed without
+regenerating leaves half the document quoting the previous one.
+
+never mutate version control on the user's behalf.
+
+## end-to-end tests
+
+`tests/e2e` boots the shipped `docs/index.html` under node against the real
+`docs/data.json`, behind a dom stub thin enough that it is the page's own
+arithmetic being checked. `node --check` was tried first and is not enough: it
+passes a stray backtick that turns half the file into a template literal, which
+reaches a reader as a blank page.
+
+the stub lives in `scripts/pageboot.py` and is shared with
+`research/dashboard-table`, so the page under test and the page MODELS.md is
+generated from are the same boot.
+
+prefer an end-to-end test to a unit test. anything that CAN be tested end to end
+should be.
+
+## the dashboard is canonical
+
+`docs/index.html` is where the ranking lives. MODELS.md's ranking blocks are
+generated by running that page with nothing set, so the two cannot disagree.
+if you change how a model is scored, change it in the page.

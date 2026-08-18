@@ -1,0 +1,65 @@
+# roadmap
+
+what is done, and what is next. a user-visible feature goes here before it is
+built and is marked done when it ships.
+
+## done
+
+- **the registry** (61 models, 48 of them text), keyed by huggingface base repo.
+- **named sampling profiles**, with each profile's `source:` derived rather than
+  asserted.
+- **derived registry blocks**: `turns:` and `thinking:` executed out of the chat
+  templates, `ids:` resolved against each source's own key space, `modalities`
+  checked against each model's `config.json`.
+- **the research corpus**: 20 point-in-time captures, every one committed so a
+  refresh is a reviewable diff rather than a silent change in conclusions.
+- **the `docs/` dashboard**: 1442 facets over 61 models, every weight a slider,
+  the memory budget a setting, every number one hover from its source.
+- **one sweep command** (`make sweep`) that collects, derives, builds and
+  checks, and ends by printing what only a human can decide.
+- **MODELS.md generated from the dashboard.** the ranking, the picks, the
+  per-model verdicts, the role index and every size table are generated blocks;
+  `make lint` fails if the document is behind the data.
+- **the roster derived from the registry.** `build-tables` used to carry its own
+  twenty-model literal, so a model added to `registry/models.yaml` never reached
+  MODELS.md.
+
+## next
+
+1. **finish deduplicating MODELS.md against the dashboard.** the headline
+   ranking is generated from the page now, but `--table weights`, `--table
+   arena`, `--table effective` and `--table speed` still come from
+   `research/build-tables`, which computes its own composite over min-max
+   normalised raw values rather than the page's percentiles. those four tables
+   can therefore disagree with the ranking above them. either port them onto
+   `dashboard-table`, or make the page emit them and retire the second
+   implementation. the second is better: the point of running the page is that
+   there is one implementation, and four tables outside it is four ways back to
+   the old problem.
+
+2. **a proxy benchmark per evidence category.** there is one retention curve,
+   from one sweep of one 671b model on one code benchmark, and everything else
+   is either extrapolated from it or honestly left alone -- 36 facets
+   discounted, 57 not. `QUANT_EVIDENCE` in `scripts/build-viewer` already names
+   the categories; what it lacks is a benchmark per category that runs in
+   minutes rather than days, cheap enough to sweep in quantbench.
+
+   the curve is also fitted on a 671b model and applied to 27b ones. damage
+   scales with how little redundancy a model has, so the low rungs read
+   optimistic for small models, and both published sweeps held here are large
+   too (127b and 250b). sweeping ONE small model at several quants would settle
+   it for less compute than any of the above.
+
+3. **a consumer-side memory budget check.** gguf sizes join by repo but nothing
+   enforces a consumer's budget with them; that check belongs to the consumer,
+   and llama-tools has the TODO. the dashboard answers the same question for a
+   reader rather than for a config.
+
+4. **card claims cover 22 of 48 text models.** gpt-oss, laguna, inkling, step
+   and minimax m2.7 publish no parseable benchmark table.
+
+5. **sentiment is a blunt polarity lexicon** read over forum sentences, where
+   "x is better than y" scores positive for both. it is weighted at 0.05 for
+   that reason, against a redundancy analysis that says it is the most
+   independent signal here. a better reader of the same corpus would be worth
+   more than another benchmark.

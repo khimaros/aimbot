@@ -302,6 +302,11 @@ def contradictions(reg, probes, resolved):
 def render_block(name, fields):
     """`name:` and its values, in the file's existing style."""
     def scalar(v):
+        # python's repr for a bool is `True`, which yaml 1.1 does parse -- so
+        # this only ever showed up as the registry disagreeing with itself about
+        # spelling, in a file where every other boolean is lowercase
+        if isinstance(v, bool):
+            return "true" if v else "false"
         if isinstance(v, list):
             return "[%s]" % ", ".join(str(x) for x in v)
         if isinstance(v, dict):

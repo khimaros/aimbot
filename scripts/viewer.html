@@ -501,22 +501,22 @@ function bestInRepo(m, repo) {
 // 0.546 and 0.88 on one model, so treat this as the middle of a wide range.
 const DRAFT_ACCEPT = 0.55;
 
-// where the drafter is a SEPARATE file it has to be resident and it has to be
-// read, and neither is free. an mtp or dflash head ships inside the weights --
-// qwen3.6's -MTP- build is the plain one plus 0.42gib -- so it is already paid
-// for by the quant we picked, which is the only case this can cost honestly.
+// the drafter's weights have to be resident either way; what differs is only
+// whether the publisher put them in the quant or beside it. qwen's -MTP- build
+// carries the head, so the quant already paid; gemma, deepseek and glimmer
+// ship a sidecar, so it is added here and comes out of the vram budget.
 const draftKind = m => (m.speculative || {}).type || '';
-const headInWeights = m => /mtp|dflash/.test(draftKind(m));
-const draftGib = m => (m.speculative.draft || {}).gib || 0;
+const draftGib = m => ((m.speculative || {}).draft || {}).gib || 0;
 
-// the yield, only where the drafting is free to read. a separate drafter of
-// unknown size would need its bytes counted against every drafted token, and
-// claiming the speedup without the cost would be the flattering half of it.
+// what drafting yields, wherever the vendor ships a drafter. the read cost of
+// the draft pass itself is NOT modelled -- for a head of half a gib beside 30
+// of weights that is noise, for deepseek's 10gib dspark it is not -- so this
+// is an upper bound, tightest where the drafter is smallest.
 function draftYield(m) {
-  const s = m.speculative || {};
-  if (!(s.type || s.draft_repo) || !headInWeights(m)) return 1;
+  const n = (m.speculative || {}).n_max;
+  if (!draftKind(m)) return 1;
   let out = 1, p = 1;
-  for (let k = 0; k < (s.n_max || 3); k++) { p *= DRAFT_ACCEPT; out += p; }
+  for (let k = 0; k < (n || 3); k++) { p *= DRAFT_ACCEPT; out += p; }
   return out;
 }
 
@@ -850,13 +850,14 @@ const COLUMNS = [
    }},
   {k: 'size', t: 'gib', num: true,
    get: m => activeQuant(m) ? activeQuant(m).gib + draftGib(m) : -1,
-   help: 'what has to be resident before any cache: the weights at the fitted quant, plus a separate draft model where the registry pins one. an mtp or dflash head is inside the weights already. the kv cache is not included -- add the kv gib column for that',
+   help: 'what has to be resident before any cache: the weights at the fitted quant, plus the drafter where the publisher ships it as a separate file rather than folding it into the build. the kv cache is not included -- add the kv gib column for that',
    cell: m => {
      const q = activeQuant(m);
      if (!q || q.gib === undefined) return '<td class="n"><span class="faint">-</span></td>';
      const d = draftGib(m);
-     return `<td class="n"${d ? ` title="${gib(q.gib)} weights + ${gib(d)}`
-       + ` for the ${esc(draftKind(m) || 'draft')} model"` : ''}>${gib(q.gib + d)}`
+     return `<td class="n"${d ? ` title="${gib(q.gib)} weights + ${gib(d)} for `
+       + `${esc(m.speculative.draft.file)}, the ${esc(draftKind(m))} head"` : ''}>`
+       + `${gib(q.gib + d)}`
        + (d ? '<span class="sub"> +d</span>' : '') + '</td>';
    }},
   {k: 'kv', t: 'kv gib', num: true, get: m => kvGib(m, minCtx),
@@ -871,7 +872,7 @@ const COLUMNS = [
    help: 'bits per weight. the number that predicts how much the quant cost in quality',
    cell: m => `<td class="n dim">${num((activeQuant(m) || {}).bpw, 2) || '-'}</td>`},
   {k: 'tg', t: 'tg t/s', num: true, get: m => (tgTps(m) || {}).empty ?? -1,
-   help: 'estimated tokens generated per second with the cache empty: the bandwidth you set, discounted, over the active weights at the fitted quant, times what speculative decoding yields where the draft head ships inside the weights. a second, dimmer figure appears where a full cache at your context costs more than 15% of it. arithmetic, never a measurement',
+   help: 'estimated tokens generated per second with the cache empty: the bandwidth you set, discounted, over the active weights at the fitted quant, times what speculative decoding yields where the model ships a drafter. it does not charge for reading the drafter itself, so it runs optimistic for a large one. a second, dimmer figure appears where a full cache at your context costs more than 15% of it. arithmetic, never a measurement',
    cell: m => {
      const t = tgTps(m);
      if (!t) return noEstimate(bandwidth, 'set a memory bandwidth under hardware');
@@ -965,13 +966,13 @@ const DEFAULT_ORDER = ['rank', 'short', 'kind', 'repo', 'license', 'params', 'ac
                        'quant', 'bpw', 'think', 'profiles', 'size', 'kv', 'evidence',
                        'coding', 'agentic', 'gbench', 'swe', 'arena', 'score',
                        'langs', 'bestfor', 'community', 'downloads'];
-// `pp` and `tg` are deliberately NOT here: they are gated on their hardware
-// figure instead, so choosing a bandwidth reveals one rather than leaving a
-// reader to find it under the gear
+// `pp` and `tg` are off here AND gated on their hardware figure: switching one
+// on under the gear does nothing until there is a bandwidth or a compute
+// number for it to read
 const DEFAULT_HIDDEN = ['kind', 'repo', 'license', 'params', 'active', 'experts',
-                        'spec', 'ctx', 'extctx', 'bpw', 'think', 'profiles', 'kv',
-                        'coding', 'agentic', 'gbench', 'swe', 'arena', 'langs',
-                        'bestfor', 'community', 'downloads'];
+                        'spec', 'pp', 'tg', 'ctx', 'extctx', 'bpw', 'think',
+                        'profiles', 'kv', 'coding', 'agentic', 'gbench', 'swe',
+                        'arena', 'langs', 'bestfor', 'community', 'downloads'];
 // a strix halo box, which is what this registry is sized against, down to what
 // it reads and computes at
 const DEFAULT_HARDWARE = {budget: 128, reserve: 2, minCtx: 131072, cap: 'q8', floor: 'none',

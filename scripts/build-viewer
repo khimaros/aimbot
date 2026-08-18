@@ -88,8 +88,9 @@ QUANT_EVIDENCE = [
       "lang.rust", "lang.typescript",
       "swerebench.resolved",
       "epoch.aider_polyglot", "epoch.ale_bench", "epoch.algotune",
-      "epoch.deepswe", "epoch.frontiercode", "epoch.scicode",
-      "epoch.terminalbench", "epoch.webdev_arena",
+      "epoch.cursorbench", "epoch.deepswe", "epoch.frontiercode",
+      "epoch.frontierswe", "epoch.gso", "epoch.scicode",
+      "epoch.swe_bench_verified", "epoch.terminalbench", "epoch.webdev_arena",
       "card.deepswe", "card.livecodebench", "card.scicode",
       "card.swebench_pro", "card.swebench_verified", "card.terminalbench"]),
 
@@ -98,8 +99,8 @@ QUANT_EVIDENCE = [
      "to cost recall differently from reasoning, and nothing here measures it",
      ["aa.critpt", "aa.gpqa", "aa.hle", "aa.lcr", "aa.non_hallucination",
       "aa.omniscience", "aa.omniscience_index",
-      "epoch.critpt", "epoch.gpqa_diamond", "epoch.simpleqa_verified",
-      "epoch.simplebench",
+      "epoch.critpt", "epoch.gpqa_diamond", "epoch.hle",
+      "epoch.simpleqa_verified", "epoch.simplebench",
       "card.critpt", "card.gpqa", "card.hle", "card.mmlu", "card.mmlu_pro"]),
 
     ("reasoning", False,
@@ -121,7 +122,8 @@ QUANT_EVIDENCE = [
     ("tools", False,
      "tool use outside software: booking, banking, desktop control. the loop "
      "is agentic but the output is not code",
-     ["aa.tau2", "aa.tau_banking", "card.tau2", "card.osworld"]),
+     ["aa.tau2", "aa.tau_banking", "epoch.osworld_2",
+      "card.tau2", "card.osworld"]),
 
     ("longrun", False,
      "long-horizon and economic work, where the reported failure mode is "
@@ -130,7 +132,8 @@ QUANT_EVIDENCE = [
       "epoch.apex_agents", "epoch.blueprint_bench_2", "epoch.cl_bench",
       "epoch.cl_bench_life", "epoch.exploitbench", "epoch.gbaeval",
       "epoch.gdp_pdf", "epoch.lech_mazur_writing", "epoch.metr_time_horizons",
-      "epoch.posttrainbench", "epoch.surface_evolver_bench",
+      "epoch.forecastbench", "epoch.posttrainbench",
+      "epoch.surface_evolver_bench",
       "epoch.vending_bench_2", "epoch.weirdml", "card.gdpval"]),
 
     ("composite", False,
@@ -254,28 +257,42 @@ def per_repo_templates(repos, probes, registry_thinking):
 
 
 def speculative(model, sizes):
-    """The declared drafter, with its own file size where it has one.
+    """The declared drafter, and the file it ships in where that is separate.
 
-    An mtp or dflash head ships inside the weights -- qwen3.6's -MTP- build is
-    the plain one plus 0.42gib -- so the quant already pays for it. A dspark or
-    a separate draft model is another file that has to be resident, and the
-    viewer cannot subtract it from a memory budget without its size.
+    Whether the drafter costs extra memory is NOT a property of the drafting
+    method, which is what this assumed at first and got wrong. It is a property
+    of how the publisher shipped it, and the two conventions sit side by side:
+
+      qwen     the -MTP- build IS the plain weights plus the head, 0.42gib
+               larger, and the fit reads from that build -- already paid for
+      gemma    `draft-mtp` too, but the head is a separate `mtp-*.gguf`
+               sidecar, 0.09 to 0.48gib, that has to be loaded alongside
+      deepseek `dspark:Q8_0`, 10.15gib, beside the quants in the same repo
+      glimmer  `dflash-kquant.gguf`, 1.52gib
+
+    So it is discovered rather than inferred: look in the model's own quant
+    repos for a file named after the drafting method. NOT_A_QUANT already keeps
+    these out of the quant list, which is why they are invisible until asked
+    for by name. No hand-written pairing is involved -- it is the vendor's own
+    file in the vendor's own repo.
     """
     spec = dict(model.get("speculative") or {})
-    ref = spec.get("draft_repo")
-    if not ref:
-        return spec
-    repo, _, quant = ref.partition(":")
-    have = sizes.get(repo) or {}
     kind = (spec.get("type") or "").replace("draft-", "")
-    # the drafter's own tag first: deepseek ships it as `dspark:Q8_0` inside the
-    # model's repo, where a bare `Q8_0` lookup would find the target instead
-    for key in ("%s:%s" % (kind, quant), kind, quant):
-        if key and have.get(key):
-            spec["draft"] = {"repo": repo, "quant": key,
-                             "bytes": have[key], "gib": round(have[key] / GIB, 2)}
-            return spec
-    spec["draft_unknown"] = ref
+    if not kind:
+        return spec
+    found = []
+    for q in model.get("quants") or []:
+        for key, size in (sizes.get(q["repo"]) or {}).items():
+            if key.lower().startswith(kind):
+                found.append((size, q["repo"], key))
+    if not found:
+        return spec
+    # a bare tag is the aggregate over every variant of the head; the concrete
+    # file beside it is the one that gets loaded
+    concrete = [f for f in found if ".gguf" in f[2] or ":" in f[2]]
+    size, repo, key = min(concrete or found)
+    spec["draft"] = {"repo": repo, "file": key, "bytes": size,
+                     "gib": round(size / GIB, 2)}
     return spec
 
 

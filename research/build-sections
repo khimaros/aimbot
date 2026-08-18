@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+
+"""Render MODELS.md's per-model prose from the structured data it already holds.
+
+The judgement about a model -- what it is for, what to avoid it for, why, and
+on what evidence -- is SOURCE, and it lives in `usecase-assessed.json` so that
+a recompute cannot lose it and a consumer can read it without parsing a
+document. It was then typed a second time into MODELS.md as prose, which is two
+copies of one claim; this renders the first into the second.
+
+    ./build-sections --section verdicts   # one entry per model, ranked
+    ./build-sections --section picks      # the top of the ranking, with why
+    ./build-sections --section roles      # the same judgement, inverted by task
+    ./build-sections --section missing    # what the roster does not carry
+
+Order comes from the dashboard, because the dashboard is canonical: a reader
+who opens the page and a reader who reads this document are looking at one
+ranking, not two that agree most of the time.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+ASSESSED = os.path.join(HERE, "usecase-assessed.json")
+USECASE = os.path.join(HERE, "data", "usecase.json")
+
+# how many models the `picks` section walks through. past this the answer is
+# "read the table", and a document that explains forty models explains none.
+PICKS = 6
+
+
+def registry():
+    import yaml
+    return yaml.safe_load(open(os.path.join(ROOT, "registry", "models.yaml")))["models"]
+
+
+def ranking():
+    """The dashboard's own rows, in the dashboard's own order."""
+    r = subprocess.run([os.path.join(HERE, "dashboard-table"), "--json"],
+                       cwd=HERE, stdout=subprocess.PIPE, text=True)
+    if r.returncode:
+        sys.exit("!!! dashboard-table failed")
+    return json.loads(r.stdout)["rows"]
+
+
+def assessed():
+    return json.load(open(ASSESSED))["assessed"]
+
+
+def short_to_repo(reg):
+    return {(m.get("name") or {}).get("short"): repo for repo, m in reg.items()}
+
+
+def wrap(text, width=78, indent=""):
+    """Fill to a column, because the rest of this document is filled to one."""
+    out, line = [], indent
+    for word in text.split():
+        if len(line) + len(word) + 1 > width and line.strip():
+            out.append(line.rstrip())
+            line = indent + word + " "
+        else:
+            line += word + " "
+    if line.strip():
+        out.append(line.rstrip())
+    return "\n".join(out)
+
+
+def section_verdicts(rows, a, s2r, reg):
+    """One entry per ranked model: what it is for, and on what evidence."""
+    for r in rows:
+        repo = s2r.get(r["short"])
+        v = a.get(repo)
+        if not v:
+            continue
+        print("#### %d. %s" % (r["rank"], r["short"]))
+        print()
+        print(wrap(v["one_liner"]))
+        print()
+        print("- **use for** %s" % ", ".join(v.get("use_for") or ["-"]))
+        print("- **avoid for** %s" % ", ".join(v.get("avoid_for") or ["-"]))
+        print("- **runs at** %s, %s gib, %s of the weighted factors measured it"
+              % (r["quant"] or "-",
+                 "%.1f" % r["gib"] if r["gib"] else "?",
+                 "%d/%d" % (r["have"], r["want"])))
+        print("- **evidence** %s" % "; ".join(v.get("evidence") or ["-"]))
+        print("- **confidence in that evidence** %s" % v.get("confidence", "-"))
+        if v.get("notes"):
+            print()
+            print(wrap(v["notes"]))
+        print()
+
+
+def section_picks(rows, a, s2r, reg):
+    """The top of the ranking, in the order the dashboard puts it."""
+    for r in rows[:PICKS]:
+        repo = s2r.get(r["short"])
+        v = a.get(repo) or {}
+        m = reg.get(repo) or {}
+        q = next((x for x in (m.get("quants") or []) if x.get("quant") == r["quant"]),
+                 (m.get("quants") or [{}])[0])
+        print("%d. **%s at %s (%s gib)**, %s" % (
+            r["rank"], r["short"], r["quant"] or "?",
+            "%.1f" % r["gib"] if r["gib"] else "?",
+            v.get("one_liner", "")))
+        body = []
+        if v.get("use_for"):
+            body.append("use it for %s." % ", ".join(v["use_for"]))
+        if v.get("avoid_for"):
+            body.append("avoid it for %s." % ", ".join(v["avoid_for"]))
+        if q.get("note"):
+            body.append("on the quant: %s." % q["note"].rstrip("."))
+        if body:
+            print()
+            print(wrap(" ".join(body), indent="   "))
+        print()
+
+
+def section_roles(rows, a, s2r, reg):
+    """The same judgement inverted: given a task, which models claim it."""
+    order = {r["short"]: r["rank"] for r in rows}
+    by_task = {}
+    for repo, v in a.items():
+        short = ((reg.get(repo) or {}).get("name") or {}).get("short")
+        if short not in order:
+            continue
+        for task in v.get("use_for") or []:
+            by_task.setdefault(task, []).append(short)
+    print("| for | in ranked order |")
+    print("|---|---|")
+    for task in sorted(by_task, key=lambda t: (-len(by_task[t]), t)):
+        names = sorted(by_task[task], key=lambda n: order[n])
+        print("| %s | %s |" % (task, ", ".join(names)))
+
+
+def section_missing(rows, a, s2r, reg):
+    """Models the registry carries that the ranking cannot place, and why.
+
+    Two different reasons and the table says which: nothing that fits, or
+    nothing measured. Collapsing them would read as one problem when the first
+    is about this box and the second is about the whole state of the evidence.
+    """
+    ranked = {r["short"] for r in rows}
+    print("| model | measured by | why it is not ranked |")
+    print("|---|---|---|")
+    for repo, m in sorted(reg.items()):
+        if m.get("kind", "text") != "text":
+            continue
+        short = (m.get("name") or {}).get("short")
+        if short in ranked:
+            continue
+        ids = sorted(k for k, v in (m.get("ids") or {}).items() if v)
+        why = ("no source measures it, so the composite has nothing to place it on"
+               if not ids else "no quant of it fits this box")
+        print("| %s | %s | %s |" % (short, ", ".join(ids) or "-", why))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--section", required=True,
+                    choices=["verdicts", "picks", "roles", "missing"])
+    args = ap.parse_args()
+    reg = registry()
+    fn = {"verdicts": section_verdicts, "picks": section_picks,
+          "roles": section_roles, "missing": section_missing}[args.section]
+    fn(ranking(), assessed(), short_to_repo(reg), reg)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+
+"""Generate MODELS.md's ranking tables by RUNNING the dashboard.
+
+The dashboard is canonical. It and this document used to compute the same
+ranking twice -- `research/build-tables` in python against the captures,
+`docs/index.html` in javascript against `docs/data.json` -- and two
+implementations of one composite is exactly the drift this repo exists to
+remove. So the document is generated from the page: boot the shipped
+`docs/index.html` under node with nothing set, which is the view a reader gets
+by opening it, and print what the table says.
+
+    ./dashboard-table --table ranking     # the default view, ranked
+    ./dashboard-table --table components  # the same rows, per-source columns on
+    ./dashboard-table --json              # the rows themselves
+
+`--table ranking` is the page's default: text models, a quant that fits a 128gb
+box after a 2gib reserve and a 128k context, quality as the weighted mean of
+percentiles under the composite weights, quant-adjusted. Everything the page
+lets a reader change is left where the page leaves it, so a number here is a
+number they will see.
+
+The per-source columns are hidden by default on the page because most readers
+want a stance rather than sixty decisions; switching them on is one click and
+does not change the ranking, so `--table components` shows the same rows with
+the working out.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+PROBE = os.path.join(HERE, ".dashboard.js")
+
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+import pageboot  # noqa: E402
+
+# the page computes every one of these; nothing here recomputes any of them
+EMIT = """
+setTimeout(() => {
+  if (!D) { console.error('the page never booted'); process.exit(1); }
+  drawTable();
+  const rows = sorted(visible()).map(m => ({
+    rank: m._rank, short: m.short, publisher: m.publisher,
+    quant: (activeQuant(m) || {}).quant || null,
+    gib: (activeQuant(m) || {}).gib || null,
+    bpw: (activeQuant(m) || {}).bpw || null,
+    retention: modelRetention(m),
+    score: scored(m).value, have: scored(m).have, want: scored(m).want,
+    ctx: fitContext(m),
+    facets: Object.fromEntries(Object.keys(SCALED_COLUMNS).map(k =>
+      [k, m.facets[SCALED_COLUMNS[k]]
+          ? {value: facetValue(m, SCALED_COLUMNS[k]),
+             pct: facetPctRaw(m, SCALED_COLUMNS[k])} : null])),
+    community: m.facets['community.reddit-localllama']
+      ? facetValue(m, 'community.reddit-localllama') : null,
+    // `card.*` is a wildcard weight on the page: one knob for "how much do i
+    // trust what the vendor says", averaged over every claim it published
+    card: (ks => ks.length
+      ? ks.reduce((a, k) => a + facetPctRaw(m, k), 0) / ks.length : null)(
+      Object.keys(m.facets).filter(k => k.startsWith('card.'))),
+  }));
+  console.log(JSON.stringify({
+    weights: D.weights, hardware: {budget, reserve, minCtx, cap, floor},
+    effective, rows,
+  }));
+  process.exit(0);
+}, 0);
+"""
+
+
+def num(v, digits=1):
+    return "-" if v is None else ("%.*f" % (digits, v))
+
+
+def table_ranking(d):
+    """What the page shows on open: what it is, whether it fits, how good it is."""
+    print("| # | model | quant | size (gib) | fits ctx | evidence | quality |")
+    print("|--:|---|---|--:|--:|--:|--:|")
+    for r in d["rows"]:
+        print("| %d | %s | %s | %s | %s | %d/%d | **%s** |" % (
+            r["rank"], r["short"], r["quant"] or "-", num(r["gib"]),
+            "%dk" % (r["ctx"] / 1024) if r["ctx"] else "-",
+            r["have"], r["want"], num(r["score"], 1)))
+
+
+def table_components(d):
+    """The same rows with the per-source columns the page keeps under the gear."""
+    print("| model | quality | eff coding | eff agentic | gbench | arena | swe-reb "
+          "| sentiment | card | evidence |")
+    print("|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|")
+    for r in d["rows"]:
+        f = r["facets"]
+        cell = lambda k, n=1: num((f.get(k) or {}).get("value"), n)
+        print("| %s | **%s** | %s | %s | %s | %s | %s | %s | %s | %d/%d |" % (
+            r["short"], num(r["score"], 1), cell("coding"), cell("agentic"),
+            cell("gbench", 3), num((f.get("arena") or {}).get("value"), 0),
+            cell("swe"), num(r["community"], 1),
+            num(r["card"], 0),
+            r["have"], r["want"]))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--table", choices=["ranking", "components"], default="ranking")
+    ap.add_argument("--json", action="store_true", help="the rows, unformatted")
+    ap.add_argument("--keep", action="store_true", help="leave the probe on disk")
+    args = ap.parse_args()
+
+    r = pageboot.run(EMIT, PROBE, keep=args.keep, capture=True)
+    if r.returncode:
+        sys.exit("!!! the page failed to boot")
+    d = json.loads(r.stdout.strip().split("\n")[-1])
+    if args.json:
+        print(json.dumps(d, indent=1))
+        return
+    {"ranking": table_ranking, "components": table_components}[args.table](d)
+
+
+if __name__ == "__main__":
+    main()

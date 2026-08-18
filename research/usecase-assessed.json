@@ -1,18 +1,5 @@
 {
- "_about": [
-  "written judgement about what each model is for. SOURCE, not derived: analyze-usecase",
-  "carries it into data/usecase.json beside the numbers, and never overwrites it.",
-  "",
-  "the numbers lead. every `evidence` entry names a facet and the percentile the model",
-  "holds on it WITHIN this registry -- p79 means it beat 79% of the registry models that",
-  "carry the same facet, not 79% of every model in the world. `claim` marks a number the",
-  "model published about itself, which analyze-self-report measures as running about +0.9",
-  "high, and which is the weakest evidence here.",
-  "",
-  "confidence is about the EVIDENCE, not the model: high means several independent",
-  "third-party sources agree, medium means one source or a thin sample, low means nobody",
-  "has measured it and this is the card plus whatever the forums said."
- ],
+ "_about": ["written judgement about what each model is for. SOURCE, not derived: analyze-usecase", "carries it into data/usecase.json beside the numbers, and never overwrites it.", "", "the numbers lead. every `evidence` entry names a facet and the percentile the model", "holds on it WITHIN this registry -- p79 means it beat 79% of the registry models that", "carry the same facet, not 79% of every model in the world. `claim` marks a number the", "model published about itself, which analyze-self-report measures as running about +0.9", "high, and which is the weakest evidence here.", "", "confidence is about the EVIDENCE, not the model: high means several independent", "third-party sources agree, medium means one source or a thin sample, low means nobody", "has measured it and this is the card plus whatever the forums said."],
  "version": 1,
  "assessed": {
   "MiniMaxAI/MiniMax-M2.5": {
@@ -55,10 +42,10 @@
    "one_liner": "resolves real merged pull requests well above what its benchmark indices predict, and decodes fast while doing it.",
    "use_for": ["real-world bug fixing", "agentic / tool use", "coding agents on a latency budget"],
    "avoid_for": ["science / reasoning", "physics"],
-   "notes": "the gap is the interesting part: swe-rebench p69 against aa coding p29. swe-rebench builds its tasks from pull requests merged after release, so that number is the one that cannot have been trained against. forum reception is mixed (hf-discussions 33% approval).",
+   "notes": "the gap is the interesting part: swe-rebench p69 against aa coding p29. swe-rebench builds its tasks from pull requests merged after release, so that number is the one that cannot have been trained against. forum reception is mixed (hf-discussions 33% approval). it is superseded on general capability by either 27b at a third of the size, so the case for a slot is the swe-rebench result and the decode speed rather than the indices. the hallucination score is the worst in the set.",
    "confidence": "high",
    "evidence": ["swerebench.resolved 47.7 p69", "aa.speed 140 tok/s p78", "aa.coding p29", "reddit 54 mentions at 56% approval"],
-   "assessed_on": "2026-08-17"
+   "assessed_on": "2026-08-18"
   },
   "Qwen/Qwen3.5-0.8B": {
    "one_liner": "too small to be a general assistant; its use here is as a speculative drafter and a smoke test.",
@@ -136,10 +123,10 @@
    "one_liner": "the strongest dense model in the registry on measured axes, and the current default answer for a single 27b that has to do everything.",
    "use_for": ["coding", "agentic / tool use", "science / reasoning", "scientific code", "long context"],
    "avoid_for": [],
-   "notes": "gbench has not played it yet, so its evidence is aa plus its own card plus 208 reddit mentions at 89% approval. the template defaults thinking to xhigh, which costs 15k-52k thinking tokens in reported traces against qwen3.6's 3k.",
+   "notes": "gbench has not played it yet, so its evidence is aa plus its own card plus 208 reddit mentions at 89% approval. the template defaults thinking to xhigh, which costs 15k-52k thinking tokens in reported traces against qwen3.6's 3k. it is also the value pick: the top score out of the smallest file of anything near it, which leaves most of a 128gb box free for context or a second model. one reproducible benchmark on this exact silicon reports UD-Q5_K_XL at 16.68 t/s against Q8_0's 12.74, with MTP at 4 draft tokens under vulkan -- one reporter on one box, so a reason to test the lower quant rather than a recommendation to run it.",
    "confidence": "high",
    "evidence": ["aa.intelligence 52 p94", "aa.agentic 50.9 p92", "aa.gpqa p91", "reddit 208 mentions at 89% approval", "no gbench entry"],
-   "assessed_on": "2026-08-17"
+   "assessed_on": "2026-08-18"
   },
   "XiaomiMiMo/MiMo-V2.5": {
    "one_liner": "a coding and physics model with the best rust play measured here, let down by one-shot coding and decode speed.",
@@ -172,10 +159,10 @@
    "one_liner": "the registry's strongest all-rounder: top decile on science, coding, long context and physics at once, and the most discussed model after qwen3.6.",
    "use_for": ["coding", "agentic / tool use", "science / reasoning", "scientific code", "physics", "planning", "long context"],
    "avoid_for": [],
-   "notes": "at UD-IQ3_XXS it is 97gib, so on a 128gb box it fits with a drafter and little else. best go play measured here at 82%.",
+   "notes": "at UD-IQ3_XXS it is 97gib, so on a 128gb box it fits with a drafter and little else. best go play measured here at 82%. v4's compressed sparse attention makes the kv cache far cheaper than a generic reserve assumes -- deepseek reports the 1m setting costing 27% of what the naive form would -- which is what leaves room for the 10.2gib dspark drafter beside it. two complaints from people actually running it: it ignores rules files and skill definitions, which the thread attributes to deepseek shipping no official jinja template and each quant publisher writing their own, so pin a known-good template rather than trusting the gguf default; and where the fitting quant is too tight, the community's answer for this class of box is Rednalreden's dwarfstar, a single 80.8gib file that keeps Q8 attention projections, shared experts and output layer while dropping the routed experts to IQ2_XXS.",
    "confidence": "high",
    "evidence": ["aa.coding 69.1 p93", "aa.gpqa p94", "aa.hle p94", "aa.critpt p94", "reddit 304 mentions at 90% approval", "gbench go 82%"],
-   "assessed_on": "2026-08-17"
+   "assessed_on": "2026-08-18"
   },
   "google/embeddinggemma-300M": {
    "one_liner": "an embedding model: it emits vectors, not text, and no benchmark in this corpus scores it.",
@@ -357,10 +344,10 @@
    "one_liner": "top-decile on reasoning and the best-rated model here by human preference, with a gbench sample too thin to quote.",
    "use_for": ["chat / general use", "science / reasoning", "coding", "scientific code", "long context"],
    "avoid_for": [],
-   "notes": "gbench has played it 7 games over 25 matches, which is why its gscore is marked thin rather than used. 48 reddit mentions at 93% approval is the best reception in the registry.",
+   "notes": "gbench has played it 7 games over 25 matches, which is why its gscore is marked thin rather than used. 48 reddit mentions at 93% approval is the best reception in the registry. the ranking and the people running it disagree, and the disagreement is worth more than either. a handful on 128gb machines rate it first for coding -- \"significantly better coder than deepseek-v4-flash, keep using deepseek-v4-flash only if speed is the primary concern\" -- against a similar number who found it slow. both can be true: AA measures the unquantized model, the retention curve is transferred from another architecture, and 21b active is more compute per token than anything else that fits. what people report costing them is context and speed rather than quality, roughly 190k against deepseek's 1m, with throughput that drops off brutally as context grows.",
    "confidence": "high",
    "evidence": ["lmarena 1460 p93", "aa.gpqa p88", "aa.intelligence 42.2 p88", "reddit 48 mentions at 93% approval", "gbench 25 matches, below the 1000 threshold"],
-   "assessed_on": "2026-08-17"
+   "assessed_on": "2026-08-18"
   },
   "thinkingmachines/Inkling-Small": {
    "one_liner": "a science and physics specialist: p91 on critpt, omniscience and scicode at once.",
@@ -379,6 +366,69 @@
    "confidence": "medium",
    "evidence": ["aa.critpt p88", "aa.scicode p82", "aa.agentic 27.8 p71", "no forum mentions"],
    "assessed_on": "2026-08-17"
+  },
+  "Qwen/Qwen3.8-2.4T-A95B": {
+   "one_liner": "the strongest open-weights model this corpus measures, and the one nothing here can load.",
+   "use_for": ["agentic / tool use", "coding", "science / reasoning", "long context"],
+   "avoid_for": ["anything local", "latency-sensitive chat"],
+   "notes": "it sets the ceiling rather than joining the ladder: the smallest published rung is 370 gib, so every recommendation on this box is a statement about how far below this a runnable model sits. artificial analysis is so far the only third party to have scored it -- gbench, lmarena, swe-rebench and epoch all have nothing -- so the lead is one harness's answer rather than a consensus. it is also the slowest thing here per token, at p6.",
+   "confidence": "medium",
+   "evidence": ["aa.agentic p97", "aa.gdpval p97", "aa.tau_banking p97", "aa.coding p94", "aa.intelligence p95", "aa.speed p6"],
+   "assessed_on": "2026-08-18"
+  },
+  "deepseek-ai/DeepSeek-V4-Pro-0813": {
+   "one_liner": "the flash model's flagship sibling: the same shape of answer, corroborated by five sources instead of one, at ten times the file size.",
+   "use_for": ["coding", "agentic / tool use", "c# and rust work", "long context"],
+   "avoid_for": ["anything local", "questions where declining to answer is the right answer"],
+   "notes": "the best-measured model added this sweep -- aa, gbench, lmarena, swe-rebench and its own card all carry it -- and the one clear weakness is non-hallucination at p0: it answers rather than declines, which is the opposite of minimax m3 beside it. the language breakdown is lopsided, p89-p91 on c#, rust and kotlin against p50-p55 on javascript and typescript.",
+   "confidence": "high",
+   "evidence": ["aa.omniscience p98", "lmarena.rating p94", "gbench.overall p91", "aa.coding p88", "aa.agentic p87", "aa.non_hallucination p0", "lang.rust p90"],
+   "assessed_on": "2026-08-18"
+  },
+  "MiniMaxAI/MiniMax-M3": {
+   "one_liner": "the registry's most calibrated model: first on non-hallucination and instruction following, middling on the coding benchmarks everyone quotes.",
+   "use_for": ["instruction following", "long context", "vision", "agentic / tool use"],
+   "avoid_for": ["one-shot coding in python or c#", "a 128gb box with context to spare"],
+   "notes": "the split is the point. non-hallucination p98 and ifbench p96 against python p15 and c# p22 describes a model that does what it is told and admits what it does not know, which is not what a coding index measures. it is the only model added this sweep that takes images. the smallest rung is 120 gib, so it clears a 128gb box with nothing left for kv cache.",
+   "confidence": "high",
+   "evidence": ["aa.non_hallucination p98", "aa.ifbench p96", "aa.lcr p95", "aa.terminalbench_hard p93", "lang.python p15", "aa.coding p74"],
+   "assessed_on": "2026-08-18"
+  },
+  "zai-org/GLM-5.2": {
+   "one_liner": "the most-measured model in this registry and the second most-discussed, and no quant of it fits.",
+   "use_for": ["agentic / tool use", "coding", "typescript and rust work", "science / reasoning"],
+   "avoid_for": ["anything local", "competition mathematics"],
+   "notes": "67 facets across every source carried here, which makes it the best-corroborated entry in the file. the forums agree -- 113 reddit mentions across 42 threads at 79% approval, second only to the qwen3.x line -- and the smallest rung is 202 gib, so this registry can say what it is and not how to run it. epoch's mathematics runs are the dissent: deepswe p0 and otis aime p0 against tau2 p96 and terminal-bench hard p96.",
+   "confidence": "high",
+   "evidence": ["aa.tau2 p96", "aa.terminalbench_hard p96", "gbench.decision p95", "aa.coding p85", "epoch.deepswe p0", "reddit 113 mentions over 42 threads"],
+   "assessed_on": "2026-08-18"
+  },
+  "zai-org/GLM-4.5-Air": {
+   "one_liner": "a year-old 106b that people still run because it fits, and that every newer model on this roster beats.",
+   "use_for": ["a 128gb box with nothing newer installed"],
+   "avoid_for": ["coding", "science / reasoning", "agentic / tool use"],
+   "notes": "carried because the discussion tab is still busy -- 53 mentions on unsloth's repo, mostly about what speed it gets on a strix halo -- and because a model that is measured and superseded is more useful in the table than absent from it. artificial analysis has it deprecated and every percentile it holds is below p40. neither its card nor unsloth's documents a sampler set, which is why its profile reads tuned-here.",
+   "confidence": "high",
+   "evidence": ["aa.intelligence p15", "aa.hle p12", "lmarena.rating p11", "swerebench.resolved p38", "hf-discussions 53 mentions at 75% approval"],
+   "assessed_on": "2026-08-18"
+  },
+  "Motif-Technologies/Motif-3": {
+   "one_liner": "a 314b that knows what it does not know: p95 on the omniscience index, p42 on gpqa.",
+   "use_for": ["science / reasoning", "coding", "agentic / tool use"],
+   "avoid_for": ["anything local", "trusting the ranking on one source"],
+   "notes": "artificial analysis is the only third party carrying it and the rest of the evidence is its own card, which analyze-self-report measures as running about +0.9 high -- and here the card is the pessimistic side, claiming p0 on critpt and gdpval where AA puts it at p82 and p77. nobody in any of the four community corpora has mentioned it. the only gguf is five hand-rolled rungs from a single uploader.",
+   "confidence": "medium",
+   "evidence": ["aa.omniscience_index p95", "aa.non_hallucination p90", "aa.intelligence p82", "aa.coding p79", "aa.gpqa p42", "0 community mentions"],
+   "assessed_on": "2026-08-18"
+  },
+  "inclusionAI/Ling-3.0-tiny": {
+   "one_liner": "1.3b active in a 7.8gib file: the fastest thing here, and the only model this sweep added that actually fits.",
+   "use_for": ["latency-sensitive chat", "a second slot beside a large model", "drafting"],
+   "avoid_for": ["coding", "science / reasoning", "agentic / tool use"],
+   "notes": "the whole quant ladder fits, so the question is what a 7.9b/1.3b moe is worth rather than whether it runs. coding p12 and agentic p27 say not much; speed p88 with non-hallucination p85 says the trade is honest rather than bad. the five people who have posted about it are unanimous, and the claim they make is against qwen3.5 9b rather than against anything larger.",
+   "confidence": "medium",
+   "evidence": ["aa.speed p88", "aa.non_hallucination p85", "aa.coding p12", "aa.agentic p27", "aa.intelligence p30", "reddit 5 mentions at 100% approval"],
+   "assessed_on": "2026-08-18"
   },
   "Tongyi-MAI/Z-Image-Turbo": {
    "one_liner": "a single-stream diffusion transformer for fast text-to-image, run here with a separate vae and text encoder.",

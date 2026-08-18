@@ -22,51 +22,20 @@ handler would have called, which is the same code path.
 """
 
 import argparse
-import json
 import os
-import re
-import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-PAGE = os.path.join(ROOT, "docs", "index.html")
-DATA = os.path.join(ROOT, "docs", "data.json")
 PROBE = os.path.join(HERE, ".probe.js")
 
-STUB = """
-const nodes = {};
-const el = key => nodes[key] || (nodes[key] = {
-  style: {}, dataset: {}, children: [], value: '', textContent: '', innerHTML: '',
-  classList: {add(){}, remove(){}, toggle(){}, contains(){return false}},
-  setAttribute(){}, getAttribute(){return 'false'}, addEventListener(){},
-  querySelector(s){ return el(key + ' ' + s); }, querySelectorAll(){ return []; },
-  getBoundingClientRect(){ return {left:0, top:0, bottom:0, width:0, height:0}; },
-  onclick: null,
-});
-global.document = {
-  querySelector(s){ return el(s); }, querySelectorAll(){ return []; },
-  addEventListener(){}, body: el('body'), title: '',
-};
-global.window = global;
-global.location = {hash: '', pathname: '/', search: ''};
-global.history = {replaceState(){}};
-const mem = {};
-global.localStorage = {
-  getItem(k){ return k in mem ? mem[k] : null; },
-  setItem(k, v){ mem[k] = v; }, removeItem(k){ delete mem[k]; },
-};
-global.addEventListener = () => {};
-global.innerWidth = 1200;
-global.innerHeight = 800;
-global.CSS = {escape: s => s};
-const PAYLOAD = require('fs').readFileSync(%s, 'utf8');
-global.fetch = () => Promise.resolve({json: () => JSON.parse(PAYLOAD)});
-process.on('unhandledRejection', e => {
-  console.log('FAIL boot threw: ' + ((e && e.stack) || e));
-  process.exit(1);
-});
-const html = s => el(s).innerHTML;
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+import pageboot  # noqa: E402  the stub and the boot, shared with dashboard-table
+
+# helpers the cases assert with. the dom stub itself lives in scripts/pageboot.py,
+# shared with the generator so the page under test and the page MODELS.md is
+# generated from are the same boot.
+HELPERS = """
 const cases = [];
 const test = (name, fn) => cases.push([name, fn]);
 function near(got, want, tol, what) {
@@ -115,7 +84,7 @@ const RESET = () => {
 };
 
 test('boots against the real data.json and draws every row', () => {
-  eq(D.models.length, 54, 'models in the payload');
+  eq(D.models.length, REGISTRY_MODELS, 'models in the payload');
   const rows = (html('#rows').match(/<tr data-repo=/g) || []).length;
   eq(rows, visible().length, 'rows drawn');
   ok(rows > 20, 'a filtered-to-text roster is still most of the registry');
@@ -201,16 +170,18 @@ test('the fitted quant is the largest that clears vram, cap and floor', () => {
 
 test('speed columns come and go with the setting behind them', () => {
   RESET();
+  ok(!shown().includes('tg') && !shown().includes('pp'), 'both are off to begin with');
+  ok(!html('#head').includes('t/s'), 'and neither is in the header');
+  hidden.delete('tg'); hidden.delete('pp');
+  drawTable();
   ok(shown().includes('tg') && shown().includes('pp'),
-     'the default box has both figures, so both columns are drawn');
+     'switching them on draws them, since the default box has both figures');
   ok(html('#head').includes('tg t/s'), 'and the header says so');
-  ok(!hidden.has('tg'), 'they are gated on the setting, not hidden under the gear');
   setHardware({bandwidth: 0});
-  ok(!shown().includes('tg'), 'clearing the bandwidth takes tg away');
+  ok(!shown().includes('tg'), 'clearing the bandwidth takes tg away again');
   ok(shown().includes('pp'), 'and leaves pp, which reads the other setting');
   setHardware({flops: 0});
   ok(!shown().includes('pp'), 'clearing compute takes pp too');
-  ok(!html('#head').includes('t/s'), 'neither is in the header');
   RESET();
 });
 
@@ -229,23 +200,22 @@ test('generation speed is bandwidth over the bytes a token reads', () => {
        'prefill');
 });
 
-test('drafting multiplies generation only where the head is free to read', () => {
+test('every declared drafter earns a yield, whatever the method', () => {
   RESET();
-  // an mtp or dflash head is inside the weights the quant already pays for
-  const mtp = model('qwen3.6 27b');
-  eq(mtp.speculative.type, 'draft-mtp', 'the registry declares mtp');
-  ok(draftYield(mtp) > 1.9, 'so it earns a yield, got ' + draftYield(mtp).toFixed(2));
-  near(tgTps(mtp).empty / draftYield(mtp),
-       256e9 * BW_EFFICIENCY / (activeB(mtp) * 1e9 * activeQuant(mtp).bpw / 8),
-       1e-6, 'and the base underneath it is the plain read');
-
-  // dspark is a separate file in the model's repo: another read per drafted
-  // token, and no size for it here, so the speedup is not claimed
-  const sep = model('deepseek v4 flash 0731');
-  eq(sep.speculative.type, 'draft-dspark', 'deepseek drafts from a separate file');
-  eq(draftYield(sep), 1, 'so no yield is claimed for it');
-
-  ok(draftYield(model('gpt-oss-120b')) === 1, 'a model with no drafter gets none');
+  ['qwen3.6 27b', 'qwen3.8 27b', 'gemma 4 31b', 'muse glimmer',
+   'deepseek v4 flash 0731'].forEach(s => {
+    const m = model(s);
+    ok(draftKind(m), s + ' declares a drafter');
+    ok(draftYield(m) > 1.8, s + ' earns a yield, got ' + draftYield(m).toFixed(2));
+    near(tgTps(m).empty / draftYield(m),
+         256e9 * BW_EFFICIENCY / (activeB(m) * 1e9 * activeQuant(m).bpw / 8),
+         1e-6, s + ': the base underneath it is the plain read');
+  });
+  eq(draftYield(model('gpt-oss-120b')), 1, 'a model with no drafter gets none');
+  // more drafts is worth less each time, which is why the registry stops at 3
+  // for qwen3.8 and goes to 6 for qwen3.6
+  ok(draftYield(model('qwen3.6 27b')) - draftYield(model('qwen3.8 27b')) < 0.2,
+     'doubling the draft count is worth under a fifth of a token');
 });
 
 test('the yield reproduces the one measured drafting run', () => {
@@ -264,17 +234,33 @@ test('the yield reproduces the one measured drafting run', () => {
   });
 });
 
-test('a separate draft model would count against vram, and none is pinned', () => {
+test('a sidecar drafter is resident, so it counts against vram', () => {
   RESET();
-  // the registry carries no draft_repo any more: the two it had were hand-made
-  // pairings out of llama-tools rather than anything a vendor ships
+  // no hand-written pairings survive: every drafter is discovered as a file in
+  // the model's own repo
   D.models.forEach(m => eq((m.speculative || {}).draft_repo, undefined,
-    m.short + ' pins no separate drafter'));
-  D.models.forEach(m => eq(draftGib(m), 0, m.short + ' charges nothing for one'));
-  // an mtp head is inside the weights the quant already paid for
-  eq(draftGib(model('qwen3.6 27b')), 0, 'an mtp head is not counted twice');
-  const m = model('deepseek v4 flash 0731');
-  eq(col('size').get(m), activeQuant(m).gib, 'gib is the weights alone');
+    m.short + ' pins no hand-made drafter'));
+  // qwen folds the head into the -MTP- build, so the quant already paid
+  eq(draftGib(model('qwen3.6 27b')), 0, 'an mtp build is not counted twice');
+  ok(activeQuant(model('qwen3.6 27b')).repo.includes('MTP'), 'because it IS the build');
+  // gemma, glimmer and deepseek ship it beside the quants
+  [['gemma 4 31b', 0.4, 0.6], ['muse glimmer', 1.4, 1.7],
+   ['deepseek v4 flash 0731', 9, 11]].forEach(([s, lo, hi]) => {
+    const m = model(s), d = draftGib(m);
+    ok(d > lo && d < hi, s + ' charges ' + d + ' gib for its ' + draftKind(m) + ' head');
+    eq(col('size').get(m), activeQuant(m).gib + d, s + ': the gib column includes it');
+    ok(col('size').cell(m).includes('+d'), s + ': and the cell marks that it did');
+  });
+});
+
+test('the drafter comes out of the budget before a quant is chosen', () => {
+  RESET();
+  const m = model('deepseek v4 flash 0731'), d = draftGib(m);
+  ok(d > 1, 'it has a sidecar worth paying for');
+  const room = usable() - kvGib(m, minCtx) - d;
+  ok(activeQuant(m).gib <= room, 'the fitted quant leaves space for it');
+  ok(quantChoices(m).some(c => c.gib > room && c.gib <= room + d),
+     'and a rung it would otherwise have taken was ruled out by exactly that');
 });
 
 test('latent attention is not costed as a key and a value per head', () => {
@@ -518,26 +504,7 @@ def main():
     ap.add_argument("--keep", action="store_true", help="leave the probe on disk")
     args = ap.parse_args()
 
-    for path in (PAGE, DATA):
-        if not os.path.exists(path):
-            sys.exit("!!! %s is missing, run: make site" % path)
-
-    with open(PAGE) as f:
-        page = f.read()
-    script = re.search(r"<script>(.*)</script>", page, re.S)
-    if not script:
-        sys.exit("!!! no script block in %s" % PAGE)
-
-    with open(PROBE, "w") as f:
-        f.write(STUB % json.dumps(DATA) + script.group(1) + CASES + RUNNER)
-
-    try:
-        r = subprocess.run(["node", PROBE], cwd=ROOT)
-    except FileNotFoundError:
-        sys.exit("!!! node is not on PATH")
-    finally:
-        if not args.keep and os.path.exists(PROBE):
-            os.remove(PROBE)
+    r = pageboot.run(HELPERS + CASES + RUNNER, PROBE, keep=args.keep)
     sys.exit(r.returncode)
 
 
