@@ -193,6 +193,54 @@ def sampler_facts(gen):
     return {k: v for k, v in out.items() if isinstance(v, (int, float))}
 
 
+def attention(text):
+    """What a kv cache would cost per token, from the geometry config declares.
+
+    The naive `2 * layers * kv_heads * head_dim` is wrong for most of this
+    roster and wrong in the expensive direction. Hybrid attention is the norm
+    now: gemma 4 runs a 1024-token sliding window on all but every Nth layer,
+    qwen3.6 makes one layer in four global, and kimi k3 is linear attention on
+    69 of its 93 layers with only 24 holding a real cache. Counting every layer
+    as global overstates gemma 4 31b's cache several times over, so the full
+    and windowed layers are counted separately and the window is kept.
+
+    Layers are counted from whichever way the config says it, in order of how
+    explicit each is: an itemised `layer_types`, a linear-attention block that
+    lists its full layers, an interval, then the fallback of all layers global.
+    """
+    heads, dim = text.get("num_key_value_heads"), text.get("head_dim")
+    layers = text.get("num_hidden_layers")
+    linear = text.get("linear_attn_config") or {}
+    if not layers:
+        return {}
+    if not dim and text.get("hidden_size") and text.get("num_attention_heads"):
+        dim = text["hidden_size"] // text["num_attention_heads"]
+    dim = dim or linear.get("head_dim")
+    heads = heads or linear.get("num_heads")
+    if not heads or not dim:
+        return {}
+
+    window = text.get("sliding_window") or text.get("attention_chunk_size")
+    types = text.get("layer_types")
+    interval = text.get("full_attention_interval")
+    if isinstance(types, list) and types:
+        full = sum(1 for t in types if "sliding" not in str(t) and "linear" not in str(t))
+    elif linear.get("full_attn_layers"):
+        full = len(linear["full_attn_layers"])
+        # the rest are linear-attention layers: a fixed-size recurrent state
+        # rather than a cache that grows with context, so they are not windowed
+        window = window or 0
+    elif interval:
+        full = max(1, layers // interval)
+    else:
+        full = layers
+    out = {"kv_heads": heads, "head_dim": dim, "full_layers": full,
+           "other_layers": layers - full}
+    if window:
+        out["window"] = window
+    return {k: v for k, v in out.items() if v is not None}
+
+
 def shape_facts(cfg):
     """Architecture and size, from config.json. Nested text_config on VL models."""
     if not cfg:
@@ -222,6 +270,9 @@ def shape_facts(cfg):
             ("factor", rope.get("factor")),
             ("original", rope.get("original_max_position_embeddings")),
         ) if v is not None}
+    attn = attention(text)
+    if attn:
+        out["attn"] = attn
     mtp = text.get("mtp_num_hidden_layers") or text.get("num_nextn_predict_layers")
     if mtp:
         out["mtp_layers"] = mtp
@@ -234,7 +285,12 @@ def shape_facts(cfg):
         modes.append("image")
     if cfg.get("video_token_id") is not None:
         modes.append("video")
-    if cfg.get("audio_config"):
+    # `audio_config` is an ENCODER, so it means audio in. an asr model has none
+    # -- its encoder is the whole model -- and declares itself by the mel bins
+    # it consumes instead. that key is specific enough to be safe: kokoro is a
+    # tts model and spells its (output) mel count `n_mels`, and s2-pro's is
+    # under `audio_decoder_config`, so neither is read as taking audio in.
+    if cfg.get("audio_config") or cfg.get("num_mel_bins"):
         modes.append("audio")
     out["input"] = modes
     return {k: v for k, v in out.items() if v is not None}

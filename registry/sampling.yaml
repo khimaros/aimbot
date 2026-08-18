@@ -30,6 +30,13 @@ fields:
   # thinking level to request. graded from off to max; a model that only has an
   # on/off toggle declares off and one other. must be a level the model accepts.
   thinking:         {type: level, of: ["off", minimal, low, medium, high, xhigh, max]}
+  # where these numbers still agree with, derived by scripts/resolve-samplers.
+  # every other fact in this repo says where it came from and a sampler set did
+  # not, so a deliberate departure and a typo looked identical.
+  source:           {type: enum, of: [quant-card, vendor-card, generation-config, tuned-here]}
+  # why, and it is REQUIRED for `tuned-here`. a set agreeing with no published
+  # source is either a considered choice or a mistake, and only prose can say.
+  note:             {type: text}
 
 profiles:
   thinking:
@@ -58,6 +65,27 @@ profiles:
 # matches what the card says. any `upstream-` prefixed name is valid as long as
 # the profile it qualifies is.
 upstream_prefix: upstream-
+
+# what each `source` means. the first three are checked -- models-validate
+# re-runs the comparison and fails if the agreement it claims has stopped
+# holding -- so they are a claim about the current captures rather than a note
+# about who typed what in.
+sources:
+  quant-card:
+    summary: agrees with a set the quant repo's card documents
+    use_when: the numbers match what the repo a consumer actually serves published
+  vendor-card:
+    summary: agrees with a set the model's own card documents
+    use_when: the base repo published it and the quant repo did not contradict it
+  generation-config:
+    summary: agrees with the samplers shipped in generation_config.json
+    use_when: no card documents a set, and the weights carry their own defaults
+  tuned-here:
+    summary: agrees with nothing published; chosen for this roster
+    use_when: >
+      a departure somebody decided on. nemotron 3 super's card says temp 1.0
+      "across all tasks and serving backends, tool calling included" and this
+      registry runs it colder; that is a choice, and `note` has to say so
 
 # a consumer that names no profile gets this one.
 default: tool-use

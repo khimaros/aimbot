@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Count which models people name for which tasks, from the scraped reddit data.
+"""Count which models people name for which tasks, across every captured forum.
 
 Two quotes are an anecdote. This counts model/task co-occurrence across every
 captured comment so the task-fit claims in MODELS.md have a denominator.
@@ -15,6 +15,7 @@ missed -- so read a cell as "at least this many people said it".
     ./analyze-task-mentions --task debugging # show the matching sentences
     ./analyze-task-mentions --sentiment      # score-weighted approval per model
     ./analyze-task-mentions --quotes hy3     # best and worst received mentions
+    ./analyze-task-mentions --source all     # every forum, not just reddit
 
 On comment scores. Treating an upvote as "agreement" is roughly right *within*
 a thread and badly wrong across threads. Measured on this corpus, the top
@@ -36,6 +37,18 @@ up/down split is private and the number is fuzzed -- so a controversial +5
 visibility: early top-level comments accumulate far more of them than replies,
 whatever their content. Negative scores are the cleanest signal in the set
 precisely because they are rare (36 of 5506) and take deliberate effort.
+
+FOUR forums, kept apart rather than pooled. They do not measure the same thing:
+reddit argues about which model is best, the huggingface discussion tab reports
+whether a specific quant loads at all, level1techs publishes no post bodies so
+only its thread titles can be matched, and hacker news carries no per-comment
+score. A reader who trusts one and not another needs them separable, so
+`--json` writes each forum's numbers under `by_source` and every claim keeps a
+url and the sentence it came from.
+
+The TOP-LEVEL aggregate stays reddit-only. build-tables weights sentiment at
+0.15 on a redundancy analysis measured against reddit alone, so widening the
+aggregate would silently re-rank MODELS.md; the other forums are additive.
 """
 
 import argparse
@@ -45,11 +58,13 @@ import os
 import re
 import subprocess
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+
 # the model alias table lives in ./match-models so that every analysis in this
 # directory shares one definition; a missing alias silently zeroes a model
 # rather than erroring, so there must not be two copies to drift apart.
 MODELS = json.loads(subprocess.run(
-    [os.path.join(os.path.dirname(os.path.abspath(__file__)), "match-models"), "--lexicon"],
+    [os.path.join(HERE, "match-models"), "--lexicon"],
     stdout=subprocess.PIPE, text=True, check=True).stdout)["models"]
 
 TASKS = {
@@ -71,9 +86,6 @@ TASKS = {
     "autocomplete": r"autocomplete|\bfim\b|fill[\s-]*in[\s-]*the[\s-]*middle",
 }
 
-# a naive split on "." shreds every version number -- "Qwen3.6-27B" becomes
-# "Qwen3" and "6-27B" and the model is never matched. only break on terminators
-# that are not sitting between digits.
 # deliberately small and blunt. a bigger lexicon would not fix the real problem,
 # which is that "X is better than Y" scores positive for both X and Y; the
 # --quotes mode exists so claims get eyeballed rather than trusted.
@@ -86,16 +98,252 @@ NEG = re.compile(r"\b(worse|worst|bad|terrible|awful|useless|disappoint\w*|"
                  r"struggl\w*|fails?|failed|garbage|meh|mediocre|"
                  r"gave up|dropped it|uninstall\w*|not (great|good|worth))\b", re.I)
 
+# a naive split on "." shreds every version number -- "Qwen3.6-27B" becomes
+# "Qwen3" and "6-27B" and the model is never matched. only break on terminators
+# that are not sitting between digits.
 SENT = re.compile(r"(?<!\d)[.!?]+(?!\d)\s+|[\n\r]+")
+
+REDDIT_THREAD = "https://old.reddit.com/r/LocalLLaMA/comments/%s/"
+HN_ITEM = "https://news.ycombinator.com/item?id=%s"
+HF_DISCUSSION = "https://huggingface.co/%s/discussions/%d"
+
+# quoted mentions carried per model per forum. enough to read the room without
+# turning the data file into a copy of the corpus.
+REFS_PER_SOURCE = 8
+REFS_PER_THREAD = 2
+QUOTE_CHARS = 300
+
+# a huggingface discussion is half shell transcript, and a quote of somebody's
+# --n-gpu-layers line says nothing about the model. keep sentences that read as
+# prose: enough words, no path, no command, no unbroken 40-character token.
+CODE_LIKE = re.compile(r"^\s*[#$>|]|/\w+/\w+|\S{40,}|\s--?[a-z-]{3,}\s|={2,}")
+WORDS = re.compile(r"[a-zA-Z]{2,}")
+
+DEFAULT_SOURCE = "reddit-localllama"
 
 
 def sentences(text):
     return [s for s in SENT.split(text or "") if len(s.strip()) > 12]
 
 
+# --- corpora -----------------------------------------------------------------
+#
+# every forum flattens to the same shape: a thread with a url and a list of
+# (score, depth, text) posts. score and depth are None where the site does not
+# publish them, and the percentile control below degrades to "unscored" rather
+# than inventing a number.
+
+
+def threads_reddit(d):
+    for t in d.get("threads", {}).values():
+        posts = [(None, 0, t.get("body") or "")] + \
+                [(c.get("score"), c.get("depth", 0), c.get("text") or "")
+                 for c in t.get("comments", [])]
+        yield {"title": t.get("title", ""), "url": REDDIT_THREAD % t.get("id"),
+               "posts": posts}
+
+
+def threads_hackernews(d):
+    """One thread per story. Comments are bare strings: hn algolia publishes no
+    per-comment score, so only the story's points are scored."""
+    for query, stories in d.items():
+        for s in stories or []:
+            posts = [(s.get("points"), 0, s.get("title") or "")] + \
+                    [(None, 1, c) for c in (s.get("comments") or [])]
+            yield {"title": "%s (hn: %s)" % (s.get("title", ""), query),
+                   "url": s.get("url") or HN_ITEM % s.get("id"), "posts": posts}
+
+
+def threads_level1techs(d):
+    """Titles only. The discourse listing carries no post bodies, so a match
+    here means the thread is ABOUT the model, not that anyone praised it."""
+    for t in (d.get("topics") or {}).values():
+        yield {"title": t.get("title", ""), "url": t.get("url"),
+               "posts": [(None, 0, t.get("title") or "")]}
+
+
+def threads_hf_discussions(d):
+    """The one forum attached to a specific quant of a specific repo, which is
+    why a failure here is usually operational rather than about quality."""
+    for repo, box in d.items():
+        for disc in (box.get("discussions") or []):
+            posts = [(p.get("reactions"), 0, p.get("text") or "")
+                     for p in (disc.get("thread") or [])]
+            yield {"title": "%s: %s" % (repo, disc.get("title", "")),
+                   "url": HF_DISCUSSION % (repo, disc.get("num") or 0),
+                   "posts": posts}
+
+
+CORPORA = {
+    "reddit-localllama": ("data/reddit-localllama.json", threads_reddit),
+    "hackernews": ("data/hackernews.json", threads_hackernews),
+    "level1techs": ("data/level1techs.json", threads_level1techs),
+    "hf-discussions": ("data/hf-discussions.json", threads_hf_discussions),
+}
+
+
+def load_threads(source, root):
+    path = os.path.join(root, CORPORA[source][0])
+    if not os.path.exists(path):
+        return []
+    with open(path) as f:
+        return list(CORPORA[source][1](json.load(f)))
+
+
+class Counts:
+    """Everything counted for one forum, so the forums never pool by accident."""
+
+    def __init__(self):
+        self.mentions = collections.Counter()
+        self.threads = collections.defaultdict(set)
+        self.pairs = collections.Counter()
+        self.examples = collections.defaultdict(list)
+        self.scores = collections.defaultdict(list)
+        self.rel = collections.defaultdict(list)
+        self.toplevel = collections.defaultdict(list)
+        self.pol = collections.defaultdict(lambda: [0, 0])
+        self.said = collections.defaultdict(list)
+        self.refs = collections.defaultdict(list)
+        self.sentences = 0
+
+
+def percentiles(posts):
+    """Score percentile within (thread, depth), as a lookup over this thread.
+
+    A reply three levels down is seen by a fraction of the audience a top-level
+    comment gets, so it is compared against its siblings rather than against
+    the comment that started the chain.
+    """
+    buckets = collections.defaultdict(list)
+    for score, depth, _ in posts:
+        if score is not None:
+            buckets[min(depth or 0, 2)].append(score)
+    for v in buckets.values():
+        v.sort()
+
+    def pct(v, depth=0):
+        b = buckets.get(min(depth or 0, 2)) or []
+        if not b or v is None:
+            return None
+        return 100.0 * sum(1 for x in b if x < v) / len(b)
+    return pct
+
+
+def scan(threads, mre, tre):
+    """Count mentions, polarity and model/task pairs over one forum."""
+    c = Counts()
+    for t in threads:
+        pct = percentiles(t["posts"])
+        for score, depth, text in t["posts"]:
+            for s in sentences(text):
+                c.sentences += 1
+                ms = [m for m, r in mre.items() if r.search(s)]
+                if not ms:
+                    continue
+                ts = [k for k, r in tre.items() if r.search(s)]
+                p, n = len(POS.findall(s)), len(NEG.findall(s))
+                rel = pct(score, depth)
+                for m in ms:
+                    c.mentions[m] += 1
+                    c.threads[m].add(t["url"])
+                    if score is not None:
+                        c.scores[m].append(score)
+                        c.rel[m].append(rel)
+                        if (depth or 0) == 0:
+                            c.toplevel[m].append(score)
+                        c.said[m].append((score, s.strip()[:260]))
+                    if p or n:
+                        c.pol[m][0] += 1 if p > n else 0
+                        c.pol[m][1] += 1 if n > p else 0
+                    keep_ref(c, m, t, s, score, rel, p, n)
+                    for k in ts:
+                        c.pairs[(m, k)] += 1
+                        if len(c.examples[(m, k)]) < 6:
+                            c.examples[(m, k)].append(
+                                (t["title"][:44], s.strip()[:200]))
+    return c
+
+
+def keep_ref(c, model, thread, sentence, score, rel, pos, neg):
+    """Keep the sentence itself, with somewhere to go and read it in context.
+
+    A number nobody can trace back is an assertion. The viewer shows these on
+    hover, so a claim about a model resolves to the comment that made it.
+
+    One thread can only speak twice: without the cap a single long huggingface
+    transcript supplies every quote a model has, and eight lines of one
+    person's shell session read as a consensus.
+    """
+    s = sentence.strip()
+    if len(WORDS.findall(s)) < 5 or CODE_LIKE.search(s):
+        return
+    refs = c.refs[model]
+    if sum(1 for r in refs if r["url"] == thread["url"]) >= REFS_PER_THREAD:
+        return
+    ref = {"url": thread["url"], "title": thread["title"][:120],
+           "quote": s[:QUOTE_CHARS],
+           "polarity": "+" if pos > neg else "-" if neg > pos else "0"}
+    if score is not None:
+        ref["score"] = score
+    if rel is not None:
+        ref["rel"] = round(rel)
+    refs.append(ref)
+
+
+def summarise(c, model):
+    """The per-forum record: counts, reception, and the sentences behind them."""
+    ss = sorted(c.scores[model])
+    rr = sorted(x for x in c.rel[model] if x is not None)
+    pos, neg = c.pol[model]
+    refs = sorted(c.refs[model],
+                  key=lambda r: (r["polarity"] != "0", r.get("rel", 50)),
+                  reverse=True)[:REFS_PER_SOURCE]
+    out = {"mentions": c.mentions[model], "threads": len(c.threads[model]),
+           "top_level": len(c.toplevel[model]),
+           "median_rel": rr[len(rr) // 2] if rr else None,
+           "median_score": ss[len(ss) // 2] if ss else None,
+           "downvoted": sum(1 for x in ss if x < 0),
+           "positive": pos, "negative": neg,
+           # share of the polarised sentences that were positive. None rather
+           # than 50% when nobody said anything either way, so the viewer can
+           # tell "disliked" from "undiscussed"
+           "approval": round(100.0 * pos / (pos + neg)) if pos + neg else None,
+           "tasks": {k: n for (m, k), n in c.pairs.items() if m == model and n},
+           "refs": refs}
+    return out
+
+
+def write_json(path, per_source, models):
+    """One record per model: the reddit aggregate, then every forum separately."""
+    out = {}
+    for m in models:
+        base = per_source[DEFAULT_SOURCE]
+        if not base.mentions[m] and not any(c.mentions[m] for c in per_source.values()):
+            continue
+        # the top-level fields stay reddit-only; build-tables' composite weight
+        # was measured against reddit and must not move under it
+        rec = summarise(base, m)
+        rec.pop("refs", None)
+        rec["by_source"] = {s: summarise(c, m) for s, c in per_source.items()
+                            if c.mentions[m]}
+        tasks = collections.Counter()
+        for c in per_source.values():
+            for (mm, k), n in c.pairs.items():
+                if mm == m:
+                    tasks[k] += n
+        rec["tasks_all"] = dict(tasks)
+        out[m] = rec
+    with open(path, "w") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+    print("wrote %s: %d models over %d forums" % (path, len(out), len(per_source)))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--data", default="data/reddit-localllama.json")
+    ap.add_argument("--source", default=DEFAULT_SOURCE,
+                    choices=list(CORPORA) + ["all"],
+                    help="which forum the human-readable tables read")
+    ap.add_argument("--root", default=".", help="directory holding data/")
     ap.add_argument("--min", type=int, default=3, help="minimum count to report")
     ap.add_argument("--task", help="print the matching sentences for one task")
     ap.add_argument("--sentiment", action="store_true",
@@ -106,90 +354,29 @@ def main():
                     help="write per-model sentiment to PATH for build-tables to consume")
     args = ap.parse_args()
 
-    d = json.load(open(args.data))
     mre = {k: re.compile(v, re.I) for k, v in MODELS.items()}
     tre = {k: re.compile(v, re.I) for k, v in TASKS.items()}
 
-    pairs = collections.Counter()
-    mentions = collections.Counter()
-    examples = collections.defaultdict(list)
-    scores = collections.defaultdict(list)      # raw comment score per mention
-    rel = collections.defaultdict(list)   # percentile within (thread, depth)
-    toplevel = collections.defaultdict(list)    # scores of depth-0 mentions only
-    pol = collections.defaultdict(lambda: [0, 0])   # [positive, negative] sentences
-    weighted = collections.defaultdict(float)   # log-damped, signed
-    said = collections.defaultdict(list)        # (score, sentence) per model
-    n_sent = 0
-
-    for t in d.get("threads", {}).values():
-        # percentile within this thread, so a +40 in a quiet thread is not
-        # ranked below a +40 in one that hit the front page
-        # percentile within (thread, depth): compare a reply to sibling replies,
-        # not to the top-level comment that started the chain
-        buckets = collections.defaultdict(list)
-        for c in t.get("comments", []):
-            if c.get("score") is not None:
-                buckets[min(c.get("depth", 0), 2)].append(c["score"])
-        for v in buckets.values():
-            v.sort()
-
-        def pct(v, depth=0):
-            b = buckets.get(min(depth or 0, 2)) or []
-            if not b or v is None:
-                return None
-            return 100.0 * sum(1 for x in b if x < v) / len(b)
-        items = [(None, 0, t.get("body") or "")] + \
-                [(c.get("score"), c.get("depth", 0), c.get("text") or "")
-                 for c in t.get("comments", [])]
-        for score, depth, text in items:
-            for s in sentences(text):
-                n_sent += 1
-                ms = [m for m, r in mre.items() if r.search(s)]
-                ts = [k for k, r in tre.items() if r.search(s)]
-                p, n = len(POS.findall(s)), len(NEG.findall(s))
-                for m in ms:
-                    mentions[m] += 1
-                    if score is not None:
-                        scores[m].append(score)
-                        rel[m].append(pct(score, depth))
-                        if (depth or 0) == 0:
-                            toplevel[m].append(score)
-                        said[m].append((score, s.strip()[:260]))
-                    if p or n:
-                        pol[m][0] += 1 if p > n else 0
-                        pol[m][1] += 1 if n > p else 0
-                        # log damping: a +200 comment outweighs a +2 one, but not 100x
-                        # weight by thread-relative standing, not raw score
-                        w = (pct(score, depth) or 50.0) / 50.0
-                        weighted[m] += w * (1 if p > n else -1 if n > p else 0)
-                    for k in ts:
-                        pairs[(m, k)] += 1
-                        if len(examples[(m, k)]) < 6:
-                            examples[(m, k)].append((t.get("title", "")[:44], s.strip()[:200]))
-
-    print("sentences scanned: %d, threads: %d\n" % (n_sent, len(d.get("threads", {}))))
+    # --json always reads every forum; the human tables read the one asked for
+    wanted = list(CORPORA) if (args.json or args.source == "all") else [args.source]
+    per_source = {s: scan(load_threads(s, args.root), mre, tre) for s in wanted}
+    for s, c in per_source.items():
+        print("%-18s sentences %6d, models mentioned %d"
+              % (s, c.sentences, len(c.mentions)))
+    print()
 
     if args.json:
-        out = {}
-        for m, n in mentions.items():
-            ss = sorted(scores[m])
-            rr = sorted(x for x in rel[m] if x is not None)
-            out[m] = dict(mentions=n, top_level=len(toplevel[m]),
-                          median_rel=rr[len(rr) // 2] if rr else None,
-                          median_score=ss[len(ss) // 2] if ss else None,
-                          downvoted=sum(1 for x in ss if x < 0),
-                          positive=pol[m][0], negative=pol[m][1])
-        with open(args.json, "w") as f:
-            json.dump(out, f, indent=1, sort_keys=True)
-        print("wrote %s: %d models" % (args.json, len(out)))
+        write_json(args.json, per_source, MODELS)
         return
+
+    c = per_source[args.source] if args.source != "all" else merged(per_source)
 
     if args.quotes:
         key = args.quotes.lower()
         m = next((k for k in MODELS if key in k), None)
         if not m:
             raise SystemExit("no such model; try one of: " + ", ".join(MODELS))
-        rows = sorted(said[m], reverse=True)
+        rows = sorted(c.said[m], reverse=True)
         print("## best received mentions of %s\n" % m)
         for sc, s in rows[:8]:
             print("  [%+d] %s" % (sc, s))
@@ -199,45 +386,67 @@ def main():
         return
 
     if args.sentiment:
-        print("| model | mentions | top-level | median rel | median score | "
+        print("| model | mentions | threads | top-level | median rel | median score | "
               "downvoted | pos | neg |")
-        print("|---|--:|--:|--:|--:|--:|--:|--:|")
-        for m, n in mentions.most_common():
-            if n < args.min or not scores[m]:
+        print("|---|--:|--:|--:|--:|--:|--:|--:|--:|")
+        for m, n in c.mentions.most_common():
+            if n < args.min:
                 continue
-            ss = sorted(scores[m])
-            rr = sorted(x for x in rel[m] if x is not None)
-            tl = sorted(toplevel[m])
-            print("| %s | %d | %d | %d | %d | %d | %d | %d |" % (
-                m, n, len(tl), rr[len(rr) // 2] if rr else -1, ss[len(ss) // 2],
-                sum(1 for x in ss if x < 0), pol[m][0], pol[m][1]))
+            r = summarise(c, m)
+            print("| %s | %d | %d | %d | %s | %s | %d | %d | %d |" % (
+                m, r["mentions"], r["threads"], r["top_level"],
+                r["median_rel"] if r["median_rel"] is not None else -1,
+                r["median_score"] if r["median_score"] is not None else "-",
+                r["downvoted"], r["positive"], r["negative"]))
         print("\nmedian rel = median percentile against comments at the same depth in")
         print("the same thread. 50 is unremarkable. 'top-level' counts mentions that")
         print("were not buried in a reply chain, which is where a score means most.")
         return
 
     if args.task:
-        for (m, k), n in sorted(pairs.items(), key=lambda kv: -kv[1]):
+        for (m, k), n in sorted(c.pairs.items(), key=lambda kv: -kv[1]):
             if k != args.task:
                 continue
             print("\n## %s (%d)" % (m, n))
-            for title, s in examples[(m, k)]:
+            for title, s in c.examples[(m, k)]:
                 print("  [%s] %s" % (title, s))
         return
 
-    tasks = [k for k in TASKS if any(pairs[(m, k)] >= args.min for m in MODELS)]
-    models = [m for m, _ in mentions.most_common() if mentions[m] >= args.min]
+    tasks = [k for k in TASKS if any(c.pairs[(m, k)] >= args.min for m in MODELS)]
+    models = [m for m, _ in c.mentions.most_common() if c.mentions[m] >= args.min]
 
     print("| model | mentions | " + " | ".join(tasks) + " |")
     print("|---|--:|" + "--:|" * len(tasks))
     for m in models:
-        cells = [str(pairs[(m, k)]) if pairs[(m, k)] else "" for k in tasks]
-        print("| %s | %d | %s |" % (m, mentions[m], " | ".join(cells)))
+        cells = [str(c.pairs[(m, k)]) if c.pairs[(m, k)] else "" for k in tasks]
+        print("| %s | %d | %s |" % (m, c.mentions[m], " | ".join(cells)))
 
     print("\ntop model/task pairs (count >= %d):\n" % args.min)
-    for (m, k), n in sorted(pairs.items(), key=lambda kv: -kv[1]):
+    for (m, k), n in sorted(c.pairs.items(), key=lambda kv: -kv[1]):
         if n >= args.min:
             print("  %-22s %-18s %d" % (m, k, n))
+
+
+def merged(per_source):
+    """Every forum pooled, for the human tables only. The json output keeps
+    them apart, because pooling weights a title-only forum like level1techs the
+    same as a scored comment."""
+    out = Counts()
+    for c in per_source.values():
+        out.sentences += c.sentences
+        out.mentions.update(c.mentions)
+        out.pairs.update(c.pairs)
+        for m, v in c.threads.items():
+            out.threads[m] |= v
+        for store in ("scores", "rel", "toplevel", "said", "refs"):
+            for m, v in getattr(c, store).items():
+                getattr(out, store)[m].extend(v)
+        for m, (p, n) in c.pol.items():
+            out.pol[m][0] += p
+            out.pol[m][1] += n
+        for k, v in c.examples.items():
+            out.examples[k].extend(v)
+    return out
 
 
 if __name__ == "__main__":

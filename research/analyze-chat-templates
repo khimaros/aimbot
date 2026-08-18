@@ -286,6 +286,10 @@ def probe_knob(text, knob, gate):
         ctx[knob] = value
         return render(text, messages(["user"]), **ctx)
 
+    # what the template does when the client sends NOTHING. whichever accepted
+    # level renders byte-identically to this is the default, and a client that
+    # omits the knob has picked that level without being told so
+    unset, unset_err, _ = render(text, messages(["user"]), **dict(gate))
     ctl, ctl_err, _ = at(CONTROL)
     accepts, rejects, ignored, seen = [], [], [], {}
     for level in LEVELS:
@@ -312,13 +316,31 @@ def probe_knob(text, knob, gate):
         groups = [sorted(v, key=LEVELS.index) for v in seen.values() if len(v) > 1]
         if groups and kind != "verbatim":
             out["equivalent"] = sorted(groups, key=lambda g: LEVELS.index(g[0]))
+        # only a level the template ACCEPTS can be the default. an unset render
+        # that matches the control instead means omitting the knob leaves
+        # thinking off rather than at some level, which is a different fact and
+        # is not stated here
+        if unset_err is None:
+            for got, at_level in seen.items():
+                if got == unset:
+                    out["default"] = min(at_level, key=LEVELS.index)
+                    break
         return out
     # no level moved the output, so it is not a level knob. a boolean gate sees
     # every string as true, which is exactly why it lands here
     on, on_err, _ = at(True)
     off, off_err, _ = at(False)
     if on_err is None and off_err is None and on != off:
-        return {"type": "boolean", "kind": "boolean"}
+        out = {"type": "boolean", "kind": "boolean"}
+        # a toggle has a default too, and it is the fact most worth having:
+        # the gemma 4 templates think only when asked, and every qwen3.5 and
+        # qwen3.6 template thinks unless told not to
+        if unset_err is None:
+            if unset == off:
+                out["default"] = False
+            elif unset == on:
+                out["default"] = True
+        return out
     lo, lo_err, _ = at(0)
     hi, hi_err, _ = at(8192)
     if lo_err is None and hi_err is None and lo != hi:

@@ -42,11 +42,36 @@ class Findings:
         self.rows.append({"where": where, "error": msg})
 
 
+def check_modalities(models, facts, f):
+    """`modalities.input` against what the model's own config says it consumes.
+
+    This is the one typed field with a derived counterpart, and the two had
+    drifted on 21 of 54 entries -- most of them missing `video` where the
+    config carries a video token, and one, deepseek v4 flash, claiming image
+    and audio for a text-only model whose config has neither encoder.
+
+    Only `input` is checked: nothing here derives what a model emits, so
+    `output` stays typed and unverified.
+    """
+    rows = []
+    for repo, m in (models.get("models") or {}).items():
+        want = (facts.get(repo) or {}).get("input")
+        if not want:
+            continue
+        got = (m.get("modalities") or {}).get("input") or []
+        if sorted(got) != sorted(want):
+            rows.append((repo, got, want))
+            f.add(repo, "modalities.input %s but its config says %s"
+                  % (",".join(got) or "-", ",".join(want)))
+    return rows
+
+
 def check_registry(models, sampling, f):
     """The registry has to be internally consistent before anything can lean on it."""
     known_profiles = set(sampling.get("profiles") or {})
     known_fields = set(sampling.get("fields") or {})
     known_tags = set((sampling["fields"].get("tuned") or {}).get("of") or [])
+    known_sources = set(sampling.get("sources") or {})
 
     if sampling.get("default") not in known_profiles:
         f.add("sampling.yaml", "default profile %r is not defined"
@@ -80,6 +105,21 @@ def check_registry(models, sampling, f):
             if not q.get("repo") or not q.get("quant"):
                 f.add(repo, "every quant needs both repo and quant: %r" % (q,))
 
+        # the level a client gets by sending nothing has to be a level the
+        # template accepts, or the entry is describing two different knobs. a
+        # toggle has no vocabulary: its values are the booleans themselves, and
+        # a consumer sending the STRING "off" would turn thinking ON
+        think = m.get("thinking") or {}
+        if think.get("kind") == "boolean":
+            if "default" in think and not isinstance(think["default"], bool):
+                f.add(repo, "thinking.default %r must be true or false for a "
+                      "boolean knob" % (think["default"],))
+            if think.get("accepts"):
+                f.add(repo, "a boolean knob has no accepts; its values are true and false")
+        elif think.get("default") and think["default"] not in (think.get("accepts") or []):
+            f.add(repo, "thinking.default %r is not one of thinking.accepts %s"
+                  % (think["default"], think.get("accepts") or []))
+
         # only text models have samplers to name; an image or speech server has
         # no temperature to set
         profiles = m.get("sampling") or {}
@@ -95,6 +135,10 @@ def check_registry(models, sampling, f):
                 f.add("%s/%s" % (repo, name),
                       "profile is not in sampling.yaml (known: %s)"
                       % ", ".join(sorted(known_profiles)))
+            if (prof or {}).get("source") == "tuned-here" and not (prof or {}).get("note"):
+                f.add("%s/%s" % (repo, name),
+                      "source tuned-here needs a note: these numbers match no "
+                      "card and no shipped config, so only prose says why")
             for field, val in (prof or {}).items():
                 if field not in known_fields:
                     f.add("%s/%s" % (repo, name), "unknown sampler field %r" % field)
@@ -108,6 +152,16 @@ def check_registry(models, sampling, f):
                 # a declared level has to be one the vocabulary knows, which is
                 # the check that catches sending a model the "high" its chat
                 # template raises an exception on
+                if field == "source":
+                    if val not in known_sources:
+                        f.add("%s/%s" % (repo, name),
+                              "source %r is not one of %s"
+                              % (val, ", ".join(sorted(known_sources))))
+                    continue
+                if field == "note":
+                    if not isinstance(val, str) or not val.strip():
+                        f.add("%s/%s" % (repo, name), "note must be prose")
+                    continue
                 if field == "thinking":
                     levels = spec.get("of") or []
                     if val not in levels:
@@ -254,6 +308,8 @@ def main():
                     help="report profiles that disagree with generation_config.json")
     ap.add_argument("--thinking", action="store_true",
                     help="report graded knobs whose levels nothing declares")
+    ap.add_argument("--modalities", action="store_true",
+                    help="report modalities.input against each model's own config")
     ap.add_argument("--cards", action="store_true",
                     help="report profiles against the sampler sets cards document")
     ap.add_argument("--model-cards", default=os.path.join(HERE, "..", "research",
@@ -265,7 +321,16 @@ def main():
     sampling = load(os.path.join(args.registry, "sampling.yaml"))
 
     f = Findings()
+    facts = load(args.facts) or {}
     check_registry(models, sampling, f)
+    # a typed field with a derived counterpart is drift waiting to happen, so
+    # this one is an error rather than a report you have to remember to run
+    rows = check_modalities(models, facts, f)
+    if args.modalities:
+        print("\nmodalities: %d model(s) disagreeing with their own config" % len(rows))
+        for repo, got, want in sorted(rows):
+            print("  %-46s registry=%-24s config=%s"
+                  % (repo, ",".join(got) or "-", ",".join(want)))
     if args.samplers:
         report_samplers(models, load(args.facts) or {})
     if args.thinking:

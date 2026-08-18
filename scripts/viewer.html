@@ -1,0 +1,1724 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aimbot &middot; model registry</title>
+<style>/* dark, minimal, monospace, borrowed from quantbench's dashboard. colour
+   carries meaning and nothing else: a measurement, a claim the model makes
+   about itself, a behaviour that silently drops your message. no gradients, no
+   animation -- this is a tool for reading numbers. */
+:root {
+  /* native widgets (the publisher select and its popup) follow this, and
+     default to a white listbox without it */
+  color-scheme: dark;
+  --bg: #0e0e10; --panel: #17171b; --line: #33333a;
+  /* quantbench's ramp, opened up: this page is read for its prose as well as
+     its numbers, and a quoted comment at --dim was too quiet to read. */
+  --fg: #e8e8ec; --dim: #9d9da8; --faint: #71717c;
+  --ok: #7fbe7f; --bad: #c87d7d; --warn: #c0b06a; --link: #86a8cc;
+  /* a bar behind a number, and the one accent used for "this is measured". */
+  --bar: #2b4a63; --live: #6ea6d8;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 1.5rem 1.25rem; background: var(--bg); color: var(--fg);
+  font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+main { max-width: 1440px; margin: 0 auto; }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+h1 { font-size: 13px; font-weight: 600; margin: 0; }
+h1 span { color: var(--dim); font-weight: 400; }
+header nav { display: flex; gap: 1rem; font-size: 11px; }
+
+
+.controls { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+            color: var(--dim); font-size: 11px; margin-top: 1rem; }
+.controls + .controls { margin-top: .45rem; }
+.controls .lbl { color: var(--faint); text-transform: uppercase; letter-spacing: .04em;
+                 min-width: 5rem; flex: none; }
+.controls input[type=search] {
+  font: inherit; font-size: 12px; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--line); padding: .3rem .55rem; min-width: 15rem;
+}
+.controls input[type=number] {
+  font: inherit; font-size: 12px; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--line); padding: .3rem .55rem; width: 7rem;
+}
+.controls input[type=search]:focus { outline: none; border-color: var(--faint); }
+.controls select {
+  font: inherit; font-size: 11px; color: var(--dim); background: var(--panel);
+  border: 1px solid var(--line); padding: .25rem .5rem; cursor: pointer;
+}
+.controls select:hover { color: var(--fg); border-color: var(--faint); }
+button {
+  font: inherit; font-size: 11px; color: var(--dim); background: var(--panel);
+  border: 1px solid var(--line); padding: .25rem .6rem; cursor: pointer;
+}
+button:hover { color: var(--fg); border-color: var(--faint); }
+button[aria-pressed="true"] { color: var(--fg); border-color: var(--faint); background: var(--bg); }
+
+.panel {
+  display: none; margin: .75rem 0 0; padding: .8rem 1rem;
+  background: var(--panel); border: 1px solid var(--line);
+}
+.panel.open { display: block; }
+.panel .hint { color: var(--faint); font-size: 11px; margin-bottom: .6rem; }
+#cols { display: none; flex-wrap: wrap; gap: .35rem; }
+#cols.open { display: flex; }
+#cols button.drag { opacity: .4; }
+#cols button.drop { box-shadow: inset 2px 0 0 var(--link); }
+
+/* the weighting panel: one row per facet, grouped by what measured it. */
+.group { margin-bottom: .9rem; }
+.group h3 { font-size: 11px; margin: 0 0 .15rem; color: var(--fg); text-transform: uppercase;
+             letter-spacing: .04em; cursor: pointer; user-select: none; }
+.group h3:hover { color: var(--link); }
+/* the id-scoped sidebar rule below sets `display: grid` on these, so the
+   collapse has to match its specificity or it only hides the description */
+.group.shut p, .group.shut .wrow,
+#factors.side .group.shut .wrow { display: none; }
+.group.shut { margin-bottom: .35rem; }
+.group p { margin: 0 0 .45rem; color: var(--faint); font-size: 11px; max-width: 70ch; }
+.wrow { display: flex; align-items: center; gap: .6rem; padding: .1rem 0; }
+.wrow label { width: 22rem; color: var(--dim); font-size: 11px; }
+.wrow label b { font-weight: 400; color: var(--fg); }
+.wrow input[type=range] { width: 12rem; accent-color: var(--live); }
+.wrow .wv { width: 3rem; text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
+.wrow .cov { color: var(--faint); font-size: 11px; }
+.presets { display: flex; gap: .35rem; flex-wrap: wrap; margin-bottom: .8rem; }
+/* repo, then quant, then samplers: one labelled row each. */
+.picks { margin-bottom: .7rem; }
+.pickrow { display: flex; gap: .6rem; align-items: baseline; padding: .18rem 0; }
+.pickrow > .k { color: var(--dim); font-size: 11px; min-width: 5rem; flex: none;
+                text-transform: uppercase; letter-spacing: .04em; }
+
+/* the weighting sidebar beside the table, not above it: the point of a weight
+   is watching the ranking move, and a panel that pushes the table off screen
+   hides the only feedback there is. */
+.layout { display: flex; gap: 1.25rem; align-items: flex-start; }
+.layout > .grid-side { flex: 1; min-width: 0; }
+/* the column picker belongs to the table, not to the page: a control three
+   rows away from the thing it changes is a control nobody finds */
+.tablebar { display: flex; justify-content: flex-end; margin-top: .5rem; }
+.tablebar button { padding: .3rem .45rem; line-height: 0; }
+.icon { display: block; }
+#factors.side {
+  width: 25rem; flex: none; margin: .5rem 0 0;
+  position: sticky; top: .5rem; max-height: 94vh; overflow: auto;
+}
+/* two rows per facet: name and weight, then the slider and its coverage --
+   the wide single-line layout does not fit a column this narrow */
+#factors.side .wrow { display: grid; grid-template-columns: 1fr auto; gap: 0 .5rem; padding: .28rem 0; }
+#factors.side .wrow label { width: auto; }
+#factors.side .wrow input[type=range] { width: 100%; grid-column: 1; }
+#factors.side .wrow .wv { text-align: right; }
+#factors.side .wrow .cov { grid-column: 2; text-align: right; }
+#factors.side .group p { max-width: none; }
+@media (max-width: 1100px) {
+  .layout { display: block; }
+  #factors.side { width: auto; position: static; max-height: none; }
+}
+
+/* the grid is wider than most windows once a few columns are on, so it scrolls
+   sideways rather than truncating a cell nobody can then read. */
+.wrap { overflow-x: auto; margin-top: .5rem; }
+.wrap > table { width: max-content; min-width: 100%; }
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; font-weight: 400; color: var(--dim); font-size: 11px;
+  text-transform: uppercase; letter-spacing: .04em;
+  padding: .45rem .6rem; border-bottom: 1px solid var(--line); white-space: nowrap;
+  cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--bg);
+}
+th:hover { color: var(--fg); }
+th .ord { color: var(--faint); margin-left: .3rem; }
+td {
+  padding: .4rem .6rem; border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+th.n, td.n { text-align: right; }
+/* only the grid's rows open something. a pointer over a table that does not
+   respond to a click is a promise the page does not keep. */
+#rows tr { cursor: pointer; }
+#rows tr:hover { background: var(--panel); }
+td .sub { color: var(--faint); }
+/* a value discounted for the quant, so it cannot be mistaken for what
+   the source published */
+td.eff .bar span { border-bottom: 1px dotted var(--faint); }
+b { font-weight: 600; color: var(--fg); }
+.ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+.dim { color: var(--dim); } .faint { color: var(--faint); }
+
+/* a bar behind a number: magnitude at a glance without a second column. */
+.bar { position: relative; display: block; }
+.bar::before {
+  content: ""; position: absolute; left: 0; top: 1px; bottom: 1px;
+  width: var(--w, 0%); background: var(--bar); border-radius: 2px; z-index: 0;
+}
+.bar span { position: relative; z-index: 1; }
+
+/* a reference: hover for the quote we hold, click for the source. */
+.ref { color: var(--faint); cursor: help; font-size: 11px; }
+.ref:hover { color: var(--link); }
+#tip {
+  display: none; position: fixed; z-index: 40; max-width: 46rem;
+  background: var(--panel); border: 1px solid var(--faint); padding: .6rem .75rem;
+  font-size: 11px; line-height: 1.5; color: var(--fg); box-shadow: 0 6px 24px #000a;
+}
+#tip .meta { color: var(--dim); margin-bottom: .35rem; }
+#tip q { color: var(--fg); }
+
+/* the detail modal: a model is a lot of facts, and a row cannot hold them. */
+#modal { display: none; position: fixed; inset: 0; z-index: 30; background: #000a; }
+#modal.open { display: block; }
+/* the sheet scrolls, the page underneath does not: a wheel over the backdrop
+   was moving the table out from under the reader. */
+body.locked { overflow: hidden; }
+#sheet {
+  position: absolute; top: 2.5vh; left: 50%; transform: translateX(-50%);
+  width: min(1180px, 94vw); max-height: 95vh;
+  background: var(--bg); border: 1px solid var(--line); display: flex; flex-direction: column;
+}
+#sheet .head { display: flex; align-items: baseline; gap: 1rem; padding: .8rem 1rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+#sheet .head h2 { font-size: 14px; margin: 0; font-weight: 600; }
+#sheet .head .repo { color: var(--dim); font-size: 11px; }
+#sheet .head .close { margin-left: auto; }
+#tabs { display: flex; gap: .35rem; padding: .5rem 1rem; border-bottom: 1px solid var(--line); }
+#body { overflow: auto; padding: 1rem; }
+#body h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); margin: 1.2rem 0 .5rem; }
+#body h3:first-child { margin-top: 0; }
+/* inside the modal nothing scrolls sideways: text wraps, numbers do not. the
+   grid is the opposite -- it scrolls and never wraps -- so each context has
+   one behaviour instead of both at once. */
+#body td, #body th { white-space: normal; }
+#body td.n, #body th.n { white-space: nowrap; }
+#body p { margin: .3rem 0 .6rem; max-width: 90ch; }
+#body .lead { color: var(--fg); }
+/* one column, always. a second column means the reader's eye has to decide
+   whether to go right or down at every row, and the values here are sentences
+   often enough that the columns never line up anyway. */
+.kv { display: grid; grid-template-columns: 1fr; gap: .3rem 2rem; max-width: 96ch; }
+/* the longest label sets the column, so every value starts in one place */
+.kv .k { min-width: 14rem; }
+.kv.one .k { min-width: 18rem; }
+.kv div { display: flex; gap: .5rem; border-bottom: 1px solid var(--line); padding: .2rem 0; align-items: baseline; }
+.kv .k { color: var(--dim); flex: none; }
+.kv .v { color: var(--fg); word-break: break-word; }
+.chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+.chip { border: 1px solid var(--line); padding: .1rem .45rem; font-size: 11px; color: var(--dim); }
+.chip.on { color: var(--fg); border-color: var(--faint); }
+pre {
+  margin: .35rem 0 .9rem; padding: .7rem .8rem; background: var(--panel);
+  border: 1px solid var(--line); overflow-x: auto; font-size: 12px;
+  white-space: pre; color: var(--fg);
+}
+.snippet { position: relative; }
+.snippet .copy { position: absolute; right: .4rem; top: .4rem; }
+/* one sampling profile: its name, what the name means, its numbers. */
+.profile { border-left: 2px solid var(--line); padding: .15rem .8rem; margin: .7rem 0; }
+.profile .pname { color: var(--fg); font-weight: 600; }
+.profile .pdesc { color: var(--dim); max-width: 88ch; }
+.profile .pwhen { color: var(--faint); max-width: 88ch; }
+.pvals { display: flex; flex-wrap: wrap; gap: .1rem 1.4rem; margin: .4rem 0 .35rem;
+         font-variant-numeric: tabular-nums; }
+.pvals .k { color: var(--faint); margin-right: .3rem; }
+
+.quote { border-left: 2px solid var(--faint); padding: .1rem .7rem; margin: .6rem 0; color: var(--fg); }
+.quote .src { display: block; color: var(--dim); font-size: 11px; margin-top: .15rem; }
+.empty { color: var(--dim); padding: 3rem 0; text-align: center; }
+footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 1.7; }
+</style>
+<main>
+  <header>
+    <h1>aimbot <span>&middot; model registry</span></h1>
+    <nav id="nav"></nav>
+  </header>
+
+  <!-- one row per thing you are deciding: what hardware it has to run on,
+       what quality means and what the table shows, then which models. -->
+  <div class="controls">
+    <span class="lbl">hardware</span>
+    <select id="ram" title="how much memory the box has. the quant column, the sizes and the retention behind `quant adjusted` all switch to the largest quant that fits in it">
+      <option value="">any vram</option>
+    </select>
+    <select id="reserve" title="held back for everything that is not weights or kv cache: compute buffers, the host, whatever else is resident"></select>
+    <select id="ctx" title="the context you need to serve. its kv cache is computed from each model's own attention geometry and has to fit alongside the weights"></select>
+    <select id="cap" title="how far up the quant ladder to go. past q8 the extra bytes buy nothing measurable and cost decode speed, so the fit stops there unless you say otherwise"></select>
+    <select id="floor" title="how far down the ladder is still worth running. below this the model reads as not fitting rather than as a 2-bit version of itself"></select>
+  </div>
+  <div class="controls">
+    <span class="lbl">ranking</span>
+    <button id="factors-btn" aria-pressed="false" title="choose what quality means: one weight per measurement, and the ranking resorts as you drag">factors</button>
+    <button id="eff-btn" aria-pressed="false" title="discount the artificial analysis indices by the retention the read quant's bits per weight predict">raw scores</button>
+    <button id="reset">reset</button>
+  </div>
+  <div class="controls">
+    <span class="lbl">filter</span>
+    <input type="search" id="q" placeholder="search any column">
+    <select id="pub"></select>
+    <span id="kinds" class="chips"></span>
+  </div>
+
+  <div class="layout">
+    <aside class="panel side" id="factors"></aside>
+    <div class="grid-side">
+      <div class="tablebar">
+        <!-- drawn rather than typed: a unicode gear is not ascii and leans on
+             the monospace font having the glyph, which several do not -->
+        <button id="cols-btn" aria-pressed="false" aria-label="columns"
+                title="show, hide and reorder columns"><svg class="icon" viewBox="0 0 16 16"
+          width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"
+          stroke-linecap="round"><circle cx="8" cy="8" r="4.4" stroke-width="1.5"/><circle
+          cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/><path stroke-width="1.8"
+          d="M13.4 8.0L15.2 8.0M11.8 11.8L13.1 13.1M8.0 13.4L8.0 15.2M4.2 11.8L2.9 13.1M2.6 8.0L0.8 8.0M4.2 4.2L2.9 2.9M8.0 2.6L8.0 0.8M11.8 4.2L13.1 2.9"/></svg></button>
+      </div>
+      <div class="panel" id="cols"></div>
+      <div class="wrap">
+        <table id="grid">
+          <thead id="head"></thead>
+          <tbody id="rows"><tr><td class="empty">loading</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer id="foot"></footer>
+</main>
+
+<div id="modal"><div id="sheet">
+  <div class="head">
+    <h2 id="m-name"></h2>
+    <span class="repo" id="m-repo"></span>
+    <button class="close" id="m-close">close (esc)</button>
+  </div>
+  <div id="tabs"></div>
+  <div id="body"></div>
+</div></div>
+<div id="tip"></div>
+
+<script>
+// aimbot registry viewer.
+//
+// reads data.json -- one file, built by scripts/build-viewer from the registry
+// and the research captures -- and renders three things in the order somebody
+// actually asks for them: which models are good, why they are good, and how to
+// run the one you picked.
+//
+// NOTHING is imputed. a model with no gbench entry has no gbench facet, its
+// composite renormalizes over the facets it does carry, and the evidence
+// column says how many of the weighted factors it actually had. an absence is
+// never scored as a zero, because a model nobody has measured is not a bad
+// model.
+const DATA_URL = '__DATA_URL__';
+
+const store = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem('aim-' + k)) ?? d; } catch (e) { return d; } },
+  set(k, v) { localStorage.setItem('aim-' + k, JSON.stringify(v)); },
+};
+
+let D = null;                       // the payload
+let W = {};                         // facet key -> weight
+let sort = store.get('sort', {k: 'score', dir: -1});
+let filters = {q: '', kind: new Set(), pub: '', flags: new Set()};
+let folded = new Set();             // collapsed factor groups
+let hidden = new Set();
+let order = [];
+let openRepo = null;
+let tab = 'overview';
+
+const fmt = new Intl.NumberFormat();
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c =>
+  ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const num = (v, d = 1) => v === null || v === undefined ? '' : (+v).toFixed(d);
+// the thinking vocabulary, with the level a client gets by sending nothing in
+// bold. that level is not always the cheap one: kimi k3 defaults to `max`, and
+// the gemma 4 templates do not think at all until asked.
+const levels = (t, sep = ' ') => {
+  // a switch has two states and no vocabulary. the words are for reading --
+  // what a client sends is the boolean itself
+  if (t.kind === 'boolean') {
+    return ['off', 'on'].map(s => t.default === (s === 'on') ? `<b>${s}</b>` : s).join(sep);
+  }
+  return (t.accepts || []).map(l => l === t.default ? `<b>${esc(l)}</b>` : esc(l)).join(sep);
+};
+const gib = v => v === undefined || v === null ? '' : (+v).toFixed(1);
+const ctxLabel = v => !v ? '' : v >= 1000 ? Math.round(v / 1024) + 'k' : String(v);
+
+// --- scoring -----------------------------------------------------------------
+//
+// a weight key is either a facet key (aa.coding) or a prefix wildcard
+// (card.*), which averages every facet under it. the wildcard exists because
+// card claims and epoch runs are per benchmark: a reader wants one knob for
+// "how much do i trust what the vendor says", not eleven.
+
+const facetKeys = (m, key) => key.endsWith('.*')
+  ? Object.keys(m.facets).filter(k => k.startsWith(key.slice(0, -1)))
+  : (m.facets[key] ? [key] : []);
+
+// --- effective values --------------------------------------------------------
+//
+// a benchmark measures the model; a local roster runs a QUANT of it. `raw` is
+// what the source published, `effective` is that discounted by the retention
+// build-tables' curve predicts for the pinned quant's bits per weight -- the
+// same adjustment MODELS.md's composite makes, from the same curve.
+//
+// only the three artificial analysis indices are scaled. the other sources
+// measured a served endpoint whose precision this repo does not know, so
+// discounting them would invent a number rather than adjust one.
+
+let effective = true;
+let budget = null;                  // gib of memory, or null
+// weights are not the whole resident set: the kv cache grows with context and
+// the compute buffers are not free either. what is left after that reserve is
+// what a quant has to fit in, which is why build-tables budgets 105 of a 128gb
+// box rather than 128.
+let reserve = 8;
+const usable = () => budget === null ? null : Math.max(0, budget - reserve);
+
+// how far up the quant ladder the fit will climb, as a bits-per-weight
+// ceiling. past q8 the extra bytes buy nothing measurable and cost decode --
+// build-tables pins the dense models at q8 for the same reason -- so a box
+// with room to spare gets the fastest quant that is still lossless-ish rather
+// than bf16 because it happened to fit.
+const CAPS = [['none', Infinity, 'up to bf16'], ['q8', 11, 'max q8'],
+              ['q6', 7.5, 'max q6'], ['q5', 6.2, 'max q5'], ['q4', 5.3, 'max q4']];
+// a floor rather than a ceiling: below it the answer is "not with this much
+// memory" rather than a two-bit version of the model
+const FLOORS = [['none', 0, 'any quant'], ['q2', 2.4, 'min q2'], ['q3', 3.2, 'min q3'],
+                ['q4', 4.2, 'min q4'], ['q5', 5.3, 'min q5'], ['q6', 6.2, 'min q6'],
+                ['q8', 7.5, 'min q8']];
+let cap = 'q8';
+let floor = 'none';
+const capBpw = () => (CAPS.find(c => c[0] === cap) || CAPS[0])[1];
+const floorBpw = () => (FLOORS.find(c => c[0] === floor) || FLOORS[0])[1];
+
+// context to serve, and what its kv cache costs. the geometry comes from each
+// model's own config: full-attention layers hold a cache that grows with the
+// context, windowed layers hold at most their window, and a linear-attention
+// layer holds a fixed state that does not scale at all. counting every layer
+// as global would overstate gemma 4 31b several times over.
+const KV_BYTES = 2;                 // f16 keys and values, llama.cpp's default
+let minCtx = 0;
+
+function kvGib(m, ctx) {
+  const a = m.facts.attn;
+  if (!a || !ctx) return 0;
+  const perTok = 2 * a.kv_heads * a.head_dim * KV_BYTES;
+  const windowed = a.window ? a.other_layers * Math.min(ctx, a.window) : 0;
+  return perTok * (a.full_layers * ctx + windowed) / (1024 ** 3);
+}
+
+// a model that cannot reach the context natively is not a fit at it. serving
+// past the trained window means rope scaling, which is the consumer's call
+const reaches = m => !minCtx || (m.facts.context_native || 0) >= minCtx;
+
+// which quant this model is being READ as. with no budget that is the one the
+// registry pins; with one it is the largest that fits, which is the question
+// somebody with 128gb is actually asking. the search stays inside the pinned
+// quant's repo -- crossing to the -MTP- build changes whether it can speculate
+// at all, and that is a choice rather than a size.
+function activeQuant(m) {
+  const repo = (m.quants[0] || {}).repo;
+  const all = quantChoices(m).filter(c => c.repo === repo);
+  const pinned = all.find(c => c.pinned) || all[0] || null;
+  // no sizes for this repo is not the same answer as nothing fits. hy3's
+  // publisher lists no file sizes, and reporting it as too big would be a
+  // measurement this repo does not have
+  if (!budget || !all.some(c => c.gib)) return pinned;
+  if (!reaches(m)) return null;
+  const room = usable() - kvGib(m, minCtx), ceiling = capBpw(), bottom = floorBpw();
+  const fits = all.filter(c => c.gib && c.gib <= room
+    && (!c.bpw || (c.bpw <= ceiling && c.bpw >= bottom))).sort((a, b) => a.gib - b.gib);
+  return fits.length ? fits[fits.length - 1] : null;
+}
+const fitsBudget = m => !budget || !!activeQuant(m);
+
+function retention(bpw) {
+  const c = D.retention.curve;
+  if (bpw <= c[0][0]) return c[0][1];
+  for (let i = 0; i < c.length - 1; i++) {
+    const [x0, y0] = c[i], [x1, y1] = c[i + 1];
+    if (bpw >= x0 && bpw <= x1) return y0 + (y1 - y0) * (bpw - x0) / (x1 - x0);
+  }
+  return 1;
+}
+
+// a model whose weights are natively low-bpw is not paying a quantization
+// penalty for being small, so it is exempt -- the registry says which
+function modelRetention(m) {
+  if (!effective || m.native_low_bpw) return 1;
+  const q = activeQuant(m);
+  return q && q.bpw ? retention(q.bpw) : 1;
+}
+
+const scaledFacet = key => D.retention.scaled.includes(key);
+const facetValue = (m, key) => m.facets[key].value
+  * (scaledFacet(key) ? modelRetention(m) : 1);
+
+// percentiles ship precomputed over raw values, so effective mode has to rank
+// the cohort again -- against the scaled numbers, or a discount every model
+// paid would move nobody
+let pctCache = null;
+
+function facetPctRaw(m, key) {
+  const f = m.facets[key];
+  if (!effective || !scaledFacet(key)) return f.pct;
+  if (!pctCache) {
+    pctCache = {};
+    D.retention.scaled.forEach(k => {
+      const pop = D.models.filter(x => x.facets[k]).map(x => facetValue(x, k));
+      pctCache[k] = pop;
+    });
+  }
+  const pop = pctCache[key] || [];
+  if (pop.length < 2) return null;
+  const v = facetValue(m, key);
+  return Math.round(100 * pop.filter(x => x < v).length / pop.length);
+}
+
+function facetPct(m, key) {
+  const keys = facetKeys(m, key).map(k => facetPctRaw(m, k)).filter(p => p !== null);
+  if (!keys.length) return null;
+  return keys.reduce((a, p) => a + p, 0) / keys.length;
+}
+
+// the composite: weighted mean of percentiles over the facets PRESENT. the
+// denominator is the weight actually used, so a model measured by three of
+// five sources is ranked on those three rather than penalised for the two.
+function score(m) {
+  let num = 0, den = 0, have = 0, want = 0;
+  for (const [key, w] of Object.entries(W)) {
+    if (!w) continue;
+    want++;
+    const p = facetPct(m, key);
+    if (p === null) continue;
+    have++; num += w * p; den += w;
+  }
+  return {value: den ? num / den : null, have, want};
+}
+
+const scored = m => (m._s || (m._s = score(m)));
+
+// --- columns -----------------------------------------------------------------
+//
+// defined once: each column knows its label, how to pull a sortable value, and
+// how to draw its cell. sorting, hiding and reordering are generic over this
+// list rather than written per column.
+
+const facetCell = (m, key, digits) => {
+  const f = m.facets[key];
+  if (!f) return '<td class="n faint">-</td>';
+  const pct = facetPctRaw(m, key);
+  const scaled = effective && scaledFacet(key) && modelRetention(m) < 1;
+  return `<td class="n${scaled ? ' eff' : ''}"${scaled
+    ? ` title="${num(f.value, digits)} raw, x${modelRetention(m).toFixed(3)} retention at ${m.quants[0].bpw} bpw"` : ''}>`
+    + `<span class="bar" style="--w:${pct === null ? 0 : pct}%">`
+    + `<span>${num(facetValue(m, key), digits)}</span></span></td>`;
+};
+const facetVal = (m, key) => m.facets[key] ? facetValue(m, key) : -1;
+
+const COLUMNS = [
+  {k: 'rank', t: '#', num: true, get: m => m._rank,
+   help: 'position in the current ranking. it renumbers when you change the weights',
+   cell: m => `<td class="n faint">${m._rank}</td>`},
+  {k: 'short', t: 'model', num: false, get: m => m.short,
+   help: "the registry's one name for this model, and who publishes it",
+   cell: m => `<td>${esc(m.short)}<span class="sub"> ${esc(m.publisher)}</span></td>`},
+  {k: 'score', t: 'quality', num: true, get: m => scored(m).value ?? -1,
+   help: "weighted mean of this model's percentiles, renormalized over the factors it actually carries. set the weights under `factors`",
+   cell: m => {
+     const s = scored(m);
+     if (s.value === null) return '<td class="n faint" title="none of the weighted factors measured this model">-</td>';
+     return `<td class="n"><span class="bar" style="--w:${s.value}%"><span>${num(s.value, 0)}</span></span></td>`;
+   }},
+  {k: 'evidence', t: 'evidence', num: true, get: m => scored(m).have,
+   help: 'how many of the weighted factors measured this model at all. 3/7 is a gap in the evidence, not a verdict',
+   cell: m => {
+     const s = scored(m);
+     const cls = s.have === s.want ? 'dim' : s.have ? 'warn' : 'faint';
+     return `<td class="n ${cls}" title="weighted factors this model was actually measured on">${s.have}/${s.want}</td>`;
+   }},
+  {k: 'kind', t: 'kind', num: false, get: m => m.kind,
+   help: 'text, image or speech, as the registry classes it',
+   cell: m => `<td class="dim">${esc(m.kind)}</td>`},
+  {k: 'params', t: 'params', num: true, get: m => m.facts.params_total_b ?? -1,
+   help: 'total parameters, and active parameters for a mixture of experts',
+   cell: m => {
+     const p = m.facts.params_total_b, e = m.facts.experts_active;
+     return `<td class="n">${p ? p + 'b' : '<span class="faint">-</span>'}${e ? `<span class="sub"> ${e}a</span>` : ''}</td>`;
+   }},
+  {k: 'ctx', t: 'context', num: true, get: m => m.facts.context_native ?? -1,
+   help: 'the context window the model was trained for, from its own config',
+   cell: m => `<td class="n">${ctxLabel(m.facts.context_native) || '<span class="faint">-</span>'}</td>`},
+  {k: 'quant', t: 'quant', num: false, get: m => (activeQuant(m) || {}).quant || '',
+   help: 'the quant being read: the one the registry pins, or with a memory budget set, the largest that fits',
+   cell: m => {
+     const q = activeQuant(m);
+     if (!q) return '<td class="faint" title="nothing this repo publishes fits the budget">does not fit</td>';
+     return `<td>${esc(q.quant)}<span class="sub"> ${esc(q.repo.split('/')[0])}</span></td>`;
+   }},
+  {k: 'size', t: 'gib', num: true, get: m => (activeQuant(m) || {}).gib ?? -1,
+   help: 'what that quant WEIGHTS weigh on disk, gibibytes. the kv cache is not in it -- see the kv gib column -- though both are subtracted from your vram when picking which quant fits',
+   cell: m => `<td class="n">${gib((activeQuant(m) || {}).gib) || '<span class="faint">-</span>'}</td>`},
+  {k: 'kv', t: 'kv gib', num: true, get: m => kvGib(m, minCtx),
+   help: 'what the kv cache costs at the context set under hardware, from this model\'s own attention geometry. the gib column beside it is weights only, so resident memory is the two added together plus the reserve',
+   cell: m => {
+     const v = kvGib(m, minCtx);
+     if (!minCtx) return '<td class="n faint" title="set a context under hardware">-</td>';
+     if (!m.facts.attn) return '<td class="n faint" title="its config publishes no attention geometry">?</td>';
+     return `<td class="n dim">${gib(v)}</td>`;
+   }},
+  {k: 'bpw', t: 'bpw', num: true, get: m => (activeQuant(m) || {}).bpw ?? -1,
+   help: 'bits per weight: the number that predicts how much quantizing cost it',
+   cell: m => `<td class="n dim">${num((activeQuant(m) || {}).bpw, 2) || '-'}</td>`},
+  {k: 'coding', t: 'aa coding', num: true, get: m => facetVal(m, 'aa.coding'),
+   help: 'artificial analysis coding index. one harness across every model it scores',
+   cell: m => facetCell(m, 'aa.coding', 1)},
+  {k: 'agentic', t: 'aa agentic', num: true, get: m => facetVal(m, 'aa.agentic'),
+   help: 'artificial analysis agentic index: tool use and multi-step work',
+   cell: m => facetCell(m, 'aa.agentic', 1)},
+  {k: 'gbench', t: 'gbench', num: true, get: m => facetVal(m, 'gbench.agentic'),
+   help: 'gert labs gscore for agentic coding: models playing generated games, so there is no problem set to train against',
+   cell: m => facetCell(m, 'gbench.agentic', 3)},
+  {k: 'swe', t: 'swe-reb', num: true, get: m => facetVal(m, 'swerebench.resolved'),
+   help: 'swe-rebench resolved rate, on pull requests merged after the model shipped -- the one score here that cannot have been trained against',
+   cell: m => facetCell(m, 'swerebench.resolved', 1)},
+  {k: 'arena', t: 'arena', num: true, get: m => facetVal(m, 'lmarena.rating'),
+   help: 'lmarena rating, style controlled. human preference rather than a grader',
+   cell: m => facetCell(m, 'lmarena.rating', 0)},
+  {k: 'community', t: 'community', num: true,
+   get: m => facetVal(m, 'community.reddit-localllama'),
+   help: 'mentions on r/LocalLLaMA, and the share of polarised sentences that were positive',
+   cell: m => {
+     const f = m.facets['community.reddit-localllama'];
+     if (!f) return '<td class="n faint">-</td>';
+     const a = f.approval;
+     return `<td class="n"><span class="bar" style="--w:${f.pct || 0}%"><span>${f.mentions}`
+       + (a === null || a === undefined ? '' : `<span class="sub"> ${a}%</span>`) + '</span></span></td>';
+   }},
+  {k: 'langs', t: 'best langs', num: false, get: m => (m.languages[0] || {}).lang || '',
+   help: 'the languages gbench measured this model highest on',
+   cell: m => `<td class="dim">${esc(m.languages.slice(0, 3).map(l => l.lang).join(' ')) || '-'}</td>`},
+  {k: 'bestfor', t: 'best for', num: false, get: m => (m.derived.best_for || [])[0] || '',
+   help: 'the use cases where it sits in the top third of the models carrying that facet',
+   cell: m => `<td class="dim">${esc((m.derived.best_for || []).slice(0, 2).join(', ')) || '-'}</td>`},
+  {k: 'think', t: 'thinking', num: false, get: m => (m.thinking.knob || ''),
+   help: 'the thinking knob its chat template reads, and the levels it takes. bold is what you get by sending nothing',
+   cell: m => m.thinking.knob
+     ? `<td class="dim" title="bold is the level the template uses when the client sends nothing">`
+       + `${esc(m.thinking.knob)}<span class="sub"> ${levels(m.thinking, '|')}</span></td>`
+     : '<td class="faint">-</td>'},
+  {k: 'profiles', t: 'profiles', num: false, get: m => Object.keys(m.sampling).join(','),
+   help: 'the sampling profiles the registry defines for it',
+   cell: m => `<td class="dim">${esc(Object.keys(m.sampling).join(' ')) || '-'}</td>`},
+  {k: 'dev', t: 'developer', num: false, get: m => m.turns.developer || '',
+   help: 'what its chat template does with a developer message. `dropped` renders, returns 200, and omits it',
+   cell: m => {
+     const v = m.turns.developer;
+     if (!v) return '<td class="faint">-</td>';
+     const cls = v === 'own' ? 'ok' : v === 'dropped' ? 'bad' : v === 'rejected' ? 'warn' : 'dim';
+     return `<td class="${cls}">${esc(v)}</td>`;
+   }},
+  {k: 'spec', t: 'draft', num: false, get: m => m.speculative.type || '',
+   help: 'speculative decoding: the draft method this model supports',
+   cell: m => `<td class="dim">${esc(m.speculative.type || '')}${m.speculative.n_max ? `<span class="sub"> n${m.speculative.n_max}</span>` : ''}</td>`},
+  {k: 'license', t: 'license', num: false, get: m => (m.card.hub || {}).license || '',
+   help: 'the licence its huggingface repo declares',
+   cell: m => `<td class="dim">${esc((m.card.hub || {}).license || '-')}</td>`},
+  {k: 'downloads', t: 'downloads', num: true, get: m => (m.card.hub || {}).downloads ?? -1,
+   help: 'huggingface downloads in the last month. adoption, not quality',
+   cell: m => `<td class="n dim">${(m.card.hub || {}).downloads ? fmt.format(m.card.hub.downloads) : '-'}</td>`},
+  {k: 'repo', t: 'repo', num: false, get: m => m.repo,
+   help: 'the huggingface base repo, which is the key everything here joins on',
+   cell: m => `<td class="dim">${esc(m.repo)}</td>`},
+];
+
+// which table columns read a scaled facet, so the header can say so
+const SCALED_COLUMNS = {coding: 'aa.coding', agentic: 'aa.agentic'};
+
+const DEFAULT_HIDDEN = ['kv', 'bpw', 'arena', 'swe', 'langs', 'profiles', 'dev', 'spec',
+                        'license', 'downloads', 'repo', 'kind'];
+const col = k => COLUMNS.find(c => c.k === k);
+const shown = () => order.filter(k => !hidden.has(k));
+
+// --- filtering ---------------------------------------------------------------
+
+const FLAGS = [
+  {k: 'text', t: 'text', test: m => m.kind === 'text'},
+  {k: 'vision', t: 'vision', test: m => (m.modalities.input || []).includes('image')},
+  {k: 'moe', t: 'moe', test: m => !!m.facts.experts},
+  {k: 'mtp', t: 'mtp', test: m => !!m.facts.mtp_layers},
+  {k: 'draft', t: 'speculative', test: m => !!m.speculative.type},
+  {k: 'think', t: 'thinking knob', test: m => !!m.thinking.knob},
+  {k: 'fits', t: 'fits vram', test: m => fitsBudget(m)},
+];
+
+function haystack(m) {
+  return m._hay || (m._hay = [m.repo, m.short, m.match, m.facts.arch, m.facts.model_type,
+    m.notes, m.card.summary, (m.derived.best_for || []).join(' '),
+    ((m.card.hub || {}).tags || []).join(' '), Object.keys(m.tasks).join(' '),
+    m.quants.map(q => q.repo + ' ' + q.quant).join(' ')].join(' ').toLowerCase());
+}
+
+function visible() {
+  const q = filters.q.trim().toLowerCase();
+  return D.models.filter(m => {
+    if (q && !haystack(m).includes(q)) return false;
+    if (filters.pub && m.publisher !== filters.pub) return false;
+    for (const f of filters.flags) {
+      const flag = FLAGS.find(x => x.k === f);
+      if (flag && !flag.test(m)) return false;
+    }
+    return true;
+  });
+}
+
+function sorted(rows) {
+  const c = col(sort.k) || col('score');
+  const out = [...rows].sort((a, b) => {
+    const x = c.get(a), y = c.get(b);
+    const d = c.num ? (x - y) : String(x).localeCompare(String(y));
+    return d * sort.dir || a.short.localeCompare(b.short);
+  });
+  return out;
+}
+
+// --- table -------------------------------------------------------------------
+
+function tableHead() {
+  return '<tr>' + shown().map(k => {
+    const c = col(k);
+    const arrow = sort.k === k ? `<span class="ord">${sort.dir > 0 ? '^' : 'v'}</span>` : '';
+    const eff = effective && SCALED_COLUMNS[k];
+    const help = (c.help || '') + (eff ? '. shown discounted for the quant being read' : '');
+    return `<th class="${c.num ? 'n' : ''}" data-k="${k}" data-help="${esc(help)}"`
+      + ` title="${esc(help)}">`
+      + `${c.t}${eff ? ' <span class="faint">eff</span>' : ''}${arrow}</th>`;
+  }).join('') + '</tr>';
+}
+
+function drawTable() {
+  const rows = sorted(visible());
+  // rank is the position in the CURRENT ranking, so it re-numbers when the
+  // weights change -- that is the point of it
+  rows.forEach((m, i) => { m._rank = i + 1; });
+  document.querySelector('#head').innerHTML = tableHead();
+  document.querySelector('#rows').innerHTML = rows.length
+    ? rows.map(m => `<tr data-repo="${esc(m.repo)}">`
+        + shown().map(k => col(k).cell(m)).join('') + '</tr>').join('')
+    : `<tr><td class="empty" colspan="${shown().length}">nothing matches</td></tr>`;
+  wireHeaders();
+  document.querySelectorAll('#rows tr[data-repo]').forEach(tr => {
+    tr.onclick = () => openModel(tr.dataset.repo);
+  });
+}
+
+function wireHeaders() {
+  document.querySelectorAll('th[data-k]').forEach(th => {
+    th.onclick = () => {
+      const k = th.dataset.k;
+      sort = sort.k === k ? {k, dir: -sort.dir} : {k, dir: col(k).num ? -1 : 1};
+      store.set('sort', sort);
+      drawTable();
+    };
+  });
+}
+
+// --- factors -----------------------------------------------------------------
+
+const WEIGHT_KEYS = () => {
+  // every facet at least two models carry -- a facet with one model cannot be
+  // a percentile, so weighting it would rank that model against itself -- plus
+  // a `.*` roll-up for any source with enough benchmarks to be unreadable one
+  // slider at a time.
+  const keys = new Set(Object.keys(W));
+  const perPrefix = {};
+  Object.keys(D.facet_meta).forEach(k => {
+    const p = k.split('.')[0];
+    perPrefix[p] = (perPrefix[p] || 0) + 1;
+    if (coverage(k) >= 2) keys.add(k);
+  });
+  Object.entries(perPrefix).forEach(([p, n]) => { if (n >= 3) keys.add(p + '.*'); });
+  return [...keys].filter(k => coverage(k) >= 2 || W[k]);
+};
+
+// every group present, for the "start collapsed" default. computing it beats
+// a hardcoded list that silently stops covering a group somebody adds later.
+const allGroups = () => [...new Set(Object.keys(D.facet_meta).map(groupOf))];
+
+function coverage(key) {
+  return D.models.filter(m => facetPct(m, key) !== null).length;
+}
+
+function facetLabel(key) {
+  if (key.endsWith('.*')) {
+    const prefix = key.slice(0, -1);
+    const n = Object.keys(D.facet_meta).filter(k => k.startsWith(prefix)).length;
+    return `every ${key.slice(0, -2)} benchmark (${n})`;
+  }
+  return (D.facet_meta[key] || {}).label || key;
+}
+
+function groupOf(key) {
+  if (key.endsWith('.*')) {
+    const prefix = key.slice(0, -1);
+    const any = Object.keys(D.facet_meta).find(k => k.startsWith(prefix));
+    return any ? D.facet_meta[any].group : key;
+  }
+  return (D.facet_meta[key] || {}).group || 'other';
+}
+
+const PRESETS = {
+  default: () => ({...D.weights}),
+  coding: () => ({'aa.coding': 0.4, 'gbench.oneshot': 0.2, 'swerebench.resolved': 0.25,
+                  'card.*': 0.05, 'community.reddit-localllama': 0.1}),
+  agentic: () => ({'aa.agentic': 0.4, 'aa.tau2': 0.15, 'gbench.agentic': 0.3,
+                   'community.reddit-localllama': 0.15}),
+  measured: () => {
+    // third-party measurement only: no card claims, no forum opinion
+    const w = {...D.weights};
+    Object.keys(w).forEach(k => { if (k.startsWith('card') || k.startsWith('community')) delete w[k]; });
+    return w;
+  },
+  community: () => ({'community.reddit-localllama': 0.5, 'community.hackernews': 0.2,
+                     'community.hf-discussions': 0.2, 'community.level1techs': 0.1}),
+  clear: () => ({}),
+};
+
+function drawFactors() {
+  const box = document.querySelector('#factors');
+  const keys = WEIGHT_KEYS();
+  const groups = new Map();
+  keys.forEach(k => {
+    const g = groupOf(k);
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(k);
+  });
+  const about = Object.fromEntries(D.groups.map(g => [g.name, g.about]));
+  const order = D.groups.map(g => g.name).filter(n => groups.has(n))
+    .concat([...groups.keys()].filter(n => !about[n]));
+
+  box.innerHTML = '<div class="hint">quality is whatever you say it is. a weight of zero '
+    + 'drops the factor; a model missing a factor is ranked on the ones it has, never '
+    + 'scored zero for the absence.</div>'
+    + '<div class="presets">' + Object.keys(PRESETS).map(p =>
+      `<button data-preset="${p}">${p}</button>`).join('') + '</div>'
+    + order.map(g => {
+      const shut = folded.has(g);
+      // 22 artificial analysis benchmarks and 11 languages do not all need to
+      // be on screen at once; a group that says how many of its weights are
+      // live can stay shut without hiding anything
+      const live = groups.get(g).filter(k => W[k]).length;
+      return `<div class="group${shut ? ' shut' : ''}">`
+      + `<h3 data-group="${esc(g)}">${shut ? '+' : '-'} ${esc(g)}`
+      + ` <span class="faint">${groups.get(g).length}`
+      + (live ? `, ${live} weighted` : '') + '</span></h3>'
+      + (about[g] ? `<p>${esc(about[g])}</p>` : '')
+      + groups.get(g).sort((a, b) => (b.endsWith('.*') - a.endsWith('.*')) || a.localeCompare(b)).map(k => {
+        const w = Math.round((W[k] || 0) * 100);
+        return `<div class="wrow">
+          <label for="w-${esc(k)}"><b>${esc(facetLabel(k))}</b> <span class="faint">${esc(k)}</span></label>
+          <input type="range" id="w-${esc(k)}" data-key="${esc(k)}" min="0" max="50" value="${w}">
+          <span class="wv" data-for="${esc(k)}">${w ? w + '%' : '-'}</span>
+          <span class="cov">${coverage(k)} models</span>
+        </div>`;
+      }).join('') + '</div>';
+    }).join('');
+
+  box.querySelectorAll('h3[data-group]').forEach(h => {
+    h.onclick = () => {
+      const g = h.dataset.group;
+      folded.has(g) ? folded.delete(g) : folded.add(g);
+      store.set('folded', [...folded]);
+      drawFactors();
+    };
+  });
+
+  box.querySelectorAll('input[type=range]').forEach(r => {
+    r.oninput = () => {
+      const k = r.dataset.key, v = +r.value / 100;
+      if (v) W[k] = v; else delete W[k];
+      box.querySelector(`[data-for="${CSS.escape(k)}"]`).textContent = v ? Math.round(v * 100) + '%' : '-';
+      reweigh();
+    };
+  });
+  box.querySelectorAll('[data-preset]').forEach(b => {
+    b.onclick = () => { W = PRESETS[b.dataset.preset](); reweigh(); drawFactors(); };
+  });
+}
+
+function reweigh() {
+  D.models.forEach(m => { m._s = null; });
+  store.set('weights', W);
+  drawTable();
+}
+
+// --- column picker -----------------------------------------------------------
+
+function drawColumns() {
+  const box = document.querySelector('#cols');
+  box.innerHTML = order.map(k =>
+    `<button draggable="true" data-k="${k}" aria-pressed="${!hidden.has(k)}">${col(k).t}</button>`
+  ).join('') + '<span class="hint">click to show or hide &middot; drag to reorder</span>';
+  box.querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      const k = b.dataset.k;
+      hidden.has(k) ? hidden.delete(k) : hidden.add(k);
+      if (!shown().length) hidden.delete(k);
+      store.set('hidden', [...hidden]);
+      drawColumns(); drawTable();
+    };
+    b.ondragstart = e => { e.dataTransfer.setData('text/plain', b.dataset.k); b.classList.add('drag'); };
+    b.ondragend = () => b.classList.remove('drag');
+    b.ondragover = e => { e.preventDefault(); b.classList.add('drop'); };
+    b.ondragleave = () => b.classList.remove('drop');
+    b.ondrop = e => {
+      e.preventDefault(); b.classList.remove('drop');
+      const from = e.dataTransfer.getData('text/plain'), to = b.dataset.k;
+      if (from && from !== to) {
+        order.splice(order.indexOf(to), 0, ...order.splice(order.indexOf(from), 1));
+        store.set('order', order);
+        drawColumns(); drawTable();
+      }
+    };
+  });
+}
+
+// --- references --------------------------------------------------------------
+//
+// every number carries where it came from. the marker is small on purpose:
+// hover shows the source and, where we hold one, the sentence itself.
+
+function refMark(ref, quote) {
+  if (!ref) return '';
+  const payload = esc(JSON.stringify({...ref, quote: quote || ref.quote || ''}));
+  const href = ref.url ? ` href="${esc(ref.url)}" target="_blank" rel="noopener"` : '';
+  return `<a class="ref" data-ref="${payload}"${href}>[src]</a>`;
+}
+
+function showTip(el) {
+  let r;
+  try { r = JSON.parse(el.dataset.ref); } catch (e) { return; }
+  const tip = document.querySelector('#tip');
+  const bits = [r.source, r.id, r.file].filter(Boolean).map(esc).join(' &middot; ');
+  tip.innerHTML = `<div class="meta">${bits}</div>`
+    + (r.quote ? `<q>${esc(r.quote)}</q>` : '')
+    + (r.note ? `<div class="meta">${esc(r.note)}</div>` : '')
+    + (r.title ? `<div class="meta">${esc(r.title)}</div>` : '');
+  const box = el.getBoundingClientRect();
+  tip.style.display = 'block';
+  const w = tip.getBoundingClientRect();
+  tip.style.left = Math.max(8, Math.min(box.left, innerWidth - w.width - 12)) + 'px';
+  tip.style.top = (box.bottom + w.height + 12 > innerHeight
+    ? box.top - w.height - 6 : box.bottom + 6) + 'px';
+}
+
+// a column header explains itself on hover, through the same panel the
+// references use -- the native tooltip takes a second to appear and half the
+// columns are numbers nobody can name on sight
+function showHelp(el) {
+  const tip = document.querySelector('#tip');
+  tip.innerHTML = `<div class="meta">${esc(el.dataset.k)}</div>${esc(el.dataset.help)}`;
+  const box = el.getBoundingClientRect();
+  tip.style.display = 'block';
+  const w = tip.getBoundingClientRect();
+  tip.style.left = Math.max(8, Math.min(box.left, innerWidth - w.width - 12)) + 'px';
+  tip.style.top = (box.bottom + 6) + 'px';
+}
+
+document.addEventListener('mouseover', e => {
+  const ref = e.target.closest('.ref');
+  const th = e.target.closest('th[data-help]');
+  if (ref) showTip(ref);
+  else if (th) showHelp(th);
+  else if (!e.target.closest('#tip')) document.querySelector('#tip').style.display = 'none';
+});
+
+// --- detail modal ------------------------------------------------------------
+
+const TABS = ['overview', 'quality', 'analysis', 'community', 'vendor', 'operate'];
+
+// the model AND the tab live in the hash, so a link can point at the operate
+// tab of one model rather than at the page and a set of instructions
+function openModel(repo, want) {
+  if (repo !== openRepo) ops = {repo: null, quant: null, profile: null};
+  openRepo = repo;
+  tab = want || tab;
+  location.hash = 'model=' + encodeURIComponent(repo) + '&tab=' + tab;
+  drawModal();
+}
+
+function closeModel() {
+  openRepo = null;
+  document.querySelector('#modal').classList.remove('open');
+  document.body.classList.remove('locked');
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+}
+
+function drawModal(keepScroll) {
+  const m = D.models.find(x => x.repo === openRepo);
+  if (!m) return closeModel();
+  document.querySelector('#modal').classList.add('open');
+  document.body.classList.add('locked');
+  document.querySelector('#m-name').textContent = m.short;
+  document.querySelector('#m-repo').innerHTML =
+    `<a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.repo)}</a>`
+    + ` &middot; <a href="${esc(m.entry_url)}" target="_blank" rel="noopener">registry entry</a>`;
+  document.querySelector('#tabs').innerHTML = TABS.map(t =>
+    `<button data-tab="${t}" aria-pressed="${t === tab}">${t}</button>`).join('');
+  document.querySelectorAll('#tabs button').forEach(b => {
+    b.onclick = () => openModel(openRepo, b.dataset.tab);
+  });
+  const body = document.querySelector('#body');
+  // a picker redraw keeps the reader where they were; opening a model or a tab
+  // starts at the top
+  const y = keepScroll ? body.scrollTop : 0;
+  body.innerHTML = ({overview: tabOverview, quality: tabQuality,
+                     analysis: tabAnalysis, community: tabCommunity,
+                     vendor: tabVendor,
+                     operate: tabOperate})[tab](m);
+  body.scrollTop = y;
+  body.querySelectorAll('[data-pick-repo]').forEach(b => {
+    b.onclick = () => {
+      ops.repo = b.dataset.pickRepo;
+      // a repo row carries no quant: switching repo falls back to the quant
+      // that repo pins rather than to a tag the other repo happened to have
+      ops.quant = b.dataset.pickQuant || null;
+      drawModal(true);
+    };
+  });
+  body.querySelectorAll('[data-profile]').forEach(b => {
+    b.onclick = () => { ops.profile = b.dataset.profile; drawModal(true); };
+  });
+  body.querySelectorAll('.copy').forEach(b => {
+    b.onclick = e => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(b.parentElement.querySelector('pre').textContent);
+      b.textContent = 'copied';
+      setTimeout(() => { b.textContent = 'copy'; }, 1200);
+    };
+  });
+}
+
+// two columns by default; `one` for a list whose values are sentences, where
+// wrapping into a second column makes the reading order zigzag
+const kv = (pairs, cls = '') => `<div class="kv ${cls}">`
+  + pairs.filter(p => p[1] !== undefined && p[1] !== null && p[1] !== '')
+    .map(([k, v]) => `<div><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`)
+    .join('') + '</div>';
+
+function tabOverview(m) {
+  const f = m.facts, s = scored(m);
+  const use = m.derived.best_for || [];
+  const weak = m.derived.weak_for || [];
+  const hub = m.card.hub || {};
+  // the vendor's own paragraph is on the prose tab, under ours. up here it was
+  // the first thing read about a model, which gave the marketing copy the
+  // position the measurements had earned
+  return (m.assessed && m.assessed.one_liner
+    ? `<p class="lead">${esc(m.assessed.one_liner)}</p>` : '')
+    + '<h3>what it is for</h3>'
+    + (use.length || weak.length || m.languages.length
+      ? kv([['best for', esc(use.join(', ')) || '<span class="faint">no facet in the top third</span>'],
+            ['weaker at', esc(weak.join(', ')) || '<span class="faint">-</span>'],
+            ['best languages', m.languages.slice(0, 4).map(l =>
+              `${esc(l.lang)} <span class="sub">${Math.round(l.rate * 100)}%</span>`).join(', ')
+              || '<span class="faint">gbench has not played it</span>'],
+            ['discussed as', Object.entries(m.tasks).sort((a, b) => b[1] - a[1]).slice(0, 5)
+              .map(([t, n]) => `${esc(t)} <span class="sub">${n}</span>`).join(', ')]])
+      : '<p class="faint">nothing has measured this model yet.</p>')
+    + '<h3>facts</h3>'
+    + kv([['kind', esc(m.kind)], ['publisher', esc(m.publisher)],
+          ['architecture', esc(f.arch || f.model_type || '')],
+          ['parameters', f.params_total_b ? f.params_total_b + 'b'
+            + (f.experts ? ` <span class="sub">${f.experts} experts, ${f.experts_active || '?'} active</span>` : '') : ''],
+          ['layers / hidden', f.layers ? `${f.layers} / ${f.hidden || '?'}` : ''],
+          ['native context', ctxLabel(f.context_native)],
+          ['gguf context', ctxLabel(f.context_gguf)],
+          ['mtp layers', f.mtp_layers],
+          ['license', esc(hub.license || '')],
+          ['downloads', hub.downloads ? fmt.format(hub.downloads) : ''],
+          ['likes', hub.likes],
+          ['first published', (hub.createdAt || '').slice(0, 10)],
+          ['modalities', esc((m.modalities.input || []).join(',') + ' -> ' + (m.modalities.output || []).join(','))],
+          ['quality', s.value === null ? '<span class="faint">unmeasured</span>'
+            : `${num(s.value, 0)} <span class="sub">on ${s.have} of ${s.want} weighted factors</span>`]])
+    + (m.notes ? `<h3>registry note</h3><p>${esc(m.notes)}</p>` : '')
+    + idsSection(m);
+}
+
+// a gscore of 0.4517 rounded to one decimal is three models tied at 0.5
+const DIGITS = {share: 3, gscore: 3, elo: 0, index: 1, rate: 1, score: 2};
+
+function facetTable(m, keys) {
+  return '<table><thead><tr><th>measurement</th><th class="n">value</th>'
+    + '<th class="n">percentile</th><th class="n">of</th><th>source</th></tr></thead><tbody>'
+    + keys.map(k => {
+      const f = m.facets[k], meta = D.facet_meta[k] || {};
+      const p = facetPctRaw(m, k);
+      const pct = p === null ? '' : p;
+      return `<tr><td>${esc(meta.label || k)}`
+        + (meta.vendor_reported ? ' <span class="warn">vendor-reported</span>' : '')
+        + (f.low_confidence ? ' <span class="warn">thin sample</span>' : '')
+        + (effective && scaledFacet(k) && modelRetention(m) < 1
+          ? ` <span class="faint">x${modelRetention(m).toFixed(3)} for the quant</span>` : '')
+        + `</td><td class="n">${num(facetValue(m, k), DIGITS[meta.unit] ?? 2)}</td>`
+        + `<td class="n"><span class="bar" style="--w:${pct || 0}%"><span>${pct === '' ? '-' : pct}</span></span></td>`
+        + `<td class="n faint">${f.cohort || ''}</td>`
+        + `<td>${refMark(f.ref)}</td></tr>`;
+    }).join('') + '</tbody></table>';
+}
+
+function tabQuality(m) {
+  const keys = Object.keys(m.facets);
+  if (!keys.length) return '<p class="faint">no source in this corpus has measured this model. '
+    + 'that is a gap in the measurement, not a verdict on the model.</p>';
+  const byGroup = new Map();
+  keys.forEach(k => {
+    const g = (D.facet_meta[k] || {}).group || 'other';
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g).push(k);
+  });
+  let out = '';
+  for (const [g, ks] of byGroup) {
+    if (g === 'community') continue;
+    out += `<h3>${esc(g)}</h3>` + facetTable(m, ks.sort());
+  }
+  if (m.languages.length) {
+    out += '<h3>by language <span class="faint">gbench, success rate over games played</span></h3>'
+      + '<table><thead><tr><th>language</th><th class="n">success</th><th class="n">games</th>'
+      + '<th class="n">matches</th><th>source</th></tr></thead><tbody>'
+      + m.languages.map(l => `<tr><td>${esc(l.lang)}</td>`
+        + `<td class="n"><span class="bar" style="--w:${Math.round(l.rate * 100)}%"><span>${Math.round(l.rate * 100)}%</span></span></td>`
+        + `<td class="n">${l.games}</td><td class="n faint">${fmt.format(l.matches || 0)}</td>`
+        + `<td>${refMark(l.ref)}</td></tr>`).join('') + '</tbody></table>';
+  }
+  return out;
+}
+
+function communitySection(m) {
+  const sources = Object.entries(m.community);
+  if (!sources.length) return '';
+  return '<h3>community <span class="faint">per forum, never pooled</span></h3>'
+    + '<table><thead><tr><th>forum</th><th class="n">mentions</th><th class="n">threads</th>'
+    + '<th class="n">approval</th><th class="n">median rel</th><th>said</th></tr></thead><tbody>'
+    + sources.map(([src, s]) => {
+      const refs = (s.refs || []).map(r => refMark({source: src, url: r.url, title: r.title,
+        note: r.score !== undefined ? `score ${r.score}` : ''}, r.quote)).join(' ');
+      const cls = s.approval === null ? 'faint' : s.approval >= 60 ? 'ok' : s.approval <= 40 ? 'bad' : 'dim';
+      return `<tr><td>${esc(src)}</td><td class="n">${s.mentions}</td>`
+        + `<td class="n faint">${s.threads ?? ''}</td>`
+        + `<td class="n ${cls}">${s.approval === null || s.approval === undefined ? '-' : s.approval + '%'}</td>`
+        + `<td class="n dim">${s.median_rel === null || s.median_rel === undefined ? '-' : Math.round(s.median_rel)}</td>`
+        + `<td>${refs}</td></tr>`;
+    }).join('') + '</tbody></table>'
+    + '<p class="faint">approval is the share of polarised sentences that were positive. '
+    + 'median rel is how those comments scored against comments at the same depth in the '
+    + 'same thread, where 50 is unremarkable. hover a [src] for the sentence itself.</p>';
+}
+
+// the benchmark ids this model is known by at each source, which is how every
+// join in this repo is made
+function idsSection(m) {
+  const ids = Object.entries(m.ids).filter(([, v]) => v);
+  if (!ids.length) return '';
+  return '<h3>ids at each source <span class="faint">the keys every join here'
+    + ' is made on</span></h3>'
+    + '<table><thead><tr><th>source</th><th>id</th></tr></thead><tbody>'
+    + ids.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="dim">${esc(v)}</td></tr>`).join('')
+    + '</tbody></table>';
+}
+
+// a citation that names a facet is resolved against the live number, so a
+// claim written in march and a capture refreshed in august sit side by side
+// rather than the older one quietly standing in for both
+const FACET_CITED = /^([a-z]+\.[a-z0-9_-]+)/;
+
+function evidenceTable(m, evidence) {
+  if (!evidence.length) return '';
+  return '<h3>evidence cited</h3>'
+    + '<table><thead><tr><th>claim</th><th class="n">value now</th>'
+    + '<th class="n">percentile</th><th>source</th></tr></thead><tbody>'
+    + evidence.map(e => {
+      const key = (FACET_CITED.exec(e) || [])[1];
+      const f = key && m.facets[key];
+      if (!f) return `<tr><td colspan="4">${esc(e)}</td></tr>`;
+      const meta = D.facet_meta[key] || {};
+      const pct = facetPctRaw(m, key);
+      return `<tr><td>${esc(e)}</td>`
+        + `<td class="n">${num(facetValue(m, key), DIGITS[meta.unit] ?? 2)}</td>`
+        + `<td class="n">${pct === null ? '-' : pct}</td>`
+        + `<td>${refMark(f.ref)}</td></tr>`;
+    }).join('') + '</tbody></table>';
+}
+
+// what we concluded and what the room said. what the vendor says is next door,
+// on its own tab, because the two are not the same kind of claim.
+function tabAnalysis(m) {
+  const a = m.assessed || {};
+  let out = '';
+  if (a.one_liner || a.notes) {
+    out += '<h3>assessment</h3>'
+      + (a.one_liner ? `<p class="lead">${esc(a.one_liner)}</p>` : '')
+      + (a.notes ? `<p>${esc(a.notes)}</p>` : '')
+      + kv([['use for', esc((a.use_for || []).join(', '))],
+            ['avoid for', esc((a.avoid_for || []).join(', ')) || '<span class="faint">-</span>'],
+            ['evidence', esc(a.confidence || '')],
+            ['assessed', esc(a.assessed_on || '')]])
+      + evidenceTable(m, a.evidence || []);
+  }
+  return out || '<p class="faint">nothing written about this model yet.</p>';
+}
+
+// every forum in one place: the counts, then the sentences behind them
+function tabCommunity(m) {
+  let out = communitySection(m);
+  // per forum rather than pooled and truncated: one busy huggingface thread
+  // would otherwise use up the whole list and reddit would never appear
+  Object.entries(m.community).forEach(([src, s]) => {
+    const refs = (s.refs || []).slice(0, 6);
+    if (!refs.length) return;
+    out += `<h3>what people said on ${esc(src)} `
+      + `<span class="faint">${s.mentions} mentions in ${s.threads || '?'} threads</span></h3>`
+      + refs.map(r => `<div class="quote">${esc(r.quote)}<span class="src">`
+        + `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || r.url)}</a>`
+        + (r.score !== undefined ? ` &middot; score ${r.score}` : '')
+        + (r.rel !== undefined ? ` &middot; ${r.rel}th percentile in its thread` : '')
+        + '</span></div>').join('');
+  });
+  const tasks = Object.entries(m.tasks || {}).sort((a, b) => b[1] - a[1]);
+  if (tasks.length) {
+    const forums = Object.keys(m.community);
+    out += '<h3>what people discuss it for <span class="faint">model and task named in'
+      + ' the same sentence, counted per forum</span></h3>'
+      + '<table><thead><tr><th>task</th>'
+      + forums.map(f => `<th class="n">${esc(f)}</th>`).join('')
+      + '<th class="n">all</th></tr></thead><tbody>'
+      + tasks.map(([t, n]) => `<tr><td>${esc(t)}</td>`
+        + forums.map(f => {
+          const v = ((m.community[f] || {}).tasks || {})[t];
+          return `<td class="n${v ? '' : ' faint'}">${v || '-'}</td>`;
+        }).join('')
+        + `<td class="n"><span class="bar" style="--w:${Math.round(100 * n / tasks[0][1])}%">`
+        + `<span>${n}</span></span></td></tr>`).join('')
+      + '</tbody></table>';
+  }
+  return out || '<p class="faint">no forum in this corpus mentions this model.</p>';
+}
+
+// everything the people selling the model say about it, kept together and
+// kept apart from the measurements
+function tabVendor(m) {
+  const c = m.card;
+  let out = '';
+  if (c.summary) out += `<h3>what the card says</h3><p class="lead">${esc(c.summary)}</p>`;
+  if (c.highlights && c.highlights.length) {
+    out += '<ul>' + c.highlights.map(h => `<li>${esc(h)}</li>`).join('') + '</ul>';
+  }
+  if (c.card_url) out += `<p><a href="${esc(c.card_url)}" target="_blank" rel="noopener">read the full card</a></p>`;
+  if (c.claimed && Object.keys(c.claimed).length) {
+    out += '<h3>what it claims about itself <span class="faint">runs about +0.9 over third-party'
+      + ' measurement of the same model on the same benchmark</span></h3>'
+      + '<table><thead><tr><th>benchmark</th><th class="n">claimed</th>'
+      + '<th>what the card says about others</th></tr></thead><tbody>'
+      + Object.entries(c.claimed).sort().map(([b, v]) => {
+        const peers = (c.others || {})[b] || {};
+        return `<tr><td>${esc(b.replace(/_/g, ' '))}</td><td class="n">${v}</td>`
+          + `<td class="dim">${Object.entries(peers).slice(0, 4)
+            .map(([n, pv]) => `${esc(n)} ${pv}`).join(', ')}</td></tr>`;
+      }).join('') + '</tbody></table>';
+  }
+  // the two cards are kept apart. they are not the same claim: the quantizer
+  // republishes the vendor's numbers sometimes and its own the rest of the
+  // time, which is exactly why fetch-model-cards reads both
+  const cardSets = (title, sets) => !sets || !sets.length ? '' : `<h3>${title}</h3>`
+    + sets.slice(0, 6).map(x => '<div class="profile">'
+      + (x.label ? `<div class="pdesc">${esc(x.label)}</div>` : '')
+      + '<div class="pvals">' + Object.entries(x.values || {}).map(([k, v]) =>
+        `<span><span class="k">${esc(k)}</span> ${esc(v)}</span>`).join('')
+      + '</div></div>').join('');
+  out += cardSets('samplers the model\'s own card documents', c.samplers);
+  out += cardSets('samplers ' + esc(c.quant_repo || 'the quant repo')
+    + ' documents', c.quant_samplers);
+  const hub = c.hub || {};
+  if (hub.tags && hub.tags.length) {
+    out += '<h3>hub tags</h3><div class="chips">'
+      + hub.tags.map(t => `<span class="chip">${esc(t)}</span>`).join('') + '</div>';
+  }
+  return out || '<p class="faint">this model publishes no parseable card.</p>';
+}
+
+// samplers in the order a reader thinks about them, with labels short enough
+// to sit beside their value rather than above a column of them
+const SAMPLERS = [['temp', 'temp'], ['top_p', 'top_p'], ['top_k', 'top_k'],
+                  ['min_p', 'min_p'], ['presence_penalty', 'presence'],
+                  ['repeat_penalty', 'repeat']];
+
+function profileBlock(m, name, p) {
+  const d = D.sampling.profiles[name.replace(/^upstream-/, '')] || {};
+  const vals = SAMPLERS.filter(([f]) => p[f] !== undefined && p[f] !== null)
+    .map(([f, label]) => `<span><span class="k">${label}</span> ${esc(p[f])}</span>`).join('');
+  // a profile may ask for a level this model's knob cannot express; say so
+  // here rather than only in the snippet built from it
+  const t = m.thinking || {};
+  // `off` is expressible whenever the template has a switch, whatever the
+  // graded knob's vocabulary says, so only warn where there is no way to ask
+  const said = p.thinking;
+  const viaGate = t.gate && OFF_LEVELS.includes(said);
+  const bad = said && t.knob && t.kind !== 'boolean' && (t.accepts || []).length
+    && !viaGate && !(t.accepts.includes(said) || (t.aliases || {})[said]);
+  const think = said === undefined ? ''
+    : `<span><span class="k">thinking</span> ${esc(said)}`
+      + (viaGate ? ` <span class="faint">via ${esc(t.gate)}</span>` : '')
+      + (bad ? ` <span class="warn">${esc(t.knob)} has no such level</span>` : '') + '</span>';
+  return `<div class="profile">
+    <div class="pname">${esc(name)}${name.startsWith('upstream-')
+      ? ' <span class="faint">what the vendor documents, kept beside the profile that departs from it</span>' : ''}</div>
+    ${d.summary ? `<div class="pdesc">${esc(d.summary)}</div>` : ''}
+    ${d.use_when ? `<div class="pwhen">use when ${esc(d.use_when)}</div>` : ''}
+    <div class="pvals">${vals}${think}</div>
+    ${(p.tuned || []).length ? `<div class="chips">`
+      + p.tuned.map(t => `<span class="chip">${esc(t)}</span>`).join('') + '</div>' : ''}
+  </div>`;
+}
+
+function tabOperate(m) {
+  let out = '<h3>weights</h3>'
+    + '<table><thead><tr><th>repo</th><th>quant</th><th class="n">gib</th>'
+    + '<th class="n">bpw</th><th>role</th><th>note</th></tr></thead><tbody>'
+    + m.quants.concat(m.components || []).map(q =>
+      `<tr><td><a href="${esc('https://huggingface.co/' + q.repo)}" target="_blank" rel="noopener">${esc(q.repo)}</a></td>`
+      + `<td>${esc(q.quant)}</td><td class="n">${gib(q.gib) || '-'}</td>`
+      + `<td class="n dim">${num(q.bpw, 2) || '-'}</td>`
+      + `<td class="dim">${esc(q.role || '')}</td>`
+      + `<td class="dim">${esc(q.note || '')}</td></tr>`).join('')
+    + '</tbody></table>';
+
+  const profiles = Object.entries(m.sampling);
+  if (profiles.length) {
+    // one block per profile rather than a nine-column table beside a separate
+    // grid of definitions: there are only two or three of these, they are read
+    // one at a time, and the wide table put every number a long way from the
+    // header naming it
+    out += '<h3>sampling profiles</h3>' + profiles.map(([name, p]) =>
+      profileBlock(m, name, p)).join('');
+  }
+
+  if (m.thinking.knob || Object.keys(m.turns).length) {
+    const t = m.thinking, u = m.turns;
+    // one column, and the meaning of `dropped` said once at the bottom rather
+    // than repeated in every cell that has it
+    const states = [
+      ['thinking knob', esc(t.knob || '') + (t.kind === 'boolean'
+        ? ' <span class="faint">a switch: send it true or false</span>' : '')],
+      ['thinking switch', t.gate ? esc(t.gate)
+        + ' <span class="faint">how thinking is turned off; the graded knob has no'
+        + ' level for it</span>' : ''],
+      [t.kind === 'boolean' ? 'states' : 'accepts', t.knob ? levels(t, ', ')
+        + (t.default !== undefined
+          ? ' <span class="faint">bold is what you get by sending nothing</span>' : '') : ''],
+      ['aliases', esc(Object.entries(t.aliases || {}).map(([a, b]) => a + ' -> ' + b).join(', '))],
+    ];
+    const roles = [
+      ['developer role', turnWord(u.developer)],
+      ['leading system messages kept', esc(u.leading_system_max ?? '')],
+      ['system after an assistant turn', turnWord(u.mid_system)],
+      ['developer after an assistant turn', turnWord(u.mid_developer)],
+      ['answers differently from the base repo', esc((u.upstream_differs || []).join(', '))],
+    ];
+    const words = new Set([u.developer, u.mid_system, u.mid_developer]);
+    out += '<h3>chat template behaviour <span class="faint">derived by executing '
+      + esc(u.source || 'it') + '</span></h3>'
+      + (t.knob ? kv(states, 'one') : '')
+      + kv(roles, 'one')
+      + (words.has('dropped') ? '<p class="faint">dropped: the template renders, the '
+        + 'server returns 200, and your message is not in the prompt.</p>' : '')
+      + (words.has('rejected') ? '<p class="faint">rejected: the template raises, so '
+        + 'the request fails rather than losing the message silently.</p>' : '');
+  }
+
+  const repo = pickedRepo(m), pick = pickedQuant(m), profile = pickedProfile(m);
+  const repos = repoChoices(m);
+  const pickRow = (label, body) => `<div class="pickrow"><span class="k">${label}</span>`
+    + `<span class="chips">${body}</span></div>`;
+  out += '<h3>how to run it</h3>'
+    + '<div class="picks">'
+    + pickRow('repo', repos.map(r =>
+      `<button class="chip${r === repo ? ' on' : ''}" data-pick-repo="${esc(r)}">${esc(r)}`
+      + ` <span class="faint">${quantChoices(m).filter(c => c.repo === r).length}</span></button>`).join(''))
+    + pickRow('quant', quantChoices(m).filter(c => c.repo === repo).map(c =>
+      `<button class="chip${pick && c.quant === pick.quant ? ' on' : ''}"`
+      + ` data-pick-repo="${esc(c.repo)}" data-pick-quant="${esc(c.quant)}">${esc(c.quant)}`
+      + (c.gib ? ` <span class="faint">${gib(c.gib)}g${c.bpw ? ' ' + c.bpw + 'bpw' : ''}</span>` : '')
+      + (c.pinned ? ' <span class="faint">pinned</span>' : '')
+      + (budget && c.gib && c.gib > usable() ? ' <span class="warn">over</span>' : '')
+      + '</button>').join(''))
+    + (profiles.length > 1 ? pickRow('samplers', profiles.map(([name]) =>
+      `<button class="chip${name === profile ? ' on' : ''}"`
+      + ` data-profile="${esc(name)}">${esc(name)}</button>`).join('')) : '')
+    + '</div>'
+    + snippets(m).map(o => `<div class="snippet"><div class="faint">${esc(o.label)}</div>`
+      + `<button class="copy">copy</button><pre>${esc(o.text)}</pre></div>`).join('');
+
+  return out;
+}
+
+// --- run snippets ------------------------------------------------------------
+//
+// built here rather than at build time because the reader chooses what they are
+// built FROM: some repos publish twenty quants, and a snippet for the one the
+// registry pins is not much use to somebody who cannot fit it. every flag below
+// is still a pure function of registry facts -- the quant repo, the profile's
+// samplers, the native context, the derived knob. what to run, at what context,
+// on which host stays the consumer's business and is deliberately absent.
+
+const SAMPLER_FLAG = {temp: '--temp', top_p: '--top-p', top_k: '--top-k',
+                      min_p: '--min-p', presence_penalty: '--presence-penalty',
+                      repeat_penalty: '--repeat-penalty'};
+let ops = {repo: null, quant: null, profile: null};
+
+// every (repo, quant) a consumer could actually serve: each declared quant, and
+// every other quant published in the same repo
+function quantChoices(m) {
+  // keyed by (repo, quant): a model may declare two quants OUT OF THE SAME
+  // repo -- gemma 4 31b pins Q8_0 and UD-Q4_K_XL -- and expanding that repo's
+  // listing once per declared quant listed all 25 of them twice
+  const seen = new Map();
+  m.quants.forEach(q => {
+    const alt = (q.available || []).length ? q.available
+      : [{quant: q.quant, gib: q.gib, bpw: q.bpw}];
+    alt.forEach(a => {
+      const key = q.repo + ':' + a.quant;
+      const was = seen.get(key);
+      if (was) { was.pinned = was.pinned || a.quant === q.quant; return; }
+      seen.set(key, {repo: q.repo, quant: a.quant, gib: a.gib, bpw: a.bpw,
+                     pinned: a.quant === q.quant, speculative: q.speculative});
+    });
+  });
+  return [...seen.values()];
+}
+
+// repo first, then quant within it. the two repos of a model are not
+// interchangeable: only the -MTP- build of qwen3.6-27b carries the nextn head,
+// and its files are identically named 0.42gib apart, so which repo you are
+// looking at has to be a choice rather than a tooltip
+const repoChoices = m => [...new Set(quantChoices(m).map(c => c.repo))];
+
+function pickedRepo(m) {
+  const repos = repoChoices(m);
+  return repos.includes(ops.repo) ? ops.repo : repos[0] || null;
+}
+
+function pickedQuant(m) {
+  const inRepo = quantChoices(m).filter(c => c.repo === pickedRepo(m));
+  return inRepo.find(c => c.quant === ops.quant)
+    || inRepo.find(c => c.pinned) || inRepo[0] || null;
+}
+
+function pickedProfile(m) {
+  const names = Object.keys(m.sampling);
+  if (ops.profile && m.sampling[ops.profile]) return ops.profile;
+  return ['tool-use', 'thinking', 'instruct'].find(n => names.includes(n)) || names[0] || '';
+}
+
+function llamaServer(m, pick, profileName) {
+  const p = m.sampling[profileName] || {};
+  const cmd = ['llama-server'];
+  if (pick) cmd.push(`--hf-repo ${pick.repo}:${pick.quant}`);
+  (m.components || []).forEach(w => cmd.push(w.role === 'mmproj'
+    ? `--mmproj hf://${w.repo}:${w.quant}`
+    : `# component (${w.role}): hf://${w.repo}:${w.quant}`));
+  // speculative decoding is a property of the GGUF, not of the model: a quant
+  // saying `speculative: false` cannot draft whatever the model declares
+  const spec = (pick && pick.speculative === false) ? {} : (m.speculative || {});
+  if (spec.draft_repo) cmd.push('--hf-repo-draft ' + spec.draft_repo);
+  if (spec.type) {
+    cmd.push('--spec-type ' + spec.type);
+    if (spec.n_max) cmd.push('--spec-draft-n-max ' + spec.n_max);
+  }
+  if (m.facts.context_native) cmd.push('-c ' + m.facts.context_native);
+  Object.entries(SAMPLER_FLAG).forEach(([f, flag]) => {
+    if (p[f] !== undefined && p[f] !== null) cmd.push(`${flag} ${p[f]}`);
+  });
+  // the turns and thinking facts in this registry were derived by executing the
+  // template, which llama.cpp only does under --jinja
+  cmd.push('--jinja');
+  return cmd.join(' \\\n  ');
+}
+
+function piProvider(m, pick) {
+  if (!pick) return null;
+  const id = `${pick.repo}:${pick.quant}`;
+  const entry = {id, name: id,
+    reasoning: !!(m.thinking.knob || m.sampling.thinking),
+    input: m.modalities.input || ['text'],
+    cost: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0},
+    compat: {maxTokensField: 'max_completion_tokens'}};
+  if (m.facts.context_native) entry.contextWindow = m.facts.context_native;
+  return JSON.stringify({providers: {local: {baseUrl: 'http://localhost:8080/v1',
+    api: 'openai-completions', apiKey: 'none', models: [entry]}}}, null, 2);
+}
+
+// the knob is not a server flag: the level rides in the chat template's kwargs,
+// so it is sent per request
+const OFF_LEVELS = ['off', 'none', 'no_think'];
+
+function requestBody(m, profileName) {
+  const t = m.thinking;
+  if (!t.knob) return null;
+  const p = m.sampling[profileName] || {};
+  const accepts = t.accepts || [];
+  const want = p.thinking;
+  // three models read a switch AND a graded knob. `off` is the switch's job --
+  // it is not in the graded vocabulary and sending it there raises -- so the
+  // profile's level decides which knob the request carries
+  if (t.gate && t.kind !== 'boolean') {
+    const off = want !== undefined && OFF_LEVELS.includes(want) && !accepts.includes(want);
+    const kwargs = off ? {[t.gate]: false}
+      : {[t.gate]: true, [t.knob]: accepts.includes(want) ? want
+          : (t.aliases || {})[want] || t.default || accepts[accepts.length - 1]};
+    return {text: JSON.stringify({model: 'local',
+      messages: [{role: 'user', content: 'hello'}],
+      chat_template_kwargs: kwargs}, null, 2), note: ''};
+  }
+  if (t.kind === 'boolean') {
+    // the profile names a level; a switch can only carry off or not-off
+    const on = want === undefined ? t.default !== false : !OFF_LEVELS.includes(want);
+    return {text: JSON.stringify({model: 'local',
+      messages: [{role: 'user', content: 'hello'}],
+      chat_template_kwargs: {[t.knob]: on}}, null, 2),
+      note: want && want !== 'off' && want !== 'on'
+        ? `the ${profileName} profile asks for ${want}; this knob is a switch, `
+          + `so it is on or off` : ''};
+  }
+  // a profile may name a level this knob cannot express: qwen3.8's `instruct`
+  // asks for `off` and its reasoning_effort takes low, medium and xhigh only.
+  // say so rather than emit a value the template raises on
+  const known = want && (!accepts.length || accepts.includes(want)
+    || (m.thinking.aliases || {})[want]);
+  const level = known ? want : (m.thinking.default || accepts[accepts.length - 1] || 'high');
+  return {text: JSON.stringify({model: 'local',
+    messages: [{role: 'user', content: 'hello'}],
+    chat_template_kwargs: {[m.thinking.knob]: level}}, null, 2),
+    note: known || !want ? '' : `the ${profileName} profile asks for ${want}, `
+      + `which this template does not accept; showing ${level}`};
+}
+
+function snippets(m) {
+  const pick = pickedQuant(m), profile = pickedProfile(m);
+  const out = [{label: `llama-server (${profile || 'no profile'} samplers)`,
+                text: llamaServer(m, pick, profile)}];
+  const body = requestBody(m, profile);
+  if (body) out.push({label: 'request body (thinking knob)'
+    + (body.note ? ' -- ' + body.note : ''), text: body.text});
+  const pi = piProvider(m, pick);
+  if (pi) out.push({label: 'pi models.json', text: pi});
+  out.push({label: 'vllm (base weights, not the gguf)',
+            text: ['vllm serve ' + m.repo].concat(
+              m.facts.context_native ? ['--max-model-len ' + m.facts.context_native] : [])
+              .join(' \\\n  ')});
+  return out;
+}
+
+// the word alone, coloured. what `dropped` means is stated once per model
+// rather than beside every field that says it
+const turnWord = v => !v ? '' : `<span class="${
+  v === 'dropped' ? 'bad' : v === 'rejected' ? 'warn' : 'ok'}">${esc(v)}</span>`;
+
+// --- wiring ------------------------------------------------------------------
+
+function drawChrome() {
+  document.querySelector('#nav').innerHTML = [
+    ['the repo', D.repo_url],
+    ['registry', `${D.repo_url}/blob/${D.branch}/registry/models.yaml`],
+    ['the comparison', `${D.repo_url}/blob/${D.branch}/MODELS.md`],
+    ['the research', `${D.repo_url}/blob/${D.branch}/research/README.md`],
+  ].map(([t, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`).join('');
+
+  const kinds = [...new Set(D.models.map(m => m.kind))].sort();
+  document.querySelector('#kinds').innerHTML = FLAGS.map(f =>
+    `<button data-flag="${f.k}" aria-pressed="${filters.flags.has(f.k)}">${f.t}</button>`).join('');
+  document.querySelectorAll('[data-flag]').forEach(b => {
+    b.onclick = () => {
+      const k = b.dataset.flag;
+      filters.flags.has(k) ? filters.flags.delete(k) : filters.flags.add(k);
+      b.setAttribute('aria-pressed', filters.flags.has(k));
+      saveFilters();
+      drawTable();
+    };
+  });
+
+  // the sizes cards and unified-memory boxes actually come in
+  document.querySelector('#ram').innerHTML = '<option value="">any vram</option>'
+    + [8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 512].map(g =>
+      `<option value="${g}"${g === budget ? ' selected' : ''}>${g} gib vram</option>`).join('');
+  document.querySelector('#cap').innerHTML = CAPS.map(([k, , label]) =>
+    `<option value="${k}"${k === cap ? ' selected' : ''}>${label}</option>`).join('');
+  document.querySelector('#reserve').innerHTML = [0, 2, 4, 8, 12, 16, 24].map(g =>
+    `<option value="${g}"${g === reserve ? ' selected' : ''}>`
+    + (g ? `${g} gib reserve` : 'no reserve') + '</option>').join('');
+  document.querySelector('#ctx').innerHTML = [0, 4096, 8192, 16384, 32768, 65536,
+    131072, 262144, 524288, 1048576].map(c =>
+    `<option value="${c}"${c === minCtx ? ' selected' : ''}>`
+    + (c ? `min ${ctxLabel(c)} context` : 'any context') + '</option>').join('');
+  document.querySelector('#floor').innerHTML = FLOORS.map(([k, , label]) =>
+    `<option value="${k}"${k === floor ? ' selected' : ''}>${label}</option>`).join('');
+
+  const pubs = [...new Set(D.models.map(m => m.publisher))].sort();
+  document.querySelector('#pub').innerHTML = '<option value="">every publisher</option>'
+    + pubs.map(p => `<option value="${esc(p)}"${p === filters.pub ? ' selected' : ''}>`
+      + `${esc(p)}</option>`).join('');
+  document.querySelector('#q').value = filters.q;
+
+  const n = Object.keys(D.provenance).length;
+  document.querySelector('#foot').innerHTML =
+    `every number on this page comes from a file in the repo: ${n} captures, `
+    + `content-addressed in data.json under <code>provenance</code>. `
+    + `click a row for the model, hover a [src] for the sentence or the source behind a number.`
+    + `<br>quality is a weighted mean of percentiles within this registry -- not against `
+    + `frontier api models -- renormalized over the factors each model actually carries.`;
+}
+
+function applyHash() {
+  const m = /model=([^&]+)/.exec(location.hash);
+  const t = /tab=(\w+)/.exec(location.hash);
+  if (t) tab = t[1] === 'prose' ? 'analysis' : (TABS.includes(t[1]) ? t[1] : tab);
+  if (m) {
+    openRepo = decodeURIComponent(m[1]);
+    drawModal();
+  } else {
+    document.querySelector('#modal').classList.remove('open');
+    document.body.classList.remove('locked');
+    openRepo = null;
+  }
+}
+
+function boot(payload) {
+  D = payload;
+  W = store.get('weights', null) || {...D.weights};
+  // shut on a first visit: eight headers is a menu, sixty sliders is a wall.
+  // a stored [] is a reader who opened them, so only a MISSING key defaults
+  folded = new Set(store.get('folded', null) || allGroups());
+  order = store.get('order', COLUMNS.map(c => c.k)).filter(k => COLUMNS.some(c => c.k === k));
+  COLUMNS.forEach(c => { if (!order.includes(c.k)) order.push(c.k); });
+  hidden = new Set(store.get('hidden', DEFAULT_HIDDEN).filter(k => COLUMNS.some(c => c.k === k)));
+
+  // BEFORE drawChrome, which builds the hardware selects and marks `selected`
+  // against these: restoring them afterwards left every dropdown showing its
+  // default while the value behind it was the stored one
+  const f = store.get('filters', null) || {};
+  filters = {q: f.q || '', kind: new Set(), pub: f.pub || '',
+             flags: new Set(f.flags || [])};
+  budget = store.get('budget', null);
+  reserve = store.get('reserve', 8);
+  cap = store.get('cap', 'q8');
+  minCtx = store.get('minCtx', 0);
+  floor = store.get('floor', 'none');
+
+  drawChrome();
+  setEffective(store.get('effective', true));
+  drawFactors();
+  drawColumns();
+  drawTable();
+  applyHash();
+}
+
+const effBtn = () => document.querySelector('#eff-btn');
+function setEffective(on) {
+  effective = on;
+  pctCache = null;
+  D.models.forEach(m => { m._s = null; });
+  effBtn().setAttribute('aria-pressed', on ? 'true' : 'false');
+  effBtn().textContent = on ? 'quant adjusted' : 'raw scores';
+  store.set('effective', on);
+  drawTable();
+  if (openRepo) drawModal(true);
+}
+effBtn().onclick = () => setEffective(!effective);
+
+function setBudget(gib, held, ceiling, ctx, bottom) {
+  budget = gib > 0 ? gib : null;
+  reserve = held;
+  cap = ceiling;
+  minCtx = ctx;
+  floor = bottom;
+  pctCache = null;
+  D.models.forEach(m => { m._s = null; });
+  store.set('budget', budget);
+  store.set('reserve', reserve);
+  store.set('cap', cap);
+  store.set('minCtx', minCtx);
+  store.set('floor', floor);
+  drawTable();
+  if (openRepo) drawModal(true);
+}
+const hw = () => [budget, reserve, cap, minCtx, floor];
+document.querySelector('#ram').onchange = e =>
+  setBudget(+e.target.value, reserve, cap, minCtx, floor);
+document.querySelector('#reserve').onchange = e =>
+  setBudget(budget, +e.target.value, cap, minCtx, floor);
+document.querySelector('#cap').onchange = e =>
+  setBudget(budget, reserve, e.target.value, minCtx, floor);
+document.querySelector('#ctx').onchange = e =>
+  setBudget(budget, reserve, cap, +e.target.value, floor);
+document.querySelector('#floor').onchange = e =>
+  setBudget(budget, reserve, cap, minCtx, e.target.value);
+
+function saveFilters() {
+  store.set('filters', {q: filters.q, pub: filters.pub, flags: [...filters.flags]});
+}
+
+document.querySelector('#q').oninput = e => {
+  filters.q = e.target.value;
+  saveFilters();
+  drawTable();
+};
+document.querySelector('#pub').onchange = e => {
+  filters.pub = e.target.value;
+  saveFilters();
+  drawTable();
+};
+['factors', 'cols'].forEach(id => {
+  const btn = document.querySelector('#' + id + '-btn');
+  const set = open => {
+    btn.setAttribute('aria-pressed', open);
+    document.querySelector('#' + id).classList.toggle('open', open);
+    store.set(id + '-open', open);
+  };
+  btn.onclick = () => set(btn.getAttribute('aria-pressed') !== 'true');
+  set(store.get(id + '-open', false));
+});
+document.querySelector('#reset').onclick = () => {
+  W = {...D.weights};
+  filters = {q: '', kind: new Set(), pub: '', flags: new Set()};
+  hidden = new Set(DEFAULT_HIDDEN);
+  folded = new Set(allGroups());
+  order = COLUMNS.map(c => c.k);
+  sort = {k: 'score', dir: -1};
+  budget = null;
+  reserve = 8;
+  cap = 'q8';
+  minCtx = 0;
+  floor = 'none';
+  ['weights', 'hidden', 'order', 'sort', 'budget', 'reserve', 'cap', 'minCtx',
+   'floor', 'folded', 'effective', 'filters']
+    .forEach(k => localStorage.removeItem('aim-' + k));
+  document.querySelector('#q').value = '';
+  document.querySelector('#pub').value = '';
+  document.querySelectorAll('[data-flag]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+  drawFactors(); drawColumns(); drawTable();
+};
+document.querySelector('#m-close').onclick = closeModel;
+document.querySelector('#modal').onclick = e => { if (e.target.id === 'modal') closeModel(); };
+addEventListener('keydown', e => { if (e.key === 'Escape' && openRepo) closeModel(); });
+addEventListener('hashchange', applyHash);
+
+fetch(DATA_URL, {cache: 'no-cache'})
+  .then(r => r.json())
+  .then(boot)
+  .catch(e => {
+    document.querySelector('#rows').innerHTML =
+      `<tr><td class="empty bad">could not load ${DATA_URL}: ${esc(e.message)}</td></tr>`;
+  });
+</script>

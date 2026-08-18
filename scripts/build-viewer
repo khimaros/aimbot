@@ -1,0 +1,328 @@
+#!/usr/bin/env python3
+
+"""Build the single-page registry viewer that github pages serves from docs/.
+
+The page is static and fetches ONE file, docs/data.json, by relative path. The
+raw captures are 19mb across twenty files and half of them are yaml, so joining
+them in the browser would mean shipping a yaml parser and most of the corpus to
+read one table. This does the join once, here.
+
+    build-viewer            # write docs/data.json and docs/index.html
+    build-viewer --check    # exit 1 if either is out of date
+
+What it joins, all by the registry's own keys:
+
+    registry/models.yaml            the facts and the four keys to address them
+    registry/sampling.yaml          what a profile name means
+    research/data/model-facts.json  arch, params, context, mtp (derived)
+    research/data/gguf-sizes.json   what each quant actually weighs
+    research/data/usecase.json      every measurement, per facet, with its ref
+    research/data/model-cards.json  the vendor's own prose and hub metadata
+
+Nothing is imputed. A model with no gbench entry has no gbench facet, and the
+page renormalizes its ranking over the facets a model actually carries rather
+than scoring an absence as a zero.
+
+The run snippets are NOT built here. The page builds them, because the reader
+picks the quant and the sampling profile they are built from and there are
+twenty quants in some repos. What ships is the facts they are a function of.
+Those snippets stay derived rather than policy either way: which model to run,
+at what context, on which host, is the consumer's business and is deliberately
+absent -- see the README's split.
+"""
+
+import argparse
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.join(HERE, "..")
+DATA = os.path.join(ROOT, "research", "data")
+TEMPLATE = os.path.join(HERE, "viewer.html")
+OUT_DIR = os.path.join(ROOT, "docs")
+
+# files in a quant repo that are not a quant of the model. the multimodal
+# projector and the mtp draft head ship beside the weights under their own
+# names, and offering either as something to serve would be an error a size
+# column makes look plausible -- `MTP` is 2.26gib of gemma 4 31b's repo.
+# same exclusion build-tables applies, plus the projector: a drafter is a
+# separate model that ships in the model's repo, and `dspark` is 10.5gib of
+# deepseek v4 flash's -- offered as a quant it looks like the bargain of the
+# roster and is not the model at all.
+NOT_A_QUANT = re.compile(r"^(mmproj|mtp|dspark|dflash|eagle3)|\.gguf$", re.I)
+
+# the facets a quantization penalty applies to. build-tables scales exactly
+# these three and nothing else: the other sources measured a served endpoint
+# whose precision this repo does not know, so discounting them would be
+# inventing a number rather than adjusting one.
+SCALED_FACETS = ["aa.coding", "aa.agentic", "aa.intelligence"]
+
+GITHUB = "https://github.com/khimaros/aimbot"
+BRANCH = "master"
+HF = "https://huggingface.co/"
+GIB = 2 ** 30
+
+# weights the ranking opens with. these are build-tables' composite weights,
+# which were set by a redundancy analysis rather than by taste -- see its
+# WEIGHTS comment. the page lets a reader change every one of them, so this is
+# a starting point rather than a claim.
+# a key ending in `.*` is a wildcard over every facet under it, averaged. card
+# claims and epoch runs are per benchmark, and a reader wants one knob for "how
+# much do i trust what the vendor says", not eleven.
+DEFAULT_WEIGHTS = {
+    "aa.coding": 0.25, "aa.agentic": 0.25, "gbench.agentic": 0.15,
+    "lmarena.rating": 0.10, "swerebench.resolved": 0.10,
+    "community.reddit-localllama": 0.15, "card.*": 0.05,
+}
+
+# facet groups in the order the weighting panel lists them, with what each one
+# actually measures. a reader deciding what to trust needs this more than the
+# numbers.
+GROUPS = [
+    ("artificial analysis", "one harness across every model, third party. "
+     "the coding and agentic indices are the two axes; the intelligence index "
+     "is ~0.4*coding + 0.4*agentic and would count them twice."),
+    ("gbench", "models play generated games against each other, so there is no "
+     "public problem set to train against and outcomes are decided by play."),
+    ("gbench languages", "success rate per language, rolled up from the games "
+     "gbench played in each. the only source here that says a model is better "
+     "at rust than at clojure -- weight the one you write."),
+    ("lmarena", "human preference, style controlled. the only source here not "
+     "scored by a grader."),
+    ("swe-rebench", "pull requests merged after the models shipped, so a score "
+     "here cannot have been trained against."),
+    ("epoch", "epoch's own runs on its own harness, plus leaderboards it mirrors."),
+    ("card claims", "what the model says about itself. corrected by the median "
+     "+0.9 overstatement analyze-self-report measured, and still the weakest "
+     "evidence here."),
+    ("community", "what forums say, per forum. quantitative: mentions damped by "
+     "log, times how well those mentions were received."),
+]
+
+
+def retention_curve():
+    """build-tables' quantization retention curve, shipped rather than restated.
+
+    A benchmark measures the model at full precision; a local roster runs a
+    quant of it. build-tables scales the three artificial analysis indices by
+    the retention this curve predicts for the quant's bits per weight, and the
+    page offers the same view -- from the same numbers, so the two cannot
+    disagree about what `effective` means.
+    """
+    spec = importlib.util.spec_from_loader(
+        "build_tables",
+        importlib.machinery.SourceFileLoader(
+            "build_tables", os.path.join(ROOT, "research", "build-tables")))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return {"curve": mod.CURVE, "scaled": SCALED_FACETS,
+            "source": "research/build-tables CURVE, fitted to unsloth's aider "
+                      "polyglot sweep of deepseek v3.1"}
+
+
+def load_yaml(path):
+    import yaml
+    with open(path) as f:
+        return yaml.safe_load(f) or {}
+
+
+def load_json(name):
+    path = os.path.join(DATA, name + ".json")
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (IOError, ValueError):
+        return {}
+
+
+def registry_lines(path):
+    """Line number of each model key, so every row can link at its own entry."""
+    lines = {}
+    with open(path) as f:
+        for n, line in enumerate(f, 1):
+            m = re.match(r"^  ([\w.-]+/[\w.-]+):\s*$", line)
+            if m:
+                lines[m.group(1)] = n
+    return lines
+
+
+def quant_rows(model, sizes):
+    """Each declared quant, with what it weighs and what that is per weight."""
+    params = None
+    out = []
+    for q in model.get("quants") or []:
+        repo_sizes = sizes.get(q["repo"]) or {}
+        row = dict(q)
+        row["url"] = HF + q["repo"]
+        b = repo_sizes.get(q["quant"])
+        if b:
+            row["bytes"] = b
+            row["gib"] = round(b / GIB, 2)
+        # every other quant published in the same repo, so a reader who cannot
+        # fit the pinned one can see what else is there
+        row["available"] = sorted(
+            ({"quant": k, "gib": round(v / GIB, 2)}
+             for k, v in repo_sizes.items() if not NOT_A_QUANT.search(k)),
+            key=lambda x: x["gib"])
+        out.append(row)
+    return out, params
+
+
+def with_bpw(quants, params_b):
+    """Bits per weight, which is the number that predicts quantization loss."""
+    if not params_b:
+        return quants
+    for q in quants:
+        if q.get("bytes"):
+            q["bpw"] = round(q["bytes"] * 8 / (params_b * 1e9), 2)
+        for a in q.get("available") or []:
+            a["bpw"] = round(a["gib"] * GIB * 8 / (params_b * 1e9), 2)
+    return quants
+
+
+def build_model(repo, model, ctx):
+    facts = ctx["facts"].get(repo) or {}
+    use = (ctx["usecase"].get("models") or {}).get(repo) or {}
+    card = ctx["cards"].get(repo) or {}
+    quants, _ = quant_rows(model, ctx["sizes"])
+    quants = with_bpw(quants, facts.get("params_total_b"))
+    name = model.get("name") or {}
+    rec = {
+        "repo": repo, "publisher": repo.split("/")[0],
+        "short": name.get("short") or repo, "match": name.get("match"),
+        "kind": model.get("kind", "text"),
+        "url": HF + repo,
+        "entry_url": "%s/blob/%s/registry/models.yaml#L%d"
+                     % (GITHUB, BRANCH, ctx["lines"].get(repo, 1)),
+        "notes": model.get("notes"),
+        "native_low_bpw": model.get("native_low_bpw"),
+        "modalities": model.get("modalities") or {},
+        "facts": facts, "quants": quants,
+        "components": model.get("components") or [],
+        "speculative": model.get("speculative") or {},
+        "sampling": model.get("sampling") or {},
+        "thinking": model.get("thinking") or {},
+        "turns": model.get("turns") or {},
+        "ids": model.get("ids") or {},
+        "facets": use.get("facets") or {},
+        "languages": use.get("languages") or [],
+        "community": use.get("community") or {},
+        "tasks": use.get("tasks") or {},
+        "derived": use.get("derived") or {},
+        "assessed": use.get("assessed") or {},
+        # `quant_repo` rides along because the two sampler sets are not
+        # interchangeable: unsloth's page routinely documents different numbers
+        # from the vendor's, and merging them loses which is which
+        "card": {k: card.get(k) for k in
+                 ("summary", "highlights", "claimed", "others", "samplers",
+                  "quant_samplers", "quant_repo", "hub", "card_url") if card.get(k)},
+    }
+    return rec
+
+
+def facet_meta(models):
+    """One description of each facet, rather than one per model that carries it."""
+    meta = {}
+    for m in models:
+        for key, f in m["facets"].items():
+            meta.setdefault(key, {"label": f.get("label"), "group": f.get("group"),
+                                  "unit": f.get("unit"),
+                                  "vendor_reported": bool(f.get("vendor_reported"))})
+            # the per-model copies only need what varies
+            for drop in ("label", "group", "unit"):
+                f.pop(drop, None)
+    return meta
+
+
+def provenance():
+    """Which capture each number came from, by content rather than by date."""
+    out = {}
+    for name in sorted(os.listdir(DATA)):
+        if not name.endswith(".json"):
+            continue
+        path = os.path.join(DATA, name)
+        with open(path, "rb") as f:
+            out["research/data/" + name] = hashlib.sha256(f.read()).hexdigest()[:12]
+    for rel in ("registry/models.yaml", "registry/sampling.yaml"):
+        with open(os.path.join(ROOT, rel), "rb") as f:
+            out[rel] = hashlib.sha256(f.read()).hexdigest()[:12]
+    return out
+
+
+def build():
+    reg_path = os.path.join(ROOT, "registry", "models.yaml")
+    ctx = {"facts": load_json("model-facts"), "sizes": load_json("gguf-sizes"),
+           "usecase": load_json("usecase"), "cards": load_json("model-cards"),
+           "lines": registry_lines(reg_path)}
+    registry = load_yaml(reg_path).get("models") or {}
+    sampling = load_yaml(os.path.join(ROOT, "registry", "sampling.yaml"))
+    models = [build_model(repo, m, ctx) for repo, m in sorted(registry.items())]
+    return {
+        "repo_url": GITHUB, "branch": BRANCH,
+        "sampling": {"profiles": sampling.get("profiles") or {},
+                     "default": sampling.get("default"),
+                     "fields": sampling.get("fields") or {}},
+        "weights": DEFAULT_WEIGHTS,
+        "groups": [{"name": n, "about": a} for n, a in GROUPS],
+        "facet_meta": facet_meta(models),
+        "retention": retention_curve(),
+        "provenance": provenance(),
+        "models": models,
+    }
+
+
+def render(payload):
+    with open(TEMPLATE) as f:
+        html = f.read()
+    if "__DATA_URL__" not in html:
+        sys.exit("!!! %s has no __DATA_URL__ placeholder" % TEMPLATE)
+    return html.replace("__DATA_URL__", "data.json")
+
+
+def write(path, text, check):
+    current = open(path).read() if os.path.exists(path) else None
+    if check:
+        if current != text:
+            sys.exit("!!! %s is out of date, run: make site" % os.path.relpath(path, ROOT))
+        return False
+    if current == text:
+        return False
+    with open(path, "w") as f:
+        f.write(text)
+    return True
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--check", action="store_true",
+                    help="exit 1 if the committed page is not what this would write")
+    ap.add_argument("--out", default=OUT_DIR)
+    args = ap.parse_args()
+
+    payload = build()
+    data = json.dumps(payload, indent=1, sort_keys=True) + "\n"
+    page = render(payload)
+
+    os.makedirs(args.out, exist_ok=True)
+    changed = [write(os.path.join(args.out, "data.json"), data, args.check),
+               write(os.path.join(args.out, "index.html"), page, args.check),
+               # github pages runs jekyll over a branch folder unless told not
+               # to, and jekyll drops files it does not recognise
+               write(os.path.join(args.out, ".nojekyll"), "", args.check)]
+    if args.check:
+        print("docs/ is current (%d models)" % len(payload["models"]))
+        return
+    print("wrote %s: %d models, %d facets, %d bytes of data%s"
+          % (os.path.relpath(args.out, ROOT), len(payload["models"]),
+             sum(len(m["facets"]) for m in payload["models"]), len(data),
+             "" if any(changed) else " (unchanged)"))
+
+
+if __name__ == "__main__":
+    main()

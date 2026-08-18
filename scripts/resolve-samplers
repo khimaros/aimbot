@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+
+"""Fill each sampling profile's `source:` from what its numbers still agree with.
+
+Every other fact in this registry says where it came from -- `turns` names the
+template it was executed from, a usecase facet carries a `ref`, a capture
+carries its sha -- and a sampling profile said nothing at all. So a deliberate
+departure and a typo looked identical, and `models-validate --cards` could only
+print both and shrug.
+
+    resolve-samplers              # what would change
+    resolve-samplers --write      # update registry/models.yaml
+    resolve-samplers --check      # exit 1 if the registry is behind
+
+The value is DERIVED rather than typed, because "where did these numbers come
+from" is unknowable after the fact but "what do they still agree with" is not:
+
+  quant-card         matches a set the quant repo's card documents
+  vendor-card        matches a set the base repo's card documents
+  generation-config  matches the samplers shipped in generation_config.json
+  tuned-here         matches nothing published
+
+The quant repo wins where both agree, because that is the card describing the
+weights a consumer actually serves. `tuned-here` is the one that needs a human:
+it means somebody chose these numbers, and models-validate requires a `note`
+saying why. Nothing here writes that note.
+
+Comparison is on the fields BOTH sides name. A card documenting temp and top_p
+cannot speak to a min_p the profile also sets, and demanding it did would file
+every profile under `tuned-here`.
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REGISTRY = os.path.join(HERE, "..", "registry", "models.yaml")
+DATA = os.path.join(HERE, "..", "research", "data")
+
+# our field name -> generation_config.json's
+SHIPPED = {"temp": "temperature", "top_p": "top_p", "top_k": "top_k",
+           "min_p": "min_p", "repeat_penalty": "repetition_penalty",
+           "presence_penalty": "presence_penalty"}
+NUMERIC = set(SHIPPED)
+
+MODEL_KEY = re.compile(r"^  (\S.*?):\s*$")
+PROFILE_KEY = re.compile(r"^      ([\w.-]+):\s*$")
+FIELD = re.compile(r"^        ([\w.-]+):")
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("!!! pyyaml not found")
+
+
+def load(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (IOError, ValueError):
+        return {}
+
+
+def agrees(profile, values):
+    """Do the two sets agree on every field they both name, and is there one?"""
+    common = [k for k in values if k in profile and k in NUMERIC]
+    if not common:
+        return False
+    return all(abs(float(profile[k]) - float(values[k])) < 1e-9 for k in common)
+
+
+def source_for(profile, card, shipped):
+    """The strongest published source these numbers still match."""
+    for key, name in (("quant_samplers", "quant-card"), ("samplers", "vendor-card")):
+        for s in card.get(key) or []:
+            if agrees(profile, s.get("values") or {}):
+                return name
+    if shipped:
+        theirs = {ours: shipped[t] for ours, t in SHIPPED.items() if t in shipped}
+        if agrees(profile, theirs):
+            return "generation-config"
+    return "tuned-here"
+
+
+def resolve(models, cards, facts):
+    """{repo: {profile: source}} for every profile in the registry."""
+    out = {}
+    for repo, m in (models.get("models") or {}).items():
+        card = cards.get(repo) or {}
+        shipped = (facts.get(repo) or {}).get("samplers_shipped") or {}
+        for name, prof in (m.get("sampling") or {}).items():
+            if not prof:
+                continue
+            out.setdefault(repo, {})[name] = source_for(prof, card, shipped)
+    return out
+
+
+def rewrite(lines, wanted):
+    """Put `source:` first under each profile, replacing any already there."""
+    out, model, profile, changed = [], None, None, []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = MODEL_KEY.match(line)
+        if m:
+            model, profile = m.group(1), None
+        # a profile header, but only inside this model's sampling block
+        p = PROFILE_KEY.match(line)
+        if p and model and p.group(1) in (wanted.get(model) or {}):
+            profile = p.group(1)
+            want = wanted[model][profile]
+            out.append(line)
+            i += 1
+            had = None
+            body = []
+            while i < len(lines) and FIELD.match(lines[i] or " "):
+                f = FIELD.match(lines[i]).group(1)
+                if f == "source":
+                    had = lines[i].split(":", 1)[1].strip()
+                else:
+                    body.append(lines[i])
+                i += 1
+            if had != want:
+                changed.append((model, profile, had, want))
+            out.append("        source: %s" % want)
+            out += body
+            continue
+        out.append(line)
+        i += 1
+    return out, changed
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--registry", default=REGISTRY)
+    ap.add_argument("--write", action="store_true")
+    ap.add_argument("--check", action="store_true")
+    args = ap.parse_args()
+
+    with open(args.registry) as f:
+        text = f.read()
+    models = yaml.safe_load(text) or {}
+    wanted = resolve(models, load(os.path.join(DATA, "model-cards.json")),
+                     load(os.path.join(DATA, "model-facts.json")))
+    lines, changed = rewrite(text.split("\n"), wanted)
+
+    counts = {}
+    for profiles in wanted.values():
+        for src in profiles.values():
+            counts[src] = counts.get(src, 0) + 1
+    print("  ".join("%s %d" % kv for kv in sorted(counts.items())))
+
+    if args.check:
+        if changed:
+            for repo, name, had, want in changed:
+                print("  %-46s %-16s %s -> %s" % (repo, name, had or "-", want))
+            sys.exit("!!! %d profile(s) behind the data, run: make samplers" % len(changed))
+        print("samplers: every profile's source matches the captures")
+        return
+
+    for repo, name, had, want in changed:
+        print("  %-46s %-16s %s -> %s" % (repo, name, had or "-", want))
+    if args.write:
+        with open(args.registry, "w") as f:
+            f.write("\n".join(lines))
+        print("patched %d profile(s) in %s" % (len(changed), args.registry))
+    else:
+        print("%d profile(s) would change; --write to apply" % len(changed))
+
+
+if __name__ == "__main__":
+    main()

@@ -24,6 +24,12 @@ measured one, and now there is a number for how much less.
 Cards are wildly heterogeneous -- markdown tables, HTML tables with inline
 styles, prose -- so extraction is best-effort and records what it could not
 parse rather than silently dropping it.
+
+Besides the numbers, the card is also the only place the vendor says what the
+model is FOR, so its opening paragraph and its feature bullets are kept as
+`summary` and `highlights`, and the hub's own structured metadata (pipeline
+tag, tags, license, downloads) as `hub`. Those feed analyze-usecase, which is
+where the question "what should I use this for" is actually answered.
 """
 
 import argparse
@@ -37,6 +43,27 @@ from html.parser import HTMLParser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = "https://huggingface.co/%s/raw/main/README.md"
+API = "https://huggingface.co/api/models/%s"
+UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+      "Chrome/140.0.0.0 Safari/537.36")
+
+# hub fields worth keeping. downloads and likes are not quality, but they are
+# the only measure of adoption that covers every model rather than the fifth
+# of them a leaderboard scored.
+HUB_FIELDS = ["pipeline_tag", "library_name", "downloads", "likes", "gated",
+              "createdAt", "lastModified"]
+
+# the opening prose of a card, which is where the vendor says what it built.
+# markdown noise that is never a summary: badges, images, tables, headings,
+# rules, blockquote callouts, and the bullet lists `highlights` already takes.
+SUMMARY_SKIP = re.compile(r"^\s*(!\[|\[!\[|#|\||>|[-*+]\s|-{3,}|\*{3,}|$)")
+SUMMARY_MIN = 60
+SUMMARY_MAX = 600
+HIGHLIGHT_HEADING = re.compile(
+    r"^#{1,4}\s*.*\b(highlight|key feature|features|introduction|overview|"
+    r"what.s new|capabilit)", re.I)
+HIGHLIGHT_MAX = 8
+HIGHLIGHT_CHARS = 240
 
 # benchmark names as cards write them -> the key third-party sources use, so a
 # claim can be put beside a measurement. the left side is matched loosely
@@ -226,10 +253,16 @@ def sampler_sets(text):
     calling", which is two recommendations rather than one contradictory set.
     """
     out, cur, label = [], {}, ""
+    seen = set()
 
     def flush():
+        # a card states the same numbers in prose, in a code block and in a
+        # table, and that is one recommendation rather than three. the first
+        # label wins because it is the one with the prose around it
         nonlocal cur, label
-        if len(cur) >= 2 and not HARNESS.search(label):
+        key = tuple(sorted(cur.items()))
+        if len(cur) >= 2 and not HARNESS.search(label) and key not in seen:
+            seen.add(key)
             out.append({"label": label, "values": cur})
         cur, label = {}, ""
 
@@ -252,6 +285,93 @@ def sampler_sets(text):
     return out
 
 
+def strip_frontmatter(text):
+    """Drop the yaml block a card opens with; its keys come from the api."""
+    if not text.startswith("---"):
+        return text, {}
+    end = text.find("\n---", 3)
+    if end < 0:
+        return text, {}
+    head, body = text[3:end], text[end + 4:]
+    meta = {}
+    for line in head.split("\n"):
+        if ":" in line and not line.startswith((" ", "-", "\t")):
+            k, v = line.split(":", 1)
+            meta[k.strip()] = v.strip()
+    return body, meta
+
+
+def summary(text):
+    """The card's first real paragraph: what the vendor says it built.
+
+    Cards open with a wall of badge images and centred html, so the markup is
+    stripped first and then the first paragraph that reads as sentences wins.
+    Best-effort by design -- a card that is all tables gets no summary rather
+    than a row of pipes.
+    """
+    body, _ = strip_frontmatter(text or "")
+    body = re.sub(r"<!--.*?-->", " ", body, flags=re.S)
+    body = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", body)          # images and badges
+    body = re.sub(r"<[^>]+>", " ", body)                       # centred html wrappers
+    for para in re.split(r"\n\s*\n", body):
+        lines = [l.strip() for l in para.split("\n")
+                 if not SUMMARY_SKIP.match(l.strip())]
+        s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", " ".join(lines))
+        s = " ".join(s.replace("**", "").split())
+        # the link bar cards put under the title survives tag stripping as a
+        # row of pipe-separated names, and is not a description of anything
+        if s.count("|") >= 2:
+            continue
+        if len(s) >= SUMMARY_MIN and len(s.split()) >= 10:
+            return s[:SUMMARY_MAX]
+    return ""
+
+
+def highlights(text):
+    """Feature bullets under a highlights-shaped heading, in document order."""
+    body, _ = strip_frontmatter(text or "")
+    out, collecting = [], False
+    for line in body.split("\n"):
+        s = line.strip()
+        if s.startswith("#"):
+            collecting = bool(HIGHLIGHT_HEADING.match(s))
+            continue
+        if not collecting or not s.startswith(("-", "*", "+")):
+            continue
+        item = re.sub(r"^[-*+]\s*", "", s)
+        item = re.sub(r"<[^>]+>", "", item)
+        item = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", item).replace("**", "")
+        item = " ".join(item.split())
+        if len(item) > 20:
+            out.append(item[:HIGHLIGHT_CHARS])
+        if len(out) >= HIGHLIGHT_MAX:
+            break
+    return out
+
+
+def hub_meta(repo, max_age, refresh):
+    """The hub's own structured metadata, which needs no card to parse."""
+    cmd = [os.path.join(HERE, "httpcache"), API % repo,
+           "--key", "hub-%s" % repo.replace("/", "_"),
+           "--max-age", str(max_age), "--header", "User-Agent: " + UA]
+    if refresh:
+        cmd.append("--refresh")
+    raw = subprocess.run(cmd, stdout=subprocess.PIPE,
+                         stderr=subprocess.DEVNULL, text=True).stdout
+    try:
+        d = json.loads(raw)
+    except ValueError:
+        return {}
+    out = {k: d[k] for k in HUB_FIELDS if d.get(k) is not None}
+    # the licence lives in cardData on some repos and only in the tags on
+    # others, so take whichever answered
+    out["license"] = (d.get("cardData") or {}).get("license") or next(
+        (t.split(":", 1)[1] for t in (d.get("tags") or []) if t.startswith("license:")), None)
+    out["tags"] = [t for t in (d.get("tags") or [])
+                   if ":" not in t and t not in ("region", "endpoints_compatible")]
+    return {k: v for k, v in out.items() if v not in (None, [], "")}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -266,7 +386,7 @@ def main():
 
     out = {}
     for repo, m in reg.items():
-        if m.get("kind", "text") != "text" or "/" not in repo:
+        if "/" not in repo:
             continue
         cmd = [os.path.join(HERE, "httpcache"), RAW % repo,
                "--key", "card-%s" % repo.replace("/", "_"),
@@ -275,9 +395,9 @@ def main():
             cmd.append("--refresh")
         text = subprocess.run(cmd, stdout=subprocess.PIPE,
                               stderr=subprocess.DEVNULL, text=True).stdout
-        if not text:
-            print("  %-40s no card" % repo, file=sys.stderr)
-            continue
+        # an entry is written even with no card at all: the hub metadata below
+        # answers "what is this and who publishes it" for the image and speech
+        # models, which have no benchmark table anywhere
         p = Tables()
         try:
             p.feed(text)
@@ -286,12 +406,12 @@ def main():
         names = [(m.get("name") or {}).get("short")]
         claimed, others, unmatched = parse_tables(
             p.tables + markdown_tables(text), repo, names)
-        if not claimed and not unmatched:
-            print("  %-40s no benchmark table found" % repo, file=sys.stderr)
-            continue
         out[repo] = {"claimed": claimed, "others": others,
                      "unmatched": unmatched[:20],
-                     "samplers": sampler_sets(text)}
+                     "samplers": sampler_sets(text),
+                     "summary": summary(text), "highlights": highlights(text),
+                     "hub": hub_meta(repo, args.max_age, args.refresh),
+                     "card_url": "https://huggingface.co/%s" % repo}
         # the quant repo is what actually gets run, and it does not always say
         # the same thing as the base repo
         qrepo = ((m.get("quants") or [{}])[0]).get("repo")
@@ -307,8 +427,10 @@ def main():
             if qsets:
                 out[repo]["quant_repo"] = qrepo
                 out[repo]["quant_samplers"] = qsets
-        print("  %-40s %d claimed, %d unmatched"
-              % (repo, len(claimed), len(unmatched)), file=sys.stderr)
+        print("  %-40s %d claimed, %d unmatched, %s summary, %d highlights"
+              % (repo, len(claimed), len(unmatched),
+                 "no" if not out[repo]["summary"] else "a",
+                 len(out[repo]["highlights"])), file=sys.stderr)
 
     with open(args.out, "w") as f:
         json.dump(out, f, indent=1, sort_keys=True)

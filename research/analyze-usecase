@@ -1,0 +1,450 @@
+#!/usr/bin/env python3
+
+"""Roll every measurement of a model into one file: data/usecase.json.
+
+What is this model FOR is a question the corpus can mostly answer with numbers,
+and this collects them in one place so a consumer does not have to re-derive
+the joins. Each entry carries:
+
+  facets      one number per (source, benchmark), with the model's percentile
+              among the registry models that also carry it, and a reference
+  languages   gbench per-language success rates, which is the only source here
+              that says a model is better at rust than at clojure
+  community   what each forum says, kept per forum, with quoted references
+  assessed    a written judgement, carried in from usecase-assessed.json.
+              that file is SOURCE and this one is derived, so a recompute
+              cannot lose the prose and a diff shows judgement changing
+              separately from measurement. it is machine-readable on purpose:
+              a generated MODELS.md should read it rather than a document
+
+Facets are deliberately not blended here. Weighing coding against community
+approval is the reader's call, so the viewer applies weights at read time and
+this file keeps the components separable. `derived.best_for` is the exception:
+a cheap top-third summary so a consumer with no weighting UI still gets an
+answer.
+
+Every number keeps a `ref` -- source, file and url. A measurement nobody can
+trace is an assertion, and the whole point of this repo is that a fact has a
+place it came from.
+
+    ./analyze-usecase                # rewrite data/usecase.json
+    ./analyze-usecase --check        # exit 1 if it is out of date
+    ./analyze-usecase --missing      # models with no assessed block yet
+
+The joins (gbench, lmarena, swe-rebench, card claims) are imported from
+build-tables rather than restated, because two definitions of "this model's
+gbench score" is exactly the drift this repo exists to remove.
+"""
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = "data/usecase.json"
+# written judgement lives beside the collectors as SOURCE, not in data/,
+# which holds captures and rollups that a rerun may overwrite.
+ASSESSED = "usecase-assessed.json"
+
+# artificial analysis fields worth carrying, as (facet key, label, aa field).
+# the intelligence index is included for display but is NOT a separate axis:
+# it is ~0.4*coding + 0.4*agentic, so a reader who weights all three is
+# counting the same measurement twice. build-tables says so at length.
+AA_FACETS = [
+    ("aa.coding", "coding index", "codingIndex", "index"),
+    ("aa.agentic", "agentic index", "agenticIndex", "index"),
+    ("aa.intelligence", "intelligence index", "intelligenceIndex", "index"),
+    ("aa.gpqa", "gpqa diamond", "gpqa", "share"),
+    ("aa.hle", "humanity's last exam", "hle", "share"),
+    ("aa.scicode", "scicode", "scicode", "share"),
+    ("aa.tau2", "tau2 (tool use)", "tau2", "share"),
+    ("aa.tau_banking", "tau2 banking split", "tauBanking", "share"),
+    ("aa.ifbench", "instruction following", "ifbench", "share"),
+    ("aa.lcr", "long context reasoning", "lcr", "share"),
+    ("aa.critpt", "critpt (physics)", "critpt", "share"),
+    ("aa.mmmu_pro", "mmmu pro (vision)", "mmmuPro", "share"),
+    ("aa.terminalbench", "terminal-bench 2.1", "terminalbenchV21", "share"),
+    ("aa.terminalbench_hard", "terminal-bench hard", "terminalbenchHard", "score"),
+    ("aa.gdpval", "gdpval (economic tasks)", "gdpvalNormalized", "share"),
+    ("aa.apex_agents", "apex agents", "apexAgents", "share"),
+    ("aa.analyst_agent", "analyst agent", "analystAgent", "share"),
+    ("aa.itbench_sre", "itbench sre", "itbenchSre", "share"),
+    ("aa.omniscience", "omniscience accuracy", "omniscienceAccuracy", "share"),
+    # the one axis here where a model is rewarded for declining to answer.
+    # accuracy and non-hallucination pull against each other, and the composite
+    # `omniscience` is accuracy minus the hallucination rate, which is why all
+    # three are carried rather than the summary alone
+    ("aa.non_hallucination", "omniscience non-hallucination",
+     "omniscienceNonHallucination", "share"),
+    ("aa.omniscience_index", "omniscience index (accuracy less hallucination)",
+     "omniscience", "score"),
+    ("aa.speed", "median output tokens/s", "medianOutputTokensPerSecond", "rate"),
+]
+
+GBENCH_MODES = [("gbench.overall", "gscore (all games)", None),
+                ("gbench.agentic", "gscore (agentic coding)", "agentic_coding"),
+                ("gbench.oneshot", "gscore (one-shot coding)", "oneshot_coding"),
+                ("gbench.decision", "gscore (decision making)", "decision_making")]
+
+# a language with two games behind it is noise. gbench reports `total` as the
+# number of scored submissions in that language, which is the sample that
+# matters rather than the match count.
+LANG_MIN_GAMES = 5
+
+SOURCES = {
+    "aa": {"label": "artificial analysis", "file": "data/artificial-analysis.json",
+           "url": "https://artificialanalysis.ai/leaderboards/models",
+           "model_url": "https://artificialanalysis.ai/models/%s"},
+    "gbench": {"label": "gert labs gbench", "file": "data/gbench.json",
+               "url": "https://gertlabs.com/rankings"},
+    "lmarena": {"label": "lmarena", "file": "data/lmarena.json",
+                "url": "https://lmarena.ai/leaderboard"},
+    "swerebench": {"label": "swe-rebench", "file": "data/swe-rebench.json",
+                   "url": "https://swe-rebench.com/"},
+    "epoch": {"label": "epoch ai", "file": "data/epoch.json",
+              "url": "https://epoch.ai/data/ai-benchmarking-dashboard"},
+    "card": {"label": "the model's own card", "file": "data/model-cards.json",
+             "model_url": "https://huggingface.co/%s"},
+    "community": {"label": "forums", "file": "data/sentiment.json"},
+}
+
+# what a strong facet implies the model is FOR. only the axes where a high
+# score means a use case rather than a property; speed and context are
+# operational and say nothing about fit.
+USE_FOR = {
+    "aa.coding": "coding", "aa.agentic": "agentic / tool use",
+    "aa.tau2": "agentic / tool use", "gbench.agentic": "agentic / tool use",
+    "gbench.oneshot": "one-shot coding", "swerebench.resolved": "real-world bug fixing",
+    "aa.gpqa": "science / reasoning", "aa.hle": "science / reasoning",
+    "aa.scicode": "scientific code", "aa.critpt": "physics",
+    "aa.ifbench": "instruction following", "aa.lcr": "long context",
+    "lmarena.rating": "chat / general use", "gbench.decision": "planning",
+}
+TOP_PCT = 67          # top third of the models carrying a facet
+BOTTOM_PCT = 33
+
+
+def load_build_tables():
+    """Reuse build-tables' joins rather than restating them."""
+    spec = importlib.util.spec_from_loader(
+        "build_tables",
+        importlib.machinery.SourceFileLoader("build_tables",
+                                             os.path.join(HERE, "build-tables")))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def load(name):
+    path = os.path.join("data", name + ".json")
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (IOError, ValueError):
+        return {}
+
+
+def ref(source, model_id=None, note=None):
+    """Where a number came from: the source, its file, and a url to read it at."""
+    s = SOURCES[source]
+    out = {"source": s["label"], "file": s["file"]}
+    if s.get("model_url") and model_id:
+        out["url"] = s["model_url"] % model_id
+    elif s.get("url"):
+        out["url"] = s["url"]
+    if model_id:
+        out["id"] = model_id
+    if note:
+        out["note"] = note
+    return out
+
+
+def percentile(value, population):
+    """Share of the cohort strictly below this value, 0-100.
+
+    The cohort is the registry models carrying the SAME facet, not every model
+    the source scored: "top third of what this box can run" is the question,
+    and ranking a 27b local model against a frontier api model answers a
+    different one.
+    """
+    others = [v for v in population if v is not None]
+    if len(others) < 2:
+        return None
+    return round(100.0 * sum(1 for x in others if x < value) / len(others))
+
+
+def aa_facets(entry, aa_id):
+    out = {}
+    for key, label, field, unit in AA_FACETS:
+        v = entry.get(field)
+        if v is None:
+            continue
+        out[key] = {"value": v, "label": label, "unit": unit,
+                    "group": "artificial analysis", "ref": ref("aa", aa_id)}
+    return out
+
+
+def gbench_facets(row, gid, bt):
+    """gscore overall and per mode, plus the per-language breakdown."""
+    out, langs = {}, []
+    if not row:
+        return out, langs
+    thin = (row.get("total_matches") or 0) < bt.GBENCH_MIN_MATCHES
+    for key, label, mode in GBENCH_MODES:
+        sub = row if mode is None else (row.get(mode) or {})
+        if sub.get("gscore") is None:
+            continue
+        note = "only %d matches played" % (row.get("total_matches") or 0) if thin else None
+        out[key] = {"value": sub["gscore"], "label": label, "unit": "gscore",
+                    "group": "gbench", "games": sub.get("games_played"),
+                    "low_confidence": bool(thin), "ref": ref("gbench", gid, note)}
+    for lang, c in (row.get("by_language") or {}).items():
+        if (c.get("total") or 0) < LANG_MIN_GAMES or c.get("success_rate") is None:
+            continue
+        langs.append({"lang": lang, "rate": c["success_rate"], "games": c["total"],
+                      "matches": c.get("matches"), "ref": ref("gbench", gid)})
+    langs.sort(key=lambda x: -x["rate"])
+    # the per-language rates are facets too, so a reader who writes rust can
+    # weight rust. they are kept out of `USE_FOR` -- being good at kotlin is
+    # not a use case, it is a language somebody either uses or does not
+    for l in langs:
+        out["lang." + l["lang"]] = {
+            "value": l["rate"], "label": "%s (%d games)" % (l["lang"], l["games"]),
+            "unit": "share", "group": "gbench languages", "games": l["games"],
+            "ref": l["ref"]}
+    return out, langs
+
+
+def epoch_facets(epoch, epoch_id):
+    """Third-party runs on epoch's own harness, one facet per benchmark."""
+    out = {}
+    if not epoch_id:
+        return out
+    for name, b in (epoch.get("benchmarks") or {}).items():
+        metric = b.get("metric") or "Score"
+        for row in b.get("results") or []:
+            mv = (row.get("Model version") or "").split("/")[-1].rsplit("_", 1)[0]
+            if mv != epoch_id or metric not in row:
+                continue
+            try:
+                v = float(row[metric])
+            except (TypeError, ValueError):
+                continue
+            out["epoch." + name] = {
+                "value": v, "label": "%s (%s)" % (name.replace("_", " "), metric.lower()),
+                "unit": "share" if v <= 1 else "score", "group": "epoch",
+                "ref": ref("epoch", epoch_id, row.get("Source"))}
+            break
+    return out
+
+
+def card_facets(card, repo, bias):
+    """What the model says about itself, marked as such and bias-corrected.
+
+    analyze-self-report measures the median claim at +0.9 over third-party
+    measurement of the same model on the same benchmark, so the constant is
+    subtracted here rather than left for the reader to remember.
+    """
+    out = {}
+    for bench, v in ((card or {}).get("claimed") or {}).items():
+        out["card." + bench] = {
+            "value": round(v - bias, 1), "raw": v, "label": bench.replace("_", " "),
+            "unit": "share" if v <= 1 else "score", "group": "card claims",
+            "vendor_reported": True,
+            "ref": ref("card", repo, "claimed %s, corrected by -%.1f" % (v, bias))}
+    return out
+
+
+def community_facet(sent):
+    """One number per forum: how much it is discussed x how well received.
+
+    Same shape as build-tables' sentiment score -- log-damped volume times
+    reception -- but computed per forum rather than pooled, because a forum
+    that publishes no post bodies cannot vote on quality.
+    """
+    import math
+    out = {}
+    for source, s in (sent.get("by_source") or {}).items():
+        if not s.get("mentions"):
+            continue
+        rel = (s["median_rel"] if s.get("median_rel") is not None else 50) / 50.0
+        out["community." + source] = {
+            "value": round(math.log1p(s["mentions"]) * rel, 2),
+            "label": "discussion on %s" % source, "unit": "score",
+            "group": "community", "mentions": s["mentions"],
+            "approval": s.get("approval"), "refs": s.get("refs") or [],
+            "ref": {"source": source, "file": SOURCES["community"]["file"]}}
+    return out
+
+
+def derive(facets, langs):
+    """A cheap answer for a consumer with no weighting ui: what stands out."""
+    best, weak = [], []
+    for key, f in facets.items():
+        use = USE_FOR.get(key)
+        pct = f.get("pct")
+        if not use or pct is None or f.get("vendor_reported"):
+            continue
+        if pct >= TOP_PCT and use not in best:
+            best.append(use)
+        elif pct <= BOTTOM_PCT and use not in weak:
+            weak.append(use)
+    return {"best_for": best, "weak_for": [w for w in weak if w not in best],
+            "best_languages": [l["lang"] for l in langs[:3]]}
+
+
+def provenance(files):
+    """Which capture every number in this file came from."""
+    out = {}
+    for f in files:
+        path = os.path.join("data", f + ".json")
+        if not os.path.exists(path):
+            continue
+        with open(path, "rb") as fh:
+            digest = hashlib.sha256(fh.read()).hexdigest()[:16]
+        out["data/%s.json" % f] = {
+            "sha256": digest,
+            "modified": time.strftime("%Y-%m-%d",
+                                      time.gmtime(os.path.getmtime(path)))}
+    return out
+
+
+def build(bt, registry):
+    """One record per registry model, plus the cohort percentiles across them."""
+    aa, epoch = load("artificial-analysis"), load("epoch")
+    gb = {m["model_id"]: m for m in (load("gbench").get("rankings") or [])}
+    sent, cards = load("sentiment"), load("model-cards")
+    models = {}
+    for repo, m in registry.items():
+        ids = m.get("ids") or {}
+        short = (m.get("name") or {}).get("short") or repo
+        facets = {}
+        facets.update(aa_facets(aa.get(ids.get("aa")) or {}, ids.get("aa")))
+        gfacets, langs = gbench_facets(gb.get(ids.get("gbench")), ids.get("gbench"), bt)
+        facets.update(gfacets)
+        facets.update(epoch_facets(epoch, ids.get("epoch")))
+        facets.update(card_facets(cards.get(repo), repo, bt.CARD_BIAS))
+        facets.update(community_facet(sent.get(short) or {}))
+        rating = bt.lmarena_score(ids)
+        if rating is not None:
+            facets["lmarena.rating"] = {
+                "value": rating, "label": "arena rating (style controlled)",
+                "unit": "elo", "group": "lmarena", "ref": ref("lmarena", ids.get("lmarena"))}
+        resolved = bt.swerebench_score(ids)
+        if resolved is not None:
+            facets["swerebench.resolved"] = {
+                "value": resolved, "label": "resolved rate", "unit": "share",
+                "group": "swe-rebench", "ref": ref("swerebench", ids.get("swerebench"))}
+        models[repo] = {"name": short, "kind": m.get("kind", "text"),
+                        "facets": facets, "languages": langs,
+                        "community": (sent.get(short) or {}).get("by_source") or {},
+                        "tasks": (sent.get(short) or {}).get("tasks_all") or {}}
+    add_percentiles(models)
+    for rec in models.values():
+        rec["derived"] = derive(rec["facets"], rec["languages"])
+    return models
+
+
+def add_percentiles(models):
+    """Rank each facet within the registry cohort that carries it."""
+    pops = {}
+    for rec in models.values():
+        for key, f in rec["facets"].items():
+            pops.setdefault(key, []).append(f["value"])
+    for rec in models.values():
+        for key, f in rec["facets"].items():
+            f["pct"] = percentile(f["value"], pops[key])
+            f["cohort"] = len(pops[key])
+
+
+def merge_assessed(new, authored, old):
+    """Written judgement in, from its own file rather than from the output.
+
+    usecase-assessed.json is SOURCE: hand-written, or written by a model
+    reading the facets below and told to cite them. Keeping it out of the
+    generated file means a recompute cannot lose it, a diff shows judgement
+    changing separately from measurement, and anything else that wants the
+    prose -- a generated MODELS.md, say -- reads one machine-readable file
+    rather than parsing a document.
+
+    An entry still sitting in the old output is carried forward too, so a
+    handwritten block added there directly is not silently dropped.
+    """
+    kept = 0
+    for repo, rec in new.items():
+        a = authored.get(repo) or (old.get("models", {}).get(repo) or {}).get("assessed")
+        if a:
+            rec["assessed"] = a
+            kept += 1
+    return kept
+
+
+def load_authored(path):
+    try:
+        with open(path) as f:
+            return json.load(f).get("assessed") or {}
+    except (IOError, ValueError):
+        return {}
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--assessed", default=ASSESSED,
+                    help="the written judgements, which this file only carries")
+    ap.add_argument("--check", action="store_true",
+                    help="exit 1 if the file on disk is not what this would write")
+    ap.add_argument("--missing", action="store_true",
+                    help="list models with no assessed block")
+    args = ap.parse_args()
+
+    bt = load_build_tables()
+    registry = bt.registry()
+    if not registry:
+        sys.exit("!!! registry/models.yaml did not load")
+
+    old = {}
+    if os.path.exists(args.out):
+        with open(args.out) as f:
+            old = json.load(f)
+
+    models = build(bt, registry)
+    kept = merge_assessed(models, load_authored(args.assessed), old)
+    doc = {"version": 1,
+           "provenance": provenance(["artificial-analysis", "gbench", "lmarena",
+                                     "swe-rebench", "epoch", "model-cards",
+                                     "sentiment"]),
+           "models": models}
+    text = json.dumps(doc, indent=1, sort_keys=True) + "\n"
+
+    if args.missing:
+        for repo, rec in sorted(models.items()):
+            if not rec.get("assessed"):
+                print("  %-45s %d facets" % (repo, len(rec["facets"])))
+        print("\n%d of %d models have no assessed block"
+              % (sum(1 for r in models.values() if not r.get("assessed")), len(models)))
+        return
+
+    if args.check:
+        current = open(args.out).read() if os.path.exists(args.out) else ""
+        if current != text:
+            sys.exit("!!! %s is out of date, run: make usecase" % args.out)
+        print("%s is current (%d models)" % (args.out, len(models)))
+        return
+
+    with open(args.out, "w") as f:
+        f.write(text)
+    facets = sum(len(r["facets"]) for r in models.values())
+    print("wrote %s: %d models, %d facets, %d assessed blocks kept"
+          % (args.out, len(models), facets, kept))
+
+
+if __name__ == "__main__":
+    main()

@@ -49,7 +49,7 @@ PROBES = os.path.join(HERE, "..", "research", "data", "template-probes.json")
 MODEL_KEY = re.compile(r"^  (\S.*?):\s*$")
 FIELDS = {"turns": ["source", "developer", "leading_system_max", "mid_system",
                     "mid_developer", "upstream_differs"],
-          "thinking": ["knob", "accepts", "aliases"]}
+          "thinking": ["knob", "gate", "kind", "accepts", "default", "aliases"]}
 
 try:
     import yaml
@@ -146,6 +146,45 @@ def level_knob(probe):
     return knob, levels[knob]
 
 
+def knob_summary(th):
+    """One line for the report: the knob, its vocabulary, and its default."""
+    if not th:
+        return ""
+    vocab = ",".join(th.get("accepts") or []) or "true|false"
+    default = th.get("default")
+    if isinstance(default, bool):
+        default = "on" if default else "off"
+    return "%s=%s%s" % (th["knob"], vocab, " default:%s" % default if default else "")
+
+
+def toggle_for(probe, existing):
+    """The thinking block for a template whose only control is a switch.
+
+    25 of the 41 models have one of these and no graded knob, and the registry
+    said nothing about them at all -- which hid the fact worth knowing: the
+    gemma 4 templates think only when asked, and every qwen3.5 and qwen3.6
+    template thinks unless told not to.
+
+    `accepts` is deliberately NOT written for these. The values are the
+    booleans true and false, and a consumer reading `accepts: [off, on]` would
+    send the STRING "off", which jinja evaluates as truthy -- turning thinking
+    on by asking for it off. `kind` says which shape it is instead.
+    """
+    knobs = {k: v for k, v in (probe.get("thinking") or {}).items()
+             if v.get("type") == "boolean"}
+    if not knobs:
+        return None
+    knob = sorted(knobs)[0]
+    out = dict(existing or {})
+    out["knob"] = knob
+    out["kind"] = "boolean"
+    if knobs[knob].get("default") is not None:
+        out["default"] = knobs[knob]["default"]
+    out.pop("accepts", None)
+    out.pop("aliases", None)
+    return out
+
+
 def thinking_for(probe, base, existing):
     """The thinking block, deriving what the template can answer for.
 
@@ -155,23 +194,52 @@ def thinking_for(probe, base, existing):
     the template branches on `medium|high|xhigh`, so `none` was a no-op nobody
     had noticed.
 
-    A template that interpolates the value VERBATIM states nothing: gpt-oss
-    takes any string at all, and its levels exist only in openai's docs. Those
-    keep whatever was typed, and the comment above them keeps saying where it
-    came from. `knob` is derivable either way, and is not always the name
-    everyone assumes -- kimi k3's is `thinking_effort`.
+    A template that interpolates the value VERBATIM states nothing about its
+    vocabulary: gpt-oss takes any string at all, and its levels exist only in
+    openai's docs. Those keep whatever was typed, and the comment above them
+    keeps saying where it came from. `knob` is derivable either way, and is not
+    always the name everyone assumes -- kimi k3's is `thinking_effort`.
+
+    `default` is the level a client gets by NOT setting the knob, derived by
+    rendering the template with it absent and matching that against each
+    accepted level. It is the one thing a verbatim template does state, and it
+    is worth stating: kimi k3 defaults to `max` and qwen3.8-27b to `xhigh`,
+    which is 15k-52k thinking tokens a caller never asked for.
+
+    The default is reported in the same spelling as `accepts`. unsloth's
+    qwen3.8 build answers `high` where upstream answers `xhigh`, and those are
+    two names for one render, so the alias map decides which one is printed.
     """
     knob, levels = level_knob(probe)
     if not knob:
-        return None
+        return toggle_for(probe, existing)
     out = dict(existing or {})
     out["knob"] = knob
+    # a template may read BOTH a switch and a graded knob, and three do:
+    # qwen3.8-27b, deepseek v4 flash and kimi k3. the graded knob has no `off`
+    # in its vocabulary because turning thinking off is the switch's job, so a
+    # consumer that only knows the graded name cannot express `off` at all
+    gate = sorted(k for k, v in (probe.get("thinking") or {}).items()
+                  if v.get("type") == "boolean")
+    if gate:
+        out["gate"] = gate[0]
+    else:
+        out.pop("gate", None)
+    aliases = {}
     if levels["kind"] != "verbatim":
         _, base_levels = level_knob(base or {})
         accepts, aliases = collapse(levels, base_levels, (existing or {}).get("accepts"))
         out["accepts"] = accepts
         if aliases:
             out["aliases"] = aliases
+    default = levels.get("default")
+    if default:
+        # a verbatim template's accepts is typed rather than derived, so the
+        # default is only recorded when it is a level the registry declares --
+        # otherwise the probe's own candidate list would leak into the entry
+        default = aliases.get(default, default)
+        if default in (out.get("accepts") or []):
+            out["default"] = default
     return out if out.get("accepts") else None
 
 
@@ -325,7 +393,7 @@ def main():
         print("  %-46s %-10s sys<=%-9s mid_sys=%-9s mid_dev=%-9s %s"
               % (repo, t["developer"], t["leading_system_max"], t["mid_system"],
                  t["mid_developer"],
-                 "%s=%s" % (th["knob"], ",".join(th["accepts"])) if th else ""))
+                 knob_summary(th)))
     missing = [r for r in reg if r not in resolved]
     print("\n%d models resolved, %d without any template (%s)"
           % (len(resolved), len(missing), ", ".join(sorted(missing)[:3]) + " ..."))

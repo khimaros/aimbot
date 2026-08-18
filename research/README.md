@@ -26,7 +26,9 @@ date is in each file's provenance below.
 | `data/chat-templates/` | 2026-08-17 | the chat templates themselves, verbatim, base repo and gguf header |
 | `data/chat-templates.json` | 2026-08-17 | the index over them: source, size, hash, base/gguf pairing |
 | `data/template-probes.json` | derived | analyze-chat-templates --json |
-| `data/model-cards.json` | 2026-08-17 | huggingface model card benchmark tables (self-reported) |
+| `data/model-cards.json` | 2026-08-17 | huggingface model cards: benchmark tables (self-reported), opening prose, hub metadata |
+| `data/usecase.json` | derived | analyze-usecase: every facet per model, with a ref each |
+| `usecase-assessed.json` | written | the judgement analyze-usecase carries into it |
 | `data/hf-discussions.json` | 2026-08-17 | huggingface per-repo discussion tabs |
 | `data/github-issues.json` | 2026-08-17 | api.github.com, ggml-org/llama.cpp |
 | `data/level1techs.json` | 2026-08-17 | forum.level1techs.com discourse api |
@@ -122,6 +124,43 @@ is a real truncation, not a total.
 own the hardware. discourse `search.json` gives topics, `t/<id>.json` gives
 every post, and search blurbs are truncated so the topics are fetched whole.
 
+`sentiment.json` counts model mentions across all four community corpora, and
+keeps them APART. the forums do not measure the same thing: reddit argues about
+which model is best, the huggingface discussion tab reports whether a specific
+quant loads at all, level1techs publishes no post bodies so only its titles can
+be matched, and hacker news carries no per-comment score. muse glimmer reads
+73% approval on reddit and 0% on the discussion tab, and pooling those would
+average away the only useful thing either of them said.
+
+each `by_source` block carries mentions, distinct threads, the positive and
+negative sentence counts, approval, the score percentile within thread and
+depth, the model/task co-occurrence counts, and up to eight quoted references
+with a url. a quote has to read as prose to be kept -- five words, no path, no
+command line -- because a huggingface thread is half shell transcript and eight
+lines of one person's `--n-gpu-layers` is not a consensus. one thread can
+supply at most two of them.
+
+the TOP-LEVEL fields stay reddit-only and byte-identical to what they were.
+build-tables weights sentiment at 0.15 on a redundancy analysis measured
+against reddit alone, so widening the aggregate would have silently re-ranked
+MODELS.md; the other three forums are additive.
+
+`usecase.json` is the rollup a consumer reads instead of redoing these joins:
+850 facets over the 54 models, each one a (source, benchmark) value with the
+model's percentile among the registry models carrying the same facet, a cohort
+size, and a `ref` naming the source, the file and a url. the gbench
+per-language rates are here too, which is the only source in the corpus that
+says a model is better at rust than at clojure. the joins themselves are
+imported from `build-tables` rather than restated -- two definitions of "this
+model's gbench score" is exactly the drift this repo exists to remove.
+
+it does not blend them. weighing coding against community approval is the
+reader's call, so the components stay separable and the viewer applies weights
+at read time. `usecase-assessed.json` holds the written judgement and is
+SOURCE: `analyze-usecase --missing` lists models without one, a recompute
+cannot lose it, and it stays machine-readable so a generated MODELS.md can read
+the prose rather than parse a document.
+
 `hf-catalog.json` is the only collector that can discover anything: every other
 one looks up models already on the roster. it carries the trending GGUF listing
 plus every GGUF repo from the publishers in publishers.txt, which is how the
@@ -161,6 +200,42 @@ names for one prompt are not two levels. That is what a widened guard is in
 every case here: unsloth's qwen3.8 accepts a `high` upstream rejects, and maps
 it onto `xhigh` before the guard, so the model sees three levels either way and
 nobody is reaching an untrained setting by asking for it.
+
+The same run answers what the template does when the client sends NOTHING:
+render it with the knob absent, and whichever accepted level matches that byte
+for byte is the `default`. 17 of the 84 templates answer, and the answer is
+rarely the cheap end -- kimi k3 defaults to `max`, qwen3.8-27b to `xhigh`,
+gpt-oss to `medium`, hy3 to `no_think`. It is the one thing a verbatim template
+does state: gpt-oss interpolates any string at all, so its vocabulary lives
+only in openai's docs, but its default is in the file. Where the unset render
+matches the control instead, no default is reported -- omitting the knob leaves
+thinking off rather than at a level, which is a different fact.
+
+A boolean gate is probed the same way, and that is where most of the roster
+lives: 25 of the 41 text models read `enable_thinking` and nothing graded. 19
+of them render their thinking prompt when the knob is unset and 6 do not, so
+`kind: boolean` carries `default: true` or `default: false` and the question
+"what happens if my client says nothing" has an answer for 34 of the 36 models
+that have a knob at all.
+
+Three templates read both a gate and a graded knob -- qwen3.8-27b, deepseek v4
+flash and kimi k3 -- and the registry records both, because the graded
+vocabulary has no `off` in it. Turning thinking off is the gate's job, and a
+consumer holding only the graded name would send `reasoning_effort: "off"`
+into a guard that raises.
+
+Sampler sets are deduplicated by their values. A card states the same numbers
+in prose, again in a code block and again in a table, and that is one
+recommendation rather than four; the first label wins because it is the one
+with the prose around it.
+
+`model-facts.json` carries an `attn` block per model -- kv heads, head dim, and
+the split between layers holding a full cache and layers holding a windowed or
+recurrent one -- because that split is what a kv cache costs. Counting every
+layer as global overstates gemma 4 31b several times over and kimi k3 by nearly
+four, so the full and windowed layers are counted from whatever the config
+states and the window is kept beside them. 37 of the 50 models answer; the rest
+publish no config this can read.
 
 `gguf-sizes.json` is keyed by repo, then by quant tag, with values in bytes.
 these are summed byte totals of the real files, so sharded quants aggregate and
