@@ -3,6 +3,7 @@ help:
 	@echo "to rebuild MODELS.md from research/data, run 'make tables'"
 	@echo "to rebuild the usecase rollup, run 'make usecase'"
 	@echo "to re-derive sampler provenance, run 'make samplers'"
+	@echo "to refresh published quant sweeps, run 'make curves'"
 	@echo "to rebuild the github pages viewer, run 'make site'"
 .PHONY: help
 
@@ -10,6 +11,7 @@ lint:
 	./scripts/models-validate
 	./scripts/resolve-turns --check
 	./scripts/resolve-samplers --check
+	cd research && ./fetch-quant-sweeps --check
 	./research/refresh-tables --check
 	cd research && ./analyze-usecase --check
 	./scripts/build-viewer --check
@@ -22,6 +24,11 @@ tables:
 ids:
 	./scripts/resolve-ids --write
 .PHONY: ids
+
+# published per-quant quality sweeps, where a quantizer measured their own work
+curves:
+	cd research && ./fetch-quant-sweeps
+.PHONY: curves
 
 # what each sampling profile's numbers still agree with
 samplers:

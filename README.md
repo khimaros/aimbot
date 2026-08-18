@@ -458,5 +458,15 @@ not done yet, in the order it should happen:
    nothing appears in both.
 3. gguf sizes join by repo but nothing enforces a consumer's memory budget with
    them yet; that check belongs to the consumer, and llama-tools has the TODO.
+   the viewer answers the same question for a reader rather than for a config.
+
+4. memory bandwidth as a hardware setting, and estimated prefill and generation
+   tokens per second beside the quant that fits. decode is bandwidth bound --
+   bytes per token is roughly active parameters times bits per weight over 8 --
+   so the registry now carries every input it needs: active parameters, the
+   quant's bpw, and the attention geometry the prefill cost falls out of.
+   `research/build-tables --table speed` already does the decode half against a
+   fixed 160gb/s; making the bandwidth a control and showing both halves per
+   model is the remaining work.
 4. card claims cover 22 of 41 text models; gpt-oss, laguna, inkling, step and
    minimax m2.7 publish no parseable benchmark table.

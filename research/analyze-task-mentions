@@ -197,6 +197,11 @@ class Counts:
         self.mentions = collections.Counter()
         self.threads = collections.defaultdict(set)
         self.pairs = collections.Counter()
+        # the same sentence's polarity, kept against the pair rather than
+        # thrown away: "i use this for planning" and "bad at planning" are not
+        # the same claim, and counting them together made them one
+        self.pair_pos = collections.Counter()
+        self.pair_neg = collections.Counter()
         self.examples = collections.defaultdict(list)
         self.scores = collections.defaultdict(list)
         self.rel = collections.defaultdict(list)
@@ -258,6 +263,10 @@ def scan(threads, mre, tre):
                     keep_ref(c, m, t, s, score, rel, p, n)
                     for k in ts:
                         c.pairs[(m, k)] += 1
+                        if p > n:
+                            c.pair_pos[(m, k)] += 1
+                        elif n > p:
+                            c.pair_neg[(m, k)] += 1
                         if len(c.examples[(m, k)]) < 6:
                             c.examples[(m, k)].append(
                                 (t["title"][:44], s.strip()[:200]))
@@ -290,6 +299,22 @@ def keep_ref(c, model, thread, sentence, score, rel, pos, neg):
     refs.append(ref)
 
 
+def task_counts(c, model):
+    """{task: {n, pos, neg}} -- how often it is named for this, and how it went.
+
+    `n` alone reads a complaint as an endorsement. The polarity is the same
+    blunt lexicon the model-level counts use, so "X is better than Y at
+    planning" still scores positive for both; it is a signal to read beside the
+    quotes rather than a verdict.
+    """
+    out = {}
+    for (m, k), n in c.pairs.items():
+        if m != model or not n:
+            continue
+        out[k] = {"n": n, "pos": c.pair_pos[(m, k)], "neg": c.pair_neg[(m, k)]}
+    return out
+
+
 def summarise(c, model):
     """The per-forum record: counts, reception, and the sentences behind them."""
     ss = sorted(c.scores[model])
@@ -308,7 +333,7 @@ def summarise(c, model):
            # than 50% when nobody said anything either way, so the viewer can
            # tell "disliked" from "undiscussed"
            "approval": round(100.0 * pos / (pos + neg)) if pos + neg else None,
-           "tasks": {k: n for (m, k), n in c.pairs.items() if m == model and n},
+           "tasks": task_counts(c, model),
            "refs": refs}
     return out
 
@@ -326,12 +351,13 @@ def write_json(path, per_source, models):
         rec.pop("refs", None)
         rec["by_source"] = {s: summarise(c, m) for s, c in per_source.items()
                             if c.mentions[m]}
-        tasks = collections.Counter()
+        tasks = {}
         for c in per_source.values():
-            for (mm, k), n in c.pairs.items():
-                if mm == m:
-                    tasks[k] += n
-        rec["tasks_all"] = dict(tasks)
+            for k, v in task_counts(c, m).items():
+                t = tasks.setdefault(k, {"n": 0, "pos": 0, "neg": 0})
+                for f in ("n", "pos", "neg"):
+                    t[f] += v[f]
+        rec["tasks_all"] = tasks
         out[m] = rec
     with open(path, "w") as f:
         json.dump(out, f, indent=1, sort_keys=True)
@@ -436,6 +462,8 @@ def merged(per_source):
         out.sentences += c.sentences
         out.mentions.update(c.mentions)
         out.pairs.update(c.pairs)
+        out.pair_pos.update(c.pair_pos)
+        out.pair_neg.update(c.pair_neg)
         for m, v in c.threads.items():
             out.threads[m] |= v
         for store in ("scores", "rel", "toplevel", "said", "refs"):

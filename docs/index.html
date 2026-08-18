@@ -64,7 +64,8 @@ button[aria-pressed="true"] { color: var(--fg); border-color: var(--faint); back
 }
 .panel.open { display: block; }
 .panel .hint { color: var(--faint); font-size: 11px; margin-bottom: .6rem; }
-#cols { display: none; flex-wrap: wrap; gap: .35rem; }
+#cols { display: none; flex-wrap: wrap; gap: .35rem; align-items: center; }
+#cols .hint { align-self: center; }
 #cols.open { display: flex; }
 #cols button.drag { opacity: .4; }
 #cols button.drop { box-shadow: inset 2px 0 0 var(--link); }
@@ -192,7 +193,7 @@ body.locked { overflow: hidden; }
    grid is the opposite -- it scrolls and never wraps -- so each context has
    one behaviour instead of both at once. */
 #body td, #body th { white-space: normal; }
-#body td.n, #body th.n { white-space: nowrap; }
+#body td.n, #body th.n, #body td.nw { white-space: nowrap; }
 #body p { margin: .3rem 0 .6rem; max-width: 90ch; }
 #body .lead { color: var(--fg); }
 /* one column, always. a second column means the reader's eye has to decide
@@ -239,24 +240,24 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
        what quality means and what the table shows, then which models. -->
   <div class="controls">
     <span class="lbl">hardware</span>
-    <select id="ram" title="how much memory the box has. the quant column, the sizes and the retention behind `quant adjusted` all switch to the largest quant that fits in it">
+    <select id="ram" data-help="how much memory the box has. the quant column, the sizes and the retention behind `quant adjusted` all switch to the largest quant that fits in what is left after the reserve and the kv cache">
       <option value="">any vram</option>
     </select>
-    <select id="reserve" title="held back for everything that is not weights or kv cache: compute buffers, the host, whatever else is resident"></select>
-    <select id="ctx" title="the context you need to serve. its kv cache is computed from each model's own attention geometry and has to fit alongside the weights"></select>
-    <select id="cap" title="how far up the quant ladder to go. past q8 the extra bytes buy nothing measurable and cost decode speed, so the fit stops there unless you say otherwise"></select>
-    <select id="floor" title="how far down the ladder is still worth running. below this the model reads as not fitting rather than as a 2-bit version of itself"></select>
+    <select id="reserve" data-help="held back for everything that is not weights or kv cache: compute buffers, the host, whatever else is resident"></select>
+    <select id="ctx" data-help="the context you need to serve. its kv cache is computed from each model's own attention geometry -- full, windowed and linear layers counted separately -- and subtracted before anything is asked to fit. a model whose native window is shorter is not a fit at all"></select>
+    <select id="cap" data-help="how far up the quant ladder to go. past q8 the extra bytes buy nothing measurable and cost decode speed, so the fit stops there unless you say otherwise"></select>
+    <select id="floor" data-help="how far down is still worth running. below this a model reads as not fitting rather than as a two-bit version of itself"></select>
   </div>
   <div class="controls">
     <span class="lbl">ranking</span>
-    <button id="factors-btn" aria-pressed="false" title="choose what quality means: one weight per measurement, and the ranking resorts as you drag">factors</button>
-    <button id="eff-btn" aria-pressed="false" title="discount the artificial analysis indices by the retention the read quant's bits per weight predict">raw scores</button>
-    <button id="reset">reset</button>
+    <button id="factors-btn" aria-pressed="false" data-help="one weight per measurement, grouped by what measured it. the ranking resorts as you drag, and a model missing a factor is ranked on the ones it has rather than scored zero">factors</button>
+    <button id="eff-btn" aria-pressed="false" data-help="raw scores are what the source published. quant adjusted answers `what would i get from the quant i can actually run`: a benchmark scores the model at the precision the scorer served, so every measured score is multiplied by the retention that quant's bits per weight predict and the percentiles are recomputed against the discounted cohort. two caveats: the curve is fitted to one published sweep rather than measured per model, and sources other than artificial analysis scored an endpoint whose precision this repo does not know, so their discount is an assumption rather than a correction. community sentiment and decode speed are never discounted.">raw scores</button>
+    <button id="reset" data-help="clear the weights, filters, hardware settings, columns and sort, and forget them">reset</button>
   </div>
   <div class="controls">
     <span class="lbl">filter</span>
-    <input type="search" id="q" placeholder="search any column">
-    <select id="pub"></select>
+    <input type="search" id="q" placeholder="search any column" data-help="matches the text: name, repo, architecture, registry notes, card summary, best-for, hub tags, discussed tasks and quant names. not the numeric columns">
+    <select id="pub" data-help="narrow to one publisher, taken from the repo owner"></select>
     <span id="kinds" class="chips"></span>
   </div>
 
@@ -266,8 +267,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
       <div class="tablebar">
         <!-- drawn rather than typed: a unicode gear is not ascii and leans on
              the monospace font having the glyph, which several do not -->
-        <button id="cols-btn" aria-pressed="false" aria-label="columns"
-                title="show, hide and reorder columns"><svg class="icon" viewBox="0 0 16 16"
+        <button id="cols-btn" aria-pressed="false" aria-label="columns" data-help="show, hide and reorder columns. drag to reorder"><svg class="icon" viewBox="0 0 16 16"
           width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"
           stroke-linecap="round"><circle cx="8" cy="8" r="4.4" stroke-width="1.5"/><circle
           cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/><path stroke-width="1.8"
@@ -344,6 +344,22 @@ const levels = (t, sep = ' ') => {
 };
 const gib = v => v === undefined || v === null ? '' : (+v).toFixed(1);
 const ctxLabel = v => !v ? '' : v >= 1000 ? Math.round(v / 1024) + 'k' : String(v);
+// a counted parameter total is 27.78b and the vendor calls it 27b. neither is
+// wrong, and one decimal is as much as anyone reads -- the exact figure is on
+// hover
+const round1 = v => v === undefined || v === null ? '' : (Math.round(v * 10) / 10);
+
+// active parameters: the vendor's own naming convention first, since it is
+// exact and covers models nobody has scored, then artificial analysis, and for
+// a dense model the total it already has. never larger than the total, which
+// is what comparing a counted 29.78b against an advertised 30b produced.
+function activeB(m) {
+  const total = m.facts.params_total_b;
+  const a = m.facts.params_active_b ?? m.params.advertised_active_b
+    ?? (m.facts.experts ? undefined : total);
+  if (a === undefined) return undefined;
+  return total ? Math.min(a, total) : a;
+}
 
 // --- scoring -----------------------------------------------------------------
 //
@@ -373,7 +389,7 @@ let budget = null;                  // gib of memory, or null
 // the compute buffers are not free either. what is left after that reserve is
 // what a quant has to fit in, which is why build-tables budgets 105 of a 128gb
 // box rather than 128.
-let reserve = 8;
+let reserve = 0;
 const usable = () => budget === null ? null : Math.max(0, budget - reserve);
 
 // how far up the quant ladder the fit will climb, as a bits-per-weight
@@ -413,13 +429,30 @@ function kvGib(m, ctx) {
 // past the trained window means rope scaling, which is the consumer's call
 const reaches = m => !minCtx || (m.facts.context_native || 0) >= minCtx;
 
+// the longest context whose cache fits beside the weights. windowed layers cap
+// at their window, so past that only the full-attention layers keep growing.
+function fitContext(m) {
+  const q = activeQuant(m), a = m.facts.attn, native = m.facts.context_native;
+  if (!budget || !q || !q.gib || !a || !native) return null;
+  const room = (usable() - q.gib) * (1024 ** 3);
+  if (room <= 0) return 0;
+  const perTok = 2 * a.kv_heads * a.head_dim * KV_BYTES;
+  const windowed = a.window ? a.other_layers * a.window * perTok : 0;
+  const ctx = (room - windowed) / (perTok * a.full_layers);
+  // never above the trained window: going past it needs rope scaling, which is
+  // the consumer's decision rather than a number this page can report
+  return Math.max(0, Math.min(native, Math.floor(ctx)));
+}
+
 // which quant this model is being READ as. with no budget that is the one the
 // registry pins; with one it is the largest that fits, which is the question
 // somebody with 128gb is actually asking. the search stays inside the pinned
 // quant's repo -- crossing to the -MTP- build changes whether it can speculate
 // at all, and that is a choice rather than a size.
-function activeQuant(m) {
-  const repo = (m.quants[0] || {}).repo;
+// the biggest quant in one repo that clears the vram budget and the ceiling and
+// floor set on the main page. the modal opens on this rather than on whatever
+// the registry pinned, so what you read there matches the row you clicked.
+function bestInRepo(m, repo) {
   const all = quantChoices(m).filter(c => c.repo === repo);
   const pinned = all.find(c => c.pinned) || all[0] || null;
   // no sizes for this repo is not the same answer as nothing fits. hy3's
@@ -432,10 +465,23 @@ function activeQuant(m) {
     && (!c.bpw || (c.bpw <= ceiling && c.bpw >= bottom))).sort((a, b) => a.gib - b.gib);
   return fits.length ? fits[fits.length - 1] : null;
 }
+
+const activeQuant = m => bestInRepo(m, (m.quants[0] || {}).repo);
 const fitsBudget = m => !budget || !!activeQuant(m);
 
-function retention(bpw) {
-  const c = D.retention.curve;
+// the curve for THIS model: its own measurement if somebody has made one, the
+// median of the measured curves once there are enough to have a middle, and
+// build-tables' fitted curve otherwise. which one answered is never hidden.
+function curveFor(m) {
+  const r = D.retention;
+  const own = (r.measured || {})[m.repo];
+  if (own) return {points: own.points, kind: 'measured', src: own};
+  if (r.median && r.median.points) return {points: r.median.points, kind: 'median', src: r.median};
+  return {points: r.fitted.points, kind: 'fitted', src: r.fitted};
+}
+
+function retention(bpw, m) {
+  const c = curveFor(m).points;
   if (bpw <= c[0][0]) return c[0][1];
   for (let i = 0; i < c.length - 1; i++) {
     const [x0, y0] = c[i], [x1, y1] = c[i + 1];
@@ -449,10 +495,11 @@ function retention(bpw) {
 function modelRetention(m) {
   if (!effective || m.native_low_bpw) return 1;
   const q = activeQuant(m);
-  return q && q.bpw ? retention(q.bpw) : 1;
+  return q && q.bpw ? retention(q.bpw, m) : 1;
 }
 
-const scaledFacet = key => D.retention.scaled.includes(key);
+// everything measured is discounted except what the penalty does not describe
+const scaledFacet = key => !D.retention.unscaled.some(x => key.startsWith(x));
 const facetValue = (m, key) => m.facets[key].value
   * (scaledFacet(key) ? modelRetention(m) : 1);
 
@@ -466,9 +513,11 @@ function facetPctRaw(m, key) {
   if (!effective || !scaledFacet(key)) return f.pct;
   if (!pctCache) {
     pctCache = {};
-    D.retention.scaled.forEach(k => {
-      const pop = D.models.filter(x => x.facets[k]).map(x => facetValue(x, k));
-      pctCache[k] = pop;
+    const all = new Set();
+    D.models.forEach(x => Object.keys(x.facets).forEach(k => all.add(k)));
+    all.forEach(k => {
+      if (!scaledFacet(k)) return;
+      pctCache[k] = D.models.filter(x => x.facets[k]).map(x => facetValue(x, k));
     });
   }
   const pop = pctCache[key] || [];
@@ -512,7 +561,8 @@ const facetCell = (m, key, digits) => {
   const pct = facetPctRaw(m, key);
   const scaled = effective && scaledFacet(key) && modelRetention(m) < 1;
   return `<td class="n${scaled ? ' eff' : ''}"${scaled
-    ? ` title="${num(f.value, digits)} raw, x${modelRetention(m).toFixed(3)} retention at ${m.quants[0].bpw} bpw"` : ''}>`
+    ? ` title="${num(f.value, digits)} raw, x${modelRetention(m).toFixed(3)} `
+      + `${curveFor(m).kind} retention at ${(activeQuant(m) || {}).bpw} bpw"` : ''}>`
     + `<span class="bar" style="--w:${pct === null ? 0 : pct}%">`
     + `<span>${num(facetValue(m, key), digits)}</span></span></td>`;
 };
@@ -520,49 +570,93 @@ const facetVal = (m, key) => m.facets[key] ? facetValue(m, key) : -1;
 
 const COLUMNS = [
   {k: 'rank', t: '#', num: true, get: m => m._rank,
-   help: 'position in the current ranking. it renumbers when you change the weights',
+   help: 'rank under the current weights. it renumbers when you change them',
    cell: m => `<td class="n faint">${m._rank}</td>`},
   {k: 'short', t: 'model', num: false, get: m => m.short,
-   help: "the registry's one name for this model, and who publishes it",
+   help: "the registry's name for it, and who publishes it",
    cell: m => `<td>${esc(m.short)}<span class="sub"> ${esc(m.publisher)}</span></td>`},
   {k: 'score', t: 'quality', num: true, get: m => scored(m).value ?? -1,
-   help: "weighted mean of this model's percentiles, renormalized over the factors it actually carries. set the weights under `factors`",
+   help: "the weighted mean of its percentiles, over the factors it was actually measured on. set the weights under factors",
    cell: m => {
      const s = scored(m);
      if (s.value === null) return '<td class="n faint" title="none of the weighted factors measured this model">-</td>';
      return `<td class="n"><span class="bar" style="--w:${s.value}%"><span>${num(s.value, 0)}</span></span></td>`;
    }},
   {k: 'evidence', t: 'evidence', num: true, get: m => scored(m).have,
-   help: 'how many of the weighted factors measured this model at all. 3/7 is a gap in the evidence, not a verdict',
+   help: 'how many of the weighted factors actually measured this model. 3/7 means four of them never scored it',
    cell: m => {
      const s = scored(m);
      const cls = s.have === s.want ? 'dim' : s.have ? 'warn' : 'faint';
      return `<td class="n ${cls}" title="weighted factors this model was actually measured on">${s.have}/${s.want}</td>`;
    }},
   {k: 'kind', t: 'kind', num: false, get: m => m.kind,
-   help: 'text, image or speech, as the registry classes it',
+   help: 'text, image or speech',
    cell: m => `<td class="dim">${esc(m.kind)}</td>`},
   {k: 'params', t: 'params', num: true, get: m => m.facts.params_total_b ?? -1,
-   help: 'total parameters, and active parameters for a mixture of experts',
+   help: 'total parameters, counted from the weights that ship. a * means the vendor advertises a different number; hover for both',
    cell: m => {
-     const p = m.facts.params_total_b, e = m.facts.experts_active;
-     return `<td class="n">${p ? p + 'b' : '<span class="faint">-</span>'}${e ? `<span class="sub"> ${e}a</span>` : ''}</td>`;
+     const p = m.facts.params_total_b, adv = m.params.advertised_total_b;
+     const act = m.params.advertised_active_b;
+     if (!p && !adv) return '<td class="n faint">-</td>';
+     // the counted total and the advertised one disagree by 7% on deepseek v4
+     // flash, so the number is labelled rather than quietly averaged
+     const off = p && adv && Math.abs(p - adv) / adv > 0.03;
+     const shown = p || adv;
+     const named = m.facts.params_source === 'name';
+     const title = !p
+       ? ` title="${adv}b, the vendor's figure; nothing here counted the tensors"`
+       : named
+         ? ` title="${p}b, taken from the name -- this repo's safetensors index does not add up"`
+         : ` title="${p}b counted from the safetensors index${adv ? `, ${adv}b advertised` : ''}"`;
+     return `<td class="n"${title}>${round1(shown)}b`
+       + (off ? '<span class="sub" data-help="the counted total and the advertised one'
+         + ' disagree by more than 3%; hover the number for both"> *</span>' : '') + '</td>';
+   }},
+  {k: 'active', t: 'active', num: true, get: m => activeB(m) ?? -1,
+   help: 'parameters used per token. taken from the name a vendor encodes it in (-A3B), or artificial analysis where it has one. a dense model uses all of them, so it repeats the total',
+   cell: m => {
+     const a = activeB(m);
+     if (a === undefined) return '<td class="n faint">-</td>';
+     return `<td class="n">${round1(a)}b</td>`;
+   }},
+  {k: 'experts', t: 'experts', num: true, get: m => m.facts.experts ?? -1,
+   help: 'experts routed per token, of the total. a count of experts, not of parameters: qwen3.6 35b a3b routes 8 of 256 and that comes to about 3b',
+   cell: m => {
+     const e = m.facts.experts, a = m.facts.experts_active;
+     if (e) return `<td class="n dim">${a ? a + ' / ' : ''}${e}</td>`;
+     // a model activating far fewer parameters than it holds is a mixture
+     // whose config did not name its experts in any key this reads. calling
+     // that dense would be asserting something false
+     const act = activeB(m), total = m.facts.params_total_b;
+     if (act && total && act < total * 0.9) return '<td class="n faint"'
+       + ' data-help="a mixture of experts, but its config does not publish the counts">?</td>';
+     return '<td class="n faint">dense</td>';
    }},
   {k: 'ctx', t: 'context', num: true, get: m => m.facts.context_native ?? -1,
-   help: 'the context window the model was trained for, from its own config',
+   help: 'the context window it was trained for. what will actually fit in your vram is the column beside it',
    cell: m => `<td class="n">${ctxLabel(m.facts.context_native) || '<span class="faint">-</span>'}</td>`},
-  {k: 'quant', t: 'quant', num: false, get: m => (activeQuant(m) || {}).quant || '',
-   help: 'the quant being read: the one the registry pins, or with a memory budget set, the largest that fits',
+  {k: 'fitctx', t: 'fits ctx', num: true, get: m => fitContext(m) ?? -1,
+   help: 'the longest context whose kv cache still fits once the weights and the reserve are paid for, capped at what the model was trained for. needs a vram budget',
+   cell: m => {
+     if (!budget) return '<td class="n faint" title="set a vram budget under hardware">-</td>';
+     const c = fitContext(m);
+     if (c === null) return '<td class="n faint">-</td>';
+     const full = c >= (m.facts.context_native || 0);
+     return `<td class="n${full ? '' : ' warn'}">${ctxLabel(c)}</td>`;
+   }},
+  {k: 'quant', t: 'fits quant', num: false, get: m => (activeQuant(m) || {}).quant || '',
+   help: 'the quant being read. with a vram budget set, the largest that fits; otherwise the one the registry pins',
    cell: m => {
      const q = activeQuant(m);
      if (!q) return '<td class="faint" title="nothing this repo publishes fits the budget">does not fit</td>';
-     return `<td>${esc(q.quant)}<span class="sub"> ${esc(q.repo.split('/')[0])}</span></td>`;
+     // the publisher is on the operate tab, where you can act on it
+     return `<td title="${esc(q.repo)}">${esc(q.quant)}</td>`;
    }},
   {k: 'size', t: 'gib', num: true, get: m => (activeQuant(m) || {}).gib ?? -1,
-   help: 'what that quant WEIGHTS weigh on disk, gibibytes. the kv cache is not in it -- see the kv gib column -- though both are subtracted from your vram when picking which quant fits',
+   help: 'what the weights weigh on disk. the kv cache is not included -- add the kv gib column for that',
    cell: m => `<td class="n">${gib((activeQuant(m) || {}).gib) || '<span class="faint">-</span>'}</td>`},
   {k: 'kv', t: 'kv gib', num: true, get: m => kvGib(m, minCtx),
-   help: 'what the kv cache costs at the context set under hardware, from this model\'s own attention geometry. the gib column beside it is weights only, so resident memory is the two added together plus the reserve',
+   help: 'what the kv cache costs at the context you set. resident memory is this plus gib plus the reserve',
    cell: m => {
      const v = kvGib(m, minCtx);
      if (!minCtx) return '<td class="n faint" title="set a context under hardware">-</td>';
@@ -570,26 +664,26 @@ const COLUMNS = [
      return `<td class="n dim">${gib(v)}</td>`;
    }},
   {k: 'bpw', t: 'bpw', num: true, get: m => (activeQuant(m) || {}).bpw ?? -1,
-   help: 'bits per weight: the number that predicts how much quantizing cost it',
+   help: 'bits per weight. the number that predicts how much the quant cost in quality',
    cell: m => `<td class="n dim">${num((activeQuant(m) || {}).bpw, 2) || '-'}</td>`},
   {k: 'coding', t: 'aa coding', num: true, get: m => facetVal(m, 'aa.coding'),
-   help: 'artificial analysis coding index. one harness across every model it scores',
+   help: 'artificial analysis coding index, one harness across every model it scores',
    cell: m => facetCell(m, 'aa.coding', 1)},
   {k: 'agentic', t: 'aa agentic', num: true, get: m => facetVal(m, 'aa.agentic'),
    help: 'artificial analysis agentic index: tool use and multi-step work',
    cell: m => facetCell(m, 'aa.agentic', 1)},
   {k: 'gbench', t: 'gbench', num: true, get: m => facetVal(m, 'gbench.agentic'),
-   help: 'gert labs gscore for agentic coding: models playing generated games, so there is no problem set to train against',
+   help: 'gbench agentic coding score. models play generated games, so there is no problem set to train against',
    cell: m => facetCell(m, 'gbench.agentic', 3)},
   {k: 'swe', t: 'swe-reb', num: true, get: m => facetVal(m, 'swerebench.resolved'),
-   help: 'swe-rebench resolved rate, on pull requests merged after the model shipped -- the one score here that cannot have been trained against',
+   help: 'swe-rebench resolved rate, on pull requests merged after the model shipped',
    cell: m => facetCell(m, 'swerebench.resolved', 1)},
   {k: 'arena', t: 'arena', num: true, get: m => facetVal(m, 'lmarena.rating'),
    help: 'lmarena rating, style controlled. human preference rather than a grader',
    cell: m => facetCell(m, 'lmarena.rating', 0)},
   {k: 'community', t: 'community', num: true,
    get: m => facetVal(m, 'community.reddit-localllama'),
-   help: 'mentions on r/LocalLLaMA, and the share of polarised sentences that were positive',
+   help: 'mentions on r/LocalLLaMA, and how many of the opinionated ones were positive',
    cell: m => {
      const f = m.facets['community.reddit-localllama'];
      if (!f) return '<td class="n faint">-</td>';
@@ -598,60 +692,79 @@ const COLUMNS = [
        + (a === null || a === undefined ? '' : `<span class="sub"> ${a}%</span>`) + '</span></span></td>';
    }},
   {k: 'langs', t: 'best langs', num: false, get: m => (m.languages[0] || {}).lang || '',
-   help: 'the languages gbench measured this model highest on',
+   help: 'the languages gbench scored it highest on',
    cell: m => `<td class="dim">${esc(m.languages.slice(0, 3).map(l => l.lang).join(' ')) || '-'}</td>`},
   {k: 'bestfor', t: 'best for', num: false, get: m => (m.derived.best_for || [])[0] || '',
-   help: 'the use cases where it sits in the top third of the models carrying that facet',
+   help: 'the uses where it lands in the top third of the models measured on them',
    cell: m => `<td class="dim">${esc((m.derived.best_for || []).slice(0, 2).join(', ')) || '-'}</td>`},
-  {k: 'think', t: 'thinking', num: false, get: m => (m.thinking.knob || ''),
-   help: 'the thinking knob its chat template reads, and the levels it takes. bold is what you get by sending nothing',
-   cell: m => m.thinking.knob
-     ? `<td class="dim" title="bold is the level the template uses when the client sends nothing">`
-       + `${esc(m.thinking.knob)}<span class="sub"> ${levels(m.thinking, '|')}</span></td>`
-     : '<td class="faint">-</td>'},
+  {k: 'think', t: 'thinking', num: false,
+   get: m => (m.thinking.accepts || []).join(' / ') || (m.thinking.knob ? 'off / on' : ''),
+   help: 'the thinking levels its chat template takes, with the default in bold',
+   cell: m => {
+     const t = m.thinking;
+     if (!t.knob) return '<td class="faint"'
+       + ' data-help="its chat template reads no thinking control, so there is nothing to set">'
+       + 'none</td>';
+     const undef = t.default === undefined && t.gate_default === undefined;
+     return `<td class="dim"${undef
+       ? ' data-help="no default: sending nothing injects no directive at all, so the model\'s own behaviour applies"'
+       : ''}>${levels(t, ' / ')}${undef ? '<span class="sub"> ?</span>' : ''}</td>`;
+   }},
   {k: 'profiles', t: 'profiles', num: false, get: m => Object.keys(m.sampling).join(','),
    help: 'the sampling profiles the registry defines for it',
    cell: m => `<td class="dim">${esc(Object.keys(m.sampling).join(' ')) || '-'}</td>`},
-  {k: 'dev', t: 'developer', num: false, get: m => m.turns.developer || '',
-   help: 'what its chat template does with a developer message. `dropped` renders, returns 200, and omits it',
-   cell: m => {
-     const v = m.turns.developer;
-     if (!v) return '<td class="faint">-</td>';
-     const cls = v === 'own' ? 'ok' : v === 'dropped' ? 'bad' : v === 'rejected' ? 'warn' : 'dim';
-     return `<td class="${cls}">${esc(v)}</td>`;
-   }},
   {k: 'spec', t: 'draft', num: false, get: m => m.speculative.type || '',
-   help: 'speculative decoding: the draft method this model supports',
+   help: 'the speculative decoding method it supports, if any',
    cell: m => `<td class="dim">${esc(m.speculative.type || '')}${m.speculative.n_max ? `<span class="sub"> n${m.speculative.n_max}</span>` : ''}</td>`},
   {k: 'license', t: 'license', num: false, get: m => (m.card.hub || {}).license || '',
    help: 'the licence its huggingface repo declares',
    cell: m => `<td class="dim">${esc((m.card.hub || {}).license || '-')}</td>`},
   {k: 'downloads', t: 'downloads', num: true, get: m => (m.card.hub || {}).downloads ?? -1,
-   help: 'huggingface downloads in the last month. adoption, not quality',
+   help: 'huggingface downloads last month. adoption, not quality',
    cell: m => `<td class="n dim">${(m.card.hub || {}).downloads ? fmt.format(m.card.hub.downloads) : '-'}</td>`},
   {k: 'repo', t: 'repo', num: false, get: m => m.repo,
-   help: 'the huggingface base repo, which is the key everything here joins on',
+   help: 'the huggingface repo. every join in this registry is keyed on it',
    cell: m => `<td class="dim">${esc(m.repo)}</td>`},
 ];
 
 // which table columns read a scaled facet, so the header can say so
-const SCALED_COLUMNS = {coding: 'aa.coding', agentic: 'aa.agentic'};
+const SCALED_COLUMNS = {coding: 'aa.coding', agentic: 'aa.agentic',
+                        gbench: 'gbench.agentic', swe: 'swerebench.resolved',
+                        arena: 'lmarena.rating'};
 
-const DEFAULT_HIDDEN = ['kv', 'bpw', 'arena', 'swe', 'langs', 'profiles', 'dev', 'spec',
-                        'license', 'downloads', 'repo', 'kind'];
+// what the page opens on: what it is and whether it fits, then how good it is.
+// the per-source scores are one click away under the gear rather than eleven
+// columns wide by default.
+const DEFAULT_ORDER = ['rank', 'short', 'kind', 'license', 'params', 'active', 'experts',
+                       'ctx', 'fitctx', 'bpw', 'repo', 'quant', 'size', 'kv', 'think', 'evidence',
+                       'score', 'coding', 'agentic', 'gbench', 'swe', 'arena', 'langs',
+                       'bestfor', 'profiles', 'community', 'downloads', 'spec'];
+const DEFAULT_HIDDEN = ['kind', 'license', 'experts', 'ctx', 'bpw', 'repo', 'kv', 'think',
+                        'coding', 'agentic', 'gbench', 'swe', 'arena', 'langs',
+                        'bestfor', 'profiles', 'community', 'downloads', 'spec'];
+// a strix halo box, which is what this registry is sized against
+const DEFAULT_HARDWARE = {budget: 128, reserve: 0, minCtx: 131072, cap: 'q8', floor: 'none'};
+const DEFAULT_FLAGS = ['text', 'fits'];
 const col = k => COLUMNS.find(c => c.k === k);
 const shown = () => order.filter(k => !hidden.has(k));
 
 // --- filtering ---------------------------------------------------------------
 
 const FLAGS = [
-  {k: 'text', t: 'text', test: m => m.kind === 'text'},
-  {k: 'vision', t: 'vision', test: m => (m.modalities.input || []).includes('image')},
-  {k: 'moe', t: 'moe', test: m => !!m.facts.experts},
-  {k: 'mtp', t: 'mtp', test: m => !!m.facts.mtp_layers},
-  {k: 'draft', t: 'speculative', test: m => !!m.speculative.type},
-  {k: 'think', t: 'thinking knob', test: m => !!m.thinking.knob},
-  {k: 'fits', t: 'fits vram', test: m => fitsBudget(m)},
+  {k: 'text', t: 'text', test: m => m.kind === 'text',
+   help: 'text models only'},
+  {k: 'vision', t: 'vision', test: m => (m.modalities.input || []).includes('image'),
+   help: 'takes images in, according to its own config'},
+  {k: 'moe', t: 'moe', test: m => !!m.facts.experts,
+   help: 'mixture of experts: decodes like a small model, weighs like a large one'},
+  {k: 'mtp', t: 'mtp', test: m => !!m.facts.mtp_layers,
+   help: 'ships an mtp head, which is what draft-mtp speculation needs'},
+  {k: 'draft', t: 'speculative', test: m => !!m.speculative.type,
+   help: 'the registry records a speculative decoding method for it'},
+  {k: 'think', t: 'thinking knob', test: m => !!m.thinking.knob,
+   help: 'its chat template reads a thinking control'},
+  {k: 'fits', t: 'fits vram', test: m => fitsBudget(m),
+   help: 'some quant of it fits your vram, after the reserve and the context kv cache'},
 ];
 
 function haystack(m) {
@@ -692,8 +805,9 @@ function tableHead() {
     const arrow = sort.k === k ? `<span class="ord">${sort.dir > 0 ? '^' : 'v'}</span>` : '';
     const eff = effective && SCALED_COLUMNS[k];
     const help = (c.help || '') + (eff ? '. shown discounted for the quant being read' : '');
-    return `<th class="${c.num ? 'n' : ''}" data-k="${k}" data-help="${esc(help)}"`
-      + ` title="${esc(help)}">`
+    // data-help only: a `title` beside it means the styled panel appears at
+    // once and the native tooltip fades in on top of it a second later
+    return `<th class="${c.num ? 'n' : ''}" data-k="${k}" data-help="${esc(help)}">`
       + `${c.t}${eff ? ' <span class="faint">eff</span>' : ''}${arrow}</th>`;
   }).join('') + '</tr>';
 }
@@ -919,7 +1033,10 @@ function showTip(el) {
 // columns are numbers nobody can name on sight
 function showHelp(el) {
   const tip = document.querySelector('#tip');
-  tip.innerHTML = `<div class="meta">${esc(el.dataset.k)}</div>${esc(el.dataset.help)}`;
+  // a column key or a flag name is worth naming; an element id is not
+  const label = el.dataset.k || el.dataset.flag || '';
+  tip.innerHTML = (label ? `<div class="meta">${esc(label)}</div>` : '')
+    + esc(el.dataset.help);
   const box = el.getBoundingClientRect();
   tip.style.display = 'block';
   const w = tip.getBoundingClientRect();
@@ -929,20 +1046,141 @@ function showHelp(el) {
 
 document.addEventListener('mouseover', e => {
   const ref = e.target.closest('.ref');
-  const th = e.target.closest('th[data-help]');
+  const th = e.target.closest('[data-help]');
   if (ref) showTip(ref);
   else if (th) showHelp(th);
   else if (!e.target.closest('#tip')) document.querySelector('#tip').style.display = 'none';
 });
 
+// --- methodology -------------------------------------------------------------
+//
+// every number on this page is derived from a file in the repo, and the
+// derivations have opinions in them. this is where those opinions are written
+// down, with a link to the code that holds each one.
+
+function methodology() {
+  const src = (label, path) =>
+    `<a href="${esc(D.repo_url)}/blob/${esc(D.branch)}/${esc(path)}"`
+    + ` target="_blank" rel="noopener">${esc(label)}</a>`;
+  const sec = (title, body, refs) => `<h3>${esc(title)}</h3>${body}`
+    + (refs ? `<p class="faint">${refs}</p>` : '');
+
+  return sec('quality',
+    '<p>a weighted mean of percentiles, not of scores. each measurement is turned'
+    + ' into the model\'s rank among the registry models carrying that same'
+    + ' measurement, and those percentiles are averaged using the weights you set'
+    + ' under factors. scores are not comparable across sources -- an elo, a'
+    + ' gscore and an index share no units -- and percentiles are.</p>'
+    + '<p>the weights it opens on are build-tables\' composite, set by a'
+    + ' redundancy analysis rather than by taste: gbench is 96% predictable from'
+    + ' artificial analysis, so it carries less than its apparent independence'
+    + ' suggests, and lmarena and swe-rebench are in at 0.10 because they miss'
+    + ' nine and thirteen of the roster respectively.</p>',
+    'weights and the reasoning: ' + src('research/build-tables', 'research/build-tables'))
+
+  + sec('the cohort is this registry',
+    '<p>p79 on coding means it beat 79% of the registry models that also carry a'
+    + ' coding index -- not 79% of every model in the world. the question a local'
+    + ' roster asks is "best of what i can run", and ranking a 27b against a'
+    + ' frontier api model answers a different one. the `of` column on the quality'
+    + ' tab says how many models each percentile was computed against.</p>',
+    src('research/analyze-usecase', 'research/analyze-usecase'))
+
+  + sec('a missing measurement is never a zero',
+    '<p>a model gbench has not played simply has no gbench facet. its composite'
+    + ' renormalizes over the facets it does carry, and the evidence column says'
+    + ' how many of the weighted factors it was actually measured on. 3/7 there is'
+    + ' a gap in the evidence, not a verdict on the model. 22 of the 41 text models'
+    + ' are not on the gbench board at all -- that is upstream; the api publishes'
+    + ' 98 models and no more.</p>')
+
+  + sec('quant adjusted',
+    '<p>a benchmark scores the model at the precision the scorer served. this'
+    + ' roster runs a gguf of it, so `quant adjusted` multiplies every measured'
+    + ' score by the retention the quant\'s bits per weight predict, then'
+    + ' recomputes the percentiles against the discounted cohort.</p>'
+    + '<p>the curve is fitted to unsloth\'s aider polyglot sweep of deepseek v3.1'
+    + ' -- bf16 71.6 down to 55.7 at 1 bit -- and applied to every model, which is'
+    + ' the weakest step in this page. models with natively low-bpw weights are'
+    + ' exempt, because they are not paying a quantization penalty for being'
+    + ' small. sources other than artificial analysis scored an endpoint whose'
+    + ' precision this repo does not know, so discounting them is an assumption'
+    + ' rather than a correction. sentiment and decode speed are never'
+    + ' discounted.</p>',
+    'the curve: ' + src('research/build-tables CURVE', 'research/build-tables'))
+
+  + sec('memory',
+    '<p>the quant shown is the largest that fits in the vram you set, once the'
+    + ' reserve and the context\'s kv cache are paid for. the cache is computed'
+    + ' from each model\'s own attention geometry rather than a rule of thumb:'
+    + ' full-attention layers hold a cache that grows with context, windowed'
+    + ' layers hold at most their window, and linear-attention layers hold a fixed'
+    + ' state. counting every layer as global overstates gemma 4 31b several times'
+    + ' over. a model whose native window is shorter than the context asked for is'
+    + ' not a fit at it: getting there means rope scaling, which is the'
+    + ' consumer\'s call.</p>',
+    src('research/fetch-model-facts', 'research/fetch-model-facts'))
+
+  + sec('sentiment',
+    '<p>mentions are counted per sentence, not per comment, so a comment naming'
+    + ' five models and five tasks does not manufacture twenty-five claims. scores'
+    + ' are compared only against comments at the same depth in the same thread,'
+    + ' because a raw upvote count mostly measures how much drama a thread had.'
+    + ' the four forums are kept apart: reddit argues about which model is best'
+    + ' and the huggingface discussion tab reports whether a quant loads at all.'
+    + ' polarity comes from a deliberately blunt lexicon -- "x is better than y"'
+    + ' scores positive for both -- so every claim keeps the sentence and a link'
+    + ' to the thread.</p>',
+    src('research/analyze-task-mentions', 'research/analyze-task-mentions'))
+
+  + sec('what the vendor says',
+    '<p>card claims are kept apart from measurements and marked vendor-reported.'
+    + ' across 70 matched claims the median runs +0.9 over third-party measurement'
+    + ' of the same model on the same benchmark, and 42 of 70 overstate, so the'
+    + ' constant is subtracted before use. sampling profiles record which source'
+    + ' their numbers still agree with -- the quant repo\'s card, the vendor\'s,'
+    + ' the shipped generation_config, or nothing published.</p>',
+    src('research/analyze-self-report', 'research/analyze-self-report') + ' &middot; '
+    + src('scripts/resolve-samplers', 'scripts/resolve-samplers'))
+
+  + sec('turns and thinking',
+    '<p>what a chat template does with the roles you send is derived by executing'
+    + ' it against fixed conversations, not by reading it. `dropped` is the one to'
+    + ' fear: the template renders, the server returns 200, and your message is'
+    + ' not in the prompt. the thinking default is what the template does when the'
+    + ' client sends nothing, found by rendering with the knob absent.</p>',
+    src('research/analyze-chat-templates', 'research/analyze-chat-templates'))
+
+  + sec('every number has a file',
+    '<p>hover any [src] for the source, the capture it came from and, for a'
+    + ' community claim, the sentence somebody wrote. the captures are committed'
+    + ' and content-addressed in data.json under `provenance`, so a refresh shows'
+    + ' up as a diff rather than a silent change of conclusions.</p>',
+    src('research/README.md', 'research/README.md') + ' &middot; '
+    + src('the registry', 'registry/models.yaml'));
+}
+
 // --- detail modal ------------------------------------------------------------
 
-const TABS = ['overview', 'quality', 'analysis', 'community', 'vendor', 'operate'];
+const TABS = ['overview', 'quality', 'community', 'vendor', 'operate'];
+let openDoc = null;                 // the methodology note, when it is up
+
+function drawDoc() {
+  document.querySelector('#modal').classList.add('open');
+  document.body.classList.add('locked');
+  document.querySelector('#m-name').textContent = 'methodology';
+  document.querySelector('#m-repo').innerHTML =
+    'how every number on this page is arrived at, and where it is wrong';
+  document.querySelector('#tabs').innerHTML = '';
+  const body = document.querySelector('#body');
+  body.innerHTML = methodology();
+  body.scrollTop = 0;
+}
 
 // the model AND the tab live in the hash, so a link can point at the operate
 // tab of one model rather than at the page and a set of instructions
 function openModel(repo, want) {
-  if (repo !== openRepo) ops = {repo: null, quant: null, profile: null};
+  if (repo !== openRepo) ops = {runtime: null, repo: null, quant: null, profile: null};
   openRepo = repo;
   tab = want || tab;
   location.hash = 'model=' + encodeURIComponent(repo) + '&tab=' + tab;
@@ -951,12 +1189,14 @@ function openModel(repo, want) {
 
 function closeModel() {
   openRepo = null;
+  openDoc = null;
   document.querySelector('#modal').classList.remove('open');
   document.body.classList.remove('locked');
   if (location.hash) history.replaceState(null, '', location.pathname + location.search);
 }
 
 function drawModal(keepScroll) {
+  if (openDoc) return drawDoc();
   const m = D.models.find(x => x.repo === openRepo);
   if (!m) return closeModel();
   document.querySelector('#modal').classList.add('open');
@@ -975,8 +1215,7 @@ function drawModal(keepScroll) {
   // starts at the top
   const y = keepScroll ? body.scrollTop : 0;
   body.innerHTML = ({overview: tabOverview, quality: tabQuality,
-                     analysis: tabAnalysis, community: tabCommunity,
-                     vendor: tabVendor,
+                     community: tabCommunity, vendor: tabVendor,
                      operate: tabOperate})[tab](m);
   body.scrollTop = y;
   body.querySelectorAll('[data-pick-repo]').forEach(b => {
@@ -985,6 +1224,14 @@ function drawModal(keepScroll) {
       // a repo row carries no quant: switching repo falls back to the quant
       // that repo pins rather than to a tag the other repo happened to have
       ops.quant = b.dataset.pickQuant || null;
+      drawModal(true);
+    };
+  });
+  body.querySelectorAll('[data-runtime]').forEach(b => {
+    b.onclick = () => {
+      ops.runtime = b.dataset.runtime;
+      ops.repo = null;
+      ops.quant = null;
       drawModal(true);
     };
   });
@@ -1016,17 +1263,29 @@ function tabOverview(m) {
   // the vendor's own paragraph is on the prose tab, under ours. up here it was
   // the first thing read about a model, which gave the marketing copy the
   // position the measurements had earned
-  return (m.assessed && m.assessed.one_liner
-    ? `<p class="lead">${esc(m.assessed.one_liner)}</p>` : '')
+  const a = m.assessed || {};
+  const said = a.one_liner || a.notes || m.notes;
+  return (said ? '<h3>assessment</h3>' : '')
+    + (a.one_liner ? `<p class="lead">${esc(a.one_liner)}</p>` : '')
+    + (m.notes ? `<p>${esc(m.notes)}</p>` : '')
+    + (a.notes ? `<p>${esc(a.notes)}</p>` : '')
+    + (a.one_liner || a.notes
+      ? kv([['use for', esc((a.use_for || []).join(', '))],
+            ['avoid for', esc((a.avoid_for || []).join(', ')) || '<span class="faint">-</span>'],
+            ['evidence', esc(a.confidence || '')],
+            ['assessed', esc(a.assessed_on || '')]])
+        + evidenceTable(m, a.evidence || []) : '')
     + '<h3>what it is for</h3>'
     + (use.length || weak.length || m.languages.length
-      ? kv([['best for', esc(use.join(', ')) || '<span class="faint">no facet in the top third</span>'],
-            ['weaker at', esc(weak.join(', ')) || '<span class="faint">-</span>'],
-            ['best languages', m.languages.slice(0, 4).map(l =>
+      ? kv([['measured strongest at', esc(use.join(', ')) || '<span class="faint">no facet in the top third</span>'],
+            ['measured weakest at', esc(weak.join(', ')) || '<span class="faint">-</span>'],
+            ['strongest languages', m.languages.slice(0, 4).map(l =>
               `${esc(l.lang)} <span class="sub">${Math.round(l.rate * 100)}%</span>`).join(', ')
               || '<span class="faint">gbench has not played it</span>'],
-            ['discussed as', Object.entries(m.tasks).sort((a, b) => b[1] - a[1]).slice(0, 5)
-              .map(([t, n]) => `${esc(t)} <span class="sub">${n}</span>`).join(', ')]])
+            ['forums use it for', Object.entries(m.tasks).sort((a, b) => b[1].n - a[1].n)
+              .slice(0, 5).map(([t, v]) => `${esc(t)} <span class="sub">${v.n}`
+                + (v.pos - v.neg ? `, ${v.pos - v.neg > 0 ? '+' : ''}${v.pos - v.neg}` : '')
+                + '</span>').join(', ')]])
       : '<p class="faint">nothing has measured this model yet.</p>')
     + '<h3>facts</h3>'
     + kv([['kind', esc(m.kind)], ['publisher', esc(m.publisher)],
@@ -1044,7 +1303,6 @@ function tabOverview(m) {
           ['modalities', esc((m.modalities.input || []).join(',') + ' -> ' + (m.modalities.output || []).join(','))],
           ['quality', s.value === null ? '<span class="faint">unmeasured</span>'
             : `${num(s.value, 0)} <span class="sub">on ${s.have} of ${s.want} weighted factors</span>`]])
-    + (m.notes ? `<h3>registry note</h3><p>${esc(m.notes)}</p>` : '')
     + idsSection(m);
 }
 
@@ -1071,38 +1329,87 @@ function facetTable(m, keys) {
 }
 
 function tabQuality(m) {
+  // community included: it carries 15% of the default ranking, and leaving it
+  // out made the weights on this tab fail to add up to what the table used
   const keys = Object.keys(m.facets);
   if (!keys.length) return '<p class="faint">no source in this corpus has measured this model. '
     + 'that is a gap in the measurement, not a verdict on the model.</p>';
+
+  // the weight a facet carries. a `.*` wildcard weights the group's AVERAGE
+  // once, so it is reported as shared rather than as that much per facet --
+  // summing it per facet said card claims were 55% of a ranking they are 5% of
+  const wildFor = k => Object.entries(W).find(([wk, v]) =>
+    v && wk.endsWith('.*') && k.startsWith(wk.slice(0, -1)));
+  const weightOf = k => W[k] || (wildFor(k) || [0, 0])[1];
+  const shared = k => !W[k] && !!wildFor(k);
+
+  // one section per source, sections ordered by the weight the reader put on
+  // them: what they said matters leads, the rest is still there to read
   const byGroup = new Map();
   keys.forEach(k => {
     const g = (D.facet_meta[k] || {}).group || 'other';
     if (!byGroup.has(g)) byGroup.set(g, []);
     byGroup.get(g).push(k);
   });
-  let out = '';
-  for (const [g, ks] of byGroup) {
-    if (g === 'community') continue;
-    out += `<h3>${esc(g)}</h3>` + facetTable(m, ks.sort());
-  }
-  if (m.languages.length) {
-    out += '<h3>by language <span class="faint">gbench, success rate over games played</span></h3>'
-      + '<table><thead><tr><th>language</th><th class="n">success</th><th class="n">games</th>'
-      + '<th class="n">matches</th><th>source</th></tr></thead><tbody>'
-      + m.languages.map(l => `<tr><td>${esc(l.lang)}</td>`
-        + `<td class="n"><span class="bar" style="--w:${Math.round(l.rate * 100)}%"><span>${Math.round(l.rate * 100)}%</span></span></td>`
-        + `<td class="n">${l.games}</td><td class="n faint">${fmt.format(l.matches || 0)}</td>`
-        + `<td>${refMark(l.ref)}</td></tr>`).join('') + '</tbody></table>';
-  }
-  return out;
+  const groupWeight = g => {
+    let total = 0;
+    const wilds = new Set();
+    byGroup.get(g).forEach(k => {
+      if (W[k]) { total += W[k]; return; }
+      const wild = wildFor(k);
+      if (wild) wilds.add(wild[0]);
+    });
+    wilds.forEach(wk => { total += W[wk]; });
+    return total;
+  };
+  const groups = [...byGroup.keys()].sort((a, b) =>
+    (groupWeight(b) - groupWeight(a)) || a.localeCompare(b));
+
+  return groups.map(g => {
+    const gw = groupWeight(g);
+    const rows = byGroup.get(g).sort((a, b) => (weightOf(b) - weightOf(a))
+      || ((facetPctRaw(m, b) ?? -1) - (facetPctRaw(m, a) ?? -1))
+      || a.localeCompare(b));
+    return `<h3>${esc(g)}`
+      + (gw ? ` <span class="faint">${Math.round(gw * 100)}% of the ranking</span>` : '')
+      + '</h3>'
+      + '<table><thead><tr><th>measurement</th><th class="n">weight</th>'
+      + '<th class="n">value</th><th class="n">percentile</th><th class="n">of</th>'
+      + '<th>ref</th></tr></thead><tbody>'
+      + rows.map(k => {
+        const f = m.facets[k], meta = D.facet_meta[k] || {};
+        const pv = facetPctRaw(m, k);
+        const pct = pv === null ? '' : pv;
+        const w = weightOf(k);
+        return `<tr><td>${esc(meta.label || k)}`
+          + (meta.vendor_reported ? ' <span class="warn">vendor-reported</span>' : '')
+          + (f.low_confidence ? ' <span class="warn">thin sample</span>' : '')
+          + (effective && scaledFacet(k) && modelRetention(m) < 1
+            ? ` <span class="faint">x${modelRetention(m).toFixed(3)} for the quant</span>`
+              + refMark({source: curveFor(m).kind + ' retention curve',
+                         file: curveFor(m).src.file,
+                         url: D.repo_url + '/blob/' + D.branch + '/' + curveFor(m).src.file,
+                         note: curveFor(m).src.source}) : '')
+          + `</td><td class="n${w && !shared(k) ? '' : ' faint'}">`
+          + (w ? Math.round(w * 100) + '%' + (shared(k) ? ' shared' : '') : '-') + '</td>'
+          + `<td class="n">${num(facetValue(m, k), DIGITS[meta.unit] ?? 2)}</td>`
+          + `<td class="n"><span class="bar" style="--w:${pct || 0}%"><span>`
+          + `${pct === '' ? '-' : pct}</span></span></td>`
+          + `<td class="n faint">${f.cohort || ''}</td>`
+          + `<td>${refMark(f.ref)}</td></tr>`;
+      }).join('') + '</tbody></table>';
+  }).join('')
+    + '<p class="faint">percentile is against the registry models carrying the same'
+    + ' measurement, and `of` is how many that is. a weight of zero still shows: it'
+    + ' is a measurement you chose not to rank on, not one nobody made.</p>';
 }
 
 function communitySection(m) {
   const sources = Object.entries(m.community);
   if (!sources.length) return '';
-  return '<h3>community <span class="faint">per forum, never pooled</span></h3>'
+  return '<h3>sentiment</h3>'
     + '<table><thead><tr><th>forum</th><th class="n">mentions</th><th class="n">threads</th>'
-    + '<th class="n">approval</th><th class="n">median rel</th><th>said</th></tr></thead><tbody>'
+    + '<th class="n">approval</th><th class="n">median rel</th><th>references</th></tr></thead><tbody>'
     + sources.map(([src, s]) => {
       const refs = (s.refs || []).map(r => refMark({source: src, url: r.url, title: r.title,
         note: r.score !== undefined ? `score ${r.score}` : ''}, r.quote)).join(' ');
@@ -1123,8 +1430,7 @@ function communitySection(m) {
 function idsSection(m) {
   const ids = Object.entries(m.ids).filter(([, v]) => v);
   if (!ids.length) return '';
-  return '<h3>ids at each source <span class="faint">the keys every join here'
-    + ' is made on</span></h3>'
+  return '<h3>ids at each source</h3>'
     + '<table><thead><tr><th>source</th><th>id</th></tr></thead><tbody>'
     + ids.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="dim">${esc(v)}</td></tr>`).join('')
     + '</tbody></table>';
@@ -1153,33 +1459,46 @@ function evidenceTable(m, evidence) {
     }).join('') + '</tbody></table>';
 }
 
-// what we concluded and what the room said. what the vendor says is next door,
-// on its own tab, because the two are not the same kind of claim.
-function tabAnalysis(m) {
-  const a = m.assessed || {};
-  let out = '';
-  if (a.one_liner || a.notes) {
-    out += '<h3>assessment</h3>'
-      + (a.one_liner ? `<p class="lead">${esc(a.one_liner)}</p>` : '')
-      + (a.notes ? `<p>${esc(a.notes)}</p>` : '')
-      + kv([['use for', esc((a.use_for || []).join(', '))],
-            ['avoid for', esc((a.avoid_for || []).join(', ')) || '<span class="faint">-</span>'],
-            ['evidence', esc(a.confidence || '')],
-            ['assessed', esc(a.assessed_on || '')]])
-      + evidenceTable(m, a.evidence || []);
-  }
-  return out || '<p class="faint">nothing written about this model yet.</p>';
-}
-
 // every forum in one place: the counts, then the sentences behind them
 function tabCommunity(m) {
+  // the numbers, then what people use it for, then the sentences behind both
   let out = communitySection(m);
+  const tasks = Object.entries(m.tasks || {}).sort((a, b) => b[1].n - a[1].n);
+  if (tasks.length) {
+    const forums = Object.keys(m.community);
+    const top = tasks[0][1].n;
+    out += '<h3>use cases</h3>'
+      + '<table><thead><tr><th>task</th>'
+      + forums.map(f => `<th class="n">${esc(f)}</th>`).join('')
+      + '<th class="n">all</th><th class="n">positive</th>'
+      + '<th class="n">negative</th><th class="n">net</th></tr></thead><tbody>'
+      + tasks.map(([t, v]) => {
+        // a task named only in passing has no verdict either way, which is not
+        // the same as a task people are split on
+        const net = v.pos - v.neg;
+        const cls = net > 0 ? 'ok' : net < 0 ? 'bad' : 'faint';
+        return `<tr><td>${esc(t)}</td>`
+          + forums.map(f => {
+            const c = ((m.community[f] || {}).tasks || {})[t];
+            return `<td class="n${c ? '' : ' faint'}">${c ? c.n : '-'}</td>`;
+          }).join('')
+          + `<td class="n"><span class="bar" style="--w:${Math.round(100 * v.n / top)}%">`
+          + `<span>${v.n}</span></span></td>`
+          + `<td class="n${v.pos ? ' ok' : ' faint'}">${v.pos || '-'}</td>`
+          + `<td class="n${v.neg ? ' bad' : ' faint'}">${v.neg || '-'}</td>`
+          + `<td class="n ${cls}">${net > 0 ? '+' + net : net || '0'}</td></tr>`;
+      }).join('')
+      + '</tbody></table>'
+      + '<p class="faint">the polarity is the same blunt lexicon the sentiment'
+      + ' table uses: "x is better than y at planning" scores positive for both,'
+      + ' so read a net beside the quotes rather than as a verdict.</p>';
+  }
   // per forum rather than pooled and truncated: one busy huggingface thread
   // would otherwise use up the whole list and reddit would never appear
   Object.entries(m.community).forEach(([src, s]) => {
     const refs = (s.refs || []).slice(0, 6);
     if (!refs.length) return;
-    out += `<h3>what people said on ${esc(src)} `
+    out += `<h3>discussions on ${esc(src)} `
       + `<span class="faint">${s.mentions} mentions in ${s.threads || '?'} threads</span></h3>`
       + refs.map(r => `<div class="quote">${esc(r.quote)}<span class="src">`
         + `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || r.url)}</a>`
@@ -1187,23 +1506,6 @@ function tabCommunity(m) {
         + (r.rel !== undefined ? ` &middot; ${r.rel}th percentile in its thread` : '')
         + '</span></div>').join('');
   });
-  const tasks = Object.entries(m.tasks || {}).sort((a, b) => b[1] - a[1]);
-  if (tasks.length) {
-    const forums = Object.keys(m.community);
-    out += '<h3>what people discuss it for <span class="faint">model and task named in'
-      + ' the same sentence, counted per forum</span></h3>'
-      + '<table><thead><tr><th>task</th>'
-      + forums.map(f => `<th class="n">${esc(f)}</th>`).join('')
-      + '<th class="n">all</th></tr></thead><tbody>'
-      + tasks.map(([t, n]) => `<tr><td>${esc(t)}</td>`
-        + forums.map(f => {
-          const v = ((m.community[f] || {}).tasks || {})[t];
-          return `<td class="n${v ? '' : ' faint'}">${v || '-'}</td>`;
-        }).join('')
-        + `<td class="n"><span class="bar" style="--w:${Math.round(100 * n / tasks[0][1])}%">`
-        + `<span>${n}</span></span></td></tr>`).join('')
-      + '</tbody></table>';
-  }
   return out || '<p class="faint">no forum in this corpus mentions this model.</p>';
 }
 
@@ -1255,37 +1557,145 @@ const SAMPLERS = [['temp', 'temp'], ['top_p', 'top_p'], ['top_k', 'top_k'],
                   ['min_p', 'min_p'], ['presence_penalty', 'presence'],
                   ['repeat_penalty', 'repeat']];
 
-function profileBlock(m, name, p) {
+// every quant the chosen repo publishes, with what it weighs. it was crammed
+// into the buttons, where twenty-five chips carrying three numbers each is a
+// wall rather than a menu.
+function quantTable(m, repo, pick) {
+  const rows = quantChoices(m).filter(c => c.repo === repo);
+  if (!rows.length) return '';
+  // no notes column: what the registry says about its own pick is in `what the
+  // registry pins` below, and repeating it here said it twice. a size over the
+  // budget is coloured instead of captioned.
+  return `<h3>quants in this repo</h3>`
+    + '<table><thead><tr><th>quant</th><th class="n">gib</th>'
+    + '<th class="n">bpw</th></tr></thead><tbody>'
+    + rows.map(c => {
+      const over = budget && c.gib && c.gib > usable();
+      return `<tr><td class="nw">${pick && c.quant === pick.quant
+        ? `<b>${esc(c.quant)}</b>` : esc(c.quant)}</td>`
+        + `<td class="n${over ? ' warn' : ''}"${over
+          ? ' data-help="larger than the vram left after the reserve and the kv cache"' : ''}>`
+        + `${gib(c.gib) || '-'}</td>`
+        + `<td class="n dim">${num(c.bpw, 2) || '-'}</td></tr>`;
+    }).join('') + '</tbody></table>';
+}
+
+// a quality sweep somebody actually ran on this model's quants. it is not the
+// retention curve and cannot be: perplexity and kl say how far the weights
+// moved, not how much of a benchmark score survived, and nothing published
+// maps one onto the other. shown because it is the only per-model measurement
+// of quantization damage that exists for these models at all.
+function sweepTable(m) {
+  const c = (D.retention.proxies || {})[m.repo];
+  if (!c) return '';
+  const worst = Math.max(...c.points.map(p => p[1]));
+  return `<h3>published quant sweep <span class="faint">${esc(c.metric)},`
+    + ` ${c.better} is better</span></h3>`
+    + '<table><thead><tr><th>quant</th><th class="n">bpw</th>'
+    + `<th class="n">${esc(c.metric)}</th><th>source</th></tr></thead><tbody>`
+    + c.points.map(([bpw, v], i) => `<tr><td>${esc((c.quants || [])[i] || '')}</td>`
+      + `<td class="n dim">${num(bpw, 2)}</td>`
+      + `<td class="n"><span class="bar" style="--w:${Math.round(100 * v / worst)}%">`
+      + `<span>${num(v, 4)}</span></span></td>`
+      + (i ? '' : `<td rowspan="${c.points.length}">${refMark(c.ref)}</td>`)
+      + '</tr>').join('') + '</tbody></table>'
+    + '<p class="faint">this is not what `quant adjusted` multiplies by. it measures'
+    + ' how far the quantized weights moved from full precision, not how much of a'
+    + ' benchmark score survived, and there is no published mapping between the'
+    + ' two.</p>';
+}
+
+// the samplers of the profile actually selected, rather than every profile the
+// model declares: the snippet above was built from exactly one of them
+function samplerTable(m, name) {
+  const p = m.sampling[name];
+  if (!p) return '';
   const d = D.sampling.profiles[name.replace(/^upstream-/, '')] || {};
-  const vals = SAMPLERS.filter(([f]) => p[f] !== undefined && p[f] !== null)
-    .map(([f, label]) => `<span><span class="k">${label}</span> ${esc(p[f])}</span>`).join('');
-  // a profile may ask for a level this model's knob cannot express; say so
-  // here rather than only in the snippet built from it
-  const t = m.thinking || {};
-  // `off` is expressible whenever the template has a switch, whatever the
-  // graded knob's vocabulary says, so only warn where there is no way to ask
-  const said = p.thinking;
-  const viaGate = t.gate && OFF_LEVELS.includes(said);
-  const bad = said && t.knob && t.kind !== 'boolean' && (t.accepts || []).length
-    && !viaGate && !(t.accepts.includes(said) || (t.aliases || {})[said]);
-  const think = said === undefined ? ''
-    : `<span><span class="k">thinking</span> ${esc(said)}`
-      + (viaGate ? ` <span class="faint">via ${esc(t.gate)}</span>` : '')
-      + (bad ? ` <span class="warn">${esc(t.knob)} has no such level</span>` : '') + '</span>';
-  return `<div class="profile">
-    <div class="pname">${esc(name)}${name.startsWith('upstream-')
-      ? ' <span class="faint">what the vendor documents, kept beside the profile that departs from it</span>' : ''}</div>
-    ${d.summary ? `<div class="pdesc">${esc(d.summary)}</div>` : ''}
-    ${d.use_when ? `<div class="pwhen">use when ${esc(d.use_when)}</div>` : ''}
-    <div class="pvals">${vals}${think}</div>
-    ${(p.tuned || []).length ? `<div class="chips">`
-      + p.tuned.map(t => `<span class="chip">${esc(t)}</span>`).join('') + '</div>' : ''}
-  </div>`;
+  const fields = SAMPLERS.concat([['thinking', 'thinking']]);
+  return `<h3>${esc(name)} samplers</h3>`
+    + (d.summary ? `<p class="faint">${esc(d.summary)}</p>` : '')
+    + '<table><thead><tr>'
+    + fields.map(([, label]) => `<th class="n">${esc(label)}</th>`).join('')
+    + '<th>tuned for</th><th>agrees with</th></tr></thead><tbody><tr>'
+    + fields.map(([f]) => `<td class="n">${p[f] === undefined
+      ? '<span class="faint">-</span>' : esc(p[f])}</td>`).join('')
+    + `<td class="dim">${esc((p.tuned || []).join(' '))}</td>`
+    + `<td class="dim">${esc(p.source || '')}</td></tr></tbody></table>`
+    + (p.note ? `<p class="faint">${esc(p.note)}</p>` : '');
+}
+
+// the template facts for the repo SELECTED, not the one the registry records.
+// the two disagree often enough that showing one under the other's name would
+// be wrong rather than approximate: qwen3.6-27b's base repo rejects a
+// developer message and both unsloth builds fold it into system.
+function templateSection(m, repo) {
+  const block = (m.templates || {})[repo];
+  if (!block) return '';
+  const t = block.thinking || {}, u = block.turns || {};
+  const states = [
+    ['thinking knob', esc(t.knob || '') + (t.kind === 'boolean'
+      ? ' <span class="faint">a switch: send it true or false</span>' : '')],
+    ['thinking switch', t.gate ? esc(t.gate)
+      + (t.gate_default !== undefined
+        ? ` <span class="faint">defaults to ${t.gate_default ? 'on' : 'off'}</span>` : '') : ''],
+    [t.kind === 'boolean' ? 'states' : 'accepts', t.knob ? levels(t, ', ')
+      + (t.default !== undefined
+        ? '' : '') : ''],
+    ['aliases', esc(Object.entries(t.aliases || {}).map(([a, b]) => a + ' -> ' + b).join(', '))],
+  ];
+  const roles = [
+    ['developer role', turnWord(u.developer)],
+    ['leading system messages kept', esc(u.leading_system_max ?? '')],
+    ['system after an assistant turn', turnWord(u.mid_system)],
+    ['developer after an assistant turn', turnWord(u.mid_developer)],
+  ];
+  return `<h3>chat template <span class="faint">${esc(repo)}</span></h3>`
+    + (t.knob ? kv(states, 'one') : '')
+    + kv(roles, 'one')
+    ;
 }
 
 function tabOperate(m) {
-  let out = '<h3>weights</h3>'
-    + '<table><thead><tr><th>repo</th><th>quant</th><th class="n">gib</th>'
+  const profiles = Object.entries(m.sampling);
+  const repo = pickedRepo(m), pick = pickedQuant(m), profile = pickedProfile(m);
+  const repos = repoChoices(m);
+  const pickRow = (label, body) => `<div class="pickrow"><span class="k">${label}</span>`
+    + `<span class="chips">${body}</span></div>`;
+  let out = '<h3>how to run it</h3>'
+    + '<div class="picks">'
+    + pickRow('runtime', RUNTIMES.map(r =>
+      `<button class="chip${r.k === pickedRuntime(m).k ? ' on' : ''}"`
+      + ` data-runtime="${esc(r.k)}">${esc(r.k)}</button>`).join(''))
+    + pickRow('repo', repos.map(r =>
+      `<button class="chip${r === repo ? ' on' : ''}" data-pick-repo="${esc(r)}">${esc(r)}`
+      // the count is how many quants this repo publishes, which is nothing to
+      // say about a base repo vllm is going to load whole
+      + (pickedRuntime(m).gguf
+        ? ` <span class="faint">${quantChoices(m).filter(c => c.repo === r).length}`
+          + (repoSpeculates(m, r) ? ' ' + esc((m.speculative || {}).type || 'drafts') : '')
+          + '</span>' : '')
+      + '</button>').join(''))
+    + (pickedRuntime(m).gguf ? pickRow('quant', quantChoices(m).filter(c => c.repo === repo).map(c =>
+      `<button class="chip${pick && c.quant === pick.quant ? ' on' : ''}"`
+      + ` data-pick-repo="${esc(c.repo)}" data-pick-quant="${esc(c.quant)}"`
+      + ` data-help="${c.gib ? `${gib(c.gib)} gib${c.bpw ? `, ${c.bpw} bits per weight` : ''}`
+        : 'this repo publishes no file sizes'}">`
+      + `${esc(c.quant)}</button>`).join('')) : '')
+    + (profiles.length > 1 ? pickRow('samplers', profiles.map(([name]) =>
+      `<button class="chip${name === profile ? ' on' : ''}"`
+      + ` data-profile="${esc(name)}">${esc(name)}</button>`).join('')) : '')
+    + '</div>'
+    + snippets(m).map(o => `<div class="snippet"><div class="faint">${esc(o.label)}</div>`
+      + `<button class="copy">copy</button><pre>${esc(o.text)}</pre></div>`).join('')
+    + sweepTable(m)
+    + samplerTable(m, profile)
+    + templateSection(m, repo)
+    + quantTable(m, repo, pick);
+
+  out += '<h3>what the registry pins</h3>'
+    // "quant tag" rather than "quant": it is the string after the colon in
+    // `--hf-repo repo:TAG`, and for a component it is a filename instead
+    + '<table><thead><tr><th>repo</th><th>quant tag</th><th class="n">gib</th>'
     + '<th class="n">bpw</th><th>role</th><th>note</th></tr></thead><tbody>'
     + m.quants.concat(m.components || []).map(q =>
       `<tr><td><a href="${esc('https://huggingface.co/' + q.repo)}" target="_blank" rel="noopener">${esc(q.repo)}</a></td>`
@@ -1294,72 +1704,6 @@ function tabOperate(m) {
       + `<td class="dim">${esc(q.role || '')}</td>`
       + `<td class="dim">${esc(q.note || '')}</td></tr>`).join('')
     + '</tbody></table>';
-
-  const profiles = Object.entries(m.sampling);
-  if (profiles.length) {
-    // one block per profile rather than a nine-column table beside a separate
-    // grid of definitions: there are only two or three of these, they are read
-    // one at a time, and the wide table put every number a long way from the
-    // header naming it
-    out += '<h3>sampling profiles</h3>' + profiles.map(([name, p]) =>
-      profileBlock(m, name, p)).join('');
-  }
-
-  if (m.thinking.knob || Object.keys(m.turns).length) {
-    const t = m.thinking, u = m.turns;
-    // one column, and the meaning of `dropped` said once at the bottom rather
-    // than repeated in every cell that has it
-    const states = [
-      ['thinking knob', esc(t.knob || '') + (t.kind === 'boolean'
-        ? ' <span class="faint">a switch: send it true or false</span>' : '')],
-      ['thinking switch', t.gate ? esc(t.gate)
-        + ' <span class="faint">how thinking is turned off; the graded knob has no'
-        + ' level for it</span>' : ''],
-      [t.kind === 'boolean' ? 'states' : 'accepts', t.knob ? levels(t, ', ')
-        + (t.default !== undefined
-          ? ' <span class="faint">bold is what you get by sending nothing</span>' : '') : ''],
-      ['aliases', esc(Object.entries(t.aliases || {}).map(([a, b]) => a + ' -> ' + b).join(', '))],
-    ];
-    const roles = [
-      ['developer role', turnWord(u.developer)],
-      ['leading system messages kept', esc(u.leading_system_max ?? '')],
-      ['system after an assistant turn', turnWord(u.mid_system)],
-      ['developer after an assistant turn', turnWord(u.mid_developer)],
-      ['answers differently from the base repo', esc((u.upstream_differs || []).join(', '))],
-    ];
-    const words = new Set([u.developer, u.mid_system, u.mid_developer]);
-    out += '<h3>chat template behaviour <span class="faint">derived by executing '
-      + esc(u.source || 'it') + '</span></h3>'
-      + (t.knob ? kv(states, 'one') : '')
-      + kv(roles, 'one')
-      + (words.has('dropped') ? '<p class="faint">dropped: the template renders, the '
-        + 'server returns 200, and your message is not in the prompt.</p>' : '')
-      + (words.has('rejected') ? '<p class="faint">rejected: the template raises, so '
-        + 'the request fails rather than losing the message silently.</p>' : '');
-  }
-
-  const repo = pickedRepo(m), pick = pickedQuant(m), profile = pickedProfile(m);
-  const repos = repoChoices(m);
-  const pickRow = (label, body) => `<div class="pickrow"><span class="k">${label}</span>`
-    + `<span class="chips">${body}</span></div>`;
-  out += '<h3>how to run it</h3>'
-    + '<div class="picks">'
-    + pickRow('repo', repos.map(r =>
-      `<button class="chip${r === repo ? ' on' : ''}" data-pick-repo="${esc(r)}">${esc(r)}`
-      + ` <span class="faint">${quantChoices(m).filter(c => c.repo === r).length}</span></button>`).join(''))
-    + pickRow('quant', quantChoices(m).filter(c => c.repo === repo).map(c =>
-      `<button class="chip${pick && c.quant === pick.quant ? ' on' : ''}"`
-      + ` data-pick-repo="${esc(c.repo)}" data-pick-quant="${esc(c.quant)}">${esc(c.quant)}`
-      + (c.gib ? ` <span class="faint">${gib(c.gib)}g${c.bpw ? ' ' + c.bpw + 'bpw' : ''}</span>` : '')
-      + (c.pinned ? ' <span class="faint">pinned</span>' : '')
-      + (budget && c.gib && c.gib > usable() ? ' <span class="warn">over</span>' : '')
-      + '</button>').join(''))
-    + (profiles.length > 1 ? pickRow('samplers', profiles.map(([name]) =>
-      `<button class="chip${name === profile ? ' on' : ''}"`
-      + ` data-profile="${esc(name)}">${esc(name)}</button>`).join('')) : '')
-    + '</div>'
-    + snippets(m).map(o => `<div class="snippet"><div class="faint">${esc(o.label)}</div>`
-      + `<button class="copy">copy</button><pre>${esc(o.text)}</pre></div>`).join('');
 
   return out;
 }
@@ -1370,16 +1714,22 @@ function tabOperate(m) {
 // built FROM: some repos publish twenty quants, and a snippet for the one the
 // registry pins is not much use to somebody who cannot fit it. every flag below
 // is still a pure function of registry facts -- the quant repo, the profile's
-// samplers, the native context, the derived knob. what to run, at what context,
-// on which host stays the consumer's business and is deliberately absent.
+// samplers, the native context, the derived knob.
 
 const SAMPLER_FLAG = {temp: '--temp', top_p: '--top-p', top_k: '--top-k',
                       min_p: '--min-p', presence_penalty: '--presence-penalty',
                       repeat_penalty: '--repeat-penalty'};
-let ops = {repo: null, quant: null, profile: null};
+let ops = {runtime: null, repo: null, quant: null, profile: null};
 
-// every (repo, quant) a consumer could actually serve: each declared quant, and
-// every other quant published in the same repo
+// what you are being shown a command for. the runtime decides which repos are
+// even candidates: llama.cpp and anything speaking to it serve a GGUF, vllm
+// serves the base weights and cannot load one at all.
+const RUNTIMES = [
+  {k: 'llama.cpp', gguf: true},
+  {k: 'vllm', gguf: false},
+];
+const pickedRuntime = m => RUNTIMES.find(r => r.k === ops.runtime) || RUNTIMES[0];
+
 function quantChoices(m) {
   // keyed by (repo, quant): a model may declare two quants OUT OF THE SAME
   // repo -- gemma 4 31b pins Q8_0 and UD-Q4_K_XL -- and expanding that repo's
@@ -1393,7 +1743,8 @@ function quantChoices(m) {
       const was = seen.get(key);
       if (was) { was.pinned = was.pinned || a.quant === q.quant; return; }
       seen.set(key, {repo: q.repo, quant: a.quant, gib: a.gib, bpw: a.bpw,
-                     pinned: a.quant === q.quant, speculative: q.speculative});
+                     pinned: a.quant === q.quant, speculative: q.speculative,
+                     note: a.quant === q.quant ? q.note : undefined});
     });
   });
   return [...seen.values()];
@@ -1401,19 +1752,32 @@ function quantChoices(m) {
 
 // repo first, then quant within it. the two repos of a model are not
 // interchangeable: only the -MTP- build of qwen3.6-27b carries the nextn head,
-// and its files are identically named 0.42gib apart, so which repo you are
-// looking at has to be a choice rather than a tooltip
-const repoChoices = m => [...new Set(quantChoices(m).map(c => c.repo))];
+// and its files are identically named 0.42gib apart
+const repoChoices = m => pickedRuntime(m).gguf
+  ? [...new Set(quantChoices(m).map(c => c.repo))] : [m.repo];
+
+// whether serving from this repo can speculate at all. the capability is a
+// property of the GGUF rather than of the model: `draft-mtp` needs the nextn
+// head, which qwen ships only in the `-MTP-GGUF` build, so the plain repo of
+// the same model cannot draft however the registry describes the model.
+const repoSpeculates = (m, repo) =>
+  !!((m.speculative || {}).type || (m.speculative || {}).draft_repo)
+  && quantChoices(m).some(c => c.repo === repo && c.speculative !== false);
 
 function pickedRepo(m) {
   const repos = repoChoices(m);
-  return repos.includes(ops.repo) ? ops.repo : repos[0] || null;
+  if (repos.includes(ops.repo)) return ops.repo;
+  // where a model's repos differ on it, the one that CAN speculate is the
+  // default: the two builds are the same weights 0.42gib apart, and picking
+  // the plain one silently gives up the drafter the registry declares
+  return repos.find(r => repoSpeculates(m, r)) || repos[0] || null;
 }
 
 function pickedQuant(m) {
-  const inRepo = quantChoices(m).filter(c => c.repo === pickedRepo(m));
+  const repo = pickedRepo(m);
+  const inRepo = quantChoices(m).filter(c => c.repo === repo);
   return inRepo.find(c => c.quant === ops.quant)
-    || inRepo.find(c => c.pinned) || inRepo[0] || null;
+    || bestInRepo(m, repo) || inRepo.find(c => c.pinned) || inRepo[0] || null;
 }
 
 function pickedProfile(m) {
@@ -1460,10 +1824,10 @@ function piProvider(m, pick) {
     api: 'openai-completions', apiKey: 'none', models: [entry]}}}, null, 2);
 }
 
-// the knob is not a server flag: the level rides in the chat template's kwargs,
-// so it is sent per request
 const OFF_LEVELS = ['off', 'none', 'no_think'];
 
+// the knob is not a server flag: the level rides in the chat template's kwargs,
+// so it is sent per request
 function requestBody(m, profileName) {
   const t = m.thinking;
   if (!t.knob) return null;
@@ -1493,52 +1857,73 @@ function requestBody(m, profileName) {
           + `so it is on or off` : ''};
   }
   // a profile may name a level this knob cannot express: qwen3.8's `instruct`
-  // asks for `off` and its reasoning_effort takes low, medium and xhigh only.
-  // say so rather than emit a value the template raises on
+  // asks for `off` and its reasoning_effort takes low, medium and xhigh only
   const known = want && (!accepts.length || accepts.includes(want)
-    || (m.thinking.aliases || {})[want]);
-  const level = known ? want : (m.thinking.default || accepts[accepts.length - 1] || 'high');
+    || (t.aliases || {})[want]);
+  const level = known ? want : (t.default || accepts[accepts.length - 1] || 'high');
   return {text: JSON.stringify({model: 'local',
     messages: [{role: 'user', content: 'hello'}],
-    chat_template_kwargs: {[m.thinking.knob]: level}}, null, 2),
+    chat_template_kwargs: {[t.knob]: level}}, null, 2),
     note: known || !want ? '' : `the ${profileName} profile asks for ${want}, `
       + `which this template does not accept; showing ${level}`};
 }
 
+// one runtime at a time. four commands stacked up made the reader scroll past
+// three they had not asked for to reach the one they had.
 function snippets(m) {
-  const pick = pickedQuant(m), profile = pickedProfile(m);
-  const out = [{label: `llama-server (${profile || 'no profile'} samplers)`,
-                text: llamaServer(m, pick, profile)}];
+  const rt = pickedRuntime(m), pick = pickedQuant(m), profile = pickedProfile(m);
+  const out = [];
+  if (rt.k === 'llama.cpp') {
+    out.push({label: `llama-server, ${profile || 'no'} samplers`,
+              text: llamaServer(m, pick, profile)});
+  } else {
+    out.push({label: 'vllm serve, the base weights rather than a gguf',
+              text: ['vllm serve ' + m.repo].concat(
+                m.facts.context_native ? ['--max-model-len ' + m.facts.context_native] : [])
+                .join(' \\\n  ')});
+  }
+  // the knob rides in the request whatever is serving it
   const body = requestBody(m, profile);
   if (body) out.push({label: 'request body (thinking knob)'
     + (body.note ? ' -- ' + body.note : ''), text: body.text});
-  const pi = piProvider(m, pick);
-  if (pi) out.push({label: 'pi models.json', text: pi});
-  out.push({label: 'vllm (base weights, not the gguf)',
-            text: ['vllm serve ' + m.repo].concat(
-              m.facts.context_native ? ['--max-model-len ' + m.facts.context_native] : [])
-              .join(' \\\n  ')});
   return out;
 }
-
 // the word alone, coloured. what `dropped` means is stated once per model
 // rather than beside every field that says it
+// what each outcome means rides on the word rather than in a paragraph under
+// the table, where it repeated for every field that used the same word
+const TURN_MEANS = {
+  dropped: 'the template renders, the server returns 200, and your message is not in the prompt',
+  rejected: 'the template raises, so the request fails rather than losing the message silently',
+  'as-system': 'folded into the system message rather than kept as its own role',
+  own: 'kept as its own role',
+  ok: 'kept where you put it',
+  reordered: 'kept, but moved to another position in the prompt',
+};
 const turnWord = v => !v ? '' : `<span class="${
-  v === 'dropped' ? 'bad' : v === 'rejected' ? 'warn' : 'ok'}">${esc(v)}</span>`;
+  v === 'dropped' ? 'bad' : v === 'rejected' ? 'warn' : 'ok'}"`
+  + ` data-help="${esc(TURN_MEANS[v] || '')}">${esc(v)}</span>`;
 
 // --- wiring ------------------------------------------------------------------
 
 function drawChrome() {
-  document.querySelector('#nav').innerHTML = [
+  document.querySelector('#nav').innerHTML = '<a href="#methodology" id="doc-link">methodology</a>'
+    + [
     ['the repo', D.repo_url],
     ['registry', `${D.repo_url}/blob/${D.branch}/registry/models.yaml`],
     ['the comparison', `${D.repo_url}/blob/${D.branch}/MODELS.md`],
     ['the research', `${D.repo_url}/blob/${D.branch}/research/README.md`],
   ].map(([t, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`).join('');
+  document.querySelector('#doc-link').onclick = e => {
+    e.preventDefault();
+    openDoc = true;
+    drawModal();
+  };
 
   const kinds = [...new Set(D.models.map(m => m.kind))].sort();
   document.querySelector('#kinds').innerHTML = FLAGS.map(f =>
-    `<button data-flag="${f.k}" aria-pressed="${filters.flags.has(f.k)}">${f.t}</button>`).join('');
+    `<button data-flag="${f.k}" data-help="${esc(f.help || '')}"`
+    + ` aria-pressed="${filters.flags.has(f.k)}">${f.t}</button>`).join('');
   document.querySelectorAll('[data-flag]').forEach(b => {
     b.onclick = () => {
       const k = b.dataset.flag;
@@ -1583,7 +1968,9 @@ function drawChrome() {
 function applyHash() {
   const m = /model=([^&]+)/.exec(location.hash);
   const t = /tab=(\w+)/.exec(location.hash);
-  if (t) tab = t[1] === 'prose' ? 'analysis' : (TABS.includes(t[1]) ? t[1] : tab);
+  // links written before the merge still resolve
+  if (t) tab = ['prose', 'analysis'].includes(t[1]) ? 'overview'
+    : (TABS.includes(t[1]) ? t[1] : tab);
   if (m) {
     openRepo = decodeURIComponent(m[1]);
     drawModal();
@@ -1600,21 +1987,21 @@ function boot(payload) {
   // shut on a first visit: eight headers is a menu, sixty sliders is a wall.
   // a stored [] is a reader who opened them, so only a MISSING key defaults
   folded = new Set(store.get('folded', null) || allGroups());
-  order = store.get('order', COLUMNS.map(c => c.k)).filter(k => COLUMNS.some(c => c.k === k));
+  order = store.get('order', DEFAULT_ORDER).filter(k => COLUMNS.some(c => c.k === k));
   COLUMNS.forEach(c => { if (!order.includes(c.k)) order.push(c.k); });
   hidden = new Set(store.get('hidden', DEFAULT_HIDDEN).filter(k => COLUMNS.some(c => c.k === k)));
 
   // BEFORE drawChrome, which builds the hardware selects and marks `selected`
   // against these: restoring them afterwards left every dropdown showing its
   // default while the value behind it was the stored one
-  const f = store.get('filters', null) || {};
-  filters = {q: f.q || '', kind: new Set(), pub: f.pub || '',
-             flags: new Set(f.flags || [])};
-  budget = store.get('budget', null);
-  reserve = store.get('reserve', 8);
-  cap = store.get('cap', 'q8');
-  minCtx = store.get('minCtx', 0);
-  floor = store.get('floor', 'none');
+  const f = store.get('filters', null);
+  filters = {q: (f || {}).q || '', kind: new Set(), pub: (f || {}).pub || '',
+             flags: new Set(f ? f.flags || [] : DEFAULT_FLAGS)};
+  budget = store.get('budget', DEFAULT_HARDWARE.budget);
+  reserve = store.get('reserve', DEFAULT_HARDWARE.reserve);
+  cap = store.get('cap', DEFAULT_HARDWARE.cap);
+  minCtx = store.get('minCtx', DEFAULT_HARDWARE.minCtx);
+  floor = store.get('floor', DEFAULT_HARDWARE.floor);
 
   drawChrome();
   setEffective(store.get('effective', true));
@@ -1691,16 +2078,16 @@ document.querySelector('#pub').onchange = e => {
 });
 document.querySelector('#reset').onclick = () => {
   W = {...D.weights};
-  filters = {q: '', kind: new Set(), pub: '', flags: new Set()};
+  filters = {q: '', kind: new Set(), pub: '', flags: new Set(DEFAULT_FLAGS)};
   hidden = new Set(DEFAULT_HIDDEN);
   folded = new Set(allGroups());
-  order = COLUMNS.map(c => c.k);
+  order = [...DEFAULT_ORDER];
   sort = {k: 'score', dir: -1};
-  budget = null;
-  reserve = 8;
-  cap = 'q8';
-  minCtx = 0;
-  floor = 'none';
+  budget = DEFAULT_HARDWARE.budget;
+  reserve = DEFAULT_HARDWARE.reserve;
+  cap = DEFAULT_HARDWARE.cap;
+  minCtx = DEFAULT_HARDWARE.minCtx;
+  floor = DEFAULT_HARDWARE.floor;
   ['weights', 'hidden', 'order', 'sort', 'budget', 'reserve', 'cap', 'minCtx',
    'floor', 'folded', 'effective', 'filters']
     .forEach(k => localStorage.removeItem('aim-' + k));
@@ -1711,7 +2098,9 @@ document.querySelector('#reset').onclick = () => {
 };
 document.querySelector('#m-close').onclick = closeModel;
 document.querySelector('#modal').onclick = e => { if (e.target.id === 'modal') closeModel(); };
-addEventListener('keydown', e => { if (e.key === 'Escape' && openRepo) closeModel(); });
+addEventListener('keydown', e => {
+  if (e.key === 'Escape' && (openRepo || openDoc)) closeModel();
+});
 addEventListener('hashchange', applyHash);
 
 fetch(DATA_URL, {cache: 'no-cache'})

@@ -54,13 +54,25 @@ OUT_DIR = os.path.join(ROOT, "docs")
 # separate model that ships in the model's repo, and `dspark` is 10.5gib of
 # deepseek v4 flash's -- offered as a quant it looks like the bargain of the
 # roster and is not the model at all.
-NOT_A_QUANT = re.compile(r"^(mmproj|mtp|dspark|dflash|eagle3)|\.gguf$", re.I)
+NOT_A_QUANT = re.compile(r"^(mmproj|mtp|dspark|dflash|eagle3|imatrix)|\.gguf$", re.I)
 
-# the facets a quantization penalty applies to. build-tables scales exactly
-# these three and nothing else: the other sources measured a served endpoint
-# whose precision this repo does not know, so discounting them would be
-# inventing a number rather than adjusting one.
-SCALED_FACETS = ["aa.coding", "aa.agentic", "aa.intelligence"]
+# what a quantization penalty does NOT apply to. every benchmark here measured
+# the model at whatever precision the scorer served, so `quant adjusted`
+# discounts all of them; the exceptions are the two kinds of number the penalty
+# does not describe. community sentiment is people talking, not a score, and
+# decode speed goes UP when you quantize rather than down.
+#
+# build-tables scales only the three artificial analysis indices, so MODELS.md
+# and this page deliberately answer slightly different questions -- see the
+# methodology note in the viewer.
+UNSCALED_FACETS = ["community.", "aa.speed"]
+
+# measured degradation curves live beside the collectors as SOURCE; see that
+# file for why it is empty and what a usable entry looks like.
+CURVES = os.path.join(ROOT, "research", "quant-curves.json")
+# below this many measured curves, a median of them is not a median of
+# anything. the fitted curve answers instead, and the page says so.
+MIN_CURVES = 3
 
 GITHUB = "https://github.com/khimaros/aimbot"
 BRANCH = "master"
@@ -105,6 +117,41 @@ GROUPS = [
 ]
 
 
+def per_repo_templates(repos, probes, registry_thinking):
+    """turns and thinking for EVERY repo we probed, not just the served one.
+
+    The registry records one template per model -- the one a consumer actually
+    serves -- because that is the fact a config needs. The page lets a reader
+    pick a different repo, and the two disagree far too often to show the
+    served repo's answers beside another repo's name: 11 of the 39 models with
+    both carry a gguf template that accepts a developer message where the base
+    repo rejects it.
+
+    resolve-turns owns the derivation, so it is imported rather than restated.
+    """
+    rt = load_script("resolve_turns", os.path.join(HERE, "resolve-turns"))
+    out = {}
+    for repo in repos:
+        probe = probes.get(repo)
+        if not probe:
+            continue
+        block = {"turns": rt.turns_for(probe)}
+        thinking = rt.thinking_for(probe, None, registry_thinking)
+        if thinking:
+            block["thinking"] = thinking
+        out[repo] = block
+    return out
+
+
+def load_script(name, path):
+    """Import one of this repo's extensionless scripts as a module."""
+    spec = importlib.util.spec_from_loader(
+        name, importlib.machinery.SourceFileLoader(name, path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def retention_curve():
     """build-tables' quantization retention curve, shipped rather than restated.
 
@@ -114,15 +161,86 @@ def retention_curve():
     page offers the same view -- from the same numbers, so the two cannot
     disagree about what `effective` means.
     """
-    spec = importlib.util.spec_from_loader(
-        "build_tables",
-        importlib.machinery.SourceFileLoader(
-            "build_tables", os.path.join(ROOT, "research", "build-tables")))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return {"curve": mod.CURVE, "scaled": SCALED_FACETS,
-            "source": "research/build-tables CURVE, fitted to unsloth's aider "
-                      "polyglot sweep of deepseek v3.1"}
+    mod = load_script("build_tables", os.path.join(ROOT, "research", "build-tables"))
+    all_curves = {k: check_curve(k, v)
+                  for k, v in (load_json_at(CURVES).get("curves") or {}).items()}
+    # only a ratio of benchmark scores can be a retention multiplier. a
+    # perplexity or kl sweep says the quant moved the weights, not how much of
+    # the score survived, and no published mapping turns one into the other --
+    # so those ship for a reader to see and are never multiplied by anything.
+    measured = {k: v for k, v in all_curves.items() if v["kind"] == "score"}
+    proxies = {k: v for k, v in all_curves.items() if v["kind"] == "proxy"}
+    median = median_curve(list(measured.values()))
+    return {
+        # what a model with no measurement of its own gets, in order
+        "fitted": {"points": mod.CURVE,
+                   "source": "research/build-tables CURVE, fitted to unsloth's "
+                             "aider polyglot sweep of deepseek v3.1",
+                   "file": "research/build-tables"},
+        "median": {"points": median, "of": len(measured),
+                   "source": "the median of %d measured curves" % len(measured),
+                   "file": "research/quant-curves.json"} if median else None,
+        "measured": measured,
+        "proxies": proxies,
+        "unscaled": UNSCALED_FACETS,
+    }
+
+
+def load_json_at(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (IOError, ValueError):
+        return {}
+
+
+def check_curve(repo, curve):
+    """A curve has to be a curve, and a `score` one has to be a ratio.
+
+    `proxy` curves carry perplexity or kl divergence, which are unbounded and
+    usually fall as quality rises, so only the shape is checked. `score` curves
+    are the ones the viewer multiplies by, so their range is enforced.
+    """
+    pts = curve.get("points") or []
+    kind = curve.get("kind")
+    if kind not in ("score", "proxy"):
+        sys.exit("!!! %s: curve kind %r is not score or proxy" % (repo, kind))
+    if len(pts) < 2:
+        sys.exit("!!! %s: a curve needs at least two points" % repo)
+    if [x for x, _ in pts] != sorted(x for x, _ in pts):
+        sys.exit("!!! %s: points must ascend by bits per weight" % repo)
+    if kind == "score":
+        for (_, y) in pts:
+            if not 0 < y <= 1:
+                sys.exit("!!! %s: retention %r is not in (0, 1]" % (repo, y))
+    return curve
+
+
+def median_curve(curves):
+    """The middle of the measured curves, sampled at the bpw they share.
+
+    Averaging curves with different sample points would interpolate a shape
+    nobody measured, so this reads each curve at a common grid and takes the
+    median there -- and only once there are enough of them to have a middle.
+    """
+    if len(curves) < MIN_CURVES:
+        return None
+    grid = sorted({x for c in curves for x, _ in c["points"]})
+    out = []
+    for x in grid:
+        ys = sorted(interp(c["points"], x) for c in curves)
+        out.append([x, round(ys[len(ys) // 2], 4)])
+    return out
+
+
+def interp(points, x):
+    """Retention at x, clamped to the ends rather than extrapolated."""
+    if x <= points[0][0]:
+        return points[0][1]
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        if x0 <= x <= x1:
+            return y0 + (y1 - y0) * (x - x0) / (x1 - x0) if x1 > x0 else y0
+    return points[-1][1]
 
 
 def load_yaml(path):
@@ -208,7 +326,11 @@ def build_model(repo, model, ctx):
         "sampling": model.get("sampling") or {},
         "thinking": model.get("thinking") or {},
         "turns": model.get("turns") or {},
+        "templates": per_repo_templates(
+            [repo] + [q["repo"] for q in (model.get("quants") or [])],
+            ctx["probes"], model.get("thinking")),
         "ids": model.get("ids") or {},
+        "params": use.get("params") or {},
         "facets": use.get("facets") or {},
         "languages": use.get("languages") or [],
         "community": use.get("community") or {},
@@ -257,6 +379,7 @@ def provenance():
 def build():
     reg_path = os.path.join(ROOT, "registry", "models.yaml")
     ctx = {"facts": load_json("model-facts"), "sizes": load_json("gguf-sizes"),
+           "probes": load_json("template-probes"),
            "usecase": load_json("usecase"), "cards": load_json("model-cards"),
            "lines": registry_lines(reg_path)}
     registry = load_yaml(reg_path).get("models") or {}

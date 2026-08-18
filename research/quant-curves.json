@@ -1,0 +1,115 @@
+{
+ "_about": [
+  "measured quantization degradation, per model. SOURCE, not derived: nothing",
+  "in this repo can compute it, because it takes running the same model at two",
+  "or more quants on the same benchmark at the same settings.",
+  "",
+  "EMPTY ON PURPOSE. the sweeps that exist today cannot fill it: quantbench has",
+  "1269 scored trials across 15 configs, but only two models were run at more",
+  "than one quant and in both cases one arm has n<=2. a curve fitted to that",
+  "would be noise wearing a decimal point. the schema is here so a real sweep",
+  "drops in without touching the viewer.",
+  "",
+  "a point is [bits per weight, retention], where retention is the score at",
+  "that quant over the score at the highest-precision arm of the SAME sweep --",
+  "same model, same benchmark, same samplers, same thinking level. anything",
+  "else is comparing two different measurements and calling the difference",
+  "quantization.",
+  "",
+  "what a usable entry looks like:",
+  "",
+  "  \"deepseek-ai/DeepSeek-V4-Flash-0731\": {",
+  "    \"points\": [[2.21, 0.778], [2.92, 0.919], [16.0, 1.0]],",
+  "    \"metric\": \"aider polyglot pass rate\",",
+  "    \"trials\": 580,",
+  "    \"ref\": {\"source\": \"unsloth\", \"url\": \"https://...\", \"captured\": \"2026-08-17\"}",
+  "  }",
+  "",
+  "scripts/build-viewer validates these on the way through: bits per weight",
+  "ascending, retention in (0, 1], and at least two points. where a model has",
+  "no entry the page falls back to the median of the entries that do exist, and",
+  "to build-tables' fitted curve when there are fewer than MIN_CURVES of them.",
+  "the page says which of the three it used, every time."
+ ],
+ "version": 1,
+ "curves": {
+  "inclusionAI/Ling-3.0-flash": {
+   "kind": "proxy",
+   "metric": "kl divergence",
+   "better": "lower",
+   "points": [
+    [
+     2.01,
+     0.2452
+    ],
+    [
+     3.01,
+     0.0882
+    ],
+    [
+     4.02,
+     0.0481
+    ],
+    [
+     5.02,
+     0.0329
+    ],
+    [
+     6.02,
+     0.0318
+    ],
+    [
+     8.03,
+     0.0242
+    ]
+   ],
+   "quants": [
+    "AD-IQ1_S",
+    "AD-IQ2_M",
+    "AD-IQ3_M",
+    "AD-IQ4_XXS",
+    "AD-Q4_K_S",
+    "AD-Q5_K_M"
+   ],
+   "ref": {
+    "source": "AtomicChat/Ling-3.0-flash-GGUF",
+    "url": "https://huggingface.co/AtomicChat/Ling-3.0-flash-GGUF",
+    "note": "published kl divergence per quant on the card"
+   }
+  },
+  "upstage/Solar-Open2-250B": {
+   "kind": "proxy",
+   "metric": "perplexity",
+   "better": "lower",
+   "points": [
+    [
+     1.93,
+     7.717
+    ],
+    [
+     3.05,
+     4.774
+    ],
+    [
+     4.35,
+     4.159
+    ],
+    [
+     6.57,
+     4.123
+    ]
+   ],
+   "quants": [
+    "IQ1_M",
+    "Q2_K",
+    "IQ4_XS",
+    "Q6_K"
+   ],
+   "ref": {
+    "source": "prometheusAIR/Solar-Open2-250B-GGUF",
+    "url": "https://huggingface.co/prometheusAIR/Solar-Open2-250B-GGUF",
+    "note": "published perplexity per quant on the card"
+   }
+  }
+ }
+}

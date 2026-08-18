@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+
+"""Extract published per-quant quality sweeps into quant-curves.json.
+
+A quantizer who has actually measured their own quants sometimes publishes the
+table: perplexity or KL divergence per quant, against the full-precision model.
+That is the only per-model degradation data that exists in public today -- the
+alternative is running the sweep yourself, and quantbench's current runs give
+two matched pairs with n<=2 in one arm.
+
+    ./fetch-quant-sweeps            # rewrite quant-curves.json
+    ./fetch-quant-sweeps --check    # exit 1 if it is out of date
+
+WHAT IT DOES NOT DO is turn those into a retention multiplier. Perplexity and
+KL measure how far the quantized weights moved; the retention curve the viewer
+applies is a ratio of BENCHMARK SCORES, and there is no published mapping from
+one to the other. Converting them would be inventing precision, which is the
+failure this whole repo is arranged against. So each curve is recorded with the
+metric it actually is:
+
+  kind: score    a ratio of benchmark scores, usable as a retention multiplier
+  kind: proxy    perplexity or kl divergence, shown to a reader and never used
+                 to discount anything
+
+`scripts/build-viewer` enforces that split. A `score` curve replaces the fitted
+one for its model; a `proxy` curve is displayed beside the quants and nothing
+more. Hand-written entries survive a rerun, which is how a `score` curve gets
+in until somebody publishes one in a table this can parse.
+
+Cards are heterogeneous, so extraction is deliberately narrow: a markdown table
+with a column naming quants and a column naming a metric this understands.
+Anything else is skipped rather than guessed at.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = "quant-curves.json"
+RAW = "https://huggingface.co/%s/raw/main/README.md"
+CARD_URL = "https://huggingface.co/%s"
+GIB = 2 ** 30
+
+# metrics a quantizer publishes, and which way is better. none of these is a
+# benchmark score, so all of them land as `proxy`.
+METRICS = {
+    "ppl": ("perplexity", "lower"), "perplexity": ("perplexity", "lower"),
+    "kl": ("kl divergence", "lower"), "kld": ("kl divergence", "lower"),
+    "mean kl": ("kl divergence", "lower"),
+    # if a card ever publishes one of these per quant, it IS a score ratio
+    "pass": ("pass rate", "higher"), "accuracy": ("accuracy", "higher"),
+    "score": ("score", "higher"), "aider": ("aider polyglot", "higher"),
+}
+QUANT_CELL = re.compile(r"(UD-[A-Z0-9_]+|AD-[A-Z0-9_]+|I?Q\d+(?:_[A-Z0-9]+)*|BF16|F16|FP8)", re.I)
+NUM = re.compile(r"-?\d+(?:\.\d+)?")
+SIZE = re.compile(r"(\d+(?:\.\d+)?)\s*(gib|gb)", re.I)
+
+
+def rows_of(text):
+    """Markdown tables as lists of cell lists."""
+    tables, cur = [], []
+    for line in (text or "").split("\n"):
+        s = line.strip()
+        if s.startswith("|") and s.count("|") >= 3:
+            cells = [c.strip() for c in s.strip("|").split("|")]
+            if all(set(c) <= set("-: ") for c in cells):
+                continue
+            cur.append(cells)
+        elif cur:
+            if len(cur) > 2:
+                tables.append(cur)
+            cur = []
+    if len(cur) > 2:
+        tables.append(cur)
+    return tables
+
+
+def metric_column(header):
+    """(index, metric name, direction) for the first column naming a metric."""
+    for i, cell in enumerate(header):
+        low = cell.lower()
+        for key, (name, better) in METRICS.items():
+            if re.search(r"\b%s\b" % re.escape(key), low):
+                return i, name, better
+    return None, None, None
+
+
+def quant_column(rows):
+    """The column whose cells look like quant tags in most rows."""
+    width = max(len(r) for r in rows)
+    best, score = None, 0
+    for i in range(width):
+        hits = sum(1 for r in rows if len(r) > i and QUANT_CELL.search(r[i]))
+        if hits > score:
+            best, score = i, hits
+    return best if score >= 2 else None
+
+
+def bits_column(header):
+    for i, cell in enumerate(header):
+        if re.search(r"\bbits?\b|\bbpw\b", cell.lower()):
+            return i
+    return None
+
+
+def size_gib(cells):
+    for c in cells:
+        m = SIZE.search(c)
+        if m:
+            v = float(m.group(1))
+            return v if m.group(2).lower() == "gib" else v * 1e9 / GIB
+    return None
+
+
+def sweep_from(table, params_b):
+    """(points, metric, better) from one table, or None if it is not a sweep."""
+    header, body = table[0], table[1:]
+    mi, metric, better = metric_column(header)
+    qi = quant_column(body)
+    if mi is None or qi is None:
+        return None
+    bi = bits_column(header)
+    points = []
+    for r in body:
+        if len(r) <= max(mi, qi):
+            continue
+        tag = QUANT_CELL.search(r[qi])
+        val = NUM.search(re.sub(r"\*|`", "", r[mi]))
+        if not tag or not val:
+            continue
+        bpw = None
+        if bi is not None and len(r) > bi and NUM.search(r[bi]):
+            bpw = float(NUM.search(r[bi]).group())
+        elif params_b:
+            g = size_gib(r)
+            if g:
+                bpw = round(g * GIB * 8 / (params_b * 1e9), 2)
+        if bpw:
+            points.append([bpw, float(val.group()), tag.group().upper()])
+    if len(points) < 2:
+        return None
+    points.sort()
+    return points, metric, better
+
+
+def card(repo, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), RAW % repo,
+           "--key", "card-%s" % repo.replace("/", "_"), "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    return subprocess.run(cmd, stdout=subprocess.PIPE,
+                          stderr=subprocess.DEVNULL, text=True).stdout
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--registry", default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--check", action="store_true")
+    args = ap.parse_args()
+
+    import yaml
+    reg = yaml.safe_load(open(args.registry)).get("models") or {}
+    facts = {}
+    try:
+        with open(os.path.join(HERE, "data", "model-facts.json")) as f:
+            facts = json.load(f)
+    except (IOError, ValueError):
+        pass
+
+    old = {}
+    if os.path.exists(args.out):
+        with open(args.out) as f:
+            old = json.load(f)
+    curves = {}
+    for repo, m in reg.items():
+        params = (facts.get(repo) or {}).get("params_total_b")
+        # the quantizer measures its own quants, so its card answers before the
+        # vendor's; both are read because either may carry the table
+        for source in [q["repo"] for q in (m.get("quants") or [])] + [repo]:
+            found = None
+            for table in rows_of(card(source, args.max_age, args.refresh)):
+                found = sweep_from(table, params)
+                if found:
+                    break
+            if not found:
+                continue
+            points, metric, better = found
+            curves[repo] = {
+                "kind": "proxy",
+                "metric": metric,
+                "better": better,
+                "points": [[p[0], p[1]] for p in points],
+                "quants": [p[2] for p in points],
+                "ref": {"source": source, "url": CARD_URL % source,
+                        "note": "published %s per quant on the card" % metric},
+            }
+            print("  %-46s %d points of %s from %s"
+                  % (repo, len(points), metric, source), file=sys.stderr)
+            break
+
+    # a hand-written score curve is worth more than anything parsed here, and
+    # nothing in this script can produce one
+    kept = 0
+    for repo, curve in (old.get("curves") or {}).items():
+        if curve.get("kind") == "score" or curve.get("hand_written"):
+            curves[repo] = curve
+            kept += 1
+
+    doc = dict(old)
+    doc["version"] = 1
+    doc["curves"] = dict(sorted(curves.items()))
+    text = json.dumps(doc, indent=1, sort_keys=False) + "\n"
+
+    if args.check:
+        current = open(args.out).read() if os.path.exists(args.out) else ""
+        if current != text:
+            sys.exit("!!! %s is out of date, run: make curves" % args.out)
+        print("quant-curves: %d curves, current" % len(curves))
+        return
+
+    with open(args.out, "w") as f:
+        f.write(text)
+    print("wrote %s: %d curves (%d hand-written kept)" % (args.out, len(curves), kept))
+
+
+if __name__ == "__main__":
+    main()

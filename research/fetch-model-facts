@@ -58,6 +58,13 @@ API = "https://huggingface.co/api/models/%s?expand[]=safetensors"
 # disagree about the window, which is a thing to see rather than to average.
 GGUF_API = "https://huggingface.co/api/models/%s?expand[]=gguf"
 
+# the smallest parameter count that could be a real model here, and the naming
+# convention vendors use for active parameters: `Qwen3.5-397B-A17B`.
+MIN_PARAMS = 50_000_000
+ACTIVE_IN_NAME = re.compile(r"-A(\d+(?:\.\d+)?)B\b", re.I)
+# the total the vendor put in the name, for repos whose index cannot answer
+TOTAL_IN_NAME = re.compile(r"[-_](\d+(?:\.\d+)?)B(?:-|_|$)", re.I)
+
 # every thinking knob seen in the wild. the value is how a client sets it.
 KNOBS = {
     "enable_thinking": "boolean",
@@ -208,7 +215,9 @@ def attention(text):
     explicit each is: an itemised `layer_types`, a linear-attention block that
     lists its full layers, an interval, then the fallback of all layers global.
     """
-    heads, dim = text.get("num_key_value_heads"), text.get("head_dim")
+    heads = (text.get("num_key_value_heads") or text.get("num_attention_groups")
+             or text.get("num_kv_heads"))
+    dim = text.get("head_dim")
     layers = text.get("num_hidden_layers")
     linear = text.get("linear_attn_config") or {}
     if not layers:
@@ -276,10 +285,12 @@ def shape_facts(cfg):
     mtp = text.get("mtp_num_hidden_layers") or text.get("num_nextn_predict_layers")
     if mtp:
         out["mtp_layers"] = mtp
-    experts = text.get("num_experts") or text.get("n_routed_experts")
+    experts = (text.get("num_experts") or text.get("n_routed_experts")
+               or text.get("moe_num_experts"))
     if experts:
         out["experts"] = experts
-        out["experts_active"] = text.get("num_experts_per_tok")
+        out["experts_active"] = (text.get("num_experts_per_tok")
+                                 or text.get("moe_top_k"))
     modes = ["text"]
     if cfg.get("vision_config"):
         modes.append("image")
@@ -336,8 +347,29 @@ def main():
                 disagreed.append((repo, facts["context_native"], ctx))
         info = as_json(get(API % repo, slug(repo, "info"), args.max_age, args.refresh))
         total = ((info or {}).get("safetensors") or {}).get("total")
-        if total:
+        # a published index that sums to less than a tenth of a billion is not
+        # this model: deepreinforce's ornith repos report 664,944 parameters for
+        # a 35b model, which is one shard's worth of something. recording it
+        # gave the viewer a 0.0b model and a bits-per-weight of infinity
+        if total and total >= MIN_PARAMS:
             facts["params_total_b"] = round(total / 1e9, 2)
+            facts["params_source"] = "safetensors"
+        else:
+            if total:
+                print("  %-46s safetensors index sums to %s, ignoring"
+                      % (repo, "{:,}".format(total)), file=sys.stderr)
+            # the name is the only remaining statement of size, and it is a
+            # statement: `Ornith-1.0-35B` is 35b whatever its broken index says
+            named = TOTAL_IN_NAME.search(repo)
+            if named:
+                facts["params_total_b"] = float(named.group(1))
+                facts["params_source"] = "name"
+        # vendors encode active parameters in the name -- `-35B-A3B` is 35b of
+        # weights with 3b live per token -- and for the models no third party
+        # has scored that is the only statement of it anywhere
+        active = ACTIVE_IN_NAME.search(repo)
+        if active:
+            facts["params_active_b"] = float(active.group(1))
         think = thinking_facts(repo, args.max_age, args.refresh)
         if think:
             facts["thinking"] = think

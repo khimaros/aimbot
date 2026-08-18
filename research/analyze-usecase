@@ -341,7 +341,20 @@ def build(bt, registry):
             facets["swerebench.resolved"] = {
                 "value": resolved, "label": "resolved rate", "unit": "share",
                 "group": "swe-rebench", "ref": ref("swerebench", ids.get("swerebench"))}
+        # artificial analysis publishes the ADVERTISED parameter counts. the
+        # derived total in model-facts.json counts the tensors that actually
+        # ship, so the two disagree -- deepseek v4 flash counts 304b of weights
+        # against an advertised 284b -- and both are worth carrying: one is
+        # what you download, the other is what the vendor calls it. active
+        # parameters have no derived counterpart at all, because config.json
+        # says how many EXPERTS route per token and not how big they are.
+        entry = aa.get(ids.get("aa")) or {}
+        params = {k: v for k, v in
+                  (("advertised_total_b", entry.get("totalParameters")),
+                   ("advertised_active_b", entry.get("activeParameters")))
+                  if v is not None}
         models[repo] = {"name": short, "kind": m.get("kind", "text"),
+                        "params": params,
                         "facets": facets, "languages": langs,
                         "community": (sent.get(short) or {}).get("by_source") or {},
                         "tasks": (sent.get(short) or {}).get("tasks_all") or {}}

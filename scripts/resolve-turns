@@ -49,7 +49,8 @@ PROBES = os.path.join(HERE, "..", "research", "data", "template-probes.json")
 MODEL_KEY = re.compile(r"^  (\S.*?):\s*$")
 FIELDS = {"turns": ["source", "developer", "leading_system_max", "mid_system",
                     "mid_developer", "upstream_differs"],
-          "thinking": ["knob", "gate", "kind", "accepts", "default", "aliases"]}
+          "thinking": ["knob", "gate", "gate_default", "kind", "accepts",
+                       "default", "aliases"]}
 
 try:
     import yaml
@@ -223,8 +224,17 @@ def thinking_for(probe, base, existing):
                   if v.get("type") == "boolean")
     if gate:
         out["gate"] = gate[0]
+        # what the switch does when nothing is sent. deepseek v4 flash reads
+        # two of them and they disagree, so the one recorded says its own
+        # answer rather than leaving the reader to assume
+        d = (probe.get("thinking") or {}).get(gate[0], {}).get("default")
+        if d is not None:
+            out["gate_default"] = d
+        else:
+            out.pop("gate_default", None)
     else:
         out.pop("gate", None)
+        out.pop("gate_default", None)
     aliases = {}
     if levels["kind"] != "verbatim":
         _, base_levels = level_knob(base or {})
