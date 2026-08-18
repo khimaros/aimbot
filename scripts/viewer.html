@@ -251,8 +251,8 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
   </div>
   <div class="controls">
     <span class="lbl">ranking</span>
-    <select id="preset" data-help="a named set of weights. `balanced` is build-tables' composite; the others reweight toward one question. changing any weight yourself moves this to `custom weights`"></select>
-    <button id="factors-btn" aria-pressed="false" data-help="build your own weighting: one slider per measurement, grouped by what measured it. the ranking resorts as you drag, and a model missing a factor is ranked on the ones it has rather than scored zero">custom weights</button>
+    <select id="preset" data-help="a named set of weights. `balanced` is build-tables' composite; the others reweight toward one question. changing any weight yourself moves this to `custom ranking`"></select>
+    <button id="factors-btn" aria-pressed="false" data-help="build your own weighting: one slider per measurement, grouped by what measured it. the ranking resorts as you drag, and a model missing a factor is ranked on the ones it has rather than scored zero">custom ranking</button>
     <button id="eff-btn" aria-pressed="true" data-help="off, the scores are what the source published. on, they answer `what would i get from the quant i can actually run`: a benchmark scores the model at the precision the scorer served, so the score is multiplied by the retention that quant's bits per weight predict and the percentiles are recomputed against the discounted cohort. only the coding and software-agent benchmarks are discounted, because the one sweep behind the curve measured a code-editing pass rate and nothing else -- every other number is published as-is and says why on hover. the curve itself is fitted to one model, deepseek v3.1 at 671b, and applied to all of them, which is the weakest step on this page and reads optimistic for a small model at two bits.">quant adjusted</button>
     <button id="reset" data-help="clear the weights, filters, hardware settings, columns and sort, and forget them">reset</button>
   </div>
@@ -993,10 +993,6 @@ const FLAGS = [
    help: 'text models only'},
   {k: 'vision', t: 'vision', test: m => (m.modalities.input || []).includes('image'),
    help: 'takes images in, according to its own config'},
-  {k: 'moe', t: 'moe', test: m => !!m.facts.experts,
-   help: 'mixture of experts: decodes like a small model, weighs like a large one'},
-  {k: 'mtp', t: 'mtp', test: m => !!m.facts.mtp_layers,
-   help: 'ships an mtp head, which is what draft-mtp speculation needs'},
   {k: 'draft', t: 'speculative', test: m => !!m.speculative.type,
    help: 'the registry records a speculative decoding method for it'},
   {k: 'think', t: 'thinking knob', test: m => !!m.thinking.knob,
@@ -1135,7 +1131,7 @@ function groupOf(key) {
 
 // named weightings, offered in the ranking row. each is a whole answer to "what
 // is quality", so picking one REPLACES the weights rather than nudging them --
-// which is why the select falls back to `custom weights` the moment a slider
+// which is why the select falls back to `custom ranking` the moment a slider
 // moves off a preset.
 const PRESETS = {
   default: {t: 'balanced ranking', w: () => ({...D.weights})},
@@ -1168,7 +1164,7 @@ const presetName = () => Object.keys(PRESETS).find(p => sameWeights(W, PRESETS[p
 function drawPreset() {
   const cur = presetName();
   document.querySelector('#preset').innerHTML =
-    (cur ? '' : '<option value="" selected>custom weights</option>')
+    (cur ? '' : '<option value="" selected>custom ranking</option>')
     + Object.entries(PRESETS).map(([k, p]) =>
       `<option value="${k}"${k === cur ? ' selected' : ''}>${esc(p.t)}</option>`).join('');
 }

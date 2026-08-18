@@ -279,12 +279,12 @@ analysis rather than by taste -- and every one of them is a slider. weight gbenc
 zero if games do not persuade you. weight the forums to 1.0 if they do. the
 table re-ranks as you drag.
 
-the sliders are behind `custom weights`, because most readers want a stance
+the sliders are behind `custom ranking`, because most readers want a stance
 rather than sixty decisions. the stances are a dropdown in the ranking row:
 `balanced` is the composite above, and the others answer one question each --
 writing code, agentic and tool use, third-party measurement only, what people
 report. picking one replaces the weights outright, and moving any slider off a
-stance turns the dropdown to `custom weights`.
+stance turns the dropdown to `custom ranking`.
 
 **how much memory you have.** pick a vram size and a reserve, and the quant
 column, the sizes and the retention behind `effective` all switch to the
