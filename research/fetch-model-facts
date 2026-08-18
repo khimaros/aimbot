@@ -247,6 +247,22 @@ def attention(text):
            "other_layers": layers - full}
     if window:
         out["window"] = window
+
+    # multi-head latent attention caches ONE compressed vector per token per
+    # layer -- the kv lora projection plus the rope part -- rather than a key
+    # and a value per head. costing it as `2 * kv_heads * head_dim` is wrong by
+    # 1.8x on deepseek v4 flash, 14.2x on ling 3.0 flash and 24.7x on kimi k3,
+    # always in the direction that says a model will not fit.
+    #
+    # two spellings: most declare `kv_lora_rank`, deepseek writes the latent
+    # width as `head_dim` with a single kv head. `qk_rope_head_dim` is what
+    # says the cache is split that way at all, so it gates both.
+    rope_dim = text.get("qk_rope_head_dim")
+    latent = text.get("kv_lora_rank")
+    if latent is None and rope_dim and heads == 1:
+        latent = dim
+    if latent and rope_dim:
+        out["latent"] = latent + rope_dim
     return {k: v for k, v in out.items() if v is not None}
 
 
@@ -279,6 +295,12 @@ def shape_facts(cfg):
             ("factor", rope.get("factor")),
             ("original", rope.get("original_max_position_embeddings")),
         ) if v is not None}
+        # the window it was TRAINED on, as opposed to the one yarn buys. worth
+        # its own field: a consumer choosing a context wants to know which side
+        # of that line they are on, and `max_position_embeddings` cannot say.
+        trained = rope.get("original_max_position_embeddings")
+        if trained:
+            out["context_trained"] = trained
     attn = attention(text)
     if attn:
         out["attn"] = attn

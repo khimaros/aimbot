@@ -258,10 +258,10 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
   </div>
   <div class="controls">
     <span class="lbl">filter</span>
-    <input type="search" id="q" placeholder="search any column" data-help="matches the text: name, repo, architecture, registry notes, card summary, best-for, hub tags, discussed tasks and quant names. not the numeric columns">
+    <input type="search" id="q" placeholder="full text search" data-help="matches the text: name, repo, architecture, registry notes, card summary, best-for, hub tags, discussed tasks and quant names. not the numeric columns">
     <select id="pub" data-help="narrow to one publisher, taken from the repo owner"></select>
     <span id="kinds" class="chips"></span>
-    <button id="ladder-btn" aria-pressed="true" data-help="on, one row per model, reading the largest quant that fits. off, one row per quant that fits, so the whole size ladder is on screen -- and with quant adjusted each row scores at its own bits per weight, which merges every model and every quant into one ranked list of what you could actually run. it stays inside the repo the registry pins, since crossing to another build changes more than the size">best fit</button>
+    <button id="ladder-btn" aria-pressed="true" data-help="on, one row per model, reading the largest quant that fits. off, one row per quant that fits, so the whole size ladder is on screen -- and with quant adjusted each row scores at its own bits per weight, which merges every model and every quant into one ranked list of what you could actually run. it stays inside the repo the registry pins, since crossing to another build changes more than the size">best quant</button>
   </div>
 
   <div class="layout">
@@ -420,16 +420,30 @@ const floorBpw = () => (FLOORS.find(c => c[0] === floor) || FLOORS[0])[1];
 const KV_BYTES = 2;                 // f16 keys and values, llama.cpp's default
 let minCtx = 0;
 
+// what one token costs in cache, per layer that holds one. latent attention
+// keeps a single compressed vector instead of a key and a value per head, and
+// costing it the naive way overstates kimi k3 by 24.7x, ling 3.0 flash by
+// 14.2x and deepseek v4 flash by 1.8x -- always as "this will not fit".
+const kvPerToken = a => a.latent
+  ? a.latent * KV_BYTES : 2 * a.kv_heads * a.head_dim * KV_BYTES;
+
 function kvGib(m, ctx) {
   const a = m.facts.attn;
   if (!a || !ctx) return 0;
-  const perTok = 2 * a.kv_heads * a.head_dim * KV_BYTES;
+  const perTok = kvPerToken(a);
   const windowed = a.window ? a.other_layers * Math.min(ctx, a.window) : 0;
   return perTok * (a.full_layers * ctx + windowed) / (1024 ** 3);
 }
 
-// a model that cannot reach the context natively is not a fit at it. serving
-// past the trained window means rope scaling, which is the consumer's call
+// what it was trained on, as opposed to what yarn extends it to. gpt-oss is
+// the case that makes the difference worth a column: 4096 trained, 131072
+// reported, a factor of 32 of extrapolation between them.
+const trainCtx = m => m.facts.context_trained || m.facts.context_native;
+
+// a model that cannot reach the context is not a fit at it. this reads the
+// EXTENDED window, since that is what llama.cpp serves out of the gguf without
+// a flag; whether the extrapolated part is worth having is the reader's call,
+// and the two columns put both numbers in front of them.
 const reaches = m => !minCtx || (m.facts.context_native || 0) >= minCtx;
 
 // the longest context whose cache fits beside the weights. windowed layers cap
@@ -437,9 +451,9 @@ const reaches = m => !minCtx || (m.facts.context_native || 0) >= minCtx;
 function fitContext(m) {
   const q = activeQuant(m), a = m.facts.attn, native = m.facts.context_native;
   if (!budget || !q || !q.gib || !a || !native) return null;
-  const room = (usable() - q.gib) * (1024 ** 3);
+  const room = (usable() - q.gib - draftGib(m)) * (1024 ** 3);
   if (room <= 0) return 0;
-  const perTok = 2 * a.kv_heads * a.head_dim * KV_BYTES;
+  const perTok = kvPerToken(a);
   const windowed = a.window ? a.other_layers * a.window * perTok : 0;
   const ctx = (room - windowed) / (perTok * a.full_layers);
   // never above the trained window: going past it needs rope scaling, which is
@@ -463,10 +477,47 @@ function bestInRepo(m, repo) {
   // measurement this repo does not have
   if (!budget || !all.some(c => c.gib)) return pinned;
   if (!reaches(m)) return null;
-  const room = usable() - kvGib(m, minCtx), ceiling = capBpw(), bottom = floorBpw();
+  const room = usable() - kvGib(m, minCtx) - draftGib(m),
+        ceiling = capBpw(), bottom = floorBpw();
   const fits = all.filter(c => c.gib && c.gib <= room
     && (!c.bpw || (c.bpw <= ceiling && c.bpw >= bottom))).sort((a, b) => a.gib - b.gib);
   return fits.length ? fits[fits.length - 1] : null;
+}
+
+// --- speculative decoding ----------------------------------------------------
+//
+// drafting proposes n tokens and the target verifies them in ONE pass, keeping
+// everything up to the first rejection. so the gain is tokens per target pass,
+// and with a per-token acceptance p the expected yield is 1 + sum(p^k) over
+// k=1..n -- geometric, which is why the terms past the third are worth almost
+// nothing and why the registry drafts 3 for qwen3.8 and 6 for qwen3.6.
+//
+// p is a single number for every model, which is the weak part of this. it is
+// set to the value that reproduces the only end-to-end measurement this repo
+// holds: qwen3.8 27b on a strix halo under vulkan with the MTP predictor, at
+// 16.68 / 14.24 / 12.74 t/s for UD-Q5_K_XL / Q6_K / Q8_0. against the same
+// arithmetic without drafting that is 1.97x, 1.90x and 2.16x; 1 + sum(0.55^k,
+// k=1..3) is 2.02. MODELS.md records the same log reporting acceptance between
+// 0.546 and 0.88 on one model, so treat this as the middle of a wide range.
+const DRAFT_ACCEPT = 0.55;
+
+// where the drafter is a SEPARATE file it has to be resident and it has to be
+// read, and neither is free. an mtp or dflash head ships inside the weights --
+// qwen3.6's -MTP- build is the plain one plus 0.42gib -- so it is already paid
+// for by the quant we picked, which is the only case this can cost honestly.
+const draftKind = m => (m.speculative || {}).type || '';
+const headInWeights = m => /mtp|dflash/.test(draftKind(m));
+const draftGib = m => (m.speculative.draft || {}).gib || 0;
+
+// the yield, only where the drafting is free to read. a separate drafter of
+// unknown size would need its bytes counted against every drafted token, and
+// claiming the speedup without the cost would be the flattering half of it.
+function draftYield(m) {
+  const s = m.speculative || {};
+  if (!(s.type || s.draft_repo) || !headInWeights(m)) return 1;
+  let out = 1, p = 1;
+  for (let k = 0; k < (s.n_max || 3); k++) { p *= DRAFT_ACCEPT; out += p; }
+  return out;
 }
 
 // which repo a model is READ from, in the table and in the modal alike. where a
@@ -552,7 +603,10 @@ function tgTps(m) {
   if (!bandwidth || !q || !q.bpw || a === undefined) return null;
   const eff = bandwidth * 1e9 * BW_EFFICIENCY;
   const weights = a * 1e9 * q.bpw / 8;
-  return {empty: eff / weights, full: eff / (weights + kvGib(m, minCtx) * (1024 ** 3))};
+  const y = draftYield(m);
+  return {empty: y * eff / weights,
+          full: y * eff / (weights + kvGib(m, minCtx) * (1024 ** 3)),
+          draft: y};
 }
 
 // prefill is two flops per active weight per token and ignores attention's
@@ -765,9 +819,18 @@ const COLUMNS = [
        + ' data-help="a mixture of experts, but its config does not publish the counts">?</td>';
      return '<td class="n faint">dense</td>';
    }},
-  {k: 'ctx', t: 'context', num: true, get: m => m.facts.context_native ?? -1,
-   help: 'the context window it was trained for. what will actually fit in your vram is the column beside it',
-   cell: m => `<td class="n">${ctxLabel(m.facts.context_native) || '<span class="faint">-</span>'}</td>`},
+  {k: 'ctx', t: 'train ctx', num: true, get: m => trainCtx(m) ?? -1,
+   help: 'the window it was actually trained on. where a vendor ships a rope or yarn config the longer number is bought rather than trained, and this is the number before that',
+   cell: m => `<td class="n">${ctxLabel(trainCtx(m)) || '<span class="faint">-</span>'}</td>`},
+  {k: 'extctx', t: 'ext ctx', num: true, get: m => m.facts.context_native ?? -1,
+   help: 'how far rope or yarn scaling takes it, which is what the config reports and what llama.cpp reads out of the gguf. equal to the trained window unless the vendor ships a scaling config',
+   cell: m => {
+     const ext = m.facts.context_native, r = m.facts.rope;
+     if (!ext) return '<td class="n"><span class="faint">-</span></td>';
+     return `<td class="n${r ? ' warn' : ' dim'}"${r
+       ? ` title="${esc(r.type)} x${r.factor} over a ${ctxLabel(r.original)} trained`
+         + ' window: extrapolated, not trained"' : ''}>${ctxLabel(ext)}</td>`;
+   }},
   {k: 'fitctx', t: 'fits ctx', num: true, get: m => fitContext(m) ?? -1,
    help: 'the longest context whose kv cache still fits once the weights and the reserve are paid for, capped at what the model was trained for. needs a vram budget',
    cell: m => {
@@ -785,9 +848,17 @@ const COLUMNS = [
      // the publisher is on the operate tab, where you can act on it
      return `<td title="${esc(q.repo)}">${esc(q.quant)}</td>`;
    }},
-  {k: 'size', t: 'gib', num: true, get: m => (activeQuant(m) || {}).gib ?? -1,
-   help: 'what the weights weigh on disk. the kv cache is not included -- add the kv gib column for that',
-   cell: m => `<td class="n">${gib((activeQuant(m) || {}).gib) || '<span class="faint">-</span>'}</td>`},
+  {k: 'size', t: 'gib', num: true,
+   get: m => activeQuant(m) ? activeQuant(m).gib + draftGib(m) : -1,
+   help: 'what has to be resident before any cache: the weights at the fitted quant, plus a separate draft model where the registry pins one. an mtp or dflash head is inside the weights already. the kv cache is not included -- add the kv gib column for that',
+   cell: m => {
+     const q = activeQuant(m);
+     if (!q || q.gib === undefined) return '<td class="n"><span class="faint">-</span></td>';
+     const d = draftGib(m);
+     return `<td class="n"${d ? ` title="${gib(q.gib)} weights + ${gib(d)}`
+       + ` for the ${esc(draftKind(m) || 'draft')} model"` : ''}>${gib(q.gib + d)}`
+       + (d ? '<span class="sub"> +d</span>' : '') + '</td>';
+   }},
   {k: 'kv', t: 'kv gib', num: true, get: m => kvGib(m, minCtx),
    help: 'what the kv cache costs at the context you set. resident memory is this plus gib plus the reserve',
    cell: m => {
@@ -800,13 +871,16 @@ const COLUMNS = [
    help: 'bits per weight. the number that predicts how much the quant cost in quality',
    cell: m => `<td class="n dim">${num((activeQuant(m) || {}).bpw, 2) || '-'}</td>`},
   {k: 'tg', t: 'tg t/s', num: true, get: m => (tgTps(m) || {}).empty ?? -1,
-   help: 'estimated tokens generated per second with the cache empty: the bandwidth you set, discounted, over the active weights at the fitted quant. a second, dimmer figure appears where a full cache at your context costs more than 15% of it. arithmetic, never a measurement',
+   help: 'estimated tokens generated per second with the cache empty: the bandwidth you set, discounted, over the active weights at the fitted quant, times what speculative decoding yields where the draft head ships inside the weights. a second, dimmer figure appears where a full cache at your context costs more than 15% of it. arithmetic, never a measurement',
    cell: m => {
      const t = tgTps(m);
      if (!t) return noEstimate(bandwidth, 'set a memory bandwidth under hardware');
      const decay = t.full < t.empty * 0.85;
      return `<td class="n dim" title="${tps(t.empty)} t/s with the cache empty`
        + (minCtx ? `, ${tps(t.full)} t/s with ${ctxLabel(minCtx)} of it resident` : '')
+       + (t.draft > 1 ? `. includes x${t.draft.toFixed(2)} from ${esc(draftKind(m))}`
+         + ` drafting ${(m.speculative.n_max || 3)} tokens; without it, `
+         + `${tps(t.empty / t.draft)} t/s` : '')
        + `">~${tps(t.empty)}`
        + (decay ? `<span class="sub"> ${tps(t.full)}</span>` : '') + '</td>';
    }},
@@ -886,17 +960,22 @@ const SCALED_COLUMNS = {coding: 'aa.coding', agentic: 'aa.agentic',
 // what the page opens on: what it is and whether it fits, then how good it is.
 // the per-source scores are one click away under the gear rather than eleven
 // columns wide by default.
-const DEFAULT_ORDER = ['rank', 'short', 'kind', 'license', 'params', 'active', 'experts',
-                       'ctx', 'fitctx', 'bpw', 'repo', 'quant', 'size', 'kv', 'tg', 'pp',
-                       'think', 'evidence',
-                       'score', 'coding', 'agentic', 'gbench', 'swe', 'arena', 'langs',
-                       'bestfor', 'profiles', 'community', 'downloads', 'spec'];
-const DEFAULT_HIDDEN = ['kind', 'license', 'experts', 'ctx', 'bpw', 'repo', 'kv',
-                        'think', 'coding', 'agentic', 'gbench', 'swe', 'arena', 'langs',
-                        'bestfor', 'profiles', 'community', 'downloads', 'spec'];
-// a strix halo box, which is what this registry is sized against
-const DEFAULT_HARDWARE = {budget: 128, reserve: 0, minCtx: 131072, cap: 'q8', floor: 'none',
-                          bandwidth: 0, flops: 0};
+const DEFAULT_ORDER = ['rank', 'short', 'kind', 'repo', 'license', 'params', 'active',
+                       'experts', 'spec', 'pp', 'tg', 'ctx', 'extctx', 'fitctx',
+                       'quant', 'bpw', 'think', 'profiles', 'size', 'kv', 'evidence',
+                       'coding', 'agentic', 'gbench', 'swe', 'arena', 'score',
+                       'langs', 'bestfor', 'community', 'downloads'];
+// `pp` and `tg` are deliberately NOT here: they are gated on their hardware
+// figure instead, so choosing a bandwidth reveals one rather than leaving a
+// reader to find it under the gear
+const DEFAULT_HIDDEN = ['kind', 'repo', 'license', 'params', 'active', 'experts',
+                        'spec', 'ctx', 'extctx', 'bpw', 'think', 'profiles', 'kv',
+                        'coding', 'agentic', 'gbench', 'swe', 'arena', 'langs',
+                        'bestfor', 'community', 'downloads'];
+// a strix halo box, which is what this registry is sized against, down to what
+// it reads and computes at
+const DEFAULT_HARDWARE = {budget: 128, reserve: 2, minCtx: 131072, cap: 'q8', floor: 'none',
+                          bandwidth: 256, flops: 60};
 const DEFAULT_FLAGS = ['text', 'fits'];
 const col = k => COLUMNS.find(c => c.k === k);
 // a column of `-` reads as missing data rather than as a setting you have not
@@ -1161,12 +1240,15 @@ function reweigh() {
 
 function drawColumns() {
   const box = document.querySelector('#cols');
+  // the same explanation the column header carries, so a reader deciding
+  // whether to switch one on does not have to switch it on to find out
   box.innerHTML = order.map(k =>
     `<button draggable="true" data-k="${k}" aria-pressed="${!hidden.has(k) && available(k)}"`
-    + (available(k) ? '' : ' data-help="it estimates from a hardware figure you have'
-      + ' not set, so there is nothing to show yet"')
+    + ` data-help="${esc(available(k) ? col(k).help || ''
+      : 'it estimates from a hardware figure you have not set, so there is'
+        + ' nothing to show yet')}"`
     + `>${col(k).t}</button>`
-  ).join('') + '<span class="hint">click to show or hide &middot; drag to reorder</span>';
+  ).join('');
   box.querySelectorAll('button').forEach(b => {
     b.onclick = () => {
       const k = b.dataset.k;

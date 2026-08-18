@@ -199,31 +199,108 @@ test('the fitted quant is the largest that clears vram, cap and floor', () => {
   RESET();
 });
 
-test('speed columns appear with the setting behind them', () => {
+test('speed columns come and go with the setting behind them', () => {
   RESET();
-  ok(!shown().includes('tg'), 'no bandwidth, no tg column');
-  ok(!shown().includes('pp'), 'no compute, no pp column');
-  setHardware({bandwidth: 256, flops: 60});
-  ok(shown().includes('tg'), 'setting a bandwidth brings tg out');
-  ok(shown().includes('pp'), 'setting compute brings pp out');
+  ok(shown().includes('tg') && shown().includes('pp'),
+     'the default box has both figures, so both columns are drawn');
   ok(html('#head').includes('tg t/s'), 'and the header says so');
+  ok(!hidden.has('tg'), 'they are gated on the setting, not hidden under the gear');
+  setHardware({bandwidth: 0});
+  ok(!shown().includes('tg'), 'clearing the bandwidth takes tg away');
+  ok(shown().includes('pp'), 'and leaves pp, which reads the other setting');
+  setHardware({flops: 0});
+  ok(!shown().includes('pp'), 'clearing compute takes pp too');
+  ok(!html('#head').includes('t/s'), 'neither is in the header');
   RESET();
 });
 
 test('generation speed is bandwidth over the bytes a token reads', () => {
   RESET();
   setHardware({bandwidth: 256, flops: 60});
-  const m = model('muse glimmer'), q = activeQuant(m), t = tgTps(m);
-  near(t.empty, 256e9 * BW_EFFICIENCY / (activeB(m) * 1e9 * q.bpw / 8), 1e-6,
+  const m = model('gemma 4 31b'), q = activeQuant(m), t = tgTps(m), y = draftYield(m);
+  near(t.empty, y * 256e9 * BW_EFFICIENCY / (activeB(m) * 1e9 * q.bpw / 8), 1e-6,
        'empty-cache generation');
   near(t.full,
-       256e9 * BW_EFFICIENCY
+       y * 256e9 * BW_EFFICIENCY
          / (activeB(m) * 1e9 * q.bpw / 8 + kvGib(m, minCtx) * (1024 ** 3)),
        1e-6, 'full-cache generation');
   ok(t.full < t.empty, 'a resident cache costs something');
   near(ppTps(m), 60e12 * FLOPS_EFFICIENCY / (2 * activeB(m) * 1e9), 1e-6,
        'prefill');
+});
+
+test('drafting multiplies generation only where the head is free to read', () => {
   RESET();
+  // an mtp or dflash head is inside the weights the quant already pays for
+  const mtp = model('qwen3.6 27b');
+  eq(mtp.speculative.type, 'draft-mtp', 'the registry declares mtp');
+  ok(draftYield(mtp) > 1.9, 'so it earns a yield, got ' + draftYield(mtp).toFixed(2));
+  near(tgTps(mtp).empty / draftYield(mtp),
+       256e9 * BW_EFFICIENCY / (activeB(mtp) * 1e9 * activeQuant(mtp).bpw / 8),
+       1e-6, 'and the base underneath it is the plain read');
+
+  // dspark is a separate file in the model's repo: another read per drafted
+  // token, and no size for it here, so the speedup is not claimed
+  const sep = model('deepseek v4 flash 0731');
+  eq(sep.speculative.type, 'draft-dspark', 'deepseek drafts from a separate file');
+  eq(draftYield(sep), 1, 'so no yield is claimed for it');
+
+  ok(draftYield(model('gpt-oss-120b')) === 1, 'a model with no drafter gets none');
+});
+
+test('the yield reproduces the one measured drafting run', () => {
+  // qwen3.8 27b on a strix halo under vulkan with the mtp predictor, from
+  // MODELS.md: 16.68 / 14.24 / 12.74 t/s at UD-Q5_K_XL / Q6_K / Q8_0
+  RESET();
+  const m = model('qwen3.8 27b');
+  const eff = 256e9 * BW_EFFICIENCY;
+  [['UD-Q5_K_XL', 16.68], ['Q6_K', 14.24], ['Q8_0', 12.74]].forEach(([q, measured]) => {
+    const c = quantChoices(m).find(x => x.quant === q);
+    ok(c, q + ' is in the registry');
+    const est = draftYield(m) * eff / (activeB(m) * 1e9 * c.bpw / 8);
+    const off = Math.abs(est - measured) / measured;
+    ok(off < 0.25, q + ': estimated ' + est.toFixed(2) + ' against ' + measured
+      + ' measured, ' + (off * 100).toFixed(0) + '% off');
+  });
+});
+
+test('a separate draft model would count against vram, and none is pinned', () => {
+  RESET();
+  // the registry carries no draft_repo any more: the two it had were hand-made
+  // pairings out of llama-tools rather than anything a vendor ships
+  D.models.forEach(m => eq((m.speculative || {}).draft_repo, undefined,
+    m.short + ' pins no separate drafter'));
+  D.models.forEach(m => eq(draftGib(m), 0, m.short + ' charges nothing for one'));
+  // an mtp head is inside the weights the quant already paid for
+  eq(draftGib(model('qwen3.6 27b')), 0, 'an mtp head is not counted twice');
+  const m = model('deepseek v4 flash 0731');
+  eq(col('size').get(m), activeQuant(m).gib, 'gib is the weights alone');
+});
+
+test('latent attention is not costed as a key and a value per head', () => {
+  RESET();
+  // kimi k3, ling 3.0 flash and deepseek v4 flash all cache one compressed
+  // vector per token per layer instead
+  ['kimi k3', 'ling 3.0 flash', 'deepseek v4 flash 0731'].forEach(s => {
+    const a = model(s).facts.attn;
+    ok(a.latent > 0, s + ' declares a latent width');
+    ok(kvPerToken(a) < 2 * a.kv_heads * a.head_dim * KV_BYTES,
+       s + ' costs less than the naive geometry');
+    eq(kvPerToken(a), a.latent * KV_BYTES, s + ' is one vector, not two');
+  });
+  // ling was reading 84 gib at 128k before this
+  ok(kvGib(model('ling 3.0 flash'), 131072) < 8,
+     'ling 3.0 flash at 128k, got ' + kvGib(model('ling 3.0 flash'), 131072).toFixed(1));
+});
+
+test('the trained window is kept apart from what rope extends it to', () => {
+  RESET();
+  const g = model('gpt-oss-120b');
+  eq(trainCtx(g), 4096, 'gpt-oss was trained on 4k');
+  eq(g.facts.context_native, 131072, 'and reports 128k after scaling');
+  ok(col('extctx').cell(g).includes('title='), 'the extended cell says so');
+  const q = model('qwen3.8 27b');
+  eq(trainCtx(q), q.facts.context_native, 'a model with no scaling reads the same both ways');
 });
 
 test('a model with no published active count gets no speed estimate', () => {
@@ -357,13 +434,18 @@ test('the hardware row is remembered', () => {
   RESET();
 });
 
+// a model this budget can only run well below bf16, whichever it happens to be
+const squeezed = key => D.models.filter(m => m.facets[key] && !m.native_low_bpw)
+  .sort((a, b) => modelRetention(a) - modelRetention(b))[0];
+
 test('quant adjustment discounts a ratio scale and reranks on it', () => {
   RESET();
   setEffective(true);
-  // deepseek only fits at about 3 bits on this budget, and a coding index has
-  // a real zero, so discounting it is a statement about measured skill
-  const m = model('deepseek v4 flash 0731');
-  ok(modelRetention(m) < 0.95, 'it is discounted at the quant that fits');
+  // a coding index has a real zero, so discounting it is a statement about
+  // measured skill rather than about where a scale starts
+  const m = squeezed('aa.coding');
+  ok(modelRetention(m) < 0.95,
+     m.short + ' is discounted at the quant that fits, x' + modelRetention(m).toFixed(3));
   ok(facetValue(m, 'aa.coding') < m.facets['aa.coding'].value,
      'the coding index comes down with it');
 });
@@ -399,14 +481,15 @@ test('every facet is classified, and un-discounted ones say why', () => {
 
 test('an un-discounted facet does not move with the quant', () => {
   RESET();
-  const m = model('deepseek v4 flash 0731');
+  const m = squeezed('aa.non_hallucination');
   setEffective(false);
   const raw = facetPctRaw(m, 'aa.non_hallucination');
-  const rawCoding = facetPctRaw(m, 'aa.coding');
   setEffective(true);
   eq(facetPctRaw(m, 'aa.non_hallucination'), raw, 'hallucination is left alone');
-  ok(modelRetention(m) < 0.95, 'while this model is genuinely discounted');
-  ok(facetPctRaw(m, 'aa.coding') !== rawCoding || true, 'and coding is in scope');
+  ok(modelRetention(m) < 0.95,
+     'while ' + m.short + ' is genuinely discounted, x' + modelRetention(m).toFixed(3));
+  ok(scaledFacet('aa.coding') && !scaledFacet('aa.non_hallucination'),
+     'the two sit on opposite sides of the evidence line');
 });
 
 test('quant adjustment leaves an interval scale alone', () => {

@@ -253,6 +253,32 @@ def per_repo_templates(repos, probes, registry_thinking):
     return out
 
 
+def speculative(model, sizes):
+    """The declared drafter, with its own file size where it has one.
+
+    An mtp or dflash head ships inside the weights -- qwen3.6's -MTP- build is
+    the plain one plus 0.42gib -- so the quant already pays for it. A dspark or
+    a separate draft model is another file that has to be resident, and the
+    viewer cannot subtract it from a memory budget without its size.
+    """
+    spec = dict(model.get("speculative") or {})
+    ref = spec.get("draft_repo")
+    if not ref:
+        return spec
+    repo, _, quant = ref.partition(":")
+    have = sizes.get(repo) or {}
+    kind = (spec.get("type") or "").replace("draft-", "")
+    # the drafter's own tag first: deepseek ships it as `dspark:Q8_0` inside the
+    # model's repo, where a bare `Q8_0` lookup would find the target instead
+    for key in ("%s:%s" % (kind, quant), kind, quant):
+        if key and have.get(key):
+            spec["draft"] = {"repo": repo, "quant": key,
+                             "bytes": have[key], "gib": round(have[key] / GIB, 2)}
+            return spec
+    spec["draft_unknown"] = ref
+    return spec
+
+
 def load_script(name, path):
     """Import one of this repo's extensionless scripts as a module."""
     spec = importlib.util.spec_from_loader(
@@ -437,7 +463,7 @@ def build_model(repo, model, ctx):
         "modalities": model.get("modalities") or {},
         "facts": facts, "quants": quants,
         "components": model.get("components") or [],
-        "speculative": model.get("speculative") or {},
+        "speculative": speculative(model, ctx["sizes"]),
         "sampling": model.get("sampling") or {},
         "thinking": model.get("thinking") or {},
         "turns": model.get("turns") or {},

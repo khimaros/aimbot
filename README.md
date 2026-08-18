@@ -294,7 +294,7 @@ decode speed, which is why build-tables pins the dense models there too -- and
 `min q4` says the other end: below it the answer is "not with this much
 memory" rather than a two-bit version of the model.
 
-`best fit` in the filter row is on by default and behaves like the filter it
+`best quant` in the filter row is on by default and behaves like the filter it
 is. releasing it swaps one row per model for one row per rung, using the same
 test the fit uses so the two can never disagree about what fits -- 38 models
 become 753 rows on a 128gb box at q8. clicking any row opens the modal on the
@@ -326,9 +326,34 @@ attention on 69 of its 93 layers with only 24 holding a cache that grows at
 all. `fetch-model-facts` counts the full and windowed layers separately from
 whatever the config states -- an itemised `layer_types`, a linear-attention
 block listing its full layers, an interval -- so the number is the model's
-rather than a family guess. a model whose native window is shorter than the
-context asked for is not a fit at it: getting there means rope scaling, which
-is the consumer's call.
+rather than a family guess.
+
+**latent attention needed the same treatment and was costing three models
+between 1.8x and 24.7x too much.** multi-head latent attention caches ONE
+compressed vector per token per layer -- the kv lora projection plus the rope
+part -- rather than a key and a value per head, and `2 * kv_heads * head_dim`
+does not describe it. two spellings are read: most declare `kv_lora_rank`,
+deepseek writes the latent width as `head_dim` with a single kv head, and
+`qk_rope_head_dim` is what says the cache is split that way at all. at 128k:
+
+| model | as if per-head | latent | over |
+|---|--:|--:|--:|
+| kimi k3 | 83.2 gib | 3.4 gib | 24.7x |
+| ling 3.0 flash | 84.0 gib | 5.9 gib | 14.2x |
+| deepseek v4 flash | 10.8 gib | 6.0 gib | 1.8x |
+
+the error was always in the direction that says a model will not fit, and it
+moved answers: ling 3.0 flash was reading as AD-IQ2_S at 43.7 gib capped at
+128k context, and is now AD-Q6_K at 100 gib serving 256k.
+
+**the trained window and the extrapolated one are separate columns.** where a
+vendor ships a rope or yarn config, `max_position_embeddings` already folds the
+scaling in and hides that the long window was bought rather than trained.
+`train ctx` is what it was trained on and `ext ctx` is where scaling takes it,
+which for gpt-oss is 4k against 128k -- a factor of 32 of extrapolation. the
+fit uses the extended number, since that is what llama.cpp serves out of the
+gguf without a flag, and puts both in front of the reader rather than deciding
+for them.
 
 **how fast it will be.** set your box's bandwidth and its compute and two more
 columns appear: `tg t/s` for generation and `pp t/s` for prefill. they are two
@@ -338,8 +363,32 @@ discounted to what a box does rather than what it claims. the numbers are
 arithmetic on facts the registry already holds and nothing here has timed these
 models, so they are worth a comparison between rows and an order of magnitude,
 not a promise. generation is printed twice where the kv cache costs more than
-15% of it, which is how ling 3.0 flash's 84 gib of cache at 128k shows up as
-89 t/s empty and 1.8 full.
+15% of it.
+
+**generation counts speculative decoding, but only where drafting is free to
+read.** drafting proposes n tokens and the target verifies them in one pass,
+keeping everything up to the first rejection, so the gain is tokens per target
+pass: `1 + sum(p^k)` for k in 1..n. an mtp or dflash head ships inside the
+weights -- qwen3.6's `-MTP-` build is the plain one plus 0.42gib -- so the quant
+already paid for it, and that is the only case the yield can be claimed
+honestly. a separate drafter is another read per drafted token and another file
+resident; deepseek's `dspark` is one, this repo has no size for it, and it gets
+no speedup rather than the flattering half of the arithmetic.
+
+the registry no longer carries `draft_repo` at all. the two it had -- pairing
+qwen3.5-27b with a 0.8b gguf, and deepseek with its own repo -- came out of
+llama-tools as hand-assembled setups rather than as anything a vendor ships,
+and one of them named a repo this corpus has never captured. `type` and `n_max`
+stay, because those are properties of the model.
+
+p is one number for every model, which is the weak part. it is 0.55, the value
+that reproduces the only end-to-end measurement here: qwen3.8 27b on a strix
+halo under vulkan with the MTP predictor, 16.68 / 14.24 / 12.74 t/s at
+UD-Q5_K_XL / Q6_K / Q8_0. against the same arithmetic without drafting that is
+1.97x, 1.90x and 2.16x, and `1 + sum(0.55^k, k=1..3)` is 2.02. a test asserts
+all three stay within 25% of the measured figures. the same log reports
+acceptance between 0.546 and 0.88 on one model, so read 0.55 as the middle of a
+wide range rather than a constant.
 
 **raw or effective.** a benchmark measures the model; this roster runs a QUANT
 of it. `quant adjusted` in the ranking row is on by default, since that is the
