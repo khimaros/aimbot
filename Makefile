@@ -5,6 +5,7 @@ help:
 	@echo "to re-derive sampler provenance, run 'make samplers'"
 	@echo "to refresh published quant sweeps, run 'make curves'"
 	@echo "to rebuild the github pages viewer, run 'make site'"
+	@echo "to test the viewer end to end, run 'make test-e2e'"
 .PHONY: help
 
 lint:
@@ -50,3 +51,12 @@ usecase:
 site:
 	./scripts/build-viewer
 .PHONY: site
+
+# the page shipped, booted under node against the real data.json. it needs the
+# built docs/, so build them first rather than testing a stale copy.
+test-e2e: site
+	./tests/e2e
+.PHONY: test-e2e
+
+test: test-e2e
+.PHONY: test

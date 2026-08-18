@@ -56,16 +56,126 @@ OUT_DIR = os.path.join(ROOT, "docs")
 # roster and is not the model at all.
 NOT_A_QUANT = re.compile(r"^(mmproj|mtp|dspark|dflash|eagle3|imatrix)|\.gguf$", re.I)
 
-# what a quantization penalty does NOT apply to. every benchmark here measured
-# the model at whatever precision the scorer served, so `quant adjusted`
-# discounts all of them; the exceptions are the two kinds of number the penalty
-# does not describe. community sentiment is people talking, not a score, and
-# decode speed goes UP when you quantize rather than down.
+# WHICH FACETS THE QUANTIZATION CURVE HAS EVIDENCE FOR.
 #
-# build-tables scales only the three artificial analysis indices, so MODELS.md
-# and this page deliberately answer slightly different questions -- see the
-# methodology note in the viewer.
-UNSCALED_FACETS = ["community.", "aa.speed"]
+# there is one curve, and it is a single sweep: unsloth ran DeepSeek v3.1 at
+# eight quants on AIDER POLYGLOT and published the pass rates. that is evidence
+# about one thing -- a model writing and editing code to make a test suite pass
+# -- and this list says so instead of quietly generalising it to hallucination
+# rates, chess puzzles and creative writing.
+#
+# the line drawn is SAME FAMILY: a benchmark where the model writes code or
+# drives a tool loop to finish a software task. that is still a generalisation,
+# across benchmarks rather than within one, but it is a smaller one than the
+# generalisation this already makes across all 54 models. everything else keeps
+# its published number, marked as un-discounted with the reason, on the same
+# principle as never scoring a missing measurement as a zero: an unmeasured
+# effect is not the same as no effect, and inventing the correction is worse
+# than admitting it is unknown.
+#
+# a facet in NEITHER list is an error, not a default. that is the point: when
+# epoch adds a benchmark, somebody has to decide which side it is on rather
+# than have it silently join the discounted pile.
+QUANT_EVIDENCE = [
+    ("code", True,
+     "the curve was fitted to a code-editing pass rate, so it is evidence "
+     "about writing code and driving a tool loop through a software task",
+     ["aa.coding", "aa.agentic", "aa.terminalbench", "aa.terminalbench_hard",
+      "aa.scicode", "aa.itbench_sre",
+      "gbench.agentic", "gbench.decision", "gbench.oneshot", "gbench.overall",
+      "lang.clojure", "lang.cpp", "lang.csharp", "lang.go", "lang.java",
+      "lang.javascript", "lang.kotlin", "lang.ocaml", "lang.python",
+      "lang.rust", "lang.typescript",
+      "swerebench.resolved",
+      "epoch.aider_polyglot", "epoch.ale_bench", "epoch.algotune",
+      "epoch.deepswe", "epoch.frontiercode", "epoch.scicode",
+      "epoch.terminalbench", "epoch.webdev_arena",
+      "card.deepswe", "card.livecodebench", "card.scicode",
+      "card.swebench_pro", "card.swebench_verified", "card.terminalbench"]),
+
+    ("recall", False,
+     "knowledge recall and question answering. quantization is widely reported "
+     "to cost recall differently from reasoning, and nothing here measures it",
+     ["aa.critpt", "aa.gpqa", "aa.hle", "aa.lcr", "aa.non_hallucination",
+      "aa.omniscience", "aa.omniscience_index",
+      "epoch.critpt", "epoch.gpqa_diamond", "epoch.simpleqa_verified",
+      "epoch.simplebench",
+      "card.critpt", "card.gpqa", "card.hle", "card.mmlu", "card.mmlu_pro"]),
+
+    ("reasoning", False,
+     "maths, proof and puzzle solving. scored on a final answer rather than on "
+     "working code, and no sweep here has measured what a quant costs it",
+     ["epoch.arc_agi", "epoch.arc_agi_2", "epoch.chess_puzzles",
+      "epoch.mystery_game_puzzles", "epoch.otis_mock_aime_2024_2025",
+      "epoch.proofbench", "card.aime"]),
+
+    ("following", False,
+     "instruction following: whether it did what it was told, not how well",
+     ["aa.ifbench", "card.ifbench", "card.ifeval"]),
+
+    ("vision", False,
+     "vision. the sweep quantized a text model's weights and never touched a "
+     "vision tower, which is often left at full precision anyway",
+     ["aa.mmmu_pro", "card.mmmu", "card.mmmu_pro"]),
+
+    ("tools", False,
+     "tool use outside software: booking, banking, desktop control. the loop "
+     "is agentic but the output is not code",
+     ["aa.tau2", "aa.tau_banking", "card.tau2", "card.osworld"]),
+
+    ("longrun", False,
+     "long-horizon and economic work, where the reported failure mode is "
+     "drift over many steps rather than a wrong answer in one",
+     ["aa.analyst_agent", "aa.apex_agents", "aa.gdpval",
+      "epoch.apex_agents", "epoch.blueprint_bench_2", "epoch.cl_bench",
+      "epoch.cl_bench_life", "epoch.exploitbench", "epoch.gbaeval",
+      "epoch.gdp_pdf", "epoch.lech_mazur_writing", "epoch.metr_time_horizons",
+      "epoch.posttrainbench", "epoch.surface_evolver_bench",
+      "epoch.vending_bench_2", "epoch.weirdml", "card.gdpval"]),
+
+    ("composite", False,
+     "a composite of the others, so discounting it would apply the curve "
+     "again on top of components it does not cover",
+     ["aa.intelligence"]),
+
+    ("elo", False,
+     "an elo. a retention multiplier means `keep this fraction of the measured "
+     "quality` only where zero is no quality; an elo's zero is arbitrary, so "
+     "x0.93 on 1435 subtracts 101 points -- wider than this registry's whole "
+     "spread -- while the same multiplier on 1408 subtracts 10. scaling it "
+     "moved all 15 rated models, several by 40 to 90 percentile points",
+     ["lmarena.rating"]),
+
+    ("opinion", False,
+     "people talking, not a score",
+     ["community.hackernews", "community.hf-discussions",
+      "community.level1techs", "community.reddit-localllama"]),
+
+    ("faster", False,
+     "decode speed goes UP when you quantize, not down",
+     ["aa.speed"]),
+]
+
+SCALED_FACETS = {k for _, yes, _, keys in QUANT_EVIDENCE if yes for k in keys}
+FACET_EVIDENCE = {k: (name, why)
+                  for name, _, why, keys in QUANT_EVIDENCE for k in keys}
+
+
+def check_evidence(meta):
+    """Every facet is classified, or the build stops and says which is not."""
+    loose = sorted(k for k in meta if k not in FACET_EVIDENCE)
+    if loose:
+        raise SystemExit(
+            "!!! %d facet(s) have no quantization-evidence classification:\n    %s\n"
+            "    add each to QUANT_EVIDENCE in scripts/build-viewer -- to the "
+            "`code` group if the\n    benchmark has the model write code or "
+            "drive a tool loop through a software task,\n    and to the group "
+            "that fits otherwise. a facet is never discounted by default."
+            % (len(loose), "\n    ".join(loose)))
+    gone = sorted(k for k in FACET_EVIDENCE if k not in meta)
+    if gone:
+        print("  note: %d classified facet(s) no longer in the data: %s"
+              % (len(gone), ", ".join(gone)), file=sys.stderr)
 
 # measured degradation curves live beside the collectors as SOURCE; see that
 # file for why it is empty and what a usable entry looks like.
@@ -87,9 +197,9 @@ GIB = 2 ** 30
 # claims and epoch runs are per benchmark, and a reader wants one knob for "how
 # much do i trust what the vendor says", not eleven.
 DEFAULT_WEIGHTS = {
-    "aa.coding": 0.25, "aa.agentic": 0.25, "gbench.agentic": 0.15,
+    "aa.coding": 0.30, "aa.agentic": 0.30, "gbench.agentic": 0.15,
     "lmarena.rating": 0.10, "swerebench.resolved": 0.10,
-    "community.reddit-localllama": 0.15, "card.*": 0.05,
+    "community.reddit-localllama": 0.05, "card.*": 0.05,
 }
 
 # facet groups in the order the weighting panel lists them, with what each one
@@ -182,7 +292,12 @@ def retention_curve():
                    "file": "research/quant-curves.json"} if median else None,
         "measured": measured,
         "proxies": proxies,
-        "unscaled": UNSCALED_FACETS,
+        # an allowlist, not a blocklist: what the curve is evidence FOR, plus
+        # the reason each family is in or out, so the page can say why a number
+        # was left alone rather than just leaving it alone
+        "scaled": sorted(SCALED_FACETS),
+        "evidence": [{"name": n, "scaled": yes, "why": why, "facets": sorted(keys)}
+                     for n, yes, why, keys in QUANT_EVIDENCE],
     }
 
 
@@ -385,6 +500,8 @@ def build():
     registry = load_yaml(reg_path).get("models") or {}
     sampling = load_yaml(os.path.join(ROOT, "registry", "sampling.yaml"))
     models = [build_model(repo, m, ctx) for repo, m in sorted(registry.items())]
+    meta = facet_meta(models)
+    check_evidence(meta)
     return {
         "repo_url": GITHUB, "branch": BRANCH,
         "sampling": {"profiles": sampling.get("profiles") or {},
@@ -392,7 +509,7 @@ def build():
                      "fields": sampling.get("fields") or {}},
         "weights": DEFAULT_WEIGHTS,
         "groups": [{"name": n, "about": a} for n, a in GROUPS],
-        "facet_meta": facet_meta(models),
+        "facet_meta": meta,
         "retention": retention_curve(),
         "provenance": provenance(),
         "models": models,

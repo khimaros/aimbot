@@ -245,6 +245,12 @@ those four keys and knows llama-swap for everything else.
 `make lint` fails if the committed copy is behind the data. github pages serves
 it straight from the `docs/` folder on `master`.
 
+`make test-e2e` runs it: `tests/e2e` boots the shipped `docs/index.html` under
+node against the real `docs/data.json`, behind a dom stub thin enough that it is
+the page's own arithmetic being checked rather than a mock of it. `node --check`
+was tried first and is not enough -- it passes a stray backtick that turns half
+the file into a template literal, which reaches a reader as a blank page.
+
 it fetches ONE file, `docs/data.json`, by relative path. the raw captures are
 19mb across twenty files and half of them are yaml, so joining them in the
 browser would mean shipping a yaml parser and most of the corpus to read one
@@ -260,12 +266,18 @@ of its weights are live.
 
 the ranking is the part worth explaining. **quality is a weighted mean of
 percentiles, and the weights are yours.** the page opens on build-tables'
-composite weights -- 0.25 coding, 0.25 agentic, 0.15 gbench, 0.15 community,
-0.10 arena, 0.10 swe-rebench, 0.05 card claims, set by a redundancy analysis
-rather than by taste -- and every one of them is a slider. weight gbench to
+composite weights -- 0.30 coding, 0.30 agentic, 0.15 gbench, 0.10 arena,
+0.10 swe-rebench, 0.05 community, 0.05 card claims, set by a redundancy
+analysis rather than by taste -- and every one of them is a slider. weight gbench to
 zero if games do not persuade you. weight the forums to 1.0 if they do. the
-table re-ranks as you drag, and presets cover the obvious stances (`coding`,
-`agentic`, `measured` for third-party numbers only, `community`).
+table re-ranks as you drag.
+
+the sliders are behind `custom weights`, because most readers want a stance
+rather than sixty decisions. the stances are a dropdown in the ranking row:
+`balanced` is the composite above, and the others answer one question each --
+writing code, agentic and tool use, third-party measurement only, what people
+report. picking one replaces the weights outright, and moving any slider off a
+stance turns the dropdown to `custom weights`.
 
 **how much memory you have.** pick a vram size and a reserve, and the quant
 column, the sizes and the retention behind `effective` all switch to the
@@ -282,6 +294,28 @@ decode speed, which is why build-tables pins the dense models there too -- and
 `min q4` says the other end: below it the answer is "not with this much
 memory" rather than a two-bit version of the model.
 
+`best fit` in the filter row is on by default and behaves like the filter it
+is. releasing it swaps one row per model for one row per rung, using the same
+test the fit uses so the two can never disagree about what fits -- 38 models
+become 753 rows on a 128gb box at q8. clicking any row opens the modal on the
+quant that row was showing, out of that row's repo, rather than on whatever the
+modal would have chosen for itself.
+
+that last part needed the table and the modal to agree on which repo a model is
+read from, and they did not. where a model ships two builds the registry says
+which one can speculate -- qwen3.6-27b's plain repo is marked
+`speculative: false`, and only the `-MTP-` build carries the nextn head the
+declared drafter needs -- but the table was taking whichever repo happened to be
+listed first. both sides now share one rule, so qwen3.6-27b and qwen3.6-35b-a3b
+read from their MTP builds everywhere. a test asserts the two never disagree
+again, for every model. with `quant adjusted` on, each row
+scores at its own bits per weight, which turns the sorted table into one merged
+list of what you could actually run. it is worth reading for where it is FLAT:
+qwen3.8 27b holds the same quality from UD-Q8_K_XL at 29.3 gib down to
+UD-IQ3_XXS at 11.1, because the composite is a mean of percentiles and a 20%
+discount does not move it past anything. that is the actionable part -- do not
+pay for q8 -- and it only shows up when the ladder is on screen.
+
 **the context costs memory too, and how much is a fact about the model.** set a
 `min context` and its kv cache is computed from each model's own attention
 geometry and subtracted before anything is asked to fit. the naive
@@ -296,15 +330,39 @@ rather than a family guess. a model whose native window is shorter than the
 context asked for is not a fit at it: getting there means rope scaling, which
 is the consumer's call.
 
+**how fast it will be.** set your box's bandwidth and its compute and two more
+columns appear: `tg t/s` for generation and `pp t/s` for prefill. they are two
+settings because they are two limits -- generating a token reads every active
+weight, prefilling multiplies through them -- and the spec sheet figures are
+discounted to what a box does rather than what it claims. the numbers are
+arithmetic on facts the registry already holds and nothing here has timed these
+models, so they are worth a comparison between rows and an order of magnitude,
+not a promise. generation is printed twice where the kv cache costs more than
+15% of it, which is how ling 3.0 flash's 84 gib of cache at 128k shows up as
+89 t/s empty and 1.8 full.
+
 **raw or effective.** a benchmark measures the model; this roster runs a QUANT
-of it. the page opens on `quant adjusted`, since that is the number a local
-roster is actually asking about, and the ranking row's toggle switches back to
-`raw scores` -- exactly what the source published. `quant adjusted`
+of it. `quant adjusted` in the ranking row is on by default, since that is the
+number a local roster is actually asking about; release it and the scores are
+exactly what the source published. on, it
 discounts by the retention `research/build-tables` fits for the pinned quant's
 bits per weight. that curve is imported rather than restated, so the page and
 MODELS.md cannot disagree about what effective means. it changes the answer:
 kimi k3 runs at UD-IQ1_S, 1.71 bpw, 0.778 retention, and falls from second to
 fourth the moment you ask what you would actually get.
+
+three facets sit outside it. sentiment is people talking rather than a score
+and decode speed goes UP when you quantize, so the penalty does not describe
+either. the arena elo is out for a different reason worth stating: a retention
+multiplier means "keep this fraction of the measured quality" only where zero
+means no quality -- a pass rate, an index. an elo's zero is arbitrary, so x0.93
+on a 1435 rating subtracts 101 points, wider than the spread of this whole
+registry, while the same multiplier on 1408 subtracts 10. it was scaled here
+until it was caught reordering all 15 rated models, several by 40 to 90
+percentile points and hy3 from p93 to p0 -- sending deepseek v4 flash below
+qwen3.6 27b and qwen3.5-27b above muse glimmer, none of which was a statement
+about quantization. `tests/e2e` now asserts arena percentiles do not move with
+the quant.
 
 only the three artificial analysis indices are scaled, which is what
 build-tables scales. the other sources measured a served endpoint whose
@@ -422,8 +480,16 @@ approval and quotes. they do not measure the same thing: reddit argues about
 which model is best and the discussion tab reports whether a quant loads at
 all, which is why muse glimmer reads 73% approval on one and 0% on the other.
 the TOP-LEVEL aggregate stays reddit-only, because build-tables weights
-sentiment at 0.15 on a redundancy analysis measured against reddit alone and
-widening it would silently re-rank MODELS.md.
+sentiment on a redundancy analysis measured against reddit alone and widening
+it would silently re-rank MODELS.md.
+
+that weight is 0.05, down from 0.15, with the 0.10 moved to AA. the redundancy
+table argues the other way -- sentiment is 91% new information at 18/20
+coverage, the most independent signal here -- but independence is not accuracy.
+it is a blunt polarity lexicon read over forum sentences, where "x is better
+than y" scores positive for both, and that is not a measurement worth a sixth
+of a rank. AA is the opposite trade: one axis of evidence, run as a fixed
+harness across every model it scores.
 
 derived rather than typed: `research/fetch-model-facts` covers all 41 text
 models with arch, params, native context, mtp presence, the thinking knob and
@@ -460,13 +526,41 @@ not done yet, in the order it should happen:
    them yet; that check belongs to the consumer, and llama-tools has the TODO.
    the viewer answers the same question for a reader rather than for a config.
 
-4. memory bandwidth as a hardware setting, and estimated prefill and generation
-   tokens per second beside the quant that fits. decode is bandwidth bound --
-   bytes per token is roughly active parameters times bits per weight over 8 --
-   so the registry now carries every input it needs: active parameters, the
-   quant's bpw, and the attention geometry the prefill cost falls out of.
-   `research/build-tables --table speed` already does the decode half against a
-   fixed 160gb/s; making the bandwidth a control and showing both halves per
-   model is the remaining work.
-4. card claims cover 22 of 41 text models; gpt-oss, laguna, inkling, step and
+4. [done] memory bandwidth and compute are hardware settings, and the `tg t/s`
+   and `pp t/s` columns estimate generation and prefill from them. decode is
+   bandwidth bound and prefill is compute bound, so they read two settings
+   rather than one, and each column appears when its setting is chosen. 36 of
+   41 text models get an estimate; the rest publish no active parameter count
+   or nothing that fits the budget, and get no number rather than a guess.
+
+   the two are arithmetic, not measurement, and the discounts turning a spec
+   sheet into what a box does -- 0.65 of peak bandwidth, 0.35 of peak flops --
+   are rules of thumb. 256gb/s of strix halo through the first arrives at the
+   fixed 160gb/s `research/build-tables --table speed` uses.
+
+   generation is reported twice where it matters: decode re-reads the whole kv
+   cache every step, so the column leads with the empty-cache figure everyone
+   quotes and prints the full-cache one beside it past a 15% gap. ling 3.0
+   flash is why -- 42 full-attention layers at 32 kv heads is 84 gib of cache
+   at 128k against 5 gib of active weights, so it runs at 89 t/s empty and 1.8
+   full.
+5. card claims cover 22 of 41 text models; gpt-oss, laguna, inkling, step and
    minimax m2.7 publish no parseable benchmark table.
+6. one small proxy benchmark per evidence category, cheap enough to sweep in
+   quantbench, so each category earns its own curve instead of borrowing the
+   code one or getting nothing. `QUANT_EVIDENCE` in `scripts/build-viewer`
+   already names the categories and what each is; what it does not have is a
+   benchmark per category that runs in minutes rather than days.
+
+   this is the only way out of the current position. there is one curve, from
+   one sweep of one 671b model on one code benchmark, and everything else is
+   either extrapolated from it or honestly left alone -- 36 facets discounted,
+   57 not. a sweep per category turns that into a measurement, and it is a
+   sweep this repo can run rather than one it has to wait for somebody to
+   publish.
+
+   the curve is also fitted on a 671b model and applied to 27b ones. damage
+   scales with how little redundancy a model has, so the low rungs read
+   optimistic for small models, and both published sweeps held here are large
+   too (127b and 250b). sweeping ONE small model at several quants would settle
+   it for less compute than any of the above.

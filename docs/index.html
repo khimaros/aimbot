@@ -87,7 +87,6 @@ button[aria-pressed="true"] { color: var(--fg); border-color: var(--faint); back
 .wrow input[type=range] { width: 12rem; accent-color: var(--live); }
 .wrow .wv { width: 3rem; text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
 .wrow .cov { color: var(--faint); font-size: 11px; }
-.presets { display: flex; gap: .35rem; flex-wrap: wrap; margin-bottom: .8rem; }
 /* repo, then quant, then samplers: one labelled row each. */
 .picks { margin-bottom: .7rem; }
 .pickrow { display: flex; gap: .6rem; align-items: baseline; padding: .18rem 0; }
@@ -247,11 +246,14 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <select id="ctx" data-help="the context you need to serve. its kv cache is computed from each model's own attention geometry -- full, windowed and linear layers counted separately -- and subtracted before anything is asked to fit. a model whose native window is shorter is not a fit at all"></select>
     <select id="cap" data-help="how far up the quant ladder to go. past q8 the extra bytes buy nothing measurable and cost decode speed, so the fit stops there unless you say otherwise"></select>
     <select id="floor" data-help="how far down is still worth running. below this a model reads as not fitting rather than as a two-bit version of itself"></select>
+    <select id="bw" data-help="how fast the box reads memory, from its spec sheet. decode is bandwidth bound, so this drives the `tg t/s` column: effective bandwidth over the bytes one token reads, which is the active weights at the fitted quant plus the kv cache at your context"></select>
+    <select id="flops" data-help="what the box computes at, dense fp16, from its spec sheet. prefill is compute bound rather than bandwidth bound, so it drives the `pp t/s` column on its own: two flops per active weight per prompt token"></select>
   </div>
   <div class="controls">
     <span class="lbl">ranking</span>
-    <button id="factors-btn" aria-pressed="false" data-help="one weight per measurement, grouped by what measured it. the ranking resorts as you drag, and a model missing a factor is ranked on the ones it has rather than scored zero">factors</button>
-    <button id="eff-btn" aria-pressed="false" data-help="raw scores are what the source published. quant adjusted answers `what would i get from the quant i can actually run`: a benchmark scores the model at the precision the scorer served, so every measured score is multiplied by the retention that quant's bits per weight predict and the percentiles are recomputed against the discounted cohort. two caveats: the curve is fitted to one published sweep rather than measured per model, and sources other than artificial analysis scored an endpoint whose precision this repo does not know, so their discount is an assumption rather than a correction. community sentiment and decode speed are never discounted.">raw scores</button>
+    <select id="preset" data-help="a named set of weights. `balanced` is build-tables' composite; the others reweight toward one question. changing any weight yourself moves this to `custom weights`"></select>
+    <button id="factors-btn" aria-pressed="false" data-help="build your own weighting: one slider per measurement, grouped by what measured it. the ranking resorts as you drag, and a model missing a factor is ranked on the ones it has rather than scored zero">custom weights</button>
+    <button id="eff-btn" aria-pressed="true" data-help="off, the scores are what the source published. on, they answer `what would i get from the quant i can actually run`: a benchmark scores the model at the precision the scorer served, so the score is multiplied by the retention that quant's bits per weight predict and the percentiles are recomputed against the discounted cohort. only the coding and software-agent benchmarks are discounted, because the one sweep behind the curve measured a code-editing pass rate and nothing else -- every other number is published as-is and says why on hover. the curve itself is fitted to one model, deepseek v3.1 at 671b, and applied to all of them, which is the weakest step on this page and reads optimistic for a small model at two bits.">quant adjusted</button>
     <button id="reset" data-help="clear the weights, filters, hardware settings, columns and sort, and forget them">reset</button>
   </div>
   <div class="controls">
@@ -259,6 +261,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <input type="search" id="q" placeholder="search any column" data-help="matches the text: name, repo, architecture, registry notes, card summary, best-for, hub tags, discussed tasks and quant names. not the numeric columns">
     <select id="pub" data-help="narrow to one publisher, taken from the repo owner"></select>
     <span id="kinds" class="chips"></span>
+    <button id="ladder-btn" aria-pressed="true" data-help="on, one row per model, reading the largest quant that fits. off, one row per quant that fits, so the whole size ladder is on screen -- and with quant adjusted each row scores at its own bits per weight, which merges every model and every quant into one ranked list of what you could actually run. it stays inside the repo the registry pins, since crossing to another build changes more than the size">best fit</button>
   </div>
 
   <div class="layout">
@@ -466,8 +469,99 @@ function bestInRepo(m, repo) {
   return fits.length ? fits[fits.length - 1] : null;
 }
 
-const activeQuant = m => bestInRepo(m, (m.quants[0] || {}).repo);
+// which repo a model is READ from, in the table and in the modal alike. where a
+// model ships two builds the registry says which can speculate -- qwen3.6-27b's
+// plain repo is marked `speculative: false` and only the -MTP- one carries the
+// nextn head -- so taking whichever happened to be listed first threw that away
+// and made the row disagree with the modal it opened.
+const defaultRepo = m => {
+  const repos = [...new Set(quantChoices(m).map(c => c.repo))];
+  return repos.find(r => repoSpeculates(m, r)) || repos[0] || null;
+};
+
+// which quant a ROW is being read as. an expanded row carries its own; a model
+// row asks for the largest that fits.
+const activeQuant = m => m._q !== undefined ? m._q : bestInRepo(m, defaultRepo(m));
 const fitsBudget = m => !budget || !!activeQuant(m);
+
+// every quant in the pinned repo that clears the budget, the ceiling and the
+// floor, largest first. same filter the fit uses, without the last step that
+// picks one -- so `every quant that fits` and `the one that fits` can never
+// disagree about what fits.
+function fittingQuants(m) {
+  const q = activeQuant(m);
+  if (!q) return [];
+  const all = quantChoices(m).filter(c => c.repo === q.repo);
+  if (!budget || !all.some(c => c.gib)) return [q];
+  const room = usable() - kvGib(m, minCtx), ceiling = capBpw(), bottom = floorBpw();
+  return all.filter(c => c.gib && c.gib <= room
+    && (!c.bpw || (c.bpw <= ceiling && c.bpw >= bottom)))
+    .sort((a, b) => b.gib - a.gib);
+}
+
+// one row per model, or one per (model, quant). the expanded row inherits the
+// model rather than copying it, so every column reads the same facts and only
+// the quant differs -- and it carries its own score, because quant adjusted
+// discounts by the quant, which is the whole reason to look at the ladder.
+function expand(models) {
+  if (!allQuants) return models;
+  return models.flatMap(m => {
+    const qs = fittingQuants(m);
+    if (qs.length < 2) return [m];
+    return qs.map(q => Object.assign(Object.create(m), {_q: q, _s: null}));
+  });
+}
+
+// --- speed -------------------------------------------------------------------
+//
+// the two halves of inference are limited by two different things, so they read
+// two different settings and neither is derivable from the other. generating a
+// token reads every active weight and the whole cache once, which is bandwidth;
+// prefilling a prompt multiplies through the same weights, which is flops.
+//
+// both selects take the SPEC SHEET number, because that is what a reader knows
+// about their box, and the efficiencies below turn it into what the box does.
+// they are rules of thumb rather than measurements -- decode streams weights
+// almost perfectly, a prefill matmul lands nowhere near peak -- so the columns
+// are worth an order of magnitude and a comparison between models, not a
+// promise. 256 gb/s of strix halo through this arrives at the 160 gb/s
+// build-tables measures.
+const BW_EFFICIENCY = 0.65;
+const FLOPS_EFFICIENCY = 0.35;
+const BANDWIDTHS = [[0, 'no bandwidth'], [90, '90 gb/s dual ddr5'],
+                    [205, '205 gb/s m4 pro'], [256, '256 gb/s strix halo'],
+                    [273, '273 gb/s dgx spark'], [546, '546 gb/s m4 max'],
+                    [819, '819 gb/s m3 ultra'], [1008, '1008 gb/s rtx 4090'],
+                    [1792, '1792 gb/s rtx 5090']];
+const FLOPSES = [[0, 'no compute'], [20, '20 tflops fp16'], [60, '60 tflops strix halo'],
+                 [120, '120 tflops fp16'], [165, '165 tflops rtx 4090'],
+                 [400, '400 tflops fp16'], [990, '990 tflops rtx 5090']];
+let bandwidth = 0;
+let flops = 0;
+let allQuants = false;             // one row per model, or one per fitting quant
+
+// two bounds rather than one number. decode reads the active weights every
+// step, and the whole cache with them -- which starts empty and ends up the
+// bigger half for a model that skimped on gqa. `empty` is the figure everyone
+// quotes; `full` is what it decays to with the context you asked for resident.
+// ling 3.0 flash is the case that makes the difference worth printing: 42 full
+// attention layers at 32 kv heads is 84 gib of cache at 128k, against 5 gib of
+// active weights.
+function tgTps(m) {
+  const q = activeQuant(m), a = activeB(m);
+  if (!bandwidth || !q || !q.bpw || a === undefined) return null;
+  const eff = bandwidth * 1e9 * BW_EFFICIENCY;
+  const weights = a * 1e9 * q.bpw / 8;
+  return {empty: eff / weights, full: eff / (weights + kvGib(m, minCtx) * (1024 ** 3))};
+}
+
+// prefill is two flops per active weight per token and ignores attention's
+// quadratic term, so it reads optimistic on a long prompt. it does not depend
+// on the quant: llama.cpp dequantizes to compute either way.
+function ppTps(m) {
+  const a = activeB(m);
+  return flops && a !== undefined ? flops * 1e12 * FLOPS_EFFICIENCY / (2 * a * 1e9) : null;
+}
 
 // the curve for THIS model: its own measurement if somebody has made one, the
 // median of the measured curves once there are enough to have a middle, and
@@ -498,8 +592,22 @@ function modelRetention(m) {
   return q && q.bpw ? retention(q.bpw, m) : 1;
 }
 
-// everything measured is discounted except what the penalty does not describe
-const scaledFacet = key => !D.retention.unscaled.some(x => key.startsWith(x));
+// an ALLOWLIST: a facet is discounted only where the curve is evidence about
+// what it measures. the curve is one sweep of one model on a code-editing pass
+// rate, so it answers for code and says so about everything else. build-viewer
+// refuses to build a facet that is on neither list.
+let scaledSet = null;
+const scaledFacet = key =>
+  (scaledSet || (scaledSet = new Set(D.retention.scaled))).has(key);
+
+let evidenceOf = null;
+function whyNotScaled(key) {
+  if (!evidenceOf) {
+    evidenceOf = {};
+    D.retention.evidence.forEach(e => e.facets.forEach(k => { evidenceOf[k] = e; }));
+  }
+  return (evidenceOf[key] || {}).why || '';
+}
 const facetValue = (m, key) => m.facets[key].value
   * (scaledFacet(key) ? modelRetention(m) : 1);
 
@@ -560,13 +668,25 @@ const facetCell = (m, key, digits) => {
   if (!f) return '<td class="n faint">-</td>';
   const pct = facetPctRaw(m, key);
   const scaled = effective && scaledFacet(key) && modelRetention(m) < 1;
+  // a number left alone under `quant adjusted` says so, rather than looking
+  // like one the discount forgot
+  const held = effective && !scaledFacet(key) && modelRetention(m) < 1;
   return `<td class="n${scaled ? ' eff' : ''}"${scaled
     ? ` title="${num(f.value, digits)} raw, x${modelRetention(m).toFixed(3)} `
-      + `${curveFor(m).kind} retention at ${(activeQuant(m) || {}).bpw} bpw"` : ''}>`
+      + `${curveFor(m).kind} retention at ${(activeQuant(m) || {}).bpw} bpw"`
+    : held ? ` title="published as-is: ${esc(whyNotScaled(key))}"` : ''}>`
     + `<span class="bar" style="--w:${pct === null ? 0 : pct}%">`
     + `<span>${num(facetValue(m, key), digits)}</span></span></td>`;
 };
 const facetVal = (m, key) => m.facets[key] ? facetValue(m, key) : -1;
+
+// an arithmetic estimate never wears the certainty of a measured column: no
+// percentile bar behind it, and a `~` in front of the number
+const tps = v => v >= 100 ? String(Math.round(v)) : num(v, 1);
+const noEstimate = (on, hint) => on
+  ? '<td class="n faint" title="it publishes no active parameter count, or nothing'
+    + ' it publishes fits the budget">?</td>'
+  : `<td class="n faint" title="${esc(hint)}">-</td>`;
 
 const COLUMNS = [
   {k: 'rank', t: '#', num: true, get: m => m._rank,
@@ -574,13 +694,26 @@ const COLUMNS = [
    cell: m => `<td class="n faint">${m._rank}</td>`},
   {k: 'short', t: 'model', num: false, get: m => m.short,
    help: "the registry's name for it, and who publishes it",
-   cell: m => `<td>${esc(m.short)}<span class="sub"> ${esc(m.publisher)}</span></td>`},
+   // the quant rides along here too: with one row per quant the name repeats,
+   // and `fits quant` is a column somebody may have hidden
+   cell: m => `<td>${esc(m.short)}<span class="sub"> ${esc(m._q ? m._q.quant
+     : m.publisher)}</span></td>`},
   {k: 'score', t: 'quality', num: true, get: m => scored(m).value ?? -1,
    help: "the weighted mean of its percentiles, over the factors it was actually measured on. set the weights under factors",
    cell: m => {
      const s = scored(m);
      if (s.value === null) return '<td class="n faint" title="none of the weighted factors measured this model">-</td>';
-     return `<td class="n"><span class="bar" style="--w:${s.value}%"><span>${num(s.value, 0)}</span></span></td>`;
+     // a percentile is a rank, so it steps rather than slides: the ladder can
+     // hold one number over several rungs while the discount behind it moves
+     // the whole way. say what the discount was, so a flat column reads as
+     // "still ahead of everything" rather than as a number that never updated
+     const r = modelRetention(m), q = activeQuant(m);
+     const title = effective && r < 1 && q
+       ? ` title="${num(s.value, 1)}, scored at x${r.toFixed(3)} `
+         + `${curveFor(m).kind} retention for ${esc(q.quant)} at ${q.bpw} bpw"`
+       : ` title="${num(s.value, 1)}"`;
+     return `<td class="n"${title}><span class="bar" style="--w:${s.value}%">`
+       + `<span>${num(s.value, 0)}</span></span></td>`;
    }},
   {k: 'evidence', t: 'evidence', num: true, get: m => scored(m).have,
    help: 'how many of the weighted factors actually measured this model. 3/7 means four of them never scored it',
@@ -666,6 +799,24 @@ const COLUMNS = [
   {k: 'bpw', t: 'bpw', num: true, get: m => (activeQuant(m) || {}).bpw ?? -1,
    help: 'bits per weight. the number that predicts how much the quant cost in quality',
    cell: m => `<td class="n dim">${num((activeQuant(m) || {}).bpw, 2) || '-'}</td>`},
+  {k: 'tg', t: 'tg t/s', num: true, get: m => (tgTps(m) || {}).empty ?? -1,
+   help: 'estimated tokens generated per second with the cache empty: the bandwidth you set, discounted, over the active weights at the fitted quant. a second, dimmer figure appears where a full cache at your context costs more than 15% of it. arithmetic, never a measurement',
+   cell: m => {
+     const t = tgTps(m);
+     if (!t) return noEstimate(bandwidth, 'set a memory bandwidth under hardware');
+     const decay = t.full < t.empty * 0.85;
+     return `<td class="n dim" title="${tps(t.empty)} t/s with the cache empty`
+       + (minCtx ? `, ${tps(t.full)} t/s with ${ctxLabel(minCtx)} of it resident` : '')
+       + `">~${tps(t.empty)}`
+       + (decay ? `<span class="sub"> ${tps(t.full)}</span>` : '') + '</td>';
+   }},
+  {k: 'pp', t: 'pp t/s', num: true, get: m => ppTps(m) ?? -1,
+   help: 'estimated prompt tokens prefilled per second: the compute you set, discounted, over two flops per active weight. it ignores attention, so it reads optimistic on a long prompt',
+   cell: m => {
+     const v = ppTps(m);
+     return v === null ? noEstimate(flops, 'set a compute figure under hardware')
+       : `<td class="n dim">~${tps(v)}</td>`;
+   }},
   {k: 'coding', t: 'aa coding', num: true, get: m => facetVal(m, 'aa.coding'),
    help: 'artificial analysis coding index, one harness across every model it scores',
    cell: m => facetCell(m, 'aa.coding', 1)},
@@ -736,17 +887,24 @@ const SCALED_COLUMNS = {coding: 'aa.coding', agentic: 'aa.agentic',
 // the per-source scores are one click away under the gear rather than eleven
 // columns wide by default.
 const DEFAULT_ORDER = ['rank', 'short', 'kind', 'license', 'params', 'active', 'experts',
-                       'ctx', 'fitctx', 'bpw', 'repo', 'quant', 'size', 'kv', 'think', 'evidence',
+                       'ctx', 'fitctx', 'bpw', 'repo', 'quant', 'size', 'kv', 'tg', 'pp',
+                       'think', 'evidence',
                        'score', 'coding', 'agentic', 'gbench', 'swe', 'arena', 'langs',
                        'bestfor', 'profiles', 'community', 'downloads', 'spec'];
-const DEFAULT_HIDDEN = ['kind', 'license', 'experts', 'ctx', 'bpw', 'repo', 'kv', 'think',
-                        'coding', 'agentic', 'gbench', 'swe', 'arena', 'langs',
+const DEFAULT_HIDDEN = ['kind', 'license', 'experts', 'ctx', 'bpw', 'repo', 'kv',
+                        'think', 'coding', 'agentic', 'gbench', 'swe', 'arena', 'langs',
                         'bestfor', 'profiles', 'community', 'downloads', 'spec'];
 // a strix halo box, which is what this registry is sized against
-const DEFAULT_HARDWARE = {budget: 128, reserve: 0, minCtx: 131072, cap: 'q8', floor: 'none'};
+const DEFAULT_HARDWARE = {budget: 128, reserve: 0, minCtx: 131072, cap: 'q8', floor: 'none',
+                          bandwidth: 0, flops: 0};
 const DEFAULT_FLAGS = ['text', 'fits'];
 const col = k => COLUMNS.find(c => c.k === k);
-const shown = () => order.filter(k => !hidden.has(k));
+// a column of `-` reads as missing data rather than as a setting you have not
+// made, so the two estimates come and go with the hardware figure behind them
+// instead of being one more thing to find under the gear
+const NEEDS = {tg: () => !!bandwidth, pp: () => !!flops};
+const available = k => !NEEDS[k] || NEEDS[k]();
+const shown = () => order.filter(k => !hidden.has(k) && available(k));
 
 // --- filtering ---------------------------------------------------------------
 
@@ -792,7 +950,10 @@ function sorted(rows) {
   const out = [...rows].sort((a, b) => {
     const x = c.get(a), y = c.get(b);
     const d = c.num ? (x - y) : String(x).localeCompare(String(y));
-    return d * sort.dir || a.short.localeCompare(b.short);
+    // expanded rows of one model tie on everything the model owns, so the
+    // quant breaks it and the ladder reads largest to smallest
+    return d * sort.dir || a.short.localeCompare(b.short)
+      || ((b._q || {}).gib || 0) - ((a._q || {}).gib || 0);
   });
   return out;
 }
@@ -813,18 +974,27 @@ function tableHead() {
 }
 
 function drawTable() {
-  const rows = sorted(visible());
+  const rows = sorted(expand(visible()));
   // rank is the position in the CURRENT ranking, so it re-numbers when the
   // weights change -- that is the point of it
   rows.forEach((m, i) => { m._rank = i + 1; });
   document.querySelector('#head').innerHTML = tableHead();
   document.querySelector('#rows').innerHTML = rows.length
-    ? rows.map(m => `<tr data-repo="${esc(m.repo)}">`
-        + shown().map(k => col(k).cell(m)).join('') + '</tr>').join('')
+    ? rows.map(m => {
+        // every row carries the quant it is showing, ladder or not, so the
+        // modal opens on what was clicked rather than on what it would have
+        // chosen for itself. the repo goes with it: two builds of one model
+        // name their files identically, 0.42gib apart
+        const q = activeQuant(m);
+        return `<tr data-repo="${esc(m.repo)}"`
+          + (q ? ` data-qrepo="${esc(q.repo)}" data-quant="${esc(q.quant)}"` : '') + '>'
+          + shown().map(k => col(k).cell(m)).join('') + '</tr>';
+      }).join('')
     : `<tr><td class="empty" colspan="${shown().length}">nothing matches</td></tr>`;
   wireHeaders();
   document.querySelectorAll('#rows tr[data-repo]').forEach(tr => {
-    tr.onclick = () => openModel(tr.dataset.repo);
+    tr.onclick = () => openModel(tr.dataset.repo, null,
+      {repo: tr.dataset.qrepo, quant: tr.dataset.quant});
   });
 }
 
@@ -883,22 +1053,45 @@ function groupOf(key) {
   return (D.facet_meta[key] || {}).group || 'other';
 }
 
+// named weightings, offered in the ranking row. each is a whole answer to "what
+// is quality", so picking one REPLACES the weights rather than nudging them --
+// which is why the select falls back to `custom weights` the moment a slider
+// moves off a preset.
 const PRESETS = {
-  default: () => ({...D.weights}),
-  coding: () => ({'aa.coding': 0.4, 'gbench.oneshot': 0.2, 'swerebench.resolved': 0.25,
-                  'card.*': 0.05, 'community.reddit-localllama': 0.1}),
-  agentic: () => ({'aa.agentic': 0.4, 'aa.tau2': 0.15, 'gbench.agentic': 0.3,
-                   'community.reddit-localllama': 0.15}),
-  measured: () => {
-    // third-party measurement only: no card claims, no forum opinion
+  default: {t: 'balanced ranking', w: () => ({...D.weights})},
+  coding: {t: 'writing code', w: () => ({'aa.coding': 0.4, 'gbench.oneshot': 0.2,
+                                         'swerebench.resolved': 0.25, 'card.*': 0.05,
+                                         'community.reddit-localllama': 0.1})},
+  agentic: {t: 'agentic and tool use', w: () => ({'aa.agentic': 0.4, 'aa.tau2': 0.15,
+                                                  'gbench.agentic': 0.3,
+                                                  'community.reddit-localllama': 0.15})},
+  measured: {t: 'third-party measurement only', w: () => {
     const w = {...D.weights};
     Object.keys(w).forEach(k => { if (k.startsWith('card') || k.startsWith('community')) delete w[k]; });
     return w;
-  },
-  community: () => ({'community.reddit-localllama': 0.5, 'community.hackernews': 0.2,
-                     'community.hf-discussions': 0.2, 'community.level1techs': 0.1}),
-  clear: () => ({}),
+  }},
+  community: {t: 'what people report', w: () => ({'community.reddit-localllama': 0.5,
+                                                  'community.hackernews': 0.2,
+                                                  'community.hf-discussions': 0.2,
+                                                  'community.level1techs': 0.1})},
+  clear: {t: 'nothing weighted', w: () => ({})},
 };
+
+const sameWeights = (a, b) => {
+  const live = w => Object.keys(w).filter(k => w[k]).sort();
+  const ka = live(a), kb = live(b);
+  return ka.length === kb.length && ka.every((k, i) => kb[i] === k
+    && Math.abs(a[k] - b[k]) < 1e-9);
+};
+const presetName = () => Object.keys(PRESETS).find(p => sameWeights(W, PRESETS[p].w())) || '';
+
+function drawPreset() {
+  const cur = presetName();
+  document.querySelector('#preset').innerHTML =
+    (cur ? '' : '<option value="" selected>custom weights</option>')
+    + Object.entries(PRESETS).map(([k, p]) =>
+      `<option value="${k}"${k === cur ? ' selected' : ''}>${esc(p.t)}</option>`).join('');
+}
 
 function drawFactors() {
   const box = document.querySelector('#factors');
@@ -916,8 +1109,6 @@ function drawFactors() {
   box.innerHTML = '<div class="hint">quality is whatever you say it is. a weight of zero '
     + 'drops the factor; a model missing a factor is ranked on the ones it has, never '
     + 'scored zero for the absence.</div>'
-    + '<div class="presets">' + Object.keys(PRESETS).map(p =>
-      `<button data-preset="${p}">${p}</button>`).join('') + '</div>'
     + order.map(g => {
       const shut = folded.has(g);
       // 22 artificial analysis benchmarks and 11 languages do not all need to
@@ -957,14 +1148,12 @@ function drawFactors() {
       reweigh();
     };
   });
-  box.querySelectorAll('[data-preset]').forEach(b => {
-    b.onclick = () => { W = PRESETS[b.dataset.preset](); reweigh(); drawFactors(); };
-  });
 }
 
 function reweigh() {
   D.models.forEach(m => { m._s = null; });
   store.set('weights', W);
+  drawPreset();
   drawTable();
 }
 
@@ -973,7 +1162,10 @@ function reweigh() {
 function drawColumns() {
   const box = document.querySelector('#cols');
   box.innerHTML = order.map(k =>
-    `<button draggable="true" data-k="${k}" aria-pressed="${!hidden.has(k)}">${col(k).t}</button>`
+    `<button draggable="true" data-k="${k}" aria-pressed="${!hidden.has(k) && available(k)}"`
+    + (available(k) ? '' : ' data-help="it estimates from a hardware figure you have'
+      + ' not set, so there is nothing to show yet"')
+    + `>${col(k).t}</button>`
   ).join('') + '<span class="hint">click to show or hide &middot; drag to reorder</span>';
   box.querySelectorAll('button').forEach(b => {
     b.onclick = () => {
@@ -1094,20 +1286,35 @@ function methodology() {
     + ' are not on the gbench board at all -- that is upstream; the api publishes'
     + ' 98 models and no more.</p>')
 
-  + sec('quant adjusted',
+  + sec('quant adjusted, and what it is evidence for',
     '<p>a benchmark scores the model at the precision the scorer served. this'
-    + ' roster runs a gguf of it, so `quant adjusted` multiplies every measured'
-    + ' score by the retention the quant\'s bits per weight predict, then'
-    + ' recomputes the percentiles against the discounted cohort.</p>'
-    + '<p>the curve is fitted to unsloth\'s aider polyglot sweep of deepseek v3.1'
-    + ' -- bf16 71.6 down to 55.7 at 1 bit -- and applied to every model, which is'
-    + ' the weakest step in this page. models with natively low-bpw weights are'
-    + ' exempt, because they are not paying a quantization penalty for being'
-    + ' small. sources other than artificial analysis scored an endpoint whose'
-    + ' precision this repo does not know, so discounting them is an assumption'
-    + ' rather than a correction. sentiment and decode speed are never'
-    + ' discounted.</p>',
-    'the curve: ' + src('research/build-tables CURVE', 'research/build-tables'))
+    + ' roster runs a gguf of it, so `quant adjusted` multiplies the score by the'
+    + ' retention the quant\'s bits per weight predict, then recomputes the'
+    + ' percentiles against the discounted cohort.</p>'
+    + `<p>the curve is ONE sweep: unsloth ran deepseek v3.1 at eight quants on`
+    + ' aider polyglot -- 71.6 at bf16 down to 55.7 at one bit -- and published'
+    + ' the pass rates. that is evidence about a model writing and editing code,'
+    + ' so it is applied to the coding and software-agent benchmarks and to'
+    + ` nothing else. ${(D.retention.scaled || []).length} of`
+    + ` ${Object.keys(D.facet_meta).length} facets are discounted; the rest keep`
+    + ' their published number and say why on hover. that is the same rule as'
+    + ' never scoring a missing measurement as a zero -- an unmeasured effect is'
+    + ' not no effect, and inventing the correction is worse than admitting it'
+    + ' is unknown.</p>'
+    + '<p>two things about the curve are worth holding against it. it was fitted'
+    + ' to a 671b model and is applied unchanged to a 27b one, and quantization'
+    + ' damage is widely reported to scale with how little redundancy a model'
+    + ' has -- so the low rungs read optimistic for small models, and the two'
+    + ' published sweeps this repo does hold are also of large models (127b and'
+    + ' 250b). and it is nearly flat above q4: 0.974 at 4.72 bpw, 0.987 at 5.77.'
+    + ' both proxy sweeps agree on that shape -- solar open2\'s perplexity moves'
+    + ' 0.9% from 6.57 to 4.35 bpw and then 87% by 1.93 -- so the flatness is'
+    + ' corroborated even where the depth is not.</p>'
+    + '<p>models with natively low-bpw weights are exempt: they are not paying a'
+    + ' quantization penalty for being small.</p>',
+    'the curve: ' + src('research/build-tables CURVE', 'research/build-tables')
+    + ' &middot; the classification: '
+    + src('scripts/build-viewer QUANT_EVIDENCE', 'scripts/build-viewer'))
 
   + sec('memory',
     '<p>the quant shown is the largest that fits in the vram you set, once the'
@@ -1120,6 +1327,31 @@ function methodology() {
     + ' not a fit at it: getting there means rope scaling, which is the'
     + ' consumer\'s call.</p>',
     src('research/fetch-model-facts', 'research/fetch-model-facts'))
+
+  + sec('speed is estimated, not measured',
+    '<p>the two speed columns are arithmetic on your own hardware settings, and'
+    + ' nothing in this repo has timed these models. generating a token reads'
+    + ' every active weight at the fitted quant, so `tg t/s` is bandwidth over'
+    + ' that; prefilling multiplies through the same weights, so `pp t/s` is'
+    + ' compute over two flops per active weight and ignores attention, which'
+    + ' makes it optimistic on a long prompt.</p>'
+    + '<p>decode also re-reads the whole kv cache every step, which starts empty'
+    + ' and ends up the bigger half for a model that skimped on grouped-query'
+    + ' attention. the column leads with the empty-cache figure, because that is'
+    + ' the one anybody quotes, and prints the full-cache figure beside it when'
+    + ' the difference is worth more than 15%. ling 3.0 flash is the case that'
+    + ' makes it worth printing: 42 full-attention layers at 32 kv heads is 84'
+    + ' gib of cache at 128k against 5 gib of active weights, so it runs fast'
+    + ' empty and crawls full.</p>'
+    + `<p>both selects take the spec sheet figure and discount it: ${BW_EFFICIENCY}`
+    + ` of peak bandwidth, ${FLOPS_EFFICIENCY} of peak flops. those two are rules`
+    + ' of thumb, not measurements -- decode streams weights nearly perfectly'
+    + ' while a prefill matmul lands nowhere near peak. read the columns as an'
+    + ' order of magnitude and as a comparison between models. a model that'
+    + ' publishes no active parameter count gets no estimate rather than a'
+    + ' guess.</p>',
+    'the same arithmetic, against a fixed 160 gb/s: '
+    + src('research/build-tables --table speed', 'research/build-tables'))
 
   + sec('sentiment',
     '<p>mentions are counted per sentence, not per comment, so a comment naming'
@@ -1179,8 +1411,9 @@ function drawDoc() {
 
 // the model AND the tab live in the hash, so a link can point at the operate
 // tab of one model rather than at the page and a set of instructions
-function openModel(repo, want) {
+function openModel(repo, want, pick) {
   if (repo !== openRepo) ops = {runtime: null, repo: null, quant: null, profile: null};
+  if (pick && pick.quant) { ops.repo = pick.repo || null; ops.quant = pick.quant; }
   openRepo = repo;
   tab = want || tab;
   location.hash = 'model=' + encodeURIComponent(repo) + '&tab=' + tab;
@@ -1767,10 +2000,8 @@ const repoSpeculates = (m, repo) =>
 function pickedRepo(m) {
   const repos = repoChoices(m);
   if (repos.includes(ops.repo)) return ops.repo;
-  // where a model's repos differ on it, the one that CAN speculate is the
-  // default: the two builds are the same weights 0.42gib apart, and picking
-  // the plain one silently gives up the drafter the registry declares
-  return repos.find(r => repoSpeculates(m, r)) || repos[0] || null;
+  const pref = defaultRepo(m);
+  return repos.includes(pref) ? pref : repos[0] || null;
 }
 
 function pickedQuant(m) {
@@ -1949,6 +2180,11 @@ function drawChrome() {
     + (c ? `min ${ctxLabel(c)} context` : 'any context') + '</option>').join('');
   document.querySelector('#floor').innerHTML = FLOORS.map(([k, , label]) =>
     `<option value="${k}"${k === floor ? ' selected' : ''}>${label}</option>`).join('');
+  document.querySelector('#bw').innerHTML = BANDWIDTHS.map(([v, label]) =>
+    `<option value="${v}"${v === bandwidth ? ' selected' : ''}>${label}</option>`).join('');
+  document.querySelector('#flops').innerHTML = FLOPSES.map(([v, label]) =>
+    `<option value="${v}"${v === flops ? ' selected' : ''}>${label}</option>`).join('');
+  drawPreset();
 
   const pubs = [...new Set(D.models.map(m => m.publisher))].sort();
   document.querySelector('#pub').innerHTML = '<option value="">every publisher</option>'
@@ -1997,13 +2233,10 @@ function boot(payload) {
   const f = store.get('filters', null);
   filters = {q: (f || {}).q || '', kind: new Set(), pub: (f || {}).pub || '',
              flags: new Set(f ? f.flags || [] : DEFAULT_FLAGS)};
-  budget = store.get('budget', DEFAULT_HARDWARE.budget);
-  reserve = store.get('reserve', DEFAULT_HARDWARE.reserve);
-  cap = store.get('cap', DEFAULT_HARDWARE.cap);
-  minCtx = store.get('minCtx', DEFAULT_HARDWARE.minCtx);
-  floor = store.get('floor', DEFAULT_HARDWARE.floor);
+  Object.entries(DEFAULT_HARDWARE).forEach(([k, v]) => HW_SET[k](store.get(k, v)));
 
   drawChrome();
+  setLadder(store.get('allQuants', false));
   setEffective(store.get('effective', true));
   drawFactors();
   drawColumns();
@@ -2017,40 +2250,55 @@ function setEffective(on) {
   pctCache = null;
   D.models.forEach(m => { m._s = null; });
   effBtn().setAttribute('aria-pressed', on ? 'true' : 'false');
-  effBtn().textContent = on ? 'quant adjusted' : 'raw scores';
   store.set('effective', on);
   drawTable();
   if (openRepo) drawModal(true);
 }
 effBtn().onclick = () => setEffective(!effective);
 
-function setBudget(gib, held, ceiling, ctx, bottom) {
-  budget = gib > 0 ? gib : null;
-  reserve = held;
-  cap = ceiling;
-  minCtx = ctx;
-  floor = bottom;
+const ladderBtn = () => document.querySelector('#ladder-btn');
+// it lives with the filters and behaves like one: pressed is the narrower
+// table, and releasing it lets the rest of each model's ladder through
+function setLadder(on) {
+  allQuants = on;
+  ladderBtn().setAttribute('aria-pressed', on ? 'false' : 'true');
+  store.set('allQuants', on);
+  drawTable();
+}
+ladderBtn().onclick = () => setLadder(!allQuants);
+
+// one setter for the whole hardware row: each control names the one key it
+// owns, so adding a setting is a line here and a line in the markup rather than
+// a wider positional signature at six call sites.
+const HW_GET = {budget: () => budget, reserve: () => reserve, cap: () => cap,
+                minCtx: () => minCtx, floor: () => floor,
+                bandwidth: () => bandwidth, flops: () => flops};
+const HW_SET = {
+  budget: v => { budget = v > 0 ? v : null; },
+  reserve: v => { reserve = v; }, cap: v => { cap = v; },
+  minCtx: v => { minCtx = v; }, floor: v => { floor = v; },
+  bandwidth: v => { bandwidth = v; }, flops: v => { flops = v; },
+};
+
+function setHardware(patch) {
+  Object.entries(patch).forEach(([k, v]) => {
+    HW_SET[k](v);
+    store.set(k, HW_GET[k]());
+  });
   pctCache = null;
   D.models.forEach(m => { m._s = null; });
-  store.set('budget', budget);
-  store.set('reserve', reserve);
-  store.set('cap', cap);
-  store.set('minCtx', minCtx);
-  store.set('floor', floor);
+  drawColumns();
   drawTable();
   if (openRepo) drawModal(true);
 }
-const hw = () => [budget, reserve, cap, minCtx, floor];
-document.querySelector('#ram').onchange = e =>
-  setBudget(+e.target.value, reserve, cap, minCtx, floor);
-document.querySelector('#reserve').onchange = e =>
-  setBudget(budget, +e.target.value, cap, minCtx, floor);
-document.querySelector('#cap').onchange = e =>
-  setBudget(budget, reserve, e.target.value, minCtx, floor);
-document.querySelector('#ctx').onchange = e =>
-  setBudget(budget, reserve, cap, +e.target.value, floor);
-document.querySelector('#floor').onchange = e =>
-  setBudget(budget, reserve, cap, minCtx, e.target.value);
+
+[['#ram', 'budget', true], ['#reserve', 'reserve', true], ['#cap', 'cap', false],
+ ['#ctx', 'minCtx', true], ['#floor', 'floor', false],
+ ['#bw', 'bandwidth', true], ['#flops', 'flops', true],
+].forEach(([sel, key, numeric]) => {
+  document.querySelector(sel).onchange = e =>
+    setHardware({[key]: numeric ? +e.target.value : e.target.value});
+});
 
 function saveFilters() {
   store.set('filters', {q: filters.q, pub: filters.pub, flags: [...filters.flags]});
@@ -2065,6 +2313,12 @@ document.querySelector('#pub').onchange = e => {
   filters.pub = e.target.value;
   saveFilters();
   drawTable();
+};
+document.querySelector('#preset').onchange = e => {
+  if (!e.target.value) return;
+  W = PRESETS[e.target.value].w();
+  reweigh();
+  drawFactors();
 };
 ['factors', 'cols'].forEach(id => {
   const btn = document.querySelector('#' + id + '-btn');
@@ -2083,18 +2337,13 @@ document.querySelector('#reset').onclick = () => {
   folded = new Set(allGroups());
   order = [...DEFAULT_ORDER];
   sort = {k: 'score', dir: -1};
-  budget = DEFAULT_HARDWARE.budget;
-  reserve = DEFAULT_HARDWARE.reserve;
-  cap = DEFAULT_HARDWARE.cap;
-  minCtx = DEFAULT_HARDWARE.minCtx;
-  floor = DEFAULT_HARDWARE.floor;
-  ['weights', 'hidden', 'order', 'sort', 'budget', 'reserve', 'cap', 'minCtx',
-   'floor', 'folded', 'effective', 'filters']
+  Object.entries(DEFAULT_HARDWARE).forEach(([k, v]) => HW_SET[k](v));
+  ['weights', 'hidden', 'order', 'sort', 'folded', 'effective', 'filters', 'allQuants']
+    .concat(Object.keys(DEFAULT_HARDWARE))
     .forEach(k => localStorage.removeItem('aim-' + k));
-  document.querySelector('#q').value = '';
-  document.querySelector('#pub').value = '';
-  document.querySelectorAll('[data-flag]').forEach(b => b.setAttribute('aria-pressed', 'false'));
-  drawFactors(); drawColumns(); drawTable();
+  // drawChrome rebuilds every control from the state just restored, which is
+  // also how the default filters come back pressed rather than looking off
+  drawChrome(); setLadder(false); drawFactors(); drawColumns(); drawTable();
 };
 document.querySelector('#m-close').onclick = closeModel;
 document.querySelector('#modal').onclick = e => { if (e.target.id === 'modal') closeModel(); };

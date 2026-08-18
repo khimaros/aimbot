@@ -115,26 +115,26 @@ fits a 105gib weight budget** rather than at full precision.
 
 | model | score | quant | size (gib) | eff coding | eff agentic | gbench | arena | swe-reb | sentiment | card | data | (eff II) |
 |---|--:|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| deepseek v4 flash 0731 | **84.3** | UD-IQ3_XXS | 97.1 | 63.6 | 44.5 | 0.585 | 1435 | 38.5 | 4.8 | 68 | 7/7 | 47.6 |
+| deepseek v4 flash 0731 | **84.9** | UD-IQ3_XXS | 97.1 | 63.6 | 44.5 | 0.585 | 1435 | 38.5 | 4.8 | 68 | 7/7 | 47.6 |
 | qwen3.8 27b | **82.6** | Q8_0 | 27.1 | 67.4 | 50.4 | - | - | - | 5.7 | 80 | 4/7 | 51.5 |
-| minimax m2.7 | **64.5** | UD-IQ4_NL | 103.1 | 50.6 | 24.9 | 0.459 | 1416 | 51.8 | 4.7 | - | 6/7 | 37.4 |
-| qwen3.6 27b | **63.1** | Q8_0 | 27.1 | 53.2 | 27.2 | 0.452 | - | 34.3 | 4.8 | 78 | 6/7 | 37.3 |
-| hy3 | **57.7** | Q2_K_XL-mtp | 94.6 | 51.7 | 27.6 | - | 1457 | - | 4.1 | - | 4/7 | 37.1 |
-| muse glimmer | **53.2** | Q8_0 | 27.6 | 48.5 | 22.7 | - | 1426 | - | 5.1 | - | 4/7 | 34.7 |
-| inkling small | **52.9** | UD-IQ3_S | 100.1 | 49.9 | 30.1 | - | - | - | 3.2 | - | 3/7 | 38.8 |
+| minimax m2.7 | **61.5** | UD-IQ4_NL | 103.1 | 50.6 | 24.9 | 0.459 | 1416 | 51.8 | 4.7 | - | 6/7 | 37.4 |
+| qwen3.6 27b | **60.5** | Q8_0 | 27.1 | 53.2 | 27.2 | 0.452 | - | 34.3 | 4.8 | 78 | 6/7 | 37.3 |
+| hy3 | **56.4** | Q2_K_XL-mtp | 94.6 | 51.7 | 27.6 | - | 1457 | - | 4.1 | - | 4/7 | 37.1 |
+| inkling small | **53.4** | UD-IQ3_S | 100.1 | 49.9 | 30.1 | - | - | - | 3.2 | - | 3/7 | 38.8 |
 | ling 3.0 flash | **52.9** | AD-Q6_K | 100.1 | 50.1 | 29.0 | - | - | - | 3.4 | - | 3/7 | 37.4 |
-| mimo v2.5 | **50.7** | UD-Q2_K_XL | 95.9 | 49.2 | 21.2 | 0.400 | 1434 | - | 3.1 | - | 5/7 | 33.0 |
-| qwen3.5 122b a10b | **47.5** | UD-Q6_K_XL | 104.7 | 45.2 | 21.0 | - | 1417 | - | 4.3 | 77 | 5/7 | 32.5 |
-| solar open2 250b | **47.0** | Q2_K | 88.9 | 41.5 | 25.8 | - | - | - | - | - | 2/7 | 34.8 |
-| qwen3.6 35b a3b | **42.7** | Q8_0 | 35.2 | 41.5 | 21.4 | 0.271 | - | 30.1 | 4.0 | 71 | 6/7 | 31.8 |
-| step 3.7 flash | **39.4** | UD-IQ4_NL | 90.6 | 38.1 | 20.9 | 0.322 | - | - | 2.5 | - | 4/7 | 29.7 |
-| qwen3 coder next | **38.2** | Q8_0 | 79.0 | 35.9 | 8.8 | - | - | 47.7 | 3.7 | - | 4/7 | 21.1 |
-| mistral medium 3.5 | **37.4** | UD-Q6_K_XL | 101.7 | 46.4 | 19.0 | 0.298 | 1427 | - | 0.9 | - | 5/7 | 30.0 |
-| gemma 4 31b | **34.7** | UD-Q8_K_XL | 32.6 | 43.1 | 14.3 | 0.145 | 1451 | 22.4 | 3.4 | 81 | 7/7 | 29.4 |
-| gemma 4 26b a4b | **32.8** | Q8_0 | 25.0 | 38.9 | 10.9 | 0.126 | 1438 | - | 3.8 | 73 | 6/7 | 25.8 |
-| nemotron 3.5 lightning | **27.4** | Q8_0 | 32.6 | 26.5 | 13.7 | - | - | - | - | 35 | 3/7 | 23.4 |
-| gpt-oss-120b | **18.5** | UD-Q8_K_XL | 60.0 | 30.4 | 13.4 | 0.131 | 1352 | 26.8 | 3.6 | - | 6/7 | 24.1 |
-| nemotron 3 super | **15.8** | UD-Q5_K_XL | 100.2 | 37.3 | 8.7 | 0.197 | 1360 | - | 0.9 | 59 | 6/7 | 25.4 |
+| mimo v2.5 | **50.4** | UD-Q2_K_XL | 95.9 | 49.2 | 21.2 | 0.400 | 1434 | - | 3.1 | - | 5/7 | 33.0 |
+| muse glimmer | **49.0** | Q8_0 | 27.6 | 48.5 | 22.7 | - | 1426 | - | 5.1 | - | 4/7 | 34.7 |
+| solar open2 250b | **45.1** | Q2_K | 88.9 | 41.5 | 25.8 | - | - | - | - | - | 2/7 | 34.8 |
+| qwen3.5 122b a10b | **44.3** | UD-Q6_K_XL | 104.7 | 45.2 | 21.0 | - | 1417 | - | 4.3 | 77 | 5/7 | 32.5 |
+| mistral medium 3.5 | **40.9** | UD-Q6_K_XL | 101.7 | 46.4 | 19.0 | 0.298 | 1427 | - | 0.9 | - | 5/7 | 30.0 |
+| qwen3.6 35b a3b | **39.8** | Q8_0 | 35.2 | 41.5 | 21.4 | 0.271 | - | 30.1 | 4.0 | 71 | 6/7 | 31.8 |
+| step 3.7 flash | **38.8** | UD-IQ4_NL | 90.6 | 38.1 | 20.9 | 0.322 | - | - | 2.5 | - | 4/7 | 29.7 |
+| qwen3 coder next | **33.7** | Q8_0 | 79.0 | 35.9 | 8.8 | - | - | 47.7 | 3.7 | - | 4/7 | 21.1 |
+| gemma 4 31b | **32.3** | UD-Q8_K_XL | 32.6 | 43.1 | 14.3 | 0.145 | 1451 | 22.4 | 3.4 | 81 | 7/7 | 29.4 |
+| gemma 4 26b a4b | **28.8** | Q8_0 | 25.0 | 38.9 | 10.9 | 0.126 | 1438 | - | 3.8 | 73 | 6/7 | 25.8 |
+| nemotron 3.5 lightning | **22.3** | Q8_0 | 32.6 | 26.5 | 13.7 | - | - | - | - | 35 | 3/7 | 23.4 |
+| nemotron 3 super | **16.9** | UD-Q5_K_XL | 100.2 | 37.3 | 8.7 | 0.197 | 1360 | - | 0.9 | 59 | 6/7 | 25.4 |
+| gpt-oss-120b | **14.2** | UD-Q8_K_XL | 60.0 | 30.4 | 13.4 | 0.131 | 1352 | 26.8 | 3.6 | - | 6/7 | 24.1 |
 
 **read `data` before the score.** it is how many of the seven components were
 actually measured; the rest are imputed at the set median. that keeps a model
@@ -432,10 +432,10 @@ evidence that removing the double-count was right:
 |---|---|
 | default | deepseek v4 flash 0731 > **qwen3.8 27b** > minimax m2.7 > qwen3.6 27b |
 | the old weights (gbench 0.35, no arena/swe-reb) | deepseek v4 flash 0731 > **qwen3.8 27b** > qwen3.6 27b > minimax m2.7 |
-| coding-focused (0.45) | qwen3.8 27b > **deepseek v4 flash 0731** > minimax m2.7 > qwen3.6 27b |
-| agentic-focused (0.45) | qwen3.8 27b > **deepseek v4 flash 0731** > minimax m2.7 > qwen3.6 27b |
+| coding-focused (0.45) | deepseek v4 flash 0731 > **qwen3.8 27b** > minimax m2.7 > qwen3.6 27b |
+| agentic-focused (0.45) | deepseek v4 flash 0731 > **qwen3.8 27b** > minimax m2.7 > qwen3.6 27b |
 | swe-rebench-heavy (0.25) | deepseek v4 flash 0731 > **qwen3.8 27b** > minimax m2.7 > qwen3.6 27b |
-| arena-heavy (0.25) | deepseek v4 flash 0731 > **qwen3.8 27b** > qwen3.6 27b > minimax m2.7 |
+| arena-heavy (0.25) | deepseek v4 flash 0731 > **qwen3.8 27b** > qwen3.6 27b > hy3 |
 | sentiment dropped | deepseek v4 flash 0731 > **qwen3.8 27b** > minimax m2.7 > qwen3.6 27b |
 
 **the top two swap on which capability you weight, and nothing else moves
@@ -532,21 +532,21 @@ be extrapolation.
 | minimax m2.7 | 50.6 | 24.9 | 55.4 | 9.9 | 33.0 | 0.8 |
 | qwen3.6 27b | 53.2 | 27.2 | 60.7 | 16.7 | 32.0 | -20.0 |
 | hy3 | 51.7 | 27.6 | 64.4 | 22.9 | 35.7 | -18.5 |
-| muse glimmer | 48.5 | 22.7 | 51.7 | 23.5 | 22.7 | -32.9 |
 | inkling small | 49.9 | 30.1 | 55.1 | 18.8 | 38.4 | -8.9 |
 | ling 3.0 flash | 50.1 | 29.0 | 55.4 | 27.2 | 30.4 | -17.9 |
 | mimo v2.5 | 49.2 | 21.2 | 63.7 | 8.7 | 32.5 | -9.8 |
-| qwen3.5 122b a10b | 45.2 | 21.0 | 47.6 | 15.3 | 24.4 | -41.5 |
+| muse glimmer | 48.5 | 22.7 | 51.7 | 23.5 | 22.7 | -32.9 |
 | solar open2 250b | 41.5 | 25.8 | 44.2 | 21.6 | 31.1 | -1.8 |
+| qwen3.5 122b a10b | 45.2 | 21.0 | 47.6 | 15.3 | 24.4 | -41.5 |
+| mistral medium 3.5 | 46.4 | 19.0 | 50.6 | 15.1 | 21.7 | -36.8 |
 | qwen3.6 35b a3b | 41.5 | 21.4 | 44.9 | 9.3 | 27.8 | -22.2 |
 | step 3.7 flash | 38.1 | 20.9 | 39.3 | 12.0 | 25.9 | -37.3 |
 | qwen3 coder next | 35.9 | 8.8 | 38.2 | 5.4 | 10.8 | -62.4 |
-| mistral medium 3.5 | 46.4 | 19.0 | 50.6 | 15.1 | 21.7 | -36.8 |
 | gemma 4 31b | 43.1 | 14.3 | 43.4 | 14.8 | 15.5 | -47.9 |
 | gemma 4 26b a4b | 38.9 | 10.9 | 39.0 | 12.0 | 13.4 | -50.8 |
 | nemotron 3.5 lightning | 26.5 | 13.7 | 24.3 | 8.9 | 16.2 | -17.7 |
-| gpt-oss-120b | 30.4 | 13.4 | 26.2 | 12.8 | 15.0 | -49.2 |
 | nemotron 3 super | 37.3 | 8.7 | 38.6 | 10.3 | 9.9 | -41.5 |
+| gpt-oss-120b | 30.4 | 13.4 | 26.2 | 12.8 | 15.0 | -49.2 |
 
 adjusting changes who wins at coding. **qwen3.8 27b takes coding at 67.4 and
 agentic at 50.4**, both from a 27.1gib file that gives up 1% to the quantizer,
@@ -940,21 +940,21 @@ model over a terse correct one.
 | minimax m2.7 | 3 | 1416 | 58,418 | 1397 |
 | qwen3.6 27b | 4 | - | - | - |
 | hy3 | 5 | 1457 | 4,664 | 1522 |
-| muse glimmer | 6 | 1426 | 3,733 | 1359 |
-| inkling small | 7 | - | - | - |
-| ling 3.0 flash | 8 | - | - | - |
-| mimo v2.5 | 9 | 1434 | 44,647 | 1438 |
-| qwen3.5 122b a10b | 10 | 1417 | 28,449 | 1358 |
-| solar open2 250b | 11 | - | - | - |
-| qwen3.6 35b a3b | 12 | - | - | - |
-| step 3.7 flash | 13 | - | - | - |
-| qwen3 coder next | 14 | - | - | - |
-| mistral medium 3.5 | 15 | 1427 | 11,022 | 1265 |
+| inkling small | 6 | - | - | - |
+| ling 3.0 flash | 7 | - | - | - |
+| mimo v2.5 | 8 | 1434 | 44,647 | 1438 |
+| muse glimmer | 9 | 1426 | 3,733 | 1359 |
+| solar open2 250b | 10 | - | - | - |
+| qwen3.5 122b a10b | 11 | 1417 | 28,449 | 1358 |
+| mistral medium 3.5 | 12 | 1427 | 11,022 | 1265 |
+| qwen3.6 35b a3b | 13 | - | - | - |
+| step 3.7 flash | 14 | - | - | - |
+| qwen3 coder next | 15 | - | - | - |
 | gemma 4 31b | 16 | 1451 | 5,899 | 1364 |
 | gemma 4 26b a4b | 17 | 1438 | 5,812 | 1362 |
 | nemotron 3.5 lightning | 18 | - | - | - |
-| gpt-oss-120b | 19 | 1352 | 30,775 | - |
-| nemotron 3 super | 20 | 1360 | 7,536 | - |
+| nemotron 3 super | 19 | 1360 | 7,536 | - |
+| gpt-oss-120b | 20 | 1352 | 30,775 | - |
 
 **it is a component at 0.10, and the reason it is not more is coverage.** nine
 of the twenty are not on the board at all, including qwen3.6 27b -- the model

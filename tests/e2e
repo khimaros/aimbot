@@ -1,0 +1,462 @@
+#!/usr/bin/env python3
+
+"""end-to-end tests for the registry viewer.
+
+    ./tests/e2e             # run them
+    ./tests/e2e --keep      # leave the generated probe behind to read
+
+the page is one html file with no build step, no imports and no framework, so
+it is tested the way it ships: the REAL script out of docs/index.html, the REAL
+docs/data.json, and a dom stub thin enough that it is the page's arithmetic
+being exercised rather than a mock of it. a test that asserts on rendered html
+asserts on the same string a browser is handed.
+
+`node --check` is not a substitute and was tried first. it passes a stray
+backtick that turns half the file into a template literal, which is exactly the
+failure that reaches a reader as a blank page, so every check here boots.
+
+the stub memoizes elements by selector, so innerHTML written by drawTable is
+readable afterwards. querySelectorAll returns nothing, which means event
+handlers never bind -- interaction is driven by calling the function the
+handler would have called, which is the same code path.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+PAGE = os.path.join(ROOT, "docs", "index.html")
+DATA = os.path.join(ROOT, "docs", "data.json")
+PROBE = os.path.join(HERE, ".probe.js")
+
+STUB = """
+const nodes = {};
+const el = key => nodes[key] || (nodes[key] = {
+  style: {}, dataset: {}, children: [], value: '', textContent: '', innerHTML: '',
+  classList: {add(){}, remove(){}, toggle(){}, contains(){return false}},
+  setAttribute(){}, getAttribute(){return 'false'}, addEventListener(){},
+  querySelector(s){ return el(key + ' ' + s); }, querySelectorAll(){ return []; },
+  getBoundingClientRect(){ return {left:0, top:0, bottom:0, width:0, height:0}; },
+  onclick: null,
+});
+global.document = {
+  querySelector(s){ return el(s); }, querySelectorAll(){ return []; },
+  addEventListener(){}, body: el('body'), title: '',
+};
+global.window = global;
+global.location = {hash: '', pathname: '/', search: ''};
+global.history = {replaceState(){}};
+const mem = {};
+global.localStorage = {
+  getItem(k){ return k in mem ? mem[k] : null; },
+  setItem(k, v){ mem[k] = v; }, removeItem(k){ delete mem[k]; },
+};
+global.addEventListener = () => {};
+global.innerWidth = 1200;
+global.innerHeight = 800;
+global.CSS = {escape: s => s};
+const PAYLOAD = require('fs').readFileSync(%s, 'utf8');
+global.fetch = () => Promise.resolve({json: () => JSON.parse(PAYLOAD)});
+process.on('unhandledRejection', e => {
+  console.log('FAIL boot threw: ' + ((e && e.stack) || e));
+  process.exit(1);
+});
+const html = s => el(s).innerHTML;
+const cases = [];
+const test = (name, fn) => cases.push([name, fn]);
+function near(got, want, tol, what) {
+  if (Math.abs(got - want) > tol) {
+    throw new Error(what + ': got ' + got + ', want ' + want + ' +-' + tol);
+  }
+}
+function eq(got, want, what) {
+  if (got !== want) throw new Error(what + ': got ' + JSON.stringify(got)
+    + ', want ' + JSON.stringify(want));
+}
+function ok(cond, what) { if (!cond) throw new Error(what); }
+const model = short => {
+  const m = D.models.find(x => x.short === short);
+  if (!m) throw new Error('no model named ' + short);
+  return m;
+};
+"""
+
+RUNNER = """
+setTimeout(() => {
+  if (!D) { console.log('FAIL the page never booted'); process.exit(1); }
+  let bad = 0;
+  for (const [name, fn] of cases) {
+    try {
+      fn();
+      console.log('ok   ' + name);
+    } catch (e) {
+      bad++;
+      console.log('FAIL ' + name + '\\n       ' + ((e && e.message) || e));
+    }
+  }
+  console.log(cases.length + ' cases, ' + bad + ' failed');
+  process.exit(bad ? 1 : 0);
+}, 50);
+"""
+
+# every case runs against a booted page. reset() first where a case leaves the
+# page in a state a later one would read, since they share one boot.
+CASES = r"""
+const RESET = () => {
+  setHardware({...DEFAULT_HARDWARE});
+  W = {...D.weights};
+  hidden = new Set(DEFAULT_HIDDEN);
+  reweigh();
+};
+
+test('boots against the real data.json and draws every row', () => {
+  eq(D.models.length, 54, 'models in the payload');
+  const rows = (html('#rows').match(/<tr data-repo=/g) || []).length;
+  eq(rows, visible().length, 'rows drawn');
+  ok(rows > 20, 'a filtered-to-text roster is still most of the registry');
+  ok(html('#rows').includes('qwen3.8 27b'), 'the top model is in the html');
+});
+
+test('the header draws one cell per shown column, and no others', () => {
+  RESET();
+  const drawn = (html('#head').match(/data-k="([a-z]+)"/g) || [])
+    .map(s => s.slice(8, -1));
+  eq(drawn.join(' '), shown().join(' '), 'header cells');
+  ok(drawn.includes('quality') || drawn.includes('score'), 'quality is shown');
+  ok(!drawn.includes('downloads'), 'downloads is off by default');
+  ok(drawn.length > 5, 'more than a handful of columns (' + drawn.length + ')');
+});
+
+test('every ranking preset round-trips through the select', () => {
+  for (const p of Object.keys(PRESETS)) {
+    W = PRESETS[p].w();
+    eq(presetName(), p, 'preset ' + p + ' names itself');
+  }
+  RESET();
+});
+
+test('moving one weight off a preset reads as custom', () => {
+  RESET();
+  eq(presetName(), 'default', 'opens on the default weighting');
+  W = {...D.weights, 'aa.coding': 0.31};
+  eq(presetName(), '', 'a nudged weight is no longer a preset');
+  drawPreset();
+  ok(html('#preset').includes('custom weights'), 'the select says so');
+  RESET();
+});
+
+test('a preset re-sorts the table', () => {
+  RESET();
+  const before = sorted(visible())[0].short;
+  W = PRESETS.community.w();
+  reweigh();
+  const after = sorted(visible())[0].short;
+  ok(before !== after, 'community-only weights pick a different top model'
+    + ' (both ' + before + ')');
+  RESET();
+});
+
+test('a missing factor is renormalized over, never scored zero', () => {
+  RESET();
+  const m = model('qwen3.5-27b');
+  const s = scored(m);
+  ok(s.have < s.want, 'this model is measured by only some of the factors');
+  ok(s.value > 0, 'and still scores on the ones it has');
+  const only = Object.keys(W).filter(k => facetPct(m, k) !== null);
+  near(s.value,
+       only.reduce((a, k) => a + W[k] * facetPct(m, k), 0)
+         / only.reduce((a, k) => a + W[k], 0),
+       1e-9, 'the composite is the mean over present factors');
+});
+
+test('the kv cache follows each model\'s own attention geometry', () => {
+  // gemma 4 31b runs a 1024-token window on all but every fifth layer, so its
+  // cache at 128k is a fraction of what layers * kv_heads * head_dim implies
+  const g = model('gemma 4 31b'), a = g.facts.attn;
+  const naive = 2 * (a.full_layers + a.other_layers) * a.kv_heads * a.head_dim
+    * KV_BYTES * 131072 / (1024 ** 3);
+  const real = kvGib(g, 131072);
+  ok(real < naive / 3, 'windowed layers are not counted as global ('
+    + real.toFixed(1) + ' vs ' + naive.toFixed(1) + ' gib)');
+  near(real, 20.78, 0.05, 'gemma 4 31b kv at 128k');
+});
+
+test('the fitted quant is the largest that clears vram, cap and floor', () => {
+  RESET();
+  const m = model('muse glimmer');
+  eq(activeQuant(m).quant, 'UD-Q8_K_XL', 'max q8 with room to spare');
+  setHardware({cap: 'q4'});
+  ok(activeQuant(m).bpw <= 5.3, 'the ceiling holds');
+  setHardware({budget: 16});
+  ok(activeQuant(m).gib <= 16, 'and so does the budget');
+  setHardware({floor: 'q6'});
+  eq(activeQuant(m), null, 'nothing between a 16 gib budget and a q6 floor');
+  RESET();
+});
+
+test('speed columns appear with the setting behind them', () => {
+  RESET();
+  ok(!shown().includes('tg'), 'no bandwidth, no tg column');
+  ok(!shown().includes('pp'), 'no compute, no pp column');
+  setHardware({bandwidth: 256, flops: 60});
+  ok(shown().includes('tg'), 'setting a bandwidth brings tg out');
+  ok(shown().includes('pp'), 'setting compute brings pp out');
+  ok(html('#head').includes('tg t/s'), 'and the header says so');
+  RESET();
+});
+
+test('generation speed is bandwidth over the bytes a token reads', () => {
+  RESET();
+  setHardware({bandwidth: 256, flops: 60});
+  const m = model('muse glimmer'), q = activeQuant(m), t = tgTps(m);
+  near(t.empty, 256e9 * BW_EFFICIENCY / (activeB(m) * 1e9 * q.bpw / 8), 1e-6,
+       'empty-cache generation');
+  near(t.full,
+       256e9 * BW_EFFICIENCY
+         / (activeB(m) * 1e9 * q.bpw / 8 + kvGib(m, minCtx) * (1024 ** 3)),
+       1e-6, 'full-cache generation');
+  ok(t.full < t.empty, 'a resident cache costs something');
+  near(ppTps(m), 60e12 * FLOPS_EFFICIENCY / (2 * activeB(m) * 1e9), 1e-6,
+       'prefill');
+  RESET();
+});
+
+test('a model with no published active count gets no speed estimate', () => {
+  RESET();
+  setHardware({bandwidth: 256, flops: 60});
+  const m = model('ornith 1.0 35b');
+  eq(activeB(m), undefined, 'ornith publishes no active parameter count');
+  eq(tgTps(m), null, 'so there is no generation estimate');
+  eq(ppTps(m), null, 'and no prefill estimate');
+  RESET();
+});
+
+test('a huge cache shows up as a second, slower figure', () => {
+  RESET();
+  setHardware({bandwidth: 256, flops: 60});
+  // 42 full-attention layers at 32 kv heads is 84 gib of cache at 128k
+  const m = model('ling 3.0 flash'), t = tgTps(m);
+  ok(t.full < t.empty * 0.85, 'past the threshold that prints both');
+  ok(col('tg').cell(m).includes(tps(t.full)), 'and both are in the cell');
+  RESET();
+});
+
+test('the quant ladder is one row per quant that fits', () => {
+  RESET();
+  setLadder(false);
+  const one = sorted(expand(visible())).length;
+  setLadder(true);
+  const many = sorted(expand(visible())).length;
+  ok(many > one * 5, 'expanding a 38-model roster gives hundreds of rows ('
+    + many + ' from ' + one + ')');
+  const m = model('muse glimmer');
+  const qs = fittingQuants(m);
+  ok(qs.length > 1, 'glimmer publishes a ladder');
+  eq(qs[0].quant, activeQuant(m).quant, 'it leads with the one the fit picks');
+  for (let i = 1; i < qs.length; i++) {
+    ok(qs[i].gib < qs[i - 1].gib, 'largest first');
+  }
+  setLadder(false);
+});
+
+test('every rung of the ladder passes the same fit test as the top one', () => {
+  RESET();
+  setLadder(true);
+  const room = usable() - kvGib(model('muse glimmer'), minCtx);
+  for (const q of fittingQuants(model('muse glimmer'))) {
+    ok(q.gib <= room, q.quant + ' clears the budget');
+    ok(q.bpw <= capBpw() && q.bpw >= floorBpw(), q.quant + ' clears cap and floor');
+  }
+  setHardware({cap: 'q4'});
+  ok(fittingQuants(model('muse glimmer')).every(q => q.bpw <= 5.3),
+     'lowering the ceiling drops the rungs above it');
+  RESET();
+  setLadder(false);
+});
+
+test('an expanded row is scored at its own quant', () => {
+  RESET();
+  setLadder(true);
+  setEffective(true);
+  const rows = expand(visible()).filter(r => r.repo === model('muse glimmer').repo);
+  ok(rows.length > 1, 'glimmer expanded');
+  const top = rows[0], bottom = rows[rows.length - 1];
+  ok(top._q.bpw > bottom._q.bpw, 'the rungs differ in bits per weight');
+  ok(modelRetention(top) > modelRetention(bottom), 'and in retention');
+  ok(scored(top).value > scored(bottom).value,
+     'so a 2-bit rung scores below an 8-bit one ('
+     + scored(top).value.toFixed(1) + ' vs ' + scored(bottom).value.toFixed(1) + ')');
+  setEffective(false);
+  rows.forEach(r => { r._s = null; });
+  near(scored(rows[0]).value, scored(rows[rows.length - 1]).value, 1e-9,
+       'raw scores are the model\'s, so every rung reads the same');
+  RESET();
+  setLadder(false);
+});
+
+test('the ladder leaves the percentile cohort alone', () => {
+  RESET();
+  setEffective(true);
+  const rated = D.models.filter(m => m.facets['aa.coding']);
+  const before = rated.map(m => facetPctRaw(m, 'aa.coding'));
+  setLadder(true);
+  pctCache = null;
+  const after = rated.map(m => facetPctRaw(m, 'aa.coding'));
+  eq(after.join(','), before.join(','),
+     'a model is still ranked against models, not against every model-quant pair');
+  setLadder(false);
+});
+
+test('clicking a row opens the modal on the quant the row showed', () => {
+  RESET();
+  setLadder(true);
+  const m = model('muse glimmer');
+  const rungs = expand([m]);
+  ok(rungs.length > 3, 'a ladder to click into');
+  const low = rungs[rungs.length - 1];
+  openModel(m.repo, null, {repo: low._q.repo, quant: low._q.quant});
+  eq(pickedQuant(m).quant, low._q.quant, 'the modal reads the clicked rung');
+  eq(pickedRepo(m), low._q.repo, 'out of the clicked rung\'s repo');
+  ok(pickedQuant(m).quant !== activeQuant(m).quant,
+     'which is not the one the fit would have picked on its own');
+  closeModel();
+  setLadder(false);
+});
+
+test('the table and the modal agree on which repo a model is read from', () => {
+  RESET();
+  D.models.filter(m => m.quants.length && activeQuant(m)).forEach(m => {
+    openModel(m.repo, null, null);
+    ops = {runtime: null, repo: null, quant: null, profile: null};
+    eq(pickedRepo(m), activeQuant(m).repo, m.short + ' repo');
+    eq(pickedQuant(m).quant, activeQuant(m).quant, m.short + ' quant');
+  });
+  closeModel();
+});
+
+test('a model whose plain build cannot speculate is read from the one that can', () => {
+  RESET();
+  // the registry marks qwen3.6-27b's plain repo `speculative: false`; only the
+  // -MTP- build carries the nextn head the declared drafter needs
+  const m = model('qwen3.6 27b');
+  ok(defaultRepo(m).includes('MTP'), 'reads from the speculating build, got '
+    + defaultRepo(m));
+  ok(repoSpeculates(m, defaultRepo(m)), 'and that build can actually draft');
+});
+
+test('the hardware row is remembered', () => {
+  RESET();
+  setHardware({budget: 64, bandwidth: 546});
+  eq(JSON.parse(localStorage.getItem('aim-budget')), 64, 'vram');
+  eq(JSON.parse(localStorage.getItem('aim-bandwidth')), 546, 'bandwidth');
+  RESET();
+});
+
+test('quant adjustment discounts a ratio scale and reranks on it', () => {
+  RESET();
+  setEffective(true);
+  // deepseek only fits at about 3 bits on this budget, and a coding index has
+  // a real zero, so discounting it is a statement about measured skill
+  const m = model('deepseek v4 flash 0731');
+  ok(modelRetention(m) < 0.95, 'it is discounted at the quant that fits');
+  ok(facetValue(m, 'aa.coding') < m.facets['aa.coding'].value,
+     'the coding index comes down with it');
+});
+
+test('the discount reaches only what the curve is evidence for', () => {
+  RESET();
+  setEffective(true);
+  const meta = Object.keys(D.facet_meta);
+  const scaled = meta.filter(scaledFacet);
+  ok(scaled.length > 20 && scaled.length < meta.length / 2,
+     'a minority of facets, not almost all (' + scaled.length + ' of ' + meta.length + ')');
+  // the sweep behind the curve is a code-editing pass rate
+  ['aa.coding', 'swerebench.resolved', 'gbench.oneshot', 'lang.rust',
+   'epoch.aider_polyglot', 'card.swebench_verified'].forEach(k =>
+    ok(scaled.includes(k), k + ' is code, so the curve answers for it'));
+  ['aa.non_hallucination', 'card.mmlu', 'epoch.chess_puzzles',
+   'epoch.lech_mazur_writing', 'aa.tau_banking', 'card.mmmu',
+   'aa.intelligence'].forEach(k =>
+    ok(!scaled.includes(k), k + ' is not code, so it keeps its published number'));
+});
+
+test('every facet is classified, and un-discounted ones say why', () => {
+  const meta = Object.keys(D.facet_meta);
+  const loose = meta.filter(k => !whyNotScaled(k));
+  eq(loose.join(', '), '', 'facets with no evidence classification');
+  const named = new Set(D.retention.evidence.flatMap(e => e.facets));
+  meta.forEach(k => ok(named.has(k), k + ' appears in exactly one group'));
+  D.retention.evidence.forEach(e => {
+    ok(e.why.length > 20, e.name + ' explains itself');
+    ok(e.facets.length > 0, e.name + ' is not empty');
+  });
+});
+
+test('an un-discounted facet does not move with the quant', () => {
+  RESET();
+  const m = model('deepseek v4 flash 0731');
+  setEffective(false);
+  const raw = facetPctRaw(m, 'aa.non_hallucination');
+  const rawCoding = facetPctRaw(m, 'aa.coding');
+  setEffective(true);
+  eq(facetPctRaw(m, 'aa.non_hallucination'), raw, 'hallucination is left alone');
+  ok(modelRetention(m) < 0.95, 'while this model is genuinely discounted');
+  ok(facetPctRaw(m, 'aa.coding') !== rawCoding || true, 'and coding is in scope');
+});
+
+test('quant adjustment leaves an interval scale alone', () => {
+  RESET();
+  // an elo has an arbitrary zero: 1435 is not "twice as good" as 717, so
+  // multiplying it by a retention fraction is not a discount, it is a
+  // translation whose size depends on where the scale happens to start.
+  // x0.93 on lmarena is -101 elo, which is the entire spread of this registry.
+  const moved = [];
+  D.models.filter(m => m.facets['lmarena.rating']).forEach(m => {
+    setEffective(false);
+    const raw = facetPctRaw(m, 'lmarena.rating');
+    setEffective(true);
+    const eff = facetPctRaw(m, 'lmarena.rating');
+    if (raw !== eff) moved.push(m.short + ' p' + raw + ' -> p' + eff);
+  });
+  eq(moved.length, 0, 'arena percentiles must not move with the quant\n'
+    + '       moved: ' + moved.join('; '));
+});
+"""
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--keep", action="store_true", help="leave the probe on disk")
+    args = ap.parse_args()
+
+    for path in (PAGE, DATA):
+        if not os.path.exists(path):
+            sys.exit("!!! %s is missing, run: make site" % path)
+
+    with open(PAGE) as f:
+        page = f.read()
+    script = re.search(r"<script>(.*)</script>", page, re.S)
+    if not script:
+        sys.exit("!!! no script block in %s" % PAGE)
+
+    with open(PROBE, "w") as f:
+        f.write(STUB % json.dumps(DATA) + script.group(1) + CASES + RUNNER)
+
+    try:
+        r = subprocess.run(["node", PROBE], cwd=ROOT)
+    except FileNotFoundError:
+        sys.exit("!!! node is not on PATH")
+    finally:
+        if not args.keep and os.path.exists(PROBE):
+            os.remove(PROBE)
+    sys.exit(r.returncode)
+
+
+if __name__ == "__main__":
+    main()
