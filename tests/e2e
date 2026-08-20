@@ -220,11 +220,13 @@ test('every declared drafter earns a yield, whatever the method', () => {
 
 test('the yield reproduces the one measured drafting run', () => {
   // qwen3.8 27b on a strix halo under vulkan with the mtp predictor, from
-  // MODELS.md: 16.68 / 14.24 / 12.74 t/s at UD-Q5_K_XL / Q6_K / Q8_0
+  // MODELS.md: 16.68 / 12.74 t/s at UD-Q5_K_XL / Q8_0
   RESET();
   const m = model('qwen3.8 27b');
   const eff = 256e9 * BW_EFFICIENCY;
-  [['UD-Q5_K_XL', 16.68], ['Q6_K', 14.24], ['Q8_0', 12.74]].forEach(([q, measured]) => {
+  // the run's Q6_K row is not here: unsloth withdrew the plain builds when it
+  // re-uploaded the repo as a UD-only ladder, and UD-Q6_K is a different build
+  [['UD-Q5_K_XL', 16.68], ['Q8_0', 12.74]].forEach(([q, measured]) => {
     const c = quantChoices(m).find(x => x.quant === q);
     ok(c, q + ' is in the registry');
     const est = draftYield(m) * eff / (activeB(m) * 1e9 * c.bpw / 8);

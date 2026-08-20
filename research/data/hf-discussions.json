@@ -443,8 +443,33 @@
   ]
  },
  "prism-ml/Bonsai-27B-gguf": {
-  "count": 23,
+  "count": 24,
   "discussions": [
+   {
+    "author": "d9k",
+    "comments": 2,
+    "created": "2026-08-19T17:29:29.000Z",
+    "is_pr": false,
+    "num": 24,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "open",
+    "thread": [
+     {
+      "author": "d9k",
+      "created": "2026-08-19T17:29:29.000Z",
+      "reactions": 0,
+      "text": "RTX 3060 12 GB: > 31 tok/s, bad agentic coding.\n\n```\nTemperature: 0.7\nTop K Sampling: 50\nTop P Sampling: 0.98\nMin P Sampling: 0.03\n```\n\nIt was ignoring commands. So I tried to restart with prompt:\n\n```\nDefinitely, if I say stop, you have to stop. The newer command always takes precedence over the previous and older ones. Before each edit, write down all the requirements you need to fulfill and what you want to do.\n```\n\nModel correctly described task and limitations but made same mistake in simple bash script consisting of 4 lines: Again and again."
+     },
+     {
+      "author": "YahiaAbdelraoof",
+      "created": "2026-08-19T17:58:35.000Z",
+      "reactions": 0,
+      "text": "I have the same exact gpu and had the opposite experience, I used it at opencode directly after chat and it was very aware and missed 0 tool call, I pasted my config below if you're interested, and you'll be trust me, I've been awake for 48 hours investigating/stress test the model, and it's a piece of art, fully smooth till 64k then a minor lag above that but i ran it for an hour on 100K no issues.\n\n\"@echo off\ntitle Bonsai 27B - MODEL ONLY (fastest, most VRAM free)\n\n:: ============================================\n::  BONSAI 27B - MODEL ONLY\n::  Text only. No vision, no drafter.\n:: ============================================\n:: --- Model ---\nset MODEL=K:\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nset SERVER=K:\\xxxxxxxxxxxxxxxxxx\\bin\\llama-server.exe\n\n:: --- Server ---\nset PORT=8081\nset HOST=127.0.0.1\n\n:: --- GPU / Memory ---\nset GPU_LAYERS=99\n:: CONTEXT: 65536 = 64K, safe margin on your 12GB card.\n:: You CAN raise this - the model's hybrid attention makes context cheap.\n::   65536  = 64K  (recommended, comfortable margin)\n::   98304  = 96K  (still fits, tighter - watch for out-of-memory on huge prompts)\nset CONTEXT=100000\nset KV_CACHE_K=q8_0\nset KV_CACHE_V=q8_0\nset PARALLEL=1\nset FLASH_ATTN=on\nset BATCH=1024\nset THREADS=5\n\n:: --- Sampling (model-card recommended; clients can override per-request) ---\nset TEMPERATURE=0.7\nset TOP_P=0.95\nset TOP_K=20\nset REPEAT_PENALTY=1.0\nset MIN_P=0.0\n\n:: ============================================\n::  DO NOT EDIT BELOW THIS LINE\n:: ============================================\n\necho.\necho  ============================================\necho   Bonsai 27B - MODEL ONLY\necho  ============================================\necho   Port:         %PORT%\necho   Context:      %CONTEXT% tokens\necho   KV Cache:     K=%KV_CACHE_K% V=%KV_CACHE_V%  (4-bit, near-lossless)\necho   GPU Layers:   %GPU_LAYERS%\necho   Flash Attn:   %FLASH_ATTN%\necho   Temperature:  %TEMPERATURE%\necho   Endpoint:     http://%HOST%:%PORT%/v1\necho  ============================================\necho.\n\ntaskkill /f /im llama-server.exe >nul 2>&1\ntimeout /t 2 /nobreak >nul\n\n\"%SERVER%\" ^\n  -m \"%MODEL%\" ^\n  --host %HOST% --port %PORT% ^\n  -ngl %GPU_LAYERS% ^\n  -c %CONTEXT% ^\n  -ctk %KV_CACHE_K% -ctv %KV_CACHE_V% ^\n  -np %PARALLEL% ^\n  -fa %FLASH_ATTN% ^\n  --spec-type ngram-map-k4v ^\n  --spec-ngram-map-k4v-size-n 8 ^\n  --spec-ngram-map-k4v-size-m 8 ^\n  --spec-ngram-map-k4v-min-hits 2 ^\n  --spec-draft-n-max 64 ^\n  -b %BATCH% ^\n  -t %THREADS% ^\n  --temp %TEMPERATURE% ^\n  --top-p %TOP_P% ^\n  --top-k %TOP_K% ^\n  --repeat-penalty %REPEAT_PENALTY% ^\n  --min-p %MIN_P% ^\n  --jinja ^\n  --reasoning on ^\n  --reasoning-budget -1 ^\n  --cache-ram 2048 ^\n  --ctx-checkpoints 6 ^\n  --checkpoint-min-step 512\n\n:: --- N-gram speculative decoding (no draft model, ~0 VRAM, works at full 100K) ---\n:: Using ngram-map-k4v = the PrismML doc's tested example (acceptance 0.57-0.70), with\n:: flag names corrected for this build (9fcaed7). To try the doc's \"reasoning model\"\n:: pick instead, replace the 4 map-k4v lines above with a single:  --spec-type ngram-mod\n::\n:: --reasoning-budget -1 = unlimited thinking (best quality). Set 2048-4096 to rein it in.\n:: --cache-ram 2048      = cap the prompt-cache pool at 2GB (0 = off, -1 = no limit).\n:: --ctx-checkpoints 6   = THE RAM FIX. Each checkpoint ~150MB; default 32 = up to ~4.8GB.\n::                         6 = ~0.9GB. Lower to 2 for min RAM, raise for more instant-reuse.\n:: --checkpoint-min-step 512 = wider spacing between checkpoints = fewer of them created.\npause\n\""
+     }
+    ],
+    "title": "RTX 3060 12 GB: > 31 tok/s, bad agentic coding"
+   },
    {
     "author": "abudahm",
     "comments": 1,
@@ -462,9 +487,9 @@
     "created": "2026-08-14T15:22:32.000Z",
     "is_pr": false,
     "num": 22,
-    "reaction_users": 7,
+    "reaction_users": 8,
     "reactions": {
-     "\ud83d\udc4d": 7
+     "\ud83d\udc4d": 8
     },
     "status": "open",
     "title": "Bonsai 3.8 27B?"
@@ -634,20 +659,6 @@
     "reaction_users": 0,
     "reactions": {},
     "status": "closed",
-    "thread": [
-     {
-      "author": "Gavin-chen",
-      "created": "2026-07-20T03:07:45.000Z",
-      "reactions": 0,
-      "text": "I ran the IFEval benchmark using the following command:\r\n\r\n```bash\r\nlm_eval --model local-chat-completions \\\r\n  --model_args model=\"Qwen/Qwen3.6-27B\",base_url=\"http://localhost:8080/v1/chat/completions\",eos_string=\"<|im_end|>\",num_concurrent=4,requests_per_second=0,timeout=1200 \\\r\n  --gen_kwargs do_sample=True,temperature=0.7,top_p=0.95,top_k=20 \\\r\n  --tasks ifeval \\\r\n  --batch_size 4 \\\r\n  --output_path ./LM_Eval \\\r\n  --log_samples \\\r\n  --apply_chat_template True\r\n```\r\n\r\nAnd I got the following results:\r\n\r\n```text\r\nlocal-chat-completions ({'model': 'Qwen/Qwen3.6-27B', 'base_url': 'http://localhost:8080/v1/chat/completions', 'eos_string': '<|im_end|>', 'num_concurrent': 4, 'requests_per_second': 0, 'timeout': 1200}), gen_kwargs: ({'do_sample': True, 'temperature': 0.7, 'top_p': 0.95, 'top_k': 20}), limit: None, num_fewshot: None, batch_size: 4\r\n|Tasks |Version|Filter|n-shot|        Metric         |   |Value |   |Stderr|\r\n|------|------:|------|-----:|-----------------------|---|-----:|---|------|\r\n|ifeval|      4|none  |     0|inst_level_loose_acc   |\u2191  |0.1283|\u00b1  |   N/A|\r\n|      |       |none  |     0|inst_level_strict_acc  |\u2191  |0.1283|\u00b1  |   N/A|\r\n|      |       |none  |     0|prompt_level_loose_acc |\u2191  |0.1386|\u00b1  |0.0149|\r\n|      |       |none  |     0|prompt_level_strict_acc|\u2191  |0.1386|\u00b1  |0.0149|\r\n```\r\n\r\nWhen I checked the output log (`resps`), I noticed a large number of **empty responses** (`\"resps\": [[\"\"]]`):\r\n\r\n![image](https://cdn-uploads.huggingface.co/production/uploads/68579b8bbd9cfce88f6c8e25/yar9FLTUoMtd0s4IgSoCC.png)\r\n\r\nWhy so many empty response?"
-     },
-     {
-      "author": "Gavin-chen",
-      "created": "2026-07-20T13:26:43.000Z",
-      "reactions": 1,
-      "text": "OK I got it, max_gen_toks too few."
-     }
-    ],
     "title": "Why so many empty response?"
    },
    {
@@ -996,8 +1007,8 @@
     "num": 2,
     "reaction_users": 1,
     "reactions": {
-     "\ud83d\udd25": 1,
-     "\ud83e\udd17": 1
+     "\u2764\ufe0f": 1,
+     "\ud83e\udd2f": 1
     },
     "status": "open",
     "thread": [
@@ -1095,30 +1106,63 @@
   ]
  },
  "prism-ml/Ternary-Bonsai-27B-gguf": {
-  "count": 54,
+  "count": 57,
   "discussions": [
    {
+    "author": "YahiaAbdelraoof",
+    "comments": 1,
+    "created": "2026-08-19T20:00:25.000Z",
+    "is_pr": false,
+    "num": 57,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "open",
+    "title": "How to Run this model Properly, Tested"
+   },
+   {
+    "author": "sandichhuu",
+    "comments": 2,
+    "created": "2026-08-19T13:45:11.000Z",
+    "is_pr": false,
+    "num": 56,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "closed",
+    "title": "How to use dspark  on llama.cpp ?"
+   },
+   {
+    "author": "d9k",
+    "comments": 2,
+    "created": "2026-08-19T07:22:30.000Z",
+    "is_pr": false,
+    "num": 55,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "open",
+    "title": "RTX 3060 12 GB: 31 tok/s on small contexts"
+   },
+   {
     "author": "cleverhack",
-    "comments": 5,
+    "comments": 8,
     "created": "2026-08-16T09:42:34.000Z",
     "is_pr": false,
     "num": 54,
-    "reaction_users": 6,
+    "reaction_users": 10,
     "reactions": {
-     "\u2795": 6
+     "\u2795": 10
     },
     "status": "open",
     "thread": [
      {
       "author": "cleverhack",
       "created": "2026-08-16T09:42:34.000Z",
-      "reactions": 6,
+      "reactions": 10,
       "text": "Will the qwen3.8-27b version be produced?"
      },
      {
       "author": "hamadfx",
       "created": "2026-08-16T16:15:26.000Z",
-      "reactions": 0,
+      "reactions": 1,
       "text": "second that. im still using the 3.6 version from here yet want to make the leap while less footprint so hope it comes out soon"
      },
      {
@@ -1138,6 +1182,24 @@
       "created": "2026-08-17T07:52:43.000Z",
       "reactions": 0,
       "text": "+1"
+     },
+     {
+      "author": "WaterResisitantAI",
+      "created": "2026-08-18T12:07:52.000Z",
+      "reactions": 0,
+      "text": "+1"
+     },
+     {
+      "author": "samuelcaldas",
+      "created": "2026-08-18T12:19:50.000Z",
+      "reactions": 0,
+      "text": "+1"
+     },
+     {
+      "author": "ItzStrai",
+      "created": "2026-08-18T14:49:44.000Z",
+      "reactions": 0,
+      "text": "Yea yeah +1!\n\nWe got 2.4T parameter model, so we have a good teacher for next version of Bonsai I guess \ud83d\udc40"
      }
     ],
     "title": "Will the qwen3.8-27b version be produced?"
@@ -1148,25 +1210,57 @@
     "created": "2026-08-15T16:07:59.000Z",
     "is_pr": false,
     "num": 53,
-    "reaction_users": 11,
+    "reaction_users": 14,
     "reactions": {
-     "\u2764\ufe0f": 11,
-     "\ud83d\ude80": 3
+     "\u2764\ufe0f": 13,
+     "\ud83d\ude80": 4
     },
     "status": "open",
     "title": "PLEASE COME BACK\ud83d\ude2d\ud83d\ude2d\ud83d\ude2d\ud83d\ude2d"
    },
    {
     "author": "Exo87",
-    "comments": 4,
+    "comments": 5,
     "created": "2026-08-14T15:14:57.000Z",
     "is_pr": false,
     "num": 52,
-    "reaction_users": 19,
+    "reaction_users": 24,
     "reactions": {
-     "\u2764\ufe0f": 19
+     "\u2764\ufe0f": 24
     },
     "status": "open",
+    "thread": [
+     {
+      "author": "Exo87",
+      "created": "2026-08-14T15:14:57.000Z",
+      "reactions": 24,
+      "text": "Please make quantization for new model just released qwen3.8-27b"
+     },
+     {
+      "author": "Harpere",
+      "created": "2026-08-15T15:43:39.000Z",
+      "reactions": 2,
+      "text": "Yes, thank goodness for the Prismml Bonsai men."
+     },
+     {
+      "author": "WUPING",
+      "created": "2026-08-16T02:08:05.000Z",
+      "reactions": 1,
+      "text": "3.8-27b\u5c31\u7b49\u4f60\u7684\u91cf\u5316\u7248\u672c\u4e86"
+     },
+     {
+      "author": "csyuan312",
+      "created": "2026-08-17T07:33:50.000Z",
+      "reactions": 0,
+      "text": "\u9ebb\u6e9c\u7684"
+     },
+     {
+      "author": "U2s7wd",
+      "created": "2026-08-18T07:05:13.000Z",
+      "reactions": 0,
+      "text": "yes"
+     }
+    ],
     "title": "Qwen3.8-27b version"
    },
    {
@@ -1188,7 +1282,7 @@
      {
       "author": "pirola",
       "created": "2026-08-12T21:09:16.000Z",
-      "reactions": 0,
+      "reactions": 1,
       "text": "Yes, you're trying to run a model at 3tps"
      },
      {
@@ -1792,9 +1886,9 @@
     "created": "2026-07-17T03:37:16.000Z",
     "is_pr": false,
     "num": 23,
-    "reaction_users": 11,
+    "reaction_users": 12,
     "reactions": {
-     "\ud83d\udd25": 11
+     "\ud83d\udd25": 12
     },
     "status": "open",
     "title": "Thank you for enabling local models to be useful! - MoE models next please!"
@@ -1997,38 +2091,6 @@
      "\ud83d\ude80": 1
     },
     "status": "open",
-    "thread": [
-     {
-      "author": "AsThirtyThree",
-      "created": "2026-07-15T19:46:11.000Z",
-      "reactions": 1,
-      "text": "i just asked a question about quantum physics,gemma 4 12b q4 can solve it but this model cannot,idk if its my problem,i will ask more questions and update this discussion later"
-     },
-     {
-      "author": "ajh-code",
-      "created": "2026-07-16T01:09:10.000Z",
-      "reactions": 0,
-      "text": "sampler settings? drafter in use?"
-     },
-     {
-      "author": "AsThirtyThree",
-      "created": "2026-07-16T09:04:04.000Z",
-      "reactions": 0,
-      "text": "i just used recommended default settings on qwens blog cuz creator didnt given recommended settings yet."
-     },
-     {
-      "author": "DocWolle",
-      "created": "2026-07-16T13:11:36.000Z",
-      "reactions": 0,
-      "text": "The model card has parameters for temp, etc"
-     },
-     {
-      "author": "AsThirtyThree",
-      "created": "2026-07-16T13:13:28.000Z",
-      "reactions": 0,
-      "text": "my bad,i didnt seen it"
-     }
-    ],
     "title": "it hallicunates hard"
    },
    {
@@ -2440,7 +2502,7 @@
   ]
  },
  "unsloth/DeepSeek-V4-Flash-0731-GGUF": {
-  "count": 44,
+  "count": 45,
   "discussions": [
    {
     "author": "danielhanchen",
@@ -2450,8 +2512,8 @@
     "num": 36,
     "reaction_users": 2,
     "reactions": {
-     "\u2764\ufe0f": 1,
-     "\ud83d\udd25": 2
+     "\ud83d\udd25": 2,
+     "\ud83e\udd17": 1
     },
     "status": "open",
     "title": "DSpark enables DeepSeek to run 2x Faster!"
@@ -2583,6 +2645,19 @@
      }
     ],
     "title": "Run DeepSeek-V4-Flash-0731 in Unsloth! \ud83e\udda5\u2665\ufe0f"
+   },
+   {
+    "author": "TizzyT566",
+    "comments": 1,
+    "created": "2026-08-20T04:50:18.000Z",
+    "is_pr": false,
+    "num": 46,
+    "reaction_users": 1,
+    "reactions": {
+     "\u2795": 1
+    },
+    "status": "open",
+    "title": "Any chance of a UD3.0 update?"
    },
    {
     "author": "dw1932",
@@ -3647,6 +3722,104 @@
      }
     ],
     "title": "Awww yiss"
+   }
+  ]
+ },
+ "unsloth/DeepSeek-V4-Pro-0813-GGUF": {
+  "count": 3,
+  "discussions": [
+   {
+    "author": "MB7977",
+    "comments": 3,
+    "created": "2026-08-15T01:27:45.000Z",
+    "is_pr": false,
+    "num": 3,
+    "reaction_users": 4,
+    "reactions": {
+     "\ud83d\udd25": 4
+    },
+    "status": "open",
+    "thread": [
+     {
+      "author": "MB7977",
+      "created": "2026-08-15T01:27:45.000Z",
+      "reactions": 4,
+      "text": "Will there be a Q2_K_XL and the like? Very keen to try this one but Q4 is out of reach."
+     },
+     {
+      "author": "hilarryous",
+      "created": "2026-08-15T23:36:31.000Z",
+      "reactions": 0,
+      "text": "I'm curious if a Q3 would fit on two 512 GB Mac Studios. I'm not that rich to have bought a single one. But I am curious. That'd be a pretty perfect local setup."
+     },
+     {
+      "author": "savale",
+      "created": "2026-08-16T09:22:50.000Z",
+      "reactions": 0,
+      "text": "yeah waiting for something to try on 512gb ram. Let's wait: lot's of models coming out, so I guess this is a bit more low prio."
+     }
+    ],
+    "title": "Smaller quants?"
+   },
+   {
+    "author": "vovan2",
+    "comments": 2,
+    "created": "2026-08-13T18:20:52.000Z",
+    "is_pr": false,
+    "num": 2,
+    "reaction_users": 1,
+    "reactions": {
+     "\ud83d\udc4d": 1
+    },
+    "status": "open",
+    "thread": [
+     {
+      "author": "vovan2",
+      "created": "2026-08-13T18:20:52.000Z",
+      "reactions": 1,
+      "text": "subj"
+     },
+     {
+      "author": "danielhanchen",
+      "created": "2026-08-13T23:32:11.000Z",
+      "reactions": 1,
+      "text": "Fixed thank you"
+     }
+    ],
+    "title": "mistype in comparison table - the Flash variant has 284B parameters (13B active)"
+   },
+   {
+    "author": "Lambus1",
+    "comments": 3,
+    "created": "2026-08-13T14:10:21.000Z",
+    "is_pr": false,
+    "num": 1,
+    "reaction_users": 3,
+    "reactions": {
+     "\ud83d\udc40": 3
+    },
+    "status": "open",
+    "thread": [
+     {
+      "author": "Lambus1",
+      "created": "2026-08-13T14:10:21.000Z",
+      "reactions": 3,
+      "text": "Bro, do you have original model already downloaded?"
+     },
+     {
+      "author": "danielhanchen",
+      "created": "2026-08-14T04:08:23.000Z",
+      "reactions": 1,
+      "text": "It's now the newer one that they did we had to reconvert"
+     },
+     {
+      "author": "savale",
+      "created": "2026-08-14T12:08:59.000Z",
+      "reactions": 0,
+      "text": "Great it's fixed! Waiting for lower Q's. Hopefully can run it on 512gb + 3090."
+     }
+    ],
+    "title": "original model"
    }
   ]
  },
@@ -5142,13 +5315,33 @@
    },
    {
     "author": "unraidghost",
-    "comments": 2,
+    "comments": 3,
     "created": "2026-08-03T01:12:11.000Z",
     "is_pr": false,
     "num": 26,
     "reaction_users": 0,
     "reactions": {},
     "status": "open",
+    "thread": [
+     {
+      "author": "unraidghost",
+      "created": "2026-08-03T01:12:11.000Z",
+      "reactions": 0,
+      "text": "Any plans to release xs2.1? Seems like it should be trivial since you already have done  s2.1"
+     },
+     {
+      "author": "nekolee",
+      "created": "2026-08-13T06:01:59.000Z",
+      "reactions": 0,
+      "text": "i'm hoping for xs2.1  too, would be perfect fit for ordinary gaming PCs )"
+     },
+     {
+      "author": "iAmBoosted",
+      "created": "2026-08-20T04:03:19.000Z",
+      "reactions": 0,
+      "text": "Also looking for the new  Unsloth Dynamic 3.0 quants of xs2.1 :)"
+     }
+    ],
     "title": "Any plans to release xs2.1?"
    },
    {
@@ -5720,26 +5913,6 @@
      "\ud83d\udc4d": 1
     },
     "status": "open",
-    "thread": [
-     {
-      "author": "gelim",
-      "created": "2026-07-22T13:28:10.000Z",
-      "reactions": 1,
-      "text": "quick test on coding tasks with the Q4_K_M GGUF with Llama.cpp PR #25165\r\n\r\ngen (tok/sec) |\u00a0pp (tok/sec)\r\n------|-------\r\n60   |\u00a0500\r\n\r\nnext would be to assess how DFlash helps here (but then need to use poolside's fork IIUC)"
-     },
-     {
-      "author": "gelim",
-      "created": "2026-07-24T08:16:00.000Z",
-      "reactions": 0,
-      "text": "Then going with (I see it fit tightly) Q5_K_M, ctx 64k, KV cache Q8_0 (3 GPUs)\na run on [ts-bench](https://github.com/laiso/ts-bench) against Qwen3.6-27B Q8_0, KV cache Q8_0 (2 GPUs)\n\n```\n \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n \u2502 Exercise                 \u2502 Laguna Q5_K_M + KV Q8_0 \u2502 Laguna Q5_K_M + KV Full \u2502 Qwen3.6-27B Q8_0 \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502                          \u2502                         \u2502                         \u2502                  \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 Success Rate             \u2502 76.0% (19/25)           \u2502 88.0% (22/25)           \u2502 84.0% (21/25)    \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 Total Duration           \u2502 4444.9s                 \u2502 3455.8s                 \u2502 3203.7s          \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 Avg Duration             \u2502 177.8s                  \u2502 138.2s                  \u2502 128.1s           \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 Agent Success            \u2502 19                      \u2502 22                      \u2502 24               \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 Test Success             \u2502 19                      \u2502 22                      \u2502 21               \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 Test Failed              \u2502 6                       \u2502 3                       \u2502 4                \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502                          \u2502                         \u2502                         \u2502                  \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 acronym                  \u2502 \u274c 313.4s               \u2502 \u2705 100.4s               \u2502 \u2705 216.3s        \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 anagram                  \u2502 \u2705 63.1s                \u2502 \u2705 49.9s                \u2502 \u2705 103.9s        \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 bank-account             \u2502 \u2705 66.7s                \u2502 \u2705 59.9s                \u2502 \u2705 154.1s        \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 binary-search            \u2502 \u2705 49.0s                \u2502 \u2705 46.0s                \u2502 \u2705 46.7s         \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 binary-search-tree       \u2502 \u2705 158.9s               \u2502 \u2705 74.3s                \u2502 \u2705 64.9s         \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 bowling                  \u2502 \u274c 314.0s               \u2502 \u2705 199.0s               \u2502 \u2705 161.0s        \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 complex-numbers          \u2502 \u2705 170.1s               \u2502 \u2705 97.7s                \u2502 \u274c 308.2s        \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 connect                  \u2502 \u274c 313.5s               \u2502 \u2705 196.7s               \u2502 \u2705 70.9s         \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 crypto-square            \u2502 \u2705 281.7s               \u2502 \u2705 111.8s               \u2502 \u2705 226.4s        \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 diamond                  \u2502 \u2705 92.3s                \u2502 \u2705 72.9s                \u2502 \u2705 115.3s        \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 dnd-character            \u2502 \u2705 57.9s                \u2502 \u2705 59.5s                \u2502 \u2705 208.9s        \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 flatten-array            \u2502 \u2705 42.6s                \u2502 \u2705 137.1s               \u2502 \u274c 62.5s (\ud83e\udd16\u274c)  \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 food-chain               \u2502 \u2705 237.2s               \u2502 \u274c 301.5s               \u2502 \u2705 174.3s        \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 house                    \u2502 \u2705 172.4s               \u2502 \u2705 132.9s               \u2502 \u274c 77.4s (\ud83e\udd16\u274c)  \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 pascals-triangle         \u2502 \u2705 46.9s                \u2502 \u2705 148.5s               \u2502 \u2705 40.6s         \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 rational-numbers         \u2502 \u2705 139.4s               \u2502 \u2705 91.1s                \u2502 \u2705 91.1s         \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 react                    \u2502 \u274c 313.6s               \u2502 \u274c 308.0s               \u2502 \u274c 154.7s (\ud83e\udd16\u274c) \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 rectangles               \u2502 \u274c 308.1s               \u2502 \u2705 70.2s                \u2502 \u2705 75.4s         \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 relative-distance        \u2502 \u2705 104.3s               \u2502 \u2705 66.0s                \u2502 \u2705 51.6s         \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 robot-name               \u2502 \u2705 258.2s               \u2502 \u2705 202.0s               \u2502 \u2705 188.8s        \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 spiral-matrix            \u2502 \u2705 120.8s               \u2502 \u2705 76.9s                \u2502 \u2705 67.2s         \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 transpose                \u2502 \u2705 234.3s               \u2502 \u274c 313.5s               \u2502 \u2705 44.3s         \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 two-bucket               \u2502 \u2705 74.8s                \u2502 \u2705 99.3s                \u2502 \u2705 80.4s         \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 variable-length-quantity \u2502 \u2705 204.3s               \u2502 \u2705 142.5s               \u2502 \u2705 258.6s        \u2502\n \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n \u2502 wordy                    \u2502 \u274c 307.4s               \u2502 \u2705 298.2s               \u2502 \u2705 160.1s        \u2502\n \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\nServer is launched with following parameters:\n\n```\nexport CUDA_VISIBLE_DEVICES=0,1,2\nllama-server -m Laguna-S-2.1-UD-Q5_K_M-00001-of-00003.gguf -ngl 99 \\\n    -t 4 \\\n    --jinja \\\n    -b 2048 -ub 2048 \\\n    -c 65535  --top-k 20 --top-p 0.95 --min-p 0.0 --temp 1.0 \\\n    -np 1 \\\n    -fa on \\\n    --jinja \\\n    --top-k 20 --top-p 0.95 --min-p 0.0 --temp 0.6 \\\n    --reasoning off \\\n    --cache-type-k q8_0 --cache-type-v q8_0\n```\n\nI did not expect the KV cache quantization to have such big difference."
-     },
-     {
-      "author": "gelim",
-      "created": "2026-07-24T08:29:25.000Z",
-      "reactions": 0,
-      "text": "This comment has been hidden"
-     }
-    ],
     "title": "Q4_K_M on 3 Tesla V100 (32GB) + ts-bench"
    },
    {
@@ -7276,16 +7449,16 @@
     "created": "2026-08-15T03:20:18.000Z",
     "is_pr": false,
     "num": 18,
-    "reaction_users": 3,
+    "reaction_users": 7,
     "reactions": {
-     "\ud83d\udc4d": 3
+     "\ud83d\udc4d": 7
     },
     "status": "open",
     "thread": [
      {
       "author": "nohurry",
       "created": "2026-08-15T03:20:18.000Z",
-      "reactions": 3,
+      "reactions": 7,
       "text": "Hello Unsloth team,\r\n\r\nThank you very much for your wonderful release!\r\n\r\nOn Meta's repo, they changed the chat template:\r\nhttps://huggingface.co/meta-models/Muse-Glimmer-30B/commit/a4e59da52a7bc87ae7251dd5545c0dd437c44b68\r\n\r\nWould it be possible to have these included in the GGUFs here?\r\nI understand if it takes a while, the Qwen 3.8 release must've been quite busy for you.\r\n\r\nThank you for your time!"
      }
     ],
@@ -7316,9 +7489,9 @@
     "created": "2026-08-13T14:00:37.000Z",
     "is_pr": false,
     "num": 16,
-    "reaction_users": 1,
+    "reaction_users": 2,
     "reactions": {
-     "\ud83d\udc4d": 1
+     "\ud83d\udc4d": 2
     },
     "status": "open",
     "title": "Empty responses using Ollama on AMD ROCM"
@@ -9978,7 +10151,7 @@
     "num": 8,
     "reaction_users": 10,
     "reactions": {
-     "\u2764\ufe0f": 1,
+     "\ud83d\udc40": 1,
      "\ud83d\udc4d": 8
     },
     "status": "open",
@@ -11418,7 +11591,7 @@
      {
       "author": "Josephur",
       "created": "2026-08-14T09:41:24.000Z",
-      "reactions": 0,
+      "reactions": 1,
       "text": "Yes, this does work,\n\nThe crucial part is that this:\n\nauxiliary:\n  vision:\n    extra_body:\n      speculative.n_max: 0\n\ndoes **not** mean \u201cconfigure this model with MTP permanently disabled.\u201d It means, \u201cwhen Hermes makes a request using its `vision` auxiliary model slot, add `speculative.n_max: 0` to that particular HTTP request.\u201d Hermes explicitly treats its main model and auxiliary models such as vision as separate independently configured slots. Its documentation also says `auxiliary.<task>.extra_body` is attached to that auxiliary request, and the OpenAI SDK turns `extra_body` entries into top-level JSON fields. \n\nWhat is actually happening:\n\nSuppose `llama-server` was started like this conceptually:\n\nllama-server \\\n  ... \\\n  --mmproj mmproj.gguf \\\n  --spec-type draft-mtp \\\n  --spec-draft-n-max 3\n\nSo its **server default is MTP enabled**, with up to 3 speculative tokens. Current llama.cpp still has `draft-mtp` as a supported speculative type and `--spec-draft-n-max` as the corresponding global default. \n\nThen Hermes makes two different kinds of calls.\n\nNORMAL HERMES REQUEST\n        \u2502\n        \u2502 no speculative override\n        \u25bc\n llama-server\n server default: n_max = 3\n        \u2502\n        \u25bc\n      MTP ON\n\nBut when Hermes needs vision:\n\nHERMES VISION AUXILIARY REQUEST\n        \u2502\n        \u2502 request contains:\n        \u2502 \"speculative.n_max\": 0\n        \u25bc\n llama-server\n server default: n_max = 3\n request override: n_max = 0\n        \u2502\n        \u25bc\n      MTP OFF\n   for THIS request\n\n\nThen the next regular request comes in without that override:\n\nNEXT NORMAL REQUEST\n        \u2502\n        \u2502 no override\n        \u25bc\n server default: n_max = 3\n        \u2502\n        \u25bc\n      MTP ON\n\nIn current llama.cpp, each server request gets a `task_params` structure, and **the speculative decoding configuration is part of those task parameters**:\n\nstruct task_params {\n    ...\n    struct common_params_sampling sampling;\n    struct common_params_speculative speculative;\n    ...\n};\n\n\nThen, while llama-server is processing multiple generating slots, it calculates the draft-token limit **separately for each slot**:\n\nconst int n_draft_max = slot.get_n_draft_max();\nif (n_draft_max > 0) {\n    ...\n}\n\nSo this isn't just some accidental behavior. The server architecture explicitly allows one active request/slot to have a different speculative configuration than another.\n\nThe llama.cpp documentation even shows `speculative.n_max` inside the parameters for individual slots. \n\nSo you could theoretically have this happening concurrently:\n\nSlot 0: text agent request\nspeculative.n_max = 3\nMTP ON\n\nSlot 1: vision request\nspeculative.n_max = 0\nMTP OFF\n\nSlot 2: another text request\nspeculative.n_max = 3\nMTP ON\n\n\n**All on the same loaded model/server.**\n\nThe mmproj is still loaded into llama-server. You are **not unloading the MTP head or mmproj**.\n\nYou're merely telling llama.cpp:\n\n> For this generation, don't ask the MTP machinery to produce speculative tokens.\n\nThat makes sense as a workaround because multimodal processing inserts image-derived embeddings into the prompt rather than just ordinary text tokens. Current llama.cpp actually recognizes the combination of an mmproj and MTP/speculative model during server setup. \n\nSo you get:\n\nModel weights\n   \u251c\u2500\u2500 Qwen text model\n   \u251c\u2500\u2500 MTP tensors/head       loaded\n   \u2514\u2500\u2500 mmproj                 loaded\n\n\nFor text:\n\n\ntext prompt\n   \u2193\nQwen\n   \u2193\nMTP speculative decoding\n   \u2193\nanswer\n\n\nFor vision:\n\nimage\n   \u2193\nmmproj\n   \u2193\nimage embeddings + text prompt\n   \u2193\nQwen\n   \u2193\nordinary autoregressive decoding\n   \u2193\nanswer\n\nThe MTP components remain sitting in memory, they just aren't invoked for that request.\n\nThe reply says:\n\n> \u201cYou've hard-coded no MTP into the model config for hermes.\u201d \n\nThat would be true **if** you had done something like this for the overall main model:\n\nmodel:\n  provider: custom\n  ...\n  extra_body:\n    speculative.n_max: 0\n\n\nThen every normal Hermes agent request could inherit it.\n\nBut you didn't.\n\nYou put it here:\n\nauxiliary:\n  vision:\n    extra_body:\n      speculative.n_max: 0\n\nHermes specifically documents auxiliary jobs as independently configurable model slots, including **Vision**. \n\n> `extra_body` there isn't configuring llama.cpp globally. It's attached only to API requests made through Hermes' `auxiliary.vision` route. llama-server itself is still launched with MTP enabled. Vision requests override `speculative.n_max` to 0 for their individual request, while normal model requests omit the override and inherit the server's nonzero MTP setting.\n\nInterestingly, Hermes **did have a bug** where some `auxiliary.<task>.extra_body` values from `config.yaml` were silently ignored. That bug was filed May 30, 2026 and has since been closed with a fix. \n\nSo on an older Hermes checkout, you could write:\n\nauxiliary:\n  vision:\n    extra_body:\n      speculative.n_max: 0\n\nand it might not actually reach llama.cpp.\n\nIf you enable llama.cpp's `/slots` and/or metrics/logging, you can watch the request parameters. Current llama.cpp's `/slots` output exposes `speculative.n_max` for each slot, and `--metrics` exposes speculative-draft statistics. \n\nYou should be able to observe the activity.\n\nSo **yes, your workaround is mechanically sound**, and better yet, current llama.cpp's per-task/per-slot implementation backs up why it works.\n\nThe really interesting implication is that you don't actually need a second Qwen server just to get stable vision. One Qwen3.6 instance can potentially serve **text + MTP and vision without MTP simultaneously**, with the request itself selecting whether speculative decoding runs."
      }
     ],
@@ -12119,23 +12292,552 @@
    }
   ]
  },
- "unsloth/Qwen3.8-27B-GGUF": {
-  "count": 70,
+ "unsloth/Qwen3.8-2.4T-A95B-GGUF": {
+  "count": 5,
   "discussions": [
    {
-    "author": "Ataa",
+    "author": "danielhanchen",
+    "comments": 6,
+    "created": "2026-08-12T23:27:00.000Z",
+    "is_pr": false,
+    "num": 4,
+    "reaction_users": 7,
+    "reactions": {
+     "\u2764\ufe0f": 5,
+     "\ud83d\ude80": 3
+    },
+    "status": "open",
+    "thread": [
+     {
+      "author": "danielhanchen",
+      "created": "2026-08-12T23:27:00.000Z",
+      "reactions": 10,
+      "text": "Hey for those asking for an example of the 1-bit 397GB Qwen3.8 quant, here it is!\n\nA reminder this 5TB reduced down to just 397GB. That's a whooping 91% reduction\n\nMore tests you can see here: https://www.reddit.com/r/LocalLLaMA/comments/1vnu366/1bit_qwen_38_24t_a95b_unsloth_iq1_s_medium/\n\n\n\n![image](https://cdn-uploads.huggingface.co/production/uploads/62ecdc18b72a69615d6bd857/B2QeeHtfLK1zVaw8Soycw.png)\n\n\n<img width=\"600\" alt=\"qwen3.8 unsloth desktop\" src=\"https://3215535692-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2FxhOjnexMCB3dmuQFQ2Zq%2Fuploads%2Fb3IiYJzHzsp2698xTim4%2Fgiffyy%20gf.gif?alt=media&token=f1bda1a1-b81f-43e2-ba10-dbdc9a29c0c0\" />"
+     },
+     {
+      "author": "philigrale",
+      "created": "2026-08-12T23:33:18.000Z",
+      "reactions": 4,
+      "text": "Hi Daniel,\nthanks for the demonstration.\nDo you know if there are benchmarks that compare the Quants to the Original?\nI'd like to know how much the IQ-0 quantization degrades the quality.\nThanks"
+     },
+     {
+      "author": "JermemyHaschal",
+      "created": "2026-08-12T23:58:53.000Z",
+      "reactions": 3,
+      "text": "I'm also interested in more comparisons and different benchmarks/tests as well!"
+     },
+     {
+      "author": "shimmyshimmer",
+      "created": "2026-08-13T00:06:38.000Z",
+      "reactions": 12,
+      "text": "> Hi Daniel,\n> thanks for the demonstration.\n> Do you know if there are benchmarks that compare the Quants to the Original?\n> I'd like to know how much the IQ-0 quantization degrades the quality.\n> Thanks\n\n> I'm also interested in more comparisons and different benchmarks/tests as well!\n\nWe're conducting, unfortunately will require some time"
+     },
+     {
+      "author": "Hunterx",
+      "created": "2026-08-15T01:44:00.000Z",
+      "reactions": 4,
+      "text": "Hi - In addition to the above example. Medium reasoning, 1-bit. For context, this took ~70k tokens in Unsloth Studio, and I don\u2019t have enough context headroom to push it to Extra High reasoning\n\nAcropolis I stole this prompt from Arena Ai Chanel so you can go compare against other generations from big fat models. \n![image](https://cdn-uploads.huggingface.co/production/uploads/634ac97b574bb72b10f14b02/VIWup6JAgCsh7dni8G0RM.png)\nPrompt : Create Ancient Athens' Acropolis with a recognizable Parthenon and surrounding rock plateau, in warm Mediterranean light.\n\nIf you use Three.js, add an import map (before the module script) mapping \"three\" and \"three/addons/\" to the same pinned version, and import only via those names. Never reuse identifiers in the same scope - use descriptive variable names.\n\nSCENE (instant recognition)\n\nParthenon with correct \"temple\" proportions: colonnade, pediment, stepped stylobate. Pale marble material with subtle warm tint; columns cast crisp shadows. Rocky Acropolis hill with carved steps/paths. Olive trees scattered (instanced) and distant city massing below (simple). ATMOSPHERE\n\nWarm sun + blue sky; slight haze in distance. Optional: a few small human figures in robes for scale (instanced). CONTROLS\n\nTime slider: morning \u2192 high noon \u2192 golden hour (color temperature and shadow softness change). Haze slider. Crowd toggle + density slider. Camera: Classic postcard (default), Close architectural inspection, Flyover path. TECHNICAL\n\nInstanced trees/people. Procedural textures for marble variation (subtle). Target >=55 FPS; clamp DPR <= 2; minimal UI. FINAL OUTPUT Generate the full output now. Single self-contained Three.js scene. Let me write it and syntax-check it."
+     },
+     {
+      "author": "krustik",
+      "created": "2026-08-19T08:32:32.000Z",
+      "reactions": 0,
+      "text": "I've tested the IQ2-XS (uses 740Gb Ram) and its super slow to the level of unusable. I've noticed that all Qwen big models are becoming very slow in inference than Kimi or Deepseek on same hardware and similar quantized size(the fastest on CPU is all Kimi models pre K3).\n\nThis was like using Colibri method because it's mostly by Xeon CPU with little help of one GPU, but its not Colibri. For this small code writing it takes a whole 5 hours (0.17 tokens/sec). Mostly 90% of time wasted on thinking, which wasn't turned on in launcher and started by default in model itself.\nThis is first Qwen model which completed my test in fact, but of course i'm not planning to use it, by waste of energy-time.\nThe result of 5 hours work:\n\n# Mozart \u2014 \"Ah! vous dirai-je, maman\" K.265 (Twinkle Twinkle Little Star)\n\n```chuck\n// ============================================================\n// Mozart - Ah! vous dirai-je, maman (Twinkle Twinkle) K.265\n// ============================================================\n\nTriOsc osc => Envelope env => Gain master => dac;\nmaster.gain(0.35);\nenv.duration(8::ms);\n\n0.32::second => dur qn;   // quarter note\n0.64::second => dur hn;   // half note\n0.05::second => dur gap;  // small gap between notes\n\nfun void play(int note, dur d)\n{\n    Std.mtof(note) => osc.freq;\n    env.keyOn();\n    (d - 15::ms) => now;\n    env.keyOff();\n    15::ms => now;\n}\n\n// --- Phrase 1: C C G G A A G | F F E E D D C ---\nplay(60, qn); play(60, qn); play(67, qn); play(67, qn);\nplay(69, qn); play(69, qn); play(67, hn);\nplay(65, qn); play(65, qn); play(64, qn); play(64, qn);\nplay(62, qn); play(62, qn); play(60, hn);\n\ngap => now;\n\n// --- Phrase 2: G G F F E E D | G G F F E E D ---\nplay(67, qn); play(67, qn); play(65, qn); play(65, qn);\nplay(64, qn); play(64, qn); play(62, hn);\nplay(67, qn); play(67, qn); play(65, qn); play(65, qn);\nplay(64, qn); play(64, qn); play(62, hn);\n\ngap => now;\n\n// --- Phrase 3: C C G G A A G | F F E E D D C ---\nplay(60, qn); play(60, qn); play(67, qn); play(67, qn);\nplay(69, qn); play(69, qn); play(67, hn);\nplay(65, qn); play(65, qn); play(64, qn); play(64, qn);\nplay(62, qn); play(62, qn); play(60, hn);\n```\n\n**How to run:** save as `mozart.ck` and execute:\n```\nchuck mozart.ck\n```\n\n**What it does:**\n- Uses a `TriOsc` (triangle wave) for a soft, music-box-like timbre\n- `Envelope` shapes each note with a quick attack/release to avoid clicks\n- Three phrases of the melody with correct rhythm (quarter + half notes)\n- MIDI note numbers: C4=60, D4=62, E4=64, F4=65, G4=67, A4=69\n\nP.S.: Qwen3.8-27B failed this test fully in BF16 quality (62Gb Ram), thinking slowing it by x10 times vs non-thinking."
+     }
+    ],
+    "title": "1-bit Qwen3.8 GGUF output example!"
+   },
+   {
+    "author": "singulariti",
     "comments": 1,
+    "created": "2026-08-17T05:52:28.000Z",
+    "is_pr": false,
+    "num": 5,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "open",
+    "thread": [
+     {
+      "author": "singulariti",
+      "created": "2026-08-17T05:52:28.000Z",
+      "reactions": 0,
+      "text": "Will there be any kld or perplexity benchmarks for this model? I wanna see how IQ1_0 holds up."
+     }
+    ],
+    "title": "KLD or Perplexity benchmarks?"
+   },
+   {
+    "author": "Green-Sky",
+    "comments": 3,
+    "created": "2026-08-12T18:14:56.000Z",
+    "is_pr": false,
+    "num": 3,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "closed",
+    "thread": [
+     {
+      "author": "Green-Sky",
+      "created": "2026-08-12T18:14:56.000Z",
+      "reactions": 0,
+      "text": "Are they new or are you using existing type?\r\n\r\n> Due to naming issues, we used TQ2_0, TQ1_0 and Q1_0 otherwise it won't pop up in the HF repo.\r\n\r\nThis sounds like you \"named\" your new types after existing types. Don't do that."
+     },
+     {
+      "author": "danielhanchen",
+      "created": "2026-08-12T23:15:42.000Z",
+      "reactions": 1,
+      "text": "Hey it's because it won't pop up in the Hugging Face right side bar"
+     },
+     {
+      "author": "Green-Sky",
+      "created": "2026-08-14T08:06:32.000Z",
+      "reactions": 0,
+      "text": "I see now. Still kind of a hack.\nI personally dont look at those, because they are often wrong..."
+     }
+    ],
+    "title": "New types"
+   },
+   {
+    "author": "Trilogix1",
+    "comments": 1,
+    "created": "2026-08-12T16:30:29.000Z",
+    "is_pr": false,
+    "num": 2,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "closed",
+    "thread": [
+     {
+      "author": "Trilogix1",
+      "created": "2026-08-12T16:30:29.000Z",
+      "reactions": 0,
+      "text": "Who named you Unsloth,  I see only godspeed  \ud83d\ude04.  Change the nickname to smth more appropriate to you. Cmon guys  Nickname suggestions?\nI go first: RawBit"
+     }
+    ],
+    "title": "Unsloth my @ss"
+   },
+   {
+    "author": "akierum",
+    "comments": 5,
+    "created": "2026-08-12T15:28:45.000Z",
+    "is_pr": false,
+    "num": 1,
+    "reaction_users": 2,
+    "reactions": {
+     "\ud83d\udc4d": 2
+    },
+    "status": "closed",
+    "thread": [
+     {
+      "author": "akierum",
+      "created": "2026-08-12T15:28:45.000Z",
+      "reactions": 2,
+      "text": "Nice mockery from QWEN team they release the 2.4T model nobody can use but the 27B is 2 days delayed. WTF"
+     },
+     {
+      "author": "derpmagician",
+      "created": "2026-08-12T16:21:42.000Z",
+      "reactions": 14,
+      "text": "why are you complaining about something receiving for free? Just be patient"
+     },
+     {
+      "author": "akierum",
+      "created": "2026-08-12T16:24:37.000Z",
+      "reactions": 2,
+      "text": "https://modelscope.cn/models/Qwen/Qwen3.8-27B\n\nNow shows 404, it used timer with 2 days 3 hours earlier"
+     },
+     {
+      "author": "allarac",
+      "created": "2026-08-12T17:58:31.000Z",
+      "reactions": 2,
+      "text": "Have some patience, young Padavan.\n\nBesides that, some folks have the hardware for that, others just buy a house for its price."
+     },
+     {
+      "author": "Lissanro",
+      "created": "2026-08-13T01:23:54.000Z",
+      "reactions": 8,
+      "text": "I look forward to 27B for my secondary PC which does not have that much memory but in the meantime for my main workstation I will be downloading IQ3 quant of Qwen 3.8 2.4T since it looks like it would fit 1 TB RAM + 96 GB VRAM. Thanks to the Unsloth team for publishing quants so quickly!"
+     }
+    ],
+    "title": "Nice mockery from QWEN team they release the 2.4T model nobody can use but the 27B is 2 days delayed. WTF"
+   }
+  ]
+ },
+ "unsloth/Qwen3.8-27B-GGUF": {
+  "count": 81,
+  "discussions": [
+   {
+    "author": "danielhanchen",
+    "comments": 24,
+    "created": "2026-08-19T16:42:07.000Z",
+    "is_pr": false,
+    "num": 74,
+    "reaction_users": 33,
+    "reactions": {
+     "\ud83d\udc4d": 12,
+     "\ud83d\udd25": 26
+    },
+    "status": "open",
+    "thread": [
+     {
+      "author": "danielhanchen",
+      "created": "2026-08-19T16:42:07.000Z",
+      "reactions": 42,
+      "text": "Hey everyone! We\u2019re releasing new Qwen3.8-27B GGUFs with 10% higher accuracy for the same size. This uses a new version of Dynamic v3.0\r\n\r\nUnsloth Dynamic V3 outperforms others by >10% on Div-300, KLD & more benchmarks.\r\nWe also release 1-bit quants that retain 77% accuracy. Run on 8GB RAM.\r\n\r\n<img width=\"600\" alt=\"qwen3.8 unsloth desktop\" src=\"https://unsloth.ai/docs/~gitbook/image?url=https%3A%2F%2F3215535692-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252FxhOjnexMCB3dmuQFQ2Zq%252Fuploads%252Fl9piThTmmUsePst5w3F2%252Fimage.png%3Falt%3Dmedia%26token%3D821e88e2-ad4e-40bf-adf2-e13837228e82&width=768&dpr=3&quality=100&sign=dd5f7cb5&sv=2\" />\r\n\r\n\r\n---\r\n\r\n\r\nSome of you already saw we updated our quants a few hours ago. No, nothing was broken, nothing needed fixes (I don't know why people even said this since it's a complete fabricated story). This was purely an update to make them EVEN BETTER.\r\n\r\nWe do not train on the imatrix calibration dataset, and we do NOT use QAT or QAD. Everything is done through post-training quantization. Our imatrix file used is available for the community to test, evaluate, and use. We encourage researchers and developers to create variations and fine-tunes of Qwen3.8 using our Unsloth quants/imatrix. You can read our over fitting analysis as well.\r\n\r\nBlog with all details and more benchmarks: https://unsloth.ai/docs/basics/dynamic-3.0-ggufs\r\n\r\nGGUF: https://huggingface.co/unsloth/Qwen3.8-27B-GGUF\r\n\r\nEnjoy! We also will be doing a new Unsloth Desktop update today: https://github.com/unslothai/unsloth\r\n\r\nWe had A LOT of updates and will be introducing auto compaction, allowing external APIs to do tool calling and more."
+     },
+     {
+      "author": "Lck0427",
+      "created": "2026-08-19T17:19:59.000Z",
+      "reactions": 0,
+      "text": "Thank you so much for your excellent quantization work. I saw that you create a new folder named `MTP`, does that mean that you have seperated the mtp from the model gguf? Now if we want mtp acceleration, must we download the seperate mtp.gguf? Could you please make a clear instruction on how to use mtp acceleration for this model?"
+     },
+     {
+      "author": "MNMC",
+      "created": "2026-08-19T17:23:29.000Z",
+      "reactions": 0,
+      "text": "What happened with non-dynamic quants files like `Qwen3.8-27B-Q4_K_M.gguf`? I see they were deleted."
+     },
+     {
+      "author": "tandaraSa",
+      "created": "2026-08-19T17:49:17.000Z",
+      "reactions": 0,
+      "text": "This is great. Can you run TB 2.1 for some quants?"
+     },
+     {
+      "author": "Linukso1D",
+      "created": "2026-08-19T17:53:27.000Z",
+      "reactions": 0,
+      "text": "From the ud3 description:\n\"We also removed the MTP module from smaller quants under UD-Q2_K_XL (8.37GB and lower) to converse around 500MB of disk space - you can use the Q4_0 MTP separate module if needed\""
+     },
+     {
+      "author": "thaatz",
+      "created": "2026-08-19T17:59:22.000Z",
+      "reactions": 0,
+      "text": "works well in LM Studio for me, but for some reason when using  llama.cpp it crashes during token generation. Any suggestions?\nusing bare bone arguments`llama-server -fa on --fit on -c 200000 --model Qwen3.8-27B-UD-Q5_K_XL.gguf`"
+     },
+     {
+      "author": "andyceo",
+      "created": "2026-08-19T18:29:44.000Z",
+      "reactions": 1,
+      "text": "When I look at Qwen3.8-27B-UD-Q5_K_XL.gguf info, I see: token_embd.weight precision is Q6_K\n\nCompare to Qwen3.8-27B-UD-Q6_K_XL.gguf: token_embd.weight precision is also Q6_K\n\nIs it all ok some kind of mistake?\n\nThank you for your work!"
+     },
+     {
+      "author": "ACSmith1337",
+      "created": "2026-08-19T18:55:58.000Z",
+      "reactions": 0,
+      "text": "Does this mean its faster, or  its more accurate as small quants compared to the base model?"
+     },
+     {
+      "author": "danielhanchen",
+      "created": "2026-08-19T19:10:38.000Z",
+      "reactions": 3,
+      "text": "> Does this mean its faster, or  its more accurate as small quants compared to the base model?\n\nIt's more accurate for the same size of quantization compared to the base model"
+     },
+     {
+      "author": "KoenS86",
+      "created": "2026-08-19T19:38:12.000Z",
+      "reactions": 0,
+      "text": "Will this be coming to any popular older models, for example Qwen3.6 35B? Or only future releases?"
+     },
+     {
+      "author": "sedonami",
+      "created": "2026-08-19T19:55:05.000Z",
+      "reactions": 2,
+      "text": "UD-Q8_K_XL wasn't updated or included in the benchmarks. Is it recommended to use Q8_0 or UD-Q8_K_L instead?"
+     },
+     {
+      "author": "smailimohammad",
+      "created": "2026-08-19T20:15:59.000Z",
+      "reactions": 1,
+      "text": "can we have ud3 for ornith1.5 , KAT-Coder-V2.5-Dev , GRM-3.2-Sky , ling 3-tiny?"
+     },
+     {
+      "author": "veldierin",
+      "created": "2026-08-19T20:17:22.000Z",
+      "reactions": 3,
+      "text": "@danielhanchen - can you please make your imatrix_unsloth.gguf available for us so we can use this as well."
+     },
+     {
+      "author": "Hjx2",
+      "created": "2026-08-19T20:42:45.000Z",
+      "reactions": 2,
+      "text": "@danielhanchen  Congrats on the Dynamic v3.0 release! \n\nWould it be possible to keep the standard/uniform legacy quants (especially Qwen3.8-27B-Q4_K_S.gguf) available in the repo alongside the new UD versions?\n\nFor users running dense models on 12GB/16GB GPUs using tensor-level CPU offloading (-ot in llama.cpp), uniform standard quants are noticeably faster. The dynamic layouts (likely due to internal IQ sub-layers or uneven tensor sizes) introduce a significant bottleneck on CPU dequantization and RAM-to-GPU data transfer.\n\nKeeping both options available would be a huge help for the hybrid-inference community. Thanks for all your amazing work!"
+     },
+     {
+      "author": "funnier77",
+      "created": "2026-08-19T21:09:16.000Z",
+      "reactions": 0,
+      "text": "> can we have ud3 for ornith1.5 , KAT-Coder-V2.5-Dev , GRM-3.2-Sky , ling 3-tiny?\n\nling 3 tiny is a good idea for UD 3.0 I'd imagine. Good model. Seems to be very easy to break with quants. Unsloth is probably the only one I'd trust to go under 8bits with that model"
+     },
+     {
+      "author": "smailimohammad",
+      "created": "2026-08-19T21:18:34.000Z",
+      "reactions": 0,
+      "text": "> > can we have ud3 for ornith1.5 , KAT-Coder-V2.5-Dev , GRM-3.2-Sky , ling 3-tiny?\n> \n> ling 3 tiny is a good idea for UD 3.0 I'd imagine. Good model. Seems to be very easy to break with quants. Unsloth is probably the only one I'd trust to go under 8bits with that model\n\nyes 8b moe  q4 is possible on smartphone will work fine"
+     },
+     {
+      "author": "s3rj1k",
+      "created": "2026-08-19T21:21:56.000Z",
+      "reactions": 0,
+      "text": "> ling 3 tiny is a good idea for UD 3.0\n\nyes please!"
+     },
+     {
+      "author": "xmmm",
+      "created": "2026-08-19T21:55:30.000Z",
+      "reactions": 0,
+      "text": "Great work! Can you share the evaluation dataset / methodology you used for top1 agreement and KLD?"
+     },
+     {
+      "author": "cinderfella",
+      "created": "2026-08-19T22:09:59.000Z",
+      "reactions": 3,
+      "text": "Could you clarify the MTP situation? I see the Q4 MTP download, but it's a bit unclear where it still exists and where it doesn't. Would also be a great addition to the docs for qwen3.8\n\nEither way, thanks a lot for your work."
+     },
+     {
+      "author": "CYISNOTHERE",
+      "created": "2026-08-19T23:59:31.000Z",
+      "reactions": 1,
+      "text": "Nice! Can we get a MXFP4 GGUF version please?"
+     },
+     {
+      "author": "akierum",
+      "created": "2026-08-20T00:00:30.000Z",
+      "reactions": 0,
+      "text": "> UD-Q8_K_XL wasn't updated or included in the benchmarks. Is it recommended to use Q8_0 or UD-Q8_K_L instead?\n\nI think it means the original Q8 is best, then Q8-XL there V3 are for those than cant run normal Q8 or Q8-XL version dues to VRAM limit."
+     },
+     {
+      "author": "avanpost492",
+      "created": "2026-08-20T03:42:30.000Z",
+      "reactions": 0,
+      "text": "what potential on RTX4050 laptop with 6GB VRAM and 16GB RAM?"
+     },
+     {
+      "author": "artden111",
+      "created": "2026-08-20T04:00:41.000Z",
+      "reactions": 0,
+      "text": "Where is comparison graphs with V2?"
+     },
+     {
+      "author": "curtis1969",
+      "created": "2026-08-20T04:29:25.000Z",
+      "reactions": 0,
+      "text": "Preview v3 model at UD 2 bit xl is making less mistakes than the new one on every prompt i run it has errors and the end result is unfixable sent the models the same exact code describing an issue where the ball in a ai learning pong game was moving too slow new model made like  5 edits and the bug was still there I loaded up the old  Preview v3 model and it fixes it in one edit in every test I've ran so far it's done worse except for making a t-rex svg \nnew \n![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/1oNbY-aZ84pc9Fb-BGJTs.png)\nold\n![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/nA23l4E8bRCwpMlFdCeno.png)\nI have multiple examples all with the same exact settings like to make a 3D racing game Make a 3D racing game where your on a highway an dodge vehicles make this an HTML file create detailed traffic models buildings and a beautiful sunset sky box credit detailed Rd. texture and the player car should be the best looking vehicle use three JS and anything you want to make it easier and focus on making it look as nice as you possibly can\nnew\n![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/oWaeDEsUtJNWOq2i3CfaI.png)\n\nold\n\n![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/c2v7PHrH9xTTvoJQDeo2s.png)\n\nI don't know if this has to do with the files getting smaller or I'm just getting unlucky but I just seem to be having bad luck it writes longer code but the code is broken"
+     }
+    ],
+    "title": "Introducing Unsloth Dynamic v3 Qwen3.8"
+   },
+   {
+    "author": "AsThirtyThree",
+    "comments": 3,
+    "created": "2026-08-19T21:56:55.000Z",
+    "is_pr": false,
+    "num": 81,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "open",
+    "title": "Can i ask the sweet point for 12gb cards?"
+   },
+   {
+    "author": "r1yyxn",
+    "comments": 1,
+    "created": "2026-08-19T20:06:56.000Z",
+    "is_pr": false,
+    "num": 80,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "open",
+    "title": "Quality enhance"
+   },
+   {
+    "author": "guarism0",
+    "comments": 2,
+    "created": "2026-08-19T19:31:59.000Z",
+    "is_pr": false,
+    "num": 79,
+    "reaction_users": 2,
+    "reactions": {
+     "\ud83d\udc40": 2
+    },
+    "status": "open",
+    "title": "DFlash2?"
+   },
+   {
+    "author": "artden111",
+    "comments": 3,
+    "created": "2026-08-19T18:23:23.000Z",
+    "is_pr": false,
+    "num": 78,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "open",
+    "title": "What is mtp-Qwen3.8-27B-Q4_0.gguf used for?"
+   },
+   {
+    "author": "marjimgu",
+    "comments": 3,
+    "created": "2026-08-19T17:32:53.000Z",
+    "is_pr": false,
+    "num": 77,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "open",
+    "title": "Qwen3.8-27B on Dual RTX 3060 \u2014 llama.cpp Benchmark"
+   },
+   {
+    "author": "artden111",
+    "comments": 6,
+    "created": "2026-08-19T17:14:36.000Z",
+    "is_pr": false,
+    "num": 76,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "open",
+    "title": "`Qwen3.8-27B-UD-IQ1_S.gguf`Has anyone tried this?"
+   },
+   {
+    "author": "CYISNOTHERE",
+    "comments": 2,
+    "created": "2026-08-19T16:56:40.000Z",
+    "is_pr": false,
+    "num": 75,
+    "reaction_users": 3,
+    "reactions": {
+     "\ud83d\udc4d": 3
+    },
+    "status": "open",
+    "title": "NVFP4/MXFP4 GGUF Version?"
+   },
+   {
+    "author": "vulcan4d",
+    "comments": 1,
+    "created": "2026-08-18T18:45:00.000Z",
+    "is_pr": false,
+    "num": 73,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "closed",
+    "title": "Severe Multimodal Degradation in Standard Quants"
+   },
+   {
+    "author": "Artem7799",
+    "comments": 13,
+    "created": "2026-08-18T17:08:45.000Z",
+    "is_pr": false,
+    "num": 72,
+    "reaction_users": 1,
+    "reactions": {
+     "\ud83e\udd17": 1
+    },
+    "status": "open",
+    "thread": [
+     {
+      "author": "Artem7799",
+      "created": "2026-08-18T17:08:45.000Z",
+      "reactions": 1,
+      "text": "ExecStart=/llama-server \\\n  -m /Qwen3.8-27B-Q5_K_M.gguf \\\n // --mmproj /mmproj-F16-Qwen3.8-27B.gguf \\\n  --alias grok-local \\\n  --host 0.0.0.0 \\\n  --port 8000 \\\n  --temperature 0.7 \\\n  --threads 22 \\\n  --ctx-size 215040 \\\n  --n-gpu-layers 100 \\\n  --split-mode tensor \\\n  --tensor-split 1,1 \\\n  --cache-type-k q8_0 \\\n  --cache-type-v q8_0 \\\n  --flash-attn on \\\n  --min-p 0.0 \\\n  --top-k 20 \\\n  --top-p 0.95 \\\n  --spec-type draft-mtp \\\n  --spec-draft-n-max 2 \\\n  --timeout 10000 \\\n  --repeat-penalty 1.05 \\\n  --repeat-last-n 1024\n\n==========\noutput 30t/s \ninput 800t/s"
+     },
+     {
+      "author": "arazyan",
+      "created": "2026-08-19T07:32:43.000Z",
+      "reactions": 0,
+      "text": "is it stable 30 when the context is filled up?"
+     },
+     {
+      "author": "arazyan",
+      "created": "2026-08-19T07:35:53.000Z",
+      "reactions": 0,
+      "text": "also what is you motherboard? what is happening on layer split? did you test it?"
+     },
+     {
+      "author": "Artem7799",
+      "created": "2026-08-19T08:25:59.000Z",
+      "reactions": 0,
+      "text": "> also what is you motherboard? what is happening on layer split? did you test it?\n\nUbuntu 24.04\nHUANANZHI X99 DUAL-F8D PLUS 2 x LGA\nXeon E5 2696V4\n128 GB DDR4 RAM\nToughpower GT 1200W\n\nIf I use split-mode tensor, the load on 2 GPUs is approximately 90% each. If I use split-mode layer, the load on 2 GPUs is approximately 50% each. Accordingly, the output speed with split-mode tensor is higher.\nThe speed screenshot is attached.\n![decode_1](https://cdn-uploads.huggingface.co/production/uploads/69fb2d99ff8a39f88fbcf494/h9yKAMiAby8N0n9SON82e.jpeg)"
+     },
+     {
+      "author": "artden111",
+      "created": "2026-08-19T11:36:24.000Z",
+      "reactions": 0,
+      "text": "@Artem7799 it is really strange. I have same hardware and my speed about 55-60 t/s with context 196608"
+     },
+     {
+      "author": "artden111",
+      "created": "2026-08-19T11:40:50.000Z",
+      "reactions": 0,
+      "text": "Here is screenshot:\n![image](https://cdn-uploads.huggingface.co/production/uploads/6a79cbad96feab4443261ed6/AFpoJG7Rfgeirc-_-BHL6.png)"
+     },
+     {
+      "author": "artden111",
+      "created": "2026-08-19T11:43:31.000Z",
+      "reactions": 0,
+      "text": "@Artem7799  Okay, I see. This is with a context of 70,000 tokens filled for your case. Then everything's fine!"
+     },
+     {
+      "author": "Artem7799",
+      "created": "2026-08-19T12:48:24.000Z",
+      "reactions": 0,
+      "text": "> @Artem7799  Okay, I see. This is with a context of 70,000 tokens filled for your case. Then everything's fine!\n\nYou have a Gigabyte X570 with PCIe 4.0 x16,\nwhile I have PCIe 3.0 x8 ((\nThat\u2019s probably the main reason for the speed difference.\nBy the way, I\u2019ve added your parameters:\n,ngram-mod \nno-context-shift \n\nThe speed increased by 10\u201315% )"
+     },
+     {
+      "author": "artden111",
+      "created": "2026-08-19T13:07:54.000Z",
+      "reactions": 0,
+      "text": "`ngram-mod` increases speed, but in very specific cases\n\nUsing `no-context-shift` will cause a context overflow error, so the model will not forget the start of the chat, but will simply stop."
+     },
+     {
+      "author": "artden111",
+      "created": "2026-08-19T13:10:12.000Z",
+      "reactions": 0,
+      "text": "By the way, I have overclockable video cards, and I overclocked the memory speed by almost 20%"
+     },
+     {
+      "author": "subbur",
+      "created": "2026-08-19T13:31:51.000Z",
+      "reactions": 1,
+      "text": "I am getting 5tps with 32gb vram, with latest llqmq.cpp"
+     },
+     {
+      "author": "Artem7799",
+      "created": "2026-08-19T14:51:33.000Z",
+      "reactions": 0,
+      "text": "> By the way, I have overclockable video cards, and I overclocked the memory speed by almost 20%\n\nAnd which parameters were increased, and by how much? Through which utility?"
+     },
+     {
+      "author": "artden111",
+      "created": "2026-08-19T15:40:47.000Z",
+      "reactions": 1,
+      "text": "Xtreme Tuner:\n\n![image](https://cdn-uploads.huggingface.co/production/uploads/6a79cbad96feab4443261ed6/Xc3lPuJEfLg9VCZK4lZdq.png)\n\nGPU clock is unchanged"
+     }
+    ],
+    "title": "Qwen3.8-27B: Q5_K_M, RTX 5060ti 16gb x 2, total 32gb, 30t/s, 215k context"
+   },
+   {
+    "author": "oserefemhen",
+    "comments": 4,
+    "created": "2026-08-18T14:11:08.000Z",
+    "is_pr": false,
+    "num": 71,
+    "reaction_users": 0,
+    "reactions": {},
+    "status": "closed",
+    "title": "Qwen 3.8 27B Intermittent premature EOS / truncation during agentic tool-calling despite fixed template and reasoning mode"
+   },
+   {
+    "author": "Ataa",
+    "comments": 4,
     "created": "2026-08-18T00:41:11.000Z",
     "is_pr": false,
     "num": 70,
-    "reaction_users": 0,
-    "reactions": {},
+    "reaction_users": 1,
+    "reactions": {
+     "\ud83d\ude80": 1
+    },
     "status": "open",
     "title": "Squeezing Qwen 3.8 27B into a Single 16 GB GPU \u2014 Almost 42 tok/s, 64K Context"
    },
    {
     "author": "MalcolmMielle",
-    "comments": 1,
+    "comments": 4,
     "created": "2026-08-17T22:12:24.000Z",
     "is_pr": false,
     "num": 69,
@@ -12146,7 +12848,7 @@
    },
    {
     "author": "SergeySS8",
-    "comments": 1,
+    "comments": 4,
     "created": "2026-08-17T20:31:25.000Z",
     "is_pr": false,
     "num": 68,
@@ -12157,13 +12859,13 @@
    },
    {
     "author": "odellus",
-    "comments": 4,
+    "comments": 5,
     "created": "2026-08-17T10:45:56.000Z",
     "is_pr": false,
     "num": 67,
     "reaction_users": 0,
     "reactions": {},
-    "status": "open",
+    "status": "closed",
     "title": "Subtle chat template issue when building from latest llama.cpp master branch"
    },
    {
@@ -12172,9 +12874,9 @@
     "created": "2026-08-17T07:50:59.000Z",
     "is_pr": false,
     "num": 66,
-    "reaction_users": 2,
+    "reaction_users": 3,
     "reactions": {
-     "\ud83d\udc4d": 2
+     "\ud83d\udc4d": 3
     },
     "status": "open",
     "title": "Qwen3.8-27B only 18 tok/s vs Qwen3.6-27B 62 tok/s on A100 80GB + vLLM \u2014 expected?"
@@ -12209,8 +12911,10 @@
     "created": "2026-08-17T00:37:16.000Z",
     "is_pr": false,
     "num": 63,
-    "reaction_users": 0,
-    "reactions": {},
+    "reaction_users": 2,
+    "reactions": {
+     "\u2764\ufe0f": 2
+    },
     "status": "open",
     "title": "Enable Reasoning Level with LM Studio and VS Code GitHub Copilot Chat"
    },
@@ -12227,7 +12931,7 @@
    },
    {
     "author": "Hjx2",
-    "comments": 7,
+    "comments": 9,
     "created": "2026-08-16T15:33:11.000Z",
     "is_pr": false,
     "num": 61,
@@ -12238,7 +12942,7 @@
    },
    {
     "author": "HuggingButtt",
-    "comments": 4,
+    "comments": 5,
     "created": "2026-08-16T12:44:36.000Z",
     "is_pr": false,
     "num": 60,
@@ -12251,7 +12955,7 @@
    },
    {
     "author": "djtrondheim",
-    "comments": 3,
+    "comments": 4,
     "created": "2026-08-16T12:19:25.000Z",
     "is_pr": false,
     "num": 59,
@@ -12290,9 +12994,9 @@
     "created": "2026-08-16T06:15:37.000Z",
     "is_pr": false,
     "num": 56,
-    "reaction_users": 1,
+    "reaction_users": 2,
     "reactions": {
-     "\ud83d\udc4d": 1
+     "\ud83d\udc4d": 2
     },
     "status": "open",
     "title": "My issues and what I had to do to get Qwen3.8-27B /Qwen3.8-27B-MTP-ONLY-Q6_K.gguf /Qwen3.8-27B-MTP-ONLY-Q4_K_M.gguf  to work with Llama.cpp"
@@ -12343,7 +13047,7 @@
    },
    {
     "author": "kelei999999",
-    "comments": 8,
+    "comments": 9,
     "created": "2026-08-15T15:37:19.000Z",
     "is_pr": false,
     "num": 51,
@@ -12389,7 +13093,7 @@
    },
    {
     "author": "NunoS",
-    "comments": 4,
+    "comments": 7,
     "created": "2026-08-15T13:52:34.000Z",
     "is_pr": false,
     "num": 47,
@@ -12423,62 +13127,6 @@
      "\ud83d\udc4d": 4
     },
     "status": "open",
-    "thread": [
-     {
-      "author": "WhiteDan64",
-      "created": "2026-08-15T07:50:55.000Z",
-      "reactions": 4,
-      "text": "Using a \"medium\" level of reasoning effort (higher levels are excessive), I noticed that context usage in the new version of Qwen 3.8-27b is about 10 times higher than in Qwen 3.6-27b. Has anyone else encountered the same problem? Do you have any suggestions for reducing usage?"
-     },
-     {
-      "author": "mayankiit04",
-      "created": "2026-08-15T08:07:14.000Z",
-      "reactions": 0,
-      "text": "try with reasoning-budget = 2048"
-     },
-     {
-      "author": "WhiteDan64",
-      "created": "2026-08-15T08:19:33.000Z",
-      "reactions": 1,
-      "text": "These are the Thinking Level supported by pi-agent\n\n- off :       No reasoning\n- minimal :     Very brief reasoning (~1k tokens)\n- low :         Light reasoning (~2k tokens)\n- medium :     Moderate reasoning (~8k tokens)\n- high :       Deep reasoning (~16k tokens)\n- xhigh :       Extra-high reasoning (~32k tokens)\n- max :       Maximum reasoning\n\nso you are suggesting to set reasoning effort to \"low\", no good news \ud83d\ude1f"
-     },
-     {
-      "author": "aliquis-pe",
-      "created": "2026-08-15T09:00:30.000Z",
-      "reactions": 0,
-      "text": "Even with the reasoning \"medium\" it produces hilariously wrong answers to some logical questions. With reasoning \"max\" it replies right after spending tens of thousands of tokens."
-     },
-     {
-      "author": "WhiteDan64",
-      "created": "2026-08-15T09:39:02.000Z",
-      "reactions": 0,
-      "text": "My first impression was influenced by the fact that I hadn't forced any reasoning effort. Without this, Qwen 3.8 never finishes reasoning and consumes an excessive number of tokens, only to obtain an answer that would have been possible with much, much less tokens (the default behavior of Qwen 3.6). Forcing the reasoning level to \"medium\" in pi-agent improved the situation, and now, with the same prompt, Qwen 3.8 consumes \"only\" 25% more tokens than Qwen 3.6.\nBelow are the test screenshots.\n\n-----------------------\nQwen 3.8\n-----------------------\n\n![pi_agent_qwen3.8-27b-ud-iq3_full](https://cdn-uploads.huggingface.co/production/uploads/68d01e0632fe33a0719ce1a8/lAgVSCnjWNXvVz-2Vo3jq.jpeg)\n\n-----------------------\nQwen 3.6\n-----------------------\n\n![pi_agent_qwen3.6-27b-q3_full](https://cdn-uploads.huggingface.co/production/uploads/68d01e0632fe33a0719ce1a8/I9r17EuT8jrxZoIl5CuDi.jpeg)"
-     },
-     {
-      "author": "LinkuStarto",
-      "created": "2026-08-15T11:24:39.000Z",
-      "reactions": 0,
-      "text": "Same issue here... Basically 80% of the context is now thinking and the rest is for the output... Which is not a lot left for actually coding ..."
-     },
-     {
-      "author": "curtis1969",
-      "created": "2026-08-15T17:33:26.000Z",
-      "reactions": 0,
-      "text": "{%- set image_count = namespace(value=0) %}\n{%- set video_count = namespace(value=0) %}\n{%- macro render_content(content, do_vision_count, is_system_content=false) %}\n    {%- if content is string %}\n        {{- content }}\n    {%- elif content is iterable and content is not mapping %}\n        {%- for item in content %}\n            {%- if 'image' in item or 'image_url' in item or item.type == 'image' %}\n                {%- if is_system_content %}\n                    {{- raise_exception('System message cannot contain images.') }}\n                {%- endif %}\n                {%- if do_vision_count %}\n                    {%- set image_count.value = image_count.value + 1 %}\n                {%- endif %}\n                {%- if add_vision_id %}\n                    {{- 'Picture ' ~ image_count.value ~ ': ' }}\n                {%- endif %}\n                {{- '<|vision_start|><|image_pad|><|vision_end|>' }}\n            {%- elif 'video' in item or item.type == 'video' %}\n                {%- if is_system_content %}\n                    {{- raise_exception('System message cannot contain videos.') }}\n                {%- endif %}\n                {%- if do_vision_count %}\n                    {%- set video_count.value = video_count.value + 1 %}\n                {%- endif %}\n                {%- if add_vision_id %}\n                    {{- 'Video ' ~ video_count.value ~ ': ' }}\n                {%- endif %}\n                {{- '<|vision_start|><|video_pad|><|vision_end|>' }}\n            {%- elif 'text' in item %}\n                {{- item.text }}\n            {%- else %}\n                {{- raise_exception('Unexpected item type in content.') }}\n            {%- endif %}\n        {%- endfor %}\n    {%- elif content is none or content is undefined %}\n        {{- '' }}\n    {%- else %}\n        {{- raise_exception('Unexpected content type.') }}\n    {%- endif %}\n{%- endmacro %}\n{%- if not messages %}\n    {{- raise_exception('No messages provided.') }}\n{%- endif %}\n{%- set sysns = namespace(count=0, text='') %}\n{%- for message in messages %}\n    {%- if sysns.count == loop.index0 and (message.role == 'system' or message.role == 'developer') %}\n        {%- set sys_content = render_content(message.content, false, true)|trim %}\n        {%- if sys_content %}\n            {%- set sysns.text = sysns.text + ('\\n' if sysns.text else '') + sys_content %}\n        {%- endif %}\n        {%- set sysns.count = sysns.count + 1 %}\n    {%- endif %}\n{%- endfor %}\n{%- set num_sys = sysns.count %}\n{%- set merged_system = sysns.text %}\n{%- set reasoning_instructions = '' %}\n{%- if enable_thinking is undefined or enable_thinking is true %}\n    {%- set resolved_reasoning_effort = reasoning_effort|default('medium') %}\n    {%- if resolved_reasoning_effort not in ('xhigh', 'high', 'medium', 'low') %}\n        {{- raise_exception('Unexpected reasoning effort ' ~ reasoning_effort ~ '. Supported types are medium (default), low, high, and xhigh.') }}\n    {%- endif %}\n    {%- if resolved_reasoning_effort == 'xhigh' %}\n        {%- set reasoning_instructions = 'Reasoning effort is set to xhigh. Please think exceptionally deeply through the task, exhaustively validate all edge cases and assumptions, explore alternative paths, and prioritize absolute precision, consistency, and clarity.' %}\n    {%- elif resolved_reasoning_effort == 'high' %}\n        {%- set reasoning_instructions = 'Reasoning effort is set to high. Please think carefully through the task, validate key assumptions, consider plausible alternatives, and prioritize correctness, consistency, and clarity in the final answer.' %}\n    {%- elif resolved_reasoning_effort == 'medium' %}\n        {%- set reasoning_instructions = '' %}\n    {%- elif resolved_reasoning_effort == 'low' %}\n        {%- set reasoning_instructions = 'Reasoning effort is set to low. Keep your thinking brief and focused, moving directly to the conclusion without unnecessary elaboration.' %}\n    {%- endif %}\n{%- endif %}\n{%- if tools and tools is iterable and tools is not mapping %}\n    {{- '<|im_start|>system\\n' }}\n    {%- if reasoning_instructions %}\n        {{- reasoning_instructions + '\\n\\n' }}\n    {%- endif %}\n    {{- \"# Tools\\n\\nYou have access to the following functions:\\n\\n<tools>\" }}\n    {%- for tool in tools %}\n        {{- \"\\n\" }}\n        {{- tool | tojson }}\n    {%- endfor %}\n    {{- \"\\n</tools>\" }}\n    {{- '\\n\\nIf you choose to call a function ONLY reply in the following format with NO suffix:\\n\\n<tool_call>\\n<function=example_function_name>\\n<parameter=example_parameter_1>\\nvalue_1\\n</parameter>\\n<parameter=example_parameter_2>\\nThis is the value for the second parameter\\nthat can span\\nmultiple lines\\n</parameter>\\n</function>\\n</tool_call>\\n\\n<IMPORTANT>\\nReminder:\\n- Function calls MUST follow the specified format: an inner <function=...></function> block must be nested within <tool_call></tool_call> XML tags\\n- Required parameters MUST be specified\\n- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after\\n- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls\\n</IMPORTANT>' }}\n    {%- if merged_system %}\n        {{- '\\n\\n' + merged_system }}\n    {%- endif %}\n    {{- '<|im_end|>\\n' }}\n{%- else %}\n    {%- if merged_system %}\n        {{- '<|im_start|>system\\n' + (reasoning_instructions + '\\n\\n' if reasoning_instructions else '')  + merged_system + '<|im_end|>\\n' }}\n    {%- elif reasoning_instructions %}\n        {{- '<|im_start|>system\\n' + reasoning_instructions + '<|im_end|>\\n' }}\n    {%- endif %}\n{%- endif %}\n{%- set ns = namespace(multi_step_tool=true, last_query_index=messages|length - 1) %}\n{%- for message in messages[::-1] %}\n    {%- set index = (messages|length - 1) - loop.index0 %}\n    {%- if ns.multi_step_tool and message.role == \"user\" %}\n        {%- set content = render_content(message.content, false)|trim %}\n        {%- if not(content.startswith('<tool_response>') and content.endswith('</tool_response>')) %}\n            {%- set ns.multi_step_tool = false %}\n            {%- set ns.last_query_index = index %}\n        {%- endif %}\n    {%- endif %}\n{%- endfor %}\n{%- for message in messages %}\n    {%- if loop.index0 >= num_sys %}\n    {%- set content = render_content(message.content, true)|trim %}\n    {%- if message.role == \"system\" or message.role == \"developer\" %}\n        {{- raise_exception('System message must be at the beginning.') }}\n    {%- elif message.role == \"user\" %}\n        {{- '<|im_start|>' + message.role + '\\n' + content + '<|im_end|>' + '\\n' }}\n    {%- elif message.role == \"assistant\" %}\n        {%- set reasoning_content = '' %}\n        {%- if message.reasoning_content is string %}\n            {%- set reasoning_content = message.reasoning_content %}\n        {%- endif %}\n        {%- set reasoning_content = reasoning_content|trim %}\n        {%- if preserve_thinking is undefined or preserve_thinking is true or loop.index0 > ns.last_query_index %}\n            {{- '<|im_start|>' + message.role + '\\n<think>\\n' + reasoning_content + '\\n</think>\\n\\n' + content }}\n        {%- else %}\n            {{- '<|im_start|>' + message.role + '\\n' + content }}\n        {%- endif %}\n        {%- if message.tool_calls and message.tool_calls is iterable and message.tool_calls is not mapping %}\n            {%- for tool_call in message.tool_calls %}\n                {%- if tool_call.function is defined %}\n                    {%- set tool_call = tool_call.function %}\n                {%- endif %}\n                {%- if tool_call.name is not defined or tool_call.name is none %}\n                    {{- raise_exception('Tool call is missing a function name.') }}\n                {%- endif %}\n                {%- if loop.first %}\n                    {%- if content|trim %}\n                        {{- '\\n\\n<tool_call>\\n<function=' + tool_call.name + '>\\n' }}\n                    {%- else %}\n                        {{- '<tool_call>\\n<function=' + tool_call.name + '>\\n' }}\n                    {%- endif %}\n                {%- else %}\n                    {{- '\\n<tool_call>\\n<function=' + tool_call.name + '>\\n' }}\n                {%- endif %}\n                {%- if tool_call.arguments is mapping %}\n                    {%- for args_name, args_value in tool_call.arguments|items %}\n                        {{- '<parameter=' + args_name + '>\\n' }}\n                        {%- set args_value = args_value | string if args_value is string else args_value | tojson | safe %}\n                        {{- args_value }}\n                        {{- '\\n</parameter>\\n' }}\n                    {%- endfor %}\n                {%- elif tool_call.arguments is string %}\n                    {%- if tool_call.arguments|trim %}\n                        {{- raise_exception('Tool call arguments for function \"' + (tool_call.name | string) + '\" were passed as a JSON string. Parse them into an object before calling apply_chat_template.') }}\n                    {%- endif %}\n                {%- elif tool_call.arguments is defined and tool_call.arguments is not none %}\n                    {{- raise_exception('Tool call arguments for function \"' + (tool_call.name | string) + '\" must be an object/mapping or a JSON string.') }}\n                {%- endif %}\n                {{- '</function>\\n</tool_call>' }}\n            {%- endfor %}\n        {%- endif %}\n        {{- '<|im_end|>\\n' }}\n    {%- elif message.role == \"tool\" %}\n        {%- if loop.previtem and loop.previtem.role != \"tool\" %}\n            {{- '<|im_start|>user' }}\n        {%- endif %}\n        {{- '\\n<tool_response>\\n' }}\n        {{- content }}\n        {{- '\\n</tool_response>' }}\n        {%- if not loop.last and loop.nextitem.role != \"tool\" %}\n            {{- '<|im_end|>\\n' }}\n        {%- elif loop.last %}\n            {{- '<|im_end|>\\n' }}\n        {%- endif %}\n    {%- else %}\n        {{- raise_exception('Unexpected message role.') }}\n    {%- endif %}\n    {%- endif %}\n{%- endfor %}\n{%- if add_generation_prompt %}\n    {{- '<|im_start|>assistant\\n' }}\n    {%- if enable_thinking is defined and enable_thinking is false %}\n        {{- '<think>\\n\\n</think>\\n\\n' }}\n    {%- else %}\n        {{- '<think>\\n' }}\n    {%- endif %}\n{%- endif %}                                                                                                                                                                                                                                                                   \n\nI had the model go through and make some changes to the template said it to medium default now and fix some issue where the default behavior was to switch high to extra high idk seems to work so far"
-     },
-     {
-      "author": "ruymanbr",
-      "created": "2026-08-15T20:19:59.000Z",
-      "reactions": 0,
-      "text": "Same issue. Even trying to benchmarking it is being a pain because it always runs out of steps, or tokens, or ... something."
-     },
-     {
-      "author": "Hypersniper",
-      "created": "2026-08-16T23:06:14.000Z",
-      "reactions": 0,
-      "text": "Same"
-     }
-    ],
     "title": "Qwen 3.8-27b context usage is about 10x of 3.6-27b"
    },
    {
@@ -12487,8 +13135,10 @@
     "created": "2026-08-15T07:47:37.000Z",
     "is_pr": false,
     "num": 44,
-    "reaction_users": 0,
-    "reactions": {},
+    "reaction_users": 1,
+    "reactions": {
+     "\ud83d\udc4d": 1
+    },
     "status": "open",
     "title": "Dual 3080 20G, Q6-K_XL, avg 40 - 50 t/s"
    },
@@ -12509,17 +13159,17 @@
     "created": "2026-08-15T06:51:30.000Z",
     "is_pr": false,
     "num": 42,
-    "reaction_users": 6,
+    "reaction_users": 7,
     "reactions": {
-     "\u2764\ufe0f": 1,
-     "\ud83d\udc4d": 6
+     "\u2764\ufe0f": 2,
+     "\ud83d\udc4d": 7
     },
     "status": "open",
     "title": "Chat template issue and ways to solve it"
    },
    {
     "author": "erstmalreden",
-    "comments": 12,
+    "comments": 13,
     "created": "2026-08-15T06:31:10.000Z",
     "is_pr": false,
     "num": 41,
@@ -12600,6 +13250,12 @@
       "created": "2026-08-16T07:16:25.000Z",
       "reactions": 0,
       "text": "@vstiff Thanks \u2014 your observation prompted me to run a real long-context prefill test on my current UD-Q5_K_XL setup.\n\nI excluded a separate 2,048-token warm-up and then grew one cached slot successively:\n\n- 2K\u21928K: 84.72 tok/s\n- 8K\u219232K: 79.41 tok/s\n- 32K\u219265.5K: 69.08 tok/s\n- 65.5K\u2192100K: 60.02 tok/s\n\nSo I can confirm that prefill becomes materially slower as the occupied context grows. On my setup the decline was progressive rather than a sudden cliff exactly at 100K. The final range was 29.2% slower than the first measured range, with no truncation.\n\nConfiguration: stock llama.cpp b10436, Windows Vulkan, UD-Q5_K_XL, u_batch 512, q8_0 K/V cache and 131,072 context.\n\nRegarding your 24 t/s result: how many generated tokens did the measurement cover, and which exact llama.cpp commit, backend, u_batch and K/V cache type did you use?\n\n\n![Codex-Bild 16. Aug. 2026, 09_16_08](https://cdn-uploads.huggingface.co/production/uploads/67b97082c1eb36abf416515a/PLkIAgUu9c4hic49Cggig.png)"
+     },
+     {
+      "author": "vstiff",
+      "created": "2026-08-18T11:08:08.000Z",
+      "reactions": 0,
+      "text": "Backend vulkan, llama-server --version\nversion: 10216 (876a43211)\nbuilt with GNU 15.2.0 for Linux x86_64\n\nOther args:\n```\nllama-server --host 0.0.0.0 --threads-http 4 --alias llm \\\n    -hf unsloth/Qwen3.8-27B-GGUF:Q5_K_S \\\n    -np 1 -fa on --ctx-size 262144 \\\n    --ubatch_size 256 \\\n    --load-mode mlock --keep 10000 \\\n    --reasoning-preserve --chat-template-kwargs '{\"reasoning_effort\": \"medium\"}' \\\n    --spec-type draft-mtp --spec-draft-n-max 3\n```"
      }
     ],
     "title": "Ryzen AI Max+ 395 results: 16.68 tok/s with UD-Q5_K_XL, Vulkan and MTP 4"
@@ -12610,17 +13266,17 @@
     "created": "2026-08-15T05:10:53.000Z",
     "is_pr": false,
     "num": 40,
-    "reaction_users": 6,
+    "reaction_users": 7,
     "reactions": {
      "\ud83d\udc40": 2,
-     "\ud83d\udc4d": 5
+     "\ud83d\udc4d": 6
     },
     "status": "open",
     "thread": [
      {
       "author": "sa13ma",
       "created": "2026-08-15T05:10:53.000Z",
-      "reactions": 8,
+      "reactions": 9,
       "text": "It overthinks and produces nothing!\nI have a fairly complicated work flow that I had asked Muse-Glimmer to analayze and report issues, it did a pretty good job in less than 3 minutes.\nQwen3.8 with longer context (152K) and better Quants  Q6_K .. produced NOTHING in 30 minutes -- -it's still thinking. I had reduced the thinking to \"medium\".\nIt is upto 82K    context -- Muse had done better with about 70K context on essentially the same prompt. I can't fathom how it beat other models -- even Qwen3.6-27B or Agentworld or 711 ... all of them are far more productive. I prompted it afer 30 minutes to hurry up and it produced nothing after saying I will report after completing 2 more checks .. nothing for  45+ minutes\n \n>>I don't think this model will do anything usable at least in the complex workflows - sad, as I thought this was going to be outright winnder - I think Muse-Glimmer is looking far more usable than this model.\nWell -- I have kept using it for the past 2 days and  I think this write up was premature -- it's a very good model, yes, it's slow and overthinks - but it produces far better results than any model I have tried -- some even 20x bigger than it. It doesn't hallucinate (didn't do it even once with with me) << editing it to correct the record! - Slow is true, but quality is excellent!"
      },
      {
@@ -12644,7 +13300,7 @@
      {
       "author": "vstiff",
       "created": "2026-08-15T06:47:35.000Z",
-      "reactions": 2,
+      "reactions": 3,
       "text": "To me the bigger issue so far is that model does anything to waste context tokens except for the real task. Previous qwens/gemma tend to under-do and finish job as fast as possible, but this just keeps doing anything it can, no matter for good or bad. Using UD-Q4_K_XL quant"
      },
      {
@@ -12836,22 +13492,22 @@
     "created": "2026-08-14T21:04:26.000Z",
     "is_pr": false,
     "num": 32,
-    "reaction_users": 1,
+    "reaction_users": 2,
     "reactions": {
-     "\ud83d\ude80": 1
+     "\ud83d\ude80": 2
     },
     "status": "open",
     "thread": [
      {
       "author": "SNMetamorph",
       "created": "2026-08-14T21:04:26.000Z",
-      "reactions": 1,
+      "reactions": 2,
       "text": "I tested quantizations UD-Q4_K_XL and Q4_K_M on CMP 50HX (upgraded to 20GB VRAM) with llama.cpp b10434. No matter of context size, KV-cache quantization, enabled/disabled MTP: performance always is around 7-10 t/s. Qwen 3.6 27B Q4_K_M with enabled MTP gives around 25 t/s on same hardware."
      },
      {
       "author": "CurtisM",
       "created": "2026-08-14T21:58:43.000Z",
-      "reactions": 1,
+      "reactions": 2,
       "text": "I'm also getting about 7 t/s\nI get about 20 t/s for Qwen 3.6\n\nI assume it's because 3.6 used a MoE  (mixture of experts) and 3.8 is a dense model."
      },
      {
@@ -12983,9 +13639,9 @@
     "created": "2026-08-14T20:02:21.000Z",
     "is_pr": false,
     "num": 29,
-    "reaction_users": 10,
+    "reaction_users": 11,
     "reactions": {
-     "\ud83d\udc4d": 10
+     "\ud83d\udc4d": 11
     },
     "status": "open",
     "title": "UD 3.0 vs non-UD comparison charts?"
@@ -13014,13 +13670,13 @@
    },
    {
     "author": "hfmiguel",
-    "comments": 3,
+    "comments": 7,
     "created": "2026-08-14T19:36:08.000Z",
     "is_pr": false,
     "num": 26,
-    "reaction_users": 22,
+    "reaction_users": 24,
     "reactions": {
-     "\ud83d\udc4d": 22
+     "\ud83d\udc4d": 24
     },
     "status": "open",
     "title": "Single 16GB RTX 5060 Ti: 53 t/s with MTP and Quantized KV Cache"
@@ -13122,19 +13778,19 @@
      {
       "author": "shimmyshimmer",
       "created": "2026-08-17T10:24:53.000Z",
-      "reactions": 0,
+      "reactions": 1,
       "text": "> the app is great now needs a few more settings that are in lmstudio like the advanced settings seem to lack a few things everything else is amazing the web search the code in the chat all of it is great now i can change the context This GGUF uses Unsloth Dynamic V3.0 (preview) are older models going to be updated to this as well once its out of (preview)\n> ![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/0QE2em-HXIOeFPIsUAfbh.png)\n> \n> \n> ![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/waEpoCrfWSPdeXHFN30xG.png)\n> \n> \n> ![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/YxpotLQIOP7AFazFsiUbK.png)\n> \n> \n> ![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/AvqHHg6jmOls03rywGKi3.png)\n> \n> ![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/j4nBEBpJ2cAyVaVlVsRui.png)\n> I'm also getting a good bit of token speed difference I think it's due to having some settings set wrong or something or they're just unavailable for me to set\n> {%- set image_count = namespace(value=0) %}\n> {%- set video_count = namespace(value=0) %}\n> {%- macro render_content(content, do_vision_count, is_system_content=false) %}\n> {%- if content is string %}\n> {{- content }}\n> {%- elif content is iterable and content is not mapping %}\n> {%- for item in content %}\n> {%- if 'image' in item or 'image_url' in item or item.type == 'image' %}\n> {%- if is_system_content %}\n> {{- raise_exception('System message cannot contain images.') }}\n> {%- endif %}\n> {%- if do_vision_count %}\n> {%- set image_count.value = image_count.value + 1 %}\n> {%- endif %}\n> {%- if add_vision_id %}\n> {{- 'Picture ' ~ image_count.value ~ ': ' }}\n> {%- endif %}\n> {{- '<|vision_start|><|image_pad|><|vision_end|>' }}\n> {%- elif 'video' in item or item.type == 'video' %}\n> {%- if is_system_content %}\n> {{- raise_exception('System message cannot contain videos.') }}\n> {%- endif %}\n> {%- if do_vision_count %}\n> {%- set video_count.value = video_count.value + 1 %}\n> {%- endif %}\n> {%- if add_vision_id %}\n> {{- 'Video ' ~ video_count.value ~ ': ' }}\n> {%- endif %}\n> {{- '<|vision_start|><|video_pad|><|vision_end|>' }}\n> {%- elif 'text' in item %}\n> {{- item.text }}\n> {%- else %}\n> {{- raise_exception('Unexpected item type in content.') }}\n> {%- endif %}\n> {%- endfor %}\n> {%- elif content is none or content is undefined %}\n> {{- '' }}\n> {%- else %}\n> {{- raise_exception('Unexpected content type.') }}\n> {%- endif %}\n> {%- endmacro %}\n> {%- if not messages %}\n> {{- raise_exception('No messages provided.') }}\n> {%- endif %}\n> {%- set sysns = namespace(count=0, text='') %}\n> {%- for message in messages %}\n> {%- if sysns.count == loop.index0 and (message.role == 'system' or message.role == 'developer') %}\n> {%- set sys_content = render_content(message.content, false, true)|trim %}\n> {%- if sys_content %}\n> {%- set sysns.text = sysns.text + ('\\n' if sysns.text else '') + sys_content %}\n> {%- endif %}\n> {%- set sysns.count = sysns.count + 1 %}\n> {%- endif %}\n> {%- endfor %}\n> {%- set num_sys = sysns.count %}\n> {%- set merged_system = sysns.text %}\n> {%- set reasoning_instructions = '' %}\n> {%- if enable_thinking is undefined or enable_thinking is true %}\n> {%- set resolved_reasoning_effort = reasoning_effort|default('medium') %}\n> {%- if resolved_reasoning_effort not in ('xhigh', 'high', 'medium', 'low') %}\n> {{- raise_exception('Unexpected reasoning effort ' ~ reasoning_effort ~ '. Supported types are medium (default), low, high, and xhigh.') }}\n> {%- endif %}\n> {%- if resolved_reasoning_effort == 'xhigh' %}\n> {%- set reasoning_instructions = 'Reasoning effort is set to xhigh. Please think exceptionally deeply through the task, exhaustively validate all edge cases and assumptions, explore alternative paths, and prioritize absolute precision, consistency, and clarity.' %}\n> {%- elif resolved_reasoning_effort == 'high' %}\n> {%- set reasoning_instructions = 'Reasoning effort is set to high. Please think carefully through the task, validate key assumptions, consider plausible alternatives, and prioritize correctness, consistency, and clarity in the final answer.' %}\n> {%- elif resolved_reasoning_effort == 'medium' %}\n> {%- set reasoning_instructions = '' %}\n> {%- elif resolved_reasoning_effort == 'low' %}\n> {%- set reasoning_instructions = 'Reasoning effort is set to low. Keep your thinking brief and focused, moving directly to the conclusion without unnecessary elaboration.' %}\n> {%- endif %}\n> {%- endif %}\n> {%- if tools and tools is iterable and tools is not mapping %}\n> {{- '<|im_start|>system\\n' }}\n> {%- if reasoning_instructions %}\n> {{- reasoning_instructions + '\\n\\n' }}\n> {%- endif %}\n> {{- \"# Tools\\n\\nYou have access to the following functions:\\n\\n\" }}\n> {%- for tool in tools %}\n> {{- \"\\n\" }}\n> {{- tool | tojson }}\n> {%- endfor %}\n> {{- \"\\n\" }}\n> {{- '\\n\\nIf you choose to call a function ONLY reply in the following format with NO suffix:\\n\\n\\n<function=example_function_name>\\n<parameter=example_parameter_1>\\nvalue_1\\n\\n<parameter=example_parameter_2>\\nThis is the value for the second parameter\\nthat can span\\nmultiple lines\\n\\n\\n\\n\\n\\nReminder:\\n- Function calls MUST follow the specified format: an inner <function=...> block must be nested within XML tags\\n- Required parameters MUST be specified\\n- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after\\n- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls\\n' }}\n> {%- if merged_system %}\n> {{- '\\n\\n' + merged_system }}\n> {%- endif %}\n> {{- '<|im_end|>\\n' }}\n> {%- else %}\n> {%- if merged_system %}\n> {{- '<|im_start|>system\\n' + (reasoning_instructions + '\\n\\n' if reasoning_instructions else '') + merged_system + '<|im_end|>\\n' }}\n> {%- elif reasoning_instructions %}\n> {{- '<|im_start|>system\\n' + reasoning_instructions + '<|im_end|>\\n' }}\n> {%- endif %}\n> {%- endif %}\n> {%- set ns = namespace(multi_step_tool=true, last_query_index=messages|length - 1) %}\n> {%- for message in messages[::-1] %}\n> {%- set index = (messages|length - 1) - loop.index0 %}\n> {%- if ns.multi_step_tool and message.role == \"user\" %}\n> {%- set content = render_content(message.content, false)|trim %}\n> {%- if not(content.startswith('') and content.endswith('')) %}\n> {%- set ns.multi_step_tool = false %}\n> {%- set ns.last_query_index = index %}\n> {%- endif %}\n> {%- endif %}\n> {%- endfor %}\n> {%- for message in messages %}\n> {%- if loop.index0 >= num_sys %}\n> {%- set content = render_content(message.content, true)|trim %}\n> {%- if message.role == \"system\" or message.role == \"developer\" %}\n> {{- raise_exception('System message must be at the beginning.') }}\n> {%- elif message.role == \"user\" %}\n> {{- '<|im_start|>' + message.role + '\\n' + content + '<|im_end|>' + '\\n' }}\n> {%- elif message.role == \"assistant\" %}\n> {%- set reasoning_content = '' %}\n> {%- if message.reasoning_content is string %}\n> {%- set reasoning_content = message.reasoning_content %}\n> {%- endif %}\n> {%- set reasoning_content = reasoning_content|trim %}\n> {%- if preserve_thinking is undefined or preserve_thinking is true or loop.index0 > ns.last_query_index %}\n> {{- '<|im_start|>' + message.role + '\\n\\n' + reasoning_content + '\\n\\n\\n' + content }}\n> {%- else %}\n> {{- '<|im_start|>' + message.role + '\\n' + content }}\n> {%- endif %}\n> {%- if message.tool_calls and message.tool_calls is iterable and message.tool_calls is not mapping %}\n> {%- for tool_call in message.tool_calls %}\n> {%- if tool_call.function is defined %}\n> {%- set tool_call = tool_call.function %}\n> {%- endif %}\n> {%- if tool_call.name is not defined or tool_call.name is none %}\n> {{- raise_exception('Tool call is missing a function name.') }}\n> {%- endif %}\n> {%- if loop.first %}\n> {%- if content|trim %}\n> {{- '\\n\\n\\n<function=' + tool_call.name + '>\\n' }}\n> {%- else %}\n> {{- '\\n<function=' + tool_call.name + '>\\n' }}\n> {%- endif %}\n> {%- else %}\n> {{- '\\n\\n<function=' + tool_call.name + '>\\n' }}\n> {%- endif %}\n> {%- if tool_call.arguments is mapping %}\n> {%- for args_name, args_value in tool_call.arguments|items %}\n> {{- '<parameter=' + args_name + '>\\n' }}\n> {%- set args_value = args_value | string if args_value is string else args_value | tojson | safe %}\n> {{- args_value }}\n> {{- '\\n\\n' }}\n> {%- endfor %}\n> {%- elif tool_call.arguments is string %}\n> {%- if tool_call.arguments|trim %}\n> {{- raise_exception('Tool call arguments for function \"' + (tool_call.name | string) + '\" were passed as a JSON string. Parse them into an object before calling apply_chat_template.') }}\n> {%- endif %}\n> {%- elif tool_call.arguments is defined and tool_call.arguments is not none %}\n> {{- raise_exception('Tool call arguments for function \"' + (tool_call.name | string) + '\" must be an object/mapping or a JSON string.') }}\n> {%- endif %}\n> {{- '\\n' }}\n> {%- endfor %}\n> {%- endif %}\n> {{- '<|im_end|>\\n' }}\n> {%- elif message.role == \"tool\" %}\n> {%- if loop.previtem and loop.previtem.role != \"tool\" %}\n> {{- '<|im_start|>user' }}\n> {%- endif %}\n> {{- '\\n\\n' }}\n> {{- content }}\n> {{- '\\n' }}\n> {%- if not loop.last and loop.nextitem.role != \"tool\" %}\n> {{- '<|im_end|>\\n' }}\n> {%- elif loop.last %}\n> {{- '<|im_end|>\\n' }}\n> {%- endif %}\n> {%- else %}\n> {{- raise_exception('Unexpected message role.') }}\n> {%- endif %}\n> {%- endif %}\n> {%- endfor %}\n> {%- if add_generation_prompt %}\n> {{- '<|im_start|>assistant\\n' }}\n> {%- if enable_thinking is defined and enable_thinking is false %}\n> {{- '\\n\\n\\n\\n' }}\n> {%- else %}\n> {{- '\\n' }}\n> {%- endif %}\n> {%- endif %}\n> \n> I had the model go through and make some changes to the template set it to medium default now and fix some issue where the default behavior was to switch high to extra high idk seems to work so far\n\n> > the app is great now needs a few more settings that are in lmstudio like the advanced settings seem to lack a few things everything else is amazing the web search the code in the chat all of it is great now i can change the context This GGUF uses Unsloth Dynamic V3.0 (preview) are older models going to be updated to this as well once its out of (preview)\n> > ![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/0QE2em-HXIOeFPIsUAfbh.png)\n> > \n> > \n> > ![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/waEpoCrfWSPdeXHFN30xG.png)\n> > \n> > \n> > ![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/YxpotLQIOP7AFazFsiUbK.png)\n> > \n> > \n> > ![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/AvqHHg6jmOls03rywGKi3.png)\n> > \n> > ![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/j4nBEBpJ2cAyVaVlVsRui.png)\n> > I'm also getting a good bit of token speed difference I think it's due to having some settings set wrong or something or they're just unavailable for me to set\n> > {%- set image_count = namespace(value=0) %}\n> > {%- set video_count = namespace(value=0) %}\n> > {%- macro render_content(content, do_vision_count, is_system_content=false) %}\n> > {%- if content is string %}\n> > {{- content }}\n> > {%- elif content is iterable and content is not mapping %}\n> > {%- for item in content %}\n> > {%- if 'image' in item or 'image_url' in item or item.type == 'image' %}\n> > {%- if is_system_content %}\n> > {{- raise_exception('System message cannot contain images.') }}\n> > {%- endif %}\n> > {%- if do_vision_count %}\n> > {%- set image_count.value = image_count.value + 1 %}\n> > {%- endif %}\n> > {%- if add_vision_id %}\n> > {{- 'Picture ' ~ image_count.value ~ ': ' }}\n> > {%- endif %}\n> > {{- '<|vision_start|><|image_pad|><|vision_end|>' }}\n> > {%- elif 'video' in item or item.type == 'video' %}\n> > {%- if is_system_content %}\n> > {{- raise_exception('System message cannot contain videos.') }}\n> > {%- endif %}\n> > {%- if do_vision_count %}\n> > {%- set video_count.value = video_count.value + 1 %}\n> > {%- endif %}\n> > {%- if add_vision_id %}\n> > {{- 'Video ' ~ video_count.value ~ ': ' }}\n> > {%- endif %}\n> > {{- '<|vision_start|><|video_pad|><|vision_end|>' }}\n> > {%- elif 'text' in item %}\n> > {{- item.text }}\n> > {%- else %}\n> > {{- raise_exception('Unexpected item type in content.') }}\n> > {%- endif %}\n> > {%- endfor %}\n> > {%- elif content is none or content is undefined %}\n> > {{- '' }}\n> > {%- else %}\n> > {{- raise_exception('Unexpected content type.') }}\n> > {%- endif %}\n> > {%- endmacro %}\n> > {%- if not messages %}\n> > {{- raise_exception('No messages provided.') }}\n> > {%- endif %}\n> > {%- set sysns = namespace(count=0, text='') %}\n> > {%- for message in messages %}\n> > {%- if sysns.count == loop.index0 and (message.role == 'system' or message.role == 'developer') %}\n> > {%- set sys_content = render_content(message.content, false, true)|trim %}\n> > {%- if sys_content %}\n> > {%- set sysns.text = sysns.text + ('\\n' if sysns.text else '') + sys_content %}\n> > {%- endif %}\n> > {%- set sysns.count = sysns.count + 1 %}\n> > {%- endif %}\n> > {%- endfor %}\n> > {%- set num_sys = sysns.count %}\n> > {%- set merged_system = sysns.text %}\n> > {%- set reasoning_instructions = '' %}\n> > {%- if enable_thinking is undefined or enable_thinking is true %}\n> > {%- set resolved_reasoning_effort = reasoning_effort|default('medium') %}\n> > {%- if resolved_reasoning_effort not in ('xhigh', 'high', 'medium', 'low') %}\n> > {{- raise_exception('Unexpected reasoning effort ' ~ reasoning_effort ~ '. Supported types are medium (default), low, high, and xhigh.') }}\n> > {%- endif %}\n> > {%- if resolved_reasoning_effort == 'xhigh' %}\n> > {%- set reasoning_instructions = 'Reasoning effort is set to xhigh. Please think exceptionally deeply through the task, exhaustively validate all edge cases and assumptions, explore alternative paths, and prioritize absolute precision, consistency, and clarity.' %}\n> > {%- elif resolved_reasoning_effort == 'high' %}\n> > {%- set reasoning_instructions = 'Reasoning effort is set to high. Please think carefully through the task, validate key assumptions, consider plausible alternatives, and prioritize correctness, consistency, and clarity in the final answer.' %}\n> > {%- elif resolved_reasoning_effort == 'medium' %}\n> > {%- set reasoning_instructions = '' %}\n> > {%- elif resolved_reasoning_effort == 'low' %}\n> > {%- set reasoning_instructions = 'Reasoning effort is set to low. Keep your thinking brief and focused, moving directly to the conclusion without unnecessary elaboration.' %}\n> > {%- endif %}\n> > {%- endif %}\n> > {%- if tools and tools is iterable and tools is not mapping %}\n> > {{- '<|im_start|>system\\n' }}\n> > {%- if reasoning_instructions %}\n> > {{- reasoning_instructions + '\\n\\n' }}\n> > {%- endif %}\n> > {{- \"# Tools\\n\\nYou have access to the following functions:\\n\\n\" }}\n> > {%- for tool in tools %}\n> > {{- \"\\n\" }}\n> > {{- tool | tojson }}\n> > {%- endfor %}\n> > {{- \"\\n\" }}\n> > {{- '\\n\\nIf you choose to call a function ONLY reply in the following format with NO suffix:\\n\\n\\n<function=example_function_name>\\n<parameter=example_parameter_1>\\nvalue_1\\n\\n<parameter=example_parameter_2>\\nThis is the value for the second parameter\\nthat can span\\nmultiple lines\\n\\n\\n\\n\\n\\nReminder:\\n- Function calls MUST follow the specified format: an inner <function=...> block must be nested within XML tags\\n- Required parameters MUST be specified\\n- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after\\n- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls\\n' }}\n> > {%- if merged_system %}\n> > {{- '\\n\\n' + merged_system }}\n> > {%- endif %}\n> > {{- '<|im_end|>\\n' }}\n> > {%- else %}\n> > {%- if merged_system %}\n> > {{- '<|im_start|>system\\n' + (reasoning_instructions + '\\n\\n' if reasoning_instructions else '') + merged_system + '<|im_end|>\\n' }}\n> > {%- elif reasoning_instructions %}\n> > {{- '<|im_start|>system\\n' + reasoning_instructions + '<|im_end|>\\n' }}\n> > {%- endif %}\n> > {%- endif %}\n> > {%- set ns = namespace(multi_step_tool=true, last_query_index=messages|length - 1) %}\n> > {%- for message in messages[::-1] %}\n> > {%- set index = (messages|length - 1) - loop.index0 %}\n> > {%- if ns.multi_step_tool and message.role == \"user\" %}\n> > {%- set content = render_content(message.content, false)|trim %}\n> > {%- if not(content.startswith('') and content.endswith('')) %}\n> > {%- set ns.multi_step_tool = false %}\n> > {%- set ns.last_query_index = index %}\n> > {%- endif %}\n> > {%- endif %}\n> > {%- endfor %}\n> > {%- for message in messages %}\n> > {%- if loop.index0 >= num_sys %}\n> > {%- set content = render_content(message.content, true)|trim %}\n> > {%- if message.role == \"system\" or message.role == \"developer\" %}\n> > {{- raise_exception('System message must be at the beginning.') }}\n> > {%- elif message.role == \"user\" %}\n> > {{- '<|im_start|>' + message.role + '\\n' + content + '<|im_end|>' + '\\n' }}\n> > {%- elif message.role == \"assistant\" %}\n> > {%- set reasoning_content = '' %}\n> > {%- if message.reasoning_content is string %}\n> > {%- set reasoning_content = message.reasoning_content %}\n> > {%- endif %}\n> > {%- set reasoning_content = reasoning_content|trim %}\n> > {%- if preserve_thinking is undefined or preserve_thinking is true or loop.index0 > ns.last_query_index %}\n> > {{- '<|im_start|>' + message.role + '\\n\\n' + reasoning_content + '\\n\\n\\n' + content }}\n> > {%- else %}\n> > {{- '<|im_start|>' + message.role + '\\n' + content }}\n> > {%- endif %}\n> > {%- if message.tool_calls and message.tool_calls is iterable and message.tool_calls is not mapping %}\n> > {%- for tool_call in message.tool_calls %}\n> > {%- if tool_call.function is defined %}\n> > {%- set tool_call = tool_call.function %}\n> > {%- endif %}\n> > {%- if tool_call.name is not defined or tool_call.name is none %}\n> > {{- raise_exception('Tool call is missing a function name.') }}\n> > {%- endif %}\n> > {%- if loop.first %}\n> > {%- if content|trim %}\n> > {{- '\\n\\n\\n<function=' + tool_call.name + '>\\n' }}\n> > {%- else %}\n> > {{- '\\n<function=' + tool_call.name + '>\\n' }}\n> > {%- endif %}\n> > {%- else %}\n> > {{- '\\n\\n<function=' + tool_call.name + '>\\n' }}\n> > {%- endif %}\n> > {%- if tool_call.arguments is mapping %}\n> > {%- for args_name, args_value in tool_call.arguments|items %}\n> > {{- '<parameter=' + args_name + '>\\n' }}\n> > {%- set args_value = args_value | string if args_value is string else args_value | tojson | safe %}\n> > {{- args_value }}\n> > {{- '\\n\\n' }}\n> > {%- endfor %}\n> > {%- elif tool_call.arguments is string %}\n> > {%- if tool_call.arguments|trim %}\n> > {{- raise_exception('Tool call arguments for function \"' + (tool_call.name | string) + '\" were passed as a JSON string. Parse them into an object before calling apply_chat_template.') }}\n> > {%- endif %}\n> > {%- elif tool_call.arguments is defined and tool_call.arguments is not none %}\n> > {{- raise_exception('Tool call arguments for function \"' + (tool_call.name | string) + '\" must be an object/mapping or a JSON string.') }}\n> > {%- endif %}\n> > {{- '\\n' }}\n> > {%- endfor %}\n> > {%- endif %}\n> > {{- '<|im_end|>\\n' }}\n> > {%- elif message.role == \"tool\" %}\n> > {%- if loop.previtem and loop.previtem.role != \"tool\" %}\n> > {{- '<|im_start|>user' }}\n> > {%- endif %}\n> > {{- '\\n\\n' }}\n> > {{- content }}\n> > {{- '\\n' }}\n> > {%- if not loop.last and loop.nextitem.role != \"tool\" %}\n> > {{- '<|im_end|>\\n' }}\n> > {%- elif loop.last %}\n> > {{- '<|im_end|>\\n' }}\n> > {%- endif %}\n> > {%- else %}\n> > {{- raise_exception('Unexpected message role.') }}\n> > {%- endif %}\n> > {%- endif %}\n> > {%- endfor %}\n> > {%- if add_generation_prompt %}\n> > {{- '<|im_start|>assistant\\n' }}\n> > {%- if enable_thinking is defined and enable_thinking is false %}\n> > {{- '\\n\\n\\n\\n' }}\n> > {%- else %}\n> > {{- '\\n' }}\n> > {%- endif %}\n> > {%- endif %}\n> > \n> > I had the model go through and make some changes to the template set it to medium default now and fix some issue where the default behavior was to switch high to extra high idk seems to work so far\n> \n> I agree.  I tried the desktop app and had to go back to LM Studio.  It's missing too many \"advanced features\"\n\nWhich features in particular are lacking? The text space enables you to put whatever setting you like. Also a lot of these 'extra' toggles  are not actually utilized or necessary hence we excluded them\n\nBut yes would definitely like to know which set of features or advanced settings we're missing thanks"
      },
      {
       "author": "Wladastic",
       "created": "2026-08-17T11:27:18.000Z",
-      "reactions": 0,
+      "reactions": 1,
       "text": "For me personally it is lacking no-mmproj as a visible option.\nBut I did not install it and am judging from screenshots here."
      },
      {
       "author": "curtis1969",
       "created": "2026-08-17T14:00:51.000Z",
-      "reactions": 0,
+      "reactions": 1,
       "text": "Unified kv cache ,offload kv to gpu , and flash attention settings are not available also the reason i don\u2019t have vision is i don\u2019t use it imo it is not that useful so I save vram by leaving it out  \n\n![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/4wyM2RGB5aW0UxqoM6t-X.png)\n\nI found a big reason for the speed difference as well for some reason in LM studio there's one less layer on the GPU on all models \n\n\n![image](https://cdn-uploads.huggingface.co/production/uploads/67f95aac72d5f74da8737ca4/S4DzNLBmqB2iMEmdPTBRC.png)\n\nwith both bars set to Max there's 66 in unsloth studio an only 65 in lmstudio and its speeds up when i lower to what it is on LM studio so the speed is the nearly the same"
      },
      {
@@ -13283,73 +13939,17 @@
     "reaction_users": 0,
     "reactions": {},
     "status": "closed",
-    "thread": [
-     {
-      "author": "ChessVania",
-      "created": "2026-08-14T17:55:19.000Z",
-      "reactions": 0,
-      "text": "The graphics card isn't fully utilized (not at 100%), and I feel like I could try to squeeze more performance out of the model. If so, how do I do that in Unsloth Desktop?"
-     },
-     {
-      "author": "ChessVania",
-      "created": "2026-08-14T17:56:47.000Z",
-      "reactions": 0,
-      "text": "P.S. I ran the UD-IQ2_M quantization without changing any default settings; CUDA is being used."
-     },
-     {
-      "author": "ChessVania",
-      "created": "2026-08-14T18:00:27.000Z",
-      "reactions": 0,
-      "text": "P.S. Unsloth Desktop is great, but it has two bugs. If any UD developers are reading this, could you fix them? I know I should probably post this elsewhere, but I decided to post it here.\n1. Wan 2.2 TI2V, downloaded from the Unsloth repository, doesn't accept images even though it's supposed to; as far as I can tell, this causes a persistent generation error.\n2. Safetensors-Qwen 3 TTS 0.6B Custom Voice is detected as TTS but fails to load; it claims the `transformers` version is outdated (5.5.0). I didn't install that version myself, so I suspect UD is installing an old version."
-     },
-     {
-      "author": "ChessVania",
-      "created": "2026-08-14T18:00:46.000Z",
-      "reactions": 0,
-      "text": "P.S. I use Linux Mint."
-     },
-     {
-      "author": "deluxenew",
-      "created": "2026-08-14T18:22:36.000Z",
-      "reactions": 0,
-      "text": "+"
-     },
-     {
-      "author": "iamtanmay",
-      "created": "2026-08-14T18:58:12.000Z",
-      "reactions": 0,
-      "text": "I have a 3060. I believe your  model is being offloaded into RAM, that's why the GPU is not fully utilized. Also why your speeds are so slow. The part that is in the RAM is being run on CPU. If you have 8GB VRAM, about 4-5GB is in RAM depending on context size. That's 60% GPU, 40%CPU. That's normal\n\nThe only way you will have fast speeds is if you use a model that fits fully into your GPU's VRAM, alongwith the context\n\nI also have 7900XTX 24GB, and its blazing fast for such ~30B models. 80-180 Tk/s depending on the model\n\nIf you try a 9B or 12B Qwen 3.5 model with 4 bit Quant, I believe your 3060 will give you really good speeds"
-     },
-     {
-      "author": "flyingweasel",
-      "created": "2026-08-14T19:19:10.000Z",
-      "reactions": 0,
-      "text": "with a V100, which is much older, I get a prefill of ~800 tps and inference of ~40 tps using mtp (q4 model and kv cache)"
-     },
-     {
-      "author": "sa13ma",
-      "created": "2026-08-15T00:43:26.000Z",
-      "reactions": 0,
-      "text": "I ran ito on my 4x3060s .. and i just powered it up .. did about 23 t/sec .. on my 5060 it's much higher -- somewhat fater than 3.6-27B (and 3.6-40GB hacked model)\n3 t/s is not gpu"
-     },
-     {
-      "author": "ChessVania",
-      "created": "2026-08-15T07:17:55.000Z",
-      "reactions": 0,
-      "text": "I turned off MTP, set the context quantization to Q4_0, and set the VRAM budget to 100%; now I'm getting 10 t/s."
-     }
-    ],
     "title": "[I found a solution] 3.5 t/s on an RTX 3060 via Unsloth Desktop. Is that normal?"
    },
    {
     "author": "signsur4739379373",
-    "comments": 1,
+    "comments": 2,
     "created": "2026-08-14T17:46:33.000Z",
     "is_pr": false,
     "num": 17,
-    "reaction_users": 6,
+    "reaction_users": 8,
     "reactions": {
-     "\ud83d\udc4d": 6
+     "\ud83d\udc4d": 8
     },
     "status": "open",
     "title": "Missing IMatrix file"
@@ -13573,7 +14173,7 @@
    },
    {
     "author": "erdal",
-    "comments": 7,
+    "comments": 8,
     "created": "2026-08-14T16:11:45.000Z",
     "is_pr": false,
     "num": 11,
@@ -13727,7 +14327,7 @@
     "reaction_users": 7,
     "reactions": {
      "\ud83d\udc40": 7,
-     "\ud83e\udd17": 5
+     "\ud83d\ude80": 5
     },
     "status": "open",
     "title": "UD 3.0?"
@@ -13873,9 +14473,9 @@
     "created": "2026-08-14T15:12:38.000Z",
     "is_pr": false,
     "num": 2,
-    "reaction_users": 24,
+    "reaction_users": 26,
     "reactions": {
-     "\ud83d\udd25": 24
+     "\ud83d\udd25": 26
     },
     "status": "open",
     "title": "Thanks for your hard work!"

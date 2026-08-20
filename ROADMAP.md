@@ -13,7 +13,7 @@ built and is marked done when it ships.
   checked against each model's `config.json`.
 - **the research corpus**: 20 point-in-time captures, every one committed so a
   refresh is a reviewable diff rather than a silent change in conclusions.
-- **the `docs/` dashboard**: 1442 facets over 61 models, every weight a slider,
+- **the `docs/` dashboard**: 1489 facets over 61 models, every weight a slider,
   the memory budget a setting, every number one hover from its source.
 - **one sweep command** (`make sweep`) that collects, derives, builds and
   checks, and ends by printing what only a human can decide.
@@ -39,8 +39,8 @@ built and is marked done when it ships.
 
 2. **a proxy benchmark per evidence category.** there is one retention curve,
    from one sweep of one 671b model on one code benchmark, and everything else
-   is either extrapolated from it or honestly left alone -- 36 facets
-   discounted, 57 not. `QUANT_EVIDENCE` in `scripts/build-viewer` already names
+   is either extrapolated from it or honestly left alone -- 40 facets
+   discounted, 60 not. `QUANT_EVIDENCE` in `scripts/build-viewer` already names
    the categories; what it lacks is a benchmark per category that runs in
    minutes rather than days, cheap enough to sweep in quantbench.
 

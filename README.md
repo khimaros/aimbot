@@ -268,7 +268,7 @@ the factors run deep: 23 artificial analysis benchmarks (including
 declining to answer), the four gbench modes, epoch's runs, card claims,
 community per forum, and a slider per gbench LANGUAGE -- so somebody who writes
 rust can weight rust rather than trusting a coding index that averaged it away.
-1442 facets over 61 models, grouped and collapsible, each group saying how many
+1489 facets over 61 models, grouped and collapsible, each group saying how many
 of its weights are live.
 
 the ranking is the part worth explaining. **quality is a weighted mean of
@@ -586,7 +586,7 @@ llama-tools generating its whole llama-swap config from registry facts plus
 a host file that lists only choices, and the `docs/` viewer above.
 
 `research/data/usecase.json` is the one place a consumer reads to answer "what
-is this model for". it holds 1442 facets across the 61 models -- one number per
+is this model for". it holds 1489 facets across the 61 models -- one number per
 (source, benchmark) with the model's percentile among the registry models that
 carry the same one, the gbench per-language breakdown, what each forum said
 with quoted references, and the written judgement carried in from
@@ -683,8 +683,8 @@ not done yet, in the order it should happen:
 
    this is the only way out of the current position. there is one curve, from
    one sweep of one 671b model on one code benchmark, and everything else is
-   either extrapolated from it or honestly left alone -- 36 facets discounted,
-   57 not. a sweep per category turns that into a measurement, and it is a
+   either extrapolated from it or honestly left alone -- 40 facets discounted,
+   60 not. a sweep per category turns that into a measurement, and it is a
    sweep this repo can run rather than one it has to wait for somebody to
    publish.
 
