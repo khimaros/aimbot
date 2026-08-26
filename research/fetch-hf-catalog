@@ -19,6 +19,11 @@ with abliterated merges, 2B models and architectures llama.cpp cannot load.
 That is expected. The report marks which repos are already tracked and leaves
 the judgement to a human.
 
+"Tracked" means the registry OR repos.txt, not repos.txt alone. repos.txt is a
+33-entry sizing list; the registry carries 127 repos across its base keys and
+their quant sources, so reading only the former reported repos this document
+already serves as ones it does not carry.
+
 Three API notes, all learned the hard way. `sort=trending` is a 400; the field
 is `trendingScore`. `apps=llama.cpp`, which the website URL carries, is
 accepted but ignored -- results are byte-identical with and without it, so it
@@ -35,6 +40,7 @@ import time
 import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+REGISTRY = os.path.join(HERE, "..", "registry", "models.yaml")
 API = "https://huggingface.co/api/models?%s"
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/140.0.0.0 Safari/537.36")
@@ -69,8 +75,28 @@ def shape(m, tracked):
     r = {k: m.get(k) for k in FIELDS}
     r["author"] = (m.get("id") or "/").split("/")[0]
     r["base_model"] = base_model(m.get("tags"))
-    r["tracked"] = m.get("id") in tracked
+    r["tracked"] = (m.get("id") or "").lower() in tracked
     return r
+
+
+def tracked_repos(repos_path, registry_path):
+    """Every repo this document already carries, lowercased.
+
+    Both sources count: a repo reaches a reader either because somebody listed
+    it for sizing or because a registry entry serves it. Case is folded because
+    the hub and the registry disagree on it -- `unsloth/gemma-4-12b-it-GGUF`
+    and `unsloth/gemma-4-12B-it-GGUF` are one repo, and an exact match reports
+    the second as missing while the first sits in the roster.
+    """
+    import yaml
+    out = {r.lower() for r in read_list(repos_path)}
+    models = (yaml.safe_load(open(registry_path)) or {}).get("models") or {}
+    for base, m in models.items():
+        out.add(base.lower())
+        for q in (m.get("quants") or []) + (m.get("components") or []):
+            if q.get("repo"):
+                out.add(q["repo"].lower())
+    return out
 
 
 def page(params, key, args):
@@ -113,9 +139,15 @@ def main():
     ap.add_argument("--max-age", type=int, default=6 * 3600)
     ap.add_argument("--refresh", action="store_true")
     ap.add_argument("--delay", type=float, default=0.5)
+    ap.add_argument("--registry", default=REGISTRY)
+    ap.add_argument("--tracked", action="store_true",
+                    help="print what counts as already carried, and exit")
     args = ap.parse_args()
 
-    tracked = set(read_list(args.repos))
+    tracked = tracked_repos(args.repos, args.registry)
+    if args.tracked:
+        print("\n".join(sorted(tracked)))
+        return
 
     trending = [shape(m, tracked) for m in page(
         {"filter": "gguf", "pipeline_tag": "text-generation",

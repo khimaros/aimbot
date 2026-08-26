@@ -10,9 +10,10 @@ dataset inline as an RSC stream, split across `self.__next_f.push([1, "..."])`
 calls. Reassembling those chunks yields the page's data as JSON.
 
 --match is a literal substring, and what gets emitted is the JSON object
-*enclosing* each occurrence, so matching a field name returns whole records.
-Output is json lines, which keeps this a filter: each collector pipes it into
-whatever shaping that site needs rather than importing anything.
+*enclosing* each occurrence, so matching a field name returns whole records,
+with flight's `$undefined` sentinel decoded to null. Output is json lines,
+which keeps this a filter: each collector pipes it into whatever shaping that
+site needs rather than importing anything.
 
 Fetching goes through ./httpcache, so callers inherit its etag revalidation,
 --max-age and stale-on-failure behaviour.
@@ -27,6 +28,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CHUNK = re.compile(r'self\.__next_f\.push\(\[1,(".*?")\]\)</script>', re.S)
+UNDEFINED = "$undefined"
 
 
 def flight_payload(html):
@@ -38,6 +40,23 @@ def flight_payload(html):
         except ValueError:
             pass
     return buf
+
+
+def decode(o):
+    """Flight sentinels to python values.
+
+    The RSC wire format writes a missing value as the STRING `$undefined`
+    rather than omitting the key, so a field artificial analysis never measured
+    arrives as text sitting in a column of floats -- which ranks as a TypeError
+    the first time something sorts or compares it. Every other `$` string in
+    these payloads is a lazy-module or symbol reference belonging to the react
+    element tree rather than to a data record, so it is passed through.
+    """
+    if isinstance(o, dict):
+        return {k: decode(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [decode(v) for v in o]
+    return None if o == UNDEFINED else o
 
 
 def object_at(s, pos):
@@ -112,7 +131,7 @@ def main():
         if not frag:
             continue
         try:
-            rec = json.loads(frag)
+            rec = decode(json.loads(frag))
         except ValueError:
             continue
         print(json.dumps(rec, sort_keys=True))

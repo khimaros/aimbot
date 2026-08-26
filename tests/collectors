@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+
+"""end-to-end tests for the research collectors.
+
+    ./tests/collectors
+
+the viewer suite in ./e2e boots the shipped page; this one exercises the python
+side of the sweep the way the sweep runs it: the REAL executable as a
+subprocess, over a REAL http request, against a fixture served from localhost.
+nothing here reaches the network, and nothing here imports a collector -- a
+collector that only works when imported is not what `make sweep` runs.
+
+each case gets its own httpcache key under a `test-` prefix and removes it
+afterwards, so a run leaves the real cache untouched.
+"""
+
+import http.server
+import json
+import os
+import shutil
+import socketserver
+import subprocess
+import sys
+import tempfile
+import threading
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+RESEARCH = os.path.join(ROOT, "research")
+CACHE = os.path.join(RESEARCH, ".cache")
+
+# a next.js page ships its data as escaped json inside __next_f chunks. the
+# flight encoding writes a missing value as the STRING "$undefined" rather than
+# omitting the key, which is the whole point of this fixture
+RECORDS = [
+    {"slug": "has-everything", "name": "Has Everything",
+     "intelligenceIndex": 42.5, "medianOutputTokensPerSecond": 137.0,
+     "omniscienceAccuracy": 0.61},
+    {"slug": "no-speed", "name": "No Speed",
+     "intelligenceIndex": 31.0, "medianOutputTokensPerSecond": "$undefined",
+     "omniscienceAccuracy": "$undefined"},
+]
+
+cases = []
+
+
+def test(fn):
+    cases.append(fn)
+    return fn
+
+
+def fixture_html():
+    """the records wrapped the way next.js streams them."""
+    payload = json.dumps({"models": RECORDS})
+    chunks = "".join(
+        "<script>self.__next_f.push([1,%s])</script>" % json.dumps(part)
+        for part in (payload[:len(payload) // 2], payload[len(payload) // 2:]))
+    return "<!doctype html><html><body>%s</body></html>" % chunks
+
+
+class Serve(socketserver.TCPServer):
+    allow_reuse_address = True
+
+
+def serve(directory):
+    """(url_base, shutdown) for a localhost server over `directory`."""
+    handler = lambda *a, **kw: http.server.SimpleHTTPRequestHandler(
+        *a, directory=directory, **kw)
+    httpd = Serve(("127.0.0.1", 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return "http://127.0.0.1:%d" % httpd.server_address[1], httpd.shutdown
+
+
+def purge(key):
+    for name in (key + ".body", key + ".meta", key + ".body.new", key + ".meta.hdr"):
+        p = os.path.join(CACHE, name)
+        os.path.exists(p) and os.remove(p)
+
+
+def rsc_extract(url, key, match='"intelligenceIndex":'):
+    """[record] as the collectors get them, straight off the executable."""
+    purge(key)
+    try:
+        r = subprocess.run([os.path.join(RESEARCH, "rsc-extract"), url,
+                            "--match", match, "--key", key,
+                            "--min-bytes", "200", "--max-age", "0"],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    finally:
+        purge(key)
+    if r.returncode:
+        raise AssertionError("rsc-extract exited %d: %s" % (r.returncode, r.stderr.strip()))
+    return [json.loads(l) for l in r.stdout.splitlines()]
+
+
+def eq(got, want, what):
+    if got != want:
+        raise AssertionError("%s: got %r, want %r" % (what, got, want))
+
+
+@test
+def flight_undefined_becomes_null():
+    """a missing value must not reach a collector as the string "$undefined".
+
+    percentile ranking in analyze-usecase compares facet values against the
+    cohort, so one string in a population of floats is a TypeError that kills
+    the whole sweep rather than dropping one number.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        with open(os.path.join(tmp, "page.html"), "w") as f:
+            f.write(fixture_html())
+        base, stop = serve(tmp)
+        try:
+            recs = rsc_extract(base + "/page.html", "test-rsc-undefined")
+        finally:
+            stop()
+    finally:
+        shutil.rmtree(tmp)
+
+    by_slug = {r["slug"]: r for r in recs}
+    eq(sorted(by_slug), ["has-everything", "no-speed"], "records extracted")
+
+    missing = by_slug["no-speed"]
+    eq(missing["medianOutputTokensPerSecond"], None, "an absent speed is null")
+    eq(missing["omniscienceAccuracy"], None, "an absent omniscience score is null")
+    eq(missing["intelligenceIndex"], 31.0, "a real number beside it survives")
+    eq(missing["name"], "No Speed", "a real string beside it survives")
+
+    present = by_slug["has-everything"]
+    eq(present["medianOutputTokensPerSecond"], 137.0, "a measured speed is untouched")
+    eq(present["omniscienceAccuracy"], 0.61, "a measured score is untouched")
+
+
+REGISTRY_FIXTURE = """version: 1
+models:
+  Vendor/Model-A:
+    quants:
+    - {repo: Quanter/Model-A-GGUF, quant: Q8_0}
+    - {repo: Other/Model-A-GGUF, quant: F16}
+  Vendor/Model-B:
+    quants:
+    - {repo: Quanter/MODEL-b-GGUF, quant: Q8_0}
+    components:
+    - {repo: Vendor/Model-B-Encoder, quant: F16}
+"""
+
+
+@test
+def tracked_counts_the_registry_not_just_repos_txt():
+    """a repo the registry serves is carried, however it got there.
+
+    repos.txt is a hand-kept sizing list and the registry is the roster, so
+    reading only the former puts repos this document already serves under a
+    heading that says it does not carry them. case is folded because the hub
+    and the registry disagree on it for the same repo.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        reg = os.path.join(tmp, "models.yaml")
+        repos = os.path.join(tmp, "repos.txt")
+        with open(reg, "w") as f:
+            f.write(REGISTRY_FIXTURE)
+        with open(repos, "w") as f:
+            f.write("Seeded/Only-In-Repos-Txt\n# a comment\n\n")
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-hf-catalog"), "--tracked",
+                            "--repos", repos, "--registry", reg],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    finally:
+        shutil.rmtree(tmp)
+    if r.returncode:
+        raise AssertionError("fetch-hf-catalog --tracked exited %d: %s"
+                             % (r.returncode, r.stderr.strip()))
+    got = set(r.stdout.split())
+
+    eq("vendor/model-a" in got, True, "a base repo is carried")
+    eq("quanter/model-a-gguf" in got, True, "a quant source is carried")
+    eq("other/model-a-gguf" in got, True, "a second quant source is carried")
+    eq("vendor/model-b-encoder" in got, True, "a component repo is carried")
+    eq("seeded/only-in-repos-txt" in got, True, "repos.txt still counts")
+    eq("quanter/model-b-gguf" in got, True, "case is folded, not compared raw")
+    eq(sorted(got), sorted(x.lower() for x in got), "everything is lowercased")
+    eq("# a comment" in got, False, "comments are not repos")
+
+
+def main():
+    bad = 0
+    for fn in cases:
+        try:
+            fn()
+            print("ok   " + fn.__name__)
+        except Exception as e:
+            bad += 1
+            print("FAIL %s\n       %s" % (fn.__name__, e))
+    print("%d cases, %d failed" % (len(cases), bad))
+    sys.exit(1 if bad else 0)
+
+
+if __name__ == "__main__":
+    main()

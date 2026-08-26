@@ -1,540 +1,1309 @@
 {
- "_about": ["written judgement about what each model is for. SOURCE, not derived: analyze-usecase", "carries it into data/usecase.json beside the numbers, and never overwrites it.", "", "the numbers lead. every `evidence` entry names a facet and the percentile the model", "holds on it WITHIN this registry -- p79 means it beat 79% of the registry models that", "carry the same facet, not 79% of every model in the world. `claim` marks a number the", "model published about itself, which analyze-self-report measures as running about +0.9", "high, and which is the weakest evidence here.", "", "confidence is about the EVIDENCE, not the model: high means several independent", "third-party sources agree, medium means one source or a thin sample, low means nobody", "has measured it and this is the card plus whatever the forums said."],
+ "_about": [
+  "written judgement about what each model is for. SOURCE, not derived: analyze-usecase",
+  "carries it into data/usecase.json beside the numbers, and never overwrites it.",
+  "",
+  "the numbers lead. every `evidence` entry names a facet and the percentile the model",
+  "holds on it WITHIN this registry -- p79 means it beat 79% of the registry models that",
+  "carry the same facet, not 79% of every model in the world. `claim` marks a number the",
+  "model published about itself, which analyze-self-report measures as running about +0.9",
+  "high, and which is the weakest evidence here.",
+  "",
+  "confidence is about the EVIDENCE, not the model: high means several independent",
+  "third-party sources agree, medium means one source or a thin sample, low means nobody",
+  "has measured it and this is the card plus whatever the forums said."
+ ],
  "version": 1,
  "assessed": {
   "MiniMaxAI/MiniMax-M2.5": {
    "one_liner": "a tool-use model with unusually clean javascript and typescript play, now superseded by m2.7 in its own family.",
-   "use_for": ["agentic / tool use", "long context", "javascript and typescript work"],
-   "avoid_for": ["one-shot coding", "planning"],
+   "use_for": [
+    "agentic / tool use",
+    "long context",
+    "javascript and typescript work"
+   ],
+   "avoid_for": [
+    "one-shot coding",
+    "planning"
+   ],
    "notes": "artificial analysis has it flagged deprecated, and m2.7 beats it on every axis both carry, so it is worth running only if the 0.42gib smaller quant matters.",
    "confidence": "medium",
-   "evidence": ["aa.tau2 p83", "aa.lcr p70", "gbench javascript 98% over 16 games", "aa.scicode p67"],
+   "evidence": [
+    "aa.tau2 p83",
+    "aa.lcr p70",
+    "gbench javascript 98% over 16 games",
+    "aa.scicode p67"
+   ],
    "assessed_on": "2026-08-17"
   },
   "MiniMaxAI/MiniMax-M2.7": {
    "one_liner": "the registry's best instruction follower and long-context reader, at the cost of the slowest decode in its size class.",
-   "use_for": ["agentic / tool use", "long context", "instruction following", "scientific code"],
-   "avoid_for": ["latency-sensitive chat"],
+   "use_for": [
+    "agentic / tool use",
+    "long context",
+    "instruction following",
+    "scientific code"
+   ],
+   "avoid_for": [
+    "latency-sensitive chat"
+   ],
    "notes": "both forums that discuss it are unanimously positive, but on small samples (49 and 24 mentions). speed sits at p19, so a long agent loop pays for the quality.",
    "confidence": "high",
-   "evidence": ["aa.ifbench p88", "aa.lcr p88", "aa.scicode p85", "aa.speed p19", "hf-discussions 49 mentions at 100% approval"],
+   "evidence": [
+    "aa.ifbench p88",
+    "aa.lcr p88",
+    "aa.scicode p85",
+    "aa.speed p19",
+    "hf-discussions 49 mentions at 100% approval"
+   ],
    "assessed_on": "2026-08-17"
-  },
-  "Qwen/Qwen-AgentWorld-35B-A3B": {
-   "one_liner": "a world model for agent environments rather than an assistant: it predicts the next environment state, it does not do your task.",
-   "use_for": ["agent environment simulation", "training and evaluating agent harnesses"],
-   "avoid_for": ["general chat", "coding assistance"],
-   "notes": "no benchmark in this corpus measures what it does, so it is unranked rather than bad. the card is the only description of its job.",
-   "confidence": "low",
-   "evidence": ["no facet carried by any source", "card: covers seven agent interaction domains in one model"],
-   "assessed_on": "2026-08-17"
-  },
-  "Qwen/Qwen3-Coder-30B-A3B-Instruct": {
-   "one_liner": "a small fill-in-the-middle coder: the one model here tuned for autocomplete rather than conversation.",
-   "use_for": ["autocomplete / fim", "cheap local code completion"],
-   "avoid_for": ["science / reasoning", "agentic / tool use", "long context"],
-   "notes": "it is bottom-quartile on every measured axis, which is the expected shape for a 30b a3b completion model and not a reason to avoid it at the job it was built for -- nothing here measures fim.",
-   "confidence": "medium",
-   "evidence": ["aa.intelligence p12", "aa.tau2 p12", "aa.speed p37", "the only registry entry tuned `fim`"],
-   "assessed_on": "2026-08-17"
-  },
-  "Qwen/Qwen3-Coder-Next": {
-   "one_liner": "resolves real merged pull requests well above what its benchmark indices predict, and decodes fast while doing it.",
-   "use_for": ["real-world bug fixing", "agentic / tool use", "coding agents on a latency budget"],
-   "avoid_for": ["science / reasoning", "physics"],
-   "notes": "the gap is the interesting part: swe-rebench p69 against aa coding p29. swe-rebench builds its tasks from pull requests merged after release, so that number is the one that cannot have been trained against. forum reception is mixed (hf-discussions 33% approval). it is superseded on general capability by either 27b at a third of the size, so the case for a slot is the swe-rebench result and the decode speed rather than the indices. the hallucination score is the worst in the set.",
-   "confidence": "high",
-   "evidence": ["swerebench.resolved 47.7 p69", "aa.speed 140 tok/s p78", "aa.coding p29", "reddit 54 mentions at 56% approval"],
-   "assessed_on": "2026-08-18"
-  },
-  "Qwen/Qwen3.5-0.8B": {
-   "one_liner": "too small to be a general assistant; its use here is as a speculative drafter and a smoke test.",
-   "use_for": ["speculative decoding drafts", "pipeline smoke tests"],
-   "avoid_for": ["coding", "science / reasoning", "agentic / tool use"],
-   "notes": "bottom of every axis it carries, which is what an 0.8b model is. it is in the registry because a drafter has to come from somewhere.",
-   "confidence": "high",
-   "evidence": ["aa.coding p0", "aa.gpqa p0", "aa.lcr p3"],
-   "assessed_on": "2026-08-17"
-  },
-  "Qwen/Qwen3.5-122B-A10B": {
-   "one_liner": "a well-liked long-context generalist that follows instructions better than it codes.",
-   "use_for": ["instruction following", "science / reasoning", "long context", "agentic / tool use"],
-   "avoid_for": ["physics"],
-   "notes": "82 reddit mentions at 91% approval is one of the better reception numbers in the registry, and it is the a10b that people actually run rather than the 397b they cannot.",
-   "confidence": "high",
-   "evidence": ["aa.ifbench p88", "aa.tau2 p75", "aa.gpqa p74", "reddit 82 mentions at 91% approval"],
-   "assessed_on": "2026-08-17"
-  },
-  "Qwen/Qwen3.5-27B": {
-   "one_liner": "a dense 27b that fixes real bugs: top-sixth on swe-rebench, and strong on javascript and python play.",
-   "use_for": ["real-world bug fixing", "science / reasoning", "instruction following", "long context"],
-   "avoid_for": ["chat / general use"],
-   "notes": "arena rating sits at p27 while its task scores are top-quartile, which is the usual shape of a model tuned for work rather than for being pleasant to talk to.",
-   "confidence": "high",
-   "evidence": ["swerebench.resolved 58.8 p85", "aa.ifbench p79", "aa.gpqa p76", "lmarena p27", "gbench javascript 80%"],
-   "assessed_on": "2026-08-17"
-  },
-  "Qwen/Qwen3.5-35B-A3B": {
-   "one_liner": "a fast a3b tool-caller with the best python play in its size class and a weak sense of planning.",
-   "use_for": ["agentic / tool use", "instruction following", "python work"],
-   "avoid_for": ["planning", "scientific code"],
-   "notes": "gbench decision-making p16 against tau2 p83 is a real split: it calls tools reliably and chooses badly what to do with them.",
-   "confidence": "high",
-   "evidence": ["aa.tau2 p58", "aa.speed 152 tok/s p81", "gbench.decision p16", "gbench python 87%"],
-   "assessed_on": "2026-08-17"
-  },
-  "Qwen/Qwen3.5-397B-A17B": {
-   "one_liner": "the strongest qwen3.5 on nearly every axis, and the one whose weights most people cannot fit.",
-   "use_for": ["agentic / tool use", "instruction following", "science / reasoning", "real-world bug fixing", "long context"],
-   "avoid_for": ["planning"],
-   "notes": "perfect python play over the games gbench ran it on, and swe-rebench p92. barely discussed anywhere, which is a size problem rather than a quality one.",
-   "confidence": "high",
-   "evidence": ["aa.ifbench p96", "aa.tau2 p92", "swerebench.resolved 59.8 p92", "gbench python 100%", "reddit 17 mentions"],
-   "assessed_on": "2026-08-17"
-  },
-  "Qwen/Qwen3.5-9B": {
-   "one_liner": "a small tool-caller: it holds up on tau2 and falls away everywhere else.",
-   "use_for": ["agentic / tool use at small scale", "cheap local chat"],
-   "avoid_for": ["coding", "scientific code", "physics"],
-   "notes": "tau2 p67 with mmmu, osworld and scicode at p0 is a narrow shape -- fine as a router or a cheap first pass, not as the model that finishes the job.",
-   "confidence": "medium",
-   "evidence": ["aa.tau2 p54", "aa.gpqa p39", "aa.scicode p0"],
-   "assessed_on": "2026-08-17"
-  },
-  "Qwen/Qwen3.6-27B": {
-   "one_liner": "the most-discussed local model in the corpus, and the registry's best planner among dense 27b weights.",
-   "use_for": ["coding", "agentic / tool use", "planning", "long context"],
-   "avoid_for": ["latency-sensitive work"],
-   "notes": "311 reddit mentions at 86% approval, and the phrase that keeps coming back is daily driver. gbench decision-making p84 is unusual for its size. slow decode at p11 is the price.",
-   "confidence": "high",
-   "evidence": ["aa.coding 53.7 p79", "gbench.decision 0.534 p84", "reddit 311 mentions at 86% approval", "aa.speed p11", "gbench kotlin 60%"],
-   "assessed_on": "2026-08-17"
-  },
-  "Qwen/Qwen3.6-35B-A3B": {
-   "one_liner": "a popular a3b tool-caller that reads well and plans badly.",
-   "use_for": ["agentic / tool use", "chat / assistant", "javascript work"],
-   "avoid_for": ["planning", "one-shot coding", "real-world bug fixing"],
-   "notes": "the second most discussed model here (141 reddit mentions, 82% approval) and one of the weakest planners measured: gbench decision p11 and webdev arena p0.",
-   "confidence": "high",
-   "evidence": ["aa.tau2 p83", "gbench.decision p11", "reddit 141 mentions at 82% approval", "gbench javascript 85%"],
-   "assessed_on": "2026-08-17"
-  },
-  "Qwen/Qwen3.8-27B": {
-   "one_liner": "the strongest dense model in the registry on measured axes, and the current default answer for a single 27b that has to do everything.",
-   "use_for": ["coding", "agentic / tool use", "science / reasoning", "scientific code", "long context"],
-   "avoid_for": [],
-   "notes": "gbench has not played it yet, so its evidence is aa plus its own card plus 208 reddit mentions at 89% approval. the template defaults thinking to xhigh, which costs 15k-52k thinking tokens in reported traces against qwen3.6's 3k. it is also the value pick: the top score out of the smallest file of anything near it, which leaves most of a 128gb box free for context or a second model. one reproducible benchmark on this exact silicon reports UD-Q5_K_XL at 16.68 t/s against Q8_0's 12.74, with MTP at 4 draft tokens under vulkan -- one reporter on one box, so a reason to test the lower quant rather than a recommendation to run it.",
-   "confidence": "high",
-   "evidence": ["aa.intelligence 52 p94", "aa.agentic 50.9 p92", "aa.gpqa p91", "reddit 208 mentions at 89% approval", "no gbench entry"],
-   "assessed_on": "2026-08-18"
-  },
-  "XiaomiMiMo/MiMo-V2.5": {
-   "one_liner": "a coding and physics model with the best rust play measured here, let down by one-shot coding and decode speed.",
-   "use_for": ["coding", "physics", "scientific code", "rust and c++ work"],
-   "avoid_for": ["one-shot coding", "latency-sensitive work"],
-   "notes": "do not confuse it with mimo v2.5 pro, which is a different model with a different swe-rebench score; the tables mismapped exactly that pair once.",
-   "confidence": "high",
-   "evidence": ["aa.coding 56.8 p82", "aa.critpt p79", "gbench.oneshot p24", "gbench rust 65%", "aa.speed p22"],
-   "assessed_on": "2026-08-17"
-  },
-  "deepreinforce-ai/Ornith-1.0-35B": {
-   "one_liner": "an agentic-coding model whose only numbers are its own, and whose two forums disagree completely about it.",
-   "use_for": ["agentic coding, on its own claims"],
-   "avoid_for": ["anything where the claim needs to be independently checked"],
-   "notes": "16 huggingface discussion mentions at 0% approval against 13 reddit mentions at 100%. that split usually means it works when it loads and often does not load. no third-party benchmark carries it.",
-   "confidence": "low",
-   "evidence": ["card terminalbench 61.8 claim p71", "card swebench verified 68.3 claim p50", "hf-discussions 16 mentions at 0% approval", "reddit 13 mentions at 100% approval"],
-   "assessed_on": "2026-08-17"
-  },
-  "deepreinforce-ai/Ornith-1.0-9B": {
-   "one_liner": "the 9b of the same self-improving family, with claims that put it in the bottom third of the claimants.",
-   "use_for": ["small agentic coding experiments"],
-   "avoid_for": ["production agent loops"],
-   "notes": "nothing third-party has measured it and nobody discusses it. everything known about it is its own card.",
-   "confidence": "low",
-   "evidence": ["card terminalbench 39.6 claim p29", "card swebench pro 41.9 claim p0", "no forum mentions"],
-   "assessed_on": "2026-08-17"
-  },
-  "deepseek-ai/DeepSeek-V4-Flash-0731": {
-   "one_liner": "the registry's strongest all-rounder: top decile on science, coding, long context and physics at once, and the most discussed model after qwen3.6.",
-   "use_for": ["coding", "agentic / tool use", "science / reasoning", "scientific code", "physics", "planning", "long context"],
-   "avoid_for": [],
-   "notes": "at UD-IQ3_XXS it is 97gib, so on a 128gb box it fits with a drafter and little else. best go play measured here at 82%. v4's compressed sparse attention makes the kv cache far cheaper than a generic reserve assumes -- deepseek reports the 1m setting costing 27% of what the naive form would -- which is what leaves room for the 10.2gib dspark drafter beside it. two complaints from people actually running it: it ignores rules files and skill definitions, which the thread attributes to deepseek shipping no official jinja template and each quant publisher writing their own, so pin a known-good template rather than trusting the gguf default; and where the fitting quant is too tight, the community's answer for this class of box is Rednalreden's dwarfstar, a single 80.8gib file that keeps Q8 attention projections, shared experts and output layer while dropping the routed experts to IQ2_XXS.",
-   "confidence": "high",
-   "evidence": ["aa.coding 69.1 p93", "aa.gpqa p94", "aa.hle p94", "aa.critpt p94", "reddit 304 mentions at 90% approval", "gbench go 82%"],
-   "assessed_on": "2026-08-18"
-  },
-  "google/embeddinggemma-300M": {
-   "one_liner": "an embedding model: it emits vectors, not text, and no benchmark in this corpus scores it.",
-   "use_for": ["retrieval / rag embeddings", "semantic search"],
-   "avoid_for": ["generation of any kind"],
-   "confidence": "low",
-   "evidence": ["modalities text -> embeddings", "no facet carried by any source"],
-   "assessed_on": "2026-08-17"
-  },
-  "google/functiongemma-270m-it": {
-   "one_liner": "a 270m model tuned for one job: turning a request into a function call.",
-   "use_for": ["function-call routing", "on-device tool dispatch"],
-   "avoid_for": ["chat", "reasoning", "coding"],
-   "notes": "the only registry entry whose sole capability tag is `tools`. nothing here measures routing accuracy, so it is unranked.",
-   "confidence": "low",
-   "evidence": ["tuned tags: tools only", "no facet carried by any source"],
-   "assessed_on": "2026-08-17"
-  },
-  "google/gemma-4-12B-it": {
-   "one_liner": "a small multimodal assistant that follows instructions well for its size and reasons poorly.",
-   "use_for": ["instruction following", "chat / assistant", "vision / ocr"],
-   "avoid_for": ["coding", "science / reasoning", "long context", "physics"],
-   "notes": "hle and critpt at p0 against ifbench p75 is the honest shape: it does what it is told, it does not work things out.",
-   "confidence": "medium",
-   "evidence": ["aa.ifbench p75", "aa.hle p0", "aa.critpt p0", "reddit 28 mentions at 82% approval"],
-   "assessed_on": "2026-08-17"
-  },
-  "google/gemma-4-26B-A4B-it": {
-   "one_liner": "a likeable one-shot coder and chat model that falls over as soon as it has to hold a tool loop.",
-   "use_for": ["one-shot coding", "chat / general use", "instruction following", "translation"],
-   "avoid_for": ["agentic / tool use", "science / reasoning", "long context"],
-   "notes": "aa agentic p0 with gbench one-shot p76 is as clean a split as this corpus contains: ask it for a whole answer, not for a sequence of steps.",
-   "confidence": "high",
-   "evidence": ["gbench.oneshot 0.381 p76", "lmarena 1440 p73", "aa.agentic p0", "hf-discussions 51 mentions at 100% approval"],
-   "assessed_on": "2026-08-17"
-  },
-  "google/gemma-4-31B-it": {
-   "one_liner": "the best-received chat model in the registry by arena rating, and a strong one-shot coder in python and javascript.",
-   "use_for": ["chat / general use", "one-shot coding", "science / reasoning", "instruction following"],
-   "avoid_for": ["agentic / tool use", "planning", "real-world bug fixing"],
-   "notes": "arena p87 and gbench one-shot p82 against agentic weakness; also the slowest decode measured here at p0. it writes well and does not drive.",
-   "confidence": "high",
-   "evidence": ["lmarena 1450 p87", "gbench.oneshot p82", "aa.speed p0", "gbench python 89%", "reddit 66 mentions at 84% approval"],
-   "assessed_on": "2026-08-17"
-  },
-  "google/gemma-4-E2B-it": {
-   "one_liner": "an on-device gemma: small enough to run anywhere, weak on every axis measured here.",
-   "use_for": ["on-device chat", "phone and edge deployment"],
-   "avoid_for": ["coding", "science / reasoning", "agentic / tool use"],
-   "confidence": "medium",
-   "evidence": ["aa.gpqa p6", "aa.mmlu claim p8", "aa.ifbench p17"],
-   "assessed_on": "2026-08-17"
-  },
-  "google/gemma-4-E4B-it": {
-   "one_liner": "the larger on-device gemma; the same shape as e2b with a little more of everything.",
-   "use_for": ["on-device chat", "phone and edge deployment"],
-   "avoid_for": ["coding", "agentic / tool use", "long context"],
-   "confidence": "medium",
-   "evidence": ["aa.ifbench p21", "aa.gpqa p12", "aa.hle p3"],
-   "assessed_on": "2026-08-17"
-  },
-  "inclusionAI/Ling-3.0-flash": {
-   "one_liner": "a hybrid-reasoning moe that lands in the top third on agentic and coding at 5.1b active parameters.",
-   "use_for": ["coding", "agentic / tool use", "physics"],
-   "avoid_for": [],
-   "notes": "thinly discussed (12 reddit mentions) and not on the gbench board, so the evidence is artificial analysis plus its own card.",
-   "confidence": "medium",
-   "evidence": ["aa.agentic 29.3 p75", "aa.coding 50.6 p68", "aa.intelligence p76", "reddit 12 mentions at 100% approval"],
-   "assessed_on": "2026-08-17"
-  },
-  "meta-models/Muse-Glimmer-30B": {
-   "one_liner": "the best long-context reader in the registry, and a strong game player, with an operational reputation problem.",
-   "use_for": ["long context", "planning", "scientific code", "physics"],
-   "avoid_for": [],
-   "notes": "aa long-context reasoning p94 and gbench overall p84, but 43 huggingface discussion mentions at 0% approval against 111 reddit mentions at 73%. read the discussion tab before committing: that pattern is usually a quant that does not load rather than a model that cannot think.",
-   "confidence": "high",
-   "evidence": ["aa.lcr 0.8 p94", "gbench.overall 0.496 p84", "hf-discussions 43 mentions at 0% approval", "reddit 111 mentions at 73% approval"],
-   "assessed_on": "2026-08-17"
-  },
-  "mistralai/Mistral-Medium-3.5-128B": {
-   "one_liner": "a fast dense 128b that calls tools well and does no science at all.",
-   "use_for": ["agentic / tool use", "planning", "javascript and go work"],
-   "avoid_for": ["science / reasoning", "physics", "one-shot coding"],
-   "notes": "critpt at p0 twice over, from both aa and epoch, is a consistent verdict rather than one bad run. perfect javascript play over the games it was given.",
-   "confidence": "high",
-   "evidence": ["aa.speed 154 tok/s p85", "aa.tau2 p75", "aa.critpt p0", "gbench javascript 100%"],
-   "assessed_on": "2026-08-17"
-  },
-  "moonshotai/Kimi-K3": {
-   "one_liner": "the most capable model in this registry on every reasoning axis, and at 553gib the one that costs the most to find that out.",
-   "use_for": ["science / reasoning", "physics", "coding", "long context", "planning", "scientific code"],
-   "avoid_for": ["latency-sensitive work", "anything that has to fit in 128gb"],
-   "notes": "p97 on six axes at once. its thinking knob is `thinking_effort`, whose guard rejects the `medium` its own injected prose says it supports. decode is p4, the second slowest here.",
-   "confidence": "high",
-   "evidence": ["aa.intelligence 59.7 p97", "aa.gpqa p97", "aa.hle p97", "aa.lcr p97", "aa.speed p4", "gbench python 94%"],
-   "assessed_on": "2026-08-17"
-  },
-  "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16": {
-   "one_liner": "fast and good at contest maths on its own card, weak on everything a third party measured.",
-   "use_for": ["high-throughput generation", "maths problems"],
-   "avoid_for": ["agentic / tool use", "long context", "real-world bug fixing"],
-   "notes": "aime 98.2 is its own claim at p91; the third-party numbers around it sit at p20-25 and its long-context and swe scores are p0. the gap between claim and measurement is the story of this entry.",
-   "confidence": "medium",
-   "evidence": ["aa.speed 207 tok/s p93", "card aime 98.2 claim p91", "aa.lcr p0", "card swebench verified claim p0"],
-   "assessed_on": "2026-08-17"
-  },
-  "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16": {
-   "one_liner": "a physics-leaning 120b that gbench ranks at the bottom of the board it plays on.",
-   "use_for": ["physics", "python work"],
-   "avoid_for": ["coding", "agentic / tool use", "planning", "chat / general use"],
-   "notes": "gbench overall and decision-making both at p0 against critpt p76. its card recommends temp 1.0 across every task including tool calling, and the registry runs it colder anyway -- `upstream-tool-use` records what the vendor actually said.",
-   "confidence": "high",
-   "evidence": ["aa.critpt p76", "gbench.overall p0", "gbench.decision p0", "reddit 6 mentions at 33% approval"],
-   "assessed_on": "2026-08-17"
-  },
-  "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16": {
-   "one_liner": "the fastest model in the registry by a wide margin, and it spends all of that speed being average.",
-   "use_for": ["high-throughput batch generation", "draft and first-pass work"],
-   "avoid_for": ["coding", "science / reasoning", "long context", "agentic / tool use"],
-   "notes": "298 tokens/s at p96 with intelligence at p27. worth it when volume matters more than the answer; not otherwise.",
-   "confidence": "medium",
-   "evidence": ["aa.speed 298 tok/s p96", "aa.intelligence p27", "aa.agentic p25", "hf-discussions 7 mentions at 0% approval"],
-   "assessed_on": "2026-08-17"
-  },
-  "openai/gpt-oss-120b": {
-   "one_liner": "fast, widely run, and beaten on quality by most of what it sits beside -- but the best pure language play measured here.",
-   "use_for": ["high-throughput generation", "go, c++ and java work"],
-   "avoid_for": ["coding indices", "agentic / tool use", "chat / general use"],
-   "notes": "100% gbench success in go, c++ and java against aa coding and agentic near the bottom, and an arena rating at p0. it compiles what it is asked for and loses the argument about what to ask for.",
-   "confidence": "high",
-   "evidence": ["aa.speed 177 tok/s p89", "gbench go 100%", "gbench cpp 100%", "lmarena p0", "reddit 47 mentions at 80% approval"],
-   "assessed_on": "2026-08-17"
-  },
-  "openai/gpt-oss-20b": {
-   "one_liner": "the small gpt-oss: quick, cheap, and out of its depth on anything agentic.",
-   "use_for": ["cheap local chat", "high-throughput drafts"],
-   "avoid_for": ["agentic / tool use", "real-world bug fixing", "instruction following"],
-   "confidence": "medium",
-   "evidence": ["aa.speed p63", "aa.tau2 p33", "swerebench.resolved p0", "card terminalbench claim p0"],
-   "assessed_on": "2026-08-17"
-  },
-  "poolside/Laguna-S-2.1": {
-   "one_liner": "a one-shot coder: it writes a whole program well and cannot run an agent loop.",
-   "use_for": ["one-shot coding", "python and kotlin work"],
-   "avoid_for": ["agentic / tool use"],
-   "notes": "gbench one-shot p71 against agentic p8 -- the widest such split in the corpus. hf-discussions approval of 33% against reddit's 82% points at quant problems rather than model problems.",
-   "confidence": "high",
-   "evidence": ["gbench.oneshot 0.368 p71", "gbench.agentic p8", "gbench python 82%", "hf-discussions 42 mentions at 33% approval"],
-   "assessed_on": "2026-08-17"
-  },
-  "prism-ml/Bonsai-27B-gguf": {
-   "one_liner": "27b-class reasoning in binary weights: an efficiency experiment, and the worst-received model in the corpus.",
-   "use_for": ["experiments in extreme quantization"],
-   "avoid_for": ["production work of any kind"],
-   "notes": "123 huggingface discussion mentions at 0% approval and 34 reddit mentions at 14%. no benchmark carries it, so the reception IS the evidence. the retention curve in build-tables does not model binary weights, which is why it carries native_low_bpw.",
-   "confidence": "medium",
-   "evidence": ["hf-discussions 123 mentions at 0% approval", "reddit 34 mentions at 14% approval", "no facet carried by any source"],
-   "assessed_on": "2026-08-17"
-  },
-  "prism-ml/Ternary-Bonsai-27B-gguf": {
-   "one_liner": "the ternary sibling of bonsai, with the same reception and the same absence of measurement.",
-   "use_for": ["experiments in extreme quantization"],
-   "avoid_for": ["production work of any kind"],
-   "notes": "70 huggingface mentions at 0% approval. ternary weights are outside the quantization curve this repo fits, so a bpw comparison against it is meaningless.",
-   "confidence": "medium",
-   "evidence": ["hf-discussions 70 mentions at 0% approval", "no facet carried by any source"],
-   "assessed_on": "2026-08-17"
-  },
-  "stepfun-ai/Step-3.7-Flash": {
-   "one_liner": "the most reliable tool-caller measured here, and a capable planner, that cannot write a program in one go.",
-   "use_for": ["agentic / tool use", "planning", "java and javascript work"],
-   "avoid_for": ["one-shot coding"],
-   "notes": "tau2 0.985 at p96 with gbench one-shot coding at p0 is the mirror image of gemma 4 26b. give it tools and steps, not a blank file.",
-   "confidence": "high",
-   "evidence": ["aa.tau2 0.985 p96", "gbench.decision p74", "gbench.oneshot p0", "gbench java 89%"],
-   "assessed_on": "2026-08-17"
-  },
-  "tencent/Hy3": {
-   "one_liner": "top-decile on reasoning and the best-rated model here by human preference, with a gbench sample too thin to quote.",
-   "use_for": ["chat / general use", "science / reasoning", "coding", "scientific code", "long context"],
-   "avoid_for": [],
-   "notes": "gbench has played it 7 games over 25 matches, which is why its gscore is marked thin rather than used. 48 reddit mentions at 93% approval is the best reception in the registry. the ranking and the people running it disagree, and the disagreement is worth more than either. a handful on 128gb machines rate it first for coding -- \"significantly better coder than deepseek-v4-flash, keep using deepseek-v4-flash only if speed is the primary concern\" -- against a similar number who found it slow. both can be true: AA measures the unquantized model, the retention curve is transferred from another architecture, and 21b active is more compute per token than anything else that fits. what people report costing them is context and speed rather than quality, roughly 190k against deepseek's 1m, with throughput that drops off brutally as context grows.",
-   "confidence": "high",
-   "evidence": ["lmarena 1460 p93", "aa.gpqa p88", "aa.intelligence 42.2 p88", "reddit 48 mentions at 93% approval", "gbench 25 matches, below the 1000 threshold"],
-   "assessed_on": "2026-08-18"
-  },
-  "thinkingmachines/Inkling-Small": {
-   "one_liner": "a science and physics specialist: p91 on critpt, omniscience and scicode at once.",
-   "use_for": ["science / reasoning", "physics", "scientific code", "coding"],
-   "avoid_for": ["latency-sensitive work"],
-   "notes": "do not read the flagship inkling's gbench score onto this model -- the generated tables did exactly that once. it is not on the gbench board at all.",
-   "confidence": "medium",
-   "evidence": ["aa.critpt p91", "aa.scicode p91", "aa.gpqa p85", "aa.speed p15", "no gbench entry"],
-   "assessed_on": "2026-08-17"
-  },
-  "upstage/Solar-Open2-250B": {
-   "one_liner": "an office-and-document moe that scores best on physics and scientific code, and that nobody in these forums discusses.",
-   "use_for": ["agentic / tool use", "science / reasoning", "scientific code", "physics"],
-   "avoid_for": [],
-   "notes": "its template collapses medium, high and xhigh into one branch, so the thinking knob has one effective setting under three names, and the `none` its card documents changes nothing at all.",
-   "confidence": "medium",
-   "evidence": ["aa.critpt p88", "aa.scicode p82", "aa.agentic 27.8 p71", "no forum mentions"],
-   "assessed_on": "2026-08-17"
-  },
-  "Qwen/Qwen3.8-2.4T-A95B": {
-   "one_liner": "the strongest open-weights model this corpus measures, and the one nothing here can load.",
-   "use_for": ["agentic / tool use", "coding", "science / reasoning", "long context"],
-   "avoid_for": ["anything local", "latency-sensitive chat"],
-   "notes": "it sets the ceiling rather than joining the ladder: the smallest published rung is 370 gib, so every recommendation on this box is a statement about how far below this a runnable model sits. artificial analysis is so far the only third party to have scored it -- gbench, lmarena, swe-rebench and epoch all have nothing -- so the lead is one harness's answer rather than a consensus. it is also the slowest thing here per token, at p6.",
-   "confidence": "medium",
-   "evidence": ["aa.agentic p97", "aa.gdpval p97", "aa.tau_banking p97", "aa.coding p94", "aa.intelligence p95", "aa.speed p6"],
-   "assessed_on": "2026-08-18"
-  },
-  "deepseek-ai/DeepSeek-V4-Pro-0813": {
-   "one_liner": "the flash model's flagship sibling: the same shape of answer, corroborated by five sources instead of one, at ten times the file size.",
-   "use_for": ["coding", "agentic / tool use", "c# and rust work", "long context"],
-   "avoid_for": ["anything local", "questions where declining to answer is the right answer"],
-   "notes": "the best-measured model added this sweep -- aa, gbench, lmarena, swe-rebench and its own card all carry it -- and the one clear weakness is non-hallucination at p0: it answers rather than declines, which is the opposite of minimax m3 beside it. the language breakdown is lopsided, p89-p91 on c#, rust and kotlin against p50-p55 on javascript and typescript.",
-   "confidence": "high",
-   "evidence": ["aa.omniscience p98", "lmarena.rating p94", "gbench.overall p91", "aa.coding p88", "aa.agentic p87", "aa.non_hallucination p0", "lang.rust p90"],
-   "assessed_on": "2026-08-18"
   },
   "MiniMaxAI/MiniMax-M3": {
    "one_liner": "the registry's most calibrated model: first on non-hallucination and instruction following, middling on the coding benchmarks everyone quotes.",
-   "use_for": ["instruction following", "long context", "vision", "agentic / tool use"],
-   "avoid_for": ["one-shot coding in python or c#", "a 128gb box with context to spare"],
+   "use_for": [
+    "instruction following",
+    "long context",
+    "vision",
+    "agentic / tool use"
+   ],
+   "avoid_for": [
+    "one-shot coding in python or c#",
+    "a 128gb box with context to spare"
+   ],
    "notes": "the split is the point. non-hallucination p98 and ifbench p96 against python p15 and c# p22 describes a model that does what it is told and admits what it does not know, which is not what a coding index measures. it is the only model added this sweep that takes images. the smallest rung is 120 gib, so it clears a 128gb box with nothing left for kv cache.",
    "confidence": "high",
-   "evidence": ["aa.non_hallucination p98", "aa.ifbench p96", "aa.lcr p95", "aa.terminalbench_hard p93", "lang.python p15", "aa.coding p74"],
-   "assessed_on": "2026-08-18"
-  },
-  "zai-org/GLM-5.2": {
-   "one_liner": "the most-measured model in this registry and the second most-discussed, and no quant of it fits.",
-   "use_for": ["agentic / tool use", "coding", "typescript and rust work", "science / reasoning"],
-   "avoid_for": ["anything local", "competition mathematics"],
-   "notes": "67 facets across every source carried here, which makes it the best-corroborated entry in the file. the forums agree -- 113 reddit mentions across 42 threads at 79% approval, second only to the qwen3.x line -- and the smallest rung is 202 gib, so this registry can say what it is and not how to run it. epoch's mathematics runs are the dissent: deepswe p0 and otis aime p0 against tau2 p96 and terminal-bench hard p96.",
-   "confidence": "high",
-   "evidence": ["aa.tau2 p96", "aa.terminalbench_hard p96", "gbench.decision p95", "aa.coding p85", "epoch.deepswe p0", "reddit 113 mentions over 42 threads"],
-   "assessed_on": "2026-08-18"
-  },
-  "zai-org/GLM-4.5-Air": {
-   "one_liner": "a year-old 106b that people still run because it fits, and that every newer model on this roster beats.",
-   "use_for": ["a 128gb box with nothing newer installed"],
-   "avoid_for": ["coding", "science / reasoning", "agentic / tool use"],
-   "notes": "carried because the discussion tab is still busy -- 53 mentions on unsloth's repo, mostly about what speed it gets on a strix halo -- and because a model that is measured and superseded is more useful in the table than absent from it. artificial analysis has it deprecated and every percentile it holds is below p40. neither its card nor unsloth's documents a sampler set, which is why its profile reads tuned-here.",
-   "confidence": "high",
-   "evidence": ["aa.intelligence p15", "aa.hle p12", "lmarena.rating p11", "swerebench.resolved p38", "hf-discussions 53 mentions at 75% approval"],
+   "evidence": [
+    "aa.non_hallucination p98",
+    "aa.ifbench p96",
+    "aa.lcr p95",
+    "aa.terminalbench_hard p93",
+    "lang.python p15",
+    "aa.coding p74"
+   ],
    "assessed_on": "2026-08-18"
   },
   "Motif-Technologies/Motif-3": {
    "one_liner": "a 314b that knows what it does not know: p95 on the omniscience index, p42 on gpqa.",
-   "use_for": ["science / reasoning", "coding", "agentic / tool use"],
-   "avoid_for": ["anything local", "trusting the ranking on one source"],
+   "use_for": [
+    "science / reasoning",
+    "coding",
+    "agentic / tool use"
+   ],
+   "avoid_for": [
+    "anything local",
+    "trusting the ranking on one source"
+   ],
    "notes": "artificial analysis is the only third party carrying it and the rest of the evidence is its own card, which analyze-self-report measures as running about +0.9 high -- and here the card is the pessimistic side, claiming p0 on critpt and gdpval where AA puts it at p82 and p77. nobody in any of the four community corpora has mentioned it. the only gguf is five hand-rolled rungs from a single uploader.",
    "confidence": "medium",
-   "evidence": ["aa.omniscience_index p95", "aa.non_hallucination p90", "aa.intelligence p82", "aa.coding p79", "aa.gpqa p42", "0 community mentions"],
+   "evidence": [
+    "aa.omniscience_index p95",
+    "aa.non_hallucination p90",
+    "aa.intelligence p82",
+    "aa.coding p79",
+    "aa.gpqa p42",
+    "0 community mentions"
+   ],
    "assessed_on": "2026-08-18"
   },
-  "inclusionAI/Ling-3.0-tiny": {
-   "one_liner": "1.3b active in a 7.8gib file: the fastest thing here, and the only model this sweep added that actually fits.",
-   "use_for": ["latency-sensitive chat", "a second slot beside a large model", "drafting"],
-   "avoid_for": ["coding", "science / reasoning", "agentic / tool use"],
-   "notes": "the whole quant ladder fits, so the question is what a 7.9b/1.3b moe is worth rather than whether it runs. coding p12 and agentic p27 say not much; speed p88 with non-hallucination p85 says the trade is honest rather than bad. the five people who have posted about it are unanimous, and the claim they make is against qwen3.5 9b rather than against anything larger.",
+  "Qwen/Qwen-AgentWorld-35B-A3B": {
+   "one_liner": "a world model for agent environments rather than an assistant: it predicts the next environment state, it does not do your task.",
+   "use_for": [
+    "agent environment simulation",
+    "training and evaluating agent harnesses"
+   ],
+   "avoid_for": [
+    "general chat",
+    "coding assistance"
+   ],
+   "notes": "no benchmark in this corpus measures what it does, so it is unranked rather than bad. the card is the only description of its job.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: covers seven agent interaction domains in one model"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "Qwen/Qwen3-Coder-30B-A3B-Instruct": {
+   "one_liner": "a small fill-in-the-middle coder: the one model here tuned for autocomplete rather than conversation.",
+   "use_for": [
+    "autocomplete / fim",
+    "cheap local code completion"
+   ],
+   "avoid_for": [
+    "science / reasoning",
+    "agentic / tool use",
+    "long context"
+   ],
+   "notes": "it is bottom-quartile on every measured axis, which is the expected shape for a 30b a3b completion model and not a reason to avoid it at the job it was built for -- nothing here measures fim.",
    "confidence": "medium",
-   "evidence": ["aa.speed p88", "aa.non_hallucination p85", "aa.coding p12", "aa.agentic p27", "aa.intelligence p30", "reddit 5 mentions at 100% approval"],
+   "evidence": [
+    "aa.intelligence p12",
+    "aa.tau2 p12",
+    "aa.speed p37",
+    "the only registry entry tuned `fim`"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "Qwen/Qwen3-Coder-Next": {
+   "one_liner": "resolves real merged pull requests well above what its benchmark indices predict, and decodes fast while doing it.",
+   "use_for": [
+    "real-world bug fixing",
+    "agentic / tool use",
+    "coding agents on a latency budget"
+   ],
+   "avoid_for": [
+    "science / reasoning",
+    "physics"
+   ],
+   "notes": "the gap is the interesting part: swe-rebench p69 against aa coding p29. swe-rebench builds its tasks from pull requests merged after release, so that number is the one that cannot have been trained against. forum reception is mixed (hf-discussions 33% approval). it is superseded on general capability by either 27b at a third of the size, so the case for a slot is the swe-rebench result and the decode speed rather than the indices. the hallucination score is the worst in the set.",
+   "confidence": "high",
+   "evidence": [
+    "swerebench.resolved 47.7 p69",
+    "aa.speed 140 tok/s p78",
+    "aa.coding p29",
+    "reddit 54 mentions at 56% approval"
+   ],
+   "assessed_on": "2026-08-18"
+  },
+  "Qwen/Qwen3.5-0.8B": {
+   "one_liner": "too small to be a general assistant; its use here is as a speculative drafter and a smoke test.",
+   "use_for": [
+    "speculative decoding drafts",
+    "pipeline smoke tests"
+   ],
+   "avoid_for": [
+    "coding",
+    "science / reasoning",
+    "agentic / tool use"
+   ],
+   "notes": "bottom of every axis it carries, which is what an 0.8b model is. it is in the registry because a drafter has to come from somewhere.",
+   "confidence": "high",
+   "evidence": [
+    "aa.coding p0",
+    "aa.gpqa p0",
+    "aa.lcr p3"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "Qwen/Qwen3.5-122B-A10B": {
+   "one_liner": "a well-liked long-context generalist that follows instructions better than it codes.",
+   "use_for": [
+    "instruction following",
+    "science / reasoning",
+    "long context",
+    "agentic / tool use"
+   ],
+   "avoid_for": [
+    "physics"
+   ],
+   "notes": "82 reddit mentions at 91% approval is one of the better reception numbers in the registry, and it is the a10b that people actually run rather than the 397b they cannot.",
+   "confidence": "high",
+   "evidence": [
+    "aa.ifbench p88",
+    "aa.tau2 p75",
+    "aa.gpqa p74",
+    "reddit 82 mentions at 91% approval"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "Qwen/Qwen3.5-27B": {
+   "one_liner": "a dense 27b that fixes real bugs: top-sixth on swe-rebench, and strong on javascript and python play.",
+   "use_for": [
+    "real-world bug fixing",
+    "science / reasoning",
+    "instruction following",
+    "long context"
+   ],
+   "avoid_for": [
+    "chat / general use"
+   ],
+   "notes": "arena rating sits at p27 while its task scores are top-quartile, which is the usual shape of a model tuned for work rather than for being pleasant to talk to.",
+   "confidence": "high",
+   "evidence": [
+    "swerebench.resolved 58.8 p85",
+    "aa.ifbench p79",
+    "aa.gpqa p76",
+    "lmarena p27",
+    "gbench javascript 80%"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "Qwen/Qwen3.5-35B-A3B": {
+   "one_liner": "a fast a3b tool-caller with the best python play in its size class and a weak sense of planning.",
+   "use_for": [
+    "agentic / tool use",
+    "instruction following",
+    "python work"
+   ],
+   "avoid_for": [
+    "planning",
+    "scientific code"
+   ],
+   "notes": "gbench decision-making p16 against tau2 p83 is a real split: it calls tools reliably and chooses badly what to do with them.",
+   "confidence": "high",
+   "evidence": [
+    "aa.tau2 p58",
+    "aa.speed 152 tok/s p81",
+    "gbench.decision p16",
+    "gbench python 87%"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "Qwen/Qwen3.5-397B-A17B": {
+   "one_liner": "the strongest qwen3.5 on nearly every axis, and the one whose weights most people cannot fit.",
+   "use_for": [
+    "agentic / tool use",
+    "instruction following",
+    "science / reasoning",
+    "real-world bug fixing",
+    "long context"
+   ],
+   "avoid_for": [
+    "planning"
+   ],
+   "notes": "perfect python play over the games gbench ran it on, and swe-rebench p92. barely discussed anywhere, which is a size problem rather than a quality one.",
+   "confidence": "high",
+   "evidence": [
+    "aa.ifbench p96",
+    "aa.tau2 p92",
+    "swerebench.resolved 59.8 p92",
+    "gbench python 100%",
+    "reddit 17 mentions"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "Qwen/Qwen3.5-9B": {
+   "one_liner": "a small tool-caller: it holds up on tau2 and falls away everywhere else.",
+   "use_for": [
+    "agentic / tool use at small scale",
+    "cheap local chat"
+   ],
+   "avoid_for": [
+    "coding",
+    "scientific code",
+    "physics"
+   ],
+   "notes": "tau2 p67 with mmmu, osworld and scicode at p0 is a narrow shape -- fine as a router or a cheap first pass, not as the model that finishes the job.",
+   "confidence": "medium",
+   "evidence": [
+    "aa.tau2 p54",
+    "aa.gpqa p39",
+    "aa.scicode p0"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "Qwen/Qwen3.6-27B": {
+   "one_liner": "the most-discussed local model in the corpus, and the registry's best planner among dense 27b weights.",
+   "use_for": [
+    "coding",
+    "agentic / tool use",
+    "planning",
+    "long context"
+   ],
+   "avoid_for": [
+    "latency-sensitive work"
+   ],
+   "notes": "311 reddit mentions at 86% approval, and the phrase that keeps coming back is daily driver. gbench decision-making p84 is unusual for its size. slow decode at p11 is the price.",
+   "confidence": "high",
+   "evidence": [
+    "aa.coding 53.7 p79",
+    "gbench.decision 0.534 p84",
+    "reddit 311 mentions at 86% approval",
+    "aa.speed p11",
+    "gbench kotlin 60%"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "Qwen/Qwen3.6-35B-A3B": {
+   "one_liner": "a popular a3b tool-caller that reads well and plans badly.",
+   "use_for": [
+    "agentic / tool use",
+    "chat / assistant",
+    "javascript work"
+   ],
+   "avoid_for": [
+    "planning",
+    "one-shot coding",
+    "real-world bug fixing"
+   ],
+   "notes": "the second most discussed model here (141 reddit mentions, 82% approval) and one of the weakest planners measured: gbench decision p11 and webdev arena p0.",
+   "confidence": "high",
+   "evidence": [
+    "aa.tau2 p83",
+    "gbench.decision p11",
+    "reddit 141 mentions at 82% approval",
+    "gbench javascript 85%"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "Qwen/Qwen3.8-2.4T-A95B": {
+   "one_liner": "the strongest open-weights model this corpus measures, and the one nothing here can load.",
+   "use_for": [
+    "agentic / tool use",
+    "coding",
+    "science / reasoning",
+    "long context"
+   ],
+   "avoid_for": [
+    "anything local",
+    "latency-sensitive chat"
+   ],
+   "notes": "it sets the ceiling rather than joining the ladder: the smallest published rung is 370 gib, so every recommendation on this box is a statement about how far below this a runnable model sits. artificial analysis is so far the only third party to have scored it -- gbench, lmarena, swe-rebench and epoch all have nothing -- so the lead is one harness's answer rather than a consensus. it is also the slowest thing here per token, at p6.",
+   "confidence": "medium",
+   "evidence": [
+    "aa.agentic p97",
+    "aa.gdpval p97",
+    "aa.tau_banking p97",
+    "aa.coding p94",
+    "aa.intelligence p95",
+    "aa.speed p6"
+   ],
+   "assessed_on": "2026-08-18"
+  },
+  "Qwen/Qwen3.8-27B": {
+   "one_liner": "the strongest dense model in the registry on measured axes, and the current default answer for a single 27b that has to do everything.",
+   "use_for": [
+    "coding",
+    "agentic / tool use",
+    "science / reasoning",
+    "scientific code",
+    "long context"
+   ],
+   "avoid_for": [],
+   "notes": "gbench has not played it yet, so its evidence is aa plus its own card plus 208 reddit mentions at 89% approval. the template defaults thinking to xhigh, which costs 15k-52k thinking tokens in reported traces against qwen3.6's 3k. it is also the value pick: the top score out of the smallest file of anything near it, which leaves most of a 128gb box free for context or a second model. one reproducible benchmark on this exact silicon reports UD-Q5_K_XL at 16.68 t/s against Q8_0's 12.74, with MTP at 4 draft tokens under vulkan -- one reporter on one box, so a reason to test the lower quant rather than a recommendation to run it.",
+   "confidence": "high",
+   "evidence": [
+    "aa.intelligence 52 p94",
+    "aa.agentic 50.9 p92",
+    "aa.gpqa p91",
+    "reddit 208 mentions at 89% approval",
+    "no gbench entry"
+   ],
    "assessed_on": "2026-08-18"
   },
   "Tongyi-MAI/Z-Image-Turbo": {
    "one_liner": "a single-stream diffusion transformer for fast text-to-image, run here with a separate vae and text encoder.",
-   "use_for": ["text to image", "fast local image generation"],
-   "avoid_for": ["text generation"],
+   "use_for": [
+    "text to image",
+    "fast local image generation"
+   ],
+   "avoid_for": [
+    "text generation"
+   ],
    "notes": "needs three weights rather than one: the diffusion model, a vae, and a qwen3-4b text encoder. no benchmark in this corpus scores image models.",
    "confidence": "low",
-   "evidence": ["kind image, text -> image", "registry components: vae and llm"],
+   "evidence": [
+    "kind image, text -> image",
+    "registry components: vae and llm"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "XiaomiMiMo/MiMo-V2.5": {
+   "one_liner": "a coding and physics model with the best rust play measured here, let down by one-shot coding and decode speed.",
+   "use_for": [
+    "coding",
+    "physics",
+    "scientific code",
+    "rust and c++ work"
+   ],
+   "avoid_for": [
+    "one-shot coding",
+    "latency-sensitive work"
+   ],
+   "notes": "do not confuse it with mimo v2.5 pro, which is a different model with a different swe-rebench score; the tables mismapped exactly that pair once.",
+   "confidence": "high",
+   "evidence": [
+    "aa.coding 56.8 p82",
+    "aa.critpt p79",
+    "gbench.oneshot p24",
+    "gbench rust 65%",
+    "aa.speed p22"
+   ],
    "assessed_on": "2026-08-17"
   },
   "baidu/ERNIE-Image-Turbo": {
    "one_liner": "baidu's distilled text-to-image release, built for few-step generation.",
-   "use_for": ["text to image"],
-   "avoid_for": ["text generation"],
+   "use_for": [
+    "text to image"
+   ],
+   "avoid_for": [
+    "text generation"
+   ],
    "confidence": "low",
-   "evidence": ["kind image, text -> image", "card: distilled release of ERNIE-Image"],
+   "evidence": [
+    "kind image, text -> image",
+    "card: distilled release of ERNIE-Image"
+   ],
    "assessed_on": "2026-08-17"
   },
-  "ideogram-ai/ideogram-4-fp8": {
-   "one_liner": "ideogram 4 at fp8, whose family is known for rendering legible text inside images.",
-   "use_for": ["text to image", "images containing readable text"],
-   "avoid_for": ["text generation"],
+  "deepreinforce-ai/Ornith-1.0-35B": {
+   "one_liner": "an agentic-coding model whose only numbers are its own, and whose two forums disagree completely about it.",
+   "use_for": [
+    "agentic coding, on its own claims"
+   ],
+   "avoid_for": [
+    "anything where the claim needs to be independently checked"
+   ],
+   "notes": "16 huggingface discussion mentions at 0% approval against 13 reddit mentions at 100%. that split usually means it works when it loads and often does not load. no third-party benchmark carries it.",
    "confidence": "low",
-   "evidence": ["kind image, text -> image", "no card summary published"],
+   "evidence": [
+    "card terminalbench 61.8 claim p71",
+    "card swebench verified 68.3 claim p50",
+    "hf-discussions 16 mentions at 0% approval",
+    "reddit 13 mentions at 100% approval"
+   ],
    "assessed_on": "2026-08-17"
   },
-  "krea/Krea-2-Raw": {
-   "one_liner": "the raw krea 2 checkpoint: more steps, fewer shortcuts, aimed at image quality over latency.",
-   "use_for": ["text to image where quality matters more than speed"],
-   "avoid_for": ["interactive generation"],
+  "deepreinforce-ai/Ornith-1.0-9B": {
+   "one_liner": "the 9b of the same self-improving family, with claims that put it in the bottom third of the claimants.",
+   "use_for": [
+    "small agentic coding experiments"
+   ],
+   "avoid_for": [
+    "production agent loops"
+   ],
+   "notes": "nothing third-party has measured it and nobody discusses it. everything known about it is its own card.",
    "confidence": "low",
-   "evidence": ["kind image, text -> image", "no card summary published"],
+   "evidence": [
+    "card terminalbench 39.6 claim p29",
+    "card swebench pro 41.9 claim p0",
+    "no forum mentions"
+   ],
    "assessed_on": "2026-08-17"
   },
-  "krea/Krea-2-Turbo": {
-   "one_liner": "the distilled krea 2: the same family in few steps, for interactive use.",
-   "use_for": ["fast text to image", "interactive generation"],
-   "avoid_for": ["maximum fidelity"],
-   "confidence": "low",
-   "evidence": ["kind image, text -> image", "no card summary published"],
-   "assessed_on": "2026-08-17"
+  "deepseek-ai/DeepSeek-V4-Flash-0731": {
+   "one_liner": "the registry's strongest all-rounder: top decile on science, coding, long context and physics at once, and the most discussed model after qwen3.6.",
+   "use_for": [
+    "coding",
+    "agentic / tool use",
+    "science / reasoning",
+    "scientific code",
+    "physics",
+    "planning",
+    "long context"
+   ],
+   "avoid_for": [],
+   "notes": "at UD-IQ3_XXS it is 97gib, so on a 128gb box it fits with a drafter and little else. best go play measured here at 82%. v4's compressed sparse attention makes the kv cache far cheaper than a generic reserve assumes -- deepseek reports the 1m setting costing 27% of what the naive form would -- which is what leaves room for the 10.2gib dspark drafter beside it. two complaints from people actually running it: it ignores rules files and skill definitions, which the thread attributes to deepseek shipping no official jinja template and each quant publisher writing their own, so pin a known-good template rather than trusting the gguf default; and where the fitting quant is too tight, the community's answer for this class of box is Rednalreden's dwarfstar, a single 80.8gib file that keeps Q8 attention projections, shared experts and output layer while dropping the routed experts to IQ2_XXS.",
+   "confidence": "high",
+   "evidence": [
+    "aa.coding 69.1 p93",
+    "aa.gpqa p94",
+    "aa.hle p94",
+    "aa.critpt p94",
+    "reddit 304 mentions at 90% approval",
+    "gbench go 82%"
+   ],
+   "assessed_on": "2026-08-18"
+  },
+  "deepseek-ai/DeepSeek-V4-Pro-0813": {
+   "one_liner": "the flash model's flagship sibling: the same shape of answer, corroborated by five sources instead of one, at ten times the file size.",
+   "use_for": [
+    "coding",
+    "agentic / tool use",
+    "c# and rust work",
+    "long context"
+   ],
+   "avoid_for": [
+    "anything local",
+    "questions where declining to answer is the right answer"
+   ],
+   "notes": "the best-measured model added this sweep -- aa, gbench, lmarena, swe-rebench and its own card all carry it -- and the one clear weakness is non-hallucination at p0: it answers rather than declines, which is the opposite of minimax m3 beside it. the language breakdown is lopsided, p89-p91 on c#, rust and kotlin against p50-p55 on javascript and typescript.",
+   "confidence": "high",
+   "evidence": [
+    "aa.omniscience p98",
+    "lmarena.rating p94",
+    "gbench.overall p91",
+    "aa.coding p88",
+    "aa.agentic p87",
+    "aa.non_hallucination p0",
+    "lang.rust p90"
+   ],
+   "assessed_on": "2026-08-18"
   },
   "fishaudio/s2-pro": {
    "one_liner": "a text-to-speech model with inline control of prosody and emotion, trained on 10m+ hours.",
-   "use_for": ["text to speech", "expressive narration"],
-   "avoid_for": ["speech recognition", "text generation"],
+   "use_for": [
+    "text to speech",
+    "expressive narration"
+   ],
+   "avoid_for": [
+    "speech recognition",
+    "text generation"
+   ],
    "notes": "its chat template drops a developer message and accepts unlimited leading system messages, which is unusual for a speech model and recorded in turns anyway.",
    "confidence": "low",
-   "evidence": ["kind speech, text -> audio", "card: fine-grained inline control of prosody and emotion"],
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: fine-grained inline control of prosody and emotion"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "google/embeddinggemma-300M": {
+   "one_liner": "an embedding model: it emits vectors, not text, and no benchmark in this corpus scores it.",
+   "use_for": [
+    "retrieval / rag embeddings",
+    "semantic search"
+   ],
+   "avoid_for": [
+    "generation of any kind"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "modalities text -> embeddings",
+    "no facet carried by any source"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "google/functiongemma-270m-it": {
+   "one_liner": "a 270m model tuned for one job: turning a request into a function call.",
+   "use_for": [
+    "function-call routing",
+    "on-device tool dispatch"
+   ],
+   "avoid_for": [
+    "chat",
+    "reasoning",
+    "coding"
+   ],
+   "notes": "the only registry entry whose sole capability tag is `tools`. nothing here measures routing accuracy, so it is unranked.",
+   "confidence": "low",
+   "evidence": [
+    "tuned tags: tools only",
+    "no facet carried by any source"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "google/gemma-4-12B-it": {
+   "one_liner": "a small multimodal assistant that follows instructions well for its size and reasons poorly.",
+   "use_for": [
+    "instruction following",
+    "chat / assistant",
+    "vision / ocr"
+   ],
+   "avoid_for": [
+    "coding",
+    "science / reasoning",
+    "long context",
+    "physics"
+   ],
+   "notes": "hle and critpt at p0 against ifbench p75 is the honest shape: it does what it is told, it does not work things out.",
+   "confidence": "medium",
+   "evidence": [
+    "aa.ifbench p75",
+    "aa.hle p0",
+    "aa.critpt p0",
+    "reddit 28 mentions at 82% approval"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "google/gemma-4-26B-A4B-it": {
+   "one_liner": "a likeable one-shot coder and chat model that falls over as soon as it has to hold a tool loop.",
+   "use_for": [
+    "one-shot coding",
+    "chat / general use",
+    "instruction following",
+    "translation"
+   ],
+   "avoid_for": [
+    "agentic / tool use",
+    "science / reasoning",
+    "long context"
+   ],
+   "notes": "aa agentic p0 with gbench one-shot p76 is as clean a split as this corpus contains: ask it for a whole answer, not for a sequence of steps.",
+   "confidence": "high",
+   "evidence": [
+    "gbench.oneshot 0.381 p76",
+    "lmarena 1440 p73",
+    "aa.agentic p0",
+    "hf-discussions 51 mentions at 100% approval"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "google/gemma-4-31B-it": {
+   "one_liner": "the best-received chat model in the registry by arena rating, and a strong one-shot coder in python and javascript.",
+   "use_for": [
+    "chat / general use",
+    "one-shot coding",
+    "science / reasoning",
+    "instruction following"
+   ],
+   "avoid_for": [
+    "agentic / tool use",
+    "planning",
+    "real-world bug fixing"
+   ],
+   "notes": "arena p87 and gbench one-shot p82 against agentic weakness; also the slowest decode measured here at p0. it writes well and does not drive.",
+   "confidence": "high",
+   "evidence": [
+    "lmarena 1450 p87",
+    "gbench.oneshot p82",
+    "aa.speed p0",
+    "gbench python 89%",
+    "reddit 66 mentions at 84% approval"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "google/gemma-4-E2B-it": {
+   "one_liner": "an on-device gemma: small enough to run anywhere, weak on every axis measured here.",
+   "use_for": [
+    "on-device chat",
+    "phone and edge deployment"
+   ],
+   "avoid_for": [
+    "coding",
+    "science / reasoning",
+    "agentic / tool use"
+   ],
+   "confidence": "medium",
+   "evidence": [
+    "aa.gpqa p6",
+    "aa.mmlu claim p8",
+    "aa.ifbench p17"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "google/gemma-4-E4B-it": {
+   "one_liner": "the larger on-device gemma; the same shape as e2b with a little more of everything.",
+   "use_for": [
+    "on-device chat",
+    "phone and edge deployment"
+   ],
+   "avoid_for": [
+    "coding",
+    "agentic / tool use",
+    "long context"
+   ],
+   "confidence": "medium",
+   "evidence": [
+    "aa.ifbench p21",
+    "aa.gpqa p12",
+    "aa.hle p3"
+   ],
    "assessed_on": "2026-08-17"
   },
   "hexgrad/Kokoro-82M": {
    "one_liner": "82m parameters of text-to-speech that holds up against much larger models, and the cheapest voice here to run.",
-   "use_for": ["text to speech", "low-resource or embedded voice output"],
-   "avoid_for": ["voice cloning", "speech recognition"],
+   "use_for": [
+    "text to speech",
+    "low-resource or embedded voice output"
+   ],
+   "avoid_for": [
+    "voice cloning",
+    "speech recognition"
+   ],
    "confidence": "low",
-   "evidence": ["kind speech, text -> audio", "card: comparable quality to larger models at 82m parameters"],
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: comparable quality to larger models at 82m parameters"
+   ],
    "assessed_on": "2026-08-17"
+  },
+  "ideogram-ai/ideogram-4-fp8": {
+   "one_liner": "ideogram 4 at fp8, whose family is known for rendering legible text inside images.",
+   "use_for": [
+    "text to image",
+    "images containing readable text"
+   ],
+   "avoid_for": [
+    "text generation"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind image, text -> image",
+    "no card summary published"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "inclusionAI/Ling-3.0-flash": {
+   "one_liner": "a hybrid-reasoning moe that lands in the top third on agentic and coding at 5.1b active parameters.",
+   "use_for": [
+    "coding",
+    "agentic / tool use",
+    "physics"
+   ],
+   "avoid_for": [],
+   "notes": "thinly discussed (12 reddit mentions) and not on the gbench board, so the evidence is artificial analysis plus its own card.",
+   "confidence": "medium",
+   "evidence": [
+    "aa.agentic 29.3 p75",
+    "aa.coding 50.6 p68",
+    "aa.intelligence p76",
+    "reddit 12 mentions at 100% approval"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "inclusionAI/Ling-3.0-tiny": {
+   "one_liner": "1.3b active in a 7.8gib file: the fastest thing here, and the only model this sweep added that actually fits.",
+   "use_for": [
+    "latency-sensitive chat",
+    "a second slot beside a large model",
+    "drafting"
+   ],
+   "avoid_for": [
+    "coding",
+    "science / reasoning",
+    "agentic / tool use"
+   ],
+   "notes": "the whole quant ladder fits, so the question is what a 7.9b/1.3b moe is worth rather than whether it runs. coding p12 and agentic p27 say not much; speed p88 with non-hallucination p85 says the trade is honest rather than bad. the five people who have posted about it are unanimous, and the claim they make is against qwen3.5 9b rather than against anything larger.",
+   "confidence": "medium",
+   "evidence": [
+    "aa.speed p88",
+    "aa.non_hallucination p85",
+    "aa.coding p12",
+    "aa.agentic p27",
+    "aa.intelligence p30",
+    "reddit 5 mentions at 100% approval"
+   ],
+   "assessed_on": "2026-08-18"
   },
   "khimaros/Qwen3-TTS-12Hz-0.6B-CustomVoice-GGUF": {
    "one_liner": "the smallest qwen3-tts custom-voice build: voice cloning at 0.6b, quantized for llama.cpp.",
-   "use_for": ["text to speech", "voice cloning on modest hardware"],
-   "avoid_for": ["speech recognition", "text generation"],
+   "use_for": [
+    "text to speech",
+    "voice cloning on modest hardware"
+   ],
+   "avoid_for": [
+    "speech recognition",
+    "text generation"
+   ],
    "confidence": "low",
-   "evidence": ["kind speech, text -> audio", "card: multilingual, controllable, streaming tts"],
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: multilingual, controllable, streaming tts"
+   ],
    "assessed_on": "2026-08-17"
   },
   "khimaros/Qwen3-TTS-12Hz-1.7B-Base-GGUF": {
    "one_liner": "the 1.7b qwen3-tts base voice, covering ten major languages and several dialects.",
-   "use_for": ["text to speech", "multilingual narration"],
-   "avoid_for": ["voice cloning without the customvoice build"],
+   "use_for": [
+    "text to speech",
+    "multilingual narration"
+   ],
+   "avoid_for": [
+    "voice cloning without the customvoice build"
+   ],
    "confidence": "low",
-   "evidence": ["kind speech, text -> audio", "card: covers 10 major languages"],
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: covers 10 major languages"
+   ],
    "assessed_on": "2026-08-17"
   },
   "khimaros/Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF": {
    "one_liner": "the 1.7b qwen3-tts tuned for cloning a supplied voice.",
-   "use_for": ["voice cloning", "text to speech"],
-   "avoid_for": ["speech recognition"],
+   "use_for": [
+    "voice cloning",
+    "text to speech"
+   ],
+   "avoid_for": [
+    "speech recognition"
+   ],
    "confidence": "low",
-   "evidence": ["kind speech, text -> audio", "card: voice cloning and voice design support"],
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: voice cloning and voice design support"
+   ],
    "assessed_on": "2026-08-17"
   },
   "khimaros/Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF": {
    "one_liner": "the qwen3-tts build that invents a voice from a description rather than copying a sample.",
-   "use_for": ["voice design from a text prompt", "text to speech"],
-   "avoid_for": ["cloning a specific speaker"],
+   "use_for": [
+    "voice design from a text prompt",
+    "text to speech"
+   ],
+   "avoid_for": [
+    "cloning a specific speaker"
+   ],
    "confidence": "low",
-   "evidence": ["kind speech, text -> audio", "card: voice design"],
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: voice design"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "krea/Krea-2-Raw": {
+   "one_liner": "the raw krea 2 checkpoint: more steps, fewer shortcuts, aimed at image quality over latency.",
+   "use_for": [
+    "text to image where quality matters more than speed"
+   ],
+   "avoid_for": [
+    "interactive generation"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind image, text -> image",
+    "no card summary published"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "krea/Krea-2-Turbo": {
+   "one_liner": "the distilled krea 2: the same family in few steps, for interactive use.",
+   "use_for": [
+    "fast text to image",
+    "interactive generation"
+   ],
+   "avoid_for": [
+    "maximum fidelity"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind image, text -> image",
+    "no card summary published"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "meta-models/Muse-Glimmer-30B": {
+   "one_liner": "the best long-context reader in the registry, and a strong game player, with an operational reputation problem.",
+   "use_for": [
+    "long context",
+    "planning",
+    "scientific code",
+    "physics"
+   ],
+   "avoid_for": [],
+   "notes": "aa long-context reasoning p94 and gbench overall p84, but 43 huggingface discussion mentions at 0% approval against 111 reddit mentions at 73%. read the discussion tab before committing: that pattern is usually a quant that does not load rather than a model that cannot think.",
+   "confidence": "high",
+   "evidence": [
+    "aa.lcr 0.8 p94",
+    "gbench.overall 0.496 p84",
+    "hf-discussions 43 mentions at 0% approval",
+    "reddit 111 mentions at 73% approval"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "mistralai/Mistral-Medium-3.5-128B": {
+   "one_liner": "a fast dense 128b that calls tools well and does no science at all.",
+   "use_for": [
+    "agentic / tool use",
+    "planning",
+    "javascript and go work"
+   ],
+   "avoid_for": [
+    "science / reasoning",
+    "physics",
+    "one-shot coding"
+   ],
+   "notes": "critpt at p0 twice over, from both aa and epoch, is a consistent verdict rather than one bad run. perfect javascript play over the games it was given.",
+   "confidence": "high",
+   "evidence": [
+    "aa.speed 154 tok/s p85",
+    "aa.tau2 p75",
+    "aa.critpt p0",
+    "gbench javascript 100%"
+   ],
    "assessed_on": "2026-08-17"
   },
   "mistralai/Voxtral-Mini-4B-Realtime-2602": {
    "one_liner": "realtime multilingual speech transcription, and one of the first open models to claim parity with closed asr.",
-   "use_for": ["realtime speech to text", "multilingual transcription"],
-   "avoid_for": ["speech synthesis", "text generation"],
+   "use_for": [
+    "realtime speech to text",
+    "multilingual transcription"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "text generation"
+   ],
    "confidence": "low",
-   "evidence": ["kind speech, audio -> text", "card: realtime, multilingual, accuracy comparable to closed models"],
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: realtime, multilingual, accuracy comparable to closed models"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "moonshotai/Kimi-K3": {
+   "one_liner": "the most capable model in this registry on every reasoning axis, and at 553gib the one that costs the most to find that out.",
+   "use_for": [
+    "science / reasoning",
+    "physics",
+    "coding",
+    "long context",
+    "planning",
+    "scientific code"
+   ],
+   "avoid_for": [
+    "latency-sensitive work",
+    "anything that has to fit in 128gb"
+   ],
+   "notes": "p97 on six axes at once. its thinking knob is `thinking_effort`, whose guard rejects the `medium` its own injected prose says it supports. decode is p4, the second slowest here.",
+   "confidence": "high",
+   "evidence": [
+    "aa.intelligence 59.7 p97",
+    "aa.gpqa p97",
+    "aa.hle p97",
+    "aa.lcr p97",
+    "aa.speed p4",
+    "gbench python 94%"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16": {
+   "one_liner": "fast and good at contest maths on its own card, weak on everything a third party measured.",
+   "use_for": [
+    "high-throughput generation",
+    "maths problems"
+   ],
+   "avoid_for": [
+    "agentic / tool use",
+    "long context",
+    "real-world bug fixing"
+   ],
+   "notes": "aime 98.2 is its own claim at p91; the third-party numbers around it sit at p20-25 and its long-context and swe scores are p0. the gap between claim and measurement is the story of this entry.",
+   "confidence": "medium",
+   "evidence": [
+    "aa.speed 207 tok/s p93",
+    "card aime 98.2 claim p91",
+    "aa.lcr p0",
+    "card swebench verified claim p0"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16": {
+   "one_liner": "a physics-leaning 120b that gbench ranks at the bottom of the board it plays on.",
+   "use_for": [
+    "physics",
+    "python work"
+   ],
+   "avoid_for": [
+    "coding",
+    "agentic / tool use",
+    "planning",
+    "chat / general use"
+   ],
+   "notes": "gbench overall and decision-making both at p0 against critpt p76. its card recommends temp 1.0 across every task including tool calling, and the registry runs it colder anyway -- `upstream-tool-use` records what the vendor actually said.",
+   "confidence": "high",
+   "evidence": [
+    "aa.critpt p76",
+    "gbench.overall p0",
+    "gbench.decision p0",
+    "reddit 6 mentions at 33% approval"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16": {
+   "one_liner": "the fastest model in the registry by a wide margin, and it spends all of that speed being average.",
+   "use_for": [
+    "high-throughput batch generation",
+    "draft and first-pass work"
+   ],
+   "avoid_for": [
+    "coding",
+    "science / reasoning",
+    "long context",
+    "agentic / tool use"
+   ],
+   "notes": "298 tokens/s at p96 with intelligence at p27. worth it when volume matters more than the answer; not otherwise.",
+   "confidence": "medium",
+   "evidence": [
+    "aa.speed 298 tok/s p96",
+    "aa.intelligence p27",
+    "aa.agentic p25",
+    "hf-discussions 7 mentions at 0% approval"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "openai/gpt-oss-120b": {
+   "one_liner": "fast, widely run, and beaten on quality by most of what it sits beside -- but the best pure language play measured here.",
+   "use_for": [
+    "high-throughput generation",
+    "go, c++ and java work"
+   ],
+   "avoid_for": [
+    "coding indices",
+    "agentic / tool use",
+    "chat / general use"
+   ],
+   "notes": "100% gbench success in go, c++ and java against aa coding and agentic near the bottom, and an arena rating at p0. it compiles what it is asked for and loses the argument about what to ask for.",
+   "confidence": "high",
+   "evidence": [
+    "aa.speed 177 tok/s p89",
+    "gbench go 100%",
+    "gbench cpp 100%",
+    "lmarena p0",
+    "reddit 47 mentions at 80% approval"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "openai/gpt-oss-20b": {
+   "one_liner": "the small gpt-oss: quick, cheap, and out of its depth on anything agentic.",
+   "use_for": [
+    "cheap local chat",
+    "high-throughput drafts"
+   ],
+   "avoid_for": [
+    "agentic / tool use",
+    "real-world bug fixing",
+    "instruction following"
+   ],
+   "confidence": "medium",
+   "evidence": [
+    "aa.speed p63",
+    "aa.tau2 p33",
+    "swerebench.resolved p0",
+    "card terminalbench claim p0"
+   ],
    "assessed_on": "2026-08-17"
   },
   "openai/whisper-large-v3-turbo": {
    "one_liner": "the distilled whisper large v3: the default open asr, faster than the model it came from.",
-   "use_for": ["speech to text", "speech translation", "batch transcription"],
-   "avoid_for": ["speech synthesis", "realtime streaming without extra work"],
+   "use_for": [
+    "speech to text",
+    "speech translation",
+    "batch transcription"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "realtime streaming without extra work"
+   ],
    "confidence": "low",
-   "evidence": ["kind speech, audio -> text", "card: state of the art asr and speech translation"],
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: state of the art asr and speech translation"
+   ],
    "assessed_on": "2026-08-17"
+  },
+  "poolside/Laguna-S-2.1": {
+   "one_liner": "a one-shot coder: it writes a whole program well and cannot run an agent loop.",
+   "use_for": [
+    "one-shot coding",
+    "python and kotlin work"
+   ],
+   "avoid_for": [
+    "agentic / tool use"
+   ],
+   "notes": "gbench one-shot p71 against agentic p8 -- the widest such split in the corpus. hf-discussions approval of 33% against reddit's 82% points at quant problems rather than model problems.",
+   "confidence": "high",
+   "evidence": [
+    "gbench.oneshot 0.368 p71",
+    "gbench.agentic p8",
+    "gbench python 82%",
+    "hf-discussions 42 mentions at 33% approval"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "prism-ml/Bonsai-27B-gguf": {
+   "one_liner": "27b-class reasoning in binary weights: an efficiency experiment, and the worst-received model in the corpus.",
+   "use_for": [
+    "experiments in extreme quantization"
+   ],
+   "avoid_for": [
+    "production work of any kind"
+   ],
+   "notes": "123 huggingface discussion mentions at 0% approval and 34 reddit mentions at 14%. no benchmark carries it, so the reception IS the evidence. the retention curve in build-tables does not model binary weights, which is why it carries native_low_bpw.",
+   "confidence": "medium",
+   "evidence": [
+    "hf-discussions 123 mentions at 0% approval",
+    "reddit 34 mentions at 14% approval",
+    "no facet carried by any source"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "prism-ml/Ternary-Bonsai-27B-gguf": {
+   "one_liner": "the ternary sibling of bonsai, with the same reception and the same absence of measurement.",
+   "use_for": [
+    "experiments in extreme quantization"
+   ],
+   "avoid_for": [
+    "production work of any kind"
+   ],
+   "notes": "70 huggingface mentions at 0% approval. ternary weights are outside the quantization curve this repo fits, so a bpw comparison against it is meaningless.",
+   "confidence": "medium",
+   "evidence": [
+    "hf-discussions 70 mentions at 0% approval",
+    "no facet carried by any source"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "prism-ml/Ternary-Bonsai-8B-unpacked": {
+   "one_liner": "an 8b that fits in 2 gib of ternary weights, and whose published accuracy a discussion thread says did not reproduce.",
+   "use_for": [
+    "experiments in extreme quantization",
+    "a text model where 2 gib is the entire memory budget"
+   ],
+   "avoid_for": [
+    "production work of any kind",
+    "a stock llama.cpp -- the 2 gib q2_0 needs prism-ml's own fork, and the rung that does load is f16 at 15.3 gib",
+    "long context, since the 64k window is yarn factor 4.0 over a 16k trained one",
+    "anything wanting reasoning -- the shipped template closes the think block unconditionally"
+   ],
+   "notes": "the card's own table puts it second of six 6-9b models at 1/8th the size, which is the whole claim, and it is a self-run comparison. the only independent signal in this corpus contradicts it -- the top discussion thread on the gguf repo is titled that the reported accuracy could not be replicated, with a user reporting it lagging similar-sized models in lm studio. the compression is real and interesting; the accuracy behind it is not established here.",
+   "confidence": "low",
+   "evidence": [
+    "community.hf-discussions p0 of 33 -- 2 mentions, the thread titled that the reported accuracy could not be replicated",
+    "community.reddit-localllama p0 of 33 -- 1 mention, downvoted to -7",
+    "no benchmark facet carried by any source",
+    "claim: avg 75.5 against qwen3-8b's 79.3 over six 6-9b models, the vendor's own evalscope run",
+    "context_native 65536 is yarn factor 4.0 over a context_trained of 16384"
+   ],
+   "assessed_on": "2026-08-20"
+  },
+  "stepfun-ai/Step-3.7-Flash": {
+   "one_liner": "the most reliable tool-caller measured here, and a capable planner, that cannot write a program in one go.",
+   "use_for": [
+    "agentic / tool use",
+    "planning",
+    "java and javascript work"
+   ],
+   "avoid_for": [
+    "one-shot coding"
+   ],
+   "notes": "tau2 0.985 at p96 with gbench one-shot coding at p0 is the mirror image of gemma 4 26b. give it tools and steps, not a blank file.",
+   "confidence": "high",
+   "evidence": [
+    "aa.tau2 0.985 p96",
+    "gbench.decision p74",
+    "gbench.oneshot p0",
+    "gbench java 89%"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "tencent/Hy3": {
+   "one_liner": "top-decile on reasoning and the best-rated model here by human preference, with a gbench sample too thin to quote.",
+   "use_for": [
+    "chat / general use",
+    "science / reasoning",
+    "coding",
+    "scientific code",
+    "long context"
+   ],
+   "avoid_for": [],
+   "notes": "gbench has played it 7 games over 25 matches, which is why its gscore is marked thin rather than used. 48 reddit mentions at 93% approval is the best reception in the registry. the ranking and the people running it disagree, and the disagreement is worth more than either. a handful on 128gb machines rate it first for coding -- \"significantly better coder than deepseek-v4-flash, keep using deepseek-v4-flash only if speed is the primary concern\" -- against a similar number who found it slow. both can be true: AA measures the unquantized model, the retention curve is transferred from another architecture, and 21b active is more compute per token than anything else that fits. what people report costing them is context and speed rather than quality, roughly 190k against deepseek's 1m, with throughput that drops off brutally as context grows.",
+   "confidence": "high",
+   "evidence": [
+    "lmarena 1460 p93",
+    "aa.gpqa p88",
+    "aa.intelligence 42.2 p88",
+    "reddit 48 mentions at 93% approval",
+    "gbench 25 matches, below the 1000 threshold"
+   ],
+   "assessed_on": "2026-08-18"
+  },
+  "thinkingmachines/Inkling-Small": {
+   "one_liner": "a science and physics specialist: p91 on critpt, omniscience and scicode at once.",
+   "use_for": [
+    "science / reasoning",
+    "physics",
+    "scientific code",
+    "coding"
+   ],
+   "avoid_for": [
+    "latency-sensitive work"
+   ],
+   "notes": "do not read the flagship inkling's gbench score onto this model -- the generated tables did exactly that once. it is not on the gbench board at all.",
+   "confidence": "medium",
+   "evidence": [
+    "aa.critpt p91",
+    "aa.scicode p91",
+    "aa.gpqa p85",
+    "aa.speed p15",
+    "no gbench entry"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "upstage/Solar-Open2-250B": {
+   "one_liner": "an office-and-document moe that scores best on physics and scientific code, and that nobody in these forums discusses.",
+   "use_for": [
+    "agentic / tool use",
+    "science / reasoning",
+    "scientific code",
+    "physics"
+   ],
+   "avoid_for": [],
+   "notes": "its template collapses medium, high and xhigh into one branch, so the thinking knob has one effective setting under three names, and the `none` its card documents changes nothing at all.",
+   "confidence": "medium",
+   "evidence": [
+    "aa.critpt p88",
+    "aa.scicode p82",
+    "aa.agentic 27.8 p71",
+    "no forum mentions"
+   ],
+   "assessed_on": "2026-08-17"
+  },
+  "yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2": {
+   "one_liner": "the same 12b continued into tool use, carrying one agentic number that its own author ran.",
+   "use_for": [
+    "local coding and terminal agent loops at 12b",
+    "a tool-calling model that fits an 8 gib card at q3_k_m"
+   ],
+   "avoid_for": [
+    "customer-service style agents -- the card puts the base model AHEAD of it on tau2 retail",
+    "general knowledge, which its own card puts below the base",
+    "any comparison against published tau2-bench figures"
+   ],
+   "notes": "the headline is ~55% on tau2-bench telecom against the base model's ~15%, and the card is unusually honest about what that is -- the author's own harness, 20 tasks, a self-simulated user, all at q8_0, which measures v2 against its base under one setup and nothing else. the forum signal points the other way, since every agentic-task mention it has is neutral or negative. needs --jinja for the native tool format and rep_pen 1.1 to avoid a repetition failure, so a bad first impression here is usually the client.",
+   "confidence": "low",
+   "evidence": [
+    "community.hf-discussions p0 of 33 -- 7 mentions over 4 threads, 2 negative and 0 positive",
+    "6 agentic-task mentions in hf-discussions, 2 negative and 0 positive",
+    "no benchmark facet carried by any source",
+    "claim: tau2-bench telecom ~55% against the base's ~15%, author's own harness over 20 tasks",
+    "claim: mmlu-pro below the base model, also the author's own run"
+   ],
+   "assessed_on": "2026-08-20"
+  },
+  "yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1": {
+   "one_liner": "a 12b python coder whose only measurement is its own card, and whose author has already superseded it.",
+   "use_for": [
+    "python and algorithmic coding on a small card",
+    "a private coding assistant where q4_k_m at 6.9 gib is the whole budget"
+   ],
+   "avoid_for": [
+    "general knowledge, which the card says is what was traded away",
+    "tool use and agent loops -- that is what v2 was built to fix",
+    "any slot that needs a third-party number to justify it"
+   ],
+   "notes": "the training story is the strongest thing here and it is still self-reported -- reasoning traces entered training only if their code passed the task's tests, which is a real filter, but no suite in this corpus has scored the result. its own author describes v1 as stopping after the first step, so the agentic sibling supersedes it for anything multi-step. reception is the warmest of the three additions and it is still only 6 mentions.",
+   "confidence": "low",
+   "evidence": [
+    "community.hf-discussions p91 of 33 -- 6 mentions over 3 threads, none negative",
+    "no benchmark facet carried by any source",
+    "claim: execution-gated chain-of-thought distillation, with no benchmark number published for v1"
+   ],
+   "assessed_on": "2026-08-20"
+  },
+  "zai-org/GLM-4.5-Air": {
+   "one_liner": "a year-old 106b that people still run because it fits, and that every newer model on this roster beats.",
+   "use_for": [
+    "a 128gb box with nothing newer installed"
+   ],
+   "avoid_for": [
+    "coding",
+    "science / reasoning",
+    "agentic / tool use"
+   ],
+   "notes": "carried because the discussion tab is still busy -- 53 mentions on unsloth's repo, mostly about what speed it gets on a strix halo -- and because a model that is measured and superseded is more useful in the table than absent from it. artificial analysis has it deprecated and every percentile it holds is below p40. neither its card nor unsloth's documents a sampler set, which is why its profile reads tuned-here.",
+   "confidence": "high",
+   "evidence": [
+    "aa.intelligence p15",
+    "aa.hle p12",
+    "lmarena.rating p11",
+    "swerebench.resolved p38",
+    "hf-discussions 53 mentions at 75% approval"
+   ],
+   "assessed_on": "2026-08-18"
+  },
+  "zai-org/GLM-5.2": {
+   "one_liner": "the most-measured model in this registry and the second most-discussed, and no quant of it fits.",
+   "use_for": [
+    "agentic / tool use",
+    "coding",
+    "typescript and rust work",
+    "science / reasoning"
+   ],
+   "avoid_for": [
+    "anything local",
+    "competition mathematics"
+   ],
+   "notes": "67 facets across every source carried here, which makes it the best-corroborated entry in the file. the forums agree -- 113 reddit mentions across 42 threads at 79% approval, second only to the qwen3.x line -- and the smallest rung is 202 gib, so this registry can say what it is and not how to run it. epoch's mathematics runs are the dissent: deepswe p0 and otis aime p0 against tau2 p96 and terminal-bench hard p96.",
+   "confidence": "high",
+   "evidence": [
+    "aa.tau2 p96",
+    "aa.terminalbench_hard p96",
+    "gbench.decision p95",
+    "aa.coding p85",
+    "epoch.deepswe p0",
+    "reddit 113 mentions over 42 threads"
+   ],
+   "assessed_on": "2026-08-18"
   }
  }
 }

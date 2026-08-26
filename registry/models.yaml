@@ -688,9 +688,9 @@ models:
     ids:
       aa: qwen3-8-27b
       gbench: qwen/qwen3.8-27b
-      lmarena: ''
+      lmarena: qwen3.8-27b
       swerebench: ''
-      epoch: ''
+      epoch: qwen3.8-27b
     speculative:
       type: draft-mtp
       n_max: 3
@@ -738,6 +738,72 @@ models:
       - text
     turns:
       source: unsloth/Qwen3.8-27B-GGUF
+      developer: as-system
+      leading_system_max: unlimited
+      mid_system: rejected
+      mid_developer: rejected
+      upstream_differs: [developer, leading_system_max]
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, xhigh]
+      default: xhigh
+      aliases: {high: xhigh}
+  Qwen/Qwen3.8-Flash-Next:
+    kind: text
+    name:
+      short: qwen3.8 flash next
+      match: qwen\s*-?3\.8[\s-]*flash[\s-]*next|qwen3\.8-flash-next
+    quants:
+    - repo: unsloth/Qwen3.8-Flash-Next-GGUF
+      quant: UD-IQ4_XS
+      note: 'UD-Q4_K_XL is the top rung, but at 103.7gib it leaves nothing for kv on a 128gb
+        box; UD-IQ4_XS is 87.2gib, the largest that leaves room to actually run it. the card''s
+        own top-1 table puts it at 91.089% against UD-Q3_K_XL''s 90.387%. every rung is sharded
+        3-4 ways, and the card states sizes in decimal gb, so its figures read ~7% larger than
+        the gib this registry sizes in'
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      instruct:
+        source: quant-card
+        temp: 0.7
+        top_p: 0.8
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - code
+        - tools
+    notes: 'the gguf repo is tagged image-text-to-text but publishes no mmproj sidecar, so vision
+      does not work from it as released -- text only until one appears. unsloth''s page calls it
+      125b where the hub''s own safetensors index totals ~180b; model-facts carries whichever the
+      vendor config states.'
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: unsloth/Qwen3.8-Flash-Next-GGUF
       developer: as-system
       leading_system_max: unlimited
       mid_system: rejected
@@ -1120,7 +1186,7 @@ models:
     kind: text
     name:
       short: gemma 4 12b
-      match: gemma\s*-?4[\s-]*12b|gemma4[\s-]*12b
+      match: gemma\s*-?4[\s-]*12b\b(?![\s-]*(?:coder|agentic|v1|v2))
     quants:
     - repo: unsloth/gemma-4-12B-it-GGUF
       quant: Q8_0
@@ -2216,7 +2282,7 @@ models:
     kind: text
     name:
       short: bonsai 27b
-      match: \bternary[\s-]*bonsai\b|\bbonsai\b
+      match: (?<!ternary[\s-])\bbonsai[\s-]*27b\b|(?<!ternary[\s-])\bbonsai\b(?![\s-]*\d)
     notes: >-
       a qwen3.6-27b derivative, so dense and the same shape. the repo publishes two
       rungs and nothing between them: Q1_0 at 1.13 bpw and F16 at 15.94.
@@ -2264,7 +2330,7 @@ models:
     kind: text
     name:
       short: ternary bonsai 27b
-      match: ternary[\s-]*bonsai[\s-]*27b
+      match: ternary[\s-]*bonsai(?:[\s-]*27b)?\b(?![\s-]*\d)
     notes: >-
       ternary weights, which the bits-per-weight retention curve does not model, so
       any quant-adjusted score for it would be an extrapolation rather than a fit.
@@ -2720,3 +2786,161 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+  yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1:
+    kind: text
+    name:
+      short: gemma 4 12b coder
+      match: gemma\s*-?4[\s-]*12b[\s-]*coder
+    notes: a gemma-4-12b-it finetune distilled from execution-verified python chain-of-thought
+      -- a reasoning trace entered training only if its code passed the task's tests. narrow
+      on purpose, meaning python and algorithmic work, english-centric, and the card says
+      general knowledge is what was traded for it. no safety alignment, so it refuses less
+      than its base does. its template defaults enable_thinking OFF, so the card's instruction
+      to keep it on is load-bearing rather than decorative.
+    quants:
+    - repo: yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1-GGUF
+      quant: Q8_0
+      note: five rungs off one 12b dense base, q2_k through q8_0. q8 is 11.8 gib so the whole
+        ladder fits; the card recommends q4_k_m at 6.87 gib for an 8 gib card
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: generation-config
+        temp: 1.0
+        top_p: 0.95
+        top_k: 64
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      - audio
+      output:
+      - text
+    turns:
+      source: yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1-GGUF
+      developer: as-system
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
+  yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2:
+    kind: text
+    name:
+      short: gemma 4 12b agentic
+      match: gemma\s*-?4[\s-]*12b[\s-]*(?:agentic|v2)
+    notes: the v1 coder continued into multi-step tool use, in gemma 4's native tool protocol.
+      the card reports tau2-bench telecom at ~55% against the base model's ~15%, but that is
+      the AUTHOR's own harness over 20 tasks with a self-simulated user, so it compares v2 to
+      its base under one setup and is not comparable to published tau2 figures. the same card
+      reports mmlu-pro slightly BELOW the base, which is the trade being made. like v1 it
+      defaults enable_thinking OFF, so the reasoning it was trained for needs asking for.
+    quants:
+    - repo: yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF
+      quant: Q8_0
+      note: four rungs, q3_k_m through q8_0 -- the author withheld q2_k as failing his own
+        stress test. needs --jinja to parse the native tool format, and rep_pen 1.1 to stop
+        the repeated-zeroes failure his pinned discussion attributes to sampler defaults
+    speculative:
+      type: draft-mtp
+      n_max: 6
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: generation-config
+        temp: 1.0
+        top_p: 0.95
+        top_k: 64
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      - audio
+      output:
+      - text
+    turns:
+      source: yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF
+      developer: as-system
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
+  prism-ml/Ternary-Bonsai-8B-unpacked:
+    kind: text
+    name:
+      short: ternary bonsai 8b
+      match: \bbonsai[\s-]*8b\b
+    notes: the 8b rung of the ternary line, from qwen3-8b rather than the qwen3.6-27b its 27b
+      siblings derive from. unlike them it DOES publish base weights, which is why this is
+      keyed on the unpacked repo where they are keyed on their gguf. ternary weights, so the
+      bits-per-weight retention curve does not model it and any quant-adjusted score for it is
+      an extrapolation rather than a fit. the template in its gguf header, which is the one
+      llama.cpp loads, closes the reasoning block unconditionally where the 27b gates it on
+      enable_thinking -- this rung ships with no way to turn thinking on, which is why it
+      carries no thinking knob here.
+    quants:
+    - repo: prism-ml/Ternary-Bonsai-8B-gguf
+      quant: F16
+      note: f16 at 15.26 gib is the rung mainline llama.cpp can load. the format the model
+        exists FOR is q2_0 at 2.03 gib, and that is not upstream yet -- it needs prism-ml's
+        own fork, so a consumer on a stock build gets the 8x larger file or nothing
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: generation-config
+        temp: 0.5
+        top_p: 0.85
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: prism-ml/Ternary-Bonsai-8B-gguf
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped

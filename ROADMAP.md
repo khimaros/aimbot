@@ -5,7 +5,7 @@ built and is marked done when it ships.
 
 ## done
 
-- **the registry** (61 models, 48 of them text), keyed by huggingface base repo.
+- **the registry** (64 models, 51 of them text), keyed by huggingface base repo.
 - **named sampling profiles**, with each profile's `source:` derived rather than
   asserted.
 - **derived registry blocks**: `turns:` and `thinking:` executed out of the chat
@@ -13,7 +13,7 @@ built and is marked done when it ships.
   checked against each model's `config.json`.
 - **the research corpus**: 20 point-in-time captures, every one committed so a
   refresh is a reviewable diff rather than a silent change in conclusions.
-- **the `docs/` dashboard**: 1489 facets over 61 models, every weight a slider,
+- **the `docs/` dashboard**: 1496 facets over 64 models, every weight a slider,
   the memory budget a setting, every number one hover from its source.
 - **one sweep command** (`make sweep`) that collects, derives, builds and
   checks, and ends by printing what only a human can decide.
@@ -55,7 +55,7 @@ built and is marked done when it ships.
    and llama-tools has the TODO. the dashboard answers the same question for a
    reader rather than for a config.
 
-4. **card claims cover 22 of 48 text models.** gpt-oss, laguna, inkling, step
+4. **card claims cover 25 of 51 text models.** gpt-oss, laguna, inkling, step
    and minimax m2.7 publish no parseable benchmark table.
 
 5. **sentiment is a blunt polarity lexicon** read over forum sentences, where

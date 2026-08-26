@@ -401,6 +401,7 @@ cd research
 ./fetch-level1techs
 ./fetch-hf-catalog                 # publishers.txt; discovery, not lookup
 ./fetch-hf-catalog --sort createdAt --out data/hf-catalog-new.json
+./fetch-hf-catalog --tracked       # what it counts as already carried, and why a repo is absent
 ./fetch-reddit --harvest 10 --comments 120 --front 14
 ```
 

@@ -11,7 +11,10 @@ all -- an aggregate accuracy cannot tell you that.
 
 The dataset is 121gib of trajectories and verifier logs, so nothing here fetches
 a submission wholesale: the tree api gives the job directories, and only the
-job-level `result.json` (~7kb) is pulled.
+job-level `result.json` (~7kb) is pulled. That is still ~400 requests, and a
+published submission never changes -- the dataset grows by adding directories --
+so `--max-age` defaults to 6h like the other collectors rather than revalidating
+every job on every sweep.
 
 A row is a submission (agent x model), not a model: the same model appears under
 several harnesses, and the harness moves the score as much as the model does.
@@ -153,7 +156,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", default="2.0", help="terminal-bench version (default %(default)s)")
     ap.add_argument("--out", default="data/tbench.json")
-    ap.add_argument("--max-age", type=int, default=0,
+    ap.add_argument("--max-age", type=int, default=6 * 3600,
                     help="skip revalidation below this age; 0 always revalidates")
     ap.add_argument("--refresh", action="store_true")
     args = ap.parse_args()

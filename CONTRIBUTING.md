@@ -90,7 +90,8 @@ reading:
 5. write its block in `research/usecase-assessed.json`. `analyze-usecase
    --missing` lists what is unassessed; the numbers to ground it in are in
    `research/data/usecase.json` under the same repo key.
-6. `scripts/sweep --stage build --stage check`.
+6. `scripts/sweep --stage build`, then `scripts/sweep --stage check`. `--stage`
+   takes one value, so passing it twice runs only the second.
 
 **`name.match` is a regex over forum prose and it must not overlap another
 model's.** `ling[\s-]*3\.0` swallowed `ling 3.0 tiny` for the flash entry, and a
@@ -131,6 +132,13 @@ reaches a reader as a blank page.
 the stub lives in `scripts/pageboot.py` and is shared with
 `research/dashboard-table`, so the page under test and the page MODELS.md is
 generated from are the same boot.
+
+`tests/collectors` is the same idea for the collectors: it runs the real
+executable as a subprocess over a real http request against a fixture served
+from localhost, so nothing here reaches the network and nothing imports a
+collector -- a collector that only works when imported is not what the sweep
+runs. each case uses its own httpcache key under a `test-` prefix and removes
+it, so a run leaves the real cache untouched.
 
 prefer an end-to-end test to a unit test. anything that CAN be tested end to end
 should be.

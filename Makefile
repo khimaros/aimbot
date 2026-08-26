@@ -59,6 +59,7 @@ site:
 # built docs/, so build them first rather than testing a stale copy.
 test-e2e: site
 	./tests/e2e
+	./tests/collectors
 .PHONY: test-e2e
 
 test: test-e2e

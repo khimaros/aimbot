@@ -258,6 +258,10 @@ the page's own arithmetic being checked rather than a mock of it. `node --check`
 was tried first and is not enough -- it passes a stray backtick that turns half
 the file into a template literal, which reaches a reader as a blank page.
 
+the same target runs `tests/collectors`, which covers the python half of the
+sweep the way the sweep runs it: the real executable as a subprocess against a
+fixture served from localhost, reaching no network.
+
 it fetches ONE file, `docs/data.json`, by relative path. the raw captures are
 19mb across twenty files and half of them are yaml, so joining them in the
 browser would mean shipping a yaml parser and most of the corpus to read one
@@ -268,7 +272,7 @@ the factors run deep: 23 artificial analysis benchmarks (including
 declining to answer), the four gbench modes, epoch's runs, card claims,
 community per forum, and a slider per gbench LANGUAGE -- so somebody who writes
 rust can weight rust rather than trusting a coding index that averaged it away.
-1489 facets over 61 models, grouped and collapsible, each group saying how many
+1496 facets over 64 models, grouped and collapsible, each group saying how many
 of its weights are live.
 
 the ranking is the part worth explaining. **quality is a weighted mean of
@@ -581,12 +585,12 @@ end generated -->` and everything between the two markers is replaced.
 
 ## status
 
-done: the registry (61 models), named sampling profiles, the research corpus,
+done: the registry (64 models), named sampling profiles, the research corpus,
 llama-tools generating its whole llama-swap config from registry facts plus
 a host file that lists only choices, and the `docs/` viewer above.
 
 `research/data/usecase.json` is the one place a consumer reads to answer "what
-is this model for". it holds 1489 facets across the 61 models -- one number per
+is this model for". it holds 1496 facets across the 64 models -- one number per
 (source, benchmark) with the model's percentile among the registry models that
 carry the same one, the gbench per-language breakdown, what each forum said
 with quoted references, and the written judgement carried in from
