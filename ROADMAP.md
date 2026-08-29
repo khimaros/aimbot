@@ -5,7 +5,7 @@ built and is marked done when it ships.
 
 ## done
 
-- **the registry** (64 models, 51 of them text), keyed by huggingface base repo.
+- **the registry** (65 models, 52 of them text), keyed by huggingface base repo.
 - **named sampling profiles**, with each profile's `source:` derived rather than
   asserted.
 - **derived registry blocks**: `turns:` and `thinking:` executed out of the chat
@@ -13,7 +13,7 @@ built and is marked done when it ships.
   checked against each model's `config.json`.
 - **the research corpus**: 20 point-in-time captures, every one committed so a
   refresh is a reviewable diff rather than a silent change in conclusions.
-- **the `docs/` dashboard**: 1496 facets over 64 models, every weight a slider,
+- **the `docs/` dashboard**: 1544 facets over 65 models, every weight a slider,
   the memory budget a setting, every number one hover from its source.
 - **one sweep command** (`make sweep`) that collects, derives, builds and
   checks, and ends by printing what only a human can decide.
@@ -58,7 +58,16 @@ built and is marked done when it ships.
 4. **card claims cover 25 of 51 text models.** gpt-oss, laguna, inkling, step
    and minimax m2.7 publish no parseable benchmark table.
 
-5. **sentiment is a blunt polarity lexicon** read over forum sentences, where
+5. **`resolve-ids --write` cannot create an `ids:` block, only rewrite one.**
+   `patch_ids` edits the lines it owns rather than dumping the document, which
+   is right, but a model added without an `ids:` block is then matched, counted
+   as filled and silently dropped -- qwen3.8 flash next carried AA and lmarena
+   matches for a full capture that way, and reached MODELS.md unscored. adding
+   the block by hand is the workaround; inserting it after `quants:` when it is
+   absent is the fix, and it wants a test that adds a model with no `ids:` and
+   asserts the block appears.
+
+6. **sentiment is a blunt polarity lexicon** read over forum sentences, where
    "x is better than y" scores positive for both. it is weighted at 0.05 for
    that reason, against a redundancy analysis that says it is the most
    independent signal here. a better reader of the same corpus would be worth

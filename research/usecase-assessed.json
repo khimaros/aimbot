@@ -381,6 +381,32 @@
    ],
    "assessed_on": "2026-08-18"
   },
+  "Qwen/Qwen3.8-Flash-Next": {
+   "one_liner": "the qwen4 architecture preview, and the highest-measured model here that still fits the box -- bought with a 51b n-gram table that is most of what makes it awkward to serve.",
+   "use_for": [
+    "coding",
+    "agentic / tool use",
+    "science / reasoning",
+    "scientific code",
+    "long context"
+   ],
+   "avoid_for": [
+    "factual recall"
+   ],
+   "notes": "artificial analysis scored it three days after release, and it leads qwen3.8-27b on every axis the two share: II 55.8 against 52.0, coding 73.1 against 68.1, agentic 56.4 against 50.9, terminal-bench 86.1 against 79.8. the exception is the one to know about -- non-hallucination p66 against qwen3.8-27b's p93, so it answers where the 27b declines. what the forums discuss is none of that. 67 huggingface discussion posts, more than any other model here, almost all about speed and memory: 11 t/s reported without MTP, and no mainline gguf has an MTP head because llama.cpp's converter drops it and PR 27836 is still open. 41% of the file is the n-gram table, which is what both the '4x slower than it should be' and the 'keep the n-gram table on nvme' threads are about, and it is also why the quant ladder bottoms out at 67.6gib -- its 160-column rows take only block-32 types. AtomicChat is the one publisher that shards the table separately, so 38 of their 93 gb page from ssd rather than staying resident.",
+   "confidence": "medium",
+   "evidence": [
+    "aa.terminalbench 86.1 p97",
+    "aa.gdpval 62.1 p97",
+    "aa.coding 73.1 p94",
+    "aa.agentic 56.4 p94",
+    "aa.intelligence 55.8 p93",
+    "aa.non_hallucination p66",
+    "hf-discussions 67 mentions p97, reddit 43 at 100% approval",
+    "no gbench, swe-rebench or epoch entry"
+   ],
+   "assessed_on": "2026-08-29"
+  },
   "Tongyi-MAI/Z-Image-Turbo": {
    "one_liner": "a single-stream diffusion transformer for fast text-to-image, run here with a separate vae and text encoder.",
    "use_for": [
