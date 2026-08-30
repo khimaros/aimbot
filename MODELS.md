@@ -149,7 +149,7 @@ model missing three of them is a gap in the evidence, not a verdict.
 | 1 | qwen3.8 flash next | UD-Q4_K_XL | 103.7 | 256k | 4/7 | **89.5** |
 | 2 | qwen3.8 27b | UD-Q8_K_XL | 29.3 | 256k | 6/7 | **78.9** |
 | 3 | deepseek v4 flash 0731 | UD-IQ3_XXS | 97.0 | 186k | 7/7 | **73.0** |
-| 4 | bonsai 27b | Q1_0 | 3.5 | - | 1/7 | **67.0** |
+| 4 | bonsai 27b | Q1_0 | 3.5 | 256k | 1/7 | **67.0** |
 | 5 | qwen3.6 27b | UD-Q8_K_XL | 33.3 | 256k | 6/7 | **65.4** |
 | 6 | ling 3.0 flash | AD-Q6_K | 100.1 | 256k | 3/7 | **61.3** |
 | 7 | muse glimmer | UD-Q8_K_XL | 30.1 | 128k | 5/7 | **58.7** |
@@ -170,7 +170,7 @@ model missing three of them is a gap in the evidence, not a verdict.
 | 22 | gemma 4 26b a4b | UD-Q8_K_XL | 25.7 | 256k | 6/7 | **31.6** |
 | 23 | minimax-m2.5 | UD-Q2_K_XL | 80.0 | 148k | 5/7 | **31.6** |
 | 24 | qwen3.5-35b-a3b | UD-Q8_K_XL | 45.3 | 256k | 4/7 | **31.2** |
-| 25 | ternary bonsai 27b | Q2_G64 | 7.1 | - | 1/7 | **31.0** |
+| 25 | ternary bonsai 27b | Q2_G64 | 7.1 | 256k | 1/7 | **31.0** |
 | 26 | qwen3 coder next | UD-Q8_K_XL | 80.4 | 256k | 4/7 | **30.5** |
 | 27 | ornith 1.5 35b a3b | Q8_0 | 35.2 | 256k | 2/7 | **29.1** |
 | 28 | gemma 4 12b | UD-Q8_K_XL | 12.7 | 256k | 3/7 | **28.7** |
@@ -702,9 +702,9 @@ two copies of a claim is what this repo exists to remove.
 4. **bonsai 27b at Q1_0 (3.5 gib)**, 27b-class reasoning in binary weights: an efficiency experiment, and the worst-received model in the corpus.
 
    use it for experiments in extreme quantization. avoid it for production
-   work of any kind. on the quant: keyed by the gguf repo because prism-ml
-   publishes no base weights; the card names Qwen/Qwen3.6-27B as its base, so
-   it is dense and the same shape.
+   work of any kind. on the quant: the gguf repo is what runs; the entry is
+   keyed on the unpacked weights beside it, which carry the config.json every
+   geometry fact here comes from.
 
 5. **qwen3.6 27b at UD-Q8_K_XL (33.3 gib)**, the most-discussed local model in the corpus, and the registry's best planner among dense 27b weights.
 
@@ -2122,8 +2122,8 @@ model is supposed to: AA scored it.
 | functiongemma-270m-it | Q8_0 | 0.3 | 0.27b / ? | 7,848 | 95 | 270m parameters, below the floor of every suite carried here. it emits function calls and nothing else, which is why no coding index applies to it. |
 | fara 1.5 27b | Q8_0 | 26.7 | 27.36b / ? | 216,216 | 9 | 26.7 gib, plus a 0.9 gib mmproj -- the screenshots are the input, so the vision sidecar is not optional for this one |
 | nemotron-3-nano-30b-a3b | Q8_0 | 31.3 | 31.58b / 3b | 14,429 | 328 | only nvidia's own card measures the nano; no third party in this corpus carries it, which is why it is sized rather than ranked. |
-| bonsai 27b | F16 | 50.1 | 27b / ? | 561,415 | 821 | keyed by the gguf repo because prism-ml publishes no base weights; the card names Qwen/Qwen3.6-27B as its base, so it is dense and the same shape |
-| ternary bonsai 27b | F16 | 50.1 | 27b / ? | 604,753 | 1253 | ternary weights, which the bpw retention curve in build-tables does not model; treat its quant-adjusted scores as unreliable |
+| bonsai 27b | F16 | 50.1 | 27.36b / ? | 561,415 | 821 | the gguf repo is what runs; the entry is keyed on the unpacked weights beside it, which carry the config.json every geometry fact here comes from |
+| ternary bonsai 27b | F16 | 50.1 | 27.36b / ? | 604,753 | 1253 | ternary weights, which the bpw retention curve in build-tables does not model; treat its quant-adjusted scores as unreliable |
 | gemma 4 12b coder | Q8_0 | 11.8 | 11.96b / ? | 476,740 | 2857 | five rungs off one 12b dense base, q2_k through q8_0. q8 is 11.8 gib so the whole ladder fits; the card recommends q4_k_m at 6.87 gib for an 8 gib card |
 | gemma 4 12b agentic | Q8_0 | 11.8 | 11.96b / ? | 522,598 | 1497 | four rungs, q3_k_m through q8_0 -- the author withheld q2_k as failing his own stress test. needs --jinja to parse the native tool format, and rep_pen 1.1 to stop the repeated-zeroes failure his pinned discussion attributes to sampler defaults |
 | ternary bonsai 8b | F16 | 15.3 | 8.19b / ? | 316,829 | 147 | f16 at 15.26 gib is the rung mainline llama.cpp can load. the format the model exists FOR is q2_0 at 2.03 gib, and that is not upstream yet -- it needs prism-ml's own fork, so a consumer on a stock build gets the 8x larger file or nothing |

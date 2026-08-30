@@ -499,6 +499,48 @@ test('quant adjustment leaves an interval scale alone', () => {
   eq(moved.length, 0, 'arena percentiles must not move with the quant\n'
     + '       moved: ' + moved.join('; '));
 });
+
+test('the pi config states the level vocabulary the template actually accepts', () => {
+  RESET();
+  // pi cannot read a chat template, so every level it offers has to be spelled
+  // out. a level the template would reject has to be spelled out too, as null,
+  // or pi offers it and the request raises.
+  const ink = model('inkling small');
+  const cfg = JSON.parse(piProvider(ink, {repo: 'r', quant: 'Q'}, 'thinking', true));
+  const e = cfg.providers.local.models[0];
+
+  eq(e.thinkingLevelMap.off, 'none',
+     'the template calls the bottom of its scale `none`, and pi calls it `off`');
+  eq(e.thinkingLevelMap.medium, 'medium', 'a level both agree on passes through');
+  // the registry aliases xhigh onto max for this model, which resolves what a
+  // PROFILE asked for. advertising it to pi as well would disagree with the
+  // config llama-tools deploys, whose vocabulary stops at max
+  eq(e.thinkingLevelMap.xhigh, null, 'a profile alias is not a level pi may ask for');
+  eq(Object.keys(e.thinkingLevelMap).length, 7, 'every pi level is stated, present or not');
+
+  // audio is in this model's modalities and pi's schema rejects it outright
+  eq(JSON.stringify(e.input), '["text","image"]', 'audio is dropped, image is kept');
+  eq(e.compat.thinkingFormat, 'chat-template', 'a graded knob is set through kwargs');
+  ok(!('omitWhenOff' in e.compat.chatTemplateKwargs.reasoning_effort),
+     'the template has its own word for off, so the kwarg must still be sent');
+
+  // a plain on/off gate is a different format, and has no graded vocabulary
+  const g = JSON.parse(piProvider(model('gemma 4 31b'),
+                                  {repo: 'r', quant: 'Q'}, 'thinking', true));
+  const ge = g.providers.local.models[0];
+  eq(ge.compat.thinkingFormat, 'qwen-chat-template', 'a toggle is not a graded knob');
+  eq(ge.thinkingLevelMap.high, 'high', 'a toggle offers on and off only');
+  eq(ge.thinkingLevelMap.medium, null, 'and hides every level in between');
+
+  // a knob that grades levels AND keeps a separate gate omits the kwarg to
+  // turn off, because `off` is not in its graded vocabulary
+  const k = JSON.parse(piProvider(model('kimi k3'),
+                                  {repo: 'r', quant: 'Q'}, 'thinking', true));
+  const ke = k.providers.local.models[0];
+  eq(ke.compat.chatTemplateKwargs.thinking_effort.omitWhenOff, true,
+     'nothing in `low, high, max` means off, so the kwarg is dropped instead');
+  eq(ke.thinkingLevelMap.minimal, null, 'a level it does not grade is hidden');
+});
 """
 
 

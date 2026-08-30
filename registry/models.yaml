@@ -2835,22 +2835,25 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
-  prism-ml/Bonsai-27B-gguf:
+  prism-ml/Bonsai-27B-unpacked:
     kind: text
     name:
       short: bonsai 27b
       match: (?<!ternary[\s-])\bbonsai[\s-]*27b\b|(?<!ternary[\s-])\bbonsai\b(?![\s-]*\d)
     notes: >-
-      a qwen3.6-27b derivative, so dense and the same shape. the repo publishes two
+      a qwen3.6-27b derivative, and the unpacked config confirms the shape: 64
+      layers, 5120 wide, 4 kv heads at head_dim 256, and the same hybrid stack
+      of 48 linear attention layers to 16 full. the gguf repo publishes two
       rungs and nothing between them: Q1_0 at 1.13 bpw and F16 at 15.94.
     quants:
     - repo: prism-ml/Bonsai-27B-gguf
       quant: F16
-      note: keyed by the gguf repo because prism-ml publishes no base weights; the
-        card names Qwen/Qwen3.6-27B as its base, so it is dense and the same shape
+      note: the gguf repo is what runs; the entry is keyed on the unpacked
+        weights beside it, which carry the config.json every geometry fact here
+        comes from
     sampling:
       thinking:
-        source: tuned-here
+        source: generation-config
         note: "a binary-weight rebuild that publishes no sampler guidance; these are qwen3.6-27b's, which it derives from"
         temp: 1.0
         top_p: 0.95
@@ -2871,6 +2874,8 @@ models:
     modalities:
       input:
       - text
+      - image
+      - video
       output:
       - text
     turns:
@@ -2883,7 +2888,7 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
-  prism-ml/Ternary-Bonsai-27B-gguf:
+  prism-ml/Ternary-Bonsai-27B-unpacked:
     kind: text
     name:
       short: ternary bonsai 27b
@@ -2898,7 +2903,7 @@ models:
         model; treat its quant-adjusted scores as unreliable
     sampling:
       thinking:
-        source: tuned-here
+        source: generation-config
         note: "a ternary-weight rebuild that publishes no sampler guidance; these are qwen3.6-27b's, which it derives from"
         temp: 1.0
         top_p: 0.95
@@ -2919,6 +2924,8 @@ models:
     modalities:
       input:
       - text
+      - image
+      - video
       output:
       - text
     turns:

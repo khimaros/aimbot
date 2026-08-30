@@ -2121,15 +2121,82 @@ function llamaServer(m, pick, profileName) {
   return cmd.join(' \\\n  ');
 }
 
-function piProvider(m, pick) {
-  if (!pick) return null;
-  const id = `${pick.repo}:${pick.quant}`;
-  const entry = {id, name: id,
-    reasoning: !!(m.thinking.knob || m.sampling.thinking),
-    input: m.modalities.input || ['text'],
+// pi's thinking enum, ascending. a template level outside it cannot be asked
+// for, so it is not advertised. LEVEL_ALIAS is the reverse direction from the
+// registry's own `thinking.aliases`: these are the template's words for pi's
+// `off` -- inkling and solar say `none`, hy3 says `no_think`.
+const PI_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+const PI_LEVEL_ALIAS = {none: 'off', no_think: 'off', disabled: 'off'};
+
+// {pi level: the word this model's template wants for it}, or null for a level
+// it has no way to express. null is meaningful: it HIDES a level pi would
+// otherwise offer and the template would reject.
+function piThinkingLevels(m) {
+  const t = m.thinking || {};
+  if (!t.knob) return null;
+  if (t.kind === 'boolean') return {off: 'off', high: 'high'};
+  const accepts = t.accepts || [];
+  if (!accepts.length) return null;
+  const out = {};
+  // a template that grades levels but keeps a separate gate can still be
+  // turned off, through the gate rather than through the graded knob
+  if (t.gate) out.off = 'off';
+  accepts.forEach(lv => {
+    const pi = PI_LEVEL_ALIAS[lv] || lv;
+    if (PI_LEVELS.includes(pi)) out[pi] = lv;
+  });
+  // `thinking.aliases` is deliberately NOT read here. it resolves a level a
+  // sampling profile asked for onto one the template accepts, which is a
+  // different question from what vocabulary to advertise -- and llama-tools
+  // builds the deployed config without it, so reading it here would put two
+  // configs for the same model in front of a reader that disagree
+  return Object.keys(out).length ? out : null;
+}
+
+// an entry for ~/.pi/agent/models.json, per pi.dev/docs/latest/custom-provider.
+//
+// llama-tools builds the same thing from llama-swap's SERVED metadata, which is
+// the authority for a running host and can differ from this: a server predating
+// the `knob` field advertises no level at all. this one is what the registry
+// knows, which is what a reader pointing pi at their own llama-server wants.
+function piProvider(m, pick, profileName, gguf) {
+  // the id is whatever the server advertises: `repo:QUANT` is what
+  // `--hf-repo` names a gguf, and vllm serves the base repo under its own name
+  if (gguf && !pick) return null;
+  const id = gguf ? `${pick.repo}:${pick.quant}` : m.repo;
+  const t = m.thinking || {};
+  const tuned = (m.sampling[profileName] || {}).tuned || [];
+  const levels = piThinkingLevels(m);
+  const reasoning = tuned.includes('reason') || !!t.knob;
+  // pi's schema takes text and image only; audio is rejected outright
+  const input = (m.modalities.input || ['text']).filter(x => x === 'text' || x === 'image');
+  const compat = {maxTokensField: 'max_completion_tokens'};
+  if (reasoning && levels && t.knob && t.knob !== 'enable_thinking') {
+    // a graded knob rides beside the gate. where the template grades no "off"
+    // of its own, the kwarg is dropped entirely rather than sent a word the
+    // template never defined
+    const effort = {$var: 'thinking.effort'};
+    if (!levels.off || levels.off === 'off') effort.omitWhenOff = true;
+    compat.thinkingFormat = 'chat-template';
+    compat.chatTemplateKwargs = {
+      [t.gate || 'enable_thinking']: {$var: 'thinking.enabled'},
+      [t.knob]: effort,
+    };
+  } else if (reasoning && t.knob === 'enable_thinking') {
+    compat.thinkingFormat = 'qwen-chat-template';
+  }
+  const entry = {id, name: id, reasoning,
+    input: input.length ? input : ['text'],
     cost: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0},
-    compat: {maxTokensField: 'max_completion_tokens'}};
-  if (m.facts.context_native) entry.contextWindow = m.facts.context_native;
+    compat};
+  if (reasoning && levels) {
+    entry.thinkingLevelMap = {};
+    PI_LEVELS.forEach(lv => { entry.thinkingLevelMap[lv] = levels[lv] || null; });
+  }
+  if (m.facts.context_native) {
+    entry.contextWindow = m.facts.context_native;
+    entry.maxTokens = m.facts.context_native;
+  }
   return JSON.stringify({providers: {local: {baseUrl: 'http://localhost:8080/v1',
     api: 'openai-completions', apiKey: 'none', models: [entry]}}}, null, 2);
 }
@@ -2196,6 +2263,9 @@ function snippets(m) {
   const body = requestBody(m, profile);
   if (body) out.push({label: 'request body (thinking knob)'
     + (body.note ? ' -- ' + body.note : ''), text: body.text});
+  // pi has to be told the level vocabulary; it cannot read a chat template
+  const pi = piProvider(m, pick, profile, rt.gguf);
+  if (pi) out.push({label: '~/.pi/agent/models.json', text: pi});
   return out;
 }
 // the word alone, coloured. what `dropped` means is stated once per model
