@@ -50,12 +50,16 @@ RAW = "https://huggingface.co/%s/raw/main/%s"
 GGUF_API = "https://huggingface.co/api/models/%s?expand[]=gguf"
 OUTDIR = "data/chat-templates"
 
+# must match fetch-model-facts: the two share cache keys, so the shorter window
+# would revalidate for both and neither would save anything
+MAX_AGE = 48 * 3600
+
 
 def get(url, key, max_age, refresh):
     cmd = [os.path.join(HERE, "httpcache"), url, "--key", key, "--max-age", str(max_age)]
     if refresh:
         cmd.append("--refresh")
-    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    r = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
     return r.stdout or None
 
 
@@ -149,7 +153,7 @@ def main():
     ap.add_argument("--repos", help="newline-separated base repos instead of the registry")
     ap.add_argument("--out", default="data/chat-templates.json")
     ap.add_argument("--outdir", default=OUTDIR)
-    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--max-age", type=int, default=MAX_AGE)
     ap.add_argument("--refresh", action="store_true")
     args = ap.parse_args()
 

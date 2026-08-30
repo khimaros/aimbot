@@ -929,7 +929,7 @@ models:
     kind: text
     name:
       short: ornith 1.0 35b
-      match: ornith[\s-]*1?\.?0?[\s-]*35b|\bornith\b
+      match: ornith[\s-]*(?:1\.0[\s-]*)?35b
     notes: >-
       qwen3.5-moe architecture despite the bare 35B in the name, and the vendor
       publishes no active parameter count, so its speed cannot be estimated.
@@ -996,6 +996,7 @@ models:
     kind: text
     name:
       short: ornith-1.0-9b
+      match: ornith[\s-]*(?:1\.0[\s-]*)?\b9b\b
     notes: >-
       the dense sibling of the 35b. no third-party suite carries either of them; the
       hub download count is the only evidence there is.
@@ -1046,6 +1047,209 @@ models:
       - text
     turns:
       source: unsloth/Ornith-1.0-9B-GGUF
+      developer: as-system
+      leading_system_max: 2
+      mid_system: dropped
+      mid_developer: dropped
+      upstream_differs: [developer, leading_system_max, mid_developer, mid_system]
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  # the 1.5 generation publishes under ornith-ai; 1.0 was deepreinforce-ai and
+  # the vendor has not moved it, so the two families sit under different owners
+  ornith-ai/Ornith-1.5-9B:
+    kind: text
+    name:
+      short: ornith 1.5 9b
+      match: ornith[\s-]*1\.5[\s-]*\b9b\b
+    notes: >-
+      dense, and the only ornith 1.5 whose q8_0 leaves room for anything else. the
+      card gives it its own sampler set rather than the family's -- temp 1.0 with
+      presence_penalty 1.5 for general use, 0.6 and no penalty for code -- where
+      the two larger siblings publish one set.
+    quants:
+    - repo: ornith-ai/Ornith-1.5-9B-GGUF
+      quant: Q8_0
+      note: the vendor's own gguf repo; 9.1 gib
+    sampling:
+      tool-use:
+        source: quant-card
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - code
+        - tools
+        note: the card's "precise coding tasks" set
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        note: the card's "general tasks" set
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: ornith-ai/Ornith-1.5-9B-GGUF
+      developer: as-system
+      leading_system_max: 2
+      mid_system: dropped
+      mid_developer: dropped
+      upstream_differs: [developer, leading_system_max, mid_developer, mid_system]
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  ornith-ai/Ornith-1.5-35B-A3B:
+    kind: text
+    name:
+      short: ornith 1.5 35b a3b
+      match: ornith[\s-]*1\.5[\s-]*35b
+    notes: >-
+      the size the 1.0 35b should have been: same 35b total, but the vendor now
+      publishes the active count, so its speed can be estimated where its
+      predecessor's could not. hybrid attention -- 30 linear layers to 10 full,
+      one full every fourth -- so its cache is far smaller than the layer count
+      suggests.
+    quants:
+    - repo: ornith-ai/Ornith-1.5-35B-A3B-GGUF
+      quant: Q8_0
+      note: the vendor's own gguf repo; 35.2 gib
+    sampling:
+      # the card recommends ONE set, temp 0.6 / top_p 0.95 / top_k 20, and notes
+      # temp 1.0 only "to reproduce the reported benchmarks"
+      tool-use:
+        source: quant-card
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      thinking:
+        source: quant-card
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: ornith-ai/Ornith-1.5-35B-A3B-GGUF
+      developer: as-system
+      leading_system_max: 2
+      mid_system: dropped
+      mid_developer: dropped
+      upstream_differs: [developer, leading_system_max, mid_developer, mid_system]
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  ornith-ai/Ornith-1.5-397B:
+    kind: text
+    name:
+      short: ornith 1.5 397b
+      match: ornith[\s-]*1\.5[\s-]*397b
+    notes: >-
+      512 experts, 10 active. the smallest rung published is q4_k_m at 227 gib,
+      so nothing here fits a local box -- carried because it is the head of the
+      family the two runnable sizes come from, and the card's claims are what
+      they get compared against. the vendor publishes no active parameter count
+      for this one, unlike the 35b a3b beside it, so its speed cannot be
+      estimated either.
+    quants:
+    - repo: ornith-ai/Ornith-1.5-397B-GGUF
+      quant: Q4_K_M
+      note: the smallest rung published, and still 227 gib
+    sampling:
+      tool-use:
+        source: quant-card
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      thinking:
+        source: quant-card
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: ornith-ai/Ornith-1.5-397B-GGUF
       developer: as-system
       leading_system_max: 2
       mid_system: dropped
@@ -2020,7 +2224,7 @@ models:
     kind: text
     name:
       short: inkling small
-      match: inkling[\s-]*small|inkling
+      match: inkling[\s-]*small
     quants:
     - repo: unsloth/Inkling-Small-GGUF
       quant: UD-IQ3_S

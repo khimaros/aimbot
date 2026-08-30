@@ -58,6 +58,13 @@ API = "https://huggingface.co/api/models/%s?expand[]=safetensors"
 # disagree about the window, which is a thing to see rather than to average.
 GGUF_API = "https://huggingface.co/api/models/%s?expand[]=gguf"
 
+# five files per model against 65 models, and each revalidation is a round trip
+# to be told nothing changed. these facts move when a repo is re-uploaded, which
+# is rare, so the window is longer than the gap between two daily sweeps --
+# below that it never saves anything. fetch-chat-templates shares these keys and
+# must agree, or whichever runs with the shorter window revalidates for both
+MAX_AGE = 48 * 3600
+
 # the smallest parameter count that could be a real model here, and the naming
 # convention vendors use for active parameters: `Qwen3.5-397B-A17B`.
 MIN_PARAMS = 50_000_000
@@ -103,7 +110,7 @@ def get(url, key, max_age, refresh):
     cmd = [os.path.join(HERE, "httpcache"), url, "--key", key, "--max-age", str(max_age)]
     if refresh:
         cmd.append("--refresh")
-    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    r = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
     return r.stdout or None
 
 
@@ -335,10 +342,7 @@ def main():
     ap.add_argument("--registry", default=os.path.join(HERE, "..", "registry", "models.yaml"))
     ap.add_argument("--repos", help="newline-separated repos instead of the registry")
     ap.add_argument("--out", default="data/model-facts.json")
-    # five files per model against 45 models, so always-revalidate costs ~2min
-    # of round trips to be told nothing changed. these facts change when a repo
-    # is re-uploaded, which is rare; --refresh is there for when it happens
-    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--max-age", type=int, default=MAX_AGE)
     ap.add_argument("--refresh", action="store_true")
     args = ap.parse_args()
 

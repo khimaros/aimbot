@@ -12,9 +12,11 @@ all -- an aggregate accuracy cannot tell you that.
 The dataset is 121gib of trajectories and verifier logs, so nothing here fetches
 a submission wholesale: the tree api gives the job directories, and only the
 job-level `result.json` (~7kb) is pulled. That is still ~400 requests, and a
-published submission never changes -- the dataset grows by adding directories --
-so `--max-age` defaults to 6h like the other collectors rather than revalidating
-every job on every sweep.
+published job's contents never change -- the dataset grows by adding directories
+-- so the two are cached on different clocks: the listings, where a new
+submission or a re-run shows up, revalidate on `--max-age`, and the files they
+point at are held for `--result-max-age`. That is the difference between 400
+round trips a sweep and 80.
 
 A row is a submission (agent x model), not a model: the same model appears under
 several harnesses, and the harness moves the score as much as the model does.
@@ -36,6 +38,12 @@ ROOT = "submissions/terminal-bench/%s"
 # across submissions; the base name is what the task is called everywhere else
 TASK = re.compile(r"^(.*?)__[A-Za-z0-9]{7}$")
 
+# listings gain entries, so they revalidate on a sweep's timescale. the files
+# inside a published job do not change at all, and there are five of them for
+# every listing
+MAX_AGE = 6 * 3600
+RESULT_MAX_AGE = 30 * 86400
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -43,9 +51,7 @@ def fetch(url, key, max_age, refresh):
     cmd = [os.path.join(HERE, "httpcache"), url, "--key", key, "--max-age", str(max_age)]
     if refresh:
         cmd.append("--refresh")
-    out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                         text=True).stdout
-    return out
+    return subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout
 
 
 def fetch_json(url, key, max_age, refresh):
@@ -104,7 +110,7 @@ def rewards(result):
     return out
 
 
-def submission(name, version, max_age, refresh):
+def submission(name, version, max_age, result_age, refresh):
     base = ROOT % version + "/" + name
     tree = fetch_json(TREE % (DATASET, base), "tb-sub-" + slug(name), max_age, refresh)
     if not isinstance(tree, list):
@@ -115,7 +121,7 @@ def submission(name, version, max_age, refresh):
         f = e["path"].rsplit("/", 1)[-1]
         if e.get("type") == "file" and f.startswith("metadata.y"):
             meta = fetch(RAW % (DATASET, base + "/" + f), "tb-meta-" + slug(name),
-                         max_age, refresh)
+                         result_age, refresh)
     agent, org, models = metadata(meta)
     # the directory encodes agent__model, which is all there is to go on when a
     # submission ships no metadata at all
@@ -127,7 +133,7 @@ def submission(name, version, max_age, refresh):
             continue
         job = e["path"].rsplit("/", 1)[-1]
         res = fetch_json(RAW % (DATASET, base + "/" + job + "/result.json"),
-                         "tb-job-" + slug(name + "-" + job), max_age, refresh)
+                         "tb-job-" + slug(name + "-" + job), result_age, refresh)
         if not res:
             continue
         jobs.append(job)
@@ -156,8 +162,10 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", default="2.0", help="terminal-bench version (default %(default)s)")
     ap.add_argument("--out", default="data/tbench.json")
-    ap.add_argument("--max-age", type=int, default=6 * 3600,
-                    help="skip revalidation below this age; 0 always revalidates")
+    ap.add_argument("--max-age", type=int, default=MAX_AGE,
+                    help="skip revalidation of the listings below this age; 0 always revalidates")
+    ap.add_argument("--result-max-age", type=int, default=RESULT_MAX_AGE,
+                    help="the same for a published job's own files, which never change")
     ap.add_argument("--refresh", action="store_true")
     args = ap.parse_args()
 
@@ -169,7 +177,7 @@ def main():
 
     subs = {}
     for name in sorted(names):
-        s = submission(name, args.version, args.max_age, args.refresh)
+        s = submission(name, args.version, args.max_age, args.result_max_age, args.refresh)
         if not s:
             print("  %-52s no results" % name[:52], file=sys.stderr)
             continue

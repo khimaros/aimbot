@@ -47,6 +47,12 @@ API = "https://huggingface.co/api/models/%s"
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/140.0.0.0 Safari/537.36")
 
+# three requests per model, none of which transfers anything on a re-run: a
+# card is edited in the days after release and then sits. the window is longer
+# than the gap between two daily sweeps because below that it never saves a
+# request, and --refresh is what to reach for when a card is known to have moved
+MAX_AGE = 48 * 3600
+
 # hub fields worth keeping. downloads and likes are not quality, but they are
 # the only measure of adoption that covers every model rather than the fifth
 # of them a leaderboard scored.
@@ -391,15 +397,19 @@ def highlights(text):
     return out
 
 
-def hub_meta(repo, max_age, refresh):
-    """The hub's own structured metadata, which needs no card to parse."""
-    cmd = [os.path.join(HERE, "httpcache"), API % repo,
-           "--key", "hub-%s" % repo.replace("/", "_"),
-           "--max-age", str(max_age), "--header", "User-Agent: " + UA]
+def get(url, key, max_age, refresh, header=None):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key, "--max-age", str(max_age)]
+    if header:
+        cmd += ["--header", header]
     if refresh:
         cmd.append("--refresh")
-    raw = subprocess.run(cmd, stdout=subprocess.PIPE,
-                         stderr=subprocess.DEVNULL, text=True).stdout
+    return subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout
+
+
+def hub_meta(repo, max_age, refresh):
+    """The hub's own structured metadata, which needs no card to parse."""
+    raw = get(API % repo, "hub-%s" % repo.replace("/", "_"), max_age, refresh,
+              "User-Agent: " + UA)
     try:
         d = json.loads(raw)
     except ValueError:
@@ -419,7 +429,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--registry", default=os.path.join(HERE, "..", "registry", "models.yaml"))
     ap.add_argument("--out", default="data/model-cards.json")
-    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--max-age", type=int, default=MAX_AGE)
     ap.add_argument("--refresh", action="store_true")
     args = ap.parse_args()
 
@@ -430,13 +440,8 @@ def main():
     for repo, m in reg.items():
         if "/" not in repo:
             continue
-        cmd = [os.path.join(HERE, "httpcache"), RAW % repo,
-               "--key", "card-%s" % repo.replace("/", "_"),
-               "--max-age", str(args.max_age)]
-        if args.refresh:
-            cmd.append("--refresh")
-        text = subprocess.run(cmd, stdout=subprocess.PIPE,
-                              stderr=subprocess.DEVNULL, text=True).stdout
+        text = get(RAW % repo, "card-%s" % repo.replace("/", "_"),
+                   args.max_age, args.refresh)
         # an entry is written even with no card at all: the hub metadata below
         # answers "what is this and who publishes it" for the image and speech
         # models, which have no benchmark table anywhere
@@ -458,13 +463,8 @@ def main():
         # the same thing as the base repo
         qrepo = ((m.get("quants") or [{}])[0]).get("repo")
         if qrepo:
-            qcmd = [os.path.join(HERE, "httpcache"), RAW % qrepo,
-                    "--key", "qcard-%s" % qrepo.replace("/", "_"),
-                    "--max-age", str(args.max_age)]
-            if args.refresh:
-                qcmd.append("--refresh")
-            qtext = subprocess.run(qcmd, stdout=subprocess.PIPE,
-                                   stderr=subprocess.DEVNULL, text=True).stdout
+            qtext = get(RAW % qrepo, "qcard-%s" % qrepo.replace("/", "_"),
+                        args.max_age, args.refresh)
             qsets = sampler_sets(qtext)
             if qsets:
                 out[repo]["quant_repo"] = qrepo

@@ -23,6 +23,12 @@ built and is marked done when it ships.
 - **the roster derived from the registry.** `build-tables` used to carry its own
   twenty-model literal, so a model added to `registry/models.yaml` never reached
   MODELS.md.
+- **a cache window per collector, and a visible one.** every hub-facing
+  collector defaulted to 6h, which is shorter than the gap between two daily
+  sweeps, so a sweep re-run the next morning paid ~1900 round trips to be told
+  nothing had changed; the windows now come from how fast each source moves.
+  httpcache's per-request status used to go to `/dev/null` in six collectors,
+  which is why a working cache read as a stalled one.
 
 ## next
 

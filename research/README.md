@@ -454,12 +454,35 @@ nothing refetches what it already has.
 huggingface and epoch send etags, so repeated `fetch-gguf-sizes` and
 `fetch-epoch` runs revalidate to `304 not modified` and transfer nothing.
 artificial analysis, gert labs, lmarena, swe-rebench and hn algolia send none,
-so those use a time-based `--max-age` (6h default) instead. `--path` prints the
+so those use a time-based `--max-age` instead. `--path` prints the
 cached file's path rather than its body, which is what makes a zip readable:
 stdout is decoded as text with errors replaced, so binary survives the cache
 but not the pipe. if a fetch fails and a cached copy
 exists, the cached body is served and the failure goes to stderr, so a collector
 degrades to stale data rather than writing a truncated file.
+
+an etag makes a revalidation free in bytes but not in round trips, and the
+hub-facing collectors make ~1900 of them a sweep: one `curl` per url, serially,
+0.32s each of which 0.22s is dns and tls. so `--max-age` is what actually keeps
+a re-run off the network, and it is set from how fast the data behind it moves
+rather than uniformly:
+
+| collector | window | why |
+| --- | --- | --- |
+| `fetch-model-facts`, `fetch-chat-templates` | 48h | config and template files, which move when a repo is re-uploaded. the two share cache keys, so the windows must agree |
+| `fetch-model-cards`, `fetch-quant-sweeps` | 48h | cards, edited in the days after release and then still. also shared keys |
+| `fetch-gguf-sizes` | 48h | a quantizer adds rungs early, then stops |
+| `fetch-tbench` | 6h listings, 30d contents | a listing gains submissions and re-runs; the files inside a published job never change, and there are five of them per listing |
+
+48h rather than 24 because the point is a sweep run the next day, and anything
+shorter than the gap between two of them never saves a request. a model added
+since the last sweep has no cached body at all, so it is fetched whatever the
+window says. `--refresh` is what to reach for when a card is known to have moved
+sooner.
+
+httpcache reports every request on stderr and no collector swallows it, so
+`304 not modified` and `cache fresh (Nd old)` scroll past as proof the cache is
+working. a silent pause is a collector that is genuinely waiting.
 
 `fetch-reddit` caches at two levels: httpcache for the HTTP fetch, and its own
 output file, where any search or thread already captured and younger than

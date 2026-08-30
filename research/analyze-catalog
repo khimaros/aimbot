@@ -11,6 +11,11 @@ so `--candidates` filters to what could plausibly matter here -- a size class
 this box can hold, a base model already on the roster, or a trending position
 high enough that ignoring it is a decision rather than an oversight.
 
+Half of what passes that filter is somebody else's quant of a model the roster
+already carries, which is a different question from a model it carries in no
+form at all. `requant of` names the roster model when there is one, and the
+rows with none sort first.
+
     ./analyze-catalog                    # trending repos not tracked
     ./analyze-catalog --candidates       # filtered to plausible roster additions
     ./analyze-catalog --publisher unsloth --grep GLM
@@ -126,24 +131,35 @@ def main():
                 continue
             # either it is a size class this box cares about, or it is a
             # requantization of something already on the roster
-            related = any(x.search(name) for x in mre.values())
+            # which roster model this requantizes, if any. a repo that matches
+            # none is a model the roster does not have in ANY form, which is a
+            # different decision from "somebody else quantized what we carry"
+            related = next((k for k, x in mre.items() if x.search(name)), "")
             if (b is not None and MIN_B <= b <= MAX_B) or related:
                 keep.append(dict(r, b=b, related=related))
         rows = keep
 
-    rows.sort(key=lambda r: -(r.get("downloads") or 0))
-    print("| repo | size | downloads | likes | trending | updated |")
-    print("|---|--:|--:|--:|--:|---|")
+    # unrelated first: a model absent from the roster outranks another quant of
+    # one already on it, and burying the former under the latter is how a whole
+    # generation of ornith sat in this table looking like a requant
+    rows.sort(key=lambda r: (bool(r.get("related")), -(r.get("downloads") or 0)))
+    print("| repo | size | downloads | likes | trending | updated | requant of |")
+    print("|---|--:|--:|--:|--:|---|---|")
     for r in rows[:args.top]:
         b = r.get("b") if args.candidates else size_b(r["id"].split("/", 1)[-1])
-        print("| `%s` | %s | %s | %s | %s | %s |" % (
+        print("| `%s` | %s | %s | %s | %s | %s | %s |" % (
             r["id"], ("%gb" % b) if b else "-", format(r.get("downloads") or 0, ","),
             r.get("likes"), r.get("trendingScore") or "-",
-            (r.get("lastModified") or "")[:10]))
+            (r.get("lastModified") or "")[:10], r.get("related") or ""))
+    new = sum(1 for r in rows if not r.get("related"))
     print("\n%d untracked repo(s)%s, showing %d. downloads are lifetime and favour"
           % (len(rows), " passing the candidate filter" if args.candidates else "",
              min(args.top, len(rows))))
     print("older repos; trending is the current signal.")
+    if args.candidates:
+        print("%d carry a model the roster has in no form and are listed first; the "
+              "other %d\nrequantize something already on it, and are a quant "
+              "decision rather than a roster one." % (new, len(rows) - new))
 
 
 if __name__ == "__main__":

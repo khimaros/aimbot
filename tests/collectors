@@ -97,6 +97,37 @@ def eq(got, want, what):
         raise AssertionError("%s: got %r, want %r" % (what, got, want))
 
 
+def validate(models_yaml, *flags):
+    """(returncode, findings, stdout) from models-validate over a fixture registry.
+
+    sampling.yaml is the real one: the fixtures here are about names, and a
+    profile that does not resolve would fail them for the wrong reason.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        with open(os.path.join(tmp, "models.yaml"), "w") as f:
+            f.write(models_yaml)
+        shutil.copy(os.path.join(ROOT, "registry", "sampling.yaml"), tmp)
+        facts = os.path.join(tmp, "facts.json")
+        with open(facts, "w") as f:
+            f.write("{}")
+        argv = [os.path.join(ROOT, "scripts", "models-validate"),
+                "--registry", tmp, "--facts", facts]
+        # a report writes to the same stdout the json goes to, so the findings
+        # come from a run with no report flag on it
+        r = subprocess.run(argv + ["--json"],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        plain = subprocess.run(argv + list(flags),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    finally:
+        shutil.rmtree(tmp)
+    try:
+        findings = json.loads(r.stdout)
+    except ValueError:
+        raise AssertionError("models-validate wrote no json: %s" % r.stderr.strip())
+    return r.returncode, findings, plain.stdout
+
+
 @test
 def flight_undefined_becomes_null():
     """a missing value must not reach a collector as the string "$undefined".
@@ -336,6 +367,73 @@ def a_card_label_is_prose_not_markup():
         # is noise -- and it is what pushed the text past the cap that then cut
         # `presence_penalty` in half as "presen"
         eq("=" in x["label"], False, "no label repeats its own values: %r" % x["label"])
+
+
+# a family whose flagship's alias ends in a bare surname, and a sibling for it
+# to swallow. this is the ling 3.0 flash/tiny shape and the ornith 1.0 35b/9b
+# shape: the sibling is never scored and the flagship is credited twice
+SIBLING_REGISTRY = """version: 1
+models:
+  Fixture/Widget-1.0-35B:
+    kind: text
+    name:
+      short: widget 1.0 35b
+      match: widget[\\s-]*1?\\.?0?[\\s-]*35b|\\bwidget\\b
+    quants: [{repo: Fixture/Widget-1.0-35B-GGUF, quant: Q8_0}]
+    sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
+  Fixture/Widget-1.0-9B:
+    kind: text
+    name:
+      short: widget 1.0 9b
+      match: widget[\\s-]*1?\\.?0?[\\s-]*9b
+    quants: [{repo: Fixture/Widget-1.0-9B-GGUF, quant: Q8_0}]
+    sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
+"""
+
+NO_ALIAS_REGISTRY = """version: 1
+models:
+  Fixture/Spoken:
+    kind: speech
+    name: {short: fixture spoken}
+  Fixture/Written:
+    kind: text
+    name: {short: fixture written}
+    quants: [{repo: Fixture/Written-GGUF, quant: Q8_0}]
+    sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
+"""
+
+
+@test
+def an_alias_that_claims_a_sibling_is_an_error():
+    """`name.match` is a regex over forum prose and must not claim another model.
+
+    Every matching model counts the sentence, so an overlap inflates the
+    flagship with its sibling's reception and leaves the sibling reading as
+    undiscussed. CONTRIBUTING.md has said so since `ling[\\s-]*3\\.0` swallowed
+    ling 3.0 tiny, but nothing checked it, so it came back as `\\bornith\\b`.
+    """
+    code, findings, _ = validate(SIBLING_REGISTRY)
+    hits = [x for x in findings if "widget 1.0 9b" in x["error"]]
+    eq(len(hits), 1, "the overlap is one finding, got %r" % (findings,))
+    eq(hits[0]["where"], "Fixture/Widget-1.0-35B",
+       "reported against the pattern that is too broad, not its victim")
+    eq(code, 1, "an overlap fails the lint rather than printing a note")
+
+
+@test
+def a_text_model_with_no_alias_is_reported_not_failed():
+    """No `name.match` means no lexicon entry, so sentiment scores it zero.
+
+    Silently: match-models builds its table from the models that HAVE one, and
+    a missing alias reads downstream as a model nobody discussed. 26 of 65
+    entries have none and most are deliberate -- an image model has no forum
+    prose to match -- so this prints for a human rather than failing.
+    """
+    code, findings, out = validate(NO_ALIAS_REGISTRY, "--aliases")
+    eq(code, 0, "a missing alias is not an error: %r" % (findings,))
+    eq("fixture written" in out, True, "the text model is listed: %r" % out)
+    eq("fixture spoken" in out, False,
+       "a speech model has no forum prose to match, so it is not: %r" % out)
 
 
 def main():

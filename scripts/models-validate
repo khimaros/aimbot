@@ -66,6 +66,56 @@ def check_modalities(models, facts, f):
     return rows
 
 
+def check_aliases(models, f):
+    """No model's `name.match` may claim another model's name.
+
+    The alias is a regex over forum prose and EVERY matching model counts the
+    sentence, so an overlap inflates one model with another's reception and
+    leaves the other reading as undiscussed. It is checked against both names a
+    reader would type -- the short name and the repo's own -- because the
+    patterns that go wrong are the ones ending in a bare family name, where a
+    sibling and a whole later generation fall inside them.
+    """
+    rows = [(repo, (m.get("name") or {}).get("short"),
+             (m.get("name") or {}).get("match"))
+            for repo, m in sorted((models.get("models") or {}).items())]
+    for repo, _, pattern in rows:
+        if not pattern:
+            continue
+        try:
+            # re.I because that is how match-models compiles it
+            r = re.compile(pattern, re.I)
+        except re.error:
+            continue
+        for other, oshort, _ in rows:
+            if other == repo or not oshort:
+                continue
+            for target in (oshort, other.split("/", 1)[-1]):
+                if r.search(target):
+                    f.add(repo, "name.match also claims %s (matches %r), so a "
+                          "sentence about it counts for both" % (oshort, target))
+                    break
+
+
+def report_aliases(models):
+    """Text models with no `name.match`, which sentiment therefore scores zero.
+
+    match-models builds its lexicon out of the models that have one, so a
+    missing alias never errors anywhere: the model matches no sentence and
+    reads as undiscussed. Whether one is worth writing is a judgement -- an
+    image or speech model has no forum prose to match at all -- so this prints.
+    """
+    rows = [(repo, (m.get("name") or {}).get("short"))
+            for repo, m in sorted((models.get("models") or {}).items())
+            if m.get("kind", "text") == "text"
+            and not (m.get("name") or {}).get("match")]
+    print("\naliases: %d text model(s) with no name.match, scored zero by sentiment"
+          % len(rows))
+    for repo, short in rows:
+        print("  %-46s %s" % (repo, short))
+    return rows
+
+
 def check_registry(models, sampling, f):
     """The registry has to be internally consistent before anything can lean on it."""
     known_profiles = set(sampling.get("profiles") or {})
@@ -312,6 +362,8 @@ def main():
                     help="report modalities.input against each model's own config")
     ap.add_argument("--cards", action="store_true",
                     help="report profiles against the sampler sets cards document")
+    ap.add_argument("--aliases", action="store_true",
+                    help="report text models with no name.match to score them by")
     ap.add_argument("--model-cards", default=os.path.join(HERE, "..", "research",
                                                           "data", "model-cards.json"))
     ap.add_argument("--json", action="store_true")
@@ -323,6 +375,10 @@ def main():
     f = Findings()
     facts = load(args.facts) or {}
     check_registry(models, sampling, f)
+    # an overlap silently inflates one model and empties another, and neither
+    # shows up as a wrong number anywhere downstream, so it fails rather than
+    # printing: CONTRIBUTING.md has warned about it since ling 3.0 tiny
+    check_aliases(models, f)
     # a typed field with a derived counterpart is drift waiting to happen, so
     # this one is an error rather than a report you have to remember to run
     rows = check_modalities(models, facts, f)
@@ -337,6 +393,8 @@ def main():
         report_thinking(models, load(args.facts) or {})
     if args.cards:
         report_cards(models, load(args.model_cards) or {})
+    if args.aliases:
+        report_aliases(models)
 
     if args.json:
         json.dump(f.rows, sys.stdout, indent=1)

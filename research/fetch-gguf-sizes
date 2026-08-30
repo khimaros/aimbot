@@ -74,9 +74,14 @@ def is_sidecar(path):
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+# a quantizer adds rungs to a repo in the days after release and then stops. the
+# etag makes each revalidation free in bytes but not in round trips, and there
+# is one per repo, so the window is what keeps a daily sweep off the network
+MAX_AGE = 48 * 3600
 
-def tree(repo, max_age=0, refresh=False):
-    # the hub sends etags, so this usually revalidates to a 304
+
+def tree(repo, max_age=MAX_AGE, refresh=False):
+    # the hub sends etags, so a revalidation past the window is a cheap 304
     cmd = [os.path.join(HERE, "httpcache"), TREE % repo,
            "--key", "hf-" + repo.replace("/", "_"), "--max-age", str(max_age)]
     if refresh:
@@ -89,7 +94,7 @@ def tree(repo, max_age=0, refresh=False):
     return t if isinstance(t, list) else None
 
 
-def quants(repo, max_age=0, refresh=False):
+def quants(repo, max_age=MAX_AGE, refresh=False):
     t = tree(repo, max_age, refresh)
     if t is None:
         return None
@@ -121,7 +126,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--repos", default="repos.txt")
     ap.add_argument("--out", default="data/gguf-sizes.json")
-    ap.add_argument("--max-age", type=int, default=0,
+    ap.add_argument("--max-age", type=int, default=MAX_AGE,
                     help="skip revalidation entirely below this age; 0 always revalidates")
     ap.add_argument("--refresh", action="store_true")
     args = ap.parse_args()

@@ -63,6 +63,13 @@ nothing refetches what it already has -- `research/httpcache` keeps an
 etag/last-modified cache in `research/.cache` -- so a re-run costs minutes
 rather than an hour. `scripts/sweep --refresh` ignores all of it.
 
+an etag still costs a round trip to be told nothing changed, and the hub-facing
+collectors make ~1900 of them, so each one's `--max-age` is set from how fast
+its data actually moves: 48h for cards and config files, 30d for a published
+terminal-bench job, 6h for the listings that gain entries. `research/README.md`
+has the table and the reasoning. every request is reported on stderr, so a sweep
+that looks stalled can be read rather than guessed at.
+
 ## after a sweep: the punch list
 
 the sweep ends by printing what no collector can decide. it is the part worth
@@ -72,6 +79,9 @@ reading:
   and 2b models; occasionally one is a flagship nobody added.
 - **roster models no benchmark suite has scored.**
 - **models with a graded thinking knob and no declared levels.**
+- **text models with no `name.match`**, which sentiment therefore scores zero.
+  a missing alias never errors: the model simply matches no sentence and reads
+  as undiscussed.
 - **modalities disagreeing with the model's own config.**
 - **models with no written judgement.**
 
@@ -97,6 +107,13 @@ reading:
 model's.** `ling[\s-]*3\.0` swallowed `ling 3.0 tiny` for the flash entry, and a
 bare `\bm3\b` for minimax m3 matched forty mentions of an apple m3 max. every
 matching model counts a sentence, so an overlap silently inflates both.
+
+`make lint` checks this now -- a pattern that matches another model's
+`name.short` or repo name fails. it was only a warning here until `\bornith\b`
+did it again, claiming the 9b sibling and the whole 1.5 generation. the pattern
+that goes wrong is the one ending in a bare family name; write the version and
+the size in, as `ornith[\s-]*(?:1\.0[\s-]*)?35b` does, and leave a genuinely
+ambiguous mention unmatched rather than crediting it to a guess.
 
 ## conventions
 
