@@ -161,7 +161,9 @@ test('the fitted quant is the largest that clears vram, cap and floor', () => {
   eq(activeQuant(m).quant, 'UD-Q8_K_XL', 'max q8 with room to spare');
   setHardware({cap: 'q4'});
   ok(activeQuant(m).bpw <= 5.3, 'the ceiling holds');
-  setHardware({budget: 16});
+  // pins the reserve rather than inheriting it: this case is about the budget,
+  // and the default reserve is a measurement of one box that may move again
+  setHardware({budget: 16, reserve: 2});
   ok(activeQuant(m).gib <= 16, 'and so does the budget');
   setHardware({floor: 'q6'});
   eq(activeQuant(m), null, 'nothing between a 16 gib budget and a q6 floor');

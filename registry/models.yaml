@@ -758,11 +758,15 @@ models:
     quants:
     - repo: unsloth/Qwen3.8-Flash-Next-GGUF
       quant: UD-IQ4_XS
-      note: 'UD-Q4_K_XL is the largest rung that fits at all, but 103.7gib of a 105gib budget
-        leaves 1.3 for kv, which is 56k of the 262144 window rather than the whole one.
-        UD-IQ4_XS is 87.2gib and holds all of it. the tags overstate how far this ladder
-        compresses: 41% of the model is an n-gram table whose 160-column rows take only
-        block-32 types, so nothing goes below ~4.25 bits and UD-IQ1_S is 3.28 bpw at 67.6gib
+      note: 'UD-IQ4_XS at 87.2gib rather than the UD-Q4_K_XL the viewer picks, and both fit --
+        93.2 and 109.7 resident with their 262144 caches, against a 117gib host budget. what
+        separates them is whether the model can SHARE the box: at 93.2 it hosts the ~20gib of
+        companions a host keeps beside it, at 109.7 it does not and goes solo. what the step up
+        buys is measured -- unsloth publishes top-1 agreement against bf16 for all ten rungs,
+        89.554% here against 92.255% at UD-Q4_K_XL, so 16.4gib is worth 2.7 points of token
+        agreement, and giving the box to one model. the tags overstate how
+        far the ladder compresses: 41% of the model is an n-gram table whose 160-column rows take
+        only block-32 types, so nothing goes below ~4.25 bits and UD-IQ1_S is 3.22 bpw at 67.6gib
         rather than anything like one. every rung is sharded 3-4 ways, and the card states
         sizes in decimal gb, so its figures read ~7% larger than the gib this registry sizes in'
     ids:

@@ -242,8 +242,8 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <select id="ram" data-help="how much memory the box has. the quant column, the sizes and the retention behind `quant adjusted` all switch to the largest quant that fits in what is left after the reserve and the kv cache">
       <option value="">any vram</option>
     </select>
-    <select id="reserve" data-help="held back for everything that is not weights or kv cache: compute buffers, the host, whatever else is resident"></select>
-    <select id="ctx" data-help="the context you need to serve. its kv cache is computed from each model's own attention geometry -- full, windowed and linear layers counted separately -- and subtracted before anything is asked to fit. a model whose native window is shorter is not a fit at all"></select>
+    <select id="reserve" data-help="held back for everything that is not weights or kv cache: compute buffers, the host, whatever else is resident. 12 gib is the default because a nominal 128 gib box does not have 128 to give -- measured on the strix halo this document is scoped to, the firmware and igpu aperture take 2.9, the resident os about 5.9, and llama.cpp's compute buffers about 2, which is 10.9 before a single weight is loaded"></select>
+    <select id="ctx" data-help="the context you need to serve. its kv cache is computed from each model's own attention geometry -- full, windowed and linear layers counted separately -- and subtracted before anything is asked to fit. a model whose native window is shorter is not a fit at all. the cache is sized at f16, llama.cpp's default; --cache-type-k/v q8_0 roughly halves every figure here"></select>
     <select id="cap" data-help="how far up the quant ladder to go. past q8 the extra bytes buy nothing measurable and cost decode speed, so the fit stops there unless you say otherwise"></select>
     <select id="floor" data-help="how far down is still worth running. below this a model reads as not fitting rather than as a two-bit version of itself"></select>
     <select id="bw" data-help="how fast the box reads memory, from its spec sheet. decode is bandwidth bound, so this drives the `tg t/s` column: effective bandwidth over the bytes one token reads, which is the active weights at the fitted quant plus the kv cache at your context"></select>
@@ -832,7 +832,7 @@ const COLUMNS = [
          + ' window: extrapolated, not trained"' : ''}>${ctxLabel(ext)}</td>`;
    }},
   {k: 'fitctx', t: 'fits ctx', num: true, get: m => fitContext(m) ?? -1,
-   help: 'the longest context whose kv cache still fits once the weights and the reserve are paid for, capped at what the model was trained for. needs a vram budget',
+   help: 'the longest context whose kv cache still fits once the weights and the reserve are paid for, capped at what the model was trained for. the cache is sized at f16, llama.cpp\'s default, so quantizing it with --cache-type-k/v q8_0 buys roughly twice this. needs a vram budget',
    cell: m => {
      if (!budget) return '<td class="n faint" title="set a vram budget under hardware">-</td>';
      const c = fitContext(m);
@@ -861,7 +861,7 @@ const COLUMNS = [
        + (d ? '<span class="sub"> +d</span>' : '') + '</td>';
    }},
   {k: 'kv', t: 'kv gib', num: true, get: m => kvGib(m, minCtx),
-   help: 'what the kv cache costs at the context you set. resident memory is this plus gib plus the reserve',
+   help: 'what the kv cache costs at the context you set, at f16 keys and values -- llama.cpp\'s default, and what this page assumes throughout. --cache-type-k/v q8_0 roughly halves it. resident memory is this plus gib plus the reserve',
    cell: m => {
      const v = kvGib(m, minCtx);
      if (!minCtx) return '<td class="n faint" title="set a context under hardware">-</td>';
@@ -975,7 +975,7 @@ const DEFAULT_HIDDEN = ['kind', 'repo', 'license', 'params', 'active', 'experts'
                         'arena', 'langs', 'bestfor', 'community', 'downloads'];
 // a strix halo box, which is what this registry is sized against, down to what
 // it reads and computes at
-const DEFAULT_HARDWARE = {budget: 128, reserve: 2, minCtx: 131072, cap: 'q8', floor: 'none',
+const DEFAULT_HARDWARE = {budget: 128, reserve: 12, minCtx: 131072, cap: 'q8', floor: 'none',
                           bandwidth: 256, flops: 60};
 const DEFAULT_FLAGS = ['text', 'fits'];
 const col = k => COLUMNS.find(c => c.k === k);

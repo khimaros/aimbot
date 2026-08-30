@@ -67,7 +67,17 @@ built and is marked done when it ships.
    absent is the fix, and it wants a test that adds a model with no `ids:` and
    asserts the block appears.
 
-6. **sentiment is a blunt polarity lexicon** read over forum sentences, where
+6. **`fetch-quant-sweeps` only reads huggingface READMEs**, so a quantizer who
+   publishes their ladder anywhere else is invisible to it. unsloth measured
+   all ten qwen3.8-flash-next rungs -- mean KLD and top-1 agreement against
+   bf16, on files whose sizes match ours to the decimal -- and put it on
+   `unsloth.ai/docs` as a chart rather than on the card, so the sweep found
+   nothing and the registry carried a stale figure from an older capture
+   instead. that curve is hand-written into `quant-curves.json` now. worth
+   deciding whether the fetcher should take a per-model source URL, since a
+   docs page is a stabler home for this than a card that gets rewritten.
+
+7. **sentiment is a blunt polarity lexicon** read over forum sentences, where
    "x is better than y" scores positive for both. it is weighted at 0.05 for
    that reason, against a redundancy analysis that says it is the most
    independent signal here. a better reader of the same corpus would be worth
