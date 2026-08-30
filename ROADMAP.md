@@ -35,6 +35,14 @@ built and is marked done when it ships.
   ornith sentences in the corpus were about a generation the registry did not
   carry. `make lint` fails on it now, and a text model with no alias at all,
   which sentiment silently scores zero, prints in the sweep's punch list.
+- **every text model has an alias.** twelve did not, and a missing one costs
+  twice: sentiment scored those models zero, and `analyze-catalog` could not
+  tell that a repo was a requant of one, so it read as a model nobody had
+  heard of. filling them recovered 188 forum mentions -- 65 for qwen3.5 35b
+  a3b, 34 for gpt-oss-20b -- and no existing model lost a single one, which is
+  what the new overlap check predicted. the requant label now takes the union
+  of the alias and the exact roster names `resolve-ids --names` derives, so it
+  no longer depends on an alias existing at all.
 - **discovery asks the leaderboards, not just the hub.** `analyze-catalog`
   ranks by lifetime downloads, which a release from last week cannot have, so
   granite 4.2 30b sat at rank 39 of a top-25 report while trending -- scored by
@@ -73,6 +81,28 @@ built and is marked done when it ships.
    ladder in the document by a factor of three -- which makes the gap sharper,
    not smaller. sweeping ONE small model at several quants would settle it for
    less compute than any of the above.
+
+   two assumptions underneath the curve are also wrong, and thr3e's level1techs
+   measurements on qwen3.6-27b are the evidence:
+   https://forum.level1techs.com/t/why-your-local-llm-feels-dumber-than-it-is/253917
+
+   - **a quant's damage is not one number.** the curve applies a scalar per
+     bpw. thr3e sampled top-1 flips against a bf16 reference across 8k windows
+     out to 122k and found disagreement arriving in CLUSTERS that track prompt
+     content, not a smooth function of depth -- nvfp4 reached ~50% flips by 88k
+     on the same weights that look fine short. a single retention multiplier
+     cannot express that, and every facet here is scored at one context.
+   - **kv cache quantization is a second axis, costed at zero.** the dashboard
+     sizes the cache off each model's attention geometry and charges nothing
+     for quantizing it. thr3e held weights and activations fixed and moved only
+     the cache: bf16 fine, int8 recovered from tool-call errors, int4 never
+     closed the call. a consumer trading kv precision for context is making a
+     quality decision this document currently tells them is free.
+
+   neither is directly transferable: that work is all vllm-side (fp8, int8
+   w8a16, nvfp4, awq w4a16) and carries no llama.cpp rung, so none of its
+   numbers can enter `quant-curves.json`. it bounds what the curve can honestly
+   claim rather than filling it in.
 
 3. **a consumer-side memory budget check.** gguf sizes join by repo but nothing
    enforces a consumer's budget with them; that check belongs to the consumer,

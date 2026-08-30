@@ -283,10 +283,22 @@ def main():
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--unclaimed", action="store_true",
                     help="report models a source scores that the roster does not carry")
+    ap.add_argument("--names", action="store_true",
+                    help="print {normalized name: short} for every roster model, as json")
     args = ap.parse_args()
 
     doc = yaml.safe_load(open(args.registry))
     reg = doc.get("models") or {}
+    if args.names:
+        # research/analyze-catalog labels requants with this, so that a model
+        # with no name.match is still recognised as one the roster carries
+        out = {}
+        for repo, m in reg.items():
+            for n in roster_names({repo: m}):
+                out.setdefault(n, (m.get("name") or {}).get("short") or repo)
+        json.dump(out, sys.stdout, indent=1, sort_keys=True)
+        print()
+        return
     spaces = key_spaces()
     if args.unclaimed:
         report_unclaimed(reg, spaces)

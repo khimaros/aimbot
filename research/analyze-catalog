@@ -40,6 +40,12 @@ VARIANT = re.compile(r"[ao]bliterat|uncensored|heretic|erotic|roleplay|\bnsfw\b|
                      r"horror|darkness|\bdau\b|neo-max|brainstorm", re.I)
 # parameter count in the repo name, e.g. Qwen3.6-27B or 35B-A3B
 PARAMS = re.compile(r"[-_/]?(\d+(?:\.\d+)?)\s*b\b", re.I)
+GGUF_SUFFIX = re.compile(r"[-_]?GGUF$", re.I)
+
+
+def norm_name(name):
+    """The spelling resolve-ids --names is keyed on."""
+    return re.sub(r"[^a-z0-9]", "", GGUF_SUFFIX.sub("", name).lower())
 
 # roughly what a 128gb box can hold at a useful quant, in billions of total
 # params. above this a model only fits at precisions the quant curve says cost
@@ -70,6 +76,21 @@ def roster_bases():
     return {k: re.compile(v, re.I) for k, v in json.loads(out)["models"].items()}
 
 
+def roster_exact():
+    """{normalized repo name: short name} for every model, alias or not.
+
+    The lexicon above is `name.match`, which twelve text models do not have, so
+    on its own this column calls a requant of gpt-oss-20b or gemma-4-E2B a model
+    the roster has never heard of. The two catch different things -- the alias
+    is fuzzy prose and matches a family, this is the exact name and matches the
+    entry -- so the label is their union.
+    """
+    out = subprocess.run([os.path.join(HERE, "..", "scripts", "resolve-ids"),
+                          "--names"], stdout=subprocess.PIPE, text=True,
+                         check=True).stdout
+    return json.loads(out)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -86,6 +107,7 @@ def main():
     d = json.load(open(args.data))
     allm = models(d)
     mre = roster_bases()
+    exact = roster_exact()
 
     if args.coverage:
         pubs = sorted(d.get("authors") or {})
@@ -136,7 +158,8 @@ def main():
             # which roster model this requantizes, if any. a repo that matches
             # none is a model the roster does not have in ANY form, which is a
             # different decision from "somebody else quantized what we carry"
-            related = next((k for k, x in mre.items() if x.search(name)), "")
+            related = exact.get(norm_name(name)) or \
+                next((k for k, x in mre.items() if x.search(name)), "")
             if (b is not None and MIN_B <= b <= MAX_B) or related:
                 keep.append(dict(r, b=b, related=related))
         rows = keep
