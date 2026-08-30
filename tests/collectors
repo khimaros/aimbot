@@ -271,7 +271,8 @@ license: other
 
 ## Best Practices
 
-Thinking Mode: `temperature=1.0`, `top_p=0.95`, `top_k=20`, `min_p=0.0`.
+- Thinking Mode: `temperature=1.0`, `top_p=0.95`, `top_k=20`, `min_p=0.0`
+- Instruct (or non-thinking) mode: `temperature=0.7`, `top_p=0.80`, `top_k=20`, `min_p=0.5`
 
 <p style="margin-top:12px;font-size:10px;line-height:1.4;opacity:0.7">1. DeepSWE 1.1: evaluated with the Claude Code and mini-SWE-agent harnesses, temperature=0.6, top_p=0.8, 256K context window.</p>
 """
@@ -318,11 +319,23 @@ def a_card_label_is_prose_not_markup():
 
     for x in sets:
         eq("<" in x["label"], False, "no label carries markup: %r" % x["label"])
-    eq(len(sets), 1, "the benchmark footnote is not a recommendation")
-    eq(sets[0]["values"].get("temp"), 1.0, "the real recommendation survives")
-    eq(sets[0]["values"].get("top_p"), 0.95, "with its own numbers")
-    eq(sets[0]["label"].startswith("Thinking Mode"), True,
-       "labelled by its prose: %r" % sets[0]["label"])
+    eq(len(sets), 2, "two modes, and the benchmark footnote is neither")
+    # adjacent complete recommendations used to merge: flush only fired on a
+    # line with NO sampler on it, and setdefault kept the first line's values,
+    # so the second mode lost both its numbers and its name
+    eq(sets[0]["label"], "Thinking Mode",
+       "labelled by the prose that introduces it, without the values it "
+       "already renders beside: %r" % sets[0]["label"])
+    eq(sets[0]["values"].get("temp"), 1.0, "the first mode keeps its numbers")
+    eq(sets[1]["label"], "Instruct (or non-thinking) mode",
+       "the second mode keeps its own name: %r" % sets[1]["label"])
+    eq(sets[1]["values"].get("temp"), 0.7, "and its own numbers")
+    eq(sets[1]["values"].get("min_p"), 0.5, "not the first mode's")
+    for x in sets:
+        # the values are shown next to the label, so carrying them in the label
+        # is noise -- and it is what pushed the text past the cap that then cut
+        # `presence_penalty` in half as "presen"
+        eq("=" in x["label"], False, "no label repeats its own values: %r" % x["label"])
 
 
 def main():

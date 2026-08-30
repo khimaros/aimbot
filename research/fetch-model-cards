@@ -252,6 +252,30 @@ CLAUSE = re.compile(r",?\s+(?:while|whereas)\s+", re.I)
 TAG = re.compile(r"<[^>]+>")
 
 
+MAX_LABEL = 80
+
+
+def label_for(part):
+    """What introduces a sampler set, without the numbers in it.
+
+    The values are rendered beside the label, so carrying them in the label too
+    is noise -- and it was what pushed the text past the cap, which then cut a
+    word in half: qwen3.8-flash-next read "Thinking Mode: `temperature=1.0`,
+    `top_p=0.95`, `top_k=20`, `min_p=0.0`, `presen". What identifies a set is
+    the phrase BEFORE the first assignment, so that is the label.
+
+    A card that states the numbers with no prose in front of them -- a python
+    snippet, one argument per line -- has nothing to say here and gets an empty
+    label, which the viewer renders as no label rather than as a stray fragment.
+    """
+    m = SAMPLER_KV.search(part)
+    head = (part[:m.start()] if m else part).strip().strip("*->`:, ").strip()
+    if len(head) <= MAX_LABEL:
+        return head
+    # cut on a word boundary; a label ending mid-token reads as corruption
+    return head[:MAX_LABEL].rsplit(" ", 1)[0].rstrip(",;:") + "..."
+
+
 def sampler_sets(text):
     """Labelled sampler sets a card documents, in document order.
 
@@ -284,11 +308,17 @@ def sampler_sets(text):
             found = SAMPLER_KV.findall(part)
             if found:
                 # a conjunction starts a NEW recommendation, so the one being
-                # accumulated has to close before it rather than merge with it
-                if n and cur:
+                # accumulated has to close before it rather than merge with it.
+                # so does a line that carries a WHOLE set on its own: qwen lists
+                # its two modes as consecutive bullets, and flushing only on a
+                # line with no sampler at all merged them -- setdefault kept the
+                # first bullet's numbers and the second lost its name with them.
+                # a line bearing one assignment is a snippet argument instead,
+                # and those still accumulate across lines into one set.
+                if cur and (n or len(found) > 1):
                     flush()
                 if not cur:
-                    label = part.strip().strip("*->` ")[:80]
+                    label = label_for(part)
                 for k, v in found:
                     cur.setdefault(SAMPLER_FIELD[k], float(v))
             elif cur:
