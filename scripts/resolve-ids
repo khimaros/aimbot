@@ -17,6 +17,14 @@ with another's numbers.
 
     resolve-ids                # report only
     resolve-ids --write        # update registry/models.yaml
+    resolve-ids --unclaimed    # models a source scores that the roster lacks
+
+`--unclaimed` runs the match the other way round. Every sweep already collects
+five leaderboards and the hub's gguf listings, so a model that is scored by one
+AND has a gguf on the hub AND is absent from the registry is a roster candidate
+the data already knew about. Nothing looked, which is how granite 4.2 30b sat
+in artificial analysis' key space for four days while the discovery report
+ranked it 39th by lifetime downloads and printed the top 25.
 """
 
 import argparse
@@ -143,6 +151,90 @@ def candidates(space, wants, sized=()):
     return None, "miss"
 
 
+# deliberately lower than analyze-catalog's 20b floor. that floor is a stand-in
+# for "is this worth looking at", and here the model has already been scored by
+# a third party, which answers the same question with evidence. 20b also does
+# not describe this roster: it carries gemma-4-E2B at 5b and ling 3.0 tiny at
+# 8b, and granite 4.2 8b -- AA intelligence 19.6 against the 30b's 23.7, at
+# twice the decode speed -- was invisible to every discovery report we had
+SIZE_MIN_B, SIZE_MAX_B = 3, 400
+# the report is newest-first, so a cap drops the oldest. it says how many
+SHOW = 20
+PARAMS = re.compile(r"[-_/]?(\d+(?:\.\d+)?)\s*b\b", re.I)
+GGUF_SUFFIX = re.compile(r"[-_]?GGUF$", re.I)
+# a source key shorter than this matches half the hub by accident
+MIN_KEY = 6
+
+
+def roster_names(reg):
+    """Every spelling of a model the registry already carries.
+
+    Keyed on the model rather than on the source id: a source can name the same
+    model twice (epoch carries both `gemma-4-26b-a4b` and its `-it` spelling),
+    and asking "is this key claimed" then reports a carried model as missing.
+    """
+    out = set()
+    for repo, m in reg.items():
+        cands = [repo.split("/")[-1], (m.get("name") or {}).get("short") or ""]
+        cands += [(q.get("repo") or "").split("/")[-1] for q in (m.get("quants") or [])]
+        for c in cands:
+            if not c:
+                continue
+            c = GGUF_SUFFIX.sub("", c)
+            out.add(norm(c))
+            for suffix in ("-it", "-instruct", "-bf16", "-chat", "-base"):
+                if c.lower().endswith(suffix):
+                    out.add(norm(c[: -len(suffix)]))
+    return out
+
+
+def hub_index():
+    """{normalized model name: newest gguf repo the catalog captured for it}."""
+    out = {}
+    for name in ("hf-catalog", "hf-catalog-new"):
+        d = load(name)
+        rows = list(d.get("trending") or [])
+        for repos in (d.get("authors") or {}).values():
+            rows += repos
+        for r in rows:
+            k = norm(GGUF_SUFFIX.sub("", r["id"].split("/", 1)[-1]))
+            prev = out.get(k)
+            if not prev or (r.get("createdAt") or "") > (prev.get("createdAt") or ""):
+                out[k] = r
+    return out
+
+
+def report_unclaimed(reg, spaces):
+    """Scored somewhere, downloadable as gguf, and on no roster line."""
+    roster, hub = roster_names(reg), hub_index()
+    found = {}
+    for source, space in spaces.items():
+        for key, real in space.items():
+            if len(key) < MIN_KEY or key in roster:
+                continue
+            r = hub.get(key)
+            if r:
+                found.setdefault(r["id"], {"row": r, "sources": set()})["sources"].add(source)
+    rows = []
+    for rid, v in found.items():
+        sizes = [float(m.group(1)) for m in PARAMS.finditer(rid.split("/")[-1])]
+        b = max(sizes) if sizes else None
+        if b is not None and SIZE_MIN_B <= b <= SIZE_MAX_B:
+            rows.append((v["row"].get("createdAt") or "", rid, b, sorted(v["sources"])))
+    # newest first: an old generation left off the roster is a decision that was
+    # already made, and a release from last week is the one nobody has seen
+    rows.sort(reverse=True)
+    print("\nunclaimed: %d model(s) a source scores, with a gguf, that the "
+          "registry does not carry" % len(rows))
+    for created, rid, b, sources in rows[:SHOW]:
+        print("  %-11s %-48s %5gb  %s" % (created[:10], rid, b, ",".join(sources)))
+    if len(rows) > SHOW:
+        print("  ... and %d older, back to %s. a generation left off the roster is "
+              "usually a decision\n  already made; the newest rows are the ones "
+              "nobody has looked at" % (len(rows) - SHOW, rows[-1][0][:10]))
+    return rows
+
+
 MODEL_KEY = re.compile(r"^  (\S.*?):\s*$")
 IDS_KEY = re.compile(r"^    ids:\s*$")
 
@@ -189,11 +281,16 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--registry", default=os.path.join(HERE, "..", "registry", "models.yaml"))
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--unclaimed", action="store_true",
+                    help="report models a source scores that the roster does not carry")
     args = ap.parse_args()
 
     doc = yaml.safe_load(open(args.registry))
     reg = doc.get("models") or {}
     spaces = key_spaces()
+    if args.unclaimed:
+        report_unclaimed(reg, spaces)
+        return
     print("key spaces: %s" % ", ".join("%s %d" % (k, len(v)) for k, v in spaces.items()))
 
     filled, kept, amb = 0, 0, 0

@@ -76,7 +76,15 @@ the sweep ends by printing what no collector can decide. it is the part worth
 reading:
 
 - **trending repos the registry does not carry.** most are abliterated merges
-  and 2b models; occasionally one is a flagship nobody added.
+  and 2b models; occasionally one is a flagship nobody added. it prints two
+  tables, because ranking by lifetime downloads cannot surface a release that
+  is days old -- granite 4.2 30b sat at rank 39 of a top-25 report while
+  trending. the first table is what the hub says is moving now.
+- **models a benchmark already scores that the roster does not carry.** the
+  same question from the other end: every sweep collects five leaderboards, so
+  anything one of them scores that also has a gguf on the hub is a candidate
+  the data already knew about. this is the check that catches a release in its
+  first week, when it has no download count to rank by.
 - **roster models no benchmark suite has scored.**
 - **models with a graded thinking knob and no declared levels.**
 - **text models with no `name.match`**, which sentiment therefore scores zero.

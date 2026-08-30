@@ -925,7 +925,7 @@ models:
     - repo: unsloth/Ministral-3-3B-Instruct-2512-GGUF
       quant: Q8_0
       role: llm
-  deepreinforce-ai/Ornith-1.0-35B:
+  ornith-ai/Ornith-1.0-35B:
     kind: text
     name:
       short: ornith 1.0 35b
@@ -936,7 +936,7 @@ models:
     quants:
     - repo: unsloth/Ornith-1.0-35B-GGUF
       quant: Q8_0
-    - repo: deepreinforce-ai/Ornith-1.0-35B-GGUF
+    - repo: ornith-ai/Ornith-1.0-35B-GGUF
       quant: Q8_0
       note: the vendor's own gguf repo
     sampling:
@@ -992,7 +992,7 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
-  deepreinforce-ai/Ornith-1.0-9B:
+  ornith-ai/Ornith-1.0-9B:
     kind: text
     name:
       short: ornith-1.0-9b
@@ -1669,6 +1669,110 @@ models:
       - text
       output:
       - audio
+  ibm-granite/granite-4.2-30b:
+    kind: text
+    name:
+      short: granite 4.2 30b
+      # 4.0 and 4.1 generations exist at the same sizes, and 3b/8b/30b within
+      # each, so neither the generation nor the size can be left out
+      match: granite[\s-]*4\.2[\s-]*30b
+    notes: >-
+      dense, apache 2.0, and the first granite generation with a thinking mode.
+      the jump from 4.1 is not incremental -- AA intelligence 23.7 against 8.7,
+      coding 29.9 against 10.4, terminal-bench 0.266 against 0.026 -- so 4.1 is
+      superseded rather than a sibling worth carrying. 131k context where most
+      of this roster is at 262k.
+    quants:
+    - repo: ibm-granite/granite-4.2-30b-GGUF
+      quant: Q8_0
+      note: ibm's own gguf repo; 29.0 gib, and the ladder runs down to q2_k at 10.1
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: granite-4-2-30b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: ibm-granite/granite-4.2-30b-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low]
+  ibm-granite/granite-4.2-8b:
+    kind: text
+    name:
+      short: granite 4.2 8b
+      match: granite[\s-]*4\.2[\s-]*\b8b\b
+    notes: >-
+      the size that makes the family interesting here: AA intelligence 19.6
+      against the 30b's 23.7, at 145 tok/s against 75, and q8_0 is 8.7 gib. it
+      was invisible to every discovery report this repo had, because the
+      candidate filter's 20b floor drops it and no leaderboard cross-check
+      existed until `resolve-ids --unclaimed`.
+    quants:
+    - repo: ibm-granite/granite-4.2-8b-GGUF
+      quant: Q8_0
+      note: ibm's own gguf repo; 8.7 gib
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: granite-4-2-8b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: ibm-granite/granite-4.2-8b-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low]
   ideogram-ai/ideogram-4-fp8:
     kind: image
     name:
@@ -1838,6 +1942,66 @@ models:
       leading_system_max: unlimited
       mid_system: ok
       mid_developer: dropped
+  microsoft/Fara1.5-27B:
+    kind: text
+    name:
+      short: fara 1.5 27b
+      # 4b and 9b siblings exist, and a fara-7b before them, so the size is not
+      # optional in the alias even though only this one is on the roster
+      match: fara[\s-]*(?:1\.5[\s-]*)?27b
+    notes: >-
+      a computer-use agent, not an assistant: it reads a browser through
+      screenshots -- no dom, no accessibility tree -- and emits click, type,
+      scroll and search as tool calls. supervised fine-tune of qwen3.5-27b, so
+      it is the same shape and cache geometry as the base already carried here,
+      and the card asks that it be run only under microsoft's own fara cli or
+      magentic-ui rather than a general chat harness. the three benchmarks it
+      reports are web-agent suites no source in this corpus carries, so it is
+      sized and unranked rather than scored badly.
+    quants:
+    - repo: bartowski/Fara1.5-27B-GGUF
+      quant: Q8_0
+      note: 26.7 gib, plus a 0.9 gib mmproj -- the screenshots are the input, so
+        the vision sidecar is not optional for this one
+    sampling:
+      tool-use:
+        source: tuned-here
+        note: the card publishes no sampler table, only an inference snippet
+          that runs greedy, so this is read off example code. greedy is the
+          right default for the job regardless -- a misread pixel coordinate
+          is a click in the wrong place, and no amount of sampling recovers it
+        temp: 0.0
+        top_p: 1.0
+        top_k: 0
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - tools
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: bartowski/Fara1.5-27B-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   mistralai/Voxtral-Mini-4B-Realtime-2602:
     kind: speech
     name:
@@ -2111,7 +2275,7 @@ models:
     kind: text
     name:
       short: laguna s 2.1
-      match: laguna[\s-]*s?[\s-]*2\.1|\blaguna\b
+      match: laguna[\s-]*s[\s-]*2\.1
     quants:
     - repo: unsloth/Laguna-S-2.1-GGUF
       quant: UD-Q6_K_XL
@@ -2167,6 +2331,107 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+  poolside/Laguna-XS-2.1:
+    kind: text
+    name:
+      short: laguna xs 2.1
+      match: laguna[\s-]*xs[\s-]*2\.1
+    notes: >-
+      the runnable end of the laguna line: 18.9 gib against the s's 105-ish, and
+      the only size in the family the vendor publishes a gguf for itself. the
+      ladder is two rungs, q4_k_m and bf16, with nothing in between.
+    quants:
+    - repo: poolside/Laguna-XS-2.1-GGUF
+      quant: Q4_K_M
+      note: the vendor's own gguf repo; 18.9 gib, and the only rung under bf16
+    sampling:
+      # the card gives one set and uses it for every benchmark it reports
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 1.0
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: ''
+      gbench: poolside/laguna-xs-2.1
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: poolside/Laguna-XS-2.1-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
+  poolside/Laguna-M.1:
+    kind: text
+    name:
+      short: laguna m.1
+      match: laguna[\s-]*m[\s.-]*1\b
+    notes: >-
+      70 layers and 16 of 256 experts active, which is twice the s's routing at
+      the same expert count. no vendor or first-tier gguf exists, so the only
+      ladder is one uploader's, and it is the widest in the registry -- 27 rungs
+      from iq1_s at 43 gib to bf16 at 421.
+    quants:
+    - repo: sigargv/Laguna-M.1-GGUF
+      quant: Q3_K_M
+      note: 100.9 gib, the largest rung under a 105 gib budget. a single
+        uploader's repo, which is the only gguf of this model there is
+    sampling:
+      # the card gives temp and top_k only, and uses them for every benchmark
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: ''
+      gbench: poolside/laguna-m.1
+      lmarena: laguna-m.1
+      swerebench: ''
+      epoch: laguna-m.1
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: sigargv/Laguna-M.1-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
   stepfun-ai/Step-3.7-Flash:
     kind: text
     # the card, in prose rather than beside the knob: "offers three selectable
@@ -2263,6 +2528,64 @@ models:
       - text
     turns:
       source: unsloth/Inkling-Small-GGUF
+      developer: as-system
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+      upstream_differs: [developer, mid_developer]
+    thinking:
+      knob: reasoning_effort
+      accepts: [none, minimal, low, medium, high, max]
+      default: high
+      aliases: {xhigh: max}
+  thinkingmachines/Inkling:
+    kind: text
+    name:
+      short: inkling
+      # the lookahead is load-bearing: "inkling" alone used to be this entry's
+      # sibling's alias, and every sentence about this model counted for that one
+      match: inkling(?![\s-]*small)
+    notes: >-
+      the flagship the small is small relative to: bf16 is 1.76 tib and the
+      smallest published rung is 252 gib, so nothing here runs local. carried
+      because four sources score it, which makes it the only measured statement
+      of what inkling small gives up.
+    quants:
+    - repo: unsloth/inkling-GGUF
+      quant: UD-IQ1_S
+      note: 251.6 gib, the smallest rung published, and still over any local
+        budget. carried for the comparison rather than the slot
+    sampling:
+      thinking:
+        source: tuned-here
+        note: no parseable sampler set on the card, the same as the small
+        temp: 1.0
+        top_p: 1.0
+        top_k: 40
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: inkling
+      gbench: thinkingmachines/inkling
+      lmarena: inkling
+      swerebench: ''
+      epoch: Inkling
+    modalities:
+      input:
+      - text
+      - image
+      - audio
+      output:
+      - text
+    turns:
+      source: unsloth/inkling-GGUF
       developer: as-system
       leading_system_max: unlimited
       mid_system: ok

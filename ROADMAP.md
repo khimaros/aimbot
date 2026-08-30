@@ -5,7 +5,7 @@ built and is marked done when it ships.
 
 ## done
 
-- **the registry** (65 models, 52 of them text), keyed by huggingface base repo.
+- **the registry** (74 models, 61 of them text), keyed by huggingface base repo.
 - **named sampling profiles**, with each profile's `source:` derived rather than
   asserted.
 - **derived registry blocks**: `turns:` and `thinking:` executed out of the chat
@@ -13,7 +13,7 @@ built and is marked done when it ships.
   checked against each model's `config.json`.
 - **the research corpus**: 20 point-in-time captures, every one committed so a
   refresh is a reviewable diff rather than a silent change in conclusions.
-- **the `docs/` dashboard**: 1544 facets over 65 models, every weight a slider,
+- **the `docs/` dashboard**: 1676 facets over 74 models, every weight a slider,
   the memory budget a setting, every number one hover from its source.
 - **one sweep command** (`make sweep`) that collects, derives, builds and
   checks, and ends by printing what only a human can decide.
@@ -29,6 +29,21 @@ built and is marked done when it ships.
   nothing had changed; the windows now come from how fast each source moves.
   httpcache's per-request status used to go to `/dev/null` in six collectors,
   which is why a working cache read as a stalled one.
+- **`name.match` overlap is checked rather than warned about.** CONTRIBUTING.md
+  had said since the ling 3.0 incident that an alias must not claim another
+  model, and nothing enforced it, so `\bornith\b` did it again -- 22 of the 26
+  ornith sentences in the corpus were about a generation the registry did not
+  carry. `make lint` fails on it now, and a text model with no alias at all,
+  which sentiment silently scores zero, prints in the sweep's punch list.
+- **discovery asks the leaderboards, not just the hub.** `analyze-catalog`
+  ranks by lifetime downloads, which a release from last week cannot have, so
+  granite 4.2 30b sat at rank 39 of a top-25 report while trending -- scored by
+  artificial analysis, with a gguf, four days old. `resolve-ids --unclaimed`
+  asks the other question: what do the five leaderboards we already collect
+  score that the roster does not carry? the catalog report also prints a
+  trending-now table before the download one, and the candidate filter's 20b
+  floor is gone from the cross-check, because a third party having scored a
+  model answers the question that floor was guessing at.
 
 ## next
 
@@ -52,17 +67,22 @@ built and is marked done when it ships.
 
    the curve is also fitted on a 671b model and applied to 27b ones. damage
    scales with how little redundancy a model has, so the low rungs read
-   optimistic for small models, and both published sweeps held here are large
-   too (127b and 250b). sweeping ONE small model at several quants would settle
-   it for less compute than any of the above.
+   optimistic for small models, and every published sweep held here is large
+   too: 127b, 180b, 226b and 250b. the 226b is laguna m.1's, 28 points of
+   perplexity from the one uploader who quantized it, and it is the richest
+   ladder in the document by a factor of three -- which makes the gap sharper,
+   not smaller. sweeping ONE small model at several quants would settle it for
+   less compute than any of the above.
 
 3. **a consumer-side memory budget check.** gguf sizes join by repo but nothing
    enforces a consumer's budget with them; that check belongs to the consumer,
    and llama-tools has the TODO. the dashboard answers the same question for a
    reader rather than for a config.
 
-4. **card claims cover 25 of 51 text models.** gpt-oss, laguna, inkling, step
-   and minimax m2.7 publish no parseable benchmark table.
+4. **card claims cover 29 of 61 text models.** gpt-oss, laguna, inkling, step
+   and minimax m2.7 publish no parseable benchmark table. all three laguna
+   sizes and both inklings are in that half, which is why the ornith family --
+   which publishes one -- reads as better evidenced than it is.
 
 5. **`resolve-ids --write` cannot create an `ids:` block, only rewrite one.**
    `patch_ids` edits the lines it owns rather than dumping the document, which

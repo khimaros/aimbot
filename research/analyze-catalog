@@ -34,7 +34,9 @@ DATA = "data/hf-catalog.json"
 
 # a repo name that says "this is a variant, not a model" -- these are tracked
 # for discovery but are not roster candidates without independent evaluation
-VARIANT = re.compile(r"abliterat|uncensored|heretic|erotic|roleplay|\bnsfw\b|"
+# `obliterat` is not a typo for `abliterat`: it is a second spelling the same
+# uploaders use, and it was the highest-trending repo in the whole capture
+VARIANT = re.compile(r"[ao]bliterat|uncensored|heretic|erotic|roleplay|\bnsfw\b|"
                      r"horror|darkness|\bdau\b|neo-max|brainstorm", re.I)
 # parameter count in the repo name, e.g. Qwen3.6-27B or 35B-A3B
 PARAMS = re.compile(r"[-_/]?(\d+(?:\.\d+)?)\s*b\b", re.I)
@@ -139,18 +141,34 @@ def main():
                 keep.append(dict(r, b=b, related=related))
         rows = keep
 
+    def table(rs, top):
+        print("| repo | size | downloads | likes | trending | updated | requant of |")
+        print("|---|--:|--:|--:|--:|---|---|")
+        for r in rs[:top]:
+            b = r.get("b") if args.candidates else size_b(r["id"].split("/", 1)[-1])
+            print("| `%s` | %s | %s | %s | %s | %s | %s |" % (
+                r["id"], ("%gb" % b) if b else "-", format(r.get("downloads") or 0, ","),
+                r.get("likes"), r.get("trendingScore") or "-",
+                (r.get("lastModified") or "")[:10], r.get("related") or ""))
+
+    # a release days old has no lifetime downloads yet, so the download ranking
+    # cannot surface one however hard it is trending: granite 4.2 30b sat at
+    # rank 39 of a top-25 report while carrying a trending score. anything the
+    # hub says is moving now gets its own table, before the one that favours age
+    now = sorted((r for r in rows if r.get("trendingScore")),
+                 key=lambda r: (bool(r.get("related")), -r["trendingScore"]))
+    if now:
+        print("### trending now, whatever its lifetime count says\n")
+        table(now, args.top)
+        print("\n%d of the %d repo(s) below carry a trending score.\n"
+              % (len(now), len(rows)))
+        print("### by lifetime downloads\n")
+
     # unrelated first: a model absent from the roster outranks another quant of
     # one already on it, and burying the former under the latter is how a whole
     # generation of ornith sat in this table looking like a requant
     rows.sort(key=lambda r: (bool(r.get("related")), -(r.get("downloads") or 0)))
-    print("| repo | size | downloads | likes | trending | updated | requant of |")
-    print("|---|--:|--:|--:|--:|---|---|")
-    for r in rows[:args.top]:
-        b = r.get("b") if args.candidates else size_b(r["id"].split("/", 1)[-1])
-        print("| `%s` | %s | %s | %s | %s | %s | %s |" % (
-            r["id"], ("%gb" % b) if b else "-", format(r.get("downloads") or 0, ","),
-            r.get("likes"), r.get("trendingScore") or "-",
-            (r.get("lastModified") or "")[:10], r.get("related") or ""))
+    table(rows, args.top)
     new = sum(1 for r in rows if not r.get("related"))
     print("\n%d untracked repo(s)%s, showing %d. downloads are lifetime and favour"
           % (len(rows), " passing the candidate filter" if args.candidates else "",

@@ -33,6 +33,12 @@ model belongs on the roster or writes a judgement about it, so the run ends by
 listing what a human still has to look at: trending repos the registry does not
 carry, models no benchmark has scored, and every field a collector could not
 fill.
+
+Two of those entries look at discovery from opposite ends, and both are needed.
+`analyze-catalog` asks what the hub is downloading that we do not have, which
+misses anything released too recently to have a lifetime download count.
+`resolve-ids --unclaimed` asks what the leaderboards we ALREADY collect are
+scoring that we do not have, which catches a release the week it lands.
 """
 
 import argparse
@@ -104,6 +110,8 @@ CHECK = [
 REPORT = [
     ("trending repos the registry does not carry",
      ["./analyze-catalog", "--candidates", "--top", "25"], RESEARCH),
+    ("models a benchmark already scores that the roster does not carry",
+     ["./scripts/resolve-ids", "--unclaimed"], ROOT),
     ("roster models no benchmark suite has scored",
      ["./build-tables", "--table", "unscored"], RESEARCH),
     ("models with a graded thinking knob and no declared levels",
