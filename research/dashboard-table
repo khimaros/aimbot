@@ -63,11 +63,14 @@ setTimeout(() => {
       ? ks.reduce((a, k) => a + facetPctRaw(m, k), 0) / ks.length : null)(
       Object.keys(m.facets).filter(k => k.startsWith('card.'))),
   }));
-  console.log(JSON.stringify({
+  // exit only once the payload has actually left: node's stdout to a PIPE is
+  // async, so `console.log` followed by `process.exit` truncates at the pipe
+  // buffer. this payload passed 8192 bytes when a quant note grew, and the
+  // reader got `Unterminated string ... column 8191` rather than a short read
+  process.stdout.write(JSON.stringify({
     weights: D.weights, hardware: {budget, reserve, minCtx, cap, floor},
     effective, rows,
-  }));
-  process.exit(0);
+  }), () => process.exit(0));
 }, 0);
 """
 

@@ -171,7 +171,7 @@ model missing three of them is a gap in the evidence, not a verdict.
 | 23 | qwen3 coder next | UD-Q8_K_XL | 80.4 | 256k | 4/7 | **29.1** |
 | 24 | qwen3.5-35b-a3b | UD-Q8_K_XL | 45.3 | 256k | 3/7 | **28.5** |
 | 25 | gemma 4 12b | UD-Q8_K_XL | 12.7 | 256k | 3/7 | **24.6** |
-| 26 | ternary bonsai 27b | Q2_g64 | 7.1 | - | 1/7 | **24.0** |
+| 26 | ternary bonsai 27b | Q2_G64 | 7.1 | - | 1/7 | **24.0** |
 | 27 | nemotron-3-nano-30b-a3b | UD-Q8_K_XL | 37.7 | 256k | 1/7 | **21.2** |
 | 28 | laguna s 2.1 | UD-Q6_K_XL | 99.7 | 345k | 2/7 | **19.0** |
 | 29 | ling 3.0 tiny | Q8_0 | 7.8 | 128k | 3/7 | **18.5** |
@@ -1170,7 +1170,7 @@ of measurement.
 
 - **use for** experiments in extreme quantization
 - **avoid for** production work of any kind
-- **runs at** Q2_g64, 7.1 gib, 1/7 of the weighted factors measured it
+- **runs at** Q2_G64, 7.1 gib, 1/7 of the weighted factors measured it
 - **evidence** hf-discussions 70 mentions at 0% approval; no facet carried by any source
 - **confidence in that evidence** medium
 

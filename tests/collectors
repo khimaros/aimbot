@@ -181,6 +181,149 @@ def tracked_counts_the_registry_not_just_repos_txt():
     eq(sorted(got), sorted(x.lower() for x in got), "everything is lowercased")
     eq("# a comment" in got, False, "comments are not repos")
 
+# a tree listing exercising every naming convention this corpus has run into.
+# served from the httpcache rather than a socket: fetch-gguf-sizes builds its
+# own hub url, so seeding the cache is what makes the REAL executable run with
+# no network instead of adding a --url flag only a test would pass.
+SIZE_REPO = "test-sizes/Fixture-GGUF"
+SIZE_TREE = [
+    # the shape the tag regex was written for, sharded
+    {"type": "file", "path": "Fixture-UD-IQ4_XS-00001-of-00002.gguf", "size": 3},
+    {"type": "file", "path": "Fixture-UD-IQ4_XS-00002-of-00002.gguf", "size": 4},
+    # andrijdavid ships voxtral as a bare tag: the filename IS the quant
+    {"type": "file", "path": "Q8_0.gguf", "size": 10},
+    # rodrigomt ships s2-pro lowercased
+    {"type": "file", "path": "fixture-q4_k_m.gguf", "size": 20},
+    # kokoro separates its variants with `_`, so `_` must NOT be a separator or
+    # these two collapse into one bogus `Q8` worth their combined size
+    {"type": "file", "path": "Fixture_espeak_Q8.gguf", "size": 100},
+    {"type": "file", "path": "Fixture_no_espeak_Q8.gguf", "size": 200},
+    # whisper.cpp publishes ggml `.bin`, never gguf
+    {"type": "file", "path": "ggml-large-v3-turbo-q8_0.bin", "size": 40},
+    {"type": "file", "path": "mmproj-F16.gguf", "size": 5},
+    {"type": "file", "path": "README.md", "size": 1},
+]
+
+
+def seed_cache(key, payload, raw=False):
+    """Put a body in the http cache so a collector replays it offline."""
+    os.path.isdir(CACHE) or os.makedirs(CACHE)
+    body = os.path.join(CACHE, key + ".body")
+    with open(body, "w") as f:
+        f.write(payload) if raw else json.dump(payload, f)
+    with open(os.path.join(CACHE, key + ".meta"), "w") as f:
+        json.dump({}, f)
+    return [body, os.path.join(CACHE, key + ".meta")]
+
+
+@test
+def every_publisher_naming_convention_yields_a_quant_tag():
+    """A tag the sizer cannot parse is not an error, it is a missing model.
+
+    The fallback records the whole filename, so a repo either happens to match
+    the naming the regex expects or the registry has to be hand-fitted to a
+    filename. voxtral and whisper went unsized that way and became invisible
+    to a consumer's memory budget -- no warning, just absent.
+    """
+    key = "hf-" + SIZE_REPO.replace("/", "_")
+    written = seed_cache(key, SIZE_TREE)
+    tmp = tempfile.mkdtemp()
+    try:
+        repos = os.path.join(tmp, "repos.txt")
+        with open(repos, "w") as f:
+            f.write(SIZE_REPO + "\n")
+        out = os.path.join(tmp, "sizes.json")
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-sizes"),
+                            "--repos", repos, "--out", out, "--max-age", "3600"],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if r.returncode:
+            raise AssertionError("fetch-gguf-sizes exited %d: %s"
+                                 % (r.returncode, r.stderr.strip()))
+        with open(out) as f:
+            got = json.load(f)[SIZE_REPO]
+    finally:
+        shutil.rmtree(tmp)
+        for p in written:
+            os.path.exists(p) and os.remove(p)
+
+    eq(got.get("UD-IQ4_XS"), 7, "shards of one rung aggregate, as before")
+    eq(got.get("Q8_0"), 10, "a bare `Q8_0.gguf` is the tag, not a filename")
+    eq(got.get("Q4_K_M"), 20, "a lowercase tag is read and normalised")
+    eq(got.get("mmproj:F16"), 5, "the projector is still marked, not counted as a rung")
+    eq("README.md" in got, False, "a non-weight file is not a quant")
+    eq(got.get("ggml-large-v3-turbo-q8_0.bin"), 40,
+       "ggml .bin is summed: whisper publishes nothing else")
+    # the collision guard: `_` is not a separator
+    eq(got.get("Fixture_espeak_Q8.gguf"), 100, "an `_`-separated variant keeps its name")
+    eq(got.get("Fixture_no_espeak_Q8.gguf"), 200, "and so does the one beside it")
+    eq(got.get("Q8"), None, "the two never collapse into one bogus rung")
+
+# the shape that reached the vendor tab as literal markup. a card is markdown
+# WITH html in it, and qwen3.8-flash-next's benchmark footnote opens with a
+# 70-character <p style> before it says anything -- which both rendered
+# verbatim and pushed "evaluated ... harnesses" past the 80 characters the
+# harness filter reads, so a methodology note passed as a recommendation
+CARD_FIXTURE = """---
+license: other
+---
+
+# Fixture
+
+## Best Practices
+
+Thinking Mode: `temperature=1.0`, `top_p=0.95`, `top_k=20`, `min_p=0.0`.
+
+<p style="margin-top:12px;font-size:10px;line-height:1.4;opacity:0.7">1. DeepSWE 1.1: evaluated with the Claude Code and mini-SWE-agent harnesses, temperature=0.6, top_p=0.8, 256K context window.</p>
+"""
+
+CARD_REGISTRY = """version: 1
+models:
+  Fixture/Card-Model:
+    kind: text
+    name: {short: fixture card model}
+"""
+
+
+@test
+def a_card_label_is_prose_not_markup():
+    """A sampler label is shown to a reader, so it cannot be an html tag.
+
+    Stripping tags is not cosmetic: the label is also what the harness filter
+    tests, and 70 characters of inline style crowd the words that identify a
+    benchmark note out of the window it looks at. So the markup made a
+    methodology footnote look like a recommendation to run the model at.
+    """
+    repo = "Fixture/Card-Model"
+    written = seed_cache("card-" + repo.replace("/", "_"), CARD_FIXTURE, raw=True)
+    written += seed_cache("hub-" + repo.replace("/", "_"), {}, raw=False)
+    tmp = tempfile.mkdtemp()
+    try:
+        reg = os.path.join(tmp, "models.yaml")
+        with open(reg, "w") as f:
+            f.write(CARD_REGISTRY)
+        out = os.path.join(tmp, "cards.json")
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-model-cards"),
+                            "--registry", reg, "--out", out,
+                            "--max-age", "3600"],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if r.returncode:
+            raise AssertionError("fetch-model-cards exited %d: %s"
+                                 % (r.returncode, r.stderr.strip()))
+        with open(out) as f:
+            sets = json.load(f)[repo]["samplers"]
+    finally:
+        shutil.rmtree(tmp)
+        for q in written:
+            os.path.exists(q) and os.remove(q)
+
+    for x in sets:
+        eq("<" in x["label"], False, "no label carries markup: %r" % x["label"])
+    eq(len(sets), 1, "the benchmark footnote is not a recommendation")
+    eq(sets[0]["values"].get("temp"), 1.0, "the real recommendation survives")
+    eq(sets[0]["values"].get("top_p"), 0.95, "with its own numbers")
+    eq(sets[0]["label"].startswith("Thinking Mode"), True,
+       "labelled by its prose: %r" % sets[0]["label"])
+
 
 def main():
     bad = 0

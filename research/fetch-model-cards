@@ -233,11 +233,23 @@ SAMPLER_FIELD = {"temperature": "temp", "temp": "temp", "top_p": "top_p",
 # a card states settings for two different reasons: what to RUN the model at,
 # and what a benchmark was evaluated at. ornith's only numbers are a
 # Terminal-Bench harness description, which is not a recommendation.
+# these are STEMS, so they take no trailing boundary: `\bevaluat\b` never
+# matched "evaluated" and `\bharness\b` never matched "harnesses", which is how
+# a footnote reading "evaluated with the Claude Code and mini-SWE-agent
+# harnesses" read as a recommendation. it only ever caught the uninflected form.
 HARNESS = re.compile(r"\b(bench|harness|evaluat|protocol|scaffold|we (?:run|report)|"
-                     r"terminus|swe-bench|arena)\b", re.I)
+                     r"terminus|swe-bench|arena)", re.I)
 # a line break, or the conjunction that separates two recommendations in one
 # sentence. splitting on it is what stops the second mode overwriting the first.
 CLAUSE = re.compile(r",?\s+(?:while|whereas)\s+", re.I)
+# a card is markdown WITH html in it, and the tags are not part of a label.
+# stripping them is not cosmetic: the label is what a reader sees AND what the
+# HARNESS test reads, and qwen3.8-flash-next's benchmark footnote opens with 70
+# characters of inline style before it says anything -- so the tag rendered
+# verbatim on the vendor tab and pushed "evaluated ... harnesses" past the 80
+# characters the filter looks at, letting a methodology note through as a
+# recommendation to run the model at.
+TAG = re.compile(r"<[^>]+>")
 
 
 def sampler_sets(text):
@@ -267,7 +279,7 @@ def sampler_sets(text):
         cur, label = {}, ""
 
     for line in (text or "").split("\n"):
-        parts = CLAUSE.split(line)
+        parts = CLAUSE.split(TAG.sub(" ", line))
         for n, part in enumerate(parts):
             found = SAMPLER_KV.findall(part)
             if found:

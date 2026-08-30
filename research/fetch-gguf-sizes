@@ -26,8 +26,29 @@ TREE = "https://huggingface.co/api/models/%s/tree/main?recursive=true"
 # .gguf of the unsharded name, so the separator before the shard index is
 # `-` or `.gguf-`. Without that alternative every shard tags as its own quant
 # and a 213gib model reads as five that each fit.
-QUANT = re.compile(r"-((?:UD-|AD-)?(?:IQ|Q|BF|F|MXFP|NVFP|TQ)[A-Za-z0-9_]*?)"
-                   r"(?:(?:\.gguf)?-\d{5}-of-\d{5})?\.gguf$")
+#
+# The tag is either the whole stem or a `-`-separated field in it, and it is
+# matched case-insensitively, because publishers do all three: unsloth writes
+# `Model-UD-IQ4_XS.gguf`, andrijdavid writes a bare `Q8_0.gguf`, rodrigomt
+# writes `s2-pro-q8_0.gguf`. The last two matched nothing and fell to the
+# filename fallback below, which is a key no registry would think to write --
+# so voxtral and s2-pro simply went unsized, with no error to notice.
+#
+# `_` is deliberately NOT a separator. kokoro ships `Kokoro_espeak_Q8.gguf`
+# beside `Kokoro_no_espeak_Q8.gguf`, and admitting `_` collapses two different
+# files into one `Q8` holding their combined bytes.
+# The digit after the type is load-bearing: without it `F` alone matches the
+# first letter of `Fixture_espeak_Q8.gguf` and the lazy tail swallows the whole
+# stem. Every quant tag in this corpus is a type followed by a number --
+# IQ4_XS, Q8_0, BF16, MXFP4, TQ1_0 -- so requiring one is what keeps `^` safe.
+QUANT = re.compile(r"(?:^|-)((?:UD-|AD-)?(?:IQ|Q|BF|F|MXFP|NVFP|TQ)\d[A-Za-z0-9_]*?)"
+                   r"(?:(?:\.gguf)?-\d{5}-of-\d{5})?\.gguf$", re.I)
+# what counts as weights. whisper.cpp publishes 33 ggml `.bin` files and not a
+# single gguf, so a `.gguf`-only filter skipped the repo entirely and it never
+# appeared in the output at all -- a different failure from a mis-parsed tag,
+# and a quieter one. `ggml-` keeps this to that convention rather than
+# sweeping up every stray .bin a repo happens to carry.
+WEIGHTS = re.compile(r"(?:\.gguf|^ggml-[^/]*\.bin)$", re.I)
 # Speculative-decoding sidecars are named after the *target* quant, so
 # `dspark-DeepSeek-V4-Flash-0731-Q8_0.gguf` otherwise tags as a 10gib "Q8_0"
 # quant of a 284b model.
@@ -75,14 +96,17 @@ def quants(repo, max_age=0, refresh=False):
     agg = collections.defaultdict(int)
     for e in t:
         path = e.get("path", "")
-        if e.get("type") != "file" or not path.endswith(".gguf"):
+        if e.get("type") != "file" or not WEIGHTS.search(path):
             continue
         size = e.get("size") or (e.get("lfs") or {}).get("size") or 0
         if "/" in path:
             tag = path.split("/")[0]
         else:
             m = QUANT.search(path)
-            tag = m.group(1) if m else path
+            # uppercased so `s2-pro-q8_0.gguf` and `Model-Q8_0.gguf` are one
+            # rung. every tag that matched before this was already uppercase,
+            # so no existing key moves
+            tag = m.group(1).upper() if m else path
         if "mmproj" in path.lower():
             tag = "mmproj:" + tag
         elif is_sidecar(path):
