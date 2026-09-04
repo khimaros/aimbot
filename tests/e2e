@@ -87,53 +87,50 @@ const RESET = () => {
   hidden = new Set(DEFAULT_HIDDEN);
   // the filters are shared state across cases too: one that clears the runtime
   // filter to isolate another must not leave the next case filtering on nothing
-  filters.mod = DEFAULT_MODALITY;
+  filters.mods = new Set(DEFAULT_MODALITIES);
   filters.flags = new Set(DEFAULT_FLAGS);
   filters.engines = new Set(DEFAULT_ENGINES);
   reweigh();
 };
 
-test('the gguf filter hides what nothing here can load, and says so', () => {
+test('the roster can say what it is MISSING, and does it one way', () => {
   RESET();
-  filters.mod = 'all';
+  filters.mods = new Set(['all']);
   filters.flags = new Set();
-  // the runtime filter would hide the same rows for its own reason, and this
-  // case is about the gguf one
-  filters.engines = new Set();
 
-  setGguf(true);
+  // there used to be a `has gguf` toggle beside the runtime filter, asking the
+  // same question with none of the answer, and the two disagreed: turning it
+  // off still hid supertonic-3, because the runtime filter was hiding it for
+  // its own reason. one control now, and clearing it is what shows the entries
+  // carried precisely because nothing here serves them.
   const runnable = visible().map(m => m.short);
-  ok(runnable.every(s => model(s).quants.length),
-     'with the filter on, every row has a quant');
-  eq(runnable.includes('supertonic-3'), false, 'onnx-only is hidden');
+  eq(runnable.includes('supertonic-3'), false,
+     'with a runtime selected, weights nothing loads are out');
 
-  setGguf(false);
+  filters.engines = new Set();
   const all = visible().map(m => m.short);
-  ok(all.includes('supertonic-3'),
-     'with it off the roster says what it is MISSING');
+  ok(all.includes('supertonic-3'), 'clearing it says what is missing');
   ok(all.length > runnable.length, 'and that is strictly more rows');
 
-  // the whole point of carrying them: they are the unservable ones
-  const missing = all.filter(s => !model(s).quants.length);
-  ok(missing.length >= 1, 'at least one entry has no gguf at all: ' + missing);
+  const missing = all.filter(s => !(model(s).engines || []).length);
+  ok(missing.length >= 5, 'several entries name no runtime at all: ' + missing);
+  ok(missing.includes('krea-2-raw'), 'including the image models with no loader');
 
-  setGguf(true);
   RESET();
 });
 
 test('the vram filter judges what has a size, and passes what has none', () => {
   RESET();
-  filters.mod = 't2a';
+  filters.mods = new Set(['t2a']);
   filters.flags = new Set(DEFAULT_FLAGS);
   filters.engines = new Set();
-  setGguf(false);
   setHardware({...DEFAULT_HARDWARE, budget: 96});
 
-  // `fits vram` is on by DEFAULT, so it, and not the gguf toggle, is what
-  // decides whether an onnx-only entry is reachable at all. a model with no
-  // quants makes no vram claim: reading "no quant fits" off zero quants states
-  // something the data does not say, and hides the entry behind a button whose
-  // label is about memory. the gguf filter is the one that means unservable.
+  // `fits vram` is on by DEFAULT, so it decides whether an onnx-only entry is
+  // reachable at all. a model with no quants makes no vram claim: reading "no
+  // quant fits" off zero quants states something the data does not say, and
+  // hides the entry behind a control whose label is about memory. the runtime
+  // filter is the one that means unservable.
   const shown_ = visible().map(m => m.short);
   ok(shown_.includes('supertonic-3'),
      'an entry with no quants survives the vram filter: ' + shown_);
@@ -145,15 +142,44 @@ test('the vram filter judges what has a size, and passes what has none', () => {
   ok(tiny.every(s => !model(s).quants.length || fitsBudget(model(s))),
      'everything left either has no size or fits');
 
-  setGguf(true);
+  RESET();
+});
+
+test('a factor that did not exist last visit reaches a returning reader', () => {
+  // THE BUG THIS EXISTS FOR: the speech and image boards were collected, joined
+  // and given default weights, every test passed, and a reader who had opened
+  // the page before still saw a dash beside every voice model. their weights
+  // were in localStorage from before those factors existed, and a stored map
+  // wins over the defaults -- so the new keys were simply not in it.
+  const before = {'aa.coding': 0.3, 'aa.agentic': 0.3, 'lmarena.rating': 0.1};
+  store.set('weights', before);
+  store.set('weights-base', before);
+
+  const back = restoreWeights();
+  ok(back['aa-stt.accuracy'] > 0,
+     'a factor added since is adopted at its default: ' + JSON.stringify(back));
+  ok(back['aa-t2i.elo'] > 0, 'the image board too');
+  eq(back['aa.coding'], 0.3, 'and what the reader set is untouched');
+
+  // a factor they turned OFF is a decision, not an absence: it is missing from
+  // the stored map and present in the snapshot beside it, which is how the two
+  // are told apart
+  const zeroed = {...D.weights};
+  delete zeroed['aa.agentic'];
+  store.set('weights', zeroed);
+  store.set('weights-base', D.weights);
+  eq('aa.agentic' in restoreWeights(), false,
+     'a weight dropped to zero stays dropped');
+
+  store.set('weights', null);
+  store.set('weights-base', null);
   RESET();
 });
 
 test('a speech model is scored on the boards that rank speech', () => {
   RESET();
-  filters.mod = 'all';
+  filters.mods = new Set(['all']);
   filters.flags = new Set();
-  setGguf(false);
 
   // the complaint this exists for: every voice model showed a dash, including
   // the ones artificial analysis publishes a number for
@@ -187,16 +213,14 @@ test('a speech model is scored on the boards that rank speech', () => {
      + ' of ' + pics.length);
   eq(scored(scoredPics[0]).want, 1, 'and are judged on that one factor');
 
-  setGguf(true);
   RESET();
 });
 
 test('the preset list offers only rankings the current modality can be given', () => {
   RESET();
   filters.flags = new Set();
-  setGguf(false);
 
-  filters.mod = 'text';
+  filters.mods = new Set(['text']);
   drawPreset();
   const forText = presetOptions();
   ok(forText.includes('coding'), 'writing code ranks text models: ' + forText);
@@ -206,7 +230,7 @@ test('the preset list offers only rankings the current modality can be given', (
   // `writing code` weights aa.coding and swerebench: no transcription model has
   // either, so picking it would rank every visible row on nothing and print a
   // column of dashes. a dead option is dropped the way a dead modality is.
-  filters.mod = 'a2t';
+  filters.mods = new Set(['a2t']);
   drawPreset();
   const forSpeech = presetOptions();
   eq(forSpeech.includes('coding'), false,
@@ -215,21 +239,49 @@ test('the preset list offers only rankings the current modality can be given', (
      + ' them: it weights the speech boards too');
   ok(forSpeech.includes('clear'), 'so is nothing weighted');
 
-  filters.mod = 't2i';
+  filters.mods = new Set(['t2i']);
   drawPreset();
   ok(!presetOptions().includes('community'),
      'nor is what forums say, which no image model carries');
 
-  filters.mod = DEFAULT_MODALITY;
-  setGguf(true);
+  filters.mods = new Set(DEFAULT_MODALITIES);
+  RESET();
+});
+
+test('modality is a multi-select, and the union of what is picked', () => {
+  RESET();
+  filters.flags = new Set();
+  filters.engines = new Set();
+
+  eq([...filters.mods].join(','), 'text',
+     'text models is the default, and MODELS.md is generated from it');
+
+  const text = visible().length;
+  filters.mods = new Set(['t2a']);
+  const tts = visible().length;
+  filters.mods = new Set(['text', 't2a']);
+  const both = visible().length;
+  eq(both, text + tts, 'two shapes shown together are the two shapes: '
+     + text + ' + ' + tts + ' != ' + both);
+
+  // the dropdown renders the picks rather than a single selected option
+  drawModalities();
+  const menu = document.querySelector('#modality-ms').innerHTML;
+  ok(/data-mod="text"[^>]*aria-pressed="true"/.test(menu), 'text reads on');
+  ok(/data-mod="t2a"[^>]*aria-pressed="true"/.test(menu), 'and so does t2a');
+  ok(/data-mod="v2t"[^>]*aria-pressed="false"/.test(menu), 'what is not picked is off');
+
+  // nothing picked is every model, the way no runtime is every runtime
+  filters.mods = new Set();
+  ok(visible().length > both, 'clearing it filters no shape out');
+
   RESET();
 });
 
 test('the runtime filter is a multi-select over what actually loads a model', () => {
   RESET();
-  filters.mod = 'all';
+  filters.mods = new Set(['all']);
   filters.flags = new Set();
-  setGguf(false);
 
   eq([...filters.engines].sort().join(','),
      'crispasr,llama.cpp,stable-diffusion.cpp',
@@ -252,7 +304,6 @@ test('the runtime filter is a multi-select over what actually loads a model', ()
   ok(visible().length > more.length, 'clearing it filters nothing out');
 
   filters.engines = new Set(DEFAULT_ENGINES);
-  setGguf(true);
   RESET();
 });
 
@@ -331,7 +382,7 @@ test('a model with baked speakers lists them on its detail page', () => {
 
 test('a share link carries only what was changed, and round-trips', () => {
   RESET();
-  filters.mod = DEFAULT_MODALITY;
+  filters.mods = new Set(DEFAULT_MODALITIES);
   filters.flags = new Set(DEFAULT_FLAGS);
   filters.q = ''; filters.pub = '';
   sort = {k: 'score', dir: -1};
@@ -344,7 +395,7 @@ test('a share link carries only what was changed, and round-trips', () => {
   const facet = Object.keys(D.weights)[0];
   setHardware({budget: 64, minCtx: 32768});
   W = {...D.weights, [facet]: 0.99};
-  filters.mod = 't2a';
+  filters.mods = new Set(['t2a']);
   filters.q = 'kokoro';
   sort = {k: 'name', dir: 1};
 
@@ -354,7 +405,7 @@ test('a share link carries only what was changed, and round-trips', () => {
   eq('reserve' in st.hw, false, 'an untouched hardware key does not');
   eq(st.w[facet], 0.99, 'the moved weight travels');
   eq(Object.keys(st.w).length, 1, 'and only the moved one');
-  eq(st.f.mod, 't2a', 'the modality travels');
+  eq(st.f.mods.join(','), 't2a', 'the modality travels');
   eq(st.f.q, 'kokoro', 'the search travels');
   eq('flags' in st.f, false, 'untouched flags do not');
   eq(st.sort.k, 'name', 'the sort travels');
@@ -367,17 +418,17 @@ test('a share link carries only what was changed, and round-trips', () => {
 
   // and applying it reproduces the settings
   RESET();
-  filters.q = ''; filters.mod = DEFAULT_MODALITY; sort = {k: 'score', dir: -1};
+  filters.q = ''; filters.mods = new Set(DEFAULT_MODALITIES); sort = {k: 'score', dir: -1};
   applyState(JSON.parse(json));
   eq(budget, 64, 'budget restored');
   eq(minCtx, 32768, 'context restored');
   eq(W[facet], 0.99, 'weight restored');
-  eq(filters.mod, 't2a', 'modality restored');
+  eq([...filters.mods].join(','), 't2a', 'modality restored');
   eq(filters.q, 'kokoro', 'search restored');
   eq(sort.k, 'name', 'sort restored');
 
   RESET();
-  filters.q = ''; filters.mod = DEFAULT_MODALITY; sort = {k: 'score', dir: -1};
+  filters.q = ''; filters.mods = new Set(DEFAULT_MODALITIES); sort = {k: 'score', dir: -1};
 });
 
 test('a share link that is garbage does not blank the page', () => {
@@ -411,8 +462,8 @@ test('a model that publishes no context window still fits', () => {
 
 test('the default modality is the roster MODELS.md ranks', () => {
   RESET();
-  filters.mod = DEFAULT_MODALITY;
-  eq(filters.mod, 'text', 'the page starts on text models');
+  filters.mods = new Set(DEFAULT_MODALITIES);
+  eq([...filters.mods].join(','), 'text', 'the page starts on text models');
   const got = visible().length;
   const want = D.models.filter(m => m.kind === 'text' && fitsBudget(m)).length;
   eq(got, want, 'the default view is every text model that fits');
@@ -424,7 +475,7 @@ test('the default modality is the roster MODELS.md ranks', () => {
 
 test('each modality selects the shape it names, and only that', () => {
   RESET();
-  const pick = k => { filters.mod = k; return visible(); };
+  const pick = k => { filters.mods = new Set([k]); return visible(); };
 
   ok(pick('t2t').every(m => m.kind === 'text'
        && !(m.modalities.input || []).includes('image')),
@@ -442,11 +493,11 @@ test('each modality selects the shape it names, and only that', () => {
   // the two halves of the text roster partition it: a text model either takes
   // images or does not, and the old pair of chips could express `both held
   // down` which meant neither of these
-  filters.mod = 'text';
+  filters.mods = new Set(['text']);
   const all = visible().length;
-  filters.mod = 't2t';
+  filters.mods = new Set(['t2t']);
   const t2t = visible().length;
-  filters.mod = 'v2t';
+  filters.mods = new Set(['v2t']);
   const v2t = visible().length;
   eq(t2t + v2t, all, 'text -> text and vision -> text partition the text roster');
   ok(t2t > 0 && v2t > 0, 'both halves are non-empty');
@@ -454,10 +505,11 @@ test('each modality selects the shape it names, and only that', () => {
 
 test('a modality with no models is not offered as a dead option', () => {
   RESET();
-  const html_ = html('#modality');
+  drawModalities();
+  const html_ = html('#modality-ms');
   for (const x of MODALITIES) {
     const n = D.models.filter(x.test).length;
-    const listed = html_.includes('value="' + x.k + '"');
+    const listed = html_.includes('data-mod="' + x.k + '"');
     if (!n && x.k !== 'all' && x.k !== DEFAULT_MODALITY) {
       ok(!listed, x.k + ' selects nothing and must not be offered');
     } else {

@@ -201,11 +201,29 @@ built and is marked done when it ships.
   llama.cpp merged, crispasr from the backend the registry already names), and
   lint rejects both a typo and a hand-written copy of a derived one.
 
-  the filter is a multi-select defaulting to llama.cpp, crispasr and
+  the filter is a multi-select dropdown defaulting to llama.cpp, crispasr and
   stable-diffusion.cpp, and the snippet follows the model: `crispasr --backend
   whisper`, `sd --diffusion-model ... --vae ... --llm ...`, `tts-cli
   --model-path`. the roles in the registry turned out to already BE those flags.
   a model nothing here loads prints no command rather than a wrong one.
+
+  it replaced the `has gguf` toggle, which asked the same question with none of
+  the answer, and the two disagreed exactly where it mattered: with `has gguf`
+  off, supertonic-3 still did not appear, because the runtime filter was hiding
+  it for its own reason. that toggle and its state are removed rather than
+  hidden -- a filter with no control is one a reader cannot turn off. modality became a multi-select at the same time and by
+  the same argument -- `text and speech` was a question the old dropdown could
+  only answer with `all modalities`.
+
+- **a factor added after a reader's last visit reaches them.** the speech and
+  image boards were collected, joined, weighted and tested, and a browser that
+  had opened the page before still showed a dash beside every voice model: the
+  stored weight map wins over the defaults, and it predated those keys. the
+  defaults are now stored ALONGSIDE the weights, so a key in today's defaults
+  and absent from that snapshot is one the reader never saw and is adopted,
+  while a key they dragged to zero is missing from the map and present in the
+  snapshot and stays off. it was invisible to every test until the test booted
+  as a returning reader rather than a new one.
 
 ## next
 
