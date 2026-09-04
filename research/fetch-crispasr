@@ -75,6 +75,36 @@ def get(url, key, max_age, refresh):
     return proc.stdout if proc.returncode == 0 and proc.stdout.strip() else None
 
 
+# `general.architecture` -> backend, read out of crispasr's own table rather
+# than guessed from the repos its readme links. THE POINT OF THE WHOLE FILE.
+#
+# A backend name is crispasr's word for one of its runtimes; an architecture is
+# what a gguf says it is in its own header, and it is the only thing a registry
+# model and an engine can be compared on. The alternative -- naming a backend by
+# hand on each model -- knows only about the models somebody already looked up,
+# which is how kokoro sat here with no engine while crispasr had a backend for
+# it.
+#
+# The table is the same one every crispasr surface dispatches through, and its
+# header says why it exists: two copies of it drifted, the C ABI's copy was
+# missing 113 architecture strings, and `Session::open()` returned NULL for
+# models the CLI opened fine. It also says component GGUFs -- voice packs,
+# codecs, VAD and LID helpers -- are deliberately absent so an unknown
+# architecture yields nothing rather than a backend that would fail on load.
+# That is the property this repo needs most: it is a table that under-reports
+# on purpose.
+ARCH_MAP_URL = RAW + "src/core/arch_backend_map.h"
+ENTRY = re.compile(r'\{\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\}')
+
+
+def parse_arch_map(text):
+    """{architecture: backend} out of the C table, in the order it lists them."""
+    out = {}
+    for arch, backend in ENTRY.findall(text):
+        out.setdefault(arch, backend)
+    return out
+
+
 def repo_of(url):
     """`owner/name` out of a huggingface url, or None for a collection or a file.
 
@@ -226,6 +256,48 @@ def board_hits(backend):
     return hits
 
 
+def by_arch(payload, registry):
+    """Which registry models crispasr loads, DERIVED from the architecture.
+
+    The comparison the hand-written blocks were standing in for: a gguf says
+    what it is in its own header, crispasr's catalog says which header each of
+    its backends was published against, and the intersection is the answer for
+    every model at once rather than for the ones somebody looked up.
+    """
+    index = payload.get("arch") or {}
+    if not index:
+        print("\nno architectures resolved; run without --no-archs", file=sys.stderr)
+        return
+    support = json.load(open(os.path.join(HERE, "data/llama-support.json")))
+    repo_arch = support.get("repos") or {}
+
+    agree, differ, new = [], [], []
+    for repo, m in sorted(registry.items()):
+        written = ((m.get("crispasr") or {}).get("backend")
+                   or next((q["crispasr"]["backend"] for q in (m.get("quants") or [])
+                            if (q.get("crispasr") or {}).get("backend")), None))
+        found = None
+        for q in (m.get("quants") or []):
+            arch = repo_arch.get(q.get("repo"))
+            if arch and arch in index:
+                found = index[arch]
+                break
+        if written and found == written:
+            agree.append((repo, written))
+        elif written and found != written:
+            differ.append((repo, written, found))
+        elif found:
+            new.append((repo, found))
+
+    print("\nby ARCHITECTURE: %d model(s) agree with what is written on them, "
+          "%d disagree, %d are supported and say nothing"
+          % (len(agree), len(differ), len(new)))
+    for repo, written, found in differ:
+        print("  %-46s written %-22s derived %s" % (repo, written, found or "-"))
+    for repo, found in new:
+        print("  %-46s %s" % (repo, found))
+
+
 def report(payload, registry):
     """What the catalog says the roster is missing, in three questions."""
     backends = payload["backends"]
@@ -246,9 +318,11 @@ def report(payload, registry):
              + [((q.get("crispasr") or {}).get("backend"))
                 for q in (m.get("quants") or [])] if b}
 
-    print("crispasr: %d backends, %d with a repo, %d capability rows"
+    print("crispasr: %d backends, %d with a repo, %d capability rows, "
+          "%d architectures"
           % (len(backends), sum(1 for b in backends.values() if b["gguf"] or b["models"]),
-             len(payload.get("caps") or {})))
+             len(payload.get("caps") or {}), len(payload.get("arch") or {})))
+    by_arch(payload, registry)
 
     unclaimed = []
     for name, b in sorted(backends.items()):
@@ -285,6 +359,7 @@ def main():
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--url", default=README_URL)
     ap.add_argument("--matrix-url", default=MATRIX_URL)
+    ap.add_argument("--arch-url", default=ARCH_MAP_URL)
     ap.add_argument("--registry",
                     default=os.path.join(HERE, "..", "registry", "models.yaml"))
     ap.add_argument("--cache-key", default="crispasr")
@@ -311,9 +386,15 @@ def main():
     matrix = get(args.matrix_url, args.cache_key + "-matrix", args.max_age,
                  args.refresh)
     caps = parse_matrix(matrix) if matrix else {}
+    table = get(args.arch_url, args.cache_key + "-arch", args.max_age,
+                args.refresh)
+    index = parse_arch_map(table) if table else {}
+    if table and not index:
+        sys.exit("!!! the architecture table parsed empty -- its shape changed")
 
     payload = {"backends": dict(sorted(backends.items())),
-               "caps": dict(sorted(caps.items()))}
+               "caps": dict(sorted(caps.items())),
+               "arch": dict(sorted(index.items()))}
     written, now, before = capture.write(
         args.out, payload, lambda p: len(p["backends"]),
         allow_shrink=args.allow_shrink)

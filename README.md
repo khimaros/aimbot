@@ -413,6 +413,34 @@ TTS.cpp conversion, whisper's files are whisper.cpp's own, and breeze-tts-2
 needs a C++ reimplementation published beside it. selecting none is no filter at
 all, which is also how the entries nothing here runs become visible.
 
+**support is derived from the ARCHITECTURE, not asserted per model.** a gguf
+says what it is in its own header, and each engine publishes the architectures
+it dispatches on: llama.cpp's `LLM_ARCH_NAMES`, read out of its git history by
+`fetch-llama-support`, and crispasr's `src/core/arch_backend_map.h`, 209
+architecture strings mapped to backends, read by `fetch-crispasr`. the
+intersection answers the question for every model at once rather than for the
+ones somebody looked up -- which is how kokoro sat here with no engine while
+crispasr had a backend for it.
+
+two lint rules keep that from OVER-reporting, and the obvious third one is
+wrong:
+
+- a named backend must be one the binary carries, from the feature matrix
+  crispasr generates out of `--list-backends-json`. that caught `gemma4-e4b`,
+  which is a row in crispasr's readme -- named after the model -- and not a
+  backend at all: the readme says the E4B "runs on `--backend gemma4-e2b`".
+- some pinned file must be one crispasr RECOGNISES. that caught gemma 4
+  outright: the gguf this registry pins declares `gemma4`, crispasr's table
+  knows `gemma4_e2b`, and it loads cstr's separate ASR conversion rather than
+  our file. the claim is gone and the reason is in the entry.
+- the rule NOT applied is `the written backend must equal the detected one`.
+  `--backend` overrides detection, and three honest entries fail it.
+
+what none of it tests is whether the file then WORKS. a table entry means the
+binary picks a backend, not that the tensors match -- this registry carries two
+qwen3-tts conversions whose headers both dispatch to `qwen3-tts` and only one of
+which loads. that stays hand-written, with the evidence in the model's notes.
+
 it replaced a `has gguf` toggle, which asked the same question with none of the
 answer -- and the two disagreed in the way that matters: with `has gguf` off,
 supertonic-3 still did not appear, because the runtime filter was hiding it for

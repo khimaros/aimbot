@@ -17,6 +17,15 @@
 # seeded from the pre-split llama-tools llama-swap config; prose notes are
 # hand-written.
 #
+# a quant's `quant:` is what the rung IS -- `Q8_0`, `F16`, `UD-Q4_K_XL` -- and
+# `file:` is what it is CALLED where a repo does not name its files after the
+# tag. whisper.cpp publishes `ggml-large-v3-turbo-q8_0.bin` and kokoro's
+# converter publishes `Kokoro_espeak_Q8.gguf`, neither of which a size table
+# keyed by tag can find, and putting the filename in `quant:` made the ladder
+# read as a list of filenames beside every other model's list of quants. the
+# consumer already split them by hand -- llama-tools serves that whisper rung as
+# `whisper-large-v3-turbo:FP16` -- so the split belongs here.
+#
 # `engine:` is the list of RUNTIMES that load a model's weights, and it is here
 # rather than derived because a gguf does not say what wrote it. two of them are
 # derived and are not written down: llama.cpp when `runtime.arch` names an
@@ -1800,10 +1809,9 @@ models:
       aa-stt: ''
       aa-stt-streaming: ''
       voicearena: ''
-    # the smaller half of the same pair, and crispasr carries a backend for it
-    # too. no board scores this one: voice arena publishes `Gemma E4B` alone
-    crispasr:
-      backend: gemma4-e2b
+    # the smaller half of the same pair, and the same story: `--backend
+    # gemma4-e2b` is real and reads cstr's conversion rather than this one. no
+    # board scores this half either -- voice arena publishes `Gemma E4B` alone
     modalities:
       input:
       - text
@@ -1861,11 +1869,13 @@ models:
       voicearena: Gemma E4B
       aa-stt: ''
       aa-stt-streaming: ''
-    # a TEXT model that also transcribes: 140+ languages through crispasr's own
-    # backend for it, which is why the speech boards are offered by what a model
-    # DOES rather than by its kind
-    crispasr:
-      backend: gemma4-e4b
+    # NO `crispasr:` block, though crispasr transcribes with this checkpoint in
+    # 140+ languages under `--backend gemma4-e2b`. it reads its own conversion,
+    # `cstr/gemma4-e4b-it-GGUF`, whose header declares `gemma4_e2b`; the gguf
+    # this registry pins declares `gemma4`, which crispasr's dispatch table does
+    # not carry, so it would not load. the board id above is a different claim
+    # from the engine one -- voice arena scored the CHECKPOINT -- and only the
+    # engine claim depends on which file is pinned.
     modalities:
       input:
       - text
@@ -1909,10 +1919,12 @@ models:
       backend: kokoro
     quants:
     - repo: mmwillet2/Kokoro_GGUF
-      quant: Kokoro_espeak.gguf
+      quant: F32
+      file: Kokoro_espeak.gguf
       role: model-path
     - repo: mmwillet2/Kokoro_GGUF
-      quant: Kokoro_espeak_Q8.gguf
+      quant: Q8_0
+      file: Kokoro_espeak_Q8.gguf
       role: model-path
     ids:
       aa-stt: ''
@@ -2045,7 +2057,8 @@ models:
       short: ideogram-4
     quants:
     - repo: leejet/ideogram-4-GGUF
-      quant: ideogram4-Q4_0.gguf
+      quant: Q4_0
+      file: ideogram4-Q4_0.gguf
       role: diffusion
     ids:
       aa-t2i: Ideogram 4.0
@@ -2665,10 +2678,12 @@ models:
     - whisper.cpp
     quants:
     - repo: ggerganov/whisper.cpp
-      quant: ggml-large-v3-turbo.bin
+      quant: F16
+      file: ggml-large-v3-turbo.bin
       role: model
     - repo: ggerganov/whisper.cpp
-      quant: ggml-large-v3-turbo-q8_0.bin
+      quant: Q8_0
+      file: ggml-large-v3-turbo-q8_0.bin
       role: model
     ids:
       aa-stt: Whisper Large v3 Turbo
@@ -4460,11 +4475,15 @@ models:
       file without being told.
     quants:
     - repo: cstr/wespeaker-resnet34-lm-GGUF
-      quant: wespeaker-resnet34-lm.gguf
+      quant: F16
+      file: wespeaker-resnet34-lm.gguf
       role: diarize-embedder
+      note: conv kernels F32 and linear F16, which the card marks recommended
     - repo: cstr/wespeaker-resnet34-lm-GGUF
       quant: F32
+      file: wespeaker-resnet34-lm-f32.gguf
       role: diarize-embedder
+      note: the card's reference precision
     crispasr:
       diarize: embedder
   pyannote/segmentation-3.0:
@@ -4487,7 +4506,8 @@ models:
       which is why the quant repo is not the model's own.
     quants:
     - repo: cstr/pyannote-v3-segmentation-GGUF
-      quant: pyannote-seg-3.0.gguf
+      quant: F32
+      file: pyannote-seg-3.0.gguf
       role: diarize-segment
     crispasr:
       diarize: segmentation
@@ -4509,7 +4529,8 @@ models:
       here.
     quants:
     - repo: cstr/titanet-large-GGUF
-      quant: titanet-large.gguf
+      quant: F16
+      file: titanet-large.gguf
       role: diarize-embedder
     crispasr:
       diarize: embedder

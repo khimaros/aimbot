@@ -182,17 +182,36 @@ def ref(source, model_id=None, note=None):
 
 
 def percentile(value, population):
-    """Share of the cohort strictly below this value, 0-100.
+    """Where in the cohort this value sits, 0-100, by plotting position.
 
     The cohort is the registry models carrying the SAME facet, not every model
     the source scored: "top third of what this box can run" is the question,
     and ranking a 27b local model against a frontier api model answers a
     different one.
+
+    `(below + half the ties) / n` rather than `below / n`, which is the Hazen
+    position. The difference is worst on a small cohort and it showed badly:
+    three models carry artificial analysis' TTS elo, so the lowest of them --
+    kokoro, at a perfectly real 1060 -- scored a flat ZERO, which reads as
+    unmeasured rather than as third of three. The same formula never returned
+    100 either, since nothing is strictly below the top. Three models now read
+    17, 50 and 83.
+
+    It is not a relabelling: the shift is +50/n, so a model measured on a rare
+    facet gains more than one measured on a common one, and the composite --
+    which averages percentiles across facets with different cohort sizes --
+    moves. Six adjacent pairs swapped in the text ranking when this landed, all
+    of them within 3 points. That is the point rather than a side effect: the
+    old rule pushed every small cohort toward zero, this one centres each
+    cohort on 50 whatever its size, and only then are two percentiles from
+    different-sized cohorts a fair thing to average.
     """
     others = [v for v in population if v is not None]
     if len(others) < 2:
         return None
-    return round(100.0 * sum(1 for x in others if x < value) / len(others))
+    below = sum(1 for x in others if x < value)
+    ties = sum(1 for x in others if x == value)
+    return round(100.0 * (below + 0.5 * ties) / len(others))
 
 
 def aa_facets(entry, aa_id):
@@ -356,7 +375,8 @@ def speech_facets(speech, arena, voicearena, ids):
     if v is not None:
         out["aa-stt.accuracy"] = {
             "value": v, "label": "transcription accuracy", "unit": "share",
-            "group": "speech", "ref": ref("aa-stt", ids.get("aa-stt"),
+            "group": "artificial analysis speech",
+            "ref": ref("aa-stt", ids.get("aa-stt"),
                                           "100 - aaWerIndex, a word error rate")}
 
     live = ((speech.get("speech-to-text-streaming") or {})
@@ -365,7 +385,8 @@ def speech_facets(speech, arena, voicearena, ids):
     if v is not None:
         out["aa-stt-streaming.accuracy"] = {
             "value": v, "label": "streaming transcription accuracy", "unit": "share",
-            "group": "speech", "ref": ref("aa-stt-streaming",
+            "group": "artificial analysis speech",
+            "ref": ref("aa-stt-streaming",
                                           ids.get("aa-stt-streaming"),
                                           "100 - aaWerStreamingIndex")}
 
@@ -373,7 +394,8 @@ def speech_facets(speech, arena, voicearena, ids):
     if tts.get("qualityElo") is not None:
         out["aa-tts.elo"] = {
             "value": tts["qualityElo"], "label": "synthesis quality", "unit": "elo",
-            "group": "speech", "ref": ref("aa-tts", ids.get("aa-tts"))}
+            "group": "artificial analysis speech",
+            "ref": ref("aa-tts", ids.get("aa-tts"))}
 
     ta = arena.get(ids.get("tts-arena")) or {}
     if ta.get("elo") is not None:
@@ -381,7 +403,7 @@ def speech_facets(speech, arena, voicearena, ids):
         # is three people, and this board is the only one that publishes it
         out["tts-arena.elo"] = {
             "value": ta["elo"], "label": "synthesis preference", "unit": "elo",
-            "group": "speech", "votes": ta.get("totalVotes"),
+            "group": "tts arena", "votes": ta.get("totalVotes"),
             "ref": ref("tts-arena", ids.get("tts-arena"),
                        "%s votes, +-%s" % (ta.get("totalVotes"), ta.get("uncertainty")))}
 
@@ -416,7 +438,7 @@ def image_facets(board, ids):
         return {}
     return {"aa-t2i.elo": {
         "value": row["elo"], "label": "image arena rating", "unit": "elo",
-        "group": "image", "votes": row.get("appearances"),
+        "group": "artificial analysis image", "votes": row.get("appearances"),
         "ref": ref("aa-t2i", ids.get("aa-t2i"),
                    "%s appearances, %s to %s" % (row.get("appearances"),
                                                  row.get("ciLower"),

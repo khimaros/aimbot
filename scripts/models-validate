@@ -299,6 +299,12 @@ def check_registry(models, sampling, f):
         for q in quants:
             if not q.get("repo") or not q.get("quant"):
                 f.add(repo, "every quant needs both repo and quant: %r" % (q,))
+            # `quant:` names the rung and `file:` names the object where a repo
+            # does not name its files after the tag. a filename in `quant:` is
+            # the thing this split exists to stop
+            if str(q.get("quant") or "").lower().endswith((".gguf", ".bin")):
+                f.add(repo, "quant %r is a filename; put it in `file:` and give "
+                            "`quant:` the tag the rung IS" % q.get("quant"))
             where = "%s/%s" % (repo, q.get("quant"))
             check_runtime(q.get("runtime"), where, f)
             check_crispasr(q.get("crispasr"), where, f)
@@ -614,6 +620,69 @@ def report_thinking(models, facts):
     return rows
 
 
+def check_backend_reachable(models, data, f):
+    """A named crispasr backend has to be one a PINNED FILE would dispatch to.
+
+    This is the over-reporting guard. `crispasr:` says which of ~119 runtimes
+    loads a model, and it is hand-written, so it can name a backend for a
+    checkpoint whose conversion crispasr has never seen. That is not a small
+    distinction: crispasr's own arch table knows `gemma4_e2b`, the gguf this
+    registry pins for gemma 4 declares `gemma4`, and nothing would have caught
+    the claim that crispasr loads it -- it does not, it loads cstr's separate
+    ASR conversion of the same checkpoint.
+
+    Two rules, both conservative, because the obvious third one is wrong.
+
+      1. the name is a backend crispasr COMPILES IN, from the feature matrix it
+         generates out of `--list-backends-json`. that caught `gemma4-e4b`,
+         which is a row in crispasr's readme -- named after the model -- and not
+         a backend: the readme says the E4B "runs on `--backend gemma4-e2b`".
+      2. some pinned file is one crispasr RECOGNISES: its declared architecture
+         appears in `src/core/arch_backend_map.h`, the table every crispasr
+         surface dispatches through. that caught gemma 4 outright -- the gguf
+         this registry pins declares `gemma4` and the table knows `gemma4_e2b`,
+         so crispasr loads cstr's separate ASR conversion and not our file.
+
+    The rule NOT applied is `the written backend must equal the detected one`.
+    `--backend` overrides detection, and three legitimate entries fail that
+    test: qwen3-asr detects as `qwen3` and is documented as `qwen3-1.7b`, and
+    both qwen3-tts customvoice rungs detect as the base `qwen3-tts`.
+
+    What none of this tests is whether the file then WORKS. A table entry means
+    the binary picks a backend, not that the tensors match: this registry has
+    two qwen3-tts conversions whose headers both dispatch to `qwen3-tts` and
+    only one of which loads. That claim stays hand-written, with the evidence in
+    the model's notes.
+    """
+    crispasr = data.get("crispasr") or {}
+    table, names = crispasr.get("arch") or {}, crispasr.get("caps") or {}
+    repo_arch = (data.get("llama-support") or {}).get("repos") or {}
+    if not table or not repo_arch or not names:
+        return
+    for repo, m in sorted((models.get("models") or {}).items()):
+        blocks = [(repo, m.get("crispasr"))]
+        blocks += [("%s/%s" % (repo, q.get("quant")), q.get("crispasr"))
+                   for q in (m.get("quants") or [])]
+        for where, block in blocks:
+            backend = (block or {}).get("backend")
+            if not backend:
+                continue
+            if backend not in names:
+                f.add(where, "crispasr backend %r is not one the binary carries; "
+                             "the feature matrix lists %d and this is not among "
+                             "them" % (backend, len(names)))
+            # every file this model pins, since a model-level block speaks for
+            # the whole entry and a quant-level one still ships in a repo
+            archs = {repo_arch[q["repo"]] for q in (m.get("quants") or [])
+                     if q.get("repo") in repo_arch}
+            if not archs:
+                continue  # no gguf header anywhere: whisper ships ggml .bin
+            if not any(a in table for a in archs):
+                f.add(where, "no pinned file is one crispasr recognises: %s "
+                             "declares %s and its table knows none of them"
+                      % (repo, ", ".join(sorted(archs))))
+
+
 def report_speech(models):
     """The two gaps in the speech roster: no engine to load it, no source to rank it.
 
@@ -684,6 +753,8 @@ def main():
                                                       "data", "llama-support.json"))
     ap.add_argument("--sizes", default=os.path.join(HERE, "..", "research",
                                                     "data", "gguf-sizes.json"))
+    ap.add_argument("--crispasr", default=os.path.join(HERE, "..", "research",
+                                                       "data", "crispasr.json"))
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
@@ -700,6 +771,11 @@ def main():
     # a typed field with a derived counterpart is drift waiting to happen, so
     # this one is an error rather than a report you have to remember to run
     rows = check_modalities(models, facts, f)
+    # the over-reporting guard: a hand-written engine claim against the engine's
+    # own dispatch table. both inputs are captures, so a checkout without them
+    # skips it rather than failing on a missing file
+    check_backend_reachable(models, {"crispasr": load(args.crispasr) or {},
+                                     "llama-support": load(args.support) or {}}, f)
     if args.modalities:
         print("\nmodalities: %d model(s) disagreeing with their own config" % len(rows))
         for repo, got, want in sorted(rows):

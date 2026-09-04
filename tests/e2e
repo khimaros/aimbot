@@ -228,14 +228,18 @@ test('the preset list offers only rankings the current modality can be given', (
   ok(forText.includes('default') && forText.includes('clear'),
      'the balanced and empty rankings are always offered');
 
-  // `writing code` weights aa.coding and swerebench: no transcription model has
+  // `writing code` weights aa.coding and swerebench: no synthesis model has
   // either, so picking it would rank every visible row on nothing and print a
   // column of dashes. a dead option is dropped the way a dead modality is.
-  filters.mods = new Set(['a2t']);
+  //
+  // `text -> audio` rather than `audio -> text`, which is no longer purely
+  // speech: gemma 4 and mimo v2.5 take audio and emit text, they carry coding
+  // scores, and offering the preset there is right.
+  filters.mods = new Set(['t2a']);
   drawPreset();
   const forSpeech = presetOptions();
   eq(forSpeech.includes('coding'), false,
-     'writing code is not offered over transcription: ' + forSpeech);
+     'writing code is not offered over synthesis: ' + forSpeech);
   ok(forSpeech.includes('default'), 'the balanced ranking still is, and scores'
      + ' them: it weights the speech boards too');
   ok(forSpeech.includes('clear'), 'so is nothing weighted');
@@ -315,10 +319,10 @@ test('the factors sidebar lists what the current modality is measured on', () =>
   // so a word error rate is a question somebody asks of that view
   ok(text.includes('voicearena'), 'and on what its multimodal half transcribes');
 
-  filters.mods = new Set(['a2t']);
+  filters.mods = new Set(['t2a']);
   drawFactors();
   const speech = html('#factors');
-  ok(speech.includes('aa-stt.accuracy'), 'transcription is weighted on accuracy');
+  ok(speech.includes('aa-tts.elo'), 'synthesis is weighted on the arena elo');
   eq(speech.includes('aa.coding'), false,
      'and not on 60 text benchmarks it would have to be scrolled past');
   ok(speech.length < text.length, 'which is a shorter panel');

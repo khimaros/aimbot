@@ -274,15 +274,23 @@ GROUPS = [
      "evidence here."),
     ("community", "what forums say, per forum. quantitative: mentions damped by "
      "log, times how well those mentions were received."),
-    ("speech", "transcription and synthesis, scored by boards that rank nothing "
-     "else here. the two error rates are stored as the accuracy they leave, so "
-     "higher is better in this column like every other."),
+    # named after the SOURCE, the way the text groups above are. `speech` said
+    # what the numbers were about and not where they came from, so a reader
+    # looking for the artificial analysis result on a voice model found a group
+    # called `speech` and had to hover a `[src]` to learn whose number it was.
+    ("artificial analysis speech", "the same site's three speech boards: batch "
+     "transcription, streaming transcription, and a synthesis elo. the two word "
+     "error rates are stored as the accuracy they leave, so higher is better in "
+     "this column like every other."),
+    ("tts arena", "crowd-sourced blind A/B votes on synthesis, published with "
+     "the vote count. the second opinion artificial analysis cannot give."),
     ("voice arena languages", "word error rate per language, over a corpus of "
      "real recordings graded clean to noisy. the languages disagree by twenty "
      "points, so they are carried one at a time."),
-    ("image", "generation, rated by people picking between two pictures. the "
-     "only board here that scores it, and the only factor an image model "
-     "carries -- so its weight decides nothing but whether they are ranked."),
+    ("artificial analysis image", "generation, rated by people picking between "
+     "two pictures. the only board here that scores it, and the only factor an "
+     "image model carries -- so its weight decides nothing but whether they are "
+     "ranked."),
 ]
 
 
@@ -512,7 +520,10 @@ def quant_rows(model, sizes, known_quants=(), voices=None):
         repo_sizes = sizes.get(q["repo"]) or {}
         row = dict(q)
         row["url"] = HF + q["repo"]
-        b = repo_sizes.get(q["quant"])
+        # the size table is keyed by whatever the repo publishes, which is a
+        # quant tag where the filenames carry one and a filename where they do
+        # not -- `file:` is the registry saying which of the two this rung is
+        b = repo_sizes.get(q.get("file") or q["quant"])
         if b:
             row["bytes"] = b
             row["gib"] = round(b / GIB, 2)
@@ -526,11 +537,18 @@ def quant_rows(model, sizes, known_quants=(), voices=None):
             fork = known_quants and fork_type(a["quant"], known_quants)
             if fork:
                 a["fork_type"] = fork
+            # the rung the registry PINS is shown under the tag the registry
+            # gives it; the rest of the repo keeps the names it publishes,
+            # because nothing here knows what `Kokoro_no_espeak_Q4.gguf` would
+            # be called as a tag and guessing would collide with its sibling
+            if q.get("file") and a["quant"] == q["file"]:
+                a["file"], a["quant"] = a["quant"], q["quant"]
         # the speakers this FILE ships, read out of its own header. per quant
         # rather than per model because two conversions of one checkpoint
         # answer differently: cstr's qwen3-tts carries nine names where ours
         # carries none, and a reader needs the list for the rung being served
-        spk = ((voices or {}).get("%s:%s" % (q["repo"], q["quant"])) or {}).get("voices")
+        spk = ((voices or {}).get(
+            "%s:%s" % (q["repo"], q.get("file") or q["quant"])) or {}).get("voices")
         if spk:
             row["voices"] = spk
         out.append(row)

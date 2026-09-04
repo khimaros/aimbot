@@ -146,51 +146,51 @@ model missing three of them is a gap in the evidence, not a verdict.
 
 | # | model | quant | size (gib) | fits ctx | evidence | quality |
 |--:|---|---|--:|--:|--:|--:|
-| 1 | qwen3.8 flash next | UD-Q4_K_XL | 103.7 | 256k | 4/7 | **89.5** |
-| 2 | qwen3.8 27b | UD-Q8_K_XL | 29.3 | 256k | 6/7 | **78.9** |
-| 3 | deepseek v4 flash 0731 | UD-IQ3_XXS | 97.0 | 186k | 7/7 | **73.0** |
-| 4 | bonsai 27b | Q1_0 | 3.5 | 256k | 1/7 | **67.0** |
-| 5 | qwen3.6 27b | UD-Q8_K_XL | 33.3 | 256k | 6/7 | **65.4** |
-| 6 | ling 3.0 flash | AD-Q6_K | 100.1 | 256k | 3/7 | **61.3** |
-| 7 | muse glimmer | UD-Q8_K_XL | 30.1 | 128k | 5/7 | **59.2** |
-| 8 | qwen3.5-27b | UD-Q8_K_XL | 33.1 | 256k | 4/7 | **57.5** |
-| 9 | inkling small | UD-IQ3_XXS | 91.2 | 151k | 4/9 | **56.4** |
-| 10 | minimax m2.7 | UD-IQ3_S | 77.9 | 157k | 6/7 | **56.1** |
-| 11 | mimo v2.5 | UD-Q2_K_XL | 95.9 | 142k | 5/9 | **53.3** |
-| 12 | solar open2 250b | Q2_K | 88.9 | 144k | 2/7 | **50.5** |
-| 13 | qwen3.5 122b a10b | UD-Q6_K_XL | 104.7 | 256k | 5/7 | **47.1** |
-| 14 | qwen3.5 397b a17b | UD-IQ2_XXS | 107.0 | 256k | 7/7 | **44.9** |
-| 15 | qwen3.6 35b a3b | UD-Q8_K_XL | 36.4 | 256k | 6/7 | **44.2** |
-| 16 | step 3.7 flash | UD-Q4_K_S | 106.3 | 205k | 4/7 | **41.7** |
-| 17 | mistral medium 3.5 | UD-Q4_K_XL | 70.5 | 132k | 4/7 | **41.3** |
-| 18 | gemma 4 31b | UD-Q8_K_XL | 32.6 | 256k | 7/7 | **39.2** |
-| 19 | ornith 1.5 9b | Q8_0 | 9.1 | 256k | 1/7 | **34.0** |
-| 20 | laguna m.1 | Q2_K | 77.7 | 140k | 1/7 | **33.0** |
-| 21 | glm-4.5-air | Q6_K | 92.2 | 128k | 3/7 | **32.2** |
-| 22 | gemma 4 26b a4b | UD-Q8_K_XL | 25.7 | 256k | 6/7 | **31.6** |
-| 23 | minimax-m2.5 | UD-Q2_K_XL | 80.0 | 148k | 5/7 | **31.6** |
-| 24 | qwen3.5-35b-a3b | UD-Q8_K_XL | 45.3 | 256k | 4/7 | **31.2** |
-| 25 | ternary bonsai 27b | Q2_G64 | 7.1 | 256k | 1/7 | **31.0** |
-| 26 | qwen3 coder next | UD-Q8_K_XL | 80.4 | 256k | 4/7 | **30.5** |
-| 27 | ornith 1.5 35b a3b | Q8_0 | 35.2 | 256k | 2/7 | **29.1** |
-| 28 | gemma 4 12b | UD-Q8_K_XL | 12.7 | 256k | 3/9 | **28.7** |
-| 29 | qwen3-coder-30b-a3b-instruct | UD-Q8_K_XL | 33.5 | 256k | 2/7 | **27.7** |
-| 30 | granite 4.2 30b | Q8_0 | 29.0 | 128k | 2/7 | **22.5** |
-| 31 | ornith 1.0 35b | UD-Q8_K_XL | 35.6 | 256k | 2/7 | **21.0** |
-| 32 | ling 3.0 tiny | Q8_0 | 7.8 | 128k | 3/7 | **20.8** |
-| 33 | nemotron-3-nano-30b-a3b | UD-Q8_K_XL | 37.7 | 256k | 2/7 | **19.9** |
-| 34 | gpt-oss-120b | F16 | 60.9 | 128k | 6/7 | **19.6** |
-| 35 | nemotron 3.5 lightning | Q8_0 | 32.6 | 256k | 4/7 | **18.4** |
-| 36 | nemotron 3 super | UD-Q5_K_XL | 100.2 | 184k | 5/7 | **18.1** |
-| 37 | laguna xs 2.1 | Q4_K_M | 18.9 | 256k | 2/7 | **16.2** |
-| 38 | gemma-4-e4b-it | UD-Q8_K_XL | 8.1 | 128k | 3/9 | **15.3** |
-| 39 | laguna s 2.1 | UD-Q6_K_XL | 99.7 | 345k | 2/7 | **13.5** |
-| 40 | qwen3.5-9b | UD-Q8_K_XL | 12.3 | 256k | 4/7 | **12.8** |
-| 41 | granite 4.2 8b | Q8_0 | 8.7 | 128k | 2/7 | **11.5** |
-| 42 | ornith-1.0-9b | Q8_0 | 8.9 | 256k | 1/7 | **11.0** |
-| 43 | gpt-oss-20b | F16 | 12.8 | 128k | 4/7 | **9.7** |
-| 44 | gemma-4-e2b-it | UD-Q8_K_XL | 4.9 | 128k | 3/9 | **9.3** |
-| 45 | qwen3.5-0.8b | Q8_0 | 0.8 | 256k | 3/7 | **5.0** |
+| 1 | qwen3.8 flash next | UD-Q4_K_XL | 103.7 | 256k | 4/7 | **91.1** |
+| 2 | qwen3.8 27b | UD-Q8_K_XL | 29.3 | 256k | 6/7 | **81.2** |
+| 3 | deepseek v4 flash 0731 | UD-IQ3_XXS | 97.0 | 186k | 7/7 | **74.9** |
+| 4 | bonsai 27b | Q1_0 | 3.5 | 256k | 1/7 | **68.0** |
+| 5 | qwen3.6 27b | UD-Q8_K_XL | 33.3 | 256k | 6/7 | **66.9** |
+| 6 | ling 3.0 flash | AD-Q6_K | 100.1 | 256k | 3/7 | **62.3** |
+| 7 | muse glimmer | UD-Q8_K_XL | 30.1 | 128k | 5/7 | **60.7** |
+| 8 | qwen3.5-27b | UD-Q8_K_XL | 33.1 | 256k | 4/7 | **60.2** |
+| 9 | minimax m2.7 | UD-IQ3_S | 77.9 | 157k | 6/7 | **58.1** |
+| 10 | inkling small | UD-IQ3_XXS | 91.2 | 151k | 4/9 | **57.5** |
+| 11 | mimo v2.5 | UD-Q2_K_XL | 95.9 | 142k | 5/9 | **55.1** |
+| 12 | solar open2 250b | Q2_K | 88.9 | 144k | 2/7 | **51.5** |
+| 13 | qwen3.5 122b a10b | UD-Q6_K_XL | 104.7 | 256k | 5/7 | **48.8** |
+| 14 | qwen3.5 397b a17b | UD-IQ2_XXS | 107.0 | 256k | 7/7 | **47.1** |
+| 15 | qwen3.6 35b a3b | UD-Q8_K_XL | 36.4 | 256k | 6/7 | **46.0** |
+| 16 | step 3.7 flash | UD-Q4_K_S | 106.3 | 205k | 4/7 | **43.3** |
+| 17 | mistral medium 3.5 | UD-Q4_K_XL | 70.5 | 132k | 4/7 | **42.9** |
+| 18 | gemma 4 31b | UD-Q8_K_XL | 32.6 | 256k | 7/7 | **41.4** |
+| 19 | ornith 1.5 9b | Q8_0 | 9.1 | 256k | 1/7 | **36.8** |
+| 20 | laguna m.1 | Q2_K | 77.7 | 140k | 1/7 | **36.0** |
+| 21 | glm-4.5-air | Q6_K | 92.2 | 128k | 3/7 | **34.4** |
+| 22 | minimax-m2.5 | UD-Q2_K_XL | 80.0 | 148k | 5/7 | **34.1** |
+| 23 | qwen3.5-35b-a3b | UD-Q8_K_XL | 45.3 | 256k | 4/7 | **33.8** |
+| 24 | gemma 4 26b a4b | UD-Q8_K_XL | 25.7 | 256k | 6/7 | **33.4** |
+| 25 | ternary bonsai 27b | Q2_G64 | 7.1 | 256k | 1/7 | **32.0** |
+| 26 | qwen3 coder next | UD-Q8_K_XL | 80.4 | 256k | 4/7 | **31.7** |
+| 27 | ornith 1.5 35b a3b | Q8_0 | 35.2 | 256k | 2/7 | **31.5** |
+| 28 | gemma 4 12b | UD-Q8_K_XL | 12.7 | 256k | 3/9 | **30.7** |
+| 29 | qwen3-coder-30b-a3b-instruct | UD-Q8_K_XL | 33.5 | 256k | 2/7 | **30.0** |
+| 30 | ornith 1.0 35b | UD-Q8_K_XL | 35.6 | 256k | 2/7 | **24.3** |
+| 31 | granite 4.2 30b | Q8_0 | 29.0 | 128k | 2/7 | **23.5** |
+| 32 | nemotron-3-nano-30b-a3b | UD-Q8_K_XL | 37.7 | 256k | 2/7 | **22.4** |
+| 33 | ling 3.0 tiny | Q8_0 | 7.8 | 128k | 3/7 | **22.4** |
+| 34 | gpt-oss-120b | F16 | 60.9 | 128k | 6/7 | **21.1** |
+| 35 | nemotron 3.5 lightning | Q8_0 | 32.6 | 256k | 4/7 | **19.7** |
+| 36 | nemotron 3 super | UD-Q5_K_XL | 100.2 | 184k | 5/7 | **19.5** |
+| 37 | laguna xs 2.1 | Q4_K_M | 18.9 | 256k | 2/7 | **18.8** |
+| 38 | gemma-4-e4b-it | UD-Q8_K_XL | 8.1 | 128k | 3/9 | **17.4** |
+| 39 | laguna s 2.1 | UD-Q6_K_XL | 99.7 | 345k | 2/7 | **15.2** |
+| 40 | ornith-1.0-9b | Q8_0 | 8.9 | 256k | 1/7 | **14.7** |
+| 41 | qwen3.5-9b | UD-Q8_K_XL | 12.3 | 256k | 4/7 | **14.5** |
+| 42 | granite 4.2 8b | Q8_0 | 8.7 | 128k | 2/7 | **12.5** |
+| 43 | gpt-oss-20b | F16 | 12.8 | 128k | 4/7 | **11.0** |
+| 44 | gemma-4-e2b-it | UD-Q8_K_XL | 4.9 | 128k | 3/9 | **10.6** |
+| 45 | qwen3.5-0.8b | Q8_0 | 0.8 | 256k | 3/7 | **6.4** |
 | 46 | fara 1.5 27b | Q8_0 | 26.7 | 256k | 0/7 | **-** |
 | 47 | gemma 4 12b agentic | Q8_0 | 11.8 | 256k | 0/9 | **-** |
 | 48 | gemma 4 12b coder | Q8_0 | 11.8 | 256k | 0/9 | **-** |
@@ -595,51 +595,51 @@ be extrapolation.
 
 | model | quality | eff coding | eff agentic | gbench | arena | swe-reb | sentiment | card | evidence |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| qwen3.8 flash next | **89.5** | 71.4 | 55.1 | - | - | - | 3.1 | 77 | 4/7 |
-| qwen3.8 27b | **78.9** | 67.5 | 50.4 | 0.401 | 1436 | - | 3.4 | 68 | 6/7 |
-| deepseek v4 flash 0731 | **73.0** | 61.0 | 42.8 | 0.479 | 1436 | 34.0 | 4.0 | 54 | 7/7 |
-| bonsai 27b | **67.0** | - | - | - | - | - | 3.5 | - | 1/7 |
-| qwen3.6 27b | **65.4** | 53.3 | 27.3 | 0.372 | - | 34.1 | 4.5 | 66 | 6/7 |
-| ling 3.0 flash | **61.3** | 50.1 | 29.0 | - | - | - | 1.9 | - | 3/7 |
-| muse glimmer | **59.2** | 48.5 | 22.7 | 0.427 | 1427 | - | 4.4 | - | 5/7 |
-| qwen3.5-27b | **57.5** | - | - | - | 1408 | 58.4 | 2.5 | 55 | 4/7 |
-| inkling small | **56.4** | 48.8 | 29.4 | - | 1407 | - | 2.3 | - | 4/9 |
-| minimax m2.7 | **56.1** | 48.4 | 23.8 | 0.281 | 1415 | 47.7 | 3.7 | - | 6/7 |
-| mimo v2.5 | **53.3** | 49.2 | 21.1 | 0.361 | 1434 | - | 2.7 | - | 5/9 |
-| solar open2 250b | **50.5** | 41.8 | 25.8 | - | - | - | - | - | 2/7 |
-| qwen3.5 122b a10b | **47.1** | 45.2 | 21.0 | - | 1417 | - | 4.3 | 58 | 5/7 |
-| qwen3.5 397b a17b | **44.9** | 38.2 | 15.7 | 0.263 | 1441 | 47.4 | 3.1 | 63 | 7/7 |
-| qwen3.6 35b a3b | **44.2** | 41.5 | 21.4 | 0.256 | - | 29.8 | 4.1 | 53 | 6/7 |
-| step 3.7 flash | **41.7** | 38.4 | 21.1 | 0.265 | - | - | 2.1 | - | 4/7 |
-| mistral medium 3.5 | **41.3** | 45.7 | 18.7 | - | 1427 | - | 0.2 | - | 4/7 |
-| gemma 4 31b | **39.2** | 43.0 | 14.3 | 0.184 | 1451 | 22.2 | 3.6 | 56 | 7/7 |
-| ornith 1.5 9b | **34.0** | - | - | - | - | - | - | 34 | 1/7 |
-| laguna m.1 | **33.0** | - | - | 0.253 | - | - | - | - | 1/7 |
-| glm-4.5-air | **32.2** | - | - | - | 1373 | 32.4 | 3.4 | - | 3/7 |
-| gemma 4 26b a4b | **31.6** | 38.9 | 10.9 | 0.139 | 1438 | - | 4.2 | 38 | 6/7 |
-| minimax-m2.5 | **31.6** | - | - | 0.188 | 1391 | 43.7 | 1.6 | 31 | 5/7 |
-| qwen3.5-35b-a3b | **31.2** | - | - | - | 1395 | 30.6 | 2.7 | 39 | 4/7 |
-| ternary bonsai 27b | **31.0** | - | - | - | - | - | 1.9 | - | 1/7 |
-| qwen3 coder next | **30.5** | 35.9 | 8.8 | - | - | 47.3 | 3.7 | - | 4/7 |
-| ornith 1.5 35b a3b | **29.1** | - | - | - | - | - | 0.8 | 48 | 2/7 |
-| gemma 4 12b | **28.7** | 30.7 | - | - | - | - | 2.8 | 23 | 3/9 |
-| qwen3-coder-30b-a3b-instruct | **27.7** | - | - | - | - | 21.9 | 3.5 | - | 2/7 |
-| granite 4.2 30b | **22.5** | 29.6 | 13.8 | - | - | - | - | - | 2/7 |
-| ornith 1.0 35b | **21.0** | - | - | - | - | - | 0.0 | 42 | 2/7 |
-| ling 3.0 tiny | **20.8** | 26.3 | 15.9 | - | - | - | 0.0 | - | 3/7 |
-| nemotron-3-nano-30b-a3b | **19.9** | - | - | - | - | - | 1.0 | 21 | 2/7 |
-| gpt-oss-120b | **19.6** | 30.4 | 13.4 | 0.165 | 1352 | 26.8 | 3.6 | - | 6/7 |
-| nemotron 3.5 lightning | **18.4** | 26.5 | 13.6 | - | - | - | 1.0 | 19 | 4/7 |
-| nemotron 3 super | **18.1** | 37.3 | 8.7 | - | 1361 | - | 0.9 | 40 | 5/7 |
-| laguna xs 2.1 | **16.2** | - | - | 0.173 | - | - | 1.3 | - | 2/7 |
-| gemma-4-e4b-it | **15.3** | 9.3 | - | - | - | - | 3.8 | 12 | 3/9 |
-| laguna s 2.1 | **13.5** | - | - | 0.129 | - | - | 3.0 | - | 2/7 |
-| qwen3.5-9b | **12.8** | 28.5 | 7.0 | - | - | - | 2.0 | 20 | 4/7 |
-| granite 4.2 8b | **11.5** | 22.2 | 9.1 | - | - | - | - | - | 2/7 |
-| ornith-1.0-9b | **11.0** | - | - | - | - | - | - | 11 | 1/7 |
-| gpt-oss-20b | **9.7** | 20.7 | 3.1 | - | - | 9.4 | 5.1 | - | 4/7 |
-| gemma-4-e2b-it | **9.3** | 7.2 | - | - | - | - | 3.0 | 5 | 3/9 |
-| qwen3.5-0.8b | **5.0** | 0.0 | - | - | - | - | 2.3 | 0 | 3/7 |
+| qwen3.8 flash next | **91.1** | 71.4 | 55.1 | - | - | - | 3.1 | 81 | 4/7 |
+| qwen3.8 27b | **81.2** | 67.5 | 50.4 | 0.401 | 1436 | - | 3.4 | 72 | 6/7 |
+| deepseek v4 flash 0731 | **74.9** | 61.0 | 42.8 | 0.479 | 1436 | 34.0 | 4.0 | 58 | 7/7 |
+| bonsai 27b | **68.0** | - | - | - | - | - | 3.5 | - | 1/7 |
+| qwen3.6 27b | **66.9** | 53.3 | 27.3 | 0.372 | - | 34.1 | 4.5 | 69 | 6/7 |
+| ling 3.0 flash | **62.3** | 50.1 | 29.0 | - | - | - | 1.9 | - | 3/7 |
+| muse glimmer | **60.7** | 48.5 | 22.7 | 0.427 | 1427 | - | 4.4 | - | 5/7 |
+| qwen3.5-27b | **60.2** | - | - | - | 1408 | 58.4 | 2.5 | 60 | 4/7 |
+| minimax m2.7 | **58.1** | 48.4 | 23.8 | 0.281 | 1415 | 47.7 | 3.7 | - | 6/7 |
+| inkling small | **57.5** | 48.8 | 29.4 | - | 1407 | - | 2.3 | - | 4/9 |
+| mimo v2.5 | **55.1** | 49.2 | 21.1 | 0.361 | 1434 | - | 2.7 | - | 5/9 |
+| solar open2 250b | **51.5** | 41.8 | 25.8 | - | - | - | - | - | 2/7 |
+| qwen3.5 122b a10b | **48.8** | 45.2 | 21.0 | - | 1417 | - | 4.3 | 62 | 5/7 |
+| qwen3.5 397b a17b | **47.1** | 38.2 | 15.7 | 0.263 | 1441 | 47.4 | 3.1 | 68 | 7/7 |
+| qwen3.6 35b a3b | **46.0** | 41.5 | 21.4 | 0.256 | - | 29.8 | 4.1 | 57 | 6/7 |
+| step 3.7 flash | **43.3** | 38.4 | 21.1 | 0.265 | - | - | 2.1 | - | 4/7 |
+| mistral medium 3.5 | **42.9** | 45.7 | 18.7 | - | 1427 | - | 0.2 | - | 4/7 |
+| gemma 4 31b | **41.4** | 43.0 | 14.3 | 0.184 | 1451 | 22.2 | 3.6 | 60 | 7/7 |
+| ornith 1.5 9b | **36.8** | - | - | - | - | - | - | 37 | 1/7 |
+| laguna m.1 | **36.0** | - | - | 0.253 | - | - | - | - | 1/7 |
+| glm-4.5-air | **34.4** | - | - | - | 1373 | 32.4 | 3.4 | - | 3/7 |
+| minimax-m2.5 | **34.1** | - | - | 0.188 | 1391 | 43.7 | 1.6 | 35 | 5/7 |
+| qwen3.5-35b-a3b | **33.8** | - | - | - | 1395 | 30.6 | 2.7 | 44 | 4/7 |
+| gemma 4 26b a4b | **33.4** | 38.9 | 10.9 | 0.139 | 1438 | - | 4.2 | 42 | 6/7 |
+| ternary bonsai 27b | **32.0** | - | - | - | - | - | 1.9 | - | 1/7 |
+| qwen3 coder next | **31.7** | 35.9 | 8.8 | - | - | 47.3 | 3.7 | - | 4/7 |
+| ornith 1.5 35b a3b | **31.5** | - | - | - | - | - | 0.8 | 52 | 2/7 |
+| gemma 4 12b | **30.7** | 30.7 | - | - | - | - | 2.8 | 27 | 3/9 |
+| qwen3-coder-30b-a3b-instruct | **30.0** | - | - | - | - | 21.9 | 3.5 | - | 2/7 |
+| ornith 1.0 35b | **24.3** | - | - | - | - | - | 0.0 | 46 | 2/7 |
+| granite 4.2 30b | **23.5** | 29.6 | 13.8 | - | - | - | - | - | 2/7 |
+| nemotron-3-nano-30b-a3b | **22.4** | - | - | - | - | - | 1.0 | 25 | 2/7 |
+| ling 3.0 tiny | **22.4** | 26.3 | 15.9 | - | - | - | 0.0 | - | 3/7 |
+| gpt-oss-120b | **21.1** | 30.4 | 13.4 | 0.165 | 1352 | 26.8 | 3.6 | - | 6/7 |
+| nemotron 3.5 lightning | **19.7** | 26.5 | 13.6 | - | - | - | 1.0 | 24 | 4/7 |
+| nemotron 3 super | **19.5** | 37.3 | 8.7 | - | 1361 | - | 0.9 | 43 | 5/7 |
+| laguna xs 2.1 | **18.8** | - | - | 0.173 | - | - | 1.3 | - | 2/7 |
+| gemma-4-e4b-it | **17.4** | 9.3 | - | - | - | - | 3.8 | 15 | 3/9 |
+| laguna s 2.1 | **15.2** | - | - | 0.129 | - | - | 3.0 | - | 2/7 |
+| ornith-1.0-9b | **14.7** | - | - | - | - | - | - | 15 | 1/7 |
+| qwen3.5-9b | **14.5** | 28.5 | 7.0 | - | - | - | 2.0 | 25 | 4/7 |
+| granite 4.2 8b | **12.5** | 22.2 | 9.1 | - | - | - | - | - | 2/7 |
+| gpt-oss-20b | **11.0** | 20.7 | 3.1 | - | - | 9.4 | 5.1 | - | 4/7 |
+| gemma-4-e2b-it | **10.6** | 7.2 | - | - | - | - | 3.0 | 8 | 3/9 |
+| qwen3.5-0.8b | **6.4** | 0.0 | - | - | - | - | 2.3 | 4 | 3/7 |
 | fara 1.5 27b | **-** | - | - | - | - | - | - | - | 0/7 |
 | gemma 4 12b agentic | **-** | - | - | - | - | - | - | - | 0/9 |
 | gemma 4 12b coder | **-** | - | - | - | - | - | - | - | 0/9 |
@@ -728,8 +728,8 @@ assessed block says so, so this table and the picks above cannot disagree.
 | agentic / tool use | qwen3.8 flash next, qwen3.8 27b, deepseek v4 flash 0731, qwen3.6 27b, ling 3.0 flash, minimax m2.7, solar open2 250b, qwen3.5 122b a10b, qwen3.5 397b a17b, qwen3.6 35b a3b, step 3.7 flash, mistral medium 3.5, minimax-m2.5, qwen3.5-35b-a3b, qwen3 coder next |
 | long context | qwen3.8 flash next, qwen3.8 27b, deepseek v4 flash 0731, qwen3.6 27b, muse glimmer, qwen3.5-27b, minimax m2.7, qwen3.5 122b a10b, qwen3.5 397b a17b, minimax-m2.5 |
 | science / reasoning | qwen3.8 flash next, qwen3.8 27b, deepseek v4 flash 0731, qwen3.5-27b, inkling small, solar open2 250b, qwen3.5 122b a10b, qwen3.5 397b a17b, gemma 4 31b |
-| instruction following | qwen3.5-27b, minimax m2.7, qwen3.5 122b a10b, qwen3.5 397b a17b, gemma 4 31b, gemma 4 26b a4b, qwen3.5-35b-a3b, gemma 4 12b |
-| scientific code | qwen3.8 flash next, qwen3.8 27b, deepseek v4 flash 0731, muse glimmer, inkling small, minimax m2.7, mimo v2.5, solar open2 250b |
+| instruction following | qwen3.5-27b, minimax m2.7, qwen3.5 122b a10b, qwen3.5 397b a17b, gemma 4 31b, qwen3.5-35b-a3b, gemma 4 26b a4b, gemma 4 12b |
+| scientific code | qwen3.8 flash next, qwen3.8 27b, deepseek v4 flash 0731, muse glimmer, minimax m2.7, inkling small, mimo v2.5, solar open2 250b |
 | coding | qwen3.8 flash next, qwen3.8 27b, deepseek v4 flash 0731, qwen3.6 27b, ling 3.0 flash, inkling small, mimo v2.5 |
 | physics | deepseek v4 flash 0731, ling 3.0 flash, muse glimmer, inkling small, mimo v2.5, solar open2 250b, nemotron 3 super |
 | planning | deepseek v4 flash 0731, qwen3.6 27b, muse glimmer, step 3.7 flash, mistral medium 3.5 |
@@ -942,21 +942,7 @@ arena rating sits at p27 while its task scores are top-quartile, which is the
 usual shape of a model tuned for work rather than for being pleasant to talk
 to.
 
-#### 9. inkling small
-
-a science and physics specialist: p91 on critpt, omniscience and scicode at
-once.
-
-- **use for** science / reasoning, physics, scientific code, coding
-- **avoid for** latency-sensitive work
-- **runs at** UD-IQ3_XXS, 91.2 gib, 4/9 of the weighted factors measured it
-- **evidence** aa.critpt p91; aa.scicode p91; aa.gpqa p85; aa.speed p15; no gbench entry
-- **confidence in that evidence** medium
-
-do not read the flagship inkling's gbench score onto this model -- the
-generated tables did exactly that once. it is not on the gbench board at all.
-
-#### 10. minimax m2.7
+#### 9. minimax m2.7
 
 the registry's best instruction follower and long-context reader, at the cost
 of the slowest decode in its size class.
@@ -970,6 +956,20 @@ of the slowest decode in its size class.
 both forums that discuss it are unanimously positive, but on small samples
 (49 and 24 mentions). speed sits at p19, so a long agent loop pays for the
 quality.
+
+#### 10. inkling small
+
+a science and physics specialist: p91 on critpt, omniscience and scicode at
+once.
+
+- **use for** science / reasoning, physics, scientific code, coding
+- **avoid for** latency-sensitive work
+- **runs at** UD-IQ3_XXS, 91.2 gib, 4/9 of the weighted factors measured it
+- **evidence** aa.critpt p91; aa.scicode p91; aa.gpqa p85; aa.speed p15; no gbench entry
+- **confidence in that evidence** medium
+
+do not read the flagship inkling's gbench score onto this model -- the
+generated tables did exactly that once. it is not on the gbench board at all.
 
 #### 11. mimo v2.5
 
@@ -1138,21 +1138,7 @@ it. artificial analysis has it deprecated and every percentile it holds is
 below p40. neither its card nor unsloth's documents a sampler set, which is
 why its profile reads tuned-here.
 
-#### 22. gemma 4 26b a4b
-
-a likeable one-shot coder and chat model that falls over as soon as it has to
-hold a tool loop.
-
-- **use for** one-shot coding, chat / general use, instruction following, translation
-- **avoid for** agentic / tool use, science / reasoning, long context
-- **runs at** UD-Q8_K_XL, 25.7 gib, 6/7 of the weighted factors measured it
-- **evidence** gbench.oneshot 0.381 p76; lmarena 1440 p73; aa.agentic p0; hf-discussions 51 mentions at 100% approval
-- **confidence in that evidence** high
-
-aa agentic p0 with gbench one-shot p76 is as clean a split as this corpus
-contains: ask it for a whole answer, not for a sequence of steps.
-
-#### 23. minimax-m2.5
+#### 22. minimax-m2.5
 
 a tool-use model with unusually clean javascript and typescript play, now
 superseded by m2.7 in its own family.
@@ -1167,7 +1153,7 @@ artificial analysis has it flagged deprecated, and m2.7 beats it on every
 axis both carry, so it is worth running only if the 0.42gib smaller quant
 matters.
 
-#### 24. qwen3.5-35b-a3b
+#### 23. qwen3.5-35b-a3b
 
 a fast a3b tool-caller with the best python play in its size class and a weak
 sense of planning.
@@ -1180,6 +1166,20 @@ sense of planning.
 
 gbench decision-making p16 against tau2 p83 is a real split: it calls tools
 reliably and chooses badly what to do with them.
+
+#### 24. gemma 4 26b a4b
+
+a likeable one-shot coder and chat model that falls over as soon as it has to
+hold a tool loop.
+
+- **use for** one-shot coding, chat / general use, instruction following, translation
+- **avoid for** agentic / tool use, science / reasoning, long context
+- **runs at** UD-Q8_K_XL, 25.7 gib, 6/7 of the weighted factors measured it
+- **evidence** gbench.oneshot 0.381 p76; lmarena 1440 p73; aa.agentic p0; hf-discussions 51 mentions at 100% approval
+- **confidence in that evidence** high
+
+aa agentic p0 with gbench one-shot p76 is as clean a split as this corpus
+contains: ask it for a whole answer, not for a sequence of steps.
 
 #### 25. ternary bonsai 27b
 
@@ -1265,7 +1265,22 @@ it is bottom-quartile on every measured axis, which is the expected shape for
 a 30b a3b completion model and not a reason to avoid it at the job it was
 built for -- nothing here measures fim.
 
-#### 30. granite 4.2 30b
+#### 30. ornith 1.0 35b
+
+an agentic-coding model whose only numbers are its own, and whose two forums
+disagree completely about it.
+
+- **use for** agentic coding, on its own claims
+- **avoid for** anything where the claim needs to be independently checked
+- **runs at** UD-Q8_K_XL, 35.6 gib, 2/7 of the weighted factors measured it
+- **evidence** card terminalbench 61.8 claim p71; card swebench verified 68.3 claim p50; hf-discussions 16 mentions at 0% approval; reddit 13 mentions at 100% approval
+- **confidence in that evidence** low
+
+16 huggingface discussion mentions at 0% approval against 13 reddit mentions
+at 100%. that split usually means it works when it loads and often does not
+load. no third-party benchmark carries it.
+
+#### 31. granite 4.2 30b
 
 knows the least of anything here and admits it the most: omniscience p9
 against non-hallucination p93.
@@ -1285,22 +1300,22 @@ mode and the jump from 4.1 is large enough that 4.1 is not worth carrying
 beside it: AA intelligence 23.7 against 8.7. artificial analysis is the only
 source that scores it, so one source is all this rests on.
 
-#### 31. ornith 1.0 35b
+#### 32. nemotron-3-nano-30b-a3b
 
-an agentic-coding model whose only numbers are its own, and whose two forums
-disagree completely about it.
+fast and good at contest maths on its own card, weak on everything a third
+party measured.
 
-- **use for** agentic coding, on its own claims
-- **avoid for** anything where the claim needs to be independently checked
-- **runs at** UD-Q8_K_XL, 35.6 gib, 2/7 of the weighted factors measured it
-- **evidence** card terminalbench 61.8 claim p71; card swebench verified 68.3 claim p50; hf-discussions 16 mentions at 0% approval; reddit 13 mentions at 100% approval
-- **confidence in that evidence** low
+- **use for** high-throughput generation, maths problems
+- **avoid for** agentic / tool use, long context, real-world bug fixing
+- **runs at** UD-Q8_K_XL, 37.7 gib, 2/7 of the weighted factors measured it
+- **evidence** aa.speed 207 tok/s p93; card aime 98.2 claim p91; aa.lcr p0; card swebench verified claim p0
+- **confidence in that evidence** medium
 
-16 huggingface discussion mentions at 0% approval against 13 reddit mentions
-at 100%. that split usually means it works when it loads and often does not
-load. no third-party benchmark carries it.
+aime 98.2 is its own claim at p91; the third-party numbers around it sit at
+p20-25 and its long-context and swe scores are p0. the gap between claim and
+measurement is the story of this entry.
 
-#### 32. ling 3.0 tiny
+#### 33. ling 3.0 tiny
 
 1.3b active in a 7.8gib file: the fastest thing here, and the only model this
 sweep added that actually fits.
@@ -1316,21 +1331,6 @@ rather than whether it runs. coding p12 and agentic p27 say not much; speed
 p88 with non-hallucination p85 says the trade is honest rather than bad. the
 five people who have posted about it are unanimous, and the claim they make
 is against qwen3.5 9b rather than against anything larger.
-
-#### 33. nemotron-3-nano-30b-a3b
-
-fast and good at contest maths on its own card, weak on everything a third
-party measured.
-
-- **use for** high-throughput generation, maths problems
-- **avoid for** agentic / tool use, long context, real-world bug fixing
-- **runs at** UD-Q8_K_XL, 37.7 gib, 2/7 of the weighted factors measured it
-- **evidence** aa.speed 207 tok/s p93; card aime 98.2 claim p91; aa.lcr p0; card swebench verified claim p0
-- **confidence in that evidence** medium
-
-aime 98.2 is its own claim at p91; the third-party numbers around it sit at
-p20-25 and its long-context and swe scores are p0. the gap between claim and
-measurement is the story of this entry.
 
 #### 34. gpt-oss-120b
 
@@ -1421,7 +1421,21 @@ gbench one-shot p71 against agentic p8 -- the widest such split in the
 corpus. hf-discussions approval of 33% against reddit's 82% points at quant
 problems rather than model problems.
 
-#### 40. qwen3.5-9b
+#### 40. ornith-1.0-9b
+
+the 9b of the same self-improving family, with claims that put it in the
+bottom third of the claimants.
+
+- **use for** small agentic coding experiments
+- **avoid for** production agent loops
+- **runs at** Q8_0, 8.9 gib, 1/7 of the weighted factors measured it
+- **evidence** card terminalbench 39.6 claim p29; card swebench pro 41.9 claim p0; no forum mentions
+- **confidence in that evidence** low
+
+nothing third-party has measured it and nobody discusses it. everything known
+about it is its own card.
+
+#### 41. qwen3.5-9b
 
 a small tool-caller: it holds up on tau2 and falls away everywhere else.
 
@@ -1434,7 +1448,7 @@ a small tool-caller: it holds up on tau2 and falls away everywhere else.
 tau2 p67 with mmmu, osworld and scicode at p0 is a narrow shape -- fine as a
 router or a cheap first pass, not as the model that finishes the job.
 
-#### 41. granite 4.2 8b
+#### 42. granite 4.2 8b
 
 the same calibration trade at 8.7 gib and p77 on speed: the cheapest way to
 buy a model that will not make things up.
@@ -1453,20 +1467,6 @@ fits a rag slot, not because it is a general assistant. it is also the model
 that proved the discovery gap: released the same day as the 30b, scored by AA
 immediately, and invisible to every report here until the leaderboard
 cross-check existed.
-
-#### 42. ornith-1.0-9b
-
-the 9b of the same self-improving family, with claims that put it in the
-bottom third of the claimants.
-
-- **use for** small agentic coding experiments
-- **avoid for** production agent loops
-- **runs at** Q8_0, 8.9 gib, 1/7 of the weighted factors measured it
-- **evidence** card terminalbench 39.6 claim p29; card swebench pro 41.9 claim p0; no forum mentions
-- **confidence in that evidence** low
-
-nothing third-party has measured it and nobody discusses it. everything known
-about it is its own card.
 
 #### 43. gpt-oss-20b
 

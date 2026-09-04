@@ -760,7 +760,12 @@ function facetPctRaw(m, key) {
   const pop = pctCache[key] || [];
   if (pop.length < 2) return null;
   const v = facetValue(m, key);
-  return Math.round(100 * pop.filter(x => x < v).length / pop.length);
+  // the same plotting position analyze-usecase computes for the raw values --
+  // half the ties counted -- or effective mode would rank a cohort by one rule
+  // and raw mode by another, and only one of them would give the bottom of a
+  // three-model cohort a number that is not zero
+  return Math.round(100 * (pop.filter(x => x < v).length
+    + 0.5 * pop.filter(x => x === v).length) / pop.length);
 }
 
 function facetPct(m, key) {
@@ -1130,9 +1135,14 @@ const MODALITIES = [
    help: 'text in, text out, and nothing else in'},
   {k: 'v2t', t: 'vision -> text', test: m => m.kind === 'text' && modIn(m, 'image'),
    help: 'takes images in, according to its own config'},
-  {k: 'a2t', t: 'audio -> text', test: m => m.kind === 'speech'
-     && modIn(m, 'audio') && modOut(m, 'text'),
-   help: 'transcription: audio in, text out. an LLM that merely accepts audio is not one'},
+  // no `kind` test: this used to read `kind === 'speech'` on the grounds that an
+  // LLM which merely accepts audio is not a transcription model, and the
+  // evidence went the other way. crispasr carries a backend for gemma 4 and
+  // voice arena publishes its word error rate in seven languages -- it
+  // transcribes, in 140 languages, and a filter for `audio in, text out` that
+  // hides it is answering a different question than the one it asks
+  {k: 'a2t', t: 'audio -> text', test: m => modIn(m, 'audio') && modOut(m, 'text'),
+   help: 'transcription: audio in, text out, whether that is all it does or one of several things'},
   {k: 't2a', t: 'text -> audio', test: m => modOut(m, 'audio'),
    help: 'speech synthesis'},
   {k: 't2i', t: 'text -> image', test: m => modOut(m, 'image'),
@@ -2453,14 +2463,18 @@ function quantChoices(m) {
   const seen = new Map();
   m.quants.forEach(q => {
     const alt = (q.available || []).length ? q.available
-      : [{quant: q.quant, gib: q.gib, bpw: q.bpw}];
+      : [{quant: q.quant, file: q.file, gib: q.gib, bpw: q.bpw}];
     alt.forEach(a => {
       const key = q.repo + ':' + a.quant;
       const was = seen.get(key);
       if (was) { was.pinned = was.pinned || a.quant === q.quant; return; }
-      seen.set(key, {repo: q.repo, quant: a.quant, gib: a.gib, bpw: a.bpw,
+      // `file` is what to fetch, `quant` is what to call it. they differ where
+      // a repo does not name its files after the tag -- whisper.cpp's
+      // `ggml-large-v3-turbo-q8_0.bin` is the Q8_0 rung
+      seen.set(key, {repo: q.repo, quant: a.quant, file: a.file || a.quant,
+                     gib: a.gib, bpw: a.bpw,
                      pinned: a.quant === q.quant, speculative: q.speculative,
-                     forkType: a.fork_type,
+                     forkType: a.fork_type, crispasr: q.crispasr,
                      note: a.quant === q.quant ? q.note : undefined});
     });
   });
@@ -2660,7 +2674,10 @@ const hfRef = c => c ? `hf://${c.repo}:${c.quant}` : null;
 // `llm` are the three files stable-diffusion.cpp asks for by those names, and
 // kokoro's `role: model-path` is TTS.cpp's own flag.
 function otherRuntime(m, rt, pick) {
-  const ref = pick ? `hf://${pick.repo}:${pick.quant}` : '<weights>';
+  // the FILE, not the tag: none of these runtimes resolves `repo:Q8_0` the way
+  // llama.cpp's `--hf-repo` does, and the two are the same string except where
+  // the publisher names its files something else
+  const ref = pick ? `hf://${pick.repo}:${pick.file || pick.quant}` : '<weights>';
   if (rt.k === 'crispasr') {
     // the backend can be pinned on the quant rather than the model: two
     // conversions of one checkpoint, and only one of them loads
