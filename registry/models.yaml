@@ -4327,15 +4327,21 @@ models:
     name:
       short: wespeaker-resnet34-lm
     notes: >-
-      the foxnose recipe's embedder, and the one to reach for first: 256-d
-      speaker embeddings over sliding windows, counted by GMM/BIC and clustered
-      spectrally, which ESTIMATES the number of speakers instead of being told
-      it. crispasr measures 7.3% DER on voxconverse dev against pyannote plus
-      titanet's 7.8, and 3.18% against the upstream reference's 3.07 when scored
-      on turns rather than ASR segments.
+      the foxnose recipe's embedder: 256-d speaker embeddings over sliding
+      windows, counted by GMM/BIC and clustered spectrally, which ESTIMATES the
+      number of speakers instead of being told it. crispasr publishes 7.3% DER
+      on voxconverse dev against pyannote plus titanet's 7.8, and 3.18% against
+      the upstream reference's 3.07 when scored on turns.
 
-      24mb, so the cost of diarizing is the embedding passes rather than the
-      weights.
+      CARRIED BUT NOT SERVED. those numbers did not reproduce here: over
+      crispasr's HTTP server, `--diarize-method foxnose` split a synthesized
+      four-turn two-voice dialogue into 8 segments and gave every one its own
+      speaker, byte-identically whatever `diarize_max_speakers` or
+      `diarize_embedder` the request carried -- a clusterer that is not running
+      rather than one that is wrong. pyannote plus titanet returns A B A B on
+      the same file. the published DER may well hold for the CLI, which is what
+      it was measured on; nothing here has measured it, so nothing here claims
+      it.
     quants:
     - repo: cstr/wespeaker-resnet34-lm-GGUF
       quant: wespeaker-resnet34-lm.gguf
@@ -4350,11 +4356,15 @@ models:
     name:
       short: pyannote-seg-3.0
     notes: >-
-      the segmentation half of the other path: --diarize-method pyannote runs
-      this once over the whole audio for a global speaker-turn timeline, then
-      splits ASR segments at its boundaries. it decides WHEN the speaker
-      changes and nothing about who, so it is paired with an embedder for
-      identities that hold across a long file.
+      the diarizer actually in use. `--diarize-method pyannote` runs this once
+      over the whole audio for a global speaker-turn timeline, then splits ASR
+      segments at its boundaries. it decides WHEN the speaker changes and
+      nothing about who, so it is paired with titanet for identities that hold
+      across a long file.
+
+      chosen over foxnose by measurement rather than by the published DER --
+      see the wespeaker entry, which has the numbers and the reason they are
+      not quoted as this roster's.
 
       the base repo is gated on huggingface and the gguf conversion is not,
       which is why the quant repo is not the model's own.
@@ -4370,9 +4380,11 @@ models:
       short: titanet-large
     notes: >-
       192-d speaker embeddings, and what `--diarize-embedder auto` resolves to
-      on the pyannote path. carried because pyannote's per-pass track ids are
-      local to a pass and drift over a long recording; clustering on these makes
-      them stable for one file.
+      on the pyannote path -- pinned rather than left to `auto`, which fetches
+      at request time. carried because pyannote's per-pass track ids are local
+      to a pass and drift over a long recording; clustering on these makes them
+      stable for one file, and on the four-turn test it also tightened the
+      labels from `C B C B` to `A B A B` and stopped the turns fragmenting.
 
       session-scoped by construction -- the embeddings are computed per
       recording and discarded, and the labels stay anonymous. the persistent

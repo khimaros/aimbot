@@ -15,6 +15,7 @@ date is in each file's provenance below.
 | `data/artificial-analysis-speech.json` | 2026-09-04 | artificialanalysis.ai speech-to-text (non-streaming and streaming) and text-to-speech |
 | `data/tts-arena.json` | 2026-09-04 | tts-agi TTS Arena v2, crowd-sourced blind-vote elo |
 | `data/voicearena.json` | 2026-09-04 | voicearena.com speech-to-text, WER sliced by language and noise |
+| `data/gguf-voices.json` | 2026-09-04 | the speaker names each TTS gguf ships, read from its own header |
 | `data/gbench.json` | 2026-08-17 | gertlabs.com/rankings |
 | `data/gguf-sizes.json` | 2026-08-17 | huggingface hub tree api |
 | `data/gbench-compare-observed.json` | 2026-08-10 | gertlabs compare view |
@@ -104,6 +105,24 @@ matcher at all. `tests/collectors` holds the case.
 the open-weights Qwen3-TTS is therefore **unscored**: it is on none of these
 three boards, nor on TTSDS2, whose published results are a 2024-era field. that
 is a gap in the sources, not a number waiting to be joined.
+
+`gguf-voices.json` is the one capture read out of gguf BYTES rather than off an
+api. a synthesis model that ships speakers names them in its own header --
+`qwen3tts.spk_names`, `kokoro.voices` -- and huggingface's api serves a parse of
+that header carrying three fields, none of them this one. so the collector does
+a ranged GET and walks the KV table itself, widening the read from 1mb only for
+the talkers that inline a 150k-token vocabulary.
+
+it is keyed by `repo:quant`, not by model, because the voices belong to the
+FILE: the khimaros qwen3-tts conversions carry no `spk_names` at all where
+cstr's carry nine, so the same checkpoint answers differently depending on
+which rung is served. kokoro ships fifty.
+
+worth knowing what this is NOT: crispasr's `GET /v1/voices` enumerates the
+`*.wav` and `*.gguf` stems in `--voice-dir`, which is the voice-CLONING
+registry. it can never list the speakers baked into a model, and this can never
+list a cloned one. neither is a substitute for the other, and llama-tools
+carries this list as `/v1/models` metadata for that reason.
 
 `gbench.json` holds the gert labs GBENCH rankings, which score models by having
 them play complex games against each other. worth carrying alongside artificial

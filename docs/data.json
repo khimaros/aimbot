@@ -25133,7 +25133,7 @@
    "match": null,
    "modalities": {},
    "native_low_bpw": null,
-   "notes": "the foxnose recipe's embedder, and the one to reach for first: 256-d speaker embeddings over sliding windows, counted by GMM/BIC and clustered spectrally, which ESTIMATES the number of speakers instead of being told it. crispasr measures 7.3% DER on voxconverse dev against pyannote plus titanet's 7.8, and 3.18% against the upstream reference's 3.07 when scored on turns rather than ASR segments.\n24mb, so the cost of diarizing is the embedding passes rather than the weights.",
+   "notes": "the foxnose recipe's embedder: 256-d speaker embeddings over sliding windows, counted by GMM/BIC and clustered spectrally, which ESTIMATES the number of speakers instead of being told it. crispasr publishes 7.3% DER on voxconverse dev against pyannote plus titanet's 7.8, and 3.18% against the upstream reference's 3.07 when scored on turns.\nCARRIED BUT NOT SERVED. those numbers did not reproduce here: over crispasr's HTTP server, `--diarize-method foxnose` split a synthesized four-turn two-voice dialogue into 8 segments and gave every one its own speaker, byte-identically whatever `diarize_max_speakers` or `diarize_embedder` the request carried -- a clusterer that is not running rather than one that is wrong. pyannote plus titanet returns A B A B on the same file. the published DER may well hold for the CLI, which is what it was measured on; nothing here has measured it, so nothing here claims it.",
    "params": {},
    "publisher": "Wespeaker",
    "quants": [
@@ -48116,7 +48116,7 @@
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4367",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4377",
    "facets": {},
    "facts": {},
    "ids": {},
@@ -48125,7 +48125,7 @@
    "match": null,
    "modalities": {},
    "native_low_bpw": null,
-   "notes": "192-d speaker embeddings, and what `--diarize-embedder auto` resolves to on the pyannote path. carried because pyannote's per-pass track ids are local to a pass and drift over a long recording; clustering on these makes them stable for one file.\nsession-scoped by construction -- the embeddings are computed per recording and discarded, and the labels stay anonymous. the persistent named-profile feature is a different thing entirely and is not carried here.",
+   "notes": "192-d speaker embeddings, and what `--diarize-embedder auto` resolves to on the pyannote path -- pinned rather than left to `auto`, which fetches at request time. carried because pyannote's per-pass track ids are local to a pass and drift over a long recording; clustering on these makes them stable for one file, and on the four-turn test it also tightened the labels from `C B C B` to `A B A B` and stopped the turns fragmenting.\nsession-scoped by construction -- the embeddings are computed per recording and discarded, and the labels stay anonymous. the persistent named-profile feature is a different thing entirely and is not carried here.",
    "params": {},
    "publisher": "nvidia",
    "quants": [
@@ -57510,7 +57510,7 @@
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4348",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4354",
    "facets": {},
    "facts": {},
    "ids": {},
@@ -57519,7 +57519,7 @@
    "match": null,
    "modalities": {},
    "native_low_bpw": null,
-   "notes": "the segmentation half of the other path: --diarize-method pyannote runs this once over the whole audio for a global speaker-turn timeline, then splits ASR segments at its boundaries. it decides WHEN the speaker changes and nothing about who, so it is paired with an embedder for identities that hold across a long file.\nthe base repo is gated on huggingface and the gguf conversion is not, which is why the quant repo is not the model's own.",
+   "notes": "the diarizer actually in use. `--diarize-method pyannote` runs this once over the whole audio for a global speaker-turn timeline, then splits ASR segments at its boundaries. it decides WHEN the speaker changes and nothing about who, so it is paired with titanet for identities that hold across a long file.\nchosen over foxnose by measurement rather than by the published DER -- see the wespeaker entry, which has the numbers and the reason they are not quoted as this roster's.\nthe base repo is gated on huggingface and the gguf conversion is not, which is why the quant repo is not the model's own.",
    "params": {},
    "publisher": "pyannote",
    "quants": [
@@ -65576,7 +65576,7 @@
   }
  ],
  "provenance": {
-  "registry/models.yaml": "5dd3ce4ee92f",
+  "registry/models.yaml": "731bbd934a2d",
   "registry/sampling.yaml": "e38566d41643",
   "research/data/artificial-analysis-speech.json": "e1a259673af7",
   "research/data/artificial-analysis.json": "dcd9d3d8a025",
@@ -65585,6 +65585,7 @@
   "research/data/gbench-compare-observed.json": "0dcbab2b65f1",
   "research/data/gbench.json": "d332d8f7e116",
   "research/data/gguf-sizes.json": "ca834222e913",
+  "research/data/gguf-voices.json": "9e27120305f1",
   "research/data/github-issues.json": "83848a5519c1",
   "research/data/hackernews.json": "31424ee52a94",
   "research/data/hf-catalog-new.json": "f1115def4d2c",

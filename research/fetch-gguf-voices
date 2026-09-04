@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+
+"""Read the built-in voice names out of each TTS model's gguf header.
+
+A synthesis model that ships speakers names them in its own metadata --
+`qwen3tts.spk_names`, `kokoro.voices` -- so the list a client needs is a fact
+already sitting in the file, not something to keep by hand. Nothing else here
+reads gguf VALUES: huggingface's api serves a parse of the header, but only
+three fields of it (architecture, tensor count, size), so this fetches the
+header bytes itself with a ranged GET and walks the KV table.
+
+Only the header is read. The table sits at the front of the file, so a few
+hundred kilobytes usually covers it -- and where it does not, because a talker
+carries a 150k-token vocabulary inline, the read widens rather than giving up.
+
+    fetch-gguf-voices                  # every model in the registry that emits audio
+    fetch-gguf-voices --repo cstr/qwen3-tts-1.7b-customvoice-GGUF
+"""
+
+import argparse
+import json
+import os
+import struct
+import sys
+import urllib.request
+
+import capture
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+# gguf value types, by the number the format writes
+U8, I8, U16, I16, U32, I32, F32, BOOL, STR, ARR, U64, I64, F64 = range(13)
+FIXED = {U8: ("<B", 1), I8: ("<b", 1), U16: ("<H", 2), I16: ("<h", 2),
+         U32: ("<I", 4), I32: ("<i", 4), F32: ("<f", 4), BOOL: ("<?", 1),
+         U64: ("<Q", 8), I64: ("<q", 8), F64: ("<d", 8)}
+
+# what a backend calls its speaker list. matched on the SUFFIX so a new engine's
+# `<arch>.voices` is picked up without being named here; `spk_names` is qwen's
+# spelling and specific enough to match outright.
+VOICE_KEYS = (".voices", "spk_names")
+
+# the header is at the front, so start small and widen only for the files that
+# inline a vocabulary. three tries covers every model on this roster.
+WINDOWS = (1 << 20, 8 << 20, 64 << 20)
+
+
+class Header:
+    """Just enough gguf to walk the metadata table."""
+
+    def __init__(self, data):
+        self.d, self.i = data, 0
+
+    def take(self, n):
+        if self.i + n > len(self.d):
+            raise EOFError("header longer than the %d bytes read" % len(self.d))
+        out = self.d[self.i:self.i + n]
+        self.i += n
+        return out
+
+    def u32(self):
+        return struct.unpack("<I", self.take(4))[0]
+
+    def u64(self):
+        return struct.unpack("<Q", self.take(8))[0]
+
+    def string(self):
+        return self.take(self.u64()).decode("utf-8", "replace")
+
+    def value(self, t):
+        if t in FIXED:
+            fmt, n = FIXED[t]
+            return struct.unpack(fmt, self.take(n))[0]
+        if t == STR:
+            return self.string()
+        if t == ARR:
+            et, n = self.u32(), self.u64()
+            return [self.value(et) for _ in range(n)]
+        raise ValueError("unknown gguf value type %d" % t)
+
+
+def voices_in(data):
+    """{key: [name]} for every voice list in this header."""
+    h = Header(data)
+    if h.take(4) != b"GGUF":
+        raise ValueError("not a gguf")
+    h.u32(), h.u64()
+    found = {}
+    for _ in range(h.u64()):
+        key = h.string()
+        val = h.value(h.u32())
+        if any(key.endswith(s) or key == s for s in VOICE_KEYS) and isinstance(val, list):
+            found[key] = [str(v) for v in val]
+    return found
+
+
+def fetch_header(url, window):
+    req = urllib.request.Request(url, headers={"Range": "bytes=0-%d" % (window - 1)})
+    with urllib.request.urlopen(req, timeout=300) as r:
+        return r.read()
+
+
+def read_voices(repo, quant_file):
+    """The voice lists in one gguf, widening the read until the table fits."""
+    url = "https://huggingface.co/%s/resolve/main/%s" % (repo, quant_file)
+    for window in WINDOWS:
+        try:
+            return voices_in(fetch_header(url, window))
+        except EOFError:
+            continue
+        except Exception as e:
+            print("!!! %s: %s" % (repo, e), file=sys.stderr)
+            return None
+    print("!!! %s: header exceeds %d bytes" % (repo, WINDOWS[-1]), file=sys.stderr)
+    return None
+
+
+def emitters(models):
+    """(repo, quant) for every registry model that emits audio.
+
+    Only synthesis has speakers to name, so a transcription model is not read
+    -- the point is the list a `voice` field can be set to.
+    """
+    for repo, m in sorted((models.get("models") or {}).items()):
+        if "audio" not in ((m.get("modalities") or {}).get("output") or []):
+            continue
+        for q in m.get("quants") or []:
+            yield repo, q["repo"], q["quant"]
+
+
+def resolve_filename(repo, quant):
+    """The file in `repo` that `quant` names, since a tag is not a filename."""
+    if quant.endswith((".gguf", ".bin")):
+        return quant
+    url = "https://huggingface.co/api/models/%s" % repo
+    try:
+        with urllib.request.urlopen(url, timeout=60) as r:
+            files = [s["rfilename"] for s in json.load(r).get("siblings") or []]
+    except Exception as e:
+        print("!!! %s: %s" % (repo, e), file=sys.stderr)
+        return None
+    hits = [f for f in files
+            if f.endswith(".gguf") and quant.lower() in f.lower() and "/" not in f]
+    if len(hits) != 1:
+        print("!!! %s:%s matches %d files" % (repo, quant, len(hits)), file=sys.stderr)
+        return None
+    return hits[0]
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default="data/gguf-voices.json")
+    ap.add_argument("--registry",
+                    default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--repo", help="read one gguf repo rather than the roster")
+    ap.add_argument("--allow-shrink", action="store_true")
+    args = ap.parse_args()
+
+    try:
+        import yaml
+    except ImportError:
+        sys.exit("!!! pyyaml not found")
+    models = yaml.safe_load(open(args.registry))
+
+    out = {}
+    for base, repo, quant in emitters(models):
+        if args.repo and repo != args.repo:
+            continue
+        name = resolve_filename(repo, quant)
+        if not name:
+            continue
+        found = read_voices(repo, name)
+        if not found:
+            print("  %-46s %-28s no voice list" % (repo, quant))
+            continue
+        # one gguf, one list: the key is the backend's own name for it and a
+        # consumer wants the names rather than which key they came under
+        names = sorted({v for vs in found.values() for v in vs})
+        out["%s:%s" % (repo, quant)] = {"model": base, "key": sorted(found)[0],
+                                        "voices": names}
+        print("  %-46s %-28s %d voices" % (repo, quant, len(names)))
+
+    if not out:
+        sys.exit("!!! no voice lists found -- every gguf read came back without one")
+    written, now, before = capture.write(args.out, dict(sorted(out.items())), len,
+                                         allow_shrink=args.allow_shrink)
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "gguf(s) with voices"))
+    print("wrote %s: %d gguf(s), %d voices total"
+          % (args.out, now, sum(len(v["voices"]) for v in out.values())))
+
+
+if __name__ == "__main__":
+    main()
