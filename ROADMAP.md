@@ -52,6 +52,111 @@ built and is marked done when it ships.
   trending-now table before the download one, and the candidate filter's 20b
   floor is gone from the cross-check, because a third party having scored a
   model answers the question that floor was guessing at.
+- **every model says which llama.cpp release loads it.** the fact was here
+  already, as prose in four notes nothing could query, and it is upstream of
+  every other number: a model that does not load has no speed, no fit and no
+  score worth reading. `runtime:` carries it now for all 61 text models, derived
+  by `fetch-llama-support` from llama.cpp's own history rather than typed --
+  gguf header to architecture, architecture to the commit that added the string,
+  commit to the first `bNNNN` tag containing it. it reproduces the hand-written
+  claims exactly where they overlap (qwen4exp b10660, 2026-08-27) and dates
+  gemma3 and gpt-oss to their release days.
+
+  four models turned out not to load on a stock build at all: inkling and
+  inkling-small (PR 25731), motif-3 (PR 26298) and solar-open2 (issue 26115,
+  no PR -- the quantizer ships a 951-line patch in the gguf repo). those four
+  need a `fork:`, `patch:` or `tracking:`, which is hand-written and which the
+  deriver preserves; lint fails on a model that says `mainline: false` and names
+  nowhere to get a build.
+
+  the ladder is marked too. laguna m.1 publishes 28 rungs and 10 are
+  ik_llama.cpp's, which the page offered with sizes beside them as if they were
+  choices. matching tags against mainline's type names naively flagged 60 of 63
+  repos, because `UD-Q4_K_XL` is not an ftype either. reducing the publisher
+  prefix and recipe decoration first, then asking about LAYOUT rather than name
+  -- `_R4` row-interleaving, `_G64` block size, a type family mainline defines
+  nothing in -- leaves 12 rungs over 3 repos and every one is real.
+- **a deriver can create a block, not just rewrite one.** `resolve-ids` could
+  only replace an `ids:` block that was already there, so a model added without
+  one was matched, counted as filled and silently dropped: qwen3.8 flash next
+  carried AA and lmarena ids for a full capture that way and reached MODELS.md
+  unscored. the splice is `scripts/registry_patch.py` now, shared with
+  `resolve-runtime`; it inserts after `quants:` when a block is absent and
+  leaves one that already exists where the file put it.
+- **a sweep published off the card can be read.** `fetch-quant-sweeps` only
+  parsed huggingface READMEs, so unsloth's ten-rung qwen3.8-flash-next ladder --
+  on `unsloth.ai/docs` rather than on the card -- had to be typed into
+  `quant-curves.json` by hand. a `quant_sweep:` block on the model names the url
+  and the column layout, and `rsc-extract`, already here for the three next.js
+  leaderboards, does the fetching. the derived curve reproduces the hand-written
+  one on all ten rungs, so nothing in that file is hand-written any more.
+- **two llm steps, neither of which may decide anything.** `research/propose`
+  triages the discovery backlog and `research/score-sentiment` re-reads the
+  captured quotes toward one named model at a time. both are off unless three
+  environment variables are set, both write a file nothing downstream reads, and
+  the registry stays hand-written -- the measurement/judgement split does not
+  survive a script that edits the registry from a model's opinion.
+
+  the rule that made them useful is asking only what something here can check.
+  `propose` is asked which model a repo derives from, `analyze-catalog` resolves
+  the same thing off the name index independently, and disagreement is what gets
+  marked. where a list already knows, the model is not asked: `publishers.txt`
+  now carries `[quantizer]`, `[vendor]` and `[community]` sections, and a repo
+  owned by a quantizer is a re-quant by definition. asking anyway had classified
+  `bartowski/Qwen2.5-Coder-32B-Instruct-GGUF` as an original release.
+
+  `score-sentiment` turned item 6 below from an argument into a measurement: on
+  the 40 comparative sentences in the committed corpus, the lexicon and a
+  4b-active local model agree 48% of the time, and reading the disagreements the
+  lexicon is wrong in almost all of them -- "better than GLM5.2 at a small
+  fraction of the size is extremely impressive" was scored as praise FOR glm 5.2.
+
+- **the speech roster has a loader, a diarizer and a third-party score.** it was
+  8 models carried as bare facts -- a repo, a quant, a modality pair -- and
+  nothing else. they named no engine, so which server to point at kokoro rather
+  than whisper was knowledge kept somewhere else entirely; no source scored
+  them, so the roster could not be ranked or even checked for staleness; and
+  speaker diarization, the one thing a transcript of a meeting actually needs,
+  was not expressible at all.
+
+  `crispasr:` names the engine now, for 13 models. crispasr is a whisper.cpp
+  fork carrying ggml runtimes for ~60 ASR architectures behind one binary, so
+  `backend` is the whole difference between two entries that otherwise run
+  identically -- and it is hand-written rather than derived, because no index
+  maps an architecture to a backend name the way llama.cpp's history maps one
+  to a release. it is asserted only for the gguf repo crispasr's own README
+  names: two conversions of one checkpoint are not interchangeable.
+
+  the diarization weights are registry entries rather than flags, under a
+  `kind: diarize` of their own -- the foxnose WeSpeaker embedder, the pyannote
+  segmenter, titanet. they transcribe nothing, and without a separate kind a
+  24mb embedder with no chat template and no transcript sits in the speech
+  roster looking like something to serve. lint fails if the kind and the role
+  disagree.
+
+  five boards score the rest, over three sources: artificial analysis'
+  speech-to-text (`aaWerIndex`, where LOWER is better -- the only headline
+  number here that is not a score to maximise), its streaming twin, its
+  text-to-speech elo, tts arena v2's crowd-sourced elo with the vote count
+  beside it, and voice arena's WER sliced by language, noise, age, gender and
+  utterance length.
+
+  **the join's load-bearing rule is that a closed-weights row is never offered
+  to the matcher.** these boards are mostly hosted endpoints, and a vendor's API
+  SKU shares a family name with the checkpoint it grew from while being neither
+  the same weights nor the same stack: artificial analysis scores
+  `qwen3-tts-vc-realtime` at 925 elo on alibaba cloud, and this registry carries
+  gguf conversions of the open Qwen3-TTS at a different codec rate. those names
+  match on every fuzzy test there is, so the guard cannot be a matching rule.
+  `tests/collectors` holds the case, and it is red without it.
+
+  the two transcription boards then disagree, which is why both are collected:
+  qwen3-asr leads voice arena's US english at 4.698 where cohere transcribe is
+  6.159, and cohere leads artificial analysis' batch board at 0.0457 where
+  qwen3-asr is not on it. voice arena also says what a single index cannot --
+  qwen3-asr is best in US english and the worst open model in romanian at 29.03,
+  where omniasr leads at 11.60. `--speech` prints the two remaining gaps: 6
+  models naming no engine (all TTS) and 10 no board scores.
 
 ## next
 
@@ -114,27 +219,94 @@ built and is marked done when it ships.
    sizes and both inklings are in that half, which is why the ornith family --
    which publishes one -- reads as better evidenced than it is.
 
-5. **`resolve-ids --write` cannot create an `ids:` block, only rewrite one.**
-   `patch_ids` edits the lines it owns rather than dumping the document, which
-   is right, but a model added without an `ids:` block is then matched, counted
-   as filled and silently dropped -- qwen3.8 flash next carried AA and lmarena
-   matches for a full capture that way, and reached MODELS.md unscored. adding
-   the block by hand is the workaround; inserting it after `quants:` when it is
-   absent is the fix, and it wants a test that adds a model with no `ids:` and
-   asserts the block appears.
+5. **r/LocalLLaMA can no longer be scraped, and sentiment does not know it.**
+   old.reddit.com served server-rendered html until it did not: as of the
+   2026-09-02 sweep it answers with the new client, 352kb titled `Welcome to
+   Reddit` with no `<div class="md">` in it, and the `.json` paths are shut too
+   (302 without a user-agent, 403 with one). 135 of 135 thread fetches parsed to
+   nothing.
 
-6. **`fetch-quant-sweeps` only reads huggingface READMEs**, so a quantizer who
-   publishes their ladder anywhere else is invisible to it. unsloth measured
-   all ten qwen3.8-flash-next rungs -- mean KLD and top-1 agreement against
-   bf16, on files whose sizes match ours to the decimal -- and put it on
-   `unsloth.ai/docs` as a chart rather than on the card, so the sweep found
-   nothing and the registry carried a stale figure from an older capture
-   instead. that curve is hand-written into `quant-curves.json` now. worth
-   deciding whether the fetcher should take a per-model source URL, since a
-   docs page is a stabler home for this than a card that gets rewritten.
+   `fetch-reddit` exits non-zero on a total miss now, and the sweep reports it
+   without letting it stop the run, so the breakage is at least loud. the
+   capture is also protected: `--refresh` rebuilds the output from nothing, so
+   one `scripts/sweep --refresh` would have written 0 searches, 0 listings and 0
+   threads over 38, 3 and 147, and six collectors now write through
+   `research/capture.py`, which refuses to shrink a capture. what is
+   not fixed is the corpus: reddit is one of the four forums behind
+   `community.*`, its capture is frozen at whatever the last working sweep got,
+   and every model's sentiment score still quietly includes it. the options are
+   an authenticated api client, a mirror, or dropping the source and reweighting
+   -- and the third is the only one that does not add a credential to a repo
+   whose whole point is that a reader can re-run it.
 
-7. **sentiment is a blunt polarity lexicon** read over forum sentences, where
+6. **sentiment is a blunt polarity lexicon** read over forum sentences, where
    "x is better than y" scores positive for both. it is weighted at 0.05 for
    that reason, against a redundancy analysis that says it is the most
    independent signal here. a better reader of the same corpus would be worth
    more than another benchmark.
+
+   the fix is not a bigger lexicon, which `analyze-task-mentions` says in a
+   comment already: the failure is TARGET ATTRIBUTION, not vocabulary. the task
+   with a name is aspect-based sentiment -- score a sentence toward a named
+   aspect -- and `match-models` already produces the aspect, because it knows
+   which models a sentence mentions and where.
+
+   what the hub has: `yangheng/deberta-v3-base-absa-v1.1` is the one real
+   candidate by adoption (184m params, 62k downloads, 74 likes), and it takes
+   exactly the `(sentence, aspect)` pair this needs. the problem is the runtime.
+   mainline llama.cpp carries `bert`, `modern-bert`, `neo-bert`, `jina-bert-v2`,
+   `jina-bert-v3`, `nomic-bert` and `eurobert` and has NO deberta, roberta or
+   xlm-r architecture, so that checkpoint cannot be served by the stack this
+   repo already runs. its classifier support is real but reaches the server only
+   as `/reranking`; there is no `/classify` endpoint. so the choice is:
+
+   - a new python dependency (torch or onnxruntime) for the good checkpoint, in
+     a repo whose collectors are stdlib, curl and pyyaml
+   - a BERT-family ABSA checkpoint that llama.cpp can load, which by the numbers
+     above does not exist at any adoption worth the name
+   - ask a generative model already on the roster, over llama-server, which adds
+     no dependency at all and is the same lever item 7 wants
+
+   the third is built and the measurement exists: `./score-sentiment --report`.
+   the remaining work is the decision it was built to inform -- 48% agreement on
+   the comparative sentences is enough to replace the lexicon, but only 40 of
+   552 quotes are scored so far, and `analyze-task-mentions` still computes
+   `approval` from the lexicon. what is missing is a full pass, a rule for
+   turning per-sentence stance into the same `approval` number the dashboard
+   already weights, and a decision about whether a score that needs a local
+   model to reproduce belongs in a repo whose other numbers do not.
+
+7. **the triage pass covers one punch-list entry of several.** `propose` reads
+   the discovery backlog and nothing else. the other entries are the same shape
+   and were all done by hand this sweep: find the PR for an architecture
+   mainline does not carry, propose a `name.match` for a model with none, draft
+   the `usecase-assessed.json` block for an unassessed model.
+
+   the alias case is the one to do next, because it is the best-checked: `make
+   lint` already fails a pattern that claims another model, so a generator
+   cannot quietly poison the corpus however wrong it is. the judgement case is
+   the one to leave longest -- nothing can check it, and a drafted opinion that
+   reads like a measured one is exactly what the assessed/measured split exists
+   to prevent.
+
+   the backlog is also only sampled: `--limit` defaults to 25 of 236 untriaged
+   rows, and a full pass at ~4s a call is half an hour. worth batching several
+   repos per request before pushing the limit up.
+
+8. **the open-weights Qwen3-TTS is scored by nobody, and neither is half the
+   speech roster.** artificial analysis, tts arena v2 and TTSDS2 all miss it --
+   the first two rate alibaba cloud's hosted SKU instead, and TTSDS2's published
+   results are a 2024-era field (bark, xttsv2, tortoise). the same holds for
+   sensevoice, moss-transcribe-diarize, canary-1b-v2 and parakeet v3, and for
+   every diarizer here: there is no third-party DER board at all, so crispasr's
+   own 7.3% on voxconverse dev is the only figure this repo has for foxnose, and
+   it is quoted rather than collected.
+
+   the honest options are to find a board that rates them or to measure them
+   here, and the second is a different kind of repo than this has been, because
+   every number in it so far is somebody else's. the diarizers are the tempting
+   case -- `tools/der_score.py` and voxconverse dev are both public -- and the
+   tempting case is exactly the one to be careful about: a DER this box computed
+   would sit in a document whose whole claim is that its numbers are third
+   party. the measurement/judgement split has a third column now and nothing
+   names it.

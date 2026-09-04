@@ -15,6 +15,7 @@ Exit status is 1 if anything failed, so it drops straight into a precommit.
 """
 
 import argparse
+import functools
 import json
 import os
 import re
@@ -116,6 +117,115 @@ def report_aliases(models):
     return rows
 
 
+# what a `runtime:` block may say. the model-level one is derived by
+# scripts/resolve-runtime; the quant-level one is hand-written, and is the only
+# place `fork`, `branch` and `tracking` are ever set
+RUNTIME_FIELDS = {"arch", "mainline", "since", "merged", "near",
+                  "fork", "branch", "tracking", "patch", "note"}
+RELEASE = re.compile(r"^b\d+$")
+
+# the ways a block can answer "so where do I get a build that loads this": a
+# fork to clone, an upstream PR or issue to watch, a patch shipped beside the
+# weights, or a mainline name the header only just misses
+WHERE = ("fork", "tracking", "patch", "near")
+
+
+def check_runtime(rt, where, f):
+    """A runtime block has to name a build a consumer could actually go and get.
+
+    `mainline: false` with nothing else is the assertion that a file loads
+    nowhere, which is never what is meant: something built it, and a reader
+    whose model is off mainline needs the fork to go to. `since:` is a llama.cpp
+    release tag rather than a date because that is what a consumer pins.
+    """
+    if rt is None:
+        return
+    if not isinstance(rt, dict):
+        f.add(where, "runtime must be a mapping, got %r" % (rt,))
+        return
+    unknown = sorted(set(rt) - RUNTIME_FIELDS)
+    if unknown:
+        f.add(where, "unknown runtime field(s) %s (known: %s)"
+              % (", ".join(unknown), ", ".join(sorted(RUNTIME_FIELDS))))
+    if not isinstance(rt.get("mainline"), bool):
+        f.add(where, "runtime.mainline %r must be true or false" % (rt.get("mainline"),))
+    if rt.get("since") and not RELEASE.match(str(rt["since"])):
+        f.add(where, "runtime.since %r must be a llama.cpp release tag, like b10660"
+              % (rt["since"],))
+    if rt.get("mainline") is False and not any(rt.get(k) for k in WHERE):
+        f.add(where, "runtime.mainline false needs one of %s: something built "
+                     "this file, and a reader off mainline needs where to go"
+              % ", ".join(WHERE))
+    if rt.get("mainline") is True and rt.get("fork"):
+        f.add(where, "runtime.fork is for what mainline does NOT carry; "
+                     "mainline true and a fork together say nothing")
+    if rt.get("branch") and not rt.get("fork"):
+        f.add(where, "runtime.branch names a branch of nothing without a fork:")
+
+
+# what a `crispasr:` block may say. `runtime:` answers "which llama.cpp release
+# loads this"; this answers the same question for the other engine on the
+# roster, which is not a llama.cpp release at all but a backend name.
+CRISPASR_FIELDS = {"backend", "diarize"}
+# what a weight can be to a diarization run. neither transcribes: an embedder
+# turns a span of audio into a speaker vector, a segmenter says only WHEN the
+# speaker changed
+DIARIZE_ROLES = ("embedder", "segmentation")
+DIARIZE_KIND = "diarize"
+
+
+def check_crispasr(cr, where, f):
+    """A crispasr block says what one binary does with this file, and only one.
+
+    A weight is something you transcribe WITH or something you diarize with,
+    never both -- `--backend` loads it as the ASR model and `--diarize-embedder`
+    loads it beside one, and a block claiming both describes no invocation. The
+    joint models are not the exception they look like: moss-diarize diarizes as
+    part of decoding, so it is a backend and nothing else.
+
+    Valid on a model or on one of its quants. A quant's overrides, for the same
+    reason `runtime:` does: whether an engine can load a file is a property of
+    how that ONE FILE was converted, not of the checkpoint. qwen3-tts is the
+    case -- two conversions of identical weights, one namespacing its metadata
+    `qwen3-tts` and one `qwen3tts`, and crispasr reads only the second.
+    """
+    if cr is None:
+        return
+    if not isinstance(cr, dict):
+        f.add(where, "crispasr must be a mapping, got %r" % (cr,))
+        return
+    unknown = sorted(set(cr) - CRISPASR_FIELDS)
+    if unknown:
+        f.add(where, "unknown crispasr field(s) %s (known: %s)"
+              % (", ".join(unknown), ", ".join(sorted(CRISPASR_FIELDS))))
+    named = [k for k in ("backend", "diarize") if cr.get(k)]
+    if len(named) != 1:
+        f.add(where, "crispasr names %s; it takes exactly one of backend (an ASR "
+                     "runtime) or diarize (a weight --diarize loads)"
+              % (", ".join(named) or "neither backend nor diarize"))
+    if cr.get("diarize") and cr["diarize"] not in DIARIZE_ROLES:
+        f.add(where, "crispasr.diarize %r must be one of %s"
+              % (cr["diarize"], ", ".join(DIARIZE_ROLES)))
+
+
+def check_diarize_kind(m, where, f):
+    """`kind: diarize` and a diarize role are the same statement, so they agree.
+
+    The kind is what stops a diarizer being read as a model somebody serves: it
+    has no chat template, no context and no transcript, and every consumer
+    listing the speech roster would otherwise count it as one. Model-level only
+    -- a quant carries no kind, and a diarizer has one conversion anyway.
+    """
+    kind = m.get("kind", "text")
+    role = ((m.get("crispasr") or {}).get("diarize"))
+    if kind == DIARIZE_KIND and not role:
+        f.add(where, "kind %s needs a crispasr.diarize saying what --diarize "
+                     "loads it as; nothing else here can use the file" % DIARIZE_KIND)
+    elif role and kind != DIARIZE_KIND:
+        f.add(where, "crispasr.diarize and kind %s go together; this says kind %s"
+              % (DIARIZE_KIND, kind))
+
+
 def check_registry(models, sampling, f):
     """The registry has to be internally consistent before anything can lean on it."""
     known_profiles = set(sampling.get("profiles") or {})
@@ -154,6 +264,12 @@ def check_registry(models, sampling, f):
         for q in quants:
             if not q.get("repo") or not q.get("quant"):
                 f.add(repo, "every quant needs both repo and quant: %r" % (q,))
+            where = "%s/%s" % (repo, q.get("quant"))
+            check_runtime(q.get("runtime"), where, f)
+            check_crispasr(q.get("crispasr"), where, f)
+        check_runtime(m.get("runtime"), repo, f)
+        check_crispasr(m.get("crispasr"), repo, f)
+        check_diarize_kind(m, repo, f)
 
         # the level a client gets by sending nothing has to be a level the
         # template accepts, or the entry is describing two different knobs. a
@@ -324,6 +440,120 @@ def report_cards(models, cards):
     return unmatched, diverged
 
 
+# a quantizer's own label around a type name: whose ladder it is, then which
+# recipe within it. neither says anything about what the tensors are
+QUANT_PREFIX = re.compile(r"^[A-Z]{2}-")
+QUANT_DECOR = re.compile(r"(?:_(?:XL|L|XS|S|M)|_STOCK|_FLAT|-MIXED)$")
+# a drafter head, a projector or an imatrix rather than a rung of the ladder
+NOT_A_RUNG = re.compile(r"mmproj|imatrix|dspark|dflash|mtp|\.gguf$|\.bin$|-bf16$|:", re.I)
+# ik_llama.cpp interleaves rows for its own kernels and names the result `_R4`;
+# prism re-blocks a type at a different group size and names it `_G64`. both are
+# distinct tensor layouts under a familiar-looking name, which is the case a
+# name lookup cannot catch: mainline has a `Q2_0`, at QK2_0 64 rather than 128
+REPACKED = re.compile(r"_R\d+$")
+REGROUPED = re.compile(r"_G\d+$")
+FAMILY = re.compile(r"^([A-Z]+\d+)")
+
+
+def fork_type(tag, known):
+    """Why a stock build cannot load this rung, or None if it can.
+
+    An exact name lookup is not the test and trying it that way was wrong twice.
+    Publishers label files with names mainline never defines -- `UD-Q4_K_XL`,
+    `AP-IQ4_M`, `AD-NVFP4_AI2` -- and those load, because a file type is a label
+    while the tensors inside carry their own types. So this asks about the
+    layout instead:
+
+      repacked   `_R4`, ik_llama's row-interleaved tensors
+      regrouped  `_G64`, the same type name over a different block size
+      family     `IQ5_*`, `IQ6_*` -- mainline defines nothing in that family at
+                 all, so no reading of the name gets you a loadable file
+
+    Everything else is treated as a publisher's label for mainline tensors.
+    That is the conservative direction: this drives a warning on a page, and
+    calling a loadable file unloadable is the worse error.
+    """
+    if NOT_A_RUNG.search(tag):
+        return None
+    t = QUANT_PREFIX.sub("", tag).upper()
+    if REPACKED.search(t):
+        return "%s: row-interleaved, ik_llama.cpp only" % t
+    if REGROUPED.search(t):
+        return "%s: a different block size under a mainline type name" % t
+    # decoration nests -- `UD-Q8_K_XL` is `Q8_K` under two of them
+    for _ in range(3):
+        if t in known:
+            return None
+        stripped = QUANT_DECOR.sub("", t)
+        if stripped == t:
+            break
+        t = stripped
+    if t in known:
+        return None
+    fam = FAMILY.match(t)
+    if fam and fam.group(1) in _families(frozenset(known)):
+        return None
+    return "%s: mainline defines nothing in this family" % t
+
+
+@functools.lru_cache(maxsize=4)
+def _families(known):
+    """`IQ4` from `IQ4_XS` -- cached, because the page asks this per rung."""
+    return {FAMILY.match(k).group(1) for k in known if FAMILY.match(k)}
+
+
+def report_runtime(models, support, sizes):
+    """What a stock llama.cpp will not load, from both ends.
+
+    Two different failures, so two lists. An architecture mainline has no entry
+    for refuses the file outright and is already recorded per model. A quant
+    TYPE mainline has no name for is subtler: the model loads at other rungs, so
+    the pin is fine and only part of the ladder is unreachable -- laguna m.1
+    publishes 28 rungs and 10 of them are ik_llama.cpp's, which the dashboard
+    otherwise offers a reader as if they were choices.
+
+    The name list is what mainline's own headers enumerate, so it needs no
+    maintenance here, but a tag is a directory name rather than a declared type
+    and the two only mostly agree. So the tag is reduced before it is judged:
+    the publisher prefix comes off (`UD-`, `AP-`, `AD-`), then the decoration
+    unsloth and bartowski add to say which recipe rather than which type
+    (`_XL`, `_L`, `_STOCK`). Only what survives that is looked up.
+
+    Reducing is what makes this worth printing. Checking tags as-published
+    flagged 60 of 63 repos, which is a report nobody reads; reducing first
+    leaves 4, and every one is a real fork type -- ik_llama's, prism's `_G64`
+    group size, and nvidia's NVFP4. It stays a report rather than an error
+    because it is still a guess about a name, not a load.
+    """
+    known = set(support.get("quants") or [])
+    if not known:
+        print("\nruntime: no quant name list captured; run research/fetch-llama-support")
+        return [], []
+    off = [(repo, (m.get("runtime") or {}))
+           for repo, m in sorted((models.get("models") or {}).items())
+           if (m.get("runtime") or {}).get("mainline") is False]
+    print("\nruntime: %d model(s) whose architecture mainline does not carry" % len(off))
+    for repo, rt in off:
+        print("  %-44s %-16s %s" % (repo, rt.get("arch") or "-",
+                                    rt.get("tracking") or rt.get("fork")
+                                    or rt.get("patch") or "nowhere recorded"))
+
+    rungs = []
+    for repo, m in sorted((models.get("models") or {}).items()):
+        for qrepo in {q["repo"] for q in (m.get("quants") or []) if q.get("repo")}:
+            bad = sorted({r for r in (fork_type(t, known)
+                                      for t in (sizes.get(qrepo) or {})) if r})
+            if bad:
+                rungs.append((qrepo, len(sizes.get(qrepo) or {}), bad))
+    print("\nruntime: %d repo(s) publishing rungs mainline cannot load"
+          % len(rungs))
+    for qrepo, total, bad in rungs:
+        print("  %s -- %d of %d rungs" % (qrepo, len(bad), total))
+        for reason in bad:
+            print("     %s" % reason)
+    return off, rungs
+
+
 def report_thinking(models, facts):
     """Models whose knob grades levels that nothing states.
 
@@ -348,6 +578,50 @@ def report_thinking(models, facts):
     return rows
 
 
+def report_speech(models):
+    """The two gaps in the speech roster: no engine to load it, no source to rank it.
+
+    A text model says which llama.cpp release loads it and lint fails if it
+    cannot, and five leaderboards score it. The speech half had neither, so
+    which server to point at kokoro rather than whisper was knowledge a consumer
+    kept somewhere else, and nothing said whether a model on the roster was any
+    good. Both print rather than failing: a model whose only runtime is a
+    one-off server is a real thing (fish s2-pro is one), and so is a model no
+    board has got to yet.
+    """
+    def backends(m):
+        """Every crispasr backend that reaches this model, quants included.
+
+        A model whose only loadable conversion is one of its quants is engined:
+        qwen3-tts names none at the model level because only the cstr rung
+        carries the metadata namespace crispasr reads.
+        """
+        blocks = [m.get("crispasr")] + [q.get("crispasr") for q in m.get("quants") or []]
+        return sorted({b["backend"] for b in blocks if (b or {}).get("backend")})
+
+    speech = [(repo, m) for repo, m in sorted((models.get("models") or {}).items())
+              if m.get("kind") == "speech"]
+    unengined = [(repo, m) for repo, m in speech if not backends(m)]
+    unscored = [(repo, m) for repo, m in speech
+                if not any((m.get("ids") or {}).values())]
+    served = {}
+    for repo, m in sorted((models.get("models") or {}).items()):
+        for backend in backends(m):
+            served.setdefault(backend, []).append((m.get("name") or {}).get("short"))
+
+    print("\nspeech: %d of %d model(s) naming no engine to load them"
+          % (len(unengined), len(speech)))
+    for repo, m in unengined:
+        print("  %-46s %s" % (repo, (m.get("name") or {}).get("short")))
+    print("\nspeech: %d of %d model(s) no leaderboard scores" % (len(unscored), len(speech)))
+    for repo, m in unscored:
+        print("  %-46s %s" % (repo, (m.get("name") or {}).get("short")))
+    print("\nspeech: %d crispasr backend(s) carry the roster" % len(served))
+    for backend, shorts in sorted(served.items()):
+        print("  %-16s %s" % (backend, ", ".join(sorted(shorts))))
+    return unengined, unscored
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -364,8 +638,16 @@ def main():
                     help="report profiles against the sampler sets cards document")
     ap.add_argument("--aliases", action="store_true",
                     help="report text models with no name.match to score them by")
+    ap.add_argument("--runtime", action="store_true",
+                    help="report what a stock llama.cpp build will not load")
+    ap.add_argument("--speech", action="store_true",
+                    help="report speech models with no engine and no score")
     ap.add_argument("--model-cards", default=os.path.join(HERE, "..", "research",
                                                           "data", "model-cards.json"))
+    ap.add_argument("--support", default=os.path.join(HERE, "..", "research",
+                                                      "data", "llama-support.json"))
+    ap.add_argument("--sizes", default=os.path.join(HERE, "..", "research",
+                                                    "data", "gguf-sizes.json"))
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
@@ -395,6 +677,10 @@ def main():
         report_cards(models, load(args.model_cards) or {})
     if args.aliases:
         report_aliases(models)
+    if args.runtime:
+        report_runtime(models, load(args.support) or {}, load(args.sizes) or {})
+    if args.speech:
+        report_speech(models)
 
     if args.json:
         json.dump(f.rows, sys.stdout, indent=1)

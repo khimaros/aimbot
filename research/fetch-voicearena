@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+
+"""Fetch voice arena's speech-to-text leaderboard into data/voicearena.json.
+
+The one source here that does not collapse transcription to a single number.
+Voice arena scores every model on the same corpus SLICED -- by language, by how
+noisy the recording is, by the speaker's age range and gender, and by utterance
+length -- and the slices disagree with each other loudly enough that an average
+over them is a different claim from any of them. Qwen3-ASR leads US english at
+4.70 and is the WORST open model in romanian at 29.03, where omniasr leads at
+11.60; artificial analysis' index, measured on english corpora, cannot say that.
+
+The site is a client-rendered SPA over a supabase table, so there is no page to
+parse: the anon key and project url are read out of the app bundle at fetch
+time and used to query the table directly. Read rather than committed on
+purpose -- the bundle's filename carries a content hash that changes on every
+deploy, so a key pinned here would go stale silently, and it is the site's own
+public browser token rather than anybody's credential.
+
+Only the fully aggregated slices are kept. Voice arena publishes an explicit
+`All` level in each demographic dimension, so the headline number per language
+is READ rather than averaged here -- computing our own mean over 27730 rows
+would invent a number the site does not publish and could not be checked
+against it.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+import capture
+
+SITE = "https://voicearena.com/"
+TABLE = "stt_leaderboard_rows"
+
+# the app bundle, its supabase project, and that project's public browser token
+BUNDLE = re.compile(r'src="(/assets/index-[A-Za-z0-9_-]+\.js)"')
+PROJECT = re.compile(r"https://[a-z0-9]+\.supabase\.co")
+ANON_KEY = re.compile(r"eyJ[A-Za-z0-9_.-]{100,}")
+
+# the demographic dimensions, each of which the site aggregates under `All`.
+# `set_type` is deliberately NOT one of them: how a model degrades from clean
+# to noisy is the measurement, not a dimension to collapse
+AGGREGATED = ("age_range", "gender", "length")
+FIELDS = ("language", "set_type", "model", "creator", "corpus_error_pct",
+          "samples", "open_source", "released")
+
+
+def get(url, key, max_age, refresh, headers=()):
+    """A url through httpcache, or None if it could not be read."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    cmd = [os.path.join(here, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    for h in headers:
+        cmd += ["--header", h]
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    return None if proc.returncode else proc.stdout
+
+
+def discover(max_age, refresh):
+    """(project url, anon key) read out of the live app bundle."""
+    html = get(SITE, "voicearena-app", max_age, refresh)
+    if not html:
+        return None, None
+    m = BUNDLE.search(html)
+    if not m:
+        return None, None
+    js = get(SITE.rstrip("/") + m.group(1), "voicearena-bundle", max_age, refresh)
+    if not js:
+        return None, None
+    project, key = PROJECT.search(js), ANON_KEY.search(js)
+    return (project.group(0) if project else None,
+            key.group(0) if key else None)
+
+
+def rows_of(project, key, max_age, refresh):
+    """The aggregated leaderboard rows, filtered server-side."""
+    query = "&".join(["select=" + ",".join(FIELDS)] +
+                     ["%s=eq.All" % d for d in AGGREGATED] +
+                     ["order=language.asc,corpus_error_pct.asc", "limit=5000"])
+    body = get("%s/rest/v1/%s?%s" % (project, TABLE, query), "voicearena-stt",
+               max_age, refresh, headers=["apikey: " + key])
+    try:
+        return json.loads(body or "")
+    except ValueError:
+        return None
+
+
+def shape(rows):
+    """{model: {identity, languages: {language: {set_type: measurement}}}}.
+
+    Keyed by the site's model name rather than by a row id: the ids are
+    per-slice, so there are 27730 of them and none of them names a model.
+    """
+    out = {}
+    for r in rows:
+        name = r.get("model")
+        if not name or r.get("corpus_error_pct") is None:
+            continue
+        m = out.setdefault(name, {
+            "creator": r.get("creator"),
+            "openSource": r.get("open_source"),
+            "released": r.get("released"),
+            "languages": {},
+        })
+        by_set = m["languages"].setdefault(r.get("language"), {})
+        by_set[r.get("set_type")] = {"corpusErrorPct": r["corpus_error_pct"],
+                                     "samples": r.get("samples")}
+    for m in out.values():
+        m["languages"] = {k: dict(sorted(v.items()))
+                          for k, v in sorted(m["languages"].items())}
+    return dict(sorted(out.items()))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default="data/voicearena.json")
+    # a human-rated corpus is re-scored when models are added, not hourly
+    ap.add_argument("--max-age", type=int, default=24 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even though the board holds fewer models than before")
+    args = ap.parse_args()
+
+    project, key = discover(args.max_age, args.refresh)
+    if not project or not key:
+        sys.exit("!!! could not read the supabase project out of the app bundle "
+                 "-- the site is no longer built the way this expects")
+
+    rows = rows_of(project, key, args.max_age, args.refresh)
+    if not rows:
+        sys.exit("!!! %s answered nothing -- the table was renamed or closed" % TABLE)
+    models = shape(rows)
+    if not models:
+        sys.exit("!!! no models in %d row(s) -- the columns changed" % len(rows))
+
+    written, now, before = capture.write(args.out, models, len,
+                                         allow_shrink=args.allow_shrink)
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "models"))
+    langs = sorted({lang for m in models.values() for lang in m["languages"]})
+    print("wrote %s: %d models (%d open weights) over %d languages -- %s"
+          % (args.out, now, sum(1 for m in models.values() if m["openSource"]),
+             len(langs), ", ".join(langs)))
+
+
+if __name__ == "__main__":
+    main()

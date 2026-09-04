@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+
+"""Re-score the captured forum quotes toward the model they are about.
+
+    ./score-sentiment                  # the comparative sentences first
+    ./score-sentiment --limit 200      # go further into the corpus
+    ./score-sentiment --all            # every captured quote
+    ./score-sentiment --report         # print the comparison, ask nothing
+
+`analyze-task-mentions` scores a sentence with a polarity lexicon and credits
+the result to every model the sentence mentions. Its own comment says what is
+wrong with that, and it is not the size of the word list: "X is better than Y"
+scores positive for BOTH. The corpus has 37 sentences of that shape and the
+second one in the file is
+
+    "Significantly better coder than deepseek-v4-flash"
+
+counted as a positive mention OF deepseek v4 flash.
+
+The task with a name for this is aspect-based sentiment: score a sentence
+toward a named aspect rather than in the abstract. `match-models` already
+supplies the aspect, because it is what decided the sentence was about that
+model in the first place. So the only missing piece is a reader that can be
+told which model to answer about, and that is one prompt.
+
+This writes a SECOND opinion to `data/sentiment-llm.json` and changes nothing
+about the scores the dashboard uses. The point is the comparison: both readings
+of the same committed sentences, so replacing the lexicon becomes a measurement
+rather than an argument. `--report` prints it.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import llm  # noqa: E402
+
+IN = "data/sentiment.json"
+OUT = "data/sentiment-llm.json"
+LIMIT = 60
+
+SCHEMA = {
+    "type": "object",
+    "properties": {
+        "stance": {"type": "string", "enum": ["positive", "negative", "neutral"]},
+        "about": {"type": "boolean"},
+    },
+    "required": ["stance", "about"],
+    "additionalProperties": False,
+}
+
+SYSTEM = (
+    "You judge how a forum sentence speaks about ONE named language model. "
+    "Answer only with the JSON object asked for.\n"
+    "`stance` is the opinion the sentence expresses ABOUT THAT MODEL, not its "
+    "general tone. A sentence praising a different model at this one's expense "
+    "is negative for this one. A sentence that names it only as a point of "
+    "comparison, a setup step or a list entry is neutral.\n"
+    "`about` is false when the sentence is not really discussing the model at "
+    "all -- it just contains the name.")
+
+# the sentence shapes the lexicon cannot get right, because it credits the whole
+# sentence to every model named in it. `over` was in this list and is not a
+# comparison often enough to belong: it pulled in "384k context window", "moved
+# over critical workloads" and "24gb VRAM", 8 sentences for 1 real one
+COMPARATIVE = (" better than ", " worse than ", " beats ", " instead of ",
+               " compared to ", " vs ", " versus ")
+
+
+def quotes(data):
+    """(model, source, quote, lexicon polarity) for every captured ref."""
+    out = []
+    for model, v in sorted(data.items()):
+        for source, s in sorted((v.get("by_source") or {}).items()):
+            for r in s.get("refs") or []:
+                if r.get("quote"):
+                    out.append((model, source, r["quote"], r.get("polarity", "0")))
+    return out
+
+
+def comparative_first(rows):
+    """The sentences the lexicon is known to get wrong, before the rest."""
+    def hard(q):
+        low = " %s " % q.lower()
+        return any(c in low for c in COMPARATIVE)
+    return ([r for r in rows if hard(r[2])] + [r for r in rows if not hard(r[2])])
+
+
+def ask(model, quote, refresh, captured):
+    key = llm.prompt_key(SYSTEM, model, quote)
+    if not refresh and captured.get(key):
+        return captured[key], True
+    got = llm.as_json(llm.chat(
+        [{"role": "system", "content": SYSTEM},
+         {"role": "user", "content": "model: %s\n\nsentence: %s" % (model, quote)}],
+        schema=SCHEMA, max_tokens=120))
+    if not got:
+        return None, False
+    return {"model": model, "stance": str(got.get("stance", ""))[:10],
+            "about": bool(got.get("about")), "quote": quote[:400]}, False
+
+
+SIGN = {"positive": "+", "negative": "-", "neutral": "0"}
+
+
+def report(captured, rows):
+    """Both readings of the same sentences, and where they part."""
+    by_key = {llm.prompt_key(SYSTEM, m, q): (m, s, q, p) for m, s, q, p in rows}
+    pairs = [(by_key[k], v) for k, v in captured.items() if k in by_key]
+    if not pairs:
+        print("nothing scored yet; run ./score-sentiment")
+        return
+    agree = [1 for (m, s, q, p), v in pairs if SIGN.get(v["stance"]) == p]
+    hard = [(r, v) for r, v in pairs
+            if any(c in " %s " % r[2].lower() for c in COMPARATIVE)]
+    hard_agree = [1 for r, v in hard if SIGN.get(v["stance"]) == r[3]]
+    print("scored %d of %d captured quotes with %s"
+          % (len(pairs), len(rows), "the configured model"))
+    print("  lexicon and model agree on %d (%.0f%%)"
+          % (len(agree), 100.0 * len(agree) / len(pairs)))
+    if hard:
+        print("  on the %d comparative sentences they agree on %d (%.0f%%)"
+              % (len(hard), len(hard_agree), 100.0 * len(hard_agree) / len(hard)))
+    off = [(r, v) for r, v in pairs if SIGN.get(v["stance"]) != r[3]]
+    not_about = [(r, v) for r, v in pairs if not v.get("about")]
+    print("\n%d sentence(s) the two read differently; the lexicon's sign is shown "
+          "first" % len(off))
+    for (m, s, q, p), v in off[:12]:
+        print("  %-26s lexicon=%s  model=%-8s %s"
+              % (m[:26], p, v["stance"], " ".join(q.split())[:88]))
+    print("\n%d sentence(s) the model says are not really about the model at all"
+          % len(not_about))
+    for (m, s, q, p), v in not_about[:6]:
+        print("  %-26s %s" % (m[:26], " ".join(q.split())[:96]))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--sentiment", default=IN)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--limit", type=int, default=LIMIT)
+    ap.add_argument("--all", action="store_true")
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--report", action="store_true",
+                    help="print the comparison from what is captured, ask nothing")
+    args = ap.parse_args()
+
+    rows = comparative_first(quotes(json.load(open(args.sentiment))))
+    try:
+        prev = json.load(open(args.out))
+    except (IOError, ValueError):
+        prev = {}
+    captured = prev.get("scored") or {}
+
+    if args.report:
+        report(captured, rows)
+        return
+
+    cfg = llm.configured()
+    if not cfg:
+        print("no AIMBOT_LLM_MODEL set; skipping. see research/llm.py", file=sys.stderr)
+        return
+
+    todo = rows if args.all else rows[:args.limit]
+    asked = reused = missed = 0
+    for model, source, quote, pol in todo:
+        got, from_cache = ask(model, quote, args.refresh, captured)
+        if not got:
+            missed += 1
+            continue
+        reused += from_cache
+        asked += not from_cache
+        captured[llm.prompt_key(SYSTEM, model, quote)] = got
+        if not from_cache:
+            flag = "" if SIGN.get(got["stance"]) == pol else "  <- differs"
+            print("  %-24s lexicon=%s model=%-8s%s"
+                  % (model[:24], pol, got["stance"], flag), file=sys.stderr)
+
+    with open(args.out, "w") as f:
+        json.dump({"_about": [
+            "A SECOND OPINION on the quotes in sentiment.json, from a model asked",
+            "about one named model at a time. Nothing in the dashboard reads this.",
+            "It exists so that replacing the polarity lexicon can be measured on",
+            "the same committed sentences instead of argued about.",
+        ], "model": cfg[1], "scored": captured}, f, indent=1)
+    print("wrote %s: %d scored (%d asked, %d reused, %d unanswered)"
+          % (args.out, len(captured), asked, reused, missed))
+    report(captured, rows)
+
+
+if __name__ == "__main__":
+    main()

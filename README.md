@@ -42,6 +42,9 @@ scripts/sweep             the whole research sweep in one command
 scripts/models-validate   check that the registry is internally consistent
 scripts/resolve-ids       match registry models to each source's own ids
 scripts/resolve-turns     fill turns/thinking from the executed chat template
+scripts/resolve-runtime   fill runtime: from llama.cpp's own git history
+scripts/registry_patch.py splice generated blocks into models.yaml, shared by
+                          the derivers that write it
 scripts/build-viewer      build docs/ from the registry and the captures
 scripts/viewer.html       the page it fills in
 scripts/pageboot.py       boot that page under node; shared by the test and the
@@ -206,6 +209,113 @@ returns 200, and the message is not in the prompt; 9 of the 48 unsloth gguf
 templates do this to a developer message and 9 more silently discard a THIRD
 leading system message after merging the first two. `make turns` regenerates
 the blocks and `make lint` fails if the registry is behind the probe data.
+
+## which llama.cpp loads it
+
+every number in this repo assumes the file opens, and for four models it does
+not. `runtime:` says which build:
+
+```yaml
+    runtime:
+      arch: qwen4exp
+      mainline: true
+      since: b10660
+      merged: '2026-08-27'
+```
+
+derived, not typed. a gguf declares `general.architecture` in its header,
+huggingface serves its parse of that header, and llama.cpp gains an
+architecture in one commit that adds the string to `src/llama-arch.cpp` -- so
+"the oldest release that loads this" is a join over two indexes that already
+exist. `make runtime` does it for all 61 text models; `make lint` fails if the
+registry is behind the capture.
+
+the lookup upstream is `==` against that table, with no normalisation, which is
+worth knowing because it fails silently-looking: `near` records a header that
+differs from a mainline name by punctuation only, like the `qwen3-tts` in four
+of these repos against mainline's `qwen3tts`.
+
+what history cannot tell you is written by hand and never overwritten: `fork`,
+`branch`, `patch`, `tracking`. a `runtime:` on a QUANT overrides the model's,
+because whether a rung needs a fork is a property of how that one file was
+built -- prism's ternary q2_0 is a group-128 block where mainline's `Q2_0` is
+group-64, the same type name over a different layout.
+
+    make sweep-report          # includes what a stock build will not load
+
+two failures, reported apart. an architecture mainline lacks refuses the file:
+inkling, motif-3 and solar-open2 are on unmerged PRs. a quant TYPE mainline
+lacks costs less, because only part of a ladder goes -- laguna m.1 publishes 28
+rungs and 10 are ik_llama.cpp's, which the dashboard used to offer with a size
+beside them and now marks `a fork`.
+
+## which crispasr backend loads it
+
+`runtime:` is llama.cpp's answer and it only covers the text half. the speech
+models run on a different engine: crispasr, a whisper.cpp fork carrying ggml
+runtimes for ~60 ASR architectures behind one binary. which runtime is
+`crispasr.backend`:
+
+```yaml
+  nvidia/parakeet-tdt-0.6b-v3:
+    kind: speech
+    quants:
+    - {repo: cstr/parakeet-tdt-0.6b-v3-GGUF, quant: Q8_0, role: model}
+    crispasr:
+      backend: parakeet
+```
+
+hand-written rather than derived -- no index maps an architecture to a backend
+name the way llama.cpp's history maps one to a release -- and asserted only for
+the gguf repo crispasr's own README names. two conversions of one checkpoint are
+not interchangeable, so claiming a backend for a conversion nobody tested
+against it would be a guess wearing a fact's clothes.
+
+**the diarization weights are `kind: diarize`.** the foxnose embedder, the
+pyannote segmenter and titanet transcribe nothing: they are what `--diarize`
+loads BESIDE an ASR model, so they carry `crispasr.diarize` (`embedder` or
+`segmentation`) instead of a backend, and `make lint` fails if the kind and the
+role disagree. without the separate kind a 24mb speaker embedder with no chat
+template and no transcript sits in the speech roster looking like something to
+serve.
+
+    make sweep-report          # includes speech models with no engine, and no score
+
+## how good is the speech roster
+
+three sources score it, and they measure three different things:
+
+| source | number | direction | what it is |
+| --- | --- | --- | --- |
+| artificial analysis speech-to-text | `aaWerIndex` | **lower is better** | batch WER over three corpora |
+| artificial analysis speech-to-text streaming | `aaWerStreamingIndex` | lower | the same models live, with time-to-final beside it |
+| artificial analysis text-to-speech | `qualityElo` | higher | human-preference arena |
+| tts arena v2 | `elo` | higher | crowd-sourced blind votes, published with the vote count |
+| voice arena | `corpusErrorPct` | lower | WER sliced by language, noise, age, gender, length |
+
+`ids:` is per modality: a speech model is matched against the speech boards and
+a text model against the text leaderboards, never across.
+
+**every speech key space is filtered to open weights, and that filter is doing
+real work.** these boards are mostly hosted endpoints, and a vendor's API SKU
+shares a family name with the checkpoint it grew from while being neither the
+same weights nor the same stack. artificial analysis scores
+`qwen3-tts-vc-realtime` at 925 elo on alibaba cloud; this registry carries gguf
+conversions of the open Qwen3-TTS at a different codec rate. those names match
+on every fuzzy test there is, so the guard cannot be a matching rule -- a row
+the source itself marks closed-weights is never offered to the matcher at all.
+
+which leaves the open Qwen3-TTS unscored, on all three boards and on TTSDS2
+too, whose published results are a 2024-era field. that is a gap in the sources
+rather than a number waiting to be joined, and nothing here fills it by
+borrowing the hosted SKU's.
+
+the two transcription boards disagree, which is the reason both are collected:
+qwen3-asr leads voice arena's US english at 4.698 where cohere transcribe is
+6.159, and cohere leads artificial analysis' batch board at 0.0457 where qwen3
+is absent. voice arena also shows what a single index cannot -- qwen3-asr is
+best in US english and the WORST open model in romanian at 29.03, where omniasr
+leads at 11.60.
 
 ## using it from a consumer
 
@@ -555,6 +665,44 @@ the opposite question -- what is being downloaded in gguf form right now, and
 what has each tracked publisher shipped -- and `fetch-reddit --front` scans the
 hot, new and top-week listings rather than the search index, which only ever
 returns what `QUERIES` already asks about and lags the sub by hours.
+
+## asking a model, without letting it decide
+
+two steps ask an llm rather than a source. copy `.env.example` to `.env` and
+fill in a model:
+
+    cp .env.example .env        # AIMBOT_LLM_URL / _MODEL / _KEY
+    make llm                    # run both
+    make llm-report             # read what they produced, asking nothing
+
+`.env` is gitignored, so an endpoint and a key stay out of version control, and
+anything already exported beats the file -- `AIMBOT_LLM_MODEL=gpt-oss-120b:Q8_0
+make llm` points one run somewhere else without editing anything. with no model
+configured both steps skip themselves and a sweep runs exactly as before.
+
+point it at llama-server on the box already running the roster, or at anything
+speaking the same protocol.
+
+    research/propose            triage the 479-repo discovery backlog
+    research/score-sentiment    re-read the forum quotes, one named model at a time
+
+neither writes a fact. they write `data/proposals.json` and
+`data/sentiment-llm.json`, nothing downstream reads either, and the registry
+stays hand-written. what they are asked for is chosen so something here can
+check it: `propose` is asked which model a repo derives from, `analyze-catalog`
+resolves the same thing off the name index without asking anybody, and the row
+where the two disagree is the one marked for a reader.
+
+where a curated list already knows the answer the model is not asked. a repo
+owned by a `[quantizer]` in `publishers.txt` is a re-quant by definition; asking
+anyway got `bartowski/Qwen2.5-Coder-32B-Instruct-GGUF` called an original
+release by the lab that trained it.
+
+`score-sentiment` exists to make one decision measurable rather than arguable.
+the polarity lexicon credits a sentence to every model it mentions, so
+"significantly better coder than deepseek-v4-flash" counts as PRAISE for
+deepseek v4 flash. over the 40 comparative sentences in the committed corpus the
+two readings agree 48% of the time, and the disagreements are the ones above.
 
 ## MODELS.md is generated from the dashboard
 

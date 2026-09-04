@@ -17,6 +17,10 @@ import json
 import os
 import re
 import subprocess
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import capture  # noqa: E402  the do-not-shrink guard
+
 import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -52,6 +56,9 @@ def main():
     ap.add_argument("--max-age", type=int, default=6 * 3600, metavar="SECONDS",
                     help="reuse a cached response younger than this (default 6h)")
     ap.add_argument("--refresh", action="store_true", help="ignore the cache, refetch")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even when the result holds fewer records "
+                         "than the capture on disk")
     args = ap.parse_args()
 
     def get(cache, **params):
@@ -76,8 +83,10 @@ def main():
         out[q] = stories
         print("  %-20s %d stories" % (q, len(stories)))
 
-    with open(args.out, "w") as f:
-        json.dump(out, f, indent=1)
+    written, now, before = capture.write(args.out, out, len, args.allow_shrink,
+                                         "queries")
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "queries"))
     print("wrote %s" % args.out)
 
 

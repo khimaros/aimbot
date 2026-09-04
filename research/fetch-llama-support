@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+
+"""Which llama.cpp build loads each gguf repo, from llama.cpp's own history.
+
+The registry already knew this in four places and none of them were queryable:
+qwen4exp landed on 2026-08-27 so an older build loads no qwen3.8 flash next
+file at all, ternary bonsai 8b is pinned to f16 BECAUSE its q2_0 needs a fork,
+muse glimmer's knob is translated by #26941 and silently ignored before it. All
+of it sat in prose inside `note:` fields, so the sweep could not report it and
+the dashboard could not show it.
+
+It does not have to be written by hand. A gguf declares `general.architecture`
+in its header, huggingface parses that header and serves it, and llama.cpp's
+support for an architecture arrives in one commit that adds the arch string to
+its tables. So the question "what is the oldest build that loads this file" is
+a lookup in two indexes that both already exist:
+
+    repo -> architecture      huggingface's parse of the gguf header
+    architecture -> commit    the commit that introduced the string
+    commit -> release         the first bNNNN tag containing it
+
+The arch string is searched across `src/llama-arch.cpp` AND the two paths that
+held those tables before the 2025-01-03 source split. Searching only the
+current path dates every pre-split architecture to the day of that refactor:
+`deepseek2` reads as b4409/2025-01-03 rather than b3023/2024-05-28, and `llama`
+itself as b4409 rather than b1046, which is wrong by seventeen months.
+
+What this CANNOT derive is a rung that mainline has no type for at all --
+ik_llama.cpp's `_R4`, `IQ5_K`, `IQ6_K` -- or one that needs an unmerged PR.
+Those are a property of the quantizer rather than of the model, so they stay
+hand-written as a `runtime:` block on the quant, which `resolve-runtime` never
+overwrites. This fills the model-level default; a human writes the exceptions.
+
+The llama.cpp clone is read, never written or fetched. Without one the previous
+capture is kept rather than emptied, because the capture is committed and a
+consumer of this repo has no reason to have a clone.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+GGUF_API = "https://huggingface.co/api/models/%s?expand[]=gguf"
+
+# must match fetch-model-facts and fetch-chat-templates: all three read the same
+# url under the same key, so whichever runs second transfers nothing
+MAX_AGE = 48 * 3600
+
+# where the arch tables have lived. order matters only for readability; the
+# search is over all three at once and takes the earliest commit that touched
+# any of them, which is what "when did this string first appear" means
+ARCH_PATHS = ["src/llama-arch.cpp", "src/llama.cpp", "llama.cpp"]
+
+CLONES = ["~/src/github.com/ggml-org/llama.cpp", "~/src/github.com/ggerganov/llama.cpp"]
+
+# the `{ LLM_ARCH_QWEN4EXP, "qwen4exp" },` rows that ARE the set of strings a
+# build will answer to. membership is read from the current table rather than
+# inferred from history, because `-S` finds a string that was added and later
+# renamed just as happily as one that is still there
+ARCH_ROW = re.compile(r'\{\s*LLM_ARCH_[A-Z0-9_]+,\s*"([^"]+)"')
+
+# the quant names a mainline build knows, which is a different question from
+# the architecture and fails differently: an unknown arch refuses to load, an
+# unknown quant type is a file mainline cannot even name. ik_llama.cpp's `_R4`,
+# `IQ5_K` and `IQ6_K` are the ones that reach this roster.
+#
+# both tables are needed and neither is enough. a file type is what a repo
+# usually tags a directory with (`Q4_K_M`), but unsloth's `UD-Q4_K_XL` trims to
+# `Q4_K`, which is a TENSOR type and not a file type -- checking ftypes alone
+# condemns most of the roster, and checking tensor types alone misses `Q4_K_M`
+FTYPE = re.compile(r"LLAMA_FTYPE_MOSTLY_([A-Z0-9_]+)\s*=")
+GGML_TYPE = re.compile(r"GGML_TYPE_([A-Z0-9_]+)\s*=")
+
+
+# a release tag, as distinct from the `master-*` and version tags beside it
+def is_release(tag):
+    return tag.startswith("b") and tag[1:].isdigit()
+
+
+def git(repo, *args):
+    r = subprocess.run(("git", "-C", repo) + args, capture_output=True, text=True)
+    return r.stdout.strip()
+
+
+def find_clone(explicit):
+    for p in [explicit] if explicit else CLONES:
+        p = os.path.expanduser(p)
+        if p and os.path.isdir(os.path.join(p, ".git")):
+            return p
+    return None
+
+
+def squash(s):
+    return s.replace("-", "").replace("_", "").lower()
+
+
+def arch_table(repo, ref):
+    """Every architecture string the build at `ref` will answer to."""
+    src = git(repo, "show", "%s:src/llama-arch.cpp" % ref)
+    return set(ARCH_ROW.findall(src))
+
+
+def quant_names(repo, ref):
+    """Every quant name a mainline build at `ref` knows, file type or tensor."""
+    return sorted(set(FTYPE.findall(git(repo, "show", "%s:include/llama.h" % ref)))
+                  | set(GGML_TYPE.findall(
+                      git(repo, "show", "%s:ggml/include/ggml.h" % ref))))
+
+
+def arch_support(repo, arch, ref, table):
+    """When mainline gained an architecture, or why it does not have it.
+
+    `llm_arch_from_string` compares the header's string to that table with `==`
+    and returns UNKNOWN on no match, so a header differing only in punctuation
+    does not load. That is worth telling apart from an architecture nobody
+    upstreamed: it is a converter mismatch, and `near` is the string that would
+    have worked -- `qwen3-tts` in the header against mainline's `qwen3tts`.
+    """
+    if arch not in table:
+        near = sorted(n for n in table if squash(n) == squash(arch))
+        out = {"mainline": False}
+        if near:
+            out["near"] = near[0]
+        return out
+    log = git(repo, "log", "--reverse", "--format=%H", '-S"%s"' % arch, ref,
+              "--", *ARCH_PATHS)
+    if not log:
+        return {"mainline": True}
+    commit = log.splitlines()[0]
+    tags = [t for t in git(repo, "tag", "--contains", commit,
+                           "--sort=creatordate").splitlines() if is_release(t)]
+    return {"since": tags[0] if tags else None,
+            "merged": git(repo, "log", "-1", "--format=%cs", commit),
+            "commit": commit[:9], "mainline": True}
+
+
+def get(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key, "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout
+    try:
+        return json.loads(out) if out else None
+    except ValueError:
+        return None
+
+
+def gguf_repos(registry):
+    """Every gguf repo the registry names, in one deduped list."""
+    import yaml
+    models = yaml.safe_load(open(registry)).get("models") or {}
+    seen = {}
+    for base, m in models.items():
+        for q in (m.get("quants") or []) + (m.get("components") or []):
+            if q.get("repo"):
+                seen.setdefault(q["repo"], base)
+    return seen
+
+
+def architectures(repos, max_age, refresh):
+    """{repo: architecture} from huggingface's parse of each gguf header."""
+    out = {}
+    for repo in sorted(repos):
+        # the same cache key fetch-chat-templates uses, so this is free after it
+        info = get(GGUF_API % repo, "facts-%s-ggufmeta" % repo.replace("/", "_"),
+                   max_age, refresh)
+        arch = ((info or {}).get("gguf") or {}).get("architecture")
+        if arch:
+            out[repo] = arch
+        print("  %-52s %s" % (repo, arch or "no gguf header"), file=sys.stderr)
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--registry", default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--llama", help="path to a llama.cpp clone; searched if unset")
+    ap.add_argument("--ref", default="origin/master")
+    ap.add_argument("--out", default="data/llama-support.json")
+    ap.add_argument("--max-age", type=int, default=MAX_AGE)
+    ap.add_argument("--refresh", action="store_true")
+    args = ap.parse_args()
+
+    try:
+        prev = json.load(open(args.out))
+    except (IOError, ValueError):
+        prev = {}
+
+    repos = architectures(gguf_repos(args.registry), args.max_age, args.refresh)
+    clone = find_clone(args.llama)
+    if not clone:
+        print("no llama.cpp clone found; keeping the %d architecture(s) already "
+              "captured. pass --llama DIR to refresh them"
+              % len(prev.get("arch") or {}), file=sys.stderr)
+        arch, head = prev.get("arch") or {}, prev.get("llama_cpp") or {}
+        quants = prev.get("quants") or []
+    else:
+        table = arch_table(clone, args.ref)
+        quants = quant_names(clone, args.ref)
+        arch = {}
+        head = {"commit": git(clone, "rev-parse", "--short", args.ref),
+                "date": git(clone, "log", "-1", "--format=%cs", args.ref),
+                "architectures": len(table)}
+        for a in sorted(set(repos.values())):
+            arch[a] = arch_support(clone, a, args.ref, table)
+            print("  %-20s %s" % (a, arch[a]), file=sys.stderr)
+
+    with open(args.out, "w") as f:
+        json.dump({"llama_cpp": head, "arch": arch, "repos": repos,
+                   "quants": quants}, f, indent=1, sort_keys=True)
+    absent = sorted(a for a, v in arch.items() if not v.get("mainline"))
+    near = sorted(a for a, v in arch.items() if v.get("near"))
+    print("wrote %s: %d repos over %d architectures, %d absent from mainline%s"
+          % (args.out, len(repos), len(arch), len(absent),
+             ". %s differ from a mainline name by punctuation only, which does "
+             "not load: %s" % (len(near), ", ".join(near)) if near else ""))
+
+
+if __name__ == "__main__":
+    main()

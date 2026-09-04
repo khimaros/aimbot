@@ -207,6 +207,47 @@ def sampler_facts(gen):
     return {k: v for k, v in out.items() if isinstance(v, (int, float))}
 
 
+# what a config says about consuming audio. `audio_config` is an ENCODER, so it
+# means audio IN; `num_mel_bins` is the filterbank a model reads, which is how
+# an asr model declares itself -- it has no separate audio encoder because its
+# encoder is the whole model. `audio_locator_tag` is nemo's SALM placeholder,
+# and canary-qwen declares its input no other way: its mel count is
+# `perception.preprocessor.features`, a name far too generic to match on.
+AUDIO_IN_KEYS = ("audio_config", "num_mel_bins", "audio_locator_tag")
+# a DECODER's mel count is an output, not an input. kokoro spells its `n_mels`
+# and s2-pro nests its under `audio_decoder_config`, so neither is reached even
+# now -- but the search below is recursive, and a subtree named for a decoder is
+# exactly where a false positive would come from.
+NOT_INPUT_SUBTREE = re.compile(r"decoder|vocoder|synth", re.I)
+
+
+def takes_audio(cfg):
+    """Whether this config declares an audio input, at whatever depth it says it.
+
+    Only the top level used to be read, which was true of whisper
+    (`num_mel_bins`) and voxtral (`audio_config`) and of nothing else on the
+    speech roster. nemo's whole ASR family nests it one level down --
+    parakeet, canary and nemotron all carry `encoder_config.num_mel_bins`, and
+    qwen3-asr hides its `audio_config` under `thinker_config` -- so five
+    transcription models derived as taking TEXT ONLY, which is the one modality
+    an asr model definitely does not take by itself.
+    """
+    if not isinstance(cfg, dict):
+        return False
+    for key, val in cfg.items():
+        # the VALUE has to be there, not just the key. gemma 4 declares
+        # `"audio_config": null` -- the slot its family's config schema has,
+        # left unfilled -- and reading that as an audio input claimed the
+        # modality for both gemma 4 sizes the moment this stopped testing
+        # truthiness
+        if key in AUDIO_IN_KEYS and val:
+            return True
+        if (isinstance(val, dict) and not NOT_INPUT_SUBTREE.search(key)
+                and takes_audio(val)):
+            return True
+    return False
+
+
 def attention(text):
     """What a kv cache would cost per token, from the geometry config declares.
 
@@ -325,12 +366,7 @@ def shape_facts(cfg):
         modes.append("image")
     if cfg.get("video_token_id") is not None:
         modes.append("video")
-    # `audio_config` is an ENCODER, so it means audio in. an asr model has none
-    # -- its encoder is the whole model -- and declares itself by the mel bins
-    # it consumes instead. that key is specific enough to be safe: kokoro is a
-    # tts model and spells its (output) mel count `n_mels`, and s2-pro's is
-    # under `audio_decoder_config`, so neither is read as taking audio in.
-    if cfg.get("audio_config") or cfg.get("num_mel_bins"):
+    if takes_audio(cfg):
         modes.append("audio")
     out["input"] = modes
     return {k: v for k, v in out.items() if v is not None}

@@ -2,15 +2,25 @@
 
 """Scrape r/LocalLLaMA searches, listings and comments into data/reddit-localllama.json.
 
-old.reddit serves real server-rendered HTML to plain curl -- comments, scores and
-all. Only two things are actually blocked: the `.json` endpoints (403) and
-`www.reddit.com` (SPA shell). Neither is needed, so this uses no browser.
+old.reddit served real server-rendered HTML to plain curl -- comments, scores
+and all -- and the `.json` endpoints were the only thing actually blocked. That
+is no longer true. As of the 2026-09-02 sweep old.reddit.com answers with the
+new client: 352kb titled `Welcome to Reddit`, 132 `shreddit-` custom elements
+and not one `<div class="md">`, so every parser below finds nothing. It comes
+back 200, which is why this reads as a quiet day rather than as a failure. The
+`.json` paths are shut too, 302 without a user-agent and 403 with one.
 
 An earlier version drove a real chrome under xvfb, on the assumption that the
 403 from the json api applied to the whole site. It does not, and the browser
 turned out to be worse than unnecessary: reddit started failing those page loads
 with ERR_HTTP_RESPONSE_CODE_FAILURE partway through a long run, which looks like
-throttling of the automated client. curl has been steady.
+throttling of the automated client. curl was steady while the html lasted.
+
+So the parsers are kept, because what changed is which document is served rather
+than anything here, and a total miss now EXITS NON-ZERO. That is the point worth
+keeping whatever replaces the scrape: this collector degrades by writing the
+previous capture back out, so a silent breakage leaves sentiment scoring stale
+text forever and no number anywhere looks wrong.
 
 One gotcha survives: the bare /comments/<id>/ form 301s to the slugged URL, so
 requests follow redirects (-L via httpcache).
@@ -28,6 +38,9 @@ import re
 import subprocess
 import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import capture  # noqa: E402  the do-not-shrink guard
 import urllib.parse
 from html.parser import HTMLParser
 
@@ -225,6 +238,10 @@ def main():
     ap.add_argument("--refresh", action="store_true", help="refetch everything")
     ap.add_argument("--delay", type=float, default=1.0,
                     help="seconds between requests; reddit 429s a fast loop")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even when the result holds fewer records than the "
+                         "capture on disk; the guard exists because --refresh "
+                         "against a dead source rebuilds the file from nothing")
     args = ap.parse_args()
 
     out = {"searches": {}, "listings": {}, "threads": {}}
@@ -320,11 +337,32 @@ def main():
         print("  thread %-10s %3d comments  %s" % (tid, len(t["comments"]), t["title"][:52]),
               file=sys.stderr)
 
-    with open(args.out, "w") as f:
-        json.dump(out, f, indent=1)
-    print("wrote %s: %d searches, %d listings, %d threads (reused %d, fetched %d, failed %d)"
-          % (args.out, len(out["searches"]), len(out["listings"]), len(out["threads"]),
+    def records(d):
+        return (len(d.get("searches") or {}) + len(d.get("listings") or {})
+                + len(d.get("threads") or {}))
+
+    written, now, before = capture.write(args.out, out, records, args.allow_shrink,
+                                         "searches, listings and threads")
+    print("%s %s: %d searches, %d listings, %d threads "
+          "(reused %d, fetched %d, failed %d)"
+          % ("wrote" if written else "did NOT write", args.out,
+             len(out["searches"]), len(out["listings"]), len(out["threads"]),
              reused, fetched, failed))
+    if not written:
+        sys.exit(capture.refused(args.out, now, before,
+                                 "searches, listings and threads"))
+    if fetched or not failed:
+        return
+    # every request parsed to nothing. that is not a quiet day on the subreddit,
+    # it is this collector no longer working, and it has to be louder than a
+    # summary line: the output file still holds the last good capture, sentiment
+    # still scores every model off it, and nothing anywhere would read as wrong
+    sys.exit(
+        "!!! %d attempted, 0 parsed: the scrape is broken, not the subreddit.\n"
+        "    the committed capture is untouched, so sentiment keeps scoring the\n"
+        "    last good one and NOTHING downstream will look wrong.\n"
+        "    check what a fetch returns now: old.reddit.com served server-rendered\n"
+        "    html to plain curl until it did not." % failed)
 
 
 if __name__ == "__main__":

@@ -36,6 +36,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "..", "research", "data")
 
+sys.path.insert(0, HERE)
+import registry_patch  # noqa: E402  the splice, shared with resolve-runtime
+
 try:
     import yaml
 except ImportError:
@@ -46,18 +49,62 @@ def norm(s):
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
-def load(name):
+def load(name, data=None):
     try:
-        return json.load(open(os.path.join(DATA, "%s.json" % name)))
+        return json.load(open(os.path.join(data or DATA, "%s.json" % name)))
     except (IOError, ValueError):
         return {}
 
 
-def key_spaces():
-    """{source: {normalized name: real id}} for every source that names models."""
+def speech_keys(rows, open_field, id_fields=()):
+    """{normalized name: real id} for one speech board, OPEN-WEIGHTS ONLY.
+
+    The filter is the whole point. Every speech board is dominated by hosted
+    endpoints, and a vendor's API SKU shares a family name with the checkpoint
+    it grew from while being neither the same weights nor the same stack:
+    artificial analysis scores `qwen3-tts-vc-realtime` at 925 elo on alibaba
+    cloud, and the registry carries gguf conversions of the open Qwen3-TTS at a
+    different codec rate. Matching those would put a hosted arena rating on a
+    local q8_0, so a row the source itself says is not downloadable is not
+    offered to the matcher at all.
+
+    A host qualifier is stripped as a second spelling rather than replacing the
+    first: artificial analysis writes one model as both `Whisper Large v3 Turbo`
+    and `Whisper Large v3 Turbo, Telnyx`, which are two hosts of one checkpoint.
+    """
+    space = {}
+    for key, r in rows.items():
+        if not r.get(open_field):
+            continue
+        names = [key, r.get("name")]
+        for n in list(names):
+            if n and "," in n:
+                names.append(n.rsplit(",", 1)[0])
+        for field in id_fields:
+            v = r.get(field)
+            if v:
+                # a host api id is often the huggingface repo, which is the most
+                # precise handle any of these boards publishes. the `:` is a
+                # replicate-style content hash, and it names no model
+                names += [v, v.split("/")[-1].split(":")[0]]
+        for n in names:
+            if n:
+                space.setdefault(norm(n), key)
+    return space
+
+
+def key_spaces(data=None):
+    """{kind: {source: {normalized name: real id}}} for every source that names models.
+
+    Split by the modality a source MEASURES. A text leaderboard has no opinion
+    about a transcription model and a synthesis arena has none about a text one,
+    so running every model against every source would fill the registry with
+    empty ids nobody can ever resolve -- and would let one fuzzy hit put a
+    speech score on a text model.
+    """
     out = {}
 
-    aa = load("artificial-analysis")
+    aa = load("artificial-analysis", data)
     out["aa"] = {}
     for slug, r in aa.items():
         # skip the non-reasoning twins: the roster scores reasoning mode
@@ -66,14 +113,14 @@ def key_spaces():
         out["aa"].setdefault(norm(r.get("name")), slug)
         out["aa"].setdefault(norm(slug), slug)
 
-    gb = load("gbench")
+    gb = load("gbench", data)
     out["gbench"] = {}
     for m in gb.get("rankings") or []:
         mid = m.get("model_id") or ""
         out["gbench"].setdefault(norm(mid.split("/")[-1]), mid)
         out["gbench"].setdefault(norm(m.get("model")), mid)
 
-    lm = load("lmarena")
+    lm = load("lmarena", data)
     out["lmarena"] = {}
     for board in (lm.get("boards") or {}).values():
         for e in board.get("entries") or []:
@@ -81,14 +128,14 @@ def key_spaces():
             if n:
                 out["lmarena"].setdefault(norm(n), n)
 
-    sw = load("swe-rebench")
+    sw = load("swe-rebench", data)
     out["swerebench"] = {}
     for m in (sw.get("models") or {}).values():
         n = m.get("name")
         if n:
             out["swerebench"].setdefault(norm(n), n)
 
-    ep = load("epoch")
+    ep = load("epoch", data)
     out["epoch"] = {}
     for r in ep.get("eci") or []:
         mv = (r.get("Model version") or "").split("/")[-1].rsplit("_", 1)[0]
@@ -97,7 +144,22 @@ def key_spaces():
         dn = r.get("Display name") or r.get("Model name")
         if dn:
             out["epoch"].setdefault(norm(dn), mv or dn)
-    return out
+
+    speech = load("artificial-analysis-speech", data)
+    spoken = {
+        "aa-stt": speech_keys(speech.get("speech-to-text") or {}, "openWeights",
+                              ("hostApiId",)),
+        "aa-stt-streaming": speech_keys(speech.get("speech-to-text-streaming") or {},
+                                        "openWeights", ("hostApiId",)),
+        "aa-tts": speech_keys(speech.get("text-to-speech") or {}, "openWeights",
+                              ("slug",)),
+        "tts-arena": speech_keys(load("tts-arena", data), "open"),
+        "voicearena": speech_keys(load("voicearena", data), "openSource"),
+    }
+    # nothing scores a diarizer: there is no third-party DER board for the
+    # embedders and segmenters, which is why crispasr's own figure is the only
+    # number this repo has for them and it is quoted in the model's notes
+    return {"text": out, "speech": spoken, "diarize": {}}
 
 
 # a trailing parameter count, which sources drop as often as they keep: AA and
@@ -235,51 +297,33 @@ def report_unclaimed(reg, spaces):
     return rows
 
 
-MODEL_KEY = re.compile(r"^  (\S.*?):\s*$")
-IDS_KEY = re.compile(r"^    ids:\s*$")
-
-
 def patch_ids(path, reg):
-    """Rewrite each model's `ids:` block in place, touching nothing else.
+    """Insert or replace each model's `ids:` block, touching nothing else.
 
-    Dumping the parsed document back would be shorter and would delete every
-    comment in the file -- the quant notes and sampler provenance are the part
-    of this registry a human wrote, and a script that fills in benchmark ids
-    has no business reformatting them. So this edits the lines it owns.
+    This used to only ever REPLACE, and a model added without an `ids:` block
+    was therefore matched, counted as filled and silently dropped: qwen3.8 flash
+    next carried AA and lmarena matches for a full capture that way and reached
+    MODELS.md unscored. The splice lives in registry_patch now, shared with
+    resolve-runtime, and inserts after `quants:` when the block is absent.
     """
-    lines = open(path).read().split("\n")
-    out, i, n = [], 0, 0
-    while i < len(lines):
-        m = MODEL_KEY.match(lines[i])
-        out.append(lines[i])
-        i += 1
-        if not m or m.group(1) not in reg:
+    blocks = {}
+    for repo, m in reg.items():
+        ids = m.get("ids")
+        if not ids:
             continue
-        ids = reg[m.group(1)].get("ids")
-        # copy the model's body, replacing its ids block; the body ends at the
-        # next line that is not deeper than the model key
-        while i < len(lines) and (not lines[i].strip() or lines[i].startswith("    ")):
-            if IDS_KEY.match(lines[i]) and ids:
-                out.append(lines[i])
-                i += 1
-                while i < len(lines) and lines[i].startswith("      "):
-                    i += 1
-                # dumped as a pair, not a bare scalar: safe_dump of a scalar
-                # appends a `...` document-end marker that breaks the file
-                out.extend("      " + yaml.safe_dump({k: v}).strip()
-                           for k, v in ids.items())
-                n += 1
-                continue
-            out.append(lines[i])
-            i += 1
-    open(path, "w").write("\n".join(out))
-    return n
+        # dumped as a pair, not a bare scalar: safe_dump of a scalar appends a
+        # `...` document-end marker that breaks the file
+        blocks[repo] = {"ids": ["    ids:"] + ["      " + yaml.safe_dump({k: v}).strip()
+                                               for k, v in ids.items()]}
+    return registry_patch.patch_blocks(path, blocks, after="quants")
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--registry", default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--data", default=DATA,
+                    help="directory the source captures are read from")
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--unclaimed", action="store_true",
                     help="report models a source scores that the roster does not carry")
@@ -299,20 +343,34 @@ def main():
         json.dump(out, sys.stdout, indent=1, sort_keys=True)
         print()
         return
-    spaces = key_spaces()
+    by_kind = key_spaces(args.data)
     if args.unclaimed:
-        report_unclaimed(reg, spaces)
+        # every source at once here: the question is whether ANYBODY scores a
+        # model with a gguf that the roster lacks, and a speech board answers it
+        # for the speech half exactly as a leaderboard does for the text half
+        report_unclaimed(reg, {s: sp for spaces in by_kind.values()
+                               for s, sp in spaces.items()})
         return
-    print("key spaces: %s" % ", ".join("%s %d" % (k, len(v)) for k, v in spaces.items()))
+    for kind, spaces in sorted(by_kind.items()):
+        print("%s key spaces: %s"
+              % (kind, ", ".join("%s %d" % (k, len(v)) for k, v in spaces.items())
+                 or "none"))
 
     filled, kept, amb = 0, 0, 0
     for repo, m in reg.items():
-        if m.get("kind", "text") != "text":
+        spaces = by_kind.get(m.get("kind", "text")) or {}
+        if not spaces:
             continue
         # sources drop or keep trailing qualifiers inconsistently: AA writes
         # `gemma-4-31b` where the repo is `gemma-4-31B-it`, and nvidia's repo
         # carries a `-BF16` precision suffix no benchmark uses
-        raw = [repo.split("/")[-1], (m.get("name") or {}).get("short"), ""]
+        # the owner prefix is a third real spelling, not a fourth guess: several
+        # boards slug a model as vendor-plus-name, and artificial analysis calls
+        # fishaudio/s2-pro `fish-audio-s2-pro`, which no suffix of the basename
+        # reaches. it is MORE specific than the basename, so it cannot widen a
+        # match the other variants would not already have made
+        raw = [repo.split("/")[-1], (m.get("name") or {}).get("short"),
+               repo.replace("/", "-"), ""]
         variants = []
         for cand in raw:
             if not cand:

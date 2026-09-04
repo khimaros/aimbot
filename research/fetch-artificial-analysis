@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 
-"""Fetch the artificial analysis model table into data/artificial-analysis.json.
+"""Fetch artificial analysis' leaderboards into data/artificial-analysis*.json.
 
 Artificial analysis has no free API (api/v2 returns 401 without a key), but
-their leaderboard page is a next.js app that ships the whole dataset inline as
-an RSC flight payload. ./rsc-extract pulls the records out; this shapes them.
+their leaderboard pages are a next.js app that ships the whole dataset inline
+as an RSC flight payload. ./rsc-extract pulls the records out; this shapes them.
 
-Only the fields MODELS.md actually cites are kept, so the committed file stays
-small enough to diff. Scores are as artificial analysis measured them: third
-party, one harness across every model, which is the reason MODELS.md prefers
-them to self-reported model card numbers.
+Four boards, one site, one collector. The text leaderboard keeps its own file
+because everything downstream joins on it; the three speech boards share
+data/artificial-analysis-speech.json, because a speech model is scored on
+whichever of them measures its modality and a reader wants them side by side.
+
+Only the fields something here cites are kept, so the committed files stay small
+enough to diff. Scores are as artificial analysis measured them: third party,
+one harness across every model, which is the reason MODELS.md prefers them to
+self-reported model card numbers.
+
+    fetch-artificial-analysis                       # all four boards
+    fetch-artificial-analysis --board text-to-speech
 """
 
 import argparse
@@ -18,12 +26,16 @@ import os
 import subprocess
 import sys
 
-URL = "https://artificialanalysis.ai/leaderboards/models"
+import capture
+
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/140.0.0.0 Safari/537.36")
 
-# the subset MODELS.md cites. dropping the rest takes the file from 3.7mb to ~200kb
-FIELDS = [
+TEXT_OUT = "data/artificial-analysis.json"
+SPEECH_OUT = "data/artificial-analysis-speech.json"
+
+# the text board is flat, so every field is its own path
+TEXT_FIELDS = (
     "name", "slug", "modelCreatorName", "releaseDate", "licenseName",
     "isOpenWeights", "deprecated", "isReasoning",
     "totalParameters", "activeParameters", "contextWindowTokens",
@@ -33,41 +45,242 @@ FIELDS = [
     "itbenchSre", "gdpvalNormalized", "analystAgent", "apexAgents", "mmmuPro",
     "omniscience", "omniscienceAccuracy", "omniscienceNonHallucination",
     "opennessIndex", "medianOutputTokensPerSecond", "huggingfaceUrl",
-]
+)
+
+# what each board contributes, as {kept name: dotted path into the record}.
+# dropping the rest takes the text file from 3.7mb to ~200kb, and a speech row
+# carries a whole react element tree of logos and colours beside its numbers.
+#
+# `match` is the literal rsc-extract looks for and what comes back is the object
+# ENCLOSING it, so a board whose score sits on a nested `model` has to match a
+# field of the OUTER row instead. `require` is then the path that makes a row a
+# measurement rather than some other object holding the same string.
+BOARDS = {
+    "models": {
+        "url": "https://artificialanalysis.ai/leaderboards/models",
+        "cache": "aa-leaderboard",
+        "match": '"intelligenceIndex":',
+        "require": "intelligenceIndex",
+        "out": TEXT_OUT,
+        "key": ["slug", "name"],
+        "fields": {k: k for k in TEXT_FIELDS},
+    },
+    # batch transcription. aaWerIndex is a WORD ERROR RATE, so LOWER is better
+    # -- the one place on this site where the headline number is not a score to
+    # maximise, and the reason nothing here calls it a score
+    "speech-to-text": {
+        "url": "https://artificialanalysis.ai/speech-to-text/non-streaming",
+        "cache": "aa-stt",
+        "match": '"aaWerIndex":',
+        "require": "aaWerIndex",
+        "out": SPEECH_OUT,
+        "key": ["name"],
+        "fields": {
+            "name": "name",
+            "creator": "model.creator.name",
+            "host": "host.name",
+            "hostApiId": "hostApiId",
+            "family": "model.family.slug",
+            "openWeights": "model.openWeights",
+            "releaseDate": "model.releaseDate",
+            "aaWerIndex": "aaWerIndex",
+            "aaSttDatasetWer": "aaSttDatasetWer",
+            "earnings22CleanedWer": "earnings22CleanedWer",
+            "voxpopuliCleanedWer": "voxpopuliCleanedWer",
+            "medianSpeedFactor": "performance.medianSpeedFactor",
+            "pricePer1kMinutes": "pricePer1kMinutes",
+        },
+    },
+    # the same models measured live, where what decides an interactive use is
+    # not the WER but how long after speech ends a final transcript exists
+    "speech-to-text-streaming": {
+        "url": "https://artificialanalysis.ai/speech-to-text/streaming",
+        "cache": "aa-stt-streaming",
+        "match": '"aaWerStreamingIndex":',
+        "require": "aaWerStreamingIndex",
+        "out": SPEECH_OUT,
+        "key": ["name"],
+        "fields": {
+            "name": "name",
+            "host": "host.name",
+            "hostApiId": "hostApiId",
+            "family": "family.slug",
+            "openWeights": "model.openWeights",
+            "releaseDate": "model.releaseDate",
+            "aaWerStreamingIndex": "aaWerStreamingIndex",
+            "aaAgenttalkStreamingWer": "aaAgenttalkStreamingWer",
+            "earnings22StreamingWer": "earnings22StreamingWer",
+            "voxpopuliStreamingWer": "voxpopuliStreamingWer",
+            "timeToFirstPartialTranscriptSeconds": "timeToFirstPartialTranscriptSeconds",
+            "timeToFinalTranscriptSeconds": "timeToFinalTranscriptSeconds",
+            "pricePer1kMinutes": "pricePer1kMinutes",
+        },
+    },
+    # synthesis is judged rather than measured: qualityElo is a human-preference
+    # arena rating, so HIGHER is better and its units are comparable with
+    # neither WER index above
+    "text-to-speech": {
+        "url": "https://artificialanalysis.ai/text-to-speech/models",
+        "cache": "aa-tts",
+        "match": '"pricePer1mCharacters":',
+        "require": "model.qualityElo",
+        "out": SPEECH_OUT,
+        "key": ["model.slug", "model.name"],
+        "fields": {
+            "name": "model.name",
+            "slug": "model.slug",
+            "creator": "model.creator.name",
+            "host": "host.name",
+            "family": "model.family.slug",
+            "openWeights": "model.isOpenWeights",
+            "releaseDate": "model.releaseDate",
+            "qualityElo": "model.qualityElo",
+            "medianCharactersPerSecond": "performance.medianCharactersPerSecond",
+            "pricePer1mCharacters": "pricePer1mCharacters",
+        },
+    },
+}
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--out", default="data/artificial-analysis.json")
-    ap.add_argument("--url", default=URL)
-    ap.add_argument("--max-age", type=int, default=6 * 3600)
-    ap.add_argument("--refresh", action="store_true")
-    args = ap.parse_args()
+def dig(rec, path):
+    """(found, value) for a dotted path, so a present-but-null field is kept.
 
+    Membership rather than truthiness throughout: artificial analysis reports a
+    score it did not measure as null, and dropping those would make a model
+    that was benchmarked and scored nothing indistinguishable from one that was
+    never on the board.
+    """
+    cur = rec
+    for part in path.split("."):
+        if not isinstance(cur, dict) or part not in cur:
+            return False, None
+        cur = cur[part]
+    return True, cur
+
+
+def shape(rec, fields):
+    """The kept subset, under the names this repo uses rather than the site's."""
+    out = {}
+    for name, path in fields.items():
+        found, val = dig(rec, path)
+        if found:
+            out[name] = val
+    return dict(sorted(out.items()))
+
+
+def extract(board, spec, max_age, refresh):
+    """{key: record} for one board, or None if the page could not be read."""
     here = os.path.dirname(os.path.abspath(__file__))
-    cmd = [os.path.join(here, "rsc-extract"), args.url, "--key", "aa-leaderboard",
-           "--match", '"intelligenceIndex":', "--max-age", str(args.max_age),
+    cmd = [os.path.join(here, "rsc-extract"), spec["url"], "--key", spec["cache"],
+           "--match", spec["match"], "--max-age", str(max_age),
            "--header", "User-Agent: " + UA]
-    if args.refresh:
+    if refresh:
         cmd.append("--refresh")
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
     if proc.returncode:
-        sys.exit(proc.returncode)
+        print("!!! %s: rsc-extract exited %d" % (board, proc.returncode),
+              file=sys.stderr)
+        return None
 
-    models = {}
+    rows = {}
     for line in proc.stdout.splitlines():
-        d = json.loads(line)
-        key = d.get("slug") or d.get("name")
-        if key and "intelligenceIndex" in d:
-            models[key] = {k: d.get(k) for k in FIELDS if k in d}
+        rec = json.loads(line)
+        if not dig(rec, spec["require"])[0]:
+            continue
+        key = next((v for v in (dig(rec, p)[1] for p in spec["key"]) if v), None)
+        if key:
+            rows[key] = shape(rec, spec["fields"])
+    if not rows:
+        print("!!! %s: no records -- the page structure probably changed" % board,
+              file=sys.stderr)
+        return None
+    return dict(sorted(rows.items()))
 
-    if not models:
-        sys.exit("no model records found -- the page structure probably changed")
 
-    with open(args.out, "w") as f:
-        json.dump(models, f, indent=1, sort_keys=True)
-    ow = sum(1 for d in models.values() if d.get("isOpenWeights"))
-    print("wrote %s: %d models (%d open weights)" % (args.out, len(models), ow))
+def open_weights(rows):
+    """How many of these are downloadable, under whichever name the board uses."""
+    return sum(1 for d in rows.values()
+               if d.get("isOpenWeights") or d.get("openWeights"))
+
+
+def write_board(path, rows):
+    """One board to its own file, in the formatting its capture was committed in."""
+    with open(path, "w") as f:
+        json.dump(rows, f, indent=1, sort_keys=True)
+    print("wrote %s: %d models (%d open weights)"
+          % (path, len(rows), open_weights(rows)))
+
+
+def write_speech(path, sections, allow_shrink):
+    """The three speech boards share a file, so one board's run merges into it.
+
+    Read-modify-write rather than truncate: `--board text-to-speech` alone must
+    not drop the two transcription boards, and the shrink guard then measures
+    the whole file rather than the section that happened to be refreshed.
+    """
+    try:
+        with open(path) as f:
+            payload = json.load(f)
+    except (IOError, ValueError):
+        payload = {}
+    payload.update(sections)
+    payload = dict(sorted(payload.items()))
+
+    written, now, before = capture.write(
+        path, payload, lambda p: sum(len(v) for v in p.values()),
+        allow_shrink=allow_shrink)
+    if not written:
+        print(capture.refused(path, now, before), file=sys.stderr)
+        return False
+    print("wrote %s: %d rows -- %s"
+          % (path, now, ", ".join("%s %d (%d open weights)"
+                                  % (k, len(v), open_weights(v))
+                                  for k, v in payload.items())))
+    return True
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--board", choices=sorted(BOARDS) + ["all"], default="all")
+    ap.add_argument("--out", help="override the output path (single board only)")
+    ap.add_argument("--url", help="override the page fetched (single board only)")
+    ap.add_argument("--cache-key",
+                    help="override the httpcache name, so a run against a "
+                         "fixture leaves the real cache alone")
+    ap.add_argument("--max-age", type=int, default=6 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write the speech file even though it holds fewer rows")
+    args = ap.parse_args()
+
+    for flag in ("out", "url", "cache_key"):
+        if getattr(args, flag) and args.board == "all":
+            sys.exit("--%s applies to one board, so it needs one --board"
+                     % flag.replace("_", "-"))
+    want = sorted(BOARDS) if args.board == "all" else [args.board]
+
+    # `--out` moves the destination without changing the ROUTING: a speech board
+    # still merges into whatever file it lands in, because the merge is the
+    # behaviour worth being able to point somewhere else and check
+    speech, speech_out, failed = {}, SPEECH_OUT, []
+    for board in want:
+        spec = dict(BOARDS[board], url=args.url or BOARDS[board]["url"],
+                    cache=args.cache_key or BOARDS[board]["cache"])
+        rows = extract(board, spec, args.max_age, args.refresh)
+        if rows is None:
+            failed.append(board)
+            continue
+        if spec["out"] == SPEECH_OUT:
+            speech[board] = rows
+            speech_out = args.out or SPEECH_OUT
+        else:
+            write_board(args.out or spec["out"], rows)
+
+    if speech and not write_speech(speech_out, speech, args.allow_shrink):
+        failed.append(speech_out)
+    if failed:
+        sys.exit("!!! %d board(s) unwritten: %s" % (len(failed), ", ".join(failed)))
 
 
 if __name__ == "__main__":

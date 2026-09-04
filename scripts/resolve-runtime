@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+
+"""Fill each model's `runtime:` block from what llama.cpp's history says.
+
+    resolve-runtime            # report only
+    resolve-runtime --write    # update registry/models.yaml
+    resolve-runtime --check    # fail if the registry is behind the capture
+
+`fetch-llama-support` resolves an architecture to the release that introduced
+it. This is the half that writes it down, on the model, because the
+architecture is a property of the model and every quant repo of it declares the
+same string -- and when two of them do NOT, that is a real disagreement and
+gets reported rather than averaged.
+
+A `runtime:` block on a QUANT is never touched. That is the hand-written half:
+a rung mainline has no type for (ik_llama.cpp's `_R4`, `IQ5_K`, `IQ6_K`) or one
+waiting on an unmerged PR is a property of how the quantizer built that one
+file, and nothing in llama.cpp's history can tell you about it. Model-level is
+derived, quant-level is written by a human, and the quant wins.
+
+Only text models get a block. An image or speech gguf is loaded by
+stable-diffusion.cpp or whisper.cpp, so "mainline llama.cpp does not carry this
+architecture" is true of them and also beside the point; saying it would read
+as a defect rather than as the wrong question.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA = os.path.join(HERE, "..", "research", "data")
+SUPPORT = os.path.join(DATA, "llama-support.json")
+
+sys.path.insert(0, HERE)
+import registry_patch  # noqa: E402  the splice, shared with resolve-ids
+
+# the order the block prints in: what it is, whether a stock build has it, and
+# then the two coordinates of when. `near` only appears when it is the reason
+DERIVED = ("arch", "mainline", "since", "merged", "near")
+
+# what llama.cpp's history cannot tell you and a human therefore writes: where
+# to go when mainline does not carry the architecture. these are read back off
+# the existing block and re-emitted, so `--write` refreshes the derived half
+# without deleting the half somebody researched
+KEPT = ("fork", "branch", "tracking", "patch", "note")
+
+FIELDS = DERIVED + KEPT
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("!!! pyyaml not found")
+
+
+def block_for(model, support):
+    """The `runtime:` value for one model, or (None, reason) if it gets none."""
+    repos = [q["repo"] for q in (model.get("quants") or []) if q.get("repo")]
+    archs = sorted({support["repos"][r] for r in repos if r in support["repos"]})
+    if not archs:
+        return None, "no gguf header declared an architecture"
+    if len(archs) > 1:
+        return None, "quant repos disagree: %s" % ", ".join(archs)
+    got = support["arch"].get(archs[0]) or {}
+    have = model.get("runtime") or {}
+    out = {"arch": archs[0]}
+    out.update({k: got[k] for k in DERIVED if k in got})
+    out.update({k: have[k] for k in KEPT if k in have})
+    return out, None
+
+
+def render(block):
+    """The block as registry lines, at the registry's indent.
+
+    Dumped as a pair rather than a bare scalar, for the reason patch_ids gives:
+    safe_dump of a scalar appends a `...` document-end marker mid-file. And
+    every line of the dump gets the indent, not just the first -- a `note:`
+    long enough for safe_dump to wrap comes back as two lines, and indenting
+    only the first leaves the continuation at column 2, where it reads as a new
+    model key and the file stops parsing.
+    """
+    out = ["    runtime:"]
+    for k in FIELDS:
+        if k in block:
+            dumped = yaml.safe_dump({k: block[k]}, width=90).rstrip()
+            out += ["      " + l for l in dumped.split("\n")]
+    return out
+
+
+def patch(path, blocks):
+    """Insert or replace each model's `runtime:` block, after `quants:`.
+
+    The splice is registry_patch's, shared with resolve-ids: a model added
+    without a block has to GET one, which is the half resolve-ids was missing.
+    """
+    return registry_patch.patch_blocks(
+        path, {repo: {"runtime": render(b)} for repo, b in blocks.items()},
+        after="quants")
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--registry", default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--support", default=SUPPORT)
+    ap.add_argument("--write", action="store_true")
+    ap.add_argument("--check", action="store_true",
+                    help="exit non-zero if the registry does not match the capture")
+    args = ap.parse_args()
+
+    try:
+        support = json.load(open(args.support))
+    except (IOError, ValueError):
+        sys.exit("!!! no %s -- run research/fetch-llama-support" % args.support)
+
+    reg = (yaml.safe_load(open(args.registry)) or {}).get("models") or {}
+    blocks, skipped, stale = {}, [], []
+    for repo, m in reg.items():
+        if m.get("kind", "text") != "text":
+            continue
+        block, why = block_for(m, support)
+        if not block:
+            skipped.append((repo, why))
+            continue
+        blocks[repo] = block
+        if (m.get("runtime") or None) != block:
+            stale.append(repo)
+        mark = "" if block.get("mainline") else \
+            "  ABSENT from mainline" + (" (near %s)" % block["near"] if block.get("near") else "")
+        print("  %-46s %-18s %-8s%s" % (repo, block["arch"],
+                                        block.get("since") or "-", mark))
+
+    for repo, why in skipped:
+        print("  %-46s -- %s" % (repo, why))
+    print("\n%d model(s) resolved, %d without one, %d behind the capture"
+          % (len(blocks), len(skipped), len(stale)))
+
+    if args.check and stale:
+        sys.exit("!!! %d model(s) behind research/data/llama-support.json: %s\n"
+                 "    run scripts/resolve-runtime --write"
+                 % (len(stale), ", ".join(sorted(stale)[:6])))
+    if args.write:
+        print("wrote %s: %d runtime block(s)" % (args.registry, patch(args.registry, blocks)))
+
+
+if __name__ == "__main__":
+    main()

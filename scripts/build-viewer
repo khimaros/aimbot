@@ -32,6 +32,7 @@ absent -- see the README's split.
 """
 
 import argparse
+import functools
 import hashlib
 import importlib.machinery
 import importlib.util
@@ -104,9 +105,22 @@ QUANT_EVIDENCE = [
       "card.critpt", "card.gpqa", "card.hle", "card.mmlu", "card.mmlu_pro"]),
 
     ("reasoning", False,
-     "maths, proof and puzzle solving. scored on a final answer rather than on "
-     "working code, and no sweep here has measured what a quant costs it",
+     "maths, proof, puzzle solving and argument. scored on what the model "
+     "concluded rather than on working code, and no sweep here has measured "
+     "what a quant costs it",
      ["epoch.arc_agi", "epoch.arc_agi_2", "epoch.chess_puzzles",
+      # research mathematics, scored on the final answer. the v2 pair is what
+      # epoch's own metadata marks the older two `superseded_by`, and both
+      # generations are listed so a model scored on either does not stop a build
+      "epoch.frontiermath", "epoch.frontiermath_tier_4",
+      "epoch.frontiermath_tiers_1_3_v2", "epoch.frontiermath_tier_4_v2",
+      # the conceptual reasoning index's two halves. dtbench is multiple choice
+      # over newcomb-like decision problems; lmca is expert-rated argumentative
+      # prose on philosophy, decision theory and AI risk. neither writes code or
+      # drives a tool loop, and lmca is the first facet here scored on the
+      # QUALITY of an argument rather than on a right answer -- which is a
+      # reason to leave it undiscounted, not a reason to guess a discount
+      "epoch.dtbench", "epoch.lmca",
       "epoch.mystery_game_puzzles", "epoch.otis_mock_aime_2024_2025",
       "epoch.proofbench", "card.aime"]),
 
@@ -130,6 +144,11 @@ QUANT_EVIDENCE = [
      "drift over many steps rather than a wrong answer in one",
      ["aa.analyst_agent", "aa.apex_agents", "aa.gdpval",
       "epoch.apex_agents", "epoch.blueprint_bench_2", "epoch.cl_bench",
+      # earthborne rangers: repeated playthroughs of a campaign board game with
+      # note-taking between them, asking whether a model improves with practice.
+      # a playthrough is 2-4 hours of human time, so it fails by drifting over a
+      # long horizon rather than by getting one answer wrong
+      "epoch.ebr_bench",
       "epoch.cl_bench_life", "epoch.exploitbench", "epoch.gbaeval",
       "epoch.gdp_pdf", "epoch.lech_mazur_writing", "epoch.metr_time_horizons",
       "epoch.forecastbench", "epoch.posttrainbench",
@@ -427,8 +446,29 @@ def registry_lines(path):
     return lines
 
 
-def quant_rows(model, sizes):
-    """Each declared quant, with what it weighs and what that is per weight."""
+@functools.lru_cache(maxsize=1)
+def validator():
+    """models-validate as a module, so its reduction is shipped not restated.
+
+    The page marks exactly the rungs the punch list prints, so the two cannot
+    come to different conclusions about which files a stock build opens.
+    """
+    return load_script("models_validate", os.path.join(HERE, "models-validate"))
+
+
+def fork_type(tag, known):
+    return validator().fork_type(tag, known)
+
+
+def quant_rows(model, sizes, known_quants=()):
+    """Each declared quant, with what it weighs and what that is per weight.
+
+    A rung also carries whether a stock llama.cpp can load it. The ladder is
+    built from what a repo publishes, and a publisher is free to publish rungs
+    in types only their own fork has -- laguna m.1's ik_llama `_R4` and
+    `IQ5_K` are 10 of its 28. Offering those as choices with a size beside them
+    is the page answering "what else is there" with files that will not open.
+    """
     params = None
     out = []
     for q in model.get("quants") or []:
@@ -445,6 +485,10 @@ def quant_rows(model, sizes):
             ({"quant": k, "gib": round(v / GIB, 2)}
              for k, v in repo_sizes.items() if not NOT_A_QUANT.search(k)),
             key=lambda x: x["gib"])
+        for a in row["available"]:
+            fork = known_quants and fork_type(a["quant"], known_quants)
+            if fork:
+                a["fork_type"] = fork
         out.append(row)
     return out, params
 
@@ -465,7 +509,7 @@ def build_model(repo, model, ctx):
     facts = ctx["facts"].get(repo) or {}
     use = (ctx["usecase"].get("models") or {}).get(repo) or {}
     card = ctx["cards"].get(repo) or {}
-    quants, _ = quant_rows(model, ctx["sizes"])
+    quants, _ = quant_rows(model, ctx["sizes"], ctx["known_quants"])
     quants = with_bpw(quants, facts.get("params_total_b"))
     name = model.get("name") or {}
     rec = {
@@ -476,6 +520,7 @@ def build_model(repo, model, ctx):
         "entry_url": "%s/blob/%s/registry/models.yaml#L%d"
                      % (GITHUB, BRANCH, ctx["lines"].get(repo, 1)),
         "notes": model.get("notes"),
+        "runtime": model.get("runtime") or {},
         "native_low_bpw": model.get("native_low_bpw"),
         "modalities": model.get("modalities") or {},
         "facts": facts, "quants": quants,
@@ -536,9 +581,11 @@ def provenance():
 
 def build():
     reg_path = os.path.join(ROOT, "registry", "models.yaml")
+    support = load_json("llama-support")
     ctx = {"facts": load_json("model-facts"), "sizes": load_json("gguf-sizes"),
            "probes": load_json("template-probes"),
            "usecase": load_json("usecase"), "cards": load_json("model-cards"),
+           "known_quants": set(support.get("quants") or []),
            "lines": registry_lines(reg_path)}
     registry = load_yaml(reg_path).get("models") or {}
     sampling = load_yaml(os.path.join(ROOT, "registry", "sampling.yaml"))

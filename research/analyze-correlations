@@ -207,7 +207,11 @@ def roster_vectors(here, aa, gbench, lm, sw, epoch, sentiment, sizes):
     cols = {}
     for name, ids in srcs.items():
         rec = {}
-        a = aa.get(ids["aa"]) if ids["aa"] else None
+        # `.get`, not a subscript: an id block carries the key spaces its
+        # model's MODALITY has, so a speech model has aa-stt and no aa at all.
+        # subscripting assumed every model was scored by the five text sources
+        # and crashed the whole redundancy analysis on the first one that was not
+        a = aa.get(ids.get("aa")) if ids.get("aa") else None
         if a:
             for f in ("intelligenceIndex", "codingIndex", "agenticIndex",
                       "terminalbenchV21", "gpqa", "hle"):
@@ -215,14 +219,12 @@ def roster_vectors(here, aa, gbench, lm, sw, epoch, sentiment, sizes):
                     rec["aa " + {"intelligenceIndex": "II", "codingIndex": "coding",
                                  "agenticIndex": "agentic", "terminalbenchV21": "tbench",
                                  "gpqa": "gpqa", "hle": "hle"}[f]] = float(a[f])
-        if ids["gbench"] in gb:
-            rec["gbench"] = gb[ids["gbench"]]
-        if ids["lmarena"] in arena:
-            rec["lmarena"] = arena[ids["lmarena"]]
-        if ids["swerebench"] in swe:
-            rec["swe-rebench"] = swe[ids["swerebench"]]
-        if ids["epoch"] in eci:
-            rec["epoch ECI"] = eci[ids["epoch"]]
+        for source, table, col in (("gbench", gb, "gbench"),
+                                   ("lmarena", arena, "lmarena"),
+                                   ("swerebench", swe, "swe-rebench"),
+                                   ("epoch", eci, "epoch ECI")):
+            if ids.get(source) in table:
+                rec[col] = table[ids[source]]
         s = (sentiment or {}).get(name)
         if s and s.get("mentions"):
             # the composite's own formula, so this correlates the component that

@@ -116,11 +116,18 @@ def page(params, key, args):
 
 
 def read_list(path):
+    """Names from a hand-kept list, without its comments or `[role]` markers.
+
+    publishers.txt groups its entries under markers that ./propose reads. They
+    are not names, and querying the hub for an author called `[quantizer]` is
+    the failure that skipping them avoids.
+    """
     try:
         with open(path) as f:
-            return [l.split("#")[0].strip() for l in f if l.split("#")[0].strip()]
+            names = [l.split("#")[0].strip() for l in f]
     except IOError:
         return []
+    return [n for n in names if n and not n.startswith("[")]
 
 
 def main():

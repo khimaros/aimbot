@@ -436,6 +436,648 @@ def a_text_model_with_no_alias_is_reported_not_failed():
        "a speech model has no forum prose to match, so it is not: %r" % out)
 
 
+# a llama.cpp small enough to build in a test and shaped like the real one in
+# the three places the collector reads: the arch table, the file types and the
+# tensor types. `qwen3tts` is here unhyphenated on purpose -- it is the near
+# miss that a header spelling it `qwen3-tts` has to be caught by
+ARCH_CPP_V1 = """
+static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
+    { LLM_ARCH_LLAMA, "llama" },
+};
+"""
+ARCH_CPP_V2 = ARCH_CPP_V1.replace(
+    '{ LLM_ARCH_LLAMA, "llama" },',
+    '{ LLM_ARCH_LLAMA, "llama" },\n    { LLM_ARCH_QWEN3TTS, "qwen3tts" },')
+LLAMA_H = "enum llama_ftype {\n    LLAMA_FTYPE_MOSTLY_Q4_K_M = 15,\n};\n"
+GGML_H = "enum ggml_type {\n    GGML_TYPE_Q4_K = 12,\n};\n"
+
+
+def fake_llama_cpp(tmp):
+    """A git repo where `qwen3tts` arrives in a later, tagged commit."""
+    d = os.path.join(tmp, "llama.cpp")
+    os.makedirs(os.path.join(d, "src"))
+    os.makedirs(os.path.join(d, "include"))
+    os.makedirs(os.path.join(d, "ggml", "include"))
+
+    def git(*a):
+        subprocess.run(("git", "-C", d, "-c", "user.email=t@t", "-c", "user.name=t")
+                       + a, check=True, capture_output=True)
+
+    subprocess.run(("git", "init", "-q", "-b", "master", d), check=True,
+                   capture_output=True)
+    write = lambda p, s: open(os.path.join(d, p), "w").write(s)
+    write("include/llama.h", LLAMA_H)
+    write("ggml/include/ggml.h", GGML_H)
+    write("src/llama-arch.cpp", ARCH_CPP_V1)
+    git("add", "-A")
+    git("commit", "-qm", "first")
+    git("tag", "b1000")
+    write("src/llama-arch.cpp", ARCH_CPP_V2)
+    git("add", "-A")
+    git("commit", "-qm", "add qwen3tts")
+    git("tag", "b2000")
+    # a later release, so "first tag containing it" has to pick b2000 not b3000
+    write("src/llama-arch.cpp", ARCH_CPP_V2 + "// later\n")
+    git("add", "-A")
+    git("commit", "-qm", "unrelated")
+    git("tag", "b3000")
+    return d
+
+
+SUPPORT_REGISTRY = """
+version: 1
+models:
+  Vendor/Supported:
+    kind: text
+    quants:
+    - {repo: Test-Support/Supported-GGUF, quant: Q4_K_M}
+  Vendor/Hyphenated:
+    kind: text
+    quants:
+    - {repo: Test-Support/Hyphenated-GGUF, quant: Q4_K_M}
+"""
+
+
+def seed_gguf_header(repo, architecture):
+    """Put huggingface's parse of a gguf header in the cache the collector reads."""
+    key = "facts-%s-ggufmeta" % repo.replace("/", "_")
+    purge(key)
+    with open(os.path.join(CACHE, key + ".body"), "w") as f:
+        json.dump({"gguf": {"architecture": architecture}}, f)
+    return key
+
+
+@test
+def llama_support_dates_an_arch_from_the_release_that_introduced_it():
+    """the oldest build that loads a file, resolved rather than typed.
+
+    Runs the real collector against a real git history, so what is under test
+    is the `-S` search and the tag walk -- the two things that would silently
+    return the wrong release if either were subtly wrong. b3000 also contains
+    the commit; the answer is the FIRST tag that does, which is b2000.
+    """
+    tmp = tempfile.mkdtemp()
+    keys = [seed_gguf_header("Test-Support/Supported-GGUF", "qwen3tts"),
+            seed_gguf_header("Test-Support/Hyphenated-GGUF", "qwen3-tts")]
+    try:
+        reg = os.path.join(tmp, "models.yaml")
+        with open(reg, "w") as f:
+            f.write(SUPPORT_REGISTRY)
+        out = os.path.join(tmp, "llama-support.json")
+        r = subprocess.run(
+            [os.path.join(RESEARCH, "fetch-llama-support"), "--registry", reg,
+             "--llama", fake_llama_cpp(tmp), "--ref", "master", "--out", out,
+             "--max-age", "86400"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if r.returncode:
+            raise AssertionError("fetch-llama-support exited %d: %s"
+                                 % (r.returncode, r.stderr.strip()))
+        got = json.load(open(out))
+    finally:
+        for k in keys:
+            purge(k)
+        shutil.rmtree(tmp)
+
+    eq(got["arch"]["qwen3tts"]["mainline"], True, "the arch mainline carries")
+    eq(got["arch"]["qwen3tts"]["since"], "b2000",
+       "the FIRST release containing the commit, not the newest")
+    eq(got["arch"]["qwen3tts"].get("near"), None, "an exact hit needs no near")
+
+    # the failure that costs the most to miss: the lookup is `==`, so a header
+    # one hyphen off matches nothing and the file does not load
+    eq(got["arch"]["qwen3-tts"]["mainline"], False, "a hyphenated header is absent")
+    eq(got["arch"]["qwen3-tts"]["near"], "qwen3tts", "and names the spelling it misses")
+
+    eq(got["quants"], ["Q4_K", "Q4_K_M"], "both type tables are captured")
+    eq(got["repos"]["Test-Support/Supported-GGUF"], "qwen3tts", "repo to arch")
+
+
+@test
+def a_model_off_mainline_must_say_where_to_get_a_build():
+    """`mainline: false` alone asserts a file loads nowhere, which is never true."""
+    base = """
+version: 1
+models:
+  Vendor/Model:
+    kind: text
+    name: {short: nowhere model, match: 'nowhere[\\s-]*model'}
+    quants:
+    - {repo: Quanter/Model-GGUF, quant: Q4_K_M}
+    runtime:
+      arch: madeup
+      mainline: false
+%s
+    sampling:
+      instruct: {source: quant-card, temp: 0.7}
+"""
+    code, findings, _ = validate(base % "")
+    msgs = " ".join(f["error"] for f in findings)
+    eq(code != 0, True, "a dead end is an error")
+    eq("needs one of" in msgs, True, "and says what would fix it: %s" % msgs)
+
+    # any one of the four ways of answering "where" clears it
+    for where in ("      tracking: https://github.com/ggml-org/llama.cpp/pull/1",
+                  "      fork: someone/llama.cpp",
+                  "      patch: someone/Model-GGUF",
+                  "      near: made-up"):
+        code, findings, _ = validate(base % where)
+        eq(code, 0, "%s should satisfy it, got %s"
+           % (where.strip().split(":")[0], [f["error"] for f in findings]))
+
+    # a release tag is what a consumer pins, so a date in `since` is a typo
+    code, findings, _ = validate("""
+version: 1
+models:
+  Vendor/Model:
+    kind: text
+    name: {short: dated model, match: 'dated[\\s-]*model'}
+    quants:
+    - {repo: Quanter/Model-GGUF, quant: Q4_K_M}
+    runtime: {arch: llama, mainline: true, since: '2026-08-27'}
+    sampling:
+      instruct: {source: quant-card, temp: 0.7}
+""")
+    eq(code != 0, True, "a date where a release tag belongs is an error")
+    eq("release tag" in " ".join(f["error"] for f in findings), True, "and says so")
+
+
+PATCH_FIXTURE = """version: 1
+models:
+  Vendor/Has-Block:
+    kind: text
+    quants:
+    - {repo: Quanter/Has-GGUF, quant: Q4_K_M}
+    sampling:
+      instruct: {source: quant-card, temp: 0.7}
+    ids:
+      aa: old-value
+      gbench: ''
+    notes: a note a human wrote, which nothing here may reformat
+
+  Vendor/No-Block:
+    kind: text
+    quants:
+    - {repo: Quanter/None-GGUF, quant: Q4_K_M}
+    # a comment explaining the sampling below, which must stay attached to it
+    sampling:
+      instruct: {source: quant-card, temp: 0.7}
+"""
+
+
+@test
+def a_model_with_no_block_gets_one_rather_than_being_skipped():
+    """only ever replacing a block means never filling one in.
+
+    `resolve-ids` could rewrite an `ids:` block and not create one, so a model
+    added without one was matched, counted as filled and silently dropped --
+    qwen3.8 flash next carried AA and lmarena ids for a full capture that way
+    and reached MODELS.md unscored. Both cases are checked together because the
+    fix has to insert WITHOUT relocating the block the other model already has.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "registry_patch", os.path.join(ROOT, "scripts", "registry_patch.py"))
+    rp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rp)
+
+    tmp = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmp, "models.yaml")
+        with open(path, "w") as f:
+            f.write(PATCH_FIXTURE)
+        n = rp.patch_blocks(path, {
+            "Vendor/Has-Block": {"ids": ["    ids:", "      aa: new-value"]},
+            "Vendor/No-Block": {"ids": ["    ids:", "      aa: fresh"]},
+        }, after="quants")
+        got = open(path).read()
+    finally:
+        shutil.rmtree(tmp)
+
+    import yaml
+    doc = yaml.safe_load(got)["models"]
+    eq(n, 2, "both models patched")
+    eq(doc["Vendor/No-Block"]["ids"], {"aa": "fresh"}, "a missing block is CREATED")
+    eq(doc["Vendor/Has-Block"]["ids"], {"aa": "new-value"}, "an existing one is replaced")
+    eq("old-value" in got, False, "and the old values are gone")
+
+    # the rest of the file is the part a human wrote, and a deriver that
+    # reformats it makes every future diff unreadable
+    eq("a note a human wrote, which nothing here may reformat" in got, True,
+       "prose survives")
+    eq("# a comment explaining the sampling below" in got, True, "comments survive")
+    # only keys that open a block; `notes:` carries its value inline
+    lines = got.split("\n")
+    order = [l.strip().rstrip(":") for l in lines
+             if l.startswith("    ") and l.endswith(":") and not l.startswith("     ")]
+    eq(order, ["quants", "sampling", "ids", "quants", "ids", "sampling"],
+       "an existing block stays where it sat; only the new one goes after quants")
+
+    # running it again must not append a second copy
+    tmp = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmp, "models.yaml")
+        with open(path, "w") as f:
+            f.write(got)
+        rp.patch_blocks(path, {"Vendor/No-Block": {"ids": ["    ids:", "      aa: fresh"]}},
+                        after="quants")
+        again = open(path).read()
+    finally:
+        shutil.rmtree(tmp)
+    eq(again.count("      aa: fresh"), 1, "a second pass does not duplicate the block")
+
+
+@test
+def a_dead_source_cannot_empty_a_capture():
+    """the failure that made this necessary, in the order it actually happened.
+
+    `fetch-reddit --refresh` does not read the existing file -- that is what
+    refresh means -- so when old.reddit stopped serving parseable html it
+    rebuilt its output from nothing, fetched nothing, and wrote 0 searches, 0
+    listings and 0 threads over a capture holding 38, 3 and 147. It exited
+    non-zero AFTER the write, which is no protection at all, and
+    `scripts/sweep --refresh` passes --refresh to every collector.
+
+    Nothing in this repo can rebuild that corpus: it accumulated over months of
+    sweeps from a source that no longer answers.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "capture", os.path.join(RESEARCH, "capture.py"))
+    cap = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cap)
+
+    tmp = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmp, "capture.json")
+        good = {"a": 1, "b": 2, "c": 3}
+        eq(cap.write(path, good, len)[0], True, "the first write always lands")
+        eq(json.load(open(path)), good, "and it is what was passed")
+
+        # the dead-source shape: a run that produced nothing
+        written, now, before = cap.write(path, {}, len)
+        eq(written, False, "an empty result must not overwrite a full capture")
+        eq((now, before), (0, 3), "and it reports both counts")
+        eq(json.load(open(path)), good, "the capture on disk is untouched")
+
+        # one record short is still short. the guard is crude on purpose, but a
+        # source half-answering is exactly as unnoticed as one not answering
+        eq(cap.write(path, {"a": 1, "b": 2}, len)[0], False, "n-1 is refused too")
+        eq(len(json.load(open(path))), 3, "still untouched")
+
+        # growing and staying level are the normal cases and must not be blocked
+        eq(cap.write(path, {"a": 9, "b": 2, "c": 3}, len)[0], True,
+           "same size, different contents, is a normal capture")
+        eq(json.load(open(path))["a"], 9, "and the new contents are written")
+        eq(cap.write(path, {"a": 1, "b": 2, "c": 3, "d": 4}, len)[0], True,
+           "growing is the normal case")
+
+        # a human who knows the smaller result is right can say so
+        eq(cap.write(path, {"a": 1}, len, allow_shrink=True)[0], True,
+           "--allow-shrink is the override")
+        eq(len(json.load(open(path))), 1, "and it really writes")
+
+        # no capture yet is not a shrink
+        fresh = os.path.join(tmp, "new.json")
+        eq(cap.write(fresh, {}, len)[0], True, "an empty first capture is allowed")
+    finally:
+        shutil.rmtree(tmp)
+
+
+@test
+def dotenv_configures_the_llm_without_overriding_the_environment():
+    """`.env` is read, and loses to anything already exported.
+
+    That order is what lets one run be pointed elsewhere without editing the
+    file (`AIMBOT_LLM_MODEL=other make llm`), and what stops a stale `.env` from
+    quietly winning over an endpoint somebody exported on purpose. It is also
+    the half that is easy to get backwards.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "llm_under_test", os.path.join(RESEARCH, "llm.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    tmp = tempfile.mkdtemp()
+    keep = {k: os.environ.get(k) for k in
+            ("AIMBOT_LLM_URL", "AIMBOT_LLM_MODEL", "AIMBOT_LLM_KEY", "T_QUOTED")}
+    try:
+        path = os.path.join(tmp, ".env")
+        with open(path, "w") as f:
+            f.write("# a comment\n\n"
+                    "AIMBOT_LLM_URL=http://example:9/v1\n"
+                    "export AIMBOT_LLM_MODEL=from-file\n"
+                    'T_QUOTED="quoted value"\n'
+                    "not a pair\n")
+        for k in keep:
+            os.environ.pop(k, None)
+        got = mod.load_env(path)
+        eq(got.get("AIMBOT_LLM_MODEL"), "from-file", "`export ` prefix is stripped")
+        eq(got.get("T_QUOTED"), "quoted value", "quotes come off the value")
+        eq("not a pair" in got, False, "a line with no `=` is skipped, not guessed at")
+        eq(os.environ["AIMBOT_LLM_URL"], "http://example:9/v1", "and it reaches os.environ")
+
+        # an exported value must survive a later load
+        os.environ["AIMBOT_LLM_MODEL"] = "exported-wins"
+        mod.load_env(path)
+        eq(os.environ["AIMBOT_LLM_MODEL"], "exported-wins",
+           "the environment beats the file")
+
+        eq(mod.load_env(os.path.join(tmp, "absent")), {}, "a missing .env is fine")
+
+        # no model anywhere means every llm step skips itself, which is what
+        # keeps a sweep on a machine with no endpoint identical to before
+        mod.ENV_FILE = os.path.join(tmp, "absent")
+        for k in keep:
+            os.environ.pop(k, None)
+        eq(mod.configured(), None, "unconfigured is None")
+        os.environ["AIMBOT_LLM_MODEL"] = "something"
+        eq(mod.configured()[0], mod.DEFAULT_URL, "and the url falls back to the default")
+    finally:
+        for k, v in keep.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
+        shutil.rmtree(tmp)
+
+
+CRISPASR_REGISTRY = """version: 1
+models:
+  Fixture/Both:
+    kind: speech
+    name: {short: both}
+    quants:
+    - {repo: Q/Both-GGUF, quant: Q8_0}
+    crispasr: {backend: parakeet, diarize: embedder}
+    modalities: {input: [audio], output: [text]}
+  Fixture/Diarizer-Mislabelled:
+    kind: speech
+    name: {short: diarizer mislabelled}
+    quants:
+    - {repo: Q/Emb-GGUF, quant: Q8_0}
+    crispasr: {diarize: embedder}
+  Fixture/Diarize-Kind-No-Role:
+    kind: diarize
+    name: {short: diarize kind no role}
+    quants:
+    - {repo: Q/Seg-GGUF, quant: Q8_0}
+  Fixture/Unknown-Role:
+    kind: diarize
+    name: {short: unknown role}
+    quants:
+    - {repo: Q/Weird-GGUF, quant: Q8_0}
+    crispasr: {diarize: transcription}
+  Fixture/Fine:
+    kind: speech
+    name: {short: fine}
+    quants:
+    - {repo: Q/Fine-GGUF, quant: Q8_0}
+    crispasr: {backend: whisper}
+    modalities: {input: [audio], output: [text]}
+"""
+
+
+@test
+def a_crispasr_block_names_one_use_for_a_weight():
+    """A weight is transcribed WITH or diarized with, never both.
+
+    `--backend` loads a file as the ASR model and `--diarize-embedder` loads one
+    beside it; a block claiming both describes no invocation anybody could run.
+    The kind has to agree too, because it is what stops a 24mb speaker embedder
+    with no chat template and no transcript being counted in the speech roster
+    and offered to a consumer as something to serve.
+    """
+    code, findings, _ = validate(CRISPASR_REGISTRY)
+    eq(code, 1, "a contradictory block fails the lint")
+    # one entry can raise more than one finding -- a block naming both roles
+    # also disagrees with its kind -- so collect them rather than keeping the last
+    where = {}
+    for x in findings:
+        where.setdefault(x["where"], []).append(x["error"])
+
+    def says(repo, fragment):
+        return any(fragment in e for e in where.get(repo, []))
+
+    eq(says("Fixture/Both", "exactly one of backend"), True,
+       "backend and diarize together is an error, got %r" % where.get("Fixture/Both"))
+    eq(says("Fixture/Diarizer-Mislabelled", "kind diarize"), True,
+       "a diarize role on a speech kind is an error, got %r"
+       % where.get("Fixture/Diarizer-Mislabelled"))
+    eq(says("Fixture/Diarize-Kind-No-Role", "needs a crispasr.diarize"), True,
+       "the diarize kind with no role is an error, got %r"
+       % where.get("Fixture/Diarize-Kind-No-Role"))
+    eq(says("Fixture/Unknown-Role", "must be one of"), True,
+       "an invented role is an error, got %r" % where.get("Fixture/Unknown-Role"))
+    eq("Fixture/Fine" in where, False,
+       "a backend on a speech model is the ordinary case and must not fire")
+
+
+SPEECH_CAPTURE = {
+    "speech-to-text": {
+        "Open Transcriber": {"name": "Open Transcriber", "openWeights": True,
+                             "hostApiId": "vendor/Open-Transcriber", "aaWerIndex": 0.04},
+        "Hosted Transcriber": {"name": "Hosted Transcriber", "openWeights": False,
+                               "hostApiId": "hosted-transcriber", "aaWerIndex": 0.02},
+    },
+    "text-to-speech": {
+        "widget-tts-vc-realtime": {"name": "Widget TTS", "openWeights": False,
+                                   "slug": "widget-tts-vc-realtime", "qualityElo": 925.5},
+    },
+}
+
+SPEECH_REGISTRY = """version: 1
+models:
+  vendor/Open-Transcriber:
+    kind: speech
+    name: {short: open-transcriber}
+    quants:
+    - {repo: Q/Open-Transcriber-GGUF, quant: Q8_0}
+    crispasr: {backend: whisper}
+    modalities: {input: [audio], output: [text]}
+  vendor/Widget-TTS-GGUF:
+    kind: speech
+    name: {short: widget-tts}
+    quants:
+    - {repo: vendor/Widget-TTS-GGUF, quant: Q8_0}
+    modalities: {input: [text], output: [audio]}
+"""
+
+
+@test
+def a_hosted_endpoint_never_scores_the_open_weights_it_shares_a_name_with():
+    """A speech board is mostly hosted APIs, and an API SKU is not a checkpoint.
+
+    Artificial analysis rates `qwen3-tts-vc-realtime` on alibaba cloud at 925
+    elo, and this registry carries gguf conversions of the open Qwen3-TTS at a
+    different codec rate through a different stack. The names match on every
+    fuzzy test there is, so the guard cannot be a matching rule -- a row the
+    source itself marks closed-weights is never offered to the matcher at all.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        data = os.path.join(tmp, "data")
+        os.mkdir(data)
+        with open(os.path.join(data, "artificial-analysis-speech.json"), "w") as f:
+            json.dump(SPEECH_CAPTURE, f)
+        reg = os.path.join(tmp, "models.yaml")
+        with open(reg, "w") as f:
+            f.write(SPEECH_REGISTRY)
+        r = subprocess.run([os.path.join(ROOT, "scripts", "resolve-ids"),
+                            "--registry", reg, "--data", data, "--write"],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if r.returncode:
+            raise AssertionError("resolve-ids exited %d: %s" % (r.returncode, r.stderr.strip()))
+        import yaml
+        got = yaml.safe_load(open(reg))["models"]
+    finally:
+        shutil.rmtree(tmp)
+
+    tts = got["vendor/Widget-TTS-GGUF"].get("ids") or {}
+    eq(tts.get("aa-tts", ""), "",
+       "a closed-weights row must not claim the open weights it is named after")
+    stt = got["vendor/Open-Transcriber"].get("ids") or {}
+    eq(stt.get("aa-stt"), "Open Transcriber",
+       "an open-weights row still matches, or the filter has eaten everything")
+    eq("aa" in stt, False,
+       "a speech model is never offered the text leaderboard's key space")
+
+
+@test
+def one_speech_board_refreshing_does_not_drop_the_others():
+    """The three speech boards share a file, so a single-board run must merge.
+
+    They are separate pages behind separate caches and any one of them can be
+    re-run alone. Truncating would leave the file holding whichever board went
+    last, and nothing downstream would error -- the models from the other two
+    would simply read as unscored.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        with open(os.path.join(tmp, "page.html"), "w") as f:
+            f.write(tts_fixture_html())
+        out = os.path.join(tmp, "speech.json")
+        # a board this run does not fetch, already on disk
+        with open(out, "w") as f:
+            json.dump({"speech-to-text": {"Existing": {"aaWerIndex": 0.05}}}, f)
+
+        base, stop = serve(tmp)
+        purge("test-aa-tts")
+        try:
+            r = subprocess.run(
+                [os.path.join(RESEARCH, "fetch-artificial-analysis"),
+                 "--board", "text-to-speech", "--url", base + "/page.html",
+                 "--out", out, "--cache-key", "test-aa-tts", "--max-age", "0"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        finally:
+            stop()
+            purge("test-aa-tts")
+        if r.returncode:
+            raise AssertionError("collector exited %d: %s" % (r.returncode, r.stderr.strip()))
+        got = json.load(open(out))
+    finally:
+        shutil.rmtree(tmp)
+
+    eq(sorted(got), ["speech-to-text", "text-to-speech"],
+       "the board that was not fetched must survive the one that was")
+    eq(got["speech-to-text"]["Existing"]["aaWerIndex"], 0.05,
+       "and survive unmodified")
+    eq(got["text-to-speech"]["fixture-tts"]["qualityElo"], 1100.5,
+       "while the fetched board lands under its own key")
+    eq(got["text-to-speech"]["fixture-tts"]["name"], "Fixture TTS",
+       "shaped by the dotted paths, so a nested model.name is flattened")
+
+
+def tts_fixture_html():
+    """One text-to-speech row in the shape the real page ships it.
+
+    The score sits on the nested `model`, so the collector matches the OUTER
+    row's price field and reaches in for it -- which is the part of the field
+    table a fixture has to exercise.
+    """
+    record = {"pricePer1mCharacters": 30,
+              "host": {"name": "Fixture Host"},
+              "performance": {"medianCharactersPerSecond": 51.0},
+              "model": {"name": "Fixture TTS", "slug": "fixture-tts",
+                        "isOpenWeights": True, "qualityElo": 1100.5,
+                        "releaseDate": "2026-01-01",
+                        "creator": {"name": "Fixture Labs"},
+                        "family": {"slug": "fixture"}}}
+    payload = json.dumps({"endpoints": [record]})
+    chunks = "".join(
+        "<script>self.__next_f.push([1,%s])</script>" % json.dumps(part)
+        for part in (payload[:len(payload) // 2], payload[len(payload) // 2:]))
+    # rsc-extract refuses a page under 100kb, because a short body is how a
+    # blocked or redirected fetch presents itself. that guard is the real one
+    # this collector runs behind, so the fixture clears it rather than the test
+    # asking for a lower bound the sweep would never use
+    padding = "<!-- %s -->" % ("x" * 100000)
+    return "<!doctype html><html><body>%s%s</body></html>" % (padding, chunks)
+
+
+# the shape of each real config.json, trimmed to the keys the question turns on.
+# every one of these is a live repo the registry carries, and the nesting is the
+# whole point: only the first two put their audio declaration at the top level
+AUDIO_CONFIGS = {
+    "openai/whisper-large-v3-turbo": ({"num_mel_bins": 128, "d_model": 1280}, True),
+    "mistralai/Voxtral-Mini-3B-2507": (
+        {"audio_config": {"num_mel_bins": 128}, "text_config": {}}, True),
+    "nvidia/parakeet-tdt-0.6b-v3": (
+        {"encoder_config": {"num_mel_bins": 128}, "num_decoder_layers": 2}, True),
+    "nvidia/canary-1b-v2": (
+        {"encoder_config": {"num_mel_bins": 128}, "decoder_config": {}}, True),
+    "nvidia/nemotron-3.5-asr-streaming-0.6b": (
+        {"encoder_config": {"num_mel_bins": 128, "default_num_lookahead_tokens": 4}},
+        True),
+    "Qwen/Qwen3-ASR-1.7B": (
+        {"thinker_config": {"audio_config": {"num_mel_bins": 128},
+                            "text_config": {}}}, True),
+    # nemo SALM: no `num_mel_bins` and no `audio_config` anywhere. the mel count
+    # is `perception.preprocessor.features`, which is why the locator tag is the
+    # key this recognises instead
+    "nvidia/canary-qwen-2.5b": (
+        {"audio_locator_tag": "<|audioplaceholder|>",
+         "perception": {"preprocessor": {"features": 128, "sample_rate": 16000}}},
+        True),
+    # a text model must not gain an audio input from a nested name
+    "Qwen/Qwen3.8-27B": ({"text_config": {"hidden_size": 4096}}, False),
+    # the slot its family's config schema has, left unfilled. testing that the
+    # KEY is present rather than that it holds something claimed audio for both
+    # gemma 4 sizes, which the registry has always called text,image,video
+    "google/gemma-4-31B-it": (
+        {"audio_config": None, "audio_token_id": 262273,
+         "vision_config": {"hidden_size": 1152}, "video_token_id": 262274,
+         "text_config": {"hidden_size": 5376}}, False),
+    # TTS: the mel count is what it EMITS. kokoro spells it `n_mels` and s2-pro
+    # nests it under a decoder, and neither may read as taking audio in
+    "hexgrad/Kokoro-82M": ({"n_mels": 80, "sample_rate": 24000}, False),
+    "fishaudio/s2-pro": (
+        {"audio_decoder_config": {"num_mel_bins": 128}}, False),
+}
+
+
+@test
+def an_asr_config_declares_audio_at_whatever_depth_it_says_it():
+    """Five transcription models derived as taking TEXT ONLY.
+
+    The check read `audio_config` and `num_mel_bins` at the top level, which is
+    where whisper and voxtral put them and where nobody else does: nemo's whole
+    ASR family nests `encoder_config.num_mel_bins` and qwen3-asr hides its
+    `audio_config` under `thinker_config`. The registry says those models take
+    audio, the deriver said text, and `make lint` failed on all five at once --
+    which is the check working, pointed at the wrong side of the disagreement.
+    """
+    import importlib.util
+    path = os.path.join(RESEARCH, "fetch-model-facts")
+    spec = importlib.util.spec_from_loader(
+        "fetch_model_facts",
+        importlib.machinery.SourceFileLoader("fetch_model_facts", path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    for repo, (cfg, want) in sorted(AUDIO_CONFIGS.items()):
+        eq(mod.takes_audio(cfg), want, "%s takes audio" % repo)
+
+
 def main():
     bad = 0
     for fn in cases:

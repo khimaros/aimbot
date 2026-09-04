@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+
+"""Fetch the TTS Arena v2 leaderboard into data/tts-arena.json.
+
+The second opinion on synthesis, and the one artificial analysis cannot give:
+both are human-preference elo, but this arena is crowd-sourced and open, and it
+publishes the VOTE COUNT and the uncertainty band beside each rating. An elo
+with 210 votes and a +-49 band is not the same claim as one with 1806 votes and
++-18, and a leaderboard that prints only the number hides which it is.
+
+Unlike artificial analysis this is not a next.js page to reassemble: the app
+fetches /api/leaderboard client-side and that endpoint answers plain json, so
+this reads it directly through ./httpcache.
+
+`open` is the arena's own flag for downloadable weights, and it is the field to
+read before joining a row to anything here -- it is 3 of 40, and it disagrees
+with artificial analysis about chatterbox, which is the sort of thing to notice
+rather than average over.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+
+import capture
+
+URL = "https://tts-agi-tts-arena-v2.hf.space/api/leaderboard"
+
+# what the arena measures, minus the presentation. `icon`, `url` and the
+# suspension bookkeeping describe the page rather than the model.
+FIELDS = ("name", "rank", "tier", "elo", "uncertainty", "winRate", "totalVotes",
+          "open", "preliminary", "active")
+
+
+def fetch(url, key, max_age, refresh):
+    """The decoded payload, or None if the endpoint could not be read."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    cmd = [os.path.join(here, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    if proc.returncode:
+        print("!!! httpcache exited %d" % proc.returncode, file=sys.stderr)
+        return None
+    try:
+        return json.loads(proc.stdout)
+    except ValueError:
+        print("!!! the endpoint did not answer json -- it has probably moved",
+              file=sys.stderr)
+        return None
+
+
+def shape(payload):
+    """{id: record} keyed by the arena's own model id."""
+    rows = {}
+    for r in (payload or {}).get("rows") or []:
+        key = r.get("id") or r.get("name")
+        if key:
+            rows[key] = {k: r[k] for k in FIELDS if k in r}
+    return dict(sorted(rows.items()))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default="data/tts-arena.json")
+    ap.add_argument("--url", default=URL)
+    # an arena moves only as fast as people vote, and a rating built on 600
+    # votes does not turn over in an afternoon
+    ap.add_argument("--max-age", type=int, default=24 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even though the board holds fewer models than before")
+    args = ap.parse_args()
+
+    rows = shape(fetch(args.url, "tts-arena", args.max_age, args.refresh))
+    if not rows:
+        sys.exit("!!! no models in the leaderboard -- the endpoint changed shape")
+
+    written, now, before = capture.write(args.out, rows, len,
+                                         allow_shrink=args.allow_shrink)
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "models"))
+    op = sum(1 for r in rows.values() if r.get("open"))
+    print("wrote %s: %d models (%d open weights, %d votes total)"
+          % (args.out, now, op, sum(r.get("totalVotes") or 0 for r in rows.values())))
+
+
+if __name__ == "__main__":
+    main()

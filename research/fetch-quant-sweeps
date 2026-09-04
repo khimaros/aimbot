@@ -69,7 +69,11 @@ METRICS = {
     "pass": ("pass rate", "higher"), "accuracy": ("accuracy", "higher"),
     "score": ("score", "higher"), "aider": ("aider polyglot", "higher"),
 }
-QUANT_CELL = re.compile(r"(UD-[A-Z0-9_]+|AD-[A-Z0-9_]+|I?Q\d+(?:_[A-Z0-9]+)*|BF16|F16|FP8)", re.I)
+# the publisher prefix is part of the tag, not noise around it: a card's
+# `AP-Q4_K_XL` is a DIRECTORY in that repo, and dropping the prefix to `Q4_K_XL`
+# leaves a rung name that joins to nothing the sizes collector measured. this
+# was hardcoded to UD- and AD- and so silently mis-tagged every agention row
+QUANT_CELL = re.compile(r"((?:[A-Z]{2}-)?(?:I?Q\d+(?:_[A-Z0-9]+)*|BF16|F16|FP8))", re.I)
 NUM = re.compile(r"-?\d+(?:\.\d+)?")
 SIZE = re.compile(r"(\d+(?:\.\d+)?)\s*(gib|gb)", re.I)
 
@@ -161,6 +165,82 @@ def sweep_from(table, params_b):
     return points, metric, better
 
 
+# a `quant_sweep:` block names a page that is not a card. columns are declared
+# rather than sniffed because the rows have no header to read one from
+SWEEP_METRICS = [("kld", "kl divergence", "lower"), ("ppl", "perplexity", "lower"),
+                 ("top1", "top-1 agreement", "higher")]
+
+
+def offsite_sweep(spec, params_b, refresh):
+    """(points, metric, better) from a page whose sweep is not a markdown table.
+
+    The reason this exists is unsloth: they measured all ten qwen3.8-flash-next
+    rungs against bf16 and put the result on their docs site rather than on the
+    card, so the card reader above found nothing and the curve had to be typed
+    in by hand. The page is a next.js app and rsc-extract already reassembles
+    those, so what is added here is a column layout, not a second fetcher.
+
+    `columns` is declared because these rows carry no header: they are the
+    page's own search index, `UD-IQ4_XS 93.7 89.554 0.083630 2.3677`, and
+    nothing in them says which number is which.
+    """
+    cols = list(spec.get("columns") or [])
+    if "quant" not in cols:
+        return None
+    cmd = [os.path.join(HERE, "rsc-extract"), spec["url"],
+           "--match", spec.get("match") or '"searchText":',
+           "--key", "sweep-%s" % re.sub(r"\W+", "_", spec["url"])[-60:],
+           "--max-age", str(spec.get("max_age") or MAX_AGE)]
+    if refresh:
+        cmd.append("--refresh")
+    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    field = spec.get("field") or "searchText"
+    rows = []
+    for line in r.stdout.splitlines():
+        try:
+            val = (json.loads(line) or {}).get(field)
+        except ValueError:
+            continue
+        parts = (val or "").split()
+        if len(parts) == len(cols):
+            rows.append(dict(zip(cols, parts)))
+    if len(rows) < 2:
+        return None
+
+    name = next((m for m in SWEEP_METRICS if m[0] in cols), None)
+    if not name:
+        return None
+    key, metric, better = name
+    points = []
+    for row in rows:
+        try:
+            val = float(row[key])
+            bpw = (float(row["bpw"]) if "bpw" in row
+                   else round(float(row["gb"]) * 1e9 * 8 / (params_b * 1e9), 2))
+        except (ValueError, KeyError, TypeError):
+            continue
+        points.append([bpw, val, row["quant"].upper()])
+    if len(points) < 2:
+        return None
+    points.sort()
+    return points, metric, better
+
+
+def unpublished(source, tags, sizes):
+    """Rungs the card scores that the repo has no file for.
+
+    A card is prose and a table in it can describe a tier that was measured,
+    announced, and never uploaded -- agention's `AP-IQ4_M` was in the table the
+    day the card was rewritten and had no directory in the repo. The ladder here
+    is meant to BE the files, so the ones that are not get named rather than
+    silently offered as a rung a reader could go and download.
+    """
+    have = {t.upper() for t in (sizes.get(source) or {})}
+    if not have:
+        return []
+    return sorted(t for t in tags if t.upper() not in have)
+
+
 def card(repo, max_age, refresh):
     cmd = [os.path.join(HERE, "httpcache"), RAW % repo,
            "--key", "card-%s" % repo.replace("/", "_"), "--max-age", str(max_age)]
@@ -188,6 +268,13 @@ def main():
     except (IOError, ValueError):
         pass
 
+    sizes = {}
+    try:
+        with open(os.path.join(HERE, "data", "gguf-sizes.json")) as f:
+            sizes = json.load(f)
+    except (IOError, ValueError):
+        pass
+
     old = {}
     if os.path.exists(args.out):
         with open(args.out) as f:
@@ -195,6 +282,27 @@ def main():
     curves = {}
     for repo, m in reg.items():
         params = (facts.get(repo) or {}).get("params_total_b")
+        # a declared source beats the card reader: it is there because the card
+        # does NOT carry the table, so trying the card first only wastes a fetch
+        spec = m.get("quant_sweep")
+        if spec and spec.get("url"):
+            found = offsite_sweep(spec, params, args.refresh)
+            if found:
+                points, metric, better = found
+                curves[repo] = {
+                    "kind": "proxy", "metric": metric, "better": better,
+                    "points": [[p[0], p[1]] for p in points],
+                    "quants": [p[2] for p in points],
+                    "ref": {"source": spec.get("source") or spec["url"],
+                            "url": spec["url"],
+                            "note": spec.get("note") or
+                                    "published %s per quant, off the card" % metric},
+                }
+                print("  %-46s %d points of %s from %s"
+                      % (repo, len(points), metric, spec["url"]), file=sys.stderr)
+                continue
+            print("  %-46s declared sweep source yielded nothing: %s"
+                  % (repo, spec["url"]), file=sys.stderr)
         # the quantizer measures its own quants, so its card answers before the
         # vendor's; both are read because either may carry the table
         for source in [q["repo"] for q in (m.get("quants") or [])] + [repo]:
@@ -206,6 +314,7 @@ def main():
             if not found:
                 continue
             points, metric, better = found
+            ghost = unpublished(source, [p[2] for p in points], sizes)
             curves[repo] = {
                 "kind": "proxy",
                 "metric": metric,
@@ -215,8 +324,13 @@ def main():
                 "ref": {"source": source, "url": CARD_URL % source,
                         "note": "published %s per quant on the card" % metric},
             }
-            print("  %-46s %d points of %s from %s"
-                  % (repo, len(points), metric, source), file=sys.stderr)
+            if ghost:
+                curves[repo]["ref"]["unpublished"] = ghost
+            print("  %-46s %d points of %s from %s%s"
+                  % (repo, len(points), metric, source,
+                     "  (%d rung(s) the repo does not carry: %s)"
+                     % (len(ghost), ", ".join(ghost)) if ghost else ""),
+                  file=sys.stderr)
             break
 
     # a hand-written score curve is worth more than anything parsed here, and

@@ -12,6 +12,9 @@ date is in each file's provenance below.
 | file | captured | source |
 |---|---|---|
 | `data/artificial-analysis.json` | 2026-08-17 | artificialanalysis.ai leaderboard |
+| `data/artificial-analysis-speech.json` | 2026-09-04 | artificialanalysis.ai speech-to-text (non-streaming and streaming) and text-to-speech |
+| `data/tts-arena.json` | 2026-09-04 | tts-agi TTS Arena v2, crowd-sourced blind-vote elo |
+| `data/voicearena.json` | 2026-09-04 | voicearena.com speech-to-text, WER sliced by language and noise |
 | `data/gbench.json` | 2026-08-17 | gertlabs.com/rankings |
 | `data/gguf-sizes.json` | 2026-08-17 | huggingface hub tree api |
 | `data/gbench-compare-observed.json` | 2026-08-10 | gertlabs compare view |
@@ -31,6 +34,10 @@ date is in each file's provenance below.
 | `usecase-assessed.json` | written | the judgement analyze-usecase carries into it |
 | `data/hf-discussions.json` | 2026-08-17 | huggingface per-repo discussion tabs |
 | `data/github-issues.json` | 2026-08-17 | api.github.com, ggml-org/llama.cpp |
+| `data/sentiment-llm.json` and `data/proposals.json` are written by `make llm`; see CONTRIBUTING.md. six collectors write through `capture.py`, which refuses to replace a capture with a smaller one -- `fetch-reddit --refresh` against the dead scrape would otherwise have emptied a corpus nothing here can rebuild. |
+| `data/proposals.json` | derived | a model's triage of the discovery backlog. PROPOSALS, not facts: nothing downstream reads it |
+| `data/sentiment-llm.json` | derived | a second reading of the captured quotes, toward one named model at a time. nothing downstream reads it either |
+| `data/llama-support.json` | derived | which llama.cpp release carries each architecture, from a local clone's history plus the gguf headers the hub parses |
 | `data/level1techs.json` | 2026-08-17 | forum.level1techs.com discourse api |
 | `data/hf-catalog.json` | 2026-08-17 | huggingface hub model listing (trending) |
 | `data/hf-catalog-new.json` | 2026-08-17 | huggingface hub model listing (newest) |
@@ -39,6 +46,64 @@ date is in each file's provenance below.
 of them open weights, trimmed to the 34 fields MODELS.md cites. scores are
 third party and run on one harness across every model, which is why MODELS.md
 prefers them to self-reported model card numbers.
+
+## the speech sources
+
+three sources score the speech half of the roster, and they measure three
+different things. none of them is a version of the text leaderboard with audio
+in it, which is why they are kept apart rather than folded into one number.
+
+`artificial-analysis-speech.json` has one section per board:
+
+- **`speech-to-text`** (non-streaming) is keyed by `aaWerIndex`, a WORD ERROR
+  RATE. **lower is better** -- the only headline number in this repo that is not
+  a score to maximise. the component WERs (`aaSttDatasetWer`,
+  `earnings22CleanedWer`, `voxpopuliCleanedWer`) are kept beside it because the
+  index is their roll-up and a model can be strong on read speech and weak on
+  earnings calls.
+- **`speech-to-text-streaming`** re-measures the same models live, where the
+  number that decides an interactive use is not the WER but
+  `timeToFinalTranscriptSeconds` -- how long after speech ends a final
+  transcript exists. a model can be on both boards with different numbers, and
+  the registry gives them separate ids for that reason.
+- **`text-to-speech`** is `qualityElo`, a human-preference arena rating, so
+  **higher is better** and its units are comparable with neither WER index.
+
+`tts-arena.json` is the second opinion on synthesis and the one artificial
+analysis cannot give: crowd-sourced blind A/B votes, published with the VOTE
+COUNT and the uncertainty band. an elo of 1393 at +-49 over 210 votes is not the
+same claim as 1482 at +-18 over 1806, and a board that prints only the rating
+hides which it is.
+
+`voicearena.json` is the one source that does not collapse transcription to a
+single number. it scores every model on the same corpus sliced by language, by
+how noisy the recording is, by the speaker's age range and gender, and by
+utterance length. the slices disagree loudly: qwen3-asr leads US english at 4.70
+and is the worst open model in romanian at 29.03, where omniasr leads at 11.60.
+artificial analysis, measuring on english corpora, cannot say that. only the
+fully aggregated demographic slices are kept, and they are READ rather than
+averaged -- voice arena publishes an explicit `All` level in each dimension, so
+computing our own mean over 27730 rows would invent a number the site does not
+publish and nothing could check it against.
+
+the site is a client-rendered SPA over supabase, so `fetch-voicearena` reads the
+project url and its public browser token out of the app bundle at fetch time
+rather than carrying a pinned copy: the bundle filename is content-hashed and
+changes on every deploy, so a pinned key would go stale silently.
+
+**every speech key space is filtered to open weights**, and that filter is
+load-bearing rather than tidy. these boards are dominated by hosted endpoints,
+and a vendor's API SKU shares a family name with the checkpoint it grew from
+while being neither the same weights nor the same stack. artificial analysis
+scores `qwen3-tts-vc-realtime` at 925 elo on alibaba cloud; this registry
+carries gguf conversions of the open Qwen3-TTS at a different codec rate. those
+names match on every fuzzy test there is, so the guard cannot be a matching
+rule -- a row the source itself marks closed-weights is never offered to the
+matcher at all. `tests/collectors` holds the case.
+
+the open-weights Qwen3-TTS is therefore **unscored**: it is on none of these
+three boards, nor on TTSDS2, whose published results are a 2024-era field. that
+is a gap in the sources, not a number waiting to be joined.
 
 `gbench.json` holds the gert labs GBENCH rankings, which score models by having
 them play complex games against each other. worth carrying alongside artificial
@@ -472,7 +537,9 @@ rather than uniformly:
 | `fetch-model-facts`, `fetch-chat-templates` | 48h | config and template files, which move when a repo is re-uploaded. the two share cache keys, so the windows must agree |
 | `fetch-model-cards`, `fetch-quant-sweeps` | 48h | cards, edited in the days after release and then still. also shared keys |
 | `fetch-gguf-sizes` | 48h | a quantizer adds rungs early, then stops |
+| `fetch-llama-support` | 48h | reads the same gguf headers as chat templates, under the same keys, so it transfers nothing after that one. the git history it joins them against is local |
 | `fetch-tbench` | 6h listings, 30d contents | a listing gains submissions and re-runs; the files inside a published job never change, and there are five of them per listing |
+| `fetch-tts-arena`, `fetch-voicearena` | 24h | an arena moves only as fast as people vote, and a rating built on 600 votes does not turn over in an afternoon |
 
 48h rather than 24 because the point is a sweep run the next day, and anything
 shorter than the gap between two of them never saves a request. a model added

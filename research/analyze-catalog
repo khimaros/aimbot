@@ -28,6 +28,7 @@ import json
 import re
 import subprocess
 import os
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = "data/hf-catalog.json"
@@ -102,6 +103,9 @@ def main():
     ap.add_argument("--coverage", action="store_true",
                     help="which roster models each publisher has quantized")
     ap.add_argument("--top", type=int, default=30)
+    ap.add_argument("--json", action="store_true",
+                    help="emit the candidate rows instead of the tables, so a "
+                         "consumer reads the same filter this prints")
     args = ap.parse_args()
 
     d = json.load(open(args.data))
@@ -163,6 +167,14 @@ def main():
             if (b is not None and MIN_B <= b <= MAX_B) or related:
                 keep.append(dict(r, b=b, related=related))
         rows = keep
+
+    if args.json:
+        json.dump(sorted(rows, key=lambda r: (bool(r.get("related")),
+                                              -(r.get("trendingScore") or 0),
+                                              -(r.get("downloads") or 0))),
+                  sys.stdout, indent=1, sort_keys=True)
+        print()
+        return
 
     def table(rs, top):
         print("| repo | size | downloads | likes | trending | updated | requant of |")

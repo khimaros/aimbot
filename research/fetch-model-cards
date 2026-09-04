@@ -39,6 +39,9 @@ import os
 import re
 import subprocess
 import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import capture  # noqa: E402  the do-not-shrink guard
+
 from html.parser import HTMLParser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -431,6 +434,9 @@ def main():
     ap.add_argument("--out", default="data/model-cards.json")
     ap.add_argument("--max-age", type=int, default=MAX_AGE)
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even when the result holds fewer records "
+                         "than the capture on disk")
     args = ap.parse_args()
 
     import yaml
@@ -474,8 +480,10 @@ def main():
                  "no" if not out[repo]["summary"] else "a",
                  len(out[repo]["highlights"])), file=sys.stderr)
 
-    with open(args.out, "w") as f:
-        json.dump(out, f, indent=1, sort_keys=True)
+    written, now, before = capture.write(args.out, out, len, args.allow_shrink,
+                                         "cards")
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "cards"))
     print("wrote %s: %d cards, %d with claims"
           % (args.out, len(out), sum(1 for v in out.values() if v["claimed"])))
 

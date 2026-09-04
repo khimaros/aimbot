@@ -19,6 +19,9 @@ import os
 import re
 import subprocess
 import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import capture  # noqa: E402  the do-not-shrink guard
+
 
 TREE = "https://huggingface.co/api/models/%s/tree/main?recursive=true"
 # A trailing -00001-of-000NN shard suffix is stripped so shards aggregate.
@@ -129,6 +132,9 @@ def main():
     ap.add_argument("--max-age", type=int, default=MAX_AGE,
                     help="skip revalidation entirely below this age; 0 always revalidates")
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even when the result holds fewer records "
+                         "than the capture on disk")
     args = ap.parse_args()
 
     with open(args.repos) as f:
@@ -158,9 +164,12 @@ def main():
         out[repo] = {k: v for k, v in sorted(q.items(), key=lambda kv: kv[1])}
         print("  %-52s %d quants" % (repo, len(q)), file=sys.stderr)
 
-    with open(args.out, "w") as f:
-        json.dump(out, f, indent=1, sort_keys=True)
-    print("wrote %s: %d repos" % (args.out, len(out)))
+    written, now, before = capture.write(args.out, out, len, args.allow_shrink,
+                                         "repos")
+    print("%s %s: %d repos" % ("wrote" if written else "did NOT write",
+                               args.out, len(out)))
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "repos"))
 
 
 if __name__ == "__main__":

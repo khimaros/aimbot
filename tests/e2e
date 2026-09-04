@@ -406,6 +406,62 @@ test('the table and the modal agree on which repo a model is read from', () => {
   closeModel();
 });
 
+test('every text model says which llama.cpp release loads it', () => {
+  const text = D.models.filter(m => m.kind === 'text');
+  ok(text.length > 50, 'a roster to check (' + text.length + ')');
+  const bare = text.filter(m => !(m.runtime || {}).arch);
+  eq(bare.length, 0, 'text models with no runtime.arch: '
+     + bare.map(m => m.short).join(', '));
+  // a release tag is what a consumer pins; a merge date is not something you
+  // can pass to git checkout
+  const onMainline = text.filter(m => m.runtime.mainline);
+  ok(onMainline.length > 50, 'most of the roster is on mainline');
+  const noTag = onMainline.filter(m => !/^b\d+$/.test(m.runtime.since || ''));
+  eq(noTag.length, 0, 'mainline models with no release tag: '
+     + noTag.map(m => m.short).join(', '));
+});
+
+test('a model mainline cannot load says where to go instead', () => {
+  const off = D.models.filter(m => (m.runtime || {}).mainline === false);
+  ok(off.length > 0, 'the roster carries at least one');
+  off.forEach(m => {
+    ok(m.runtime.fork || m.runtime.tracking || m.runtime.patch || m.runtime.near,
+       m.short + ' is off mainline and names nowhere to get a build');
+    const out = runtimeBlock(m);
+    ok(out.includes('not mainline'), m.short + ' says so in the modal');
+  });
+});
+
+test('the ladder marks a rung mainline has no quant type for', () => {
+  RESET();
+  // laguna m.1 is quantized by one uploader on ik_llama.cpp, so 10 of its 28
+  // rungs are types mainline has no GGML_TYPE for. the pin is not one of them
+  const m = model('laguna m.1');
+  const rungs = quantChoices(m);
+  const fork = rungs.filter(c => c.forkType);
+  ok(fork.length >= 5, 'ik_llama rungs found (' + fork.length + ' of '
+     + rungs.length + ')');
+  ok(fork.some(c => c.quant.endsWith('_R4')), 'the repacked ones are among them');
+  ok(fork.every(c => /:/.test(c.forkType)),
+     'each says why, not just that: ' + fork.map(c => c.forkType).join(' | '));
+  const pinned = rungs.find(c => c.pinned);
+  ok(pinned && !pinned.forkType, 'and the pinned rung is NOT one of them');
+  const html_ = quantTable(m, pinned.repo, pinned);
+  ok(html_.includes('a fork'), 'the table says so per row');
+  ok(html_.includes('mainline'), 'and says which rows are fine');
+});
+
+test('a publisher label is not mistaken for a fork type', () => {
+  // a file type is a label; the tensors inside carry their own types. so
+  // `UD-Q4_K_XL`, `AP-IQ4_M` and `AD-NVFP4_AI2` all name something mainline
+  // never defines and all load. an earlier reduction flagged 60 of 63 repos,
+  // and the one after it still flagged AP-IQ4_M the day agention uploaded it
+  const marked = D.models.flatMap(m => quantChoices(m))
+    .filter(c => c.forkType && /^(UD|AP|AD)-/.test(c.quant));
+  eq(marked.length, 0, 'publisher-prefixed rungs wrongly marked: '
+     + marked.map(c => c.quant).join(', '));
+});
+
 test('a model whose plain build cannot speculate is read from the one that can', () => {
   RESET();
   // the registry marks qwen3.6-27b's plain repo `speculative: false`; only the

@@ -1,0 +1,481 @@
+#!/usr/bin/env python3
+
+"""Triage the discovery backlog with a model, into a file a human reads.
+
+    ./propose                 # triage the top candidates, reuse what is captured
+    ./propose --limit 40      # go further down the list
+    ./propose --refresh       # re-ask about everything
+    ./propose --check         # exit 1 if the endpoint is configured and unreachable
+
+The sweep ends by printing what no collector can decide, and one entry on that
+list is 479 untracked repos long. 236 of them carry a model the roster has in no
+form. Nobody reads 236 rows, so the tail of that list is not triaged, which is
+the same as saying the discovery half of this repo stops at whatever a person
+had patience for -- and the two collectors that produce it were built precisely
+so discovery would not depend on that.
+
+WHAT THIS MAY NOT DO is decide. It writes `data/proposals.json` and nothing
+else; `registry/models.yaml` and `usecase-assessed.json` are written by a human,
+and the split between measurement and judgement that the rest of this repo is
+arranged around does not survive a script that edits the registry from a model's
+opinion. A proposal is an argument for a human to accept or throw away.
+
+So every field asked for is one something here can already refute:
+
+  base        the model it claims this repo is built from. `analyze-catalog`
+              independently computes `related` off the alias table and the exact
+              name index, so agreement is worth something and disagreement is
+              the interesting row -- either the model saw a lineage the name
+              does not carry, or it invented one
+  kind        flagship / finetune / merge / requant / distill / unclear. a
+              requant of something carried is a quant decision, not a roster
+              one, and that is the distinction the backlog exists to make
+  verdict     carry / skip / unclear
+
+`verified` on each proposal is this repo's answer, not the model's, and the two
+are stored side by side. A row where they disagree is the one to read first.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import llm  # noqa: E402
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = "data/proposals.json"
+LIMIT = 25
+
+SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kind": {"type": "string",
+                 "enum": ["flagship", "finetune", "merge", "requant", "distill",
+                          "unclear"]},
+        "base": {"type": "string"},
+        "verdict": {"type": "string", "enum": ["carry", "skip", "unclear"]},
+        "reason": {"type": "string"},
+    },
+    "required": ["kind", "base", "verdict", "reason"],
+    "additionalProperties": False,
+}
+
+SYSTEM = (
+    "You classify huggingface GGUF repositories for a curated local-model "
+    "registry of about 74 models. Answer only with the JSON object asked for, "
+    "in lowercase.\n"
+    "The list you are shown is the untracked tail of a trending feed. Most of "
+    "it is community merges, fine-tunes and re-quants of a handful of base "
+    "models -- Qwen, Gemma, Llama, GLM, DeepSeek, Mistral, Granite, Nemotron. "
+    "kind=flagship is for an ORIGINAL model trained by the organisation that "
+    "owns the repo. If you do not recognise the owner as a lab that trains its "
+    "own models, it is not a flagship, however capable the name sounds: a "
+    "version number belonging to another family (Qwen3.8, Gemma 4), a size in "
+    "the name paired with an unknown owner, a VRAM target, a fusion or merge "
+    "word, or an invented product name over a known architecture all mean "
+    "kind=merge or kind=finetune.\n"
+    "Put the huggingface id or family of the model it derives from in `base`, "
+    "or an empty string when the owner really did train it.\n"
+    "verdict=carry is rare and means the registry is missing a model that a "
+    "third party would benchmark. A derivative of something already carried is "
+    "verdict=skip. When unsure, skip. Keep `reason` under 25 words and do not "
+    "guess at numbers.")
+
+
+def ask(row, refresh, captured, role=None):
+    """A proposal for one repo, from the capture where possible.
+
+    The owner's role goes in the prompt when publishers.txt has one. It is a
+    hint rather than the answer -- a vendor publishes fine-tunes of its own
+    models too -- but withholding it cost the obvious case: asked cold, the
+    model called `LiquidAI/LFM2-24B-A2B-GGUF` a merge, and LiquidAI is on that
+    list as a lab that publishes its own gguf.
+    """
+    key = llm.prompt_key(SYSTEM, row["id"], row.get("b"), row.get("related"), role)
+    if not refresh and captured.get(row["id"], {}).get("prompt") == key:
+        return captured[row["id"]], True
+    user = (
+        "repo: %s\nparameters (from the name): %s\ndownloads: %s\nlikes: %s\n"
+        "trending score: %s\nlast modified: %s\n%s\n"
+        "Does this registry need this repo as a new model entry?"
+        % (row["id"], row.get("b") or "unknown", row.get("downloads"),
+           row.get("likes"), row.get("trendingScore") or "none",
+           (row.get("lastModified") or "")[:10],
+           "known publisher: this owner is tracked as a lab that trains and "
+           "publishes its own models\n" if role == "vendor" else ""))
+    got = llm.as_json(llm.chat(
+        [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],
+        schema=SCHEMA, max_tokens=400))
+    if not got:
+        return None, False
+    return {"prompt": key,
+            "kind": str(got.get("kind", ""))[:20],
+            "base": str(got.get("base", ""))[:120],
+            "verdict": str(got.get("verdict", ""))[:12],
+            "reason": " ".join(str(got.get("reason", "")).split())[:240]}, False
+
+
+FAMILY = re.compile(r"^([a-z]+)")
+
+
+def norm(name):
+    n = name.split("/")[-1].lower().replace("-", "").replace("_", "")
+    return n[:-4] if n.endswith("gguf") else n
+
+
+def scored_siblings(row, aa):
+    """What a leaderboard already says about this repo and its family.
+
+    This is the check that matters most and was missing. Told only a name and a
+    download count, the model proposes whatever carries the biggest number:
+    `ibm-granite/granite-4.1-30b` over the 4.2 already carried, and
+    `LiquidAI/LFM2-24B-A2B` -- which artificial analysis scores at 4.63, against
+    10.99 for the LFM2.5-2.6B the same lab shipped later at a tenth the size.
+
+    Nothing about that needed asking. Every one of those four LFM variants is in
+    `data/artificial-analysis.json`, captured every sweep. So the model's
+    opinion is now checked against the one axis this registry actually ranks on,
+    and a proposal whose own family already has a better-scoring member is
+    marked rather than passed on as a find.
+    """
+    key = norm(row["id"])
+    fam = FAMILY.match(key)
+    mine, kin = None, []
+    for slug, r in aa.items():
+        if slug.endswith("-non-reasoning"):
+            continue
+        score = (r or {}).get("intelligenceIndex")
+        if score is None:
+            continue
+        flat = norm(slug)
+        if flat == key:
+            mine = (r.get("name") or slug, round(score, 1))
+        elif fam and flat.startswith(fam.group(1)):
+            kin.append((round(score, 1), r.get("name") or slug))
+    kin.sort(reverse=True)
+    better = [n for v, n in kin if mine and v > mine[1]][:3]
+    return {"scored": list(mine) if mine else [],
+            "family_best": ["%s %s" % (n, v) for v, n in kin[:3]],
+            "outscored_by": better}
+
+
+def verify(prop, row, roster, aa):
+    """This repo's own reading of the claim, kept beside the model's.
+
+    Three checks, none of which asks anybody. Lineage: `analyze-catalog` already
+    resolved `related` off the alias table and the exact name index, so a
+    claimed base the roster knows is corroborated and one it does not is the
+    model's word alone. Family: the roster's own entries whose name starts the
+    same way, which is what catches granite 4.1 against the 4.2 carried, since
+    an exact index cannot see that two version numbers are one family. And the
+    leaderboards, in `scored_siblings` above, which is the one that would have
+    caught LFM2-24B and did not exist when it was proposed.
+    """
+    base = (prop.get("base") or "").strip()
+    on_roster = roster.get(norm(base)) if base else None
+    fam = FAMILY.match(norm(row["id"]))
+    kin = sorted({v for k, v in roster.items()
+                  if fam and k.startswith(fam.group(1))}) if fam else []
+    out = {
+        "base_on_roster": on_roster or "",
+        # analyze-catalog's own answer, computed from names rather than asked for
+        "related_by_name": row.get("related") or "",
+        "agrees": bool(on_roster) == bool(row.get("related")),
+        # the roster's own entries whose name starts the same way. informational:
+        # a match is a reason to look, not a verdict
+        "family_on_roster": kin[:4],
+    }
+    out.update(scored_siblings(row, aa))
+    return out
+
+
+DECIDED = "decided.txt"
+
+
+def read_decisions(path):
+    """{repo: verdict} from decided.txt, in publishers.txt's `[section]` shape."""
+    out, cur = {}, None
+    try:
+        lines = open(path).read().split("\n")
+    except IOError:
+        return out
+    for line in lines:
+        text = line.split("#")[0].strip()
+        if not text:
+            continue
+        if text.startswith("[") and text.endswith("]"):
+            cur = text[1:-1]
+        elif cur:
+            out[text] = cur
+    return out
+
+
+def write_decisions(path, decisions, notes):
+    """Rewrite decided.txt, grouped by verdict, comment intact where there is one."""
+    lines = [
+        "# discovery decisions. a repo listed here is NEVER proposed again, so",
+        "# this is what stops the punch list re-asking about the same rows every",
+        "# sweep. hand-editable: delete a line to put a repo back in the queue.",
+        "#",
+        "# `carry` is a decision to add it, not the entry itself -- the registry is",
+        "# still written by hand, and this file only records that you looked.",
+    ]
+    for verdict in ("carry", "skip"):
+        rows = sorted(k for k, v in decisions.items() if v == verdict)
+        if not rows:
+            continue
+        lines += ["", "[%s]" % verdict]
+        for r in rows:
+            note = (notes.get(r) or "").strip()
+            lines.append("%-56s%s" % (r, "# " + note if note else ""))
+    open(path, "w").write("\n".join(lines) + "\n")
+
+
+def evidence(repo, prop):
+    """The lines a person needs to decide, from checks rather than from prose."""
+    v = prop.get("verified") or {}
+    out = ["  %s" % repo,
+           "    the model says: %s, %s -- %s"
+           % (prop.get("kind"), prop.get("verdict"), prop.get("reason", ""))]
+    if v.get("scored"):
+        out.append("    artificial analysis scores it: %s %s" % tuple(v["scored"]))
+    else:
+        out.append("    no leaderboard here scores it")
+    if v.get("outscored_by"):
+        out.append("    OUTSCORED by its own family: %s" % ", ".join(v["outscored_by"]))
+    elif v.get("family_best"):
+        out.append("    best in its family: %s" % ", ".join(v["family_best"]))
+    if v.get("family_on_roster"):
+        out.append("    the roster already carries: %s"
+                   % ", ".join(v["family_on_roster"]))
+    return out
+
+
+def review(path, decided_path, only_carry=True):
+    """Walk the undecided proposals, show the evidence, record the answer.
+
+    The queue shrinks permanently: a repo answered here is written to
+    decided.txt and never proposed again. Without that the same three rows come
+    back every sweep and the punch list trains you to skip past it.
+    """
+    try:
+        props = json.load(open(path)).get("proposals") or {}
+    except (IOError, ValueError):
+        print("no proposals captured yet; run ./propose")
+        return
+    decisions = read_decisions(decided_path)
+    notes = {}
+    queue = [(k, v) for k, v in sorted(props.items())
+             if k not in decisions and (v.get("verdict") == "carry" or not only_carry)]
+    if not queue:
+        print("nothing undecided. %d already recorded in %s"
+              % (len(decisions), decided_path))
+        return
+    print("%d proposal(s) to decide. y = carry, n = skip, s = leave for later, "
+          "q = stop\n" % len(queue))
+    for repo, prop in queue:
+        print("\n".join(evidence(repo, prop)))
+        try:
+            answer = input("    carry it? [y/n/s/q] ").strip().lower()
+        except EOFError:
+            print("\n(not a terminal -- nothing recorded)")
+            return
+        if answer == "q":
+            break
+        if answer in ("y", "n"):
+            decisions[repo] = "carry" if answer == "y" else "skip"
+            notes[repo] = input("    why (one line, optional): ").strip()
+        print()
+    write_decisions(decided_path, decisions, notes)
+    carry = [k for k, v in decisions.items() if v == "carry"]
+    print("wrote %s: %d decided, %d to carry" % (decided_path, len(decisions), len(carry)))
+    if carry:
+        print("nothing is in the registry yet -- adding an entry is still by hand.")
+        print("CONTRIBUTING.md 'adding a model' is the six steps.")
+
+
+def publisher_roles(path):
+    """{owner: role} from publishers.txt's `[role]` sections."""
+    roles, cur = {}, None
+    try:
+        lines = open(path).read().split("\n")
+    except IOError:
+        return roles
+    for line in lines:
+        text = line.split("#")[0].strip()
+        if not text:
+            continue
+        if text.startswith("[") and text.endswith("]"):
+            cur = text[1:-1]
+            continue
+        if cur:
+            roles[text.lower()] = cur
+    return roles
+
+
+def mechanical(row, roles):
+    """The verdict the curated lists already imply, or None to go and ask.
+
+    A repo owned by a publisher this file calls a quantizer IS somebody's quant
+    of a model that already exists -- that is what being on that list means --
+    and no reading of the repo name can overturn it. Asking anyway is how
+    `bartowski/Qwen2.5-Coder-32B-Instruct-GGUF` came back as an original
+    release by the lab that trained it.
+    """
+    role = roles.get(row["id"].split("/", 1)[0].lower())
+    if role == "quantizer":
+        return {"kind": "requant", "base": "", "verdict": "skip",
+                "reason": "owned by a publisher publishers.txt lists as a quantizer",
+                "decided_by": "publishers.txt"}
+    if role == "community":
+        return {"kind": "merge", "base": "", "verdict": "skip",
+                "reason": "owned by a publisher publishers.txt lists as community "
+                          "fine-tunes and requantizations, tracked but not recommended",
+                "decided_by": "publishers.txt"}
+    return None
+
+
+def candidates(limit, decided=()):
+    out = subprocess.run([os.path.join(HERE, "analyze-catalog"), "--candidates",
+                          "--json"], stdout=subprocess.PIPE, text=True, check=True)
+    rows = json.loads(out.stdout)
+    # the untriaged half first: a repo carrying a model the roster has in NO
+    # form is a roster decision, where a re-quant of something carried is not
+    fresh = [r for r in rows if not r.get("related") and r["id"] not in decided]
+    return fresh[:limit]
+
+
+def roster_names():
+    out = subprocess.run([os.path.join(HERE, "..", "scripts", "resolve-ids"),
+                          "--names"], stdout=subprocess.PIPE, text=True, check=True)
+    return json.loads(out.stdout)
+
+
+def load_json(name):
+    try:
+        return json.load(open(os.path.join(HERE, "data", "%s.json" % name)))
+    except (IOError, ValueError):
+        return {}
+
+
+def show(path, decided_path):
+    """What is already captured and still undecided, without asking anything."""
+    try:
+        prev = json.load(open(path))
+    except (IOError, ValueError):
+        print("no proposals captured yet")
+        return
+    props = prev.get("proposals") or {}
+    decisions = read_decisions(decided_path)
+    carry = {k: v for k, v in props.items()
+             if v.get("verdict") == "carry" and k not in decisions}
+    print("%d proposal(s) captured by %s; %d already decided; %d awaiting you\n"
+          % (len(props), prev.get("model") or "?", len(decisions), len(carry)))
+    for k, v in sorted(carry.items()):
+        print("\n".join(evidence(k, v)))
+    if carry:
+        print("\nnothing above is in the registry. run `make llm-review` to decide "
+              "them;\nan answer is recorded and the row never comes back.")
+
+
+def triage(rows, roles, roster, aa, captured, refresh):
+    """{repo: proposal} for every row, and the counts to report."""
+    out, counts = {}, {"asked": 0, "reused": 0, "listed": 0, "missed": 0}
+    for row in rows:
+        known = mechanical(row, roles)
+        if known:
+            counts["listed"] += 1
+            known["verified"] = verify(known, row, roster, aa)
+            out[row["id"]] = known
+            print("  %-58s %-9s %-9s (publishers.txt)"
+                  % (row["id"][:58], known["kind"], known["verdict"]), file=sys.stderr)
+            continue
+        prop, from_cache = ask(row, refresh, captured,
+                               roles.get(row["id"].split("/", 1)[0].lower()))
+        if not prop:
+            counts["missed"] += 1
+            print("  %-58s no answer" % row["id"][:58], file=sys.stderr)
+            continue
+        counts["reused" if from_cache else "asked"] += 1
+        prop["verified"] = verify(prop, row, roster, aa)
+        out[row["id"]] = prop
+        print("  %-58s %-9s %-9s %s"
+              % (row["id"][:58], prop["kind"], prop["verdict"],
+                 "" if prop["verified"]["agrees"]
+                 else "<- disagrees with the name index"), file=sys.stderr)
+    return out, counts
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--limit", type=int, default=LIMIT)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--publishers", default=os.path.join(HERE, "publishers.txt"))
+    ap.add_argument("--decided", default=os.path.join(HERE, DECIDED))
+    ap.add_argument("--review", action="store_true",
+                    help="walk the undecided proposals and record an answer")
+    ap.add_argument("--all", action="store_true",
+                    help="with --review, offer every proposal rather than the carries")
+    ap.add_argument("--report", action="store_true",
+                    help="print what is already captured and ask nothing")
+    ap.add_argument("--check", action="store_true",
+                    help="fail if an endpoint is configured but not answering")
+    args = ap.parse_args()
+
+    if args.review:
+        return review(args.out, args.decided, only_carry=not args.all)
+    if args.report:
+        return show(args.out, args.decided)
+
+    cfg = llm.configured()
+    if not cfg:
+        print("no AIMBOT_LLM_MODEL set; skipping. see research/llm.py for the "
+              "three environment variables", file=sys.stderr)
+        return
+    base, model, _ = cfg
+
+    if args.check:
+        if llm.chat([{"role": "user", "content": "say ok"}], max_tokens=5) is None:
+            sys.exit("!!! %s is configured and did not answer" % base)
+        print("llm: %s at %s answering" % (model, base))
+        return
+
+    try:
+        captured = (json.load(open(args.out)).get("proposals") or {})
+    except (IOError, ValueError):
+        captured = {}
+    decisions = read_decisions(args.decided)
+    aa = load_json("artificial-analysis")
+    out, counts = triage(candidates(args.limit, decisions),
+                         publisher_roles(args.publishers), roster_names(), aa,
+                         captured, args.refresh)
+
+    # a proposal nobody re-asked about is still a proposal; keep it
+    merged = dict(captured)
+    merged.update(out)
+    with open(args.out, "w") as f:
+        json.dump({"_about": [
+            "PROPOSALS, not facts. written by a model, kept apart from the",
+            "registry on purpose: nothing here is true until a human moves it.",
+            "`verified` is this repo's own check of the claim beside it.",
+        ], "model": model, "proposals": dict(sorted(merged.items()))}, f, indent=1)
+
+    disagree = [k for k, v in out.items() if not v["verified"]["agrees"]]
+    carry = [k for k, v in out.items() if v["verdict"] == "carry"]
+    print("wrote %s: %d proposals (%d asked, %d reused, %d settled by "
+          "publishers.txt, %d unanswered)"
+          % (args.out, len(merged), counts["asked"], counts["reused"],
+             counts["listed"], counts["missed"]))
+    print("  %d proposed to carry: %s" % (len(carry), ", ".join(carry[:6]) or "-"))
+    print("  %d where the model and the name index disagree about lineage: %s"
+          % (len(disagree), ", ".join(disagree[:6]) or "-"))
+
+
+if __name__ == "__main__":
+    main()

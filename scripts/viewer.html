@@ -1872,6 +1872,39 @@ const SAMPLERS = [['temp', 'temp'], ['top_p', 'top_p'], ['top_k', 'top_k'],
 // every quant the chosen repo publishes, with what it weighs. it was crammed
 // into the buttons, where twenty-five chips carrying three numbers each is a
 // wall rather than a menu.
+const out_link = (url, label) =>
+  `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a>`;
+
+// which build opens the file at all, which is upstream of every other number
+// here: a model nothing can load has no speed, no fit and no score worth
+// reading. derived from llama.cpp's own history by scripts/resolve-runtime,
+// except the fork and the PR, which nothing in that history knows.
+function runtimeBlock(m) {
+  const r = m.runtime || {};
+  if (!r.arch) return '';
+  const rows = [['gguf architecture', esc(r.arch)]];
+  if (r.mainline) {
+    rows.push(['loads on', r.since
+      ? `mainline llama.cpp <b>${esc(r.since)}</b> or newer`
+      : 'mainline llama.cpp']);
+    if (r.merged) rows.push(['merged upstream', esc(r.merged)]);
+  } else {
+    rows.push(['loads on', '<span class="warn">not mainline llama.cpp</span>'
+      + (r.near ? ` -- the header says <code>${esc(r.arch)}</code> where mainline`
+                + ` spells it <code>${esc(r.near)}</code>, and the lookup is exact` : '')]);
+    if (r.fork) rows.push(['fork', out_link('https://github.com/' + r.fork, r.fork)
+      + (r.branch ? ` (<code>${esc(r.branch)}</code> branch)` : '')]);
+    if (r.patch) rows.push(['patch shipped in',
+                            out_link('https://huggingface.co/' + r.patch, r.patch)]);
+    if (r.tracking) rows.push(['tracking',
+                               out_link(r.tracking, r.tracking.split('/').slice(-2).join(' '))]);
+  }
+  if (r.note) rows.push(['', `<span class="dim">${esc(r.note)}</span>`]);
+  return '<h3>what loads it</h3><table><tbody>'
+    + rows.map(([k, v]) => `<tr><th class="nw">${k}</th><td>${v}</td></tr>`).join('')
+    + '</tbody></table>';
+}
+
 function quantTable(m, repo, pick) {
   const rows = quantChoices(m).filter(c => c.repo === repo);
   if (!rows.length) return '';
@@ -1880,7 +1913,7 @@ function quantTable(m, repo, pick) {
   // budget is coloured instead of captioned.
   return `<h3>quants in this repo</h3>`
     + '<table><thead><tr><th>quant</th><th class="n">gib</th>'
-    + '<th class="n">bpw</th></tr></thead><tbody>'
+    + '<th class="n">bpw</th><th>loads on</th></tr></thead><tbody>'
     + rows.map(c => {
       const over = budget && c.gib && c.gib > usable();
       return `<tr><td class="nw">${pick && c.quant === pick.quant
@@ -1888,7 +1921,12 @@ function quantTable(m, repo, pick) {
         + `<td class="n${over ? ' warn' : ''}"${over
           ? ' data-help="larger than the vram left after the reserve and the kv cache"' : ''}>`
         + `${gib(c.gib) || '-'}</td>`
-        + `<td class="n dim">${num(c.bpw, 2) || '-'}</td></tr>`;
+        + `<td class="n dim">${num(c.bpw, 2) || '-'}</td>`
+        // a size beside a rung reads as an offer, so a rung mainline has no
+        // type for has to say so in the row rather than in a footnote
+        + `<td class="${c.forkType ? 'warn nw' : 'dim nw'}"${c.forkType
+          ? ` data-help="${esc(c.forkType)}. this rung needs the fork that published it"`
+          : ''}>${c.forkType ? 'a fork' : 'mainline'}</td></tr>`;
     }).join('') + '</tbody></table>';
 }
 
@@ -2004,6 +2042,8 @@ function tabOperate(m) {
     + templateSection(m, repo)
     + quantTable(m, repo, pick);
 
+  out += runtimeBlock(m);
+
   out += '<h3>what the registry pins</h3>'
     // "quant tag" rather than "quant": it is the string after the colon in
     // `--hf-repo repo:TAG`, and for a component it is a filename instead
@@ -2056,6 +2096,7 @@ function quantChoices(m) {
       if (was) { was.pinned = was.pinned || a.quant === q.quant; return; }
       seen.set(key, {repo: q.repo, quant: a.quant, gib: a.gib, bpw: a.bpw,
                      pinned: a.quant === q.quant, speculative: q.speculative,
+                     forkType: a.fork_type,
                      note: a.quant === q.quant ? q.note : undefined});
     });
   });

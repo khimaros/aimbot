@@ -23,6 +23,9 @@ import os
 import re
 import subprocess
 import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import capture  # noqa: E402  the do-not-shrink guard
+
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -77,6 +80,9 @@ def main():
     ap.add_argument("--max-age", type=int, default=6 * 3600)
     ap.add_argument("--refresh", action="store_true")
     ap.add_argument("--delay", type=float, default=0.3)
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even when the result holds fewer records "
+                         "than the capture on disk")
     args = ap.parse_args()
 
     with open(args.repos) as f:
@@ -121,8 +127,10 @@ def main():
         print("  %-52s %3d discussions, %d bodies" %
               (repo, len(rows), sum(1 for r in rows if "thread" in r)), file=sys.stderr)
 
-    with open(args.out, "w") as f:
-        json.dump(out, f, indent=1, sort_keys=True)
+    written, now, before = capture.write(args.out, out, len, args.allow_shrink,
+                                         "repos")
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "repos"))
     total = sum(v["count"] for v in out.values())
     print("wrote %s: %d repos, %d discussions, %d full threads"
           % (args.out, len(out), total, threads))
