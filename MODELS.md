@@ -2116,16 +2116,16 @@ model is supposed to: AA scored it.
 | qwen-agentworld 35b a3b | Q8_0 | 34.4 | 34.66b / 3b | 444,055 | 235 | a world model for agent environments rather than an assistant: it predicts the next environment state. no benchmark in this corpus measures that, so it is unranked rather than unrated. |
 | ornith 1.0 35b | Q8_0 | 34.4 | 35b / ? | 76,945 | 151 | qwen3.5-moe architecture despite the bare 35B in the name, and the vendor publishes no active parameter count, so its speed cannot be estimated. |
 | ornith-1.0-9b | Q8_0 | 8.9 | 9b / ? | 356,139 | 61 | the dense sibling of the 35b. no third-party suite carries either of them; the hub download count is the only evidence there is. |
-| ornith 1.5 9b | Q8_0 | 9.1 | 9.65b / ? | 3,157,453 | 292 | the vendor's own gguf repo; 9.1 gib |
-| ornith 1.5 35b a3b | Q8_0 | 35.2 | 35.95b / 3b | 2,954,686 | 373 | the vendor's own gguf repo; 35.2 gib |
+| ornith 1.5 9b | Q8_0 | 9.1 | 9.65b / ? | 3,157,453 | 298 | the vendor's own gguf repo; 9.1 gib |
+| ornith 1.5 35b a3b | Q8_0 | 35.2 | 35.95b / 3b | 2,954,686 | 375 | the vendor's own gguf repo; 35.2 gib |
 | embeddinggemma-300m | Q8_0 | 0.3 | 0.3b / ? | 14,997 | 87 | an embedding model: no chat template, no generative benchmark, and nothing here scores it. carried so a consumer reading this registry for a retrieval slot finds the repo and the quant rather than a gap. |
 | functiongemma-270m-it | Q8_0 | 0.3 | 0.27b / ? | 8,061 | 95 | 270m parameters, below the floor of every suite carried here. it emits function calls and nothing else, which is why no coding index applies to it. |
 | fara 1.5 27b | Q8_0 | 26.7 | 27.36b / ? | 253,144 | 9 | 26.7 gib, plus a 0.9 gib mmproj -- the screenshots are the input, so the vision sidecar is not optional for this one |
 | nemotron-3-nano-30b-a3b | Q8_0 | 31.3 | 31.58b / 3b | 13,807 | 329 | only nvidia's own card measures the nano; no third party in this corpus carries it, which is why it is sized rather than ranked. |
 | bonsai 27b | F16 | 50.1 | 27.36b / ? | 496,970 | 836 | the gguf repo is what runs; the entry is keyed on the unpacked weights beside it, which carry the config.json every geometry fact here comes from |
 | ternary bonsai 27b | F16 | 50.1 | 27.36b / ? | 636,343 | 1267 | ternary weights, which the bpw retention curve in build-tables does not model; treat its quant-adjusted scores as unreliable |
-| gemma 4 12b coder | Q8_0 | 11.8 | 11.96b / ? | 518,217 | 2867 | five rungs off one 12b dense base, q2_k through q8_0. q8 is 11.8 gib so the whole ladder fits; the card recommends q4_k_m at 6.87 gib for an 8 gib card |
-| gemma 4 12b agentic | Q8_0 | 11.8 | 11.96b / ? | 601,275 | 1521 | four rungs, q3_k_m through q8_0 -- the author withheld q2_k as failing his own stress test. needs --jinja to parse the native tool format, and rep_pen 1.1 to stop the repeated-zeroes failure his pinned discussion attributes to sampler defaults |
+| gemma 4 12b coder | Q8_0 | 11.8 | 11.96b / ? | 518,217 | 2868 | five rungs off one 12b dense base, q2_k through q8_0. q8 is 11.8 gib so the whole ladder fits; the card recommends q4_k_m at 6.87 gib for an 8 gib card |
+| gemma 4 12b agentic | Q8_0 | 11.8 | 11.96b / ? | 601,275 | 1522 | four rungs, q3_k_m through q8_0 -- the author withheld q2_k as failing his own stress test. needs --jinja to parse the native tool format, and rep_pen 1.1 to stop the repeated-zeroes failure his pinned discussion attributes to sampler defaults |
 | ternary bonsai 8b | F16 | 15.3 | 8.19b / ? | 364,254 | 148 | f16 at 15.26 gib is the rung mainline llama.cpp can load. the format the model exists FOR is q2_0 at 2.03 gib, and that is not upstream yet -- it needs prism-ml's own fork, so a consumer on a stock build gets the 8x larger file or nothing |
 
 what the columns are worth: size and parameter counts are file facts, and

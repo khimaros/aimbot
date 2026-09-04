@@ -2014,13 +2014,13 @@ models:
       `crispasr:` block therefore sits on the quant that was converted for it,
       not on the model.
     quants:
-    - repo: khimaros/Qwen3-TTS-12Hz-0.6B-CustomVoice-GGUF
-      quant: Q8_0
     - repo: cstr/qwen3-tts-0.6b-customvoice-GGUF
       quant: Q8_0
       role: model
       crispasr:
         backend: qwen3-tts-customvoice
+    - repo: khimaros/Qwen3-TTS-12Hz-0.6B-CustomVoice-GGUF
+      quant: Q8_0
     ids:
       aa-stt: ''
       aa-stt-streaming: ''
@@ -2040,14 +2040,27 @@ models:
       see the 0.6b customvoice entry: this repo's metadata namespace is
       `qwen3-tts` and crispasr reads `qwen3tts`, so only the cstr conversion
       carries a `crispasr:` block.
+
+      the only one of the three variants that takes AUDIO in. its voice comes
+      from a reference clip rather than a name, and the gguf says so: base
+      carries `qwen3tts.speaker.enc_dim` and `speaker.sample_rate` and no
+      speaker list, where both customvoice builds carry nine `spk_names` and no
+      encoder, and voicedesign carries neither because its voice is prose. a
+      sample rate is only needed to encode incoming audio.
+
+      worth recording because the documentation disagrees with itself here:
+      crispasr's README footnote says cloning is "CustomVoice variant only;
+      Base uses baked speakers", and its server.md says the opposite -- base
+      takes "a path ... resolving to <voice-dir>/<name>.{wav,gguf}". the gguf
+      headers settle it in server.md's favour.
     quants:
-    - repo: khimaros/Qwen3-TTS-12Hz-1.7B-Base-GGUF
-      quant: Q8_0
     - repo: cstr/qwen3-tts-1.7b-base-GGUF
       quant: Q8_0
       role: model
       crispasr:
         backend: qwen3-tts
+    - repo: khimaros/Qwen3-TTS-12Hz-1.7B-Base-GGUF
+      quant: Q8_0
     ids:
       aa-stt: ''
       aa-stt-streaming: ''
@@ -2057,6 +2070,7 @@ models:
     modalities:
       input:
       - text
+      - audio
       output:
       - audio
   khimaros/Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF:
@@ -2068,13 +2082,16 @@ models:
       `qwen3tts.spk_names` in the cstr conversion. see the 0.6b customvoice
       entry for why only that conversion names a crispasr backend.
     quants:
-    - repo: khimaros/Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF
-      quant: Q8_0
+    # cstr's first: it is what the host serves, what crispasr can load, and the
+    # only one of the two carrying the speaker list. a reader opening this model
+    # gets read the rung that is actually running
     - repo: cstr/qwen3-tts-1.7b-customvoice-GGUF
       quant: Q8_0
       role: model
       crispasr:
         backend: qwen3-tts-customvoice
+    - repo: khimaros/Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF
+      quant: Q8_0
     ids:
       aa-stt: ''
       aa-stt-streaming: ''
@@ -2095,13 +2112,13 @@ models:
       selecting a baked speaker. see the 0.6b customvoice entry for why only the
       cstr conversion names a crispasr backend.
     quants:
-    - repo: khimaros/Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF
-      quant: Q8_0
     - repo: cstr/qwen3-tts-1.7b-voicedesign-GGUF
       quant: Q8_0
       role: model
       crispasr:
         backend: qwen3-tts
+    - repo: khimaros/Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF
+      quant: Q8_0
     ids:
       aa-stt: ''
       aa-stt-streaming: ''
@@ -4396,3 +4413,46 @@ models:
       role: diarize-embedder
     crispasr:
       diarize: embedder
+  # TRACKED, NOT SERVED. the highest-scoring open-weights TTS artificial
+  # analysis has -- 1214.89 elo, above fish-s2-pro's 1127.78, which is the best
+  # thing this roster can actually run -- and nothing here loads it.
+  #
+  # a gguf exists and does not help: `HoppouAI/Breeze-TTS-2.cpp` says on its own
+  # card that the files "will not load in llama.cpp. They need the
+  # Breeze-TTS-2.cpp runtime", a separate C++ reimplementation at
+  # github.com/HoppouAI/Breeze-TTS-2.cpp. it is recorded as a quant anyway so
+  # the sweep sizes it and a reader can see what would be involved, but it names
+  # no `crispasr:` backend because there is none.
+  #
+  # crispasr is porting it -- issue #412, with models/convert-breeze-tts-2-to-gguf.py,
+  # docs/breeze-tts-2-feasibility.md and tools/reference_backends/breeze_tts_2.py
+  # in tree -- but ships no backend for it and does not mention it in any of its
+  # docs. this entry is the thing to watch: when a crispasr backend lands, or
+  # when somebody publishes a conversion crispasr reads, this becomes servable
+  # and the roster gains its best synthesis model.
+  #
+  # the port notes are worth reading before trusting any conversion. it is a CSM
+  # (sesame) fork with a qwen3 backbone and the qwen3-tts codec, and the
+  # feasibility doc flags that `config.json`'s
+  # `"use_bidirectional_attention": false` is a DECOY -- the text encoder is
+  # bidirectional. a converter that believes the config produces a model that
+  # loads and sounds wrong, which is the failure mode this roster has already
+  # been bitten by once with qwen3-tts's two namespaces.
+  BreezeBlue/Breeze-TTS-2:
+    kind: speech
+    name:
+      short: breeze-tts-2
+    quants:
+    - repo: HoppouAI/Breeze-TTS-2.cpp
+      quant: Q8_0
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: breeze-tts-2
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio

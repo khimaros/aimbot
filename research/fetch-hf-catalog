@@ -49,6 +49,20 @@ PER_PAGE = 100
 FIELDS = ["id", "likes", "downloads", "trendingScore", "lastModified",
           "createdAt", "pipeline_tag", "gated", "tags"]
 
+# what to sweep, and whether a gguf filter belongs on that sweep.
+#
+# for text the publisher or unsloth ships the gguf themselves, so `filter=gguf`
+# finds the model. for SPEECH it does not: the gguf is almost always a third
+# party's conversion -- cstr's, for every asr model this roster carries -- so
+# the same filter returns the converter's repo and never the model's. asking
+# for text-generation on top of that meant the speech half of the roster had no
+# discovery path at all, and `Supertone/supertonic-3` (941 likes, 28k
+# downloads, onnx only) was invisible to every report here while a reader found
+# it by hand.
+PIPELINES = [("text-generation", True),
+             ("text-to-speech", False),
+             ("automatic-speech-recognition", False)]
+
 
 def get(url, key, max_age, refresh):
     cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
@@ -76,6 +90,10 @@ def shape(m, tracked):
     r["author"] = (m.get("id") or "/").split("/")[0]
     r["base_model"] = base_model(m.get("tags"))
     r["tracked"] = (m.get("id") or "").lower() in tracked
+    # recorded rather than filtered on, now that the speech sweeps do not ask
+    # for it: whether a repo ships weights this stack can load is the first
+    # question about a candidate, and "popular, no gguf" is a real answer
+    r["gguf"] = "gguf" in (m.get("tags") or [])
     return r
 
 
@@ -156,9 +174,17 @@ def main():
         print("\n".join(sorted(tracked)))
         return
 
-    trending = [shape(m, tracked) for m in page(
-        {"filter": "gguf", "pipeline_tag": "text-generation",
-         "sort": args.sort, "direction": -1}, "hfc-%s" % args.sort, args)]
+    trending = []
+    for tag, gguf_only in PIPELINES:
+        q = {"pipeline_tag": tag, "sort": args.sort, "direction": -1}
+        if gguf_only:
+            q["filter"] = "gguf"
+        rows = [shape(m, tracked)
+                for m in page(q, "hfc-%s-%s" % (args.sort, tag), args)]
+        print("  %-30s %3d repos, %d tracked, %d with a gguf"
+              % (tag, len(rows), sum(1 for r in rows if r["tracked"]),
+                 sum(1 for r in rows if r["gguf"])), file=sys.stderr)
+        trending += rows
     if not trending:
         sys.exit("no trending repos returned -- the hub api probably changed")
     print("  trending  %3d repos, %d already tracked"

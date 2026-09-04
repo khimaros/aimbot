@@ -138,10 +138,17 @@ def resolve_filename(repo, quant):
     except Exception as e:
         print("!!! %s: %s" % (repo, e), file=sys.stderr)
         return None
-    hits = [f for f in files
-            if f.endswith(".gguf") and quant.lower() in f.lower() and "/" not in f]
+    # the tag names the END of the stem. a substring match is what the sizes
+    # collector's fallback does and it is too loose here: breeze publishes
+    # `-q8_0.gguf` beside `-q8_0-dd2.gguf` and `-q8_0-dd4.gguf`, which are
+    # different files, so `q8_0` matched three and the ref was refused
+    root = [f for f in files if f.endswith(".gguf") and "/" not in f]
+    hits = [f for f in root if f.lower().endswith(quant.lower() + ".gguf")]
+    if not hits:
+        hits = [f for f in root if quant.lower() in f.lower()]
     if len(hits) != 1:
-        print("!!! %s:%s matches %d files" % (repo, quant, len(hits)), file=sys.stderr)
+        print("!!! %s:%s matches %d file(s): %s"
+              % (repo, quant, len(hits), ", ".join(hits) or "none"), file=sys.stderr)
         return None
     return hits[0]
 

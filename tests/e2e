@@ -83,6 +83,113 @@ const RESET = () => {
   reweigh();
 };
 
+test('a model with baked speakers lists them on its detail page', () => {
+  RESET();
+  const withVoices = D.models.filter(m => (m.quants || []).some(q => q.voices));
+  ok(withVoices.length >= 3, 'the roster carries models with voices ('
+     + withVoices.length + ')');
+
+  const kokoro = model('kokoro-v1');
+  const q = (kokoro.quants || []).find(x => x.voices);
+  eq(q.voices.length, 50, 'kokoro ships fifty');
+  const html_ = tabOverview(kokoro);
+  ok(html_.includes('built-in voices'), 'the field is rendered');
+  ok(html_.includes('af_bella'), 'a named voice is in the html');
+  ok(html_.includes('and 42 more'), 'the tail is summarised rather than dumped');
+  ok(html_.includes(q.voices[49]), 'and every name is on the tooltip');
+
+  // qwen3-tts customvoice carries nine, and the BASE build carries none: the
+  // list belongs to the file, not the checkpoint
+  ok(tabOverview(model('qwen3-tts-1.7b-customvoice')).includes('aiden'),
+     'customvoice lists its speakers');
+  eq(tabOverview(model('qwen3-tts-1.7b-base')).includes('built-in voices'), false,
+     'base clones from a reference and has no speaker list to show');
+
+  // and a text model never grows the field
+  eq(tabOverview(model('qwen3.8 27b')).includes('built-in voices'), false,
+     'a text model has no voices');
+});
+
+test('a share link carries only what was changed, and round-trips', () => {
+  RESET();
+  filters.mod = DEFAULT_MODALITY;
+  filters.flags = new Set(DEFAULT_FLAGS);
+  filters.q = ''; filters.pub = '';
+  sort = {k: 'score', dir: -1};
+
+  // an untouched page has nothing to say
+  eq(JSON.stringify(shareState()), '{}', 'defaults produce an empty payload');
+  eq(shareLink().includes('#'), false, 'and a link with no fragment');
+
+  // move one of each KIND of setting
+  const facet = Object.keys(D.weights)[0];
+  setHardware({budget: 64, minCtx: 32768});
+  W = {...D.weights, [facet]: 0.99};
+  filters.mod = 't2a';
+  filters.q = 'kokoro';
+  sort = {k: 'name', dir: 1};
+
+  const st = shareState();
+  eq(st.hw.budget, 64, 'the changed budget travels');
+  eq(st.hw.minCtx, 32768, 'and the changed context');
+  eq('reserve' in st.hw, false, 'an untouched hardware key does not');
+  eq(st.w[facet], 0.99, 'the moved weight travels');
+  eq(Object.keys(st.w).length, 1, 'and only the moved one');
+  eq(st.f.mod, 't2a', 'the modality travels');
+  eq(st.f.q, 'kokoro', 'the search travels');
+  eq('flags' in st.f, false, 'untouched flags do not');
+  eq(st.sort.k, 'name', 'the sort travels');
+
+  // the link parses back to the same payload, through the real encoder
+  const link = shareLink();
+  ok(link.includes('#s='), 'the fragment carries the payload: ' + link);
+  const json = decodeURIComponent(/[#&]s=([^&]+)/.exec(link)[1]);
+  eq(JSON.stringify(JSON.parse(json)), JSON.stringify(st), 'the payload round-trips');
+
+  // and applying it reproduces the settings
+  RESET();
+  filters.q = ''; filters.mod = DEFAULT_MODALITY; sort = {k: 'score', dir: -1};
+  applyState(JSON.parse(json));
+  eq(budget, 64, 'budget restored');
+  eq(minCtx, 32768, 'context restored');
+  eq(W[facet], 0.99, 'weight restored');
+  eq(filters.mod, 't2a', 'modality restored');
+  eq(filters.q, 'kokoro', 'search restored');
+  eq(sort.k, 'name', 'sort restored');
+
+  RESET();
+  filters.q = ''; filters.mod = DEFAULT_MODALITY; sort = {k: 'score', dir: -1};
+});
+
+test('a share link that is garbage does not blank the page', () => {
+  // a truncated paste is the common case and must not throw during boot
+  eq(hashState(), null, 'no fragment is null, not a crash');
+});
+
+test('a model that publishes no context window still fits', () => {
+  RESET();
+  // the default asks for 131072, which is the setting that exposed this
+  eq(minCtx, 131072, 'the default context');
+  const noWindow = D.models.filter(m => !m.facts.context_native);
+  ok(noWindow.length > 10, 'the roster has models with no window (' + noWindow.length + ')');
+  ok(noWindow.every(m => m.kind !== 'text'),
+     'no TEXT model relies on this: they all publish a window');
+
+  // `(context_native || 0) >= minCtx` read absent as zero, so every one of
+  // these reported `does not fit` on a box with 116gib free
+  const sized = noWindow.filter(m => m.quants.some(q => q.gib));
+  ok(sized.length > 5, 'enough of them are sized to be a real test');
+  const bad = sized.filter(m => !fitsBudget(m)).map(m => m.short);
+  eq(bad.join(', '), '', 'sized models with no window must fit');
+
+  // and the fit is still doing its job: a window SHORTER than asked for is
+  // still a miss, which is the case the check exists for
+  const short = D.models.filter(m => m.facts.context_native
+    && m.facts.context_native < minCtx);
+  ok(short.every(m => !fitsBudget(m)),
+     'a model whose window is genuinely too short still does not fit');
+});
+
 test('the default modality is the roster MODELS.md ranks', () => {
   RESET();
   filters.mod = DEFAULT_MODALITY;

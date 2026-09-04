@@ -460,7 +460,7 @@ def fork_type(tag, known):
     return validator().fork_type(tag, known)
 
 
-def quant_rows(model, sizes, known_quants=()):
+def quant_rows(model, sizes, known_quants=(), voices=None):
     """Each declared quant, with what it weighs and what that is per weight.
 
     A rung also carries whether a stock llama.cpp can load it. The ladder is
@@ -489,6 +489,13 @@ def quant_rows(model, sizes, known_quants=()):
             fork = known_quants and fork_type(a["quant"], known_quants)
             if fork:
                 a["fork_type"] = fork
+        # the speakers this FILE ships, read out of its own header. per quant
+        # rather than per model because two conversions of one checkpoint
+        # answer differently: cstr's qwen3-tts carries nine names where ours
+        # carries none, and a reader needs the list for the rung being served
+        spk = ((voices or {}).get("%s:%s" % (q["repo"], q["quant"])) or {}).get("voices")
+        if spk:
+            row["voices"] = spk
         out.append(row)
     return out, params
 
@@ -509,7 +516,7 @@ def build_model(repo, model, ctx):
     facts = ctx["facts"].get(repo) or {}
     use = (ctx["usecase"].get("models") or {}).get(repo) or {}
     card = ctx["cards"].get(repo) or {}
-    quants, _ = quant_rows(model, ctx["sizes"], ctx["known_quants"])
+    quants, _ = quant_rows(model, ctx["sizes"], ctx["known_quants"], ctx["voices"])
     quants = with_bpw(quants, facts.get("params_total_b"))
     name = model.get("name") or {}
     rec = {
@@ -583,6 +590,7 @@ def build():
     reg_path = os.path.join(ROOT, "registry", "models.yaml")
     support = load_json("llama-support")
     ctx = {"facts": load_json("model-facts"), "sizes": load_json("gguf-sizes"),
+           "voices": load_json("gguf-voices"),
            "probes": load_json("template-probes"),
            "usecase": load_json("usecase"), "cards": load_json("model-cards"),
            "known_quants": set(support.get("quants") or []),

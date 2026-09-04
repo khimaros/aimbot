@@ -254,6 +254,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <select id="preset" data-help="a named set of weights. `balanced` is build-tables' composite; the others reweight toward one question. changing any weight yourself moves this to `custom ranking`"></select>
     <button id="factors-btn" aria-pressed="false" data-help="build your own weighting: one slider per measurement, grouped by what measured it. the ranking resorts as you drag, and a model missing a factor is ranked on the ones it has rather than scored zero">custom ranking</button>
     <button id="eff-btn" aria-pressed="true" data-help="off, the scores are what the source published. on, they answer `what would i get from the quant i can actually run`: a benchmark scores the model at the precision the scorer served, so the score is multiplied by the retention that quant's bits per weight predict and the percentiles are recomputed against the discounted cohort. only the coding and software-agent benchmarks are discounted, because the one sweep behind the curve measured a code-editing pass rate and nothing else -- every other number is published as-is and says why on hover. the curve itself is fitted to one model, deepseek v3.1 at 671b, and applied to all of them, which is the weakest step on this page and reads optimistic for a small model at two bits.">quant adjusted</button>
+    <button id="share" data-help="copy a link that reproduces this exact table: the weights, the filters, the hardware, the columns and the sort. only what you changed goes in the link, so it stays short and shows what was actually moved">copy link</button>
     <button id="reset" data-help="clear the weights, filters, hardware settings, columns and sort, and forget them">reset</button>
   </div>
   <div class="controls">
@@ -413,6 +414,28 @@ let floor = 'none';
 const capBpw = () => (CAPS.find(c => c[0] === cap) || CAPS[0])[1];
 const floorBpw = () => (FLOORS.find(c => c[0] === floor) || FLOORS[0])[1];
 
+// the cap and the floor pick a rung off a LADDER, and a ladder is a text
+// model's problem: a speech or image model publishes one or two files and there
+// is nothing to choose between. applying them there disqualified every non-text
+// model on the roster -- 22 of 87 -- on a box with 116gib free.
+//
+// the bpw they compare is not trustworthy for those models either, which is why
+// this is a rule about ladders rather than a wider cap. `bpw` is size over
+// parameter count, and for a speech model the parameter count names a COMPONENT
+// where the gguf carries several: qwen3-tts 0.6b ships a 1.23gib file tagged
+// Q8_0 against a `0.6` figure counting only the talker, which computes to 17.7
+// bits per weight. reading the tag instead is no better -- unsloth's
+// UD-Q8_K_XL is genuinely ~11.8 bpw and the 11 ceiling excludes it correctly,
+// which a tag saying `Q8` would undo.
+const laddered = m => m.kind === 'text';
+
+function affordable(m, all, room) {
+  const fits = all.filter(c => c.gib && c.gib <= room);
+  if (!laddered(m)) return fits;
+  const ceiling = capBpw(), bottom = floorBpw();
+  return fits.filter(c => !c.bpw || (c.bpw <= ceiling && c.bpw >= bottom));
+}
+
 // context to serve, and what its kv cache costs. the geometry comes from each
 // model's own config: full-attention layers hold a cache that grows with the
 // context, windowed layers hold at most their window, and a linear-attention
@@ -445,7 +468,16 @@ const trainCtx = m => m.facts.context_trained || m.facts.context_native;
 // EXTENDED window, since that is what llama.cpp serves out of the gguf without
 // a flag; whether the extrapolated part is worth having is the reader's call,
 // and the two columns put both numbers in front of them.
-const reaches = m => !minCtx || (m.facts.context_native || 0) >= minCtx;
+//
+// a model that publishes NO window has not failed to reach one, and `|| 0` said
+// it had: 22 of 87 models carry no `context_native` -- every speech, image and
+// diarize entry, none of them text -- so at the default 131072 the whole
+// non-text roster read as `does not fit` on a box with 128gib free. a context
+// window is a text model's promise; kokoro emits audio and has no context at
+// all. same rule the quant search below already applies to missing sizes: an
+// absent measurement is not a failing one.
+const reaches = m => !minCtx || !m.facts.context_native
+  || m.facts.context_native >= minCtx;
 
 // the longest context whose cache fits beside the weights. windowed layers cap
 // at their window, so past that only the full-attention layers keep growing.
@@ -478,10 +510,8 @@ function bestInRepo(m, repo) {
   // measurement this repo does not have
   if (!budget || !all.some(c => c.gib)) return pinned;
   if (!reaches(m)) return null;
-  const room = usable() - kvGib(m, minCtx) - draftGib(m),
-        ceiling = capBpw(), bottom = floorBpw();
-  const fits = all.filter(c => c.gib && c.gib <= room
-    && (!c.bpw || (c.bpw <= ceiling && c.bpw >= bottom))).sort((a, b) => a.gib - b.gib);
+  const room = usable() - kvGib(m, minCtx) - draftGib(m);
+  const fits = affordable(m, all, room).sort((a, b) => a.gib - b.gib);
   return fits.length ? fits[fits.length - 1] : null;
 }
 
@@ -545,10 +575,8 @@ function fittingQuants(m) {
   if (!q) return [];
   const all = quantChoices(m).filter(c => c.repo === q.repo);
   if (!budget || !all.some(c => c.gib)) return [q];
-  const room = usable() - kvGib(m, minCtx), ceiling = capBpw(), bottom = floorBpw();
-  return all.filter(c => c.gib && c.gib <= room
-    && (!c.bpw || (c.bpw <= ceiling && c.bpw >= bottom)))
-    .sort((a, b) => b.gib - a.gib);
+  const room = usable() - kvGib(m, minCtx);
+  return affordable(m, all, room).sort((a, b) => b.gib - a.gib);
 }
 
 // one row per model, or one per (model, quant). the expanded row inherits the
@@ -1599,6 +1627,27 @@ function drawModal(keepScroll) {
 
 // two columns by default; `one` for a list whose values are sentences, where
 // wrapping into a second column makes the reading order zigzag
+// the speakers baked into the file being read. `voices` sits on the registry
+// quant rather than on the choice, so this looks it up by repo and tag and
+// falls back to the repo -- an expanded row can be reading an `available` rung
+// the registry never declared, and the speaker list is the repo's either way.
+const VOICES_SHOWN = 8;
+function voiceList(m, q) {
+  if (!q) return '';
+  const rows = m.quants || [];
+  const row = rows.find(x => x.repo === q.repo && x.quant === q.quant)
+    || rows.find(x => x.repo === q.repo);
+  const v = (row || {}).voices;
+  if (!v || !v.length) return '';
+  const head = v.slice(0, VOICES_SHOWN).map(esc).join(', ');
+  // all of them on hover: kokoro ships fifty and a wall of names is not a fact
+  // anybody reads, but the one they want has to be in there somewhere
+  return `<span title="${esc(v.join(', '))}">${v.length}: ${head}`
+    + (v.length > VOICES_SHOWN
+       ? ` <span class="sub">and ${v.length - VOICES_SHOWN} more</span>` : '')
+    + '</span>';
+}
+
 const kv = (pairs, cls = '') => `<div class="kv ${cls}">`
   + pairs.filter(p => p[1] !== undefined && p[1] !== null && p[1] !== '')
     .map(([k, v]) => `<div><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`)
@@ -1650,6 +1699,12 @@ function tabOverview(m) {
           ['likes', hub.likes],
           ['first published', (hub.createdAt || '').slice(0, 10)],
           ['modalities', esc((m.modalities.input || []).join(',') + ' -> ' + (m.modalities.output || []).join(','))],
+          // the speakers the file being read ships. per QUANT, so this follows
+          // the row you clicked: two conversions of one checkpoint answer
+          // differently, and crispasr's GET /v1/voices lists the clone
+          // directory rather than what is baked in, so this is the only place
+          // the built-in names are readable
+          ['built-in voices', voiceList(m, activeQuant(m))],
           ['quality', s.value === null ? '<span class="faint">unmeasured</span>'
             : `${num(s.value, 0)} <span class="sub">on ${s.have} of ${s.want} weighted factors</span>`]])
     + idsSection(m);
@@ -2442,6 +2497,95 @@ function drawChrome() {
     + `frontier api models -- renormalized over the factors each model actually carries.`;
 }
 
+// --- share links -------------------------------------------------------------
+//
+// the point of this page is that you decide what `good` means and the ranking
+// moves, which makes "the table I am looking at" the thing worth sending
+// somebody. every setting lives in localStorage, which cannot be sent, so a
+// share link carries them in the fragment instead -- alongside the `model=` and
+// `tab=` this already understood.
+//
+// only what DIFFERS from the defaults goes in. that keeps a link short, and it
+// makes the link itself readable: what is in the url is exactly what the sender
+// changed, which is the interesting part of any ranking somebody hands you.
+const SHARE_KEY = 's';
+
+const changed = (now, base) => Object.fromEntries(
+  Object.keys(now).filter(k => JSON.stringify(now[k]) !== JSON.stringify(base[k]))
+    .map(k => [k, now[k]]));
+
+function shareState() {
+  const hw = Object.fromEntries(Object.keys(DEFAULT_HARDWARE).map(k => [k, HW_GET[k]()]));
+  const st = {
+    hw: changed(hw, DEFAULT_HARDWARE),
+    w: changed(W, D.weights),
+    f: changed({q: filters.q, pub: filters.pub, mod: filters.mod,
+                flags: [...filters.flags].sort()},
+               {q: '', pub: '', mod: DEFAULT_MODALITY, flags: [...DEFAULT_FLAGS].sort()}),
+  };
+  if (sort.k !== 'score' || sort.dir !== -1) st.sort = sort;
+  if (JSON.stringify([...hidden].sort()) !== JSON.stringify([...DEFAULT_HIDDEN].sort()))
+    st.hidden = [...hidden];
+  if (JSON.stringify(order) !== JSON.stringify(DEFAULT_ORDER)) st.order = order;
+  if (allQuants) st.ladder = true;
+  if (!effective) st.eff = false;
+  // an empty section says nothing, so it is not carried
+  Object.keys(st).forEach(k => {
+    const v = st[k];
+    if (v && typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length) delete st[k];
+  });
+  return st;
+}
+
+function shareLink() {
+  const st = shareState();
+  const parts = [];
+  if (Object.keys(st).length) parts.push(SHARE_KEY + '=' + encodeURIComponent(JSON.stringify(st)));
+  if (openRepo) parts.push('model=' + encodeURIComponent(openRepo));
+  if (openRepo && tab !== TABS[0]) parts.push('tab=' + tab);
+  return location.origin + location.pathname + (parts.length ? '#' + parts.join('&') : '');
+}
+
+// state only: boot draws once after this, so touching the dom here would be a
+// second render against half-applied settings
+function applyState(st) {
+  Object.entries(st.hw || {}).forEach(([k, v]) => {
+    if (HW_SET[k]) { HW_SET[k](v); store.set(k, HW_GET[k]()); }
+  });
+  if (st.w) { W = {...D.weights, ...st.w}; store.set('weights', W); }
+  if (st.f) {
+    if (st.f.q !== undefined) filters.q = st.f.q;
+    if (st.f.pub !== undefined) filters.pub = st.f.pub;
+    if (st.f.mod !== undefined) filters.mod = st.f.mod;
+    if (st.f.flags) filters.flags = new Set(st.f.flags);
+    saveFilters();
+  }
+  if (st.sort) { sort = st.sort; store.set('sort', sort); }
+  if (st.hidden) { hidden = new Set(st.hidden); store.set('hidden', [...hidden]); }
+  if (st.order) {
+    order = st.order.filter(k => COLUMNS.some(c => c.k === k));
+    COLUMNS.forEach(c => { if (!order.includes(c.k)) order.push(c.k); });
+    store.set('order', order);
+  }
+  if (st.ladder !== undefined) store.set('allQuants', !!st.ladder);
+  if (st.eff !== undefined) store.set('effective', !!st.eff);
+}
+
+// `s=` and not `models=`: anchored so a key ending in s does not match
+const SHARE_RE = new RegExp('(?:^|[#&])' + SHARE_KEY + '=([^&]+)');
+
+function hashState() {
+  const m = SHARE_RE.exec(location.hash);
+  if (!m) return null;
+  try {
+    const st = JSON.parse(decodeURIComponent(m[1]));
+    return st && typeof st === 'object' ? st : null;
+  } catch (e) {
+    // a truncated link is a bad paste, not a reason to show a blank page
+    return null;
+  }
+}
+
 function applyHash() {
   const m = /model=([^&]+)/.exec(location.hash);
   const t = /tab=(\w+)/.exec(location.hash);
@@ -2476,6 +2620,12 @@ function boot(payload) {
              mod: (f || {}).mod || DEFAULT_MODALITY,
              flags: new Set(f ? f.flags || [] : DEFAULT_FLAGS)};
   Object.entries(DEFAULT_HARDWARE).forEach(([k, v]) => HW_SET[k](store.get(k, v)));
+
+  // a shared link beats what this browser happened to have stored: somebody
+  // sent a table, and the point is to see THAT one. same place as the stored
+  // settings, for the same reason -- drawChrome marks `selected` against these
+  const shared = hashState();
+  if (shared) applyState(shared);
 
   drawChrome();
   setLadder(store.get('allQuants', false));
@@ -2573,6 +2723,22 @@ document.querySelector('#preset').onchange = e => {
   btn.onclick = () => set(btn.getAttribute('aria-pressed') !== 'true');
   set(store.get(id + '-open', false));
 });
+document.querySelector('#share').onclick = async () => {
+  const btn = document.querySelector('#share'), url = shareLink();
+  // the address bar too, so the link is there to copy by hand if the clipboard
+  // is refused -- it is, on http origins and in some browsers without a gesture
+  history.replaceState(null, '', url);
+  let ok = true;
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch (e) {
+    ok = false;
+  }
+  const was = btn.textContent;
+  btn.textContent = ok ? 'copied' : 'in the address bar';
+  setTimeout(() => { btn.textContent = was; }, 1600);
+};
+
 document.querySelector('#reset').onclick = () => {
   W = {...D.weights};
   filters = {q: '', kind: new Set(), pub: '', mod: DEFAULT_MODALITY,

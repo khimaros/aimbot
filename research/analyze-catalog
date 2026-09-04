@@ -52,6 +52,9 @@ def norm_name(name):
 # params. above this a model only fits at precisions the quant curve says cost
 # real accuracy; below it the model is too small to compete on this roster.
 MIN_B, MAX_B = 20, 400
+# the pipelines the size floor above does not describe. every speech model on
+# this roster is under a gib and none of them names its parameter count
+SPEECH_PIPELINES = ("text-to-speech", "automatic-speech-recognition")
 
 
 def size_b(name):
@@ -164,7 +167,13 @@ def main():
             # different decision from "somebody else quantized what we carry"
             related = exact.get(norm_name(name)) or \
                 next((k for k, x in mre.items() if x.search(name)), "")
-            if (b is not None and MIN_B <= b <= MAX_B) or related:
+            # the size class is a TEXT model's proxy for "would this fit and is
+            # it worth a look", read out of the repo name. a speech model
+            # rarely puts its parameter count in the name -- supertonic-3,
+            # kokoro, sensevoice-small all fail it -- and is small enough that
+            # fitting was never the question, so the pipeline stands in for it
+            if (b is not None and MIN_B <= b <= MAX_B) or related \
+                    or r.get("pipeline_tag") in SPEECH_PIPELINES:
                 keep.append(dict(r, b=b, related=related))
         rows = keep
 
