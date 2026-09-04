@@ -113,9 +113,12 @@ test('the roster can say what it is MISSING, and does it one way', () => {
   ok(all.includes('supertonic-3'), 'clearing it says what is missing');
   ok(all.length > runnable.length, 'and that is strictly more rows');
 
+  // the image models used to be four of these and are not any more: reading
+  // stable-diffusion.cpp's own detector rather than writing the claim by hand
+  // found all five of them, ernie and krea included
   const missing = all.filter(s => !(model(s).engines || []).length);
-  ok(missing.length >= 5, 'several entries name no runtime at all: ' + missing);
-  ok(missing.includes('krea-2-raw'), 'including the image models with no loader');
+  ok(missing.length >= 2, 'entries that name no runtime at all: ' + missing);
+  ok(missing.includes('supertonic-3'), 'including the onnx-only one');
 
   RESET();
 });
@@ -415,6 +418,61 @@ test('the runtime filter is a multi-select over what actually loads a model', ()
   ok(visible().length > more.length, 'clearing it filters nothing out');
 
   filters.engines = new Set(DEFAULT_ENGINES);
+  RESET();
+});
+
+test('the quant ceiling reads the tag where it cannot read the bits', () => {
+  RESET();
+  setHardware({...DEFAULT_HARDWARE, cap: 'q8'});
+
+  // a speech model's bits-per-weight is not a number to compare: it is size
+  // over a parameter count that names one COMPONENT of several, which is how
+  // qwen3-tts 0.6b computes to 17.7 bpw. so the ceiling was skipped there
+  // entirely, and `max q8` went on offering f16 and f32 rungs.
+  const whisper = model('whisper-large-v3-turbo');
+  const tags = quantChoices(whisper).map(c => c.quant);
+  ok(tags.includes('F16') && tags.includes('Q8_0'), 'it publishes both: ' + tags);
+  const room = 100;
+  const under = affordable(whisper, quantChoices(whisper), room).map(c => c.quant);
+  eq(under.includes('F16'), false, 'f16 is above a q8 ceiling: ' + under);
+  ok(under.includes('Q8_0'), 'and the q8 rung is what is left');
+
+  // the ceiling is a PREFERENCE, so it yields rather than emptying the list: a
+  // model that publishes one f32 file and nothing else is still offered it
+  const pyannote = model('pyannote-seg-3.0');
+  const only = affordable(pyannote, quantChoices(pyannote), room).map(c => c.quant);
+  ok(only.length >= 1, 'a model with nothing under the ceiling keeps its rung');
+
+  // text models keep the bits comparison, where a tag lies: unsloth's
+  // UD-Q8_K_XL is genuinely ~11.8 bpw and the ceiling excludes it correctly
+  const text = D.models.find(m => m.kind === 'text'
+    && quantChoices(m).some(c => /UD-Q8/.test(c.quant) && c.bpw > 11));
+  if (text) {
+    const kept = affordable(text, quantChoices(text), 1e6).map(c => c.quant);
+    ok(!kept.some(q => /UD-Q8/.test(q)),
+       text.short + ': a recipe over the ceiling stays out however it is tagged');
+  }
+
+  RESET();
+});
+
+test('a runtime is offered only the repos it can read', () => {
+  RESET();
+  const m = model('qwen3-tts-1.7b-customvoice');
+  const repos = [...new Set(quantChoices(m).map(c => c.repo))];
+  eq(repos.length, 2, 'the model carries two conversions: ' + repos);
+
+  // two conversions of one checkpoint are not interchangeable, and this pair is
+  // the case the registry documents: crispasr reads cstr's metadata namespace
+  // and not ours, and it reads every key with a DEFAULT -- so the wrong file
+  // loads without complaint and emits noise. offering it in the repo picker is
+  // offering a command that cannot work.
+  ops = {runtime: 'crispasr', repo: null, quant: null, profile: null};
+  const forCrispasr = repoChoices(m);
+  eq(forCrispasr.length, 1, 'crispasr is offered one repo: ' + forCrispasr);
+  ok(forCrispasr[0].startsWith('cstr/'), 'and it is the one that declares it');
+
+  ops = {runtime: null, repo: null, quant: null, profile: null};
   RESET();
 });
 

@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+
+"""Which image models stable-diffusion.cpp loads, from its own detector.
+
+    fetch-sdcpp-support             # write data/sdcpp-support.json
+    fetch-sdcpp-support --report    # what the registry says against what it finds
+
+The same question `fetch-llama-support` answers for text and `fetch-crispasr`
+answers for speech, and it needs a third method: sd.cpp never reads
+`general.architecture`. `ModelLoader::get_sd_version()` sniffs TENSOR NAMES --
+`embed_image_indicator.weight` is ideogram 4, `txtfusion.projector.weight` is
+krea 2, `layers.0.adaLN_sa_ln.weight` is ernie image -- so the join is between
+that table and the tensor names each gguf actually carries.
+
+Both halves are read rather than assumed:
+
+  the table    src/model_loader.cpp at master, parsed for the `find("...")`
+               literals in each `if` and the VERSION_ it returns. a two-arm
+               condition is one outcome with two spellings, which is why this
+               parses blocks rather than lines: krea 2's first arm is the one
+               its ggufs use and a line-at-a-time regex sees only the second.
+  the tensors  the gguf's own header, over a ranged GET. huggingface's parse of
+               a gguf serves three fields and the tensor list is not one of
+               them, so the header is walked here the way fetch-gguf-voices
+               walks it for speaker names -- the tensor table sits directly
+               after the metadata this shares a reader with.
+
+Reading the CURRENT source matters more than it sounds. A nine-month-old clone
+of sd.cpp on this machine has no ideogram, krea or ernie in it at all, and
+answering from it would have reported three models as unsupported that upstream
+gained dedicated headers, docs and example assets for.
+"""
+
+import argparse
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import subprocess
+import sys
+
+import capture
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = "data/sdcpp-support.json"
+RAW = "https://raw.githubusercontent.com/leejet/stable-diffusion.cpp/master/"
+LOADER_URL = RAW + "src/model_loader.cpp"
+FUNCTION = "SDVersion ModelLoader::get_sd_version()"
+# the prefix sd.cpp compares against and a standalone diffusion gguf does not
+# carry: it is added by the loader's own name conversion, so a signature is
+# matched against the tail
+PREFIX = "model.diffusion_model."
+FIND = re.compile(r'\.find\("([^"]+)"\)')
+OUTCOME = re.compile(r"return\s+(VERSION_\w+)|^\s*(\w+)\s*=\s*true;")
+# how much of the file to read for the tensor table. the metadata comes first
+# and a diffusion gguf's is small, so the first window is almost always enough
+WINDOWS = (1 << 20, 8 << 20, 64 << 20)
+
+
+def load_voices_reader():
+    """fetch-gguf-voices' gguf walker, imported rather than restated."""
+    path = os.path.join(HERE, "fetch-gguf-voices")
+    spec = importlib.util.spec_from_loader(
+        "gguf_voices", importlib.machinery.SourceFileLoader("gguf_voices", path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def get(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    return proc.stdout if proc.returncode == 0 and proc.stdout.strip() else None
+
+
+def parse_signatures(source):
+    """{signature: outcome} out of the detector, one entry per spelling.
+
+    Accumulate the `find` literals as they are read and attach them to the
+    outcome that follows, which is what makes a two-arm `if` one rule with two
+    spellings rather than one rule with the second spelling.
+    """
+    start = source.find(FUNCTION)
+    if start < 0:
+        return {}
+    body = source[start:]
+    end = body.find("\n}\n")
+    body = body[:end] if end > 0 else body
+
+    out, pending = {}, []
+    for line in body.splitlines():
+        pending += FIND.findall(line)
+        hit = OUTCOME.search(line)
+        if hit and pending:
+            outcome = hit.group(1) or hit.group(2)
+            for sig in pending:
+                out.setdefault(sig, outcome)
+            pending = []
+    return out
+
+
+def tensor_names(reader, repo, filename):
+    """Every tensor name in a gguf, over a ranged GET of its header."""
+    url = "https://huggingface.co/%s/resolve/main/%s" % (repo, filename)
+    for window in WINDOWS:
+        try:
+            h = reader.Header(reader.fetch_header(url, window))
+            if h.take(4) != b"GGUF":
+                return None
+            h.u32()
+            count = h.u64()
+            for _ in range(h.u64()):
+                h.string()
+                h.value(h.u32())
+            names = []
+            for _ in range(count):
+                names.append(h.string())
+                for _ in range(h.u32()):
+                    h.u64()
+                h.u32()
+                h.u64()
+            return names
+        except EOFError:
+            continue
+        except Exception as e:
+            print("!!! %s: %s" % (repo, e), file=sys.stderr)
+            return None
+    print("!!! %s: header exceeds %d bytes" % (repo, WINDOWS[-1]), file=sys.stderr)
+    return None
+
+
+def match(names, signatures):
+    """(version, signature) for the first rule these tensors satisfy.
+
+    `find` in sd.cpp is a substring test against the prefixed name, so the tail
+    of the signature is matched against the tensor as the gguf spells it. a
+    signature that names no version -- the flags a later branch resolves, like
+    `is_flux` -- is reported as itself rather than guessed at.
+    """
+    for sig, outcome in signatures.items():
+        tail = sig[len(PREFIX):] if sig.startswith(PREFIX) else sig
+        if any(tail in n for n in names):
+            return outcome, sig
+    return None, None
+
+
+def diffusion_quants(registry):
+    """Every rung that IS a diffusion model, which is the file sd.cpp loads."""
+    out = []
+    for repo, m in sorted(registry.items()):
+        for q in m.get("quants") or []:
+            if q.get("role") == "diffusion":
+                out.append((repo, q))
+                break
+    return out
+
+
+def load_registry(path):
+    try:
+        import yaml
+    except ImportError:
+        sys.exit("!!! pyyaml not found")
+    return (yaml.safe_load(open(path)) or {}).get("models") or {}
+
+
+def report(payload, registry):
+    found = payload.get("models") or {}
+    print("stable-diffusion.cpp: %d signatures, %d model(s) tested"
+          % (len(payload.get("signatures") or {}), len(found)))
+    for repo, m in sorted(registry.items()):
+        if m.get("kind") != "image":
+            continue
+        claims = "stable-diffusion.cpp" in (m.get("engine") or [])
+        hit = found.get(repo) or {}
+        print("  %-34s registry=%-5s detector=%s"
+              % ((m.get("name") or {}).get("short"), "yes" if claims else "no",
+                 hit.get("version") or "no signature"))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--url", default=LOADER_URL)
+    ap.add_argument("--registry",
+                    default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--cache-key", default="sdcpp")
+    ap.add_argument("--max-age", type=int, default=24 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--report", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true")
+    args = ap.parse_args()
+
+    registry = load_registry(args.registry)
+    if args.report and os.path.exists(args.out):
+        report(json.load(open(args.out)), registry)
+        return
+
+    source = get(args.url, args.cache_key, args.max_age, args.refresh)
+    if not source:
+        sys.exit("!!! could not read %s" % args.url)
+    signatures = parse_signatures(source)
+    if not signatures:
+        sys.exit("!!! no signatures found -- get_sd_version() moved or changed shape")
+
+    reader = load_voices_reader()
+    models = {}
+    for repo, q in diffusion_quants(registry):
+        # a tag is not a filename, and a ranged GET needs one. the same resolver
+        # the voices collector uses, which anchors on the END of the stem
+        # because `q8_0` matches three files in some repos
+        name = q.get("file") or reader.resolve_filename(q["repo"], q["quant"])
+        names = tensor_names(reader, q["repo"], name) if name else None
+        if not names:
+            continue
+        version, sig = match(names, signatures)
+        models[repo] = {"repo": q["repo"], "tensors": len(names),
+                        "version": version, "signature": sig}
+        print("  %-46s %-22s %s" % (repo, version or "no signature", sig or ""),
+              file=sys.stderr)
+
+    payload = {"signatures": dict(sorted(signatures.items())),
+               "models": dict(sorted(models.items()))}
+    written, now, before = capture.write(
+        args.out, payload, lambda p: len(p["signatures"]),
+        allow_shrink=args.allow_shrink)
+    if not written:
+        sys.exit(capture.refused(args.out, now, before))
+    print("wrote %s: %d signatures, %d model(s), %d detected"
+          % (args.out, len(signatures), len(models),
+             sum(1 for m in models.values() if m["version"])))
+    if args.report:
+        report(payload, registry)
+
+
+if __name__ == "__main__":
+    main()

@@ -683,6 +683,34 @@ def check_backend_reachable(models, data, f):
                       % (repo, ", ".join(sorted(archs))))
 
 
+def check_sdcpp_detected(models, data, f):
+    """A stable-diffusion.cpp claim has to be one its DETECTOR makes.
+
+    The other half of the over-reporting guard, and it needs a different method
+    from the crispasr one: sd.cpp never reads `general.architecture`. Its
+    `get_sd_version()` sniffs tensor names, so `fetch-sdcpp-support` reads that
+    table out of the current source and the tensor names out of each gguf's own
+    header, and this checks the claim against what it found.
+
+    A model with no entry at all is not an error: the collector may not have run
+    on this checkout, or a header may be unreadable. What is an error is a claim
+    the detector was asked about and did not make.
+    """
+    found = (data.get("sdcpp") or {}).get("models") or {}
+    if not found:
+        return
+    for repo, m in sorted((models.get("models") or {}).items()):
+        if "stable-diffusion.cpp" not in (m.get("engine") or []):
+            continue
+        hit = found.get(repo)
+        if hit and not hit.get("version"):
+            f.add(repo, "stable-diffusion.cpp is claimed and its detector finds "
+                        "no signature in %s: %d tensors read and none of the %d "
+                        "rules matched"
+                  % (hit.get("repo"), hit.get("tensors") or 0,
+                     len((data.get("sdcpp") or {}).get("signatures") or {})))
+
+
 def report_speech(models):
     """The two gaps in the speech roster: no engine to load it, no source to rank it.
 
@@ -755,6 +783,8 @@ def main():
                                                     "data", "gguf-sizes.json"))
     ap.add_argument("--crispasr", default=os.path.join(HERE, "..", "research",
                                                        "data", "crispasr.json"))
+    ap.add_argument("--sdcpp", default=os.path.join(HERE, "..", "research",
+                                                    "data", "sdcpp-support.json"))
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
@@ -776,6 +806,7 @@ def main():
     # skips it rather than failing on a missing file
     check_backend_reachable(models, {"crispasr": load(args.crispasr) or {},
                                      "llama-support": load(args.support) or {}}, f)
+    check_sdcpp_detected(models, {"sdcpp": load(args.sdcpp) or {}}, f)
     if args.modalities:
         print("\nmodalities: %d model(s) disagreeing with their own config" % len(rows))
         for repo, got, want in sorted(rows):

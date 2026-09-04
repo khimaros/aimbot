@@ -470,9 +470,33 @@ const floorBpw = () => (FLOORS.find(c => c[0] === floor) || FLOORS[0])[1];
 // which a tag saying `Q8` would undo.
 const laddered = m => m.kind === 'text';
 
+// the bits a plain quant tag names. `max q8` used to do nothing at all to a
+// speech or image model -- the ceiling compares bits per weight, that number is
+// not trustworthy there, so the whole test was skipped and z-image went on
+// offering its f16 rung under a q8 ceiling. the TAG is trustworthy where the
+// bpw is not: a repo that publishes `F16` and `Q8_0` is telling you which is
+// which, and a speech repo publishes nothing more exotic than that.
+//
+// text models keep the bpw comparison, because there the tag is the thing that
+// lies: unsloth's UD-Q8_K_XL is genuinely ~11.8 bpw and the ceiling excludes it
+// correctly, which a tag reading `Q8` would undo.
+const TAG_BITS = /^(?:UD-|AD-)?(?:(?:BF|F)(\d+)|I?Q(\d+))/i;
+const tagBits = tag => {
+  const m = TAG_BITS.exec(tag || '');
+  return m ? +(m[1] || m[2]) : null;
+};
+const capBits = () => cap === 'none' ? Infinity : +cap.slice(1);
+
 function affordable(m, all, room) {
   const fits = all.filter(c => c.gib && c.gib <= room);
-  if (!laddered(m)) return fits;
+  if (!laddered(m)) {
+    // a PREFERENCE, so it yields rather than emptying the list: pyannote
+    // publishes one f32 file and nothing else, and a ceiling that hid it would
+    // report the model as not fitting a box with room for it fifty times over
+    const bits = capBits();
+    const under = fits.filter(c => (tagBits(c.quant) ?? 0) <= bits);
+    return under.length ? under : fits;
+  }
   const ceiling = capBpw(), bottom = floorBpw();
   return fits.filter(c => !c.bpw || (c.bpw <= ceiling && c.bpw >= bottom));
 }
@@ -2483,9 +2507,29 @@ function quantChoices(m) {
 
 // repo first, then quant within it. the two repos of a model are not
 // interchangeable: only the -MTP- build of qwen3.6-27b carries the nextn head,
-// and its files are identically named 0.42gib apart
-const repoChoices = m => pickedRuntime(m).gguf
-  ? [...new Set(quantChoices(m).map(c => c.repo))] : [m.repo];
+// and its files are identically named 0.42gib apart.
+//
+// and the runtime narrows it further, because `not interchangeable` cuts the
+// other way too. crispasr reads cstr's qwen3-tts conversion and not ours -- the
+// two namespace their metadata differently and ship different codec tensor
+// counts -- and it reads every key with a DEFAULT, so the wrong file loads
+// without complaint and emits noise. a picker that offers both is offering a
+// command that cannot work. the registry says which rung declares the runtime;
+// where nothing distinguishes them, they are all candidates.
+function repoChoices(m) {
+  const rt = pickedRuntime(m);
+  if (!rt.gguf) return [m.repo];
+  const all = [...new Set(quantChoices(m).map(c => c.repo))];
+  if (rt.k !== 'crispasr') return all;
+  const declared = all.filter(r => quantChoices(m).some(
+    c => c.repo === r && (c.crispasr || {}).backend));
+  if (declared.length) return declared;
+  // no rung names it: fall back to the repos crispasr's own catalog was
+  // published against, and to everything if it names none of them either
+  const reads = (m.crispasr || {}).repos || [];
+  const known = all.filter(r => reads.includes(r));
+  return known.length ? known : all;
+}
 
 // whether serving from this repo can speculate at all. the capability is a
 // property of the GGUF rather than of the model: `draft-mtp` needs the nextn

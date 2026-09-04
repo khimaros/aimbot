@@ -56,6 +56,9 @@ OUT_DIR = os.path.join(ROOT, "docs")
 # deepseek v4 flash's -- offered as a quant it looks like the bargain of the
 # roster and is not the model at all.
 NOT_A_QUANT = re.compile(r"^(mmproj|mtp|dspark|dflash|eagle3|imatrix)|\.gguf$", re.I)
+# the same list without the `.gguf` half, for the ladders that are keyed by
+# filename on purpose
+SIDECAR_NAME = re.compile(r"^(mmproj|mtp|dspark|dflash|eagle3|imatrix)", re.I)
 
 # WHICH FACETS THE QUANTIZATION CURVE HAS EVIDENCE FOR.
 #
@@ -505,6 +508,21 @@ def fork_type(tag, known):
     return validator().fork_type(tag, known)
 
 
+# a filename with its quant token and extension taken off, which is what makes
+# two files the same model at two sizes. `ggml-large-v3-turbo-q8_0.bin` and
+# `ggml-large-v3-turbo.bin` share a stem; `ggml-medium.bin` does not.
+QUANT_TOKEN = re.compile(r"[-_](?:UD-|AD-)?(?:IQ|Q|BF|F|MXFP|NVFP|TQ)\d[A-Za-z0-9_]*",
+                         re.I)
+
+
+def is_filename(name):
+    return bool(re.search(r"\.(gguf|bin)$", name, re.I))
+
+
+def file_stem(name):
+    return QUANT_TOKEN.sub("", re.sub(r"\.(gguf|bin)$", "", name, flags=re.I)).lower()
+
+
 def quant_rows(model, sizes, known_quants=(), voices=None):
     """Each declared quant, with what it weighs and what that is per weight.
 
@@ -516,33 +534,60 @@ def quant_rows(model, sizes, known_quants=(), voices=None):
     """
     params = None
     out = []
+    # every file this model pins, under the tag the registry gives it. built
+    # first because the ladder is per RUNG and the naming is per MODEL: the Q8_0
+    # rung lists the unsuffixed file as an alternate, and without this it stayed
+    # a filename there while reading `F16` one rung up
+    pinned = {q["file"]: q["quant"] for q in (model.get("quants") or [])
+              if q.get("file")}
     for q in model.get("quants") or []:
         repo_sizes = sizes.get(q["repo"]) or {}
         row = dict(q)
         row["url"] = HF + q["repo"]
-        # the size table is keyed by whatever the repo publishes, which is a
-        # quant tag where the filenames carry one and a filename where they do
-        # not -- `file:` is the registry saying which of the two this rung is
-        b = repo_sizes.get(q.get("file") or q["quant"])
+        # the size table is keyed by whatever the repo publishes: a quant tag
+        # where the filenames carry one, the filename itself where they do not,
+        # and BOTH where a file carries a tag the derivation could read. `file:`
+        # says which this rung is, and the tag is the fallback
+        b = repo_sizes.get(q.get("file")) or repo_sizes.get(q["quant"])
         if b:
             row["bytes"] = b
             row["gib"] = round(b / GIB, 2)
         # every other quant published in the same repo, so a reader who cannot
-        # fit the pinned one can see what else is there
+        # fit the pinned one can see what else is there -- but only the ones
+        # that are the SAME MODEL. one repo can hold several: whisper.cpp
+        # publishes 33 files over eight checkpoints, and offering
+        # `ggml-medium.bin` as an alternate rung of large-v3-turbo is offering a
+        # different model at a smaller size. where the rung names a file, the
+        # alternates are the files that differ from it only by quant token --
+        # and the derived tags, which name no file and so name no other model.
+        alt = repo_sizes.items()
+        drop = NOT_A_QUANT
+        if q.get("file"):
+            want = file_stem(q["file"])
+            alt = [(k, v) for k, v in alt
+                   if not is_filename(k) or file_stem(k) == want]
+            # `.gguf` in NOT_A_QUANT is there to keep filename keys out of a tag
+            # ladder, and the stem filter above has already done that job better:
+            # what is left IS this model at another size. kokoro publishes five
+            # espeak rungs and the blanket rule hid four of them.
+            drop = SIDECAR_NAME
         row["available"] = sorted(
             ({"quant": k, "gib": round(v / GIB, 2)}
-             for k, v in repo_sizes.items() if not NOT_A_QUANT.search(k)),
+             for k, v in alt if not drop.search(k)),
             key=lambda x: x["gib"])
         for a in row["available"]:
             fork = known_quants and fork_type(a["quant"], known_quants)
             if fork:
                 a["fork_type"] = fork
-            # the rung the registry PINS is shown under the tag the registry
-            # gives it; the rest of the repo keeps the names it publishes,
-            # because nothing here knows what `Kokoro_no_espeak_Q4.gguf` would
-            # be called as a tag and guessing would collide with its sibling
-            if q.get("file") and a["quant"] == q["file"]:
-                a["file"], a["quant"] = a["quant"], q["quant"]
+            # a filename that carries a quant token is shown under that token:
+            # `ggml-large-v3-turbo-q5_0.bin` is the Q5_0 rung, and a ladder
+            # reading half tags and half filenames is the mess this replaced
+            if a["quant"] in pinned:
+                a["file"], a["quant"] = a["quant"], pinned[a["quant"]]
+                continue
+            token = QUANT_TOKEN.search(a["quant"]) if is_filename(a["quant"]) else None
+            if token:
+                a["file"], a["quant"] = a["quant"], token.group(0).strip("-_").upper()
         # the speakers this FILE ships, read out of its own header. per quant
         # rather than per model because two conversions of one checkpoint
         # answer differently: cstr's qwen3-tts carries nine names where ours
