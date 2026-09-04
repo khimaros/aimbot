@@ -248,6 +248,34 @@ test('the preset list offers only rankings the current modality can be given', (
   RESET();
 });
 
+test('a filter menu opens on its button and swallows the click', () => {
+  RESET();
+  drawFilterMenus();
+  eq(html('#modality-ms').includes('ms-menu open'), false, 'it starts shut');
+
+  document.querySelector('#modality-ms .ms-btn').onclick();
+  ok(html('#modality-ms').includes('ms-menu open'), 'the button opens it');
+
+  // THE BUG THIS EXISTS FOR: opening it redraws the wrapper's innerHTML, which
+  // DETACHES the node that was clicked. the document handler that closes a menu
+  // on an outside click then asked `does the wrapper contain the target`, got
+  // false for a click that was plainly inside, and shut the menu in the same
+  // gesture that opened it -- so neither dropdown could be opened at all. the
+  // wrapper stops the click instead, and it has to be the wrapper rather than
+  // the button, because the button is the node that gets replaced.
+  //
+  // the assertion above cannot catch that on its own: the dom stub never
+  // dispatches, so the document handler does not run here the way it does in a
+  // browser. this is the half that encodes the fix.
+  let stopped = false;
+  document.querySelector('#modality-ms').onclick({stopPropagation: () => { stopped = true; }});
+  ok(stopped, 'a click inside the dropdown never reaches the document');
+
+  document.querySelector('#modality-ms .ms-btn').onclick();
+  eq(html('#modality-ms').includes('ms-menu open'), false, 'and it closes again');
+  RESET();
+});
+
 test('modality is a multi-select, and the union of what is picked', () => {
   RESET();
   filters.flags = new Set();

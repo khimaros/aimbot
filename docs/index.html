@@ -1335,6 +1335,14 @@ function drawMulti(id, attr, items, chosen, summary) {
       + (it.n === undefined ? '' : ` <span class="faint">${it.n}</span>`)
       + '</button>').join('') + '</div>';
 
+  // a click anywhere in here is a pick, and must not reach the document handler
+  // below. it goes on the WRAPPER, which survives: the handlers under it redraw
+  // `el.innerHTML`, so the node that was clicked is detached by the time the
+  // event bubbles, and `contains(e.target)` reads a click from inside the menu
+  // as one from outside it. that shut each menu in the same gesture that opened
+  // it, which is a dropdown that cannot be opened at all.
+  el.onclick = e => e.stopPropagation();
+
   const btn = el.querySelector('.ms-btn');
   if (btn) btn.onclick = () => { openMenu = open ? null : id; drawFilterMenus(); };
   el.querySelectorAll('[' + attr + ']').forEach(b => {
