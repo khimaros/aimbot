@@ -56,12 +56,13 @@ def load(name, data=None):
         return {}
 
 
-def speech_keys(rows, open_field, id_fields=()):
-    """{normalized name: real id} for one speech board, OPEN-WEIGHTS ONLY.
+def open_keys(rows, open_field, id_fields=()):
+    """{normalized name: real id} for one board, OPEN-WEIGHTS ONLY.
 
-    The filter is the whole point. Every speech board is dominated by hosted
-    endpoints, and a vendor's API SKU shares a family name with the checkpoint
-    it grew from while being neither the same weights nor the same stack:
+    The filter is the whole point. Every speech and image board is dominated by
+    hosted endpoints, and a vendor's API SKU shares a family name with the
+    checkpoint it grew from while being neither the same weights nor the same
+    stack:
     artificial analysis scores `qwen3-tts-vc-realtime` at 925 elo on alibaba
     cloud, and the registry carries gguf conversions of the open Qwen3-TTS at a
     different codec rate. Matching those would put a hosted arena rating on a
@@ -147,19 +148,26 @@ def key_spaces(data=None):
 
     speech = load("artificial-analysis-speech", data)
     spoken = {
-        "aa-stt": speech_keys(speech.get("speech-to-text") or {}, "openWeights",
-                              ("hostApiId",)),
-        "aa-stt-streaming": speech_keys(speech.get("speech-to-text-streaming") or {},
-                                        "openWeights", ("hostApiId",)),
-        "aa-tts": speech_keys(speech.get("text-to-speech") or {}, "openWeights",
-                              ("slug",)),
-        "tts-arena": speech_keys(load("tts-arena", data), "open"),
-        "voicearena": speech_keys(load("voicearena", data), "openSource"),
+        "aa-stt": open_keys(speech.get("speech-to-text") or {}, "openWeights",
+                            ("hostApiId",)),
+        "aa-stt-streaming": open_keys(speech.get("speech-to-text-streaming") or {},
+                                      "openWeights", ("hostApiId",)),
+        "aa-tts": open_keys(speech.get("text-to-speech") or {}, "openWeights",
+                            ("slug",)),
+        "tts-arena": open_keys(load("tts-arena", data), "open"),
+        "voicearena": open_keys(load("voicearena", data), "openSource"),
     }
+    # the image board publishes a huggingface url rather than a flag, so the
+    # same field decides openness AND supplies the most precise name any of
+    # these boards gives: a repo path. it points at a COLLECTION for a couple of
+    # them, which normalizes to the family name and is matched as one more
+    # spelling rather than trusted as a repo
+    pictured = {"aa-t2i": open_keys(load("artificial-analysis-image", data),
+                                    "openWeightsUrl", ("openWeightsUrl",))}
     # nothing scores a diarizer: there is no third-party DER board for the
     # embedders and segmenters, which is why crispasr's own figure is the only
     # number this repo has for them and it is quoted in the model's notes
-    return {"text": out, "speech": spoken, "diarize": {}}
+    return {"text": out, "speech": spoken, "image": pictured, "diarize": {}}
 
 
 # a trailing parameter count, which sources drop as often as they keep: AA and

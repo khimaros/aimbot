@@ -16,6 +16,17 @@
 #
 # seeded from the pre-split llama-tools llama-swap config; prose notes are
 # hand-written.
+#
+# `engine:` is the list of RUNTIMES that load a model's weights, and it is here
+# rather than derived because a gguf does not say what wrote it. two of them are
+# derived and are not written down: llama.cpp when `runtime.arch` names an
+# architecture it carries, and crispasr when a `crispasr:` block names a backend.
+# the rest have to be established -- kokoro's gguf is a TTS.cpp conversion and
+# loads in nothing else, whisper's files are whisper.cpp's own, z-image is one of
+# the two dozen architectures stable-diffusion.cpp detects -- so they are written
+# on the model with the reason in its notes. a model with no runtime at all
+# leaves the field off, which is a fact worth carrying: it is the difference
+# between weights this roster can run and weights it can only point at.
 
 version: 1
 models:
@@ -945,10 +956,20 @@ models:
     kind: image
     name:
       short: z-image-turbo
+    notes: >-
+      the one image model here a local runtime loads. stable-diffusion.cpp added
+      Z-Image on 2025-12-01 and detects it as `VERSION_Z_IMAGE`, with its own
+      page in docs/ and a gguf conversion by sd.cpp's author; the three files it
+      wants are the three roles below, which is why the vae and the text encoder
+      are carried as components rather than mentioned in prose.
+    engine:
+    - stable-diffusion.cpp
     quants:
     - repo: unsloth/Z-Image-Turbo-GGUF
       quant: Q8_0
       role: diffusion
+    ids:
+      aa-t2i: Z-Image Turbo
     modalities:
       input:
       - text
@@ -1025,6 +1046,8 @@ models:
     - repo: unsloth/ERNIE-Image-Turbo-GGUF
       quant: Q8_0
       role: diffusion
+    ids:
+      aa-t2i: ERNIE Image Turbo
     modalities:
       input:
       - text
@@ -1844,6 +1867,18 @@ models:
     kind: speech
     name:
       short: kokoro-v1
+    notes: >-
+      the gguf is a TTS.cpp conversion by that project's author -- its card says
+      so in a sentence -- and the `role: model-path` on each rung is TTS.cpp's
+      own flag name. crispasr has a kokoro backend too and would take the
+      upstream weights, but not these files, so the runtime that reads what this
+      registry pins is the one named here.
+
+      `_espeak` in the filename is phonemization, not a quant: those rungs want
+      espeak-ng installed, and the `_no_espeak` files in the same repo use the
+      library's own phonemizer instead.
+    engine:
+    - TTS.cpp
     quants:
     - repo: mmwillet2/Kokoro_GGUF
       quant: Kokoro_espeak.gguf
@@ -1984,6 +2019,8 @@ models:
     - repo: leejet/ideogram-4-GGUF
       quant: ideogram4-Q4_0.gguf
       role: diffusion
+    ids:
+      aa-t2i: Ideogram 4.0
     modalities:
       input:
       - text
@@ -2138,6 +2175,8 @@ models:
     - repo: vantagewithai/Krea-2-Raw-GGUF
       quant: Q8_0
       role: diffusion
+    ids:
+      aa-t2i: ''
     modalities:
       input:
       - text
@@ -2158,6 +2197,8 @@ models:
     - repo: vantagewithai/Krea-2-Turbo-GGUF
       quant: Q8_0
       role: diffusion
+    ids:
+      aa-t2i: ''
     modalities:
       input:
       - text
@@ -2587,6 +2628,13 @@ models:
     kind: speech
     name:
       short: whisper-large-v3-turbo
+    notes: >-
+      the pinned files are whisper.cpp's own ggml conversions, so stock
+      whisper.cpp loads them as well as crispasr does -- the second runtime is
+      not a fork detail, it is where the weights came from. crispasr uses
+      upstream's loader for this backend and no other.
+    engine:
+    - whisper.cpp
     quants:
     - repo: ggerganov/whisper.cpp
       quant: ggml-large-v3-turbo.bin
@@ -4346,19 +4394,30 @@ models:
     notes: >-
       the foxnose recipe's embedder: 256-d speaker embeddings over sliding
       windows, counted by GMM/BIC and clustered spectrally, which ESTIMATES the
-      number of speakers instead of being told it. crispasr publishes 7.3% DER
-      on voxconverse dev against pyannote plus titanet's 7.8, and 3.18% against
-      the upstream reference's 3.07 when scored on turns.
+      number of speakers instead of being told it.
 
-      CARRIED BUT NOT SERVED. those numbers did not reproduce here: over
-      crispasr's HTTP server, `--diarize-method foxnose` split a synthesized
-      four-turn two-voice dialogue into 8 segments and gave every one its own
-      speaker, byte-identically whatever `diarize_max_speakers` or
-      `diarize_embedder` the request carried -- a clusterer that is not running
-      rather than one that is wrong. pyannote plus titanet returns A B A B on
-      the same file. the published DER may well hold for the CLI, which is what
-      it was measured on; nothing here has measured it, so nothing here claims
-      it.
+      CARRIED BUT NOT SERVED, and the DER to quote is the publisher's LATER one.
+      crispasr's README says 7.3% on voxconverse dev against pyannote plus
+      titanet's 7.8; the gguf card at cstr/wespeaker-resnet34-lm-GGUF retracts
+      it -- "numbers near 3-7% DER quoted elsewhere in this project's history
+      came from an 8-file subset that turned out to be unrepresentative:
+      identical code scores 7.3% there and 33.1% on" the full set. the measured
+      run is 40 files of voxconverse dev at a 0.25s collar with
+      `--diarize-max-speakers 8`: 33.1% DER, the speaker count exactly right on
+      18 of 40, within one on 34. against the upstream python pipeline's OWN
+      output with the count pinned it scores 3.93% with zero speaker confusion,
+      which measures agreement with the reference rather than accuracy against
+      humans.
+
+      that is the same failure this roster hit. over crispasr's HTTP server,
+      `--diarize-method foxnose` split a synthesized four-turn two-voice
+      dialogue into 8 segments and gave every one its own speaker,
+      byte-identically whatever `diarize_max_speakers` or `diarize_embedder` the
+      request carried. the card names the cause -- "estimating the number of
+      speakers is the weak link, not the embeddings" -- and says the picture
+      improves sharply with `--diarize-num-speakers N`, which a transcription
+      client does not know. pyannote plus titanet returns A B A B on the same
+      file without being told.
     quants:
     - repo: cstr/wespeaker-resnet34-lm-GGUF
       quant: wespeaker-resnet34-lm.gguf
@@ -4379,9 +4438,10 @@ models:
       nothing about who, so it is paired with titanet for identities that hold
       across a long file.
 
-      chosen over foxnose by measurement rather than by the published DER --
-      see the wespeaker entry, which has the numbers and the reason they are
-      not quoted as this roster's.
+      chosen over foxnose by measurement here, and the publisher's own numbers
+      later agreed: the 7.3-versus-7.8 DER that favoured foxnose came off an
+      8-file subset its card now calls unrepresentative. see the wespeaker
+      entry.
 
       the base repo is gated on huggingface and the gguf conversion is not,
       which is why the quant repo is not the model's own.
@@ -4442,6 +4502,8 @@ models:
     kind: speech
     name:
       short: breeze-tts-2
+    engine:
+    - Breeze-TTS-2.cpp
     quants:
     - repo: HoppouAI/Breeze-TTS-2.cpp
       quant: Q8_0

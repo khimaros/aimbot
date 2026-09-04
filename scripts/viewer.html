@@ -263,6 +263,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <select id="modality" data-help="what the model turns into what. the same shapes llama-swap-groups derives its group membership from, so this page and a host name them alike. `text models` is the default and is the roster MODELS.md ranks"></select>
     <select id="pub" data-help="narrow to one publisher, taken from the repo owner"></select>
     <span id="kinds" class="chips"></span>
+    <span id="engines" class="chips" data-help="which runtimes you have. a model is shown when one of the selected ones loads its weights: llama.cpp comes from the architecture it merged, crispasr from the backend the registry names, the rest are written on the model because a gguf does not say what wrote it"></span>
     <button id="ladder-btn" aria-pressed="true" data-help="on, one row per model, reading the largest quant that fits. off, one row per quant that fits, so the whole size ladder is on screen -- and with quant adjusted each row scores at its own bits per weight, which merges every model and every quant into one ranked list of what you could actually run. it stays inside the repo the registry pins, since crossing to another build changes more than the size">best quant</button>
   </div>
 
@@ -332,7 +333,14 @@ const store = {
 let D = null;                       // the payload
 let W = {};                         // facet key -> weight
 let sort = store.get('sort', {k: 'score', dir: -1});
-let filters = {q: '', kind: new Set(), pub: '', flags: new Set()};
+// the runtimes selected by default: the three that load most of this roster and
+// that a reader here is likely to have built. it is a multi-select rather than
+// one choice because a model can have two -- whisper's files load in crispasr
+// and in stock whisper.cpp -- and because narrowing to one runtime is a
+// question about a box rather than about the models.
+const DEFAULT_ENGINES = ['llama.cpp', 'crispasr', 'stable-diffusion.cpp'];
+let filters = {q: '', kind: new Set(), pub: '', flags: new Set(),
+               engines: new Set(DEFAULT_ENGINES)};
 let folded = new Set();             // collapsed factor groups
 let hidden = new Set();
 let order = [];
@@ -576,7 +584,12 @@ const defaultRepo = m => {
 // which quant a ROW is being read as. an expanded row carries its own; a model
 // row asks for the largest that fits.
 const activeQuant = m => m._q !== undefined ? m._q : bestInRepo(m, defaultRepo(m));
-const fitsBudget = m => !budget || !!activeQuant(m);
+// an entry with no quants at all -- onnx-only weights the roster carries to say
+// what it is MISSING -- has no size to weigh, and answering "does it fit" with
+// `no` states something the data does not. it passes here and the gguf filter,
+// which is the one that means unservable, is what hides it. `fits vram` is on
+// by default, so getting this wrong makes those entries unreachable entirely.
+const fitsBudget = m => !budget || !m.quants.length || !!activeQuant(m);
 
 // every quant in the pinned repo that clears the budget, the ceiling and the
 // floor, largest first. same filter the fit uses, without the last step that
@@ -735,13 +748,33 @@ function facetPct(m, key) {
   return keys.reduce((a, p) => a + p, 0) / keys.length;
 }
 
+// whether a weighted factor is a question anybody asks of this model's kind:
+// true where some model of that kind carries the facet. one weight set spans
+// text, speech and image, and a text model has no word error rate -- counting
+// the speech sliders against it would read in the evidence column as MISSING
+// EVIDENCE rather than as a question nobody put to it.
+let kindFacets = null;
+function asked(m, key) {
+  if (!kindFacets) {
+    kindFacets = {};
+    D.models.forEach(x => {
+      const s = kindFacets[x.kind] || (kindFacets[x.kind] = new Set());
+      Object.keys(x.facets).forEach(k => s.add(k));
+    });
+  }
+  const have = kindFacets[m.kind] || new Set();
+  return key.endsWith('.*')
+    ? [...have].some(k => k.startsWith(key.slice(0, -1)))
+    : have.has(key);
+}
+
 // the composite: weighted mean of percentiles over the facets PRESENT. the
 // denominator is the weight actually used, so a model measured by three of
 // five sources is ranked on those three rather than penalised for the two.
 function score(m) {
   let num = 0, den = 0, have = 0, want = 0;
   for (const [key, w] of Object.entries(W)) {
-    if (!w) continue;
+    if (!w || !asked(m, key)) continue;
     want++;
     const p = facetPct(m, key);
     if (p === null) continue;
@@ -1091,6 +1124,11 @@ function visible() {
     if (filters.pub && m.publisher !== filters.pub) return false;
     if (!modality().test(m)) return false;
     if (ggufOnly && !(m.quants || []).length) return false;
+    // no runtime selected means no runtime filter, the way no flags does. a
+    // model with an EMPTY engine list is one nothing here loads, so it only
+    // appears once the filter is off entirely
+    if (filters.engines.size
+        && !(m.engines || []).some(e => filters.engines.has(e))) return false;
     for (const f of filters.flags) {
       const flag = FLAGS.find(x => x.k === f);
       if (flag && !flag.test(m)) return false;
@@ -1239,12 +1277,50 @@ const sameWeights = (a, b) => {
 };
 const presetName = () => Object.keys(PRESETS).find(p => sameWeights(W, PRESETS[p].w())) || '';
 
+// a preset means nothing for a modality whose models carry none of the facets
+// it weights: `writing code` over transcription models ranks every row on
+// nothing and prints a column of dashes. the same rule the modality list uses
+// on itself -- a dead option is dropped -- except that whatever is SELECTED
+// stays listed, or switching modality would blank the control that says what
+// the current ranking is.
+function presetFits(key) {
+  const w = PRESETS[key].w();
+  const keys = Object.keys(w).filter(k => w[k]);
+  if (!keys.length) return true;
+  return D.models.some(m => modality().test(m) && keys.some(k => asked(m, k)));
+}
+
+// one chip per runtime the roster actually has models for, with how many. a
+// runtime nothing here loads would be a toggle that empties the table.
+function drawEngines() {
+  const counts = {};
+  D.models.forEach(m => (m.engines || []).forEach(e => {
+    counts[e] = (counts[e] || 0) + 1;
+  }));
+  document.querySelector('#engines').innerHTML =
+    Object.keys(counts).sort().map(e =>
+      `<button data-engine="${esc(e)}" aria-pressed="${filters.engines.has(e)}"`
+      + ` data-help="${esc(e)} loads ${counts[e]} of these. none selected is no`
+      + ` filter at all, which is also how the entries nothing here runs become`
+      + ` visible">${esc(e)} <span class="faint">${counts[e]}</span></button>`).join('');
+  document.querySelectorAll('[data-engine]').forEach(b => {
+    b.onclick = () => {
+      const k = b.dataset.engine;
+      filters.engines.has(k) ? filters.engines.delete(k) : filters.engines.add(k);
+      b.setAttribute('aria-pressed', filters.engines.has(k));
+      saveFilters();
+      drawTable();
+    };
+  });
+}
+
 function drawPreset() {
   const cur = presetName();
   document.querySelector('#preset').innerHTML =
     (cur ? '' : '<option value="" selected>custom ranking</option>')
-    + Object.entries(PRESETS).map(([k, p]) =>
-      `<option value="${k}"${k === cur ? ' selected' : ''}>${esc(p.t)}</option>`).join('');
+    + Object.entries(PRESETS).filter(([k]) => k === cur || presetFits(k))
+      .map(([k, p]) =>
+        `<option value="${k}"${k === cur ? ' selected' : ''}>${esc(p.t)}</option>`).join('');
 }
 
 function drawFactors() {
@@ -2181,11 +2257,27 @@ let ops = {runtime: null, repo: null, quant: null, profile: null};
 // what you are being shown a command for. the runtime decides which repos are
 // even candidates: llama.cpp and anything speaking to it serve a GGUF, vllm
 // serves the base weights and cannot load one at all.
+//
+// this used to be two entries offered for every model, which meant a
+// transcription model was shown a `llama-server --hf-repo` line that will not
+// load it and an image model was offered vllm. the list is now the model's own
+// `engines`, joined at build time from the architecture llama.cpp merged, the
+// crispasr backend the registry names, and the runtimes written down because
+// nothing derives them.
 const RUNTIMES = [
   {k: 'llama.cpp', gguf: true},
   {k: 'vllm', gguf: false},
+  {k: 'crispasr', gguf: true},
+  {k: 'whisper.cpp', gguf: true},
+  {k: 'stable-diffusion.cpp', gguf: true},
+  {k: 'TTS.cpp', gguf: true},
+  {k: 'Breeze-TTS-2.cpp', gguf: true},
 ];
-const pickedRuntime = m => RUNTIMES.find(r => r.k === ops.runtime) || RUNTIMES[0];
+const runtimesFor = m => RUNTIMES.filter(r => (m.engines || []).includes(r.k));
+const pickedRuntime = m => {
+  const mine = runtimesFor(m);
+  return mine.find(r => r.k === ops.runtime) || mine[0] || {k: '', gguf: true};
+};
 
 function quantChoices(m) {
   // keyed by (repo, quant): a model may declare two quants OUT OF THE SAME
@@ -2391,19 +2483,69 @@ function requestBody(m, profileName) {
       + `which this template does not accept; showing ${level}`};
 }
 
+// a component by role, as `hf://repo:file` -- which is how every runtime here
+// takes a weight it did not download itself
+const partOf = (m, role) => (m.components || []).find(c => c.role === role);
+const hfRef = c => c ? `hf://${c.repo}:${c.quant}` : null;
+
+// the command each runtime wants, built from the same registry facts the
+// llama.cpp one is. the roles are not decoration: `role: diffusion`, `vae` and
+// `llm` are the three files stable-diffusion.cpp asks for by those names, and
+// kokoro's `role: model-path` is TTS.cpp's own flag.
+function otherRuntime(m, rt, pick) {
+  const ref = pick ? `hf://${pick.repo}:${pick.quant}` : '<weights>';
+  if (rt.k === 'crispasr') {
+    // the backend can be pinned on the quant rather than the model: two
+    // conversions of one checkpoint, and only one of them loads
+    const backend = ((pick || {}).crispasr || m.crispasr || {}).backend;
+    const speaks = (m.modalities.output || []).includes('audio');
+    return {label: `crispasr, ${speaks ? 'synthesis' : 'transcription'}`,
+            text: ['crispasr'].concat(
+              backend ? ['--backend ' + backend] : [],
+              ['-m ' + ref],
+              speaks ? ['--tts "hello world"', '--tts-output out.wav']
+                     : ['-f audio.wav']).join(' \\\n  ')};
+  }
+  if (rt.k === 'whisper.cpp') {
+    return {label: 'whisper.cpp, the files this repo pins are its own',
+            text: `whisper-cli \\\n  -m ${ref} \\\n  -f audio.wav`};
+  }
+  if (rt.k === 'stable-diffusion.cpp') {
+    return {label: 'stable-diffusion.cpp, three files',
+            text: ['sd', '--diffusion-model ' + ref,
+                   '--vae ' + (hfRef(partOf(m, 'vae')) || '<vae>'),
+                   '--llm ' + (hfRef(partOf(m, 'llm')) || '<text encoder>'),
+                   '-p "a photograph of a cat"'].join(' \\\n  ')};
+  }
+  if (rt.k === 'TTS.cpp') {
+    return {label: 'TTS.cpp',
+            text: ['tts-cli', '--model-path ' + ref,
+                   '--prompt "hello world"',
+                   '--save-path out.wav'].join(' \\\n  ')};
+  }
+  if (rt.k === 'vllm') {
+    return {label: 'vllm serve, the base weights rather than a gguf',
+            text: ['vllm serve ' + m.repo].concat(
+              m.facts.context_native ? ['--max-model-len ' + m.facts.context_native] : [])
+              .join(' \\\n  ')};
+  }
+  // a runtime named because it is the only thing that loads the file, and this
+  // page has never run it: say where it lives rather than invent its flags
+  return {label: rt.k + ', which this page cannot spell a command for',
+          text: `# ${ref}\n# needs ${rt.k}; see the registry notes for where it lives`};
+}
+
 // one runtime at a time. four commands stacked up made the reader scroll past
 // three they had not asked for to reach the one they had.
 function snippets(m) {
   const rt = pickedRuntime(m), pick = pickedQuant(m), profile = pickedProfile(m);
   const out = [];
+  if (!rt.k) return out;
   if (rt.k === 'llama.cpp') {
     out.push({label: `llama-server, ${profile || 'no'} samplers`,
               text: llamaServer(m, pick, profile)});
   } else {
-    out.push({label: 'vllm serve, the base weights rather than a gguf',
-              text: ['vllm serve ' + m.repo].concat(
-                m.facts.context_native ? ['--max-model-len ' + m.facts.context_native] : [])
-                .join(' \\\n  ')});
+    out.push(otherRuntime(m, rt, pick));
   }
   // the knob rides in the request whatever is serving it
   const body = requestBody(m, profile);
@@ -2446,7 +2588,6 @@ function drawChrome() {
     drawModal();
   };
 
-  const kinds = [...new Set(D.models.map(m => m.kind))].sort();
   document.querySelector('#kinds').innerHTML = FLAGS.map(f =>
     `<button data-flag="${f.k}" data-help="${esc(f.help || '')}"`
     + ` aria-pressed="${filters.flags.has(f.k)}">${f.t}</button>`).join('');
@@ -2459,6 +2600,8 @@ function drawChrome() {
       drawTable();
     };
   });
+
+  drawEngines();
 
   // the sizes cards and unified-memory boxes actually come in
   document.querySelector('#ram').innerHTML = '<option value="">any vram</option>'
@@ -2492,6 +2635,7 @@ function drawChrome() {
   document.querySelector('#modality').onchange = e => {
     filters.mod = e.target.value;
     saveFilters();
+    drawPreset();
     drawTable();
   };
 
@@ -2533,8 +2677,11 @@ function shareState() {
     hw: changed(hw, DEFAULT_HARDWARE),
     w: changed(W, D.weights),
     f: changed({q: filters.q, pub: filters.pub, mod: filters.mod,
-                flags: [...filters.flags].sort()},
-               {q: '', pub: '', mod: DEFAULT_MODALITY, flags: [...DEFAULT_FLAGS].sort()}),
+                flags: [...filters.flags].sort(),
+                engines: [...filters.engines].sort()},
+               {q: '', pub: '', mod: DEFAULT_MODALITY,
+                flags: [...DEFAULT_FLAGS].sort(),
+                engines: [...DEFAULT_ENGINES].sort()}),
   };
   if (sort.k !== 'score' || sort.dir !== -1) st.sort = sort;
   if (JSON.stringify([...hidden].sort()) !== JSON.stringify([...DEFAULT_HIDDEN].sort()))
@@ -2572,6 +2719,7 @@ function applyState(st) {
     if (st.f.pub !== undefined) filters.pub = st.f.pub;
     if (st.f.mod !== undefined) filters.mod = st.f.mod;
     if (st.f.flags) filters.flags = new Set(st.f.flags);
+    if (st.f.engines) filters.engines = new Set(st.f.engines);
     saveFilters();
   }
   if (st.sort) { sort = st.sort; store.set('sort', sort); }
@@ -2633,7 +2781,8 @@ function boot(payload) {
   const f = store.get('filters', null);
   filters = {q: (f || {}).q || '', kind: new Set(), pub: (f || {}).pub || '',
              mod: (f || {}).mod || DEFAULT_MODALITY,
-             flags: new Set(f ? f.flags || [] : DEFAULT_FLAGS)};
+             flags: new Set(f ? f.flags || [] : DEFAULT_FLAGS),
+             engines: new Set(f && f.engines ? f.engines : DEFAULT_ENGINES)};
   Object.entries(DEFAULT_HARDWARE).forEach(([k, v]) => HW_SET[k](store.get(k, v)));
 
   // a shared link beats what this browser happened to have stored: somebody
@@ -2719,7 +2868,8 @@ function setHardware(patch) {
 
 function saveFilters() {
   store.set('filters', {q: filters.q, pub: filters.pub, mod: filters.mod,
-                        flags: [...filters.flags]});
+                        flags: [...filters.flags],
+                        engines: [...filters.engines]});
 }
 
 document.querySelector('#q').oninput = e => {
@@ -2767,7 +2917,7 @@ document.querySelector('#share').onclick = async () => {
 document.querySelector('#reset').onclick = () => {
   W = {...D.weights};
   filters = {q: '', kind: new Set(), pub: '', mod: DEFAULT_MODALITY,
-             flags: new Set(DEFAULT_FLAGS)};
+             flags: new Set(DEFAULT_FLAGS), engines: new Set(DEFAULT_ENGINES)};
   hidden = new Set(DEFAULT_HIDDEN);
   folded = new Set(allGroups());
   order = [...DEFAULT_ORDER];

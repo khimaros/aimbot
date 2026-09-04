@@ -987,6 +987,141 @@ def one_speech_board_refreshing_does_not_drop_the_others():
        "shaped by the dotted paths, so a nested model.name is flattened")
 
 
+@test
+def an_error_rate_is_stored_as_the_accuracy_it_leaves():
+    """Every facet on the page is higher-is-better. Two speech boards are not.
+
+    The percentile pass has no notion of direction: it ranks a cohort by value
+    and calls the top of it best. Storing a word error rate verbatim would rank
+    the worst transcriber first, and it would do it SILENTLY -- 4% and 8% are
+    both plausible-looking numbers in a column. So a WER is stored as the
+    accuracy it implies, and this is the check that it was inverted exactly
+    once: a second inversion looks just as plausible.
+    """
+    board = json.load(open(os.path.join(RESEARCH, "data",
+                                        "artificial-analysis-speech.json")))
+    use = json.load(open(os.path.join(RESEARCH, "data", "usecase.json")))["models"]
+
+    checked = 0
+    for m in use.values():
+        for key, kind, field in (
+                ("aa-stt.accuracy", "speech-to-text", "aaWerIndex"),
+                ("aa-stt-streaming.accuracy", "speech-to-text-streaming",
+                 "aaWerStreamingIndex")):
+            f = m["facets"].get(key)
+            if not f:
+                continue
+            row = board[kind][f["ref"]["id"]]
+            eq(f["value"], round((1 - row[field]) * 100, 2),
+               "%s: %s inverted from a %s of %s" % (m["name"], key, field,
+                                                    row[field]))
+            checked += 1
+    if checked < 2:
+        raise AssertionError("no model carries an inverted error rate; either "
+                             "the ids stopped resolving or the facets are gone")
+
+    # and the ordering the inversion exists to produce: the board's best
+    # transcriber outranks its worst among the models this registry carries
+    rated = [(m["facets"]["aa-stt.accuracy"]["value"], m["name"])
+             for m in use.values() if m["facets"].get("aa-stt.accuracy")]
+    best, worst = max(rated), min(rated)
+    wer = lambda name: board["speech-to-text"][  # noqa: E731
+        next(m for m in use.values() if m["name"] == name)
+        ["facets"]["aa-stt.accuracy"]["ref"]["id"]]["aaWerIndex"]
+    if wer(best[1]) >= wer(worst[1]):
+        raise AssertionError(
+            "the top-scored model has the HIGHER error rate: %s at %s beats %s "
+            "at %s" % (best[1], wer(best[1]), worst[1], wer(worst[1])))
+
+
+@test
+def a_voice_arena_language_is_carried_whole_and_not_averaged():
+    """Voice arena publishes per language, and the slices disagree by twenty
+    points. An average over them would rank a model on a number no board
+    published, so each language is its own facet -- inverted the same way.
+    """
+    board = json.load(open(os.path.join(RESEARCH, "data", "voicearena.json")))
+    use = json.load(open(os.path.join(RESEARCH, "data", "usecase.json")))["models"]
+
+    checked = 0
+    for m in use.values():
+        for key, f in m["facets"].items():
+            if not key.startswith("voicearena."):
+                continue
+            langs = board[f["ref"]["id"]]["languages"]
+            lang = next(x for x in langs
+                        if x.lower().replace(" ", "-") == key.split(".", 1)[1])
+            eq(f["value"], round(100 - langs[lang]["All"]["corpusErrorPct"], 2),
+               "%s: %s is 100 minus the corpus error rate" % (m["name"], key))
+            # the noise slices are a breakdown OF "All", not more languages
+            eq(f["samples"], langs[lang]["All"]["samples"], "over all samples")
+            checked += 1
+    if checked < 4:
+        raise AssertionError("voice arena scores %d facets, expected several"
+                             % checked)
+
+
+@test
+def an_image_model_is_kept_at_its_overall_elo_not_a_category_slice():
+    """The image board ships twenty rows per model and only one is the board.
+
+    The other nineteen are prompt categories -- portraits, text rendering, and
+    so on -- shaped identically, all marked `isCurrent`, and all carrying an elo
+    two hundred points below the overall one because each is computed over its
+    own slice of the votes. Keeping whichever arrived last would put a category
+    score on the model and nothing downstream could tell: 935 and 1132 are both
+    plausible elos. `pick` keeps the row with the most appearances.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        with open(os.path.join(tmp, "page.html"), "w") as f:
+            f.write(t2i_fixture_html())
+        out = os.path.join(tmp, "image.json")
+        base, stop = serve(tmp)
+        purge("test-aa-t2i")
+        try:
+            r = subprocess.run(
+                [os.path.join(RESEARCH, "fetch-artificial-analysis"),
+                 "--board", "text-to-image", "--url", base + "/page.html",
+                 "--out", out, "--cache-key", "test-aa-t2i", "--max-age", "0"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        finally:
+            stop()
+            purge("test-aa-t2i")
+        if r.returncode:
+            raise AssertionError("collector exited %d: %s" % (r.returncode, r.stderr.strip()))
+        got = json.load(open(out))
+    finally:
+        shutil.rmtree(tmp)
+
+    eq(sorted(got), ["Fixture Diffusion"], "one row per model, not per category")
+    row = got["Fixture Diffusion"]
+    eq(row["elo"], 1132.77, "the overall elo, not the category one")
+    eq(row["appearances"], 7377, "and the vote count that identifies it")
+    eq(row["openWeightsUrl"], "https://huggingface.co/fixture/Diffusion",
+       "the repo path resolve-ids matches on survives")
+
+
+def t2i_fixture_html():
+    """One image model as three rows: the board and two category slices."""
+    def row(elo, appearances):
+        return {"id": "fixture-id", "name": "Fixture Diffusion", "elo": elo,
+                "appearances": appearances, "isCurrent": True, "rank": 3,
+                "ciLower": elo - 8, "ciUpper": elo + 8, "winRate": 0.43,
+                "creator": {"name": "Fixture Labs"}, "pricePer1kImages": 5,
+                "releaseDate": "2026-01-01",
+                "openWeightsUrl": "https://huggingface.co/fixture/Diffusion"}
+    # the category rows bracket the real one, so a collector that took the first
+    # or the last would fail this rather than pass it by luck
+    payload = json.dumps({"models": [row(935.43, 709), row(1132.77, 7377),
+                                     row(950.06, 753)]})
+    chunks = "".join(
+        "<script>self.__next_f.push([1,%s])</script>" % json.dumps(part)
+        for part in (payload[:len(payload) // 2], payload[len(payload) // 2:]))
+    return "<!doctype html><html><body><!-- %s -->%s</body></html>" % (
+        "x" * 100000, chunks)
+
+
 def tts_fixture_html():
     """One text-to-speech row in the shape the real page ships it.
 

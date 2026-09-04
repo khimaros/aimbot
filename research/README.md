@@ -13,6 +13,7 @@ date is in each file's provenance below.
 |---|---|---|
 | `data/artificial-analysis.json` | 2026-08-17 | artificialanalysis.ai leaderboard |
 | `data/artificial-analysis-speech.json` | 2026-09-04 | artificialanalysis.ai speech-to-text (non-streaming and streaming) and text-to-speech |
+| `data/artificial-analysis-image.json` | 2026-09-04 | artificialanalysis.ai text-to-image arena, one elo per model |
 | `data/tts-arena.json` | 2026-09-04 | tts-agi TTS Arena v2, crowd-sourced blind-vote elo |
 | `data/voicearena.json` | 2026-09-04 | voicearena.com speech-to-text, WER sliced by language and noise |
 | `data/gguf-voices.json` | 2026-09-04 | the speaker names each TTS gguf ships, read from its own header |
@@ -105,6 +106,36 @@ matcher at all. `tests/collectors` holds the case.
 the open-weights Qwen3-TTS is therefore **unscored**: it is on none of these
 three boards, nor on TTSDS2, whose published results are a 2024-era field. that
 is a gap in the sources, not a number waiting to be joined.
+
+**the two error rates are stored inverted.** every facet on the dashboard is
+higher-is-better, because the percentile pass has no notion of direction: it
+ranks a cohort by value and calls the top of it best. a WER stored verbatim
+would rank the worst transcriber first and would do it silently, since 4% and 8%
+are both plausible-looking numbers in a column. so `aaWerIndex` is carried as
+`(1 - wer) * 100` under the label `transcription accuracy` and voice arena's
+`corpusErrorPct` as `100 - pct` per language, each with the arithmetic in its
+`ref.note`. an elo needs no such treatment and gets none.
+
+## the image source
+
+`artificial-analysis-image.json` is the same site's text-to-image arena, and the
+only board here that scores generation. one elo per model, with the confidence
+interval and the appearance count beside it -- a model with 700 votes and one
+with 15,000 are not comparable at one decimal place.
+
+its payload ships **twenty rows per model**: the overall board plus nineteen
+prompt categories, identically shaped, all marked `isCurrent`, each computed
+over its own slice of the votes and each landing two hundred elo below the
+headline. keying by name alone would keep whichever arrived last, so the
+collector keeps the row with the most `appearances` -- on z-image turbo that is
+7377 against 655 to 880 per category, and the elo it carries is the one the
+rendered table shows. `tests/collectors` brackets a real row between two
+category rows, so taking the first or the last fails.
+
+the open-weights filter applies here too, through the board's own
+`openWeightsUrl`: it is both the openness flag and the most precise name any of
+these boards publishes, a repo path. krea 2 is on the board and is not matched,
+because artificial analysis reports no weights for it.
 
 `gguf-voices.json` is the one capture read out of gguf BYTES rather than off an
 api. a synthesis model that ships speakers names them in its own header --

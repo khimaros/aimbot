@@ -1,6 +1,24 @@
 {
  "branch": "master",
  "facet_meta": {
+  "aa-stt.accuracy": {
+   "group": "speech",
+   "label": "transcription accuracy",
+   "unit": "share",
+   "vendor_reported": false
+  },
+  "aa-t2i.elo": {
+   "group": "image",
+   "label": "image arena rating",
+   "unit": "elo",
+   "vendor_reported": false
+  },
+  "aa-tts.elo": {
+   "group": "speech",
+   "label": "synthesis quality",
+   "unit": "elo",
+   "vendor_reported": false
+  },
   "aa.agentic": {
    "group": "artificial analysis",
    "label": "agentic index",
@@ -630,6 +648,42 @@
    "label": "resolved rate",
    "unit": "share",
    "vendor_reported": false
+  },
+  "tts-arena.elo": {
+   "group": "speech",
+   "label": "synthesis preference",
+   "unit": "elo",
+   "vendor_reported": false
+  },
+  "voicearena.arabic": {
+   "group": "voice arena languages",
+   "label": "accuracy, arabic",
+   "unit": "share",
+   "vendor_reported": false
+  },
+  "voicearena.brazilian-portuguese": {
+   "group": "voice arena languages",
+   "label": "accuracy, brazilian portuguese",
+   "unit": "share",
+   "vendor_reported": false
+  },
+  "voicearena.romanian": {
+   "group": "voice arena languages",
+   "label": "accuracy, romanian",
+   "unit": "share",
+   "vendor_reported": false
+  },
+  "voicearena.us-english": {
+   "group": "voice arena languages",
+   "label": "accuracy, us english",
+   "unit": "share",
+   "vendor_reported": false
+  },
+  "voicearena.vietnamese": {
+   "group": "voice arena languages",
+   "label": "accuracy, vietnamese",
+   "unit": "share",
+   "vendor_reported": false
   }
  },
  "groups": [
@@ -664,6 +718,18 @@
   {
    "about": "what forums say, per forum. quantitative: mentions damped by log, times how well those mentions were received.",
    "name": "community"
+  },
+  {
+   "about": "transcription and synthesis, scored by boards that rank nothing else here. the two error rates are stored as the accuracy they leave, so higher is better in this column like every other.",
+   "name": "speech"
+  },
+  {
+   "about": "word error rate per language, over a corpus of real recordings graded clean to noisy. the languages disagree by twenty points, so they are carried one at a time.",
+   "name": "voice arena languages"
+  },
+  {
+   "about": "generation, rated by people picking between two pictures. the only board here that scores it, and the only factor an image model carries -- so its weight decides nothing but whether they are ranked.",
+   "name": "image"
   }
  ],
  "models": [
@@ -672,13 +738,29 @@
    "card": {},
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4441",
-   "facets": {},
+   "engines": [
+    "Breeze-TTS-2.cpp"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4501",
+   "facets": {
+    "aa-tts.elo": {
+     "cohort": 3,
+     "pct": 67,
+     "ref": {
+      "file": "data/artificial-analysis-speech.json",
+      "id": "breeze-tts-2",
+      "source": "artificial analysis text-to-speech",
+      "url": "https://artificialanalysis.ai/text-to-speech/models"
+     },
+     "value": 1214.89
+    }
+   },
    "facts": {},
    "ids": {
     "aa-stt": "",
@@ -783,13 +865,84 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "backend": "cohere"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4128",
-   "facets": {},
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4176",
+   "facets": {
+    "aa-stt.accuracy": {
+     "cohort": 5,
+     "pct": 40,
+     "ref": {
+      "file": "data/artificial-analysis-speech.json",
+      "id": "transcribe-03-2026",
+      "note": "100 - aaWerIndex, a word error rate",
+      "source": "artificial analysis speech-to-text",
+      "url": "https://artificialanalysis.ai/speech-to-text/non-streaming"
+     },
+     "value": 95.43
+    },
+    "voicearena.arabic": {
+     "cohort": 2,
+     "pct": 0,
+     "ref": {
+      "file": "data/voicearena.json",
+      "id": "Cohere Transcribe (03-2026)",
+      "note": "100 - corpusErrorPct over 3793 samples",
+      "source": "voice arena",
+      "url": "https://voicearena.com/stt-leaderboard/us-english"
+     },
+     "samples": 3793,
+     "value": 72.55
+    },
+    "voicearena.brazilian-portuguese": {
+     "cohort": 2,
+     "pct": 0,
+     "ref": {
+      "file": "data/voicearena.json",
+      "id": "Cohere Transcribe (03-2026)",
+      "note": "100 - corpusErrorPct over 4363 samples",
+      "source": "voice arena",
+      "url": "https://voicearena.com/stt-leaderboard/us-english"
+     },
+     "samples": 4363,
+     "value": 87.98
+    },
+    "voicearena.us-english": {
+     "cohort": 2,
+     "pct": 0,
+     "ref": {
+      "file": "data/voicearena.json",
+      "id": "Cohere Transcribe (03-2026)",
+      "note": "100 - corpusErrorPct over 3972 samples",
+      "source": "voice arena",
+      "url": "https://voicearena.com/stt-leaderboard/us-english"
+     },
+     "samples": 3972,
+     "value": 93.84
+    },
+    "voicearena.vietnamese": {
+     "cohort": 2,
+     "pct": 0,
+     "ref": {
+      "file": "data/voicearena.json",
+      "id": "Cohere Transcribe (03-2026)",
+      "note": "100 - corpusErrorPct over 4199 samples",
+      "source": "voice arena",
+      "url": "https://voicearena.com/stt-leaderboard/us-english"
+     },
+     "samples": 4199,
+     "value": 84.15
+    }
+   },
    "facts": {
     "params_source": "safetensors",
     "params_total_b": 2.07
@@ -948,12 +1101,18 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "backend": "sensevoice"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4255",
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4303",
    "facets": {},
    "facts": {},
    "ids": {
@@ -1362,6 +1521,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "agentic / tool use",
@@ -1378,7 +1538,11 @@
      "chat / general use"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L22",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L33",
    "facets": {
     "aa.critpt": {
      "cohort": 44,
@@ -2686,6 +2850,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "science / reasoning",
@@ -2705,7 +2870,11 @@
      "chat / general use"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L67",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L78",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -4087,6 +4256,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "coding",
@@ -4107,7 +4277,11 @@
     ],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3557",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3605",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -5443,6 +5617,7 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "coding",
@@ -5453,7 +5628,11 @@
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3700",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3748",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -5934,12 +6113,18 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "backend": "moss-diarize"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4288",
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4336",
    "facets": {},
    "facts": {
     "arch": "MossTranscribeDiarizeForConditionalGeneration",
@@ -6208,12 +6393,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L112",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L123",
    "facets": {
     "community.hf-discussions": {
      "approval": 50,
@@ -6546,13 +6736,85 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "backend": "qwen3-1.7b"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4159",
-   "facets": {},
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4207",
+   "facets": {
+    "voicearena.arabic": {
+     "cohort": 2,
+     "pct": 50,
+     "ref": {
+      "file": "data/voicearena.json",
+      "id": "Qwen3-ASR",
+      "note": "100 - corpusErrorPct over 3793 samples",
+      "source": "voice arena",
+      "url": "https://voicearena.com/stt-leaderboard/us-english"
+     },
+     "samples": 3793,
+     "value": 73.43
+    },
+    "voicearena.brazilian-portuguese": {
+     "cohort": 2,
+     "pct": 50,
+     "ref": {
+      "file": "data/voicearena.json",
+      "id": "Qwen3-ASR",
+      "note": "100 - corpusErrorPct over 4363 samples",
+      "source": "voice arena",
+      "url": "https://voicearena.com/stt-leaderboard/us-english"
+     },
+     "samples": 4363,
+     "value": 89.92
+    },
+    "voicearena.romanian": {
+     "cohort": 1,
+     "pct": null,
+     "ref": {
+      "file": "data/voicearena.json",
+      "id": "Qwen3-ASR",
+      "note": "100 - corpusErrorPct over 4564 samples",
+      "source": "voice arena",
+      "url": "https://voicearena.com/stt-leaderboard/us-english"
+     },
+     "samples": 4564,
+     "value": 70.97
+    },
+    "voicearena.us-english": {
+     "cohort": 2,
+     "pct": 50,
+     "ref": {
+      "file": "data/voicearena.json",
+      "id": "Qwen3-ASR",
+      "note": "100 - corpusErrorPct over 3972 samples",
+      "source": "voice arena",
+      "url": "https://voicearena.com/stt-leaderboard/us-english"
+     },
+     "samples": 3972,
+     "value": 95.3
+    },
+    "voicearena.vietnamese": {
+     "cohort": 2,
+     "pct": 50,
+     "ref": {
+      "file": "data/voicearena.json",
+      "id": "Qwen3-ASR",
+      "note": "100 - corpusErrorPct over 4199 samples",
+      "source": "voice arena",
+      "url": "https://voicearena.com/stt-leaderboard/us-english"
+     },
+     "samples": 4199,
+     "value": 84.24
+    }
+   },
    "facts": {
     "arch": "Qwen3ASRForConditionalGeneration",
     "input": [
@@ -6844,6 +7106,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
@@ -6857,7 +7120,11 @@
      "real-world bug fixing"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L180",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L191",
    "facets": {
     "aa.critpt": {
      "cohort": 44,
@@ -7769,6 +8036,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "real-world bug fixing"
@@ -7784,7 +8052,11 @@
      "physics"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L226",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L237",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -8842,6 +9114,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
@@ -8855,7 +9128,11 @@
      "physics"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L269",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L280",
    "facets": {
     "aa.coding": {
      "cohort": 38,
@@ -9958,6 +10235,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "agentic / tool use",
@@ -9966,7 +10244,11 @@
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L333",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L344",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -11337,6 +11619,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "science / reasoning",
@@ -11354,7 +11637,11 @@
      "chat / general use"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L396",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L407",
    "facets": {
     "aa.critpt": {
      "cohort": 44,
@@ -13076,6 +13363,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "instruction following"
@@ -13091,7 +13379,11 @@
      "real-world bug fixing"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L461",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L472",
    "facets": {
     "aa.critpt": {
      "cohort": 44,
@@ -14634,6 +14926,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "science / reasoning",
@@ -14652,7 +14945,11 @@
      "planning"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2968",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3016",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -16246,6 +16543,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
@@ -16258,7 +16556,11 @@
      "physics"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L524",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L535",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -17708,6 +18010,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "coding",
@@ -17722,7 +18025,11 @@
     ],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L588",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L599",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -19847,6 +20154,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "agentic / tool use"
@@ -19865,7 +20173,11 @@
      "real-world bug fixing"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L667",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L678",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -21641,6 +21953,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "coding",
@@ -21653,7 +21966,11 @@
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3450",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3498",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -22519,6 +22836,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "coding",
@@ -22536,7 +22854,11 @@
     ],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L743",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L754",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -24185,6 +24507,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "coding",
@@ -24197,7 +24520,11 @@
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L824",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L835",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -24995,12 +25322,14 @@
    "card": {},
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4481",
+   "engines": [],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4543",
    "facets": {},
    "facts": {},
    "ids": {
@@ -25088,18 +25417,38 @@
      "role": "llm"
     }
    ],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L944",
-   "facets": {},
+   "engines": [
+    "stable-diffusion.cpp"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L955",
+   "facets": {
+    "aa-t2i.elo": {
+     "cohort": 3,
+     "pct": 33,
+     "ref": {
+      "file": "data/artificial-analysis-image.json",
+      "id": "Z-Image Turbo",
+      "note": "7377 appearances, 1124.77 to 1140.77",
+      "source": "artificial analysis text-to-image",
+      "url": "https://artificialanalysis.ai/image/leaderboard/text-to-image"
+     },
+     "value": 1132.77,
+     "votes": 7377
+    }
+   },
    "facts": {
     "params_source": "safetensors",
     "params_total_b": 6.15
    },
-   "ids": {},
+   "ids": {
+    "aa-t2i": "Z-Image Turbo"
+   },
    "kind": "image",
    "languages": [],
    "match": null,
@@ -25112,7 +25461,7 @@
     ]
    },
    "native_low_bpw": null,
-   "notes": null,
+   "notes": "the one image model here a local runtime loads. stable-diffusion.cpp added Z-Image on 2025-12-01 and detects it as `VERSION_Z_IMAGE`, with its own page in docs/ and a gguf conversion by sd.cpp's author; the three files it wants are the three roles below, which is why the vae and the text encoder are carried as components rather than mentioned in prose.",
    "params": {},
    "publisher": "Tongyi-MAI",
    "quants": [
@@ -25239,12 +25588,18 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "diarize": "embedder"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4342",
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4390",
    "facets": {},
    "facts": {},
    "ids": {},
@@ -25253,7 +25608,7 @@
    "match": null,
    "modalities": {},
    "native_low_bpw": null,
-   "notes": "the foxnose recipe's embedder: 256-d speaker embeddings over sliding windows, counted by GMM/BIC and clustered spectrally, which ESTIMATES the number of speakers instead of being told it. crispasr publishes 7.3% DER on voxconverse dev against pyannote plus titanet's 7.8, and 3.18% against the upstream reference's 3.07 when scored on turns.\nCARRIED BUT NOT SERVED. those numbers did not reproduce here: over crispasr's HTTP server, `--diarize-method foxnose` split a synthesized four-turn two-voice dialogue into 8 segments and gave every one its own speaker, byte-identically whatever `diarize_max_speakers` or `diarize_embedder` the request carried -- a clusterer that is not running rather than one that is wrong. pyannote plus titanet returns A B A B on the same file. the published DER may well hold for the CLI, which is what it was measured on; nothing here has measured it, so nothing here claims it.",
+   "notes": "the foxnose recipe's embedder: 256-d speaker embeddings over sliding windows, counted by GMM/BIC and clustered spectrally, which ESTIMATES the number of speakers instead of being told it.\nCARRIED BUT NOT SERVED, and the DER to quote is the publisher's LATER one. crispasr's README says 7.3% on voxconverse dev against pyannote plus titanet's 7.8; the gguf card at cstr/wespeaker-resnet34-lm-GGUF retracts it -- \"numbers near 3-7% DER quoted elsewhere in this project's history came from an 8-file subset that turned out to be unrepresentative: identical code scores 7.3% there and 33.1% on\" the full set. the measured run is 40 files of voxconverse dev at a 0.25s collar with `--diarize-max-speakers 8`: 33.1% DER, the speaker count exactly right on 18 of 40, within one on 34. against the upstream python pipeline's OWN output with the count pinned it scores 3.93% with zero speaker confusion, which measures agreement with the reference rather than accuracy against humans.\nthat is the same failure this roster hit. over crispasr's HTTP server, `--diarize-method foxnose` split a synthesized four-turn two-voice dialogue into 8 segments and gave every one its own speaker, byte-identically whatever `diarize_max_speakers` or `diarize_embedder` the request carried. the card names the cause -- \"estimating the number of speakers is the weak link, not the embeddings\" -- and says the picture improves sharply with `--diarize-num-speakers N`, which a transcription client does not know. pyannote plus titanet returns A B A B on the same file without being told.",
    "params": {},
    "publisher": "Wespeaker",
    "quants": [
@@ -25532,6 +25887,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "coding",
@@ -25547,7 +25903,11 @@
      "one-shot coding"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L964",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L985",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -26622,18 +26982,36 @@
      "role": "llm"
     }
    ],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1020",
-   "facets": {},
+   "engines": [],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1041",
+   "facets": {
+    "aa-t2i.elo": {
+     "cohort": 3,
+     "pct": 0,
+     "ref": {
+      "file": "data/artificial-analysis-image.json",
+      "id": "ERNIE Image Turbo",
+      "note": "10928 appearances, 1110.01 to 1128.01",
+      "source": "artificial analysis text-to-image",
+      "url": "https://artificialanalysis.ai/image/leaderboard/text-to-image"
+     },
+     "value": 1119.01,
+     "votes": 10928
+    }
+   },
    "facts": {
     "params_source": "safetensors",
     "params_total_b": 8.03
    },
-   "ids": {},
+   "ids": {
+    "aa-t2i": "ERNIE Image Turbo"
+   },
    "kind": "image",
    "languages": [],
    "match": null,
@@ -27159,6 +27537,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "coding",
@@ -27177,7 +27556,11 @@
     ],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1399",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1422",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -28618,6 +29001,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "coding",
@@ -28637,7 +29021,11 @@
     ],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3506",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3554",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -29735,13 +30123,27 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1454",
-   "facets": {},
+   "engines": [],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1477",
+   "facets": {
+    "aa-tts.elo": {
+     "cohort": 3,
+     "pct": 33,
+     "ref": {
+      "file": "data/artificial-analysis-speech.json",
+      "id": "fish-audio-s2-pro",
+      "source": "artificial analysis text-to-speech",
+      "url": "https://artificialanalysis.ai/text-to-speech/models"
+     },
+     "value": 1127.78
+    }
+   },
    "facts": {
     "context_gguf": 32768,
     "context_native": 32768,
@@ -29906,12 +30308,17 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1482",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1505",
    "facets": {},
    "facts": {
     "context_gguf": 2048,
@@ -30079,12 +30486,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1522",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1545",
    "facets": {
     "community.reddit-localllama": {
      "approval": null,
@@ -30685,6 +31097,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "instruction following"
@@ -30698,7 +31111,11 @@
      "physics"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1567",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1590",
    "facets": {
     "aa.coding": {
      "cohort": 38,
@@ -31859,6 +32276,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "chat / general use"
@@ -31874,7 +32292,11 @@
      "physics"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1621",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1644",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -33470,6 +33892,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "instruction following",
@@ -33487,7 +33910,11 @@
      "real-world bug fixing"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1677",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1700",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -35012,6 +35439,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
@@ -35025,7 +35453,11 @@
      "physics"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1735",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1758",
    "facets": {
     "aa.coding": {
      "cohort": 38,
@@ -35907,6 +36339,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
@@ -35919,7 +36352,11 @@
      "long context"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1789",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1812",
    "facets": {
     "aa.coding": {
      "cohort": 38,
@@ -36623,13 +37060,42 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1843",
-   "facets": {},
+   "engines": [
+    "TTS.cpp"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1866",
+   "facets": {
+    "aa-tts.elo": {
+     "cohort": 3,
+     "pct": 0,
+     "ref": {
+      "file": "data/artificial-analysis-speech.json",
+      "id": "kokoro-82m-v1-0",
+      "source": "artificial analysis text-to-speech",
+      "url": "https://artificialanalysis.ai/text-to-speech/models"
+     },
+     "value": 1060.49
+    },
+    "tts-arena.elo": {
+     "cohort": 1,
+     "pct": null,
+     "ref": {
+      "file": "data/tts-arena.json",
+      "id": "kokoro-v1",
+      "note": "1033 votes, +-23",
+      "source": "tts arena v2",
+      "url": "https://tts-agi-tts-arena-v2.hf.space/leaderboard"
+     },
+     "value": 1479,
+     "votes": 1033
+    }
+   },
    "facts": {
     "input": [
      "text"
@@ -36654,7 +37120,7 @@
     ]
    },
    "native_low_bpw": null,
-   "notes": null,
+   "notes": "the gguf is a TTS.cpp conversion by that project's author -- its card says so in a sentence -- and the `role: model-path` on each rung is TTS.cpp's own flag name. crispasr has a kokoro backend too and would take the upstream weights, but not these files, so the runtime that reads what this registry pins is the one named here.\n`_espeak` in the filename is phonemization, not a quant: those rungs want espeak-ng installed, and the `_no_espeak` files in the same repo use the library's own phonemizer instead.",
    "params": {},
    "publisher": "hexgrad",
    "quants": [
@@ -36869,6 +37335,7 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
@@ -36881,7 +37348,11 @@
      "physics"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1865",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1900",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -37348,6 +37819,7 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
@@ -37360,7 +37832,11 @@
      "physics"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1923",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1958",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -37809,18 +38285,36 @@
      "role": "uncond"
     }
    ],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1979",
-   "facets": {},
+   "engines": [],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2014",
+   "facets": {
+    "aa-t2i.elo": {
+     "cohort": 3,
+     "pct": 67,
+     "ref": {
+      "file": "data/artificial-analysis-image.json",
+      "id": "Ideogram 4.0",
+      "note": "8802 appearances, 1209.07 to 1227.07",
+      "source": "artificial analysis text-to-image",
+      "url": "https://artificialanalysis.ai/image/leaderboard/text-to-image"
+     },
+     "value": 1218.07,
+     "votes": 8802
+    }
+   },
    "facts": {
     "params_source": "safetensors",
     "params_total_b": 9.28
    },
-   "ids": {},
+   "ids": {
+    "aa-t2i": "Ideogram 4.0"
+   },
    "kind": "image",
    "languages": [],
    "match": null,
@@ -38029,12 +38523,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3020",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3068",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -38696,6 +39195,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
@@ -38708,7 +39208,11 @@
      "physics"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3748",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3796",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -39225,12 +39729,16 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2002",
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2039",
    "facets": {},
    "facts": {
     "params_source": "name",
@@ -39356,12 +39864,16 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2035",
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2072",
    "facets": {},
    "facts": {
     "params_source": "name",
@@ -39484,12 +39996,16 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2076",
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2113",
    "facets": {},
    "facts": {
     "params_source": "name",
@@ -39628,12 +40144,16 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2106",
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2143",
    "facets": {},
    "facts": {
     "params_source": "name",
@@ -39761,18 +40281,22 @@
      "role": "llm"
     }
    ],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2133",
+   "engines": [],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2170",
    "facets": {},
    "facts": {
     "params_source": "safetensors",
     "params_total_b": 12.82
    },
-   "ids": {},
+   "ids": {
+    "aa-t2i": ""
+   },
    "kind": "image",
    "languages": [],
    "match": null,
@@ -39926,18 +40450,22 @@
      "role": "llm"
     }
    ],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2153",
+   "engines": [],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2192",
    "facets": {},
    "facts": {
     "params_source": "safetensors",
     "params_total_b": 12.82
    },
-   "ids": {},
+   "ids": {
+    "aa-t2i": ""
+   },
    "kind": "image",
    "languages": [],
    "match": null,
@@ -40280,6 +40808,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "scientific code",
@@ -40295,7 +40824,11 @@
     ],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2173",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2214",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -41302,12 +41835,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2236",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2277",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -41766,6 +42304,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "agentic / tool use"
@@ -41781,7 +42320,11 @@
      "one-shot coding"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3071",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3119",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -42757,13 +43300,32 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "backend": "voxtral"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4188",
-   "facets": {},
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4236",
+   "facets": {
+    "aa-stt.accuracy": {
+     "cohort": 5,
+     "pct": 80,
+     "ref": {
+      "file": "data/artificial-analysis-speech.json",
+      "id": "Voxtral Mini",
+      "note": "100 - aaWerIndex, a word error rate",
+      "source": "artificial analysis speech-to-text",
+      "url": "https://artificialanalysis.ai/speech-to-text/non-streaming"
+     },
+     "value": 96.16
+    }
+   },
    "facts": {
     "arch": "VoxtralForConditionalGeneration",
     "attn": {
@@ -42925,12 +43487,18 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "backend": "voxtral4b"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2301",
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2342",
    "facets": {},
    "facts": {
     "arch": "VoxtralRealtimeForConditionalGeneration",
@@ -43370,6 +43938,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "coding",
@@ -43388,7 +43957,11 @@
     ],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3122",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3170",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -44877,6 +45450,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
@@ -44889,7 +45463,11 @@
      "physics"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2326",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2367",
    "facets": {
     "aa.critpt": {
      "cohort": 44,
@@ -45698,6 +46276,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [
@@ -45715,7 +46294,11 @@
      "chat / general use"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2389",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2430",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -46904,6 +47487,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
@@ -46916,7 +47500,11 @@
      "physics"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3175",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3223",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -47571,12 +48159,18 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "backend": "canary"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4062",
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4110",
    "facets": {},
    "facts": {
     "arch": "CanaryForConditionalGeneration",
@@ -47742,13 +48336,32 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "backend": "canary-qwen"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4098",
-   "facets": {},
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4146",
+   "facets": {
+    "aa-stt.accuracy": {
+     "cohort": 5,
+     "pct": 60,
+     "ref": {
+      "file": "data/artificial-analysis-speech.json",
+      "id": "Canary Qwen 2.5B, NVIDIA",
+      "note": "100 - aaWerIndex, a word error rate",
+      "source": "artificial analysis speech-to-text",
+      "url": "https://artificialanalysis.ai/speech-to-text/non-streaming"
+     },
+     "value": 95.73
+    }
+   },
    "facts": {
     "input": [
      "text",
@@ -47933,12 +48546,18 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "backend": "nemotron"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4218",
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4266",
    "facets": {},
    "facts": {
     "arch": "Nemotron3_5AsrForRNNT",
@@ -48062,13 +48681,32 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "backend": "parakeet"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4032",
-   "facets": {},
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4080",
+   "facets": {
+    "aa-stt.accuracy": {
+     "cohort": 5,
+     "pct": 0,
+     "ref": {
+      "file": "data/artificial-analysis-speech.json",
+      "id": "Parakeet TDT 0.6B V2, NVIDIA",
+      "note": "100 - aaWerIndex, a word error rate",
+      "source": "artificial analysis speech-to-text",
+      "url": "https://artificialanalysis.ai/speech-to-text/non-streaming"
+     },
+     "value": 93.57
+    }
+   },
    "facts": {
     "params_source": "name",
     "params_total_b": 0.6
@@ -48222,12 +48860,18 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "backend": "parakeet"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4001",
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4049",
    "facets": {},
    "facts": {
     "arch": "ParakeetForTDT",
@@ -48358,12 +49002,18 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "diarize": "embedder"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4394",
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4454",
    "facets": {},
    "facts": {},
    "ids": {},
@@ -48641,6 +49291,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [
@@ -48657,7 +49308,11 @@
      "real-world bug fixing"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2469",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2510",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -49949,6 +50604,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
@@ -49962,7 +50618,11 @@
      "real-world bug fixing"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2529",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2570",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -50785,13 +51445,33 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "backend": "whisper"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2586",
-   "facets": {},
+   "engines": [
+    "crispasr",
+    "whisper.cpp"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2627",
+   "facets": {
+    "aa-stt.accuracy": {
+     "cohort": 5,
+     "pct": 20,
+     "ref": {
+      "file": "data/artificial-analysis-speech.json",
+      "id": "Whisper Large v3 Turbo",
+      "note": "100 - aaWerIndex, a word error rate",
+      "source": "artificial analysis speech-to-text",
+      "url": "https://artificialanalysis.ai/speech-to-text/non-streaming"
+     },
+     "value": 95.38
+    }
+   },
    "facts": {
     "arch": "WhisperForConditionalGeneration",
     "input": [
@@ -50823,7 +51503,7 @@
     ]
    },
    "native_low_bpw": null,
-   "notes": null,
+   "notes": "the pinned files are whisper.cpp's own ggml conversions, so stock whisper.cpp loads them as well as crispasr does -- the second runtime is not a fork detail, it is where the weights came from. crispasr uses upstream's loader for this backend and no other.",
    "params": {},
    "publisher": "openai",
    "quants": [
@@ -51403,12 +52083,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1040",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1063",
    "facets": {
     "card.swebench_pro": {
      "cohort": 10,
@@ -52023,12 +52708,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1112",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1135",
    "facets": {
     "card.swebench_pro": {
      "cohort": 10,
@@ -52628,12 +53318,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1254",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1277",
    "facets": {
     "card.deepswe": {
      "cohort": 8,
@@ -53188,12 +53883,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1327",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1350",
    "facets": {
     "card.deepswe": {
      "cohort": 8,
@@ -53684,12 +54384,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1183",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1206",
    "facets": {
     "card.gpqa": {
      "cohort": 25,
@@ -54051,6 +54756,7 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [
@@ -54063,7 +54769,11 @@
      "planning"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2731",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2779",
    "facets": {
     "epoch.proofbench": {
      "cohort": 13,
@@ -54909,6 +55619,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [
@@ -54920,7 +55631,11 @@
      "agentic / tool use"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2611",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2659",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -55784,6 +56499,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [
@@ -55796,7 +56512,11 @@
      "one-shot coding"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2676",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2724",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -56574,12 +57294,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3220",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3268",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -57086,12 +57811,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3278",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3326",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -57482,12 +58212,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3913",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3961",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -57752,12 +58487,18 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {
+    "diarize": "segmentation"
+   },
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4371",
+   "engines": [
+    "crispasr"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4430",
    "facets": {},
    "facts": {},
    "ids": {},
@@ -57766,7 +58507,7 @@
    "match": null,
    "modalities": {},
    "native_low_bpw": null,
-   "notes": "the diarizer actually in use. `--diarize-method pyannote` runs this once over the whole audio for a global speaker-turn timeline, then splits ASR segments at its boundaries. it decides WHEN the speaker changes and nothing about who, so it is paired with titanet for identities that hold across a long file.\nchosen over foxnose by measurement rather than by the published DER -- see the wespeaker entry, which has the numbers and the reason they are not quoted as this roster's.\nthe base repo is gated on huggingface and the gguf conversion is not, which is why the quant repo is not the model's own.",
+   "notes": "the diarizer actually in use. `--diarize-method pyannote` runs this once over the whole audio for a global speaker-turn timeline, then splits ASR segments at its boundaries. it decides WHEN the speaker changes and nothing about who, so it is paired with titanet for identities that hold across a long file.\nchosen over foxnose by measurement here, and the publisher's own numbers later agreed: the 7.3-versus-7.8 DER that favoured foxnose came off an 8-file subset its card now calls unrepresentative. see the wespeaker entry.\nthe base repo is gated on huggingface and the gguf conversion is not, which is why the quant repo is not the model's own.",
    "params": {},
    "publisher": "pyannote",
    "quants": [
@@ -57948,6 +58689,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "agentic / tool use",
@@ -57962,7 +58704,11 @@
      "one-shot coding"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2787",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2835",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -59296,6 +60042,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "coding",
@@ -59308,7 +60055,11 @@
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3333",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3381",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -60024,6 +60775,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "agentic / tool use",
@@ -60040,7 +60792,11 @@
     ],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2905",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2953",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -61185,6 +61941,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "agentic / tool use",
@@ -61197,7 +61954,11 @@
      "chat / general use"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2845",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2893",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -62083,6 +62844,7 @@
    },
    "community": {},
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "scientific code",
@@ -62091,7 +62853,11 @@
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3387",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3435",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -62502,12 +63268,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3852",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3900",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -62770,12 +63541,17 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3796",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3844",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -63220,6 +63996,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [],
     "best_languages": [],
@@ -63233,7 +64010,11 @@
      "chat / general use"
     ]
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3650",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3698",
    "facets": {
     "aa.critpt": {
      "cohort": 44,
@@ -64319,6 +65100,7 @@
     }
    },
    "components": [],
+   "crispasr": {},
    "derived": {
     "best_for": [
      "coding",
@@ -64338,7 +65120,11 @@
     ],
     "weak_for": []
    },
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3602",
+   "engines": [
+    "llama.cpp",
+    "vllm"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3650",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -65823,8 +66609,9 @@
   }
  ],
  "provenance": {
-  "registry/models.yaml": "0459c433f448",
+  "registry/models.yaml": "7ca7ea5c59ca",
   "registry/sampling.yaml": "e38566d41643",
+  "research/data/artificial-analysis-image.json": "40745f9fe8bf",
   "research/data/artificial-analysis-speech.json": "e1a259673af7",
   "research/data/artificial-analysis.json": "dcd9d3d8a025",
   "research/data/chat-templates.json": "17e18402eba3",
@@ -65851,7 +66638,7 @@
   "research/data/tbench.json": "e2c3969a875a",
   "research/data/template-probes.json": "5b61af3296e2",
   "research/data/tts-arena.json": "b45a573f36e4",
-  "research/data/usecase.json": "870b66711042",
+  "research/data/usecase.json": "e1c4ba242258",
   "research/data/voicearena.json": "b64566c32a13"
  },
  "repo_url": "https://github.com/khimaros/aimbot",
@@ -66040,6 +66827,32 @@
     "name": "faster",
     "scaled": false,
     "why": "decode speed goes UP when you quantize, not down"
+   },
+   {
+    "facets": [
+     "aa-stt-streaming.accuracy",
+     "aa-stt.accuracy",
+     "aa-tts.elo",
+     "tts-arena.elo",
+     "voicearena.arabic",
+     "voicearena.bengali",
+     "voicearena.brazilian-portuguese",
+     "voicearena.hindi",
+     "voicearena.romanian",
+     "voicearena.us-english",
+     "voicearena.vietnamese"
+    ],
+    "name": "speech",
+    "scaled": false,
+    "why": "transcription and synthesis. the retention curve was fitted to a code-editing pass rate on text models and says nothing about what a quant costs a word error rate -- and half of these are elo anyway"
+   },
+   {
+    "facets": [
+     "aa-t2i.elo"
+    ],
+    "name": "image",
+    "scaled": false,
+    "why": "image generation, rated by people choosing between two pictures. an elo, and of a diffusion stack the text-model retention curve was never fitted to"
    }
   ],
   "fitted": {
@@ -66510,12 +67323,17 @@
   }
  },
  "weights": {
+  "aa-stt.accuracy": 0.3,
+  "aa-t2i.elo": 1.0,
+  "aa-tts.elo": 0.3,
   "aa.agentic": 0.3,
   "aa.coding": 0.3,
   "card.*": 0.05,
   "community.reddit-localllama": 0.05,
   "gbench.agentic": 0.15,
   "lmarena.rating": 0.1,
-  "swerebench.resolved": 0.1
+  "swerebench.resolved": 0.1,
+  "tts-arena.elo": 0.2,
+  "voicearena.*": 0.2
  }
 }

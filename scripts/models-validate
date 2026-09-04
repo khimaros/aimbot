@@ -208,6 +208,41 @@ def check_crispasr(cr, where, f):
               % (cr["diarize"], ", ".join(DIARIZE_ROLES)))
 
 
+# every runtime this registry knows how to name. two of them are never WRITTEN
+# -- llama.cpp comes from `runtime.arch` and crispasr from a `crispasr:` block
+# -- and are listed because the derived list mixes with the written one and the
+# same vocabulary has to cover both. a name not here is a typo: `sd.cpp` and
+# `stable-diffusion.cpp` would filter as two runtimes and neither would hold the
+# models the other has.
+ENGINES = ("llama.cpp", "vllm", "crispasr", "whisper.cpp",
+           "stable-diffusion.cpp", "TTS.cpp", "Breeze-TTS-2.cpp")
+# the two the registry states some other way, so writing them again is a second
+# place for the same fact to be wrong
+DERIVED_ENGINES = ("llama.cpp", "crispasr")
+
+
+def check_engine(m, where, f):
+    """`engine:` lists the runtimes that load these weights, spelled one way."""
+    engine = m.get("engine")
+    if engine is None:
+        return
+    if not isinstance(engine, list) or not engine:
+        f.add(where, "engine must be a non-empty list of runtime names, got %r"
+              % (engine,))
+        return
+    for name in engine:
+        if name not in ENGINES:
+            f.add(where, "unknown engine %r (known: %s)"
+                  % (name, ", ".join(ENGINES)))
+        elif name in DERIVED_ENGINES:
+            f.add(where, "engine %r is derived -- %s -- so writing it here is a "
+                         "second copy that can disagree"
+                  % (name, "from runtime.arch" if name == "llama.cpp"
+                     else "from the crispasr block"))
+    if len(set(engine)) != len(engine):
+        f.add(where, "engine lists a runtime twice: %s" % ", ".join(engine))
+
+
 def check_diarize_kind(m, where, f):
     """`kind: diarize` and a diarize role are the same statement, so they agree.
 
@@ -269,6 +304,7 @@ def check_registry(models, sampling, f):
             check_crispasr(q.get("crispasr"), where, f)
         check_runtime(m.get("runtime"), repo, f)
         check_crispasr(m.get("crispasr"), repo, f)
+        check_engine(m, repo, f)
         check_diarize_kind(m, repo, f)
 
         # the level a client gets by sending nothing has to be a level the

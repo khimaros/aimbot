@@ -53,6 +53,11 @@ const model = short => {
   if (!m) throw new Error('no model named ' + short);
   return m;
 };
+// the preset keys the drawn <select> is offering, read off the html the page
+// wrote rather than off the table it was built from
+const presetOptions = () =>
+  [...document.querySelector('#preset').innerHTML.matchAll(/value="([^"]*)"/g)]
+    .map(m => m[1]).filter(Boolean);
 """
 
 RUNNER = """
@@ -80,6 +85,11 @@ const RESET = () => {
   setHardware({...DEFAULT_HARDWARE});
   W = {...D.weights};
   hidden = new Set(DEFAULT_HIDDEN);
+  // the filters are shared state across cases too: one that clears the runtime
+  // filter to isolate another must not leave the next case filtering on nothing
+  filters.mod = DEFAULT_MODALITY;
+  filters.flags = new Set(DEFAULT_FLAGS);
+  filters.engines = new Set(DEFAULT_ENGINES);
   reweigh();
 };
 
@@ -87,6 +97,9 @@ test('the gguf filter hides what nothing here can load, and says so', () => {
   RESET();
   filters.mod = 'all';
   filters.flags = new Set();
+  // the runtime filter would hide the same rows for its own reason, and this
+  // case is about the gguf one
+  filters.engines = new Set();
 
   setGguf(true);
   const runnable = visible().map(m => m.short);
@@ -105,6 +118,187 @@ test('the gguf filter hides what nothing here can load, and says so', () => {
   ok(missing.length >= 1, 'at least one entry has no gguf at all: ' + missing);
 
   setGguf(true);
+  RESET();
+});
+
+test('the vram filter judges what has a size, and passes what has none', () => {
+  RESET();
+  filters.mod = 't2a';
+  filters.flags = new Set(DEFAULT_FLAGS);
+  filters.engines = new Set();
+  setGguf(false);
+  setHardware({...DEFAULT_HARDWARE, budget: 96});
+
+  // `fits vram` is on by DEFAULT, so it, and not the gguf toggle, is what
+  // decides whether an onnx-only entry is reachable at all. a model with no
+  // quants makes no vram claim: reading "no quant fits" off zero quants states
+  // something the data does not say, and hides the entry behind a button whose
+  // label is about memory. the gguf filter is the one that means unservable.
+  const shown_ = visible().map(m => m.short);
+  ok(shown_.includes('supertonic-3'),
+     'an entry with no quants survives the vram filter: ' + shown_);
+
+  // and the filter still bites on models that DO have sizes
+  setHardware({...DEFAULT_HARDWARE, budget: 1});
+  const tiny = visible().map(m => m.short);
+  ok(tiny.length < shown_.length, 'a 1gib budget drops rows: ' + tiny);
+  ok(tiny.every(s => !model(s).quants.length || fitsBudget(model(s))),
+     'everything left either has no size or fits');
+
+  setGguf(true);
+  RESET();
+});
+
+test('a speech model is scored on the boards that rank speech', () => {
+  RESET();
+  filters.mod = 'all';
+  filters.flags = new Set();
+  setGguf(false);
+
+  // the complaint this exists for: every voice model showed a dash, including
+  // the ones artificial analysis publishes a number for
+  const speech = D.models.filter(m => m.kind === 'speech');
+  const rated = speech.filter(m => scored(m).value !== null);
+  ok(rated.length >= 5, 'speech models carry a composite: ' + rated.length
+     + ' of ' + speech.length);
+
+  // and it is the accuracy ordering, not the error-rate one
+  const stt = D.models.filter(m => m.facets['aa-stt.accuracy'])
+    .sort((a, b) => b.facets['aa-stt.accuracy'].value - a.facets['aa-stt.accuracy'].value);
+  ok(stt.length >= 3, 'several transcribers are scored');
+  ok(scored(stt[0]).value > scored(stt[stt.length - 1]).value,
+     'the most accurate transcriber outranks the least: '
+     + stt.map(m => m.short + '=' + num(scored(m).value, 0)));
+
+  // a text model is not measured by a word error rate, and counting the speech
+  // sliders against it would read as missing evidence rather than as a
+  // question nobody asked of it
+  const text = D.models.find(m => m.kind === 'text' && m.facets['aa.coding']);
+  ok(scored(text).want <= 7, text.short + ' is judged on the text weights only,'
+     + ' got want=' + scored(text).want);
+  ok(scored(rated[0]).want <= 4, rated[0].short + ' likewise, got want='
+     + scored(rated[0]).want);
+
+  // image generation is one board and one factor, so the same question again:
+  // an arena elo the models that have it are ranked on
+  const pics = D.models.filter(m => m.kind === 'image');
+  const scoredPics = pics.filter(m => scored(m).value !== null);
+  ok(scoredPics.length >= 3, 'image models carry a rating: ' + scoredPics.length
+     + ' of ' + pics.length);
+  eq(scored(scoredPics[0]).want, 1, 'and are judged on that one factor');
+
+  setGguf(true);
+  RESET();
+});
+
+test('the preset list offers only rankings the current modality can be given', () => {
+  RESET();
+  filters.flags = new Set();
+  setGguf(false);
+
+  filters.mod = 'text';
+  drawPreset();
+  const forText = presetOptions();
+  ok(forText.includes('coding'), 'writing code ranks text models: ' + forText);
+  ok(forText.includes('default') && forText.includes('clear'),
+     'the balanced and empty rankings are always offered');
+
+  // `writing code` weights aa.coding and swerebench: no transcription model has
+  // either, so picking it would rank every visible row on nothing and print a
+  // column of dashes. a dead option is dropped the way a dead modality is.
+  filters.mod = 'a2t';
+  drawPreset();
+  const forSpeech = presetOptions();
+  eq(forSpeech.includes('coding'), false,
+     'writing code is not offered over transcription: ' + forSpeech);
+  ok(forSpeech.includes('default'), 'the balanced ranking still is, and scores'
+     + ' them: it weights the speech boards too');
+  ok(forSpeech.includes('clear'), 'so is nothing weighted');
+
+  filters.mod = 't2i';
+  drawPreset();
+  ok(!presetOptions().includes('community'),
+     'nor is what forums say, which no image model carries');
+
+  filters.mod = DEFAULT_MODALITY;
+  setGguf(true);
+  RESET();
+});
+
+test('the runtime filter is a multi-select over what actually loads a model', () => {
+  RESET();
+  filters.mod = 'all';
+  filters.flags = new Set();
+  setGguf(false);
+
+  eq([...filters.engines].sort().join(','),
+     'crispasr,llama.cpp,stable-diffusion.cpp',
+     'three runtimes are on by default');
+
+  const shown_ = visible().map(m => m.short);
+  ok(shown_.includes('whisper-large-v3-turbo'), 'crispasr models are in');
+  ok(shown_.includes('z-image-turbo'), 'and the one stable-diffusion.cpp loads');
+  eq(shown_.includes('kokoro-v1'), false,
+     'kokoro is a TTS.cpp gguf and TTS.cpp is not selected');
+
+  // multi-select: adding a runtime adds its models rather than replacing
+  filters.engines.add('TTS.cpp');
+  const more = visible().map(m => m.short);
+  ok(more.includes('kokoro-v1') && more.includes('z-image-turbo'),
+     'selecting a second runtime keeps the first: ' + more.length + ' rows');
+
+  // none selected reads as no filter, the way no flags does
+  filters.engines = new Set();
+  ok(visible().length > more.length, 'clearing it filters nothing out');
+
+  filters.engines = new Set(DEFAULT_ENGINES);
+  setGguf(true);
+  RESET();
+});
+
+test('the operations section shows the runtimes that load THIS model', () => {
+  RESET();
+  // a text model: llama.cpp from the architecture llama.cpp merged, and vllm,
+  // which serves the base repo rather than any gguf
+  const text = D.models.find(m => m.kind === 'text' && m.runtime.arch);
+  eq(runtimesFor(text).map(r => r.k).join(','), 'llama.cpp,vllm',
+     text.short + ' runs under');
+
+  // a crispasr model: not llama.cpp, whatever the ops chips used to say
+  const whisper = model('whisper-large-v3-turbo');
+  eq(runtimesFor(whisper).map(r => r.k).sort().join(','),
+     'crispasr,whisper.cpp', 'whisper runs under');
+
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  const cmds = snippets(whisper).map(s => s.text).join('\n');
+  ok(/^crispasr /m.test(cmds), 'the fragment invokes crispasr: ' + cmds);
+  ok(cmds.includes('--backend whisper'),
+     'and names the backend the registry recorded');
+  ok(!cmds.includes('llama-server'), 'and never offers llama-server for it');
+
+  // the diffusion stack is three files and the snippet has to name all three,
+  // because two of them are components rather than quants
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  const sd = snippets(model('z-image-turbo')).map(s => s.text).join('\n');
+  ok(/^sd /m.test(sd), 'the image fragment invokes sd: ' + sd);
+  ok(sd.includes('--diffusion-model') && sd.includes('--vae')
+     && sd.includes('--llm'), 'with the diffusion model, the vae and the text encoder');
+
+  // and a model nothing here loads says so rather than printing a command
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  eq(runtimesFor(model('supertonic-3')).length, 0,
+     'onnx-only weights have no runtime');
+  eq(snippets(model('supertonic-3')).length, 0, 'so there is nothing to run');
+
+  // and the tab that shows all this renders for each of them: the runtime row
+  // is built from a list that can now be empty, which is a new way to be null
+  ['whisper-large-v3-turbo', 'z-image-turbo', 'supertonic-3', 'kokoro-v1']
+    .forEach(short => {
+      const html_ = tabOperate(model(short));
+      ok(html_.includes('how to run it'), short + ' renders the operations tab');
+    });
+
+  ops = {runtime: null, repo: null, quant: null, profile: null};
   RESET();
 });
 

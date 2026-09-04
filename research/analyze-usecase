@@ -112,6 +112,22 @@ SOURCES = {
     "card": {"label": "the model's own card", "file": "data/model-cards.json",
              "model_url": "https://huggingface.co/%s"},
     "community": {"label": "forums", "file": "data/sentiment.json"},
+    "aa-stt": {"label": "artificial analysis speech-to-text",
+               "file": "data/artificial-analysis-speech.json",
+               "url": "https://artificialanalysis.ai/speech-to-text/non-streaming"},
+    "aa-stt-streaming": {"label": "artificial analysis speech-to-text (streaming)",
+                         "file": "data/artificial-analysis-speech.json",
+                         "url": "https://artificialanalysis.ai/speech-to-text/streaming"},
+    "aa-tts": {"label": "artificial analysis text-to-speech",
+               "file": "data/artificial-analysis-speech.json",
+               "url": "https://artificialanalysis.ai/text-to-speech/models"},
+    "tts-arena": {"label": "tts arena v2", "file": "data/tts-arena.json",
+                  "url": "https://tts-agi-tts-arena-v2.hf.space/leaderboard"},
+    "voicearena": {"label": "voice arena", "file": "data/voicearena.json",
+                   "url": "https://voicearena.com/stt-leaderboard/us-english"},
+    "aa-t2i": {"label": "artificial analysis text-to-image",
+               "file": "data/artificial-analysis-image.json",
+               "url": "https://artificialanalysis.ai/image/leaderboard/text-to-image"},
 }
 
 # what a strong facet implies the model is FOR. only the axes where a high
@@ -315,11 +331,106 @@ def provenance(files):
     return out
 
 
+# the speech boards, and how to read each one. two of the five publish an ERROR
+# RATE, and every facet on this page is higher-is-better -- the percentile pass
+# has no notion of direction -- so a WER is stored as the accuracy it implies
+# rather than as itself. that is also how it reads: "94.6% of words right"
+# answers the question somebody opening a transcription model is asking, and the
+# label says which number it came from so nothing is hidden by the arithmetic.
+#
+# an elo needs no such treatment and gets none.
+def accuracy(wer):
+    """A word error rate as the percentage it leaves standing."""
+    return None if wer is None else round((1 - wer) * 100, 2)
+
+
+def speech_facets(speech, arena, voicearena, ids):
+    """Facets for a model one of the speech boards scores.
+
+    Nothing here is scored against a text model: no text model carries these
+    keys, so each one's percentile cohort is the speech roster that shares it.
+    """
+    out = {}
+    stt = (speech.get("speech-to-text") or {}).get(ids.get("aa-stt")) or {}
+    v = accuracy(stt.get("aaWerIndex"))
+    if v is not None:
+        out["aa-stt.accuracy"] = {
+            "value": v, "label": "transcription accuracy", "unit": "share",
+            "group": "speech", "ref": ref("aa-stt", ids.get("aa-stt"),
+                                          "100 - aaWerIndex, a word error rate")}
+
+    live = ((speech.get("speech-to-text-streaming") or {})
+            .get(ids.get("aa-stt-streaming")) or {})
+    v = accuracy(live.get("aaWerStreamingIndex"))
+    if v is not None:
+        out["aa-stt-streaming.accuracy"] = {
+            "value": v, "label": "streaming transcription accuracy", "unit": "share",
+            "group": "speech", "ref": ref("aa-stt-streaming",
+                                          ids.get("aa-stt-streaming"),
+                                          "100 - aaWerStreamingIndex")}
+
+    tts = (speech.get("text-to-speech") or {}).get(ids.get("aa-tts")) or {}
+    if tts.get("qualityElo") is not None:
+        out["aa-tts.elo"] = {
+            "value": tts["qualityElo"], "label": "synthesis quality", "unit": "elo",
+            "group": "speech", "ref": ref("aa-tts", ids.get("aa-tts"))}
+
+    ta = arena.get(ids.get("tts-arena")) or {}
+    if ta.get("elo") is not None:
+        # the vote count is what separates a rating worth reading from one that
+        # is three people, and this board is the only one that publishes it
+        out["tts-arena.elo"] = {
+            "value": ta["elo"], "label": "synthesis preference", "unit": "elo",
+            "group": "speech", "votes": ta.get("totalVotes"),
+            "ref": ref("tts-arena", ids.get("tts-arena"),
+                       "%s votes, +-%s" % (ta.get("totalVotes"), ta.get("uncertainty")))}
+
+    # one facet per language, the way gbench already gets one per language: the
+    # whole reason to carry voice arena is that the slices disagree, and an
+    # average over them would throw away the finding
+    va = voicearena.get(ids.get("voicearena")) or {}
+    for lang, sets in sorted((va.get("languages") or {}).items()):
+        # the noise slices are a breakdown of "All", not siblings of it
+        whole = sets.get("All") or {}
+        if whole.get("corpusErrorPct") is None:
+            continue
+        out["voicearena." + lang.lower().replace(" ", "-")] = {
+            "value": round(100 - whole["corpusErrorPct"], 2),
+            "label": "accuracy, %s" % lang.lower(), "unit": "share",
+            "group": "voice arena languages", "samples": whole.get("samples"),
+            "ref": ref("voicearena", ids.get("voicearena"),
+                       "100 - corpusErrorPct over %s samples" % whole.get("samples"))}
+    return out
+
+
+def image_facets(board, ids):
+    """The one facet anybody publishes for an image model: an arena elo.
+
+    No inversion and no second source. Artificial analysis is the only board
+    here that scores generation, its number is a human-preference rating rather
+    than a measurement, and the confidence interval rides along because a model
+    with 700 votes and one with 15,000 are not comparable at one decimal place.
+    """
+    row = board.get(ids.get("aa-t2i")) or {}
+    if row.get("elo") is None:
+        return {}
+    return {"aa-t2i.elo": {
+        "value": row["elo"], "label": "image arena rating", "unit": "elo",
+        "group": "image", "votes": row.get("appearances"),
+        "ref": ref("aa-t2i", ids.get("aa-t2i"),
+                   "%s appearances, %s to %s" % (row.get("appearances"),
+                                                 row.get("ciLower"),
+                                                 row.get("ciUpper")))}}
+
+
 def build(bt, registry):
     """One record per registry model, plus the cohort percentiles across them."""
     aa, epoch = load("artificial-analysis"), load("epoch")
     gb = {m["model_id"]: m for m in (load("gbench").get("rankings") or [])}
     sent, cards = load("sentiment"), load("model-cards")
+    speech = load("artificial-analysis-speech")
+    arena, voicearena = load("tts-arena"), load("voicearena")
+    pictures = load("artificial-analysis-image")
     models = {}
     for repo, m in registry.items():
         ids = m.get("ids") or {}
@@ -331,6 +442,8 @@ def build(bt, registry):
         facets.update(epoch_facets(epoch, ids.get("epoch")))
         facets.update(card_facets(cards.get(repo), repo, bt.CARD_BIAS))
         facets.update(community_facet(sent.get(short) or {}))
+        facets.update(speech_facets(speech, arena, voicearena, ids))
+        facets.update(image_facets(pictures, ids))
         rating = bt.lmarena_score(ids)
         if rating is not None:
             facets["lmarena.rating"] = {

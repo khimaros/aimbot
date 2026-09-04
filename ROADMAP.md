@@ -171,6 +171,42 @@ built and is marked done when it ships.
   where omniasr leads at 11.60. `--speech` prints the two remaining gaps: 6
   models naming no engine (all TTS) and 10 no board scores.
 
+- **the speech and image halves are SCORED, not just carried.** the boards were
+  collected and the ids resolved, and then nothing read either: `analyze-usecase`
+  loaded five sources and none of them was a speech one, so 19 speech models
+  reached the page with zero facets and a dash where the score goes. they carry
+  facets now, and the two error-rate boards are stored INVERTED -- `(1 - wer) *
+  100` as a transcription accuracy, `100 - corpusErrorPct` per language.
+
+  the inversion is the whole design. the percentile pass has no notion of
+  direction: it ranks a cohort by value and calls the top of it best, so a word
+  error rate stored verbatim ranks the worst transcriber first, silently, since
+  4% and 8% both look like plausible numbers in a column. one facet per voice
+  arena language rather than an average over them, for the reason the languages
+  were collected at all. `tests/collectors` checks each stored value against the
+  board it came from, so a second inversion fails as loudly as none.
+
+  image generation joins on the same terms: artificial analysis' text-to-image
+  arena is a fifth board on that site, and its payload ships TWENTY rows per
+  model -- the overall board plus nineteen prompt categories, identically
+  shaped, all marked current, each carrying an elo two hundred points below the
+  headline. the collector keeps the row with the most appearances and a test
+  pins it.
+
+- **the dashboard filters by RUNTIME, and the ops section spells that runtime's
+  command.** it offered every model a choice between `llama-server` and `vllm
+  serve`, which is wrong for 28 of 89: a whisper gguf is not a llama.cpp file
+  and no vllm serves z-image. `engine:` on the model says what loads it, two
+  entries are derived rather than written (llama.cpp from the architecture
+  llama.cpp merged, crispasr from the backend the registry already names), and
+  lint rejects both a typo and a hand-written copy of a derived one.
+
+  the filter is a multi-select defaulting to llama.cpp, crispasr and
+  stable-diffusion.cpp, and the snippet follows the model: `crispasr --backend
+  whisper`, `sd --diffusion-model ... --vae ... --llm ...`, `tts-cli
+  --model-path`. the roles in the registry turned out to already BE those flags.
+  a model nothing here loads prints no command rather than a wrong one.
+
 ## next
 
 1. **finish deduplicating MODELS.md against the dashboard.** the headline

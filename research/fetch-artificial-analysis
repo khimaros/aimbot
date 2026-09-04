@@ -6,10 +6,10 @@ Artificial analysis has no free API (api/v2 returns 401 without a key), but
 their leaderboard pages are a next.js app that ships the whole dataset inline
 as an RSC flight payload. ./rsc-extract pulls the records out; this shapes them.
 
-Four boards, one site, one collector. The text leaderboard keeps its own file
-because everything downstream joins on it; the three speech boards share
-data/artificial-analysis-speech.json, because a speech model is scored on
-whichever of them measures its modality and a reader wants them side by side.
+Five boards, one site, one collector. The text and image leaderboards keep their
+own files; the three speech boards share data/artificial-analysis-speech.json,
+because a speech model is scored on whichever of them measures its modality and
+a reader wants them side by side.
 
 Only the fields something here cites are kept, so the committed files stay small
 enough to diff. Scores are as artificial analysis measured them: third party,
@@ -33,6 +33,7 @@ UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
 
 TEXT_OUT = "data/artificial-analysis.json"
 SPEECH_OUT = "data/artificial-analysis-speech.json"
+IMAGE_OUT = "data/artificial-analysis-image.json"
 
 # the text board is flat, so every field is its own path
 TEXT_FIELDS = (
@@ -139,6 +140,36 @@ BOARDS = {
             "pricePer1mCharacters": "pricePer1mCharacters",
         },
     },
+    # image generation, judged the same way synthesis is: a human-preference elo
+    # from the site's own arena. the payload carries TWENTY rows per model --
+    # the overall board plus one per prompt category -- all shaped identically
+    # and all marked current, so `pick` keeps the row with the most votes. that
+    # is the overall one: on z-image turbo it is 7377 appearances against 655 to
+    # 880 for each category, and the elo it carries (1132.77) is the one the
+    # rendered table shows.
+    "text-to-image": {
+        "url": "https://artificialanalysis.ai/image/leaderboard/text-to-image",
+        "cache": "aa-t2i",
+        "match": '"elo":',
+        "require": "id",
+        "pick": "appearances",
+        "out": IMAGE_OUT,
+        "key": ["name"],
+        "fields": {
+            "name": "name",
+            "creator": "creator.name",
+            "elo": "elo",
+            "ciLower": "ciLower",
+            "ciUpper": "ciUpper",
+            "appearances": "appearances",
+            "winRate": "winRate",
+            # the board's own answer to "can you download this", and the field
+            # resolve-ids matches on -- a repo path beats a fuzzy name
+            "openWeightsUrl": "openWeightsUrl",
+            "pricePer1kImages": "pricePer1kImages",
+            "releaseDate": "releaseDate",
+        },
+    },
 }
 
 
@@ -182,14 +213,23 @@ def extract(board, spec, max_age, refresh):
               file=sys.stderr)
         return None
 
-    rows = {}
+    rows, ranked = {}, {}
     for line in proc.stdout.splitlines():
         rec = json.loads(line)
         if not dig(rec, spec["require"])[0]:
             continue
         key = next((v for v in (dig(rec, p)[1] for p in spec["key"]) if v), None)
-        if key:
-            rows[key] = shape(rec, spec["fields"])
+        if not key:
+            continue
+        # a board that ships one row per model keeps the last; one that ships
+        # several keeps the biggest by `pick`, which is a number or the row is
+        # not a candidate at all
+        if spec.get("pick"):
+            score = dig(rec, spec["pick"])[1]
+            if not isinstance(score, (int, float)) or score <= ranked.get(key, -1):
+                continue
+            ranked[key] = score
+        rows[key] = shape(rec, spec["fields"])
     if not rows:
         print("!!! %s: no records -- the page structure probably changed" % board,
               file=sys.stderr)
@@ -200,7 +240,8 @@ def extract(board, spec, max_age, refresh):
 def open_weights(rows):
     """How many of these are downloadable, under whichever name the board uses."""
     return sum(1 for d in rows.values()
-               if d.get("isOpenWeights") or d.get("openWeights"))
+               if d.get("isOpenWeights") or d.get("openWeights")
+               or d.get("openWeightsUrl"))
 
 
 def write_board(path, rows):

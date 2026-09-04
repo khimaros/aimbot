@@ -176,6 +176,24 @@ QUANT_EVIDENCE = [
     ("faster", False,
      "decode speed goes UP when you quantize, not down",
      ["aa.speed"]),
+
+    ("speech", False,
+     "transcription and synthesis. the retention curve was fitted to a "
+     "code-editing pass rate on text models and says nothing about what a quant "
+     "costs a word error rate -- and half of these are elo anyway",
+     ["aa-stt.accuracy", "aa-stt-streaming.accuracy", "aa-tts.elo",
+      "tts-arena.elo",
+      # voice arena reports per language, and the slices disagree by twenty
+      # points, so they are carried one facet each rather than averaged
+      "voicearena.arabic", "voicearena.bengali", "voicearena.hindi",
+      "voicearena.brazilian-portuguese", "voicearena.romanian",
+      "voicearena.us-english", "voicearena.vietnamese"]),
+
+    ("image", False,
+     "image generation, rated by people choosing between two pictures. an elo, "
+     "and of a diffusion stack the text-model retention curve was never fitted "
+     "to",
+     ["aa-t2i.elo"]),
 ]
 
 SCALED_FACETS = {k for _, yes, _, keys in QUANT_EVIDENCE if yes for k in keys}
@@ -218,10 +236,20 @@ GIB = 2 ** 30
 # a key ending in `.*` is a wildcard over every facet under it, averaged. card
 # claims and epoch runs are per benchmark, and a reader wants one knob for "how
 # much do i trust what the vendor says", not eleven.
+# the speech keys are weighted here for the same reason the text ones are: a
+# facet nothing weights produces no score, and a roster that ranks 70 models and
+# shows a dash beside the other 19 reads as "unmeasured" when the measurement
+# exists. they cost the text ranking nothing -- no text model carries one, and
+# the composite's denominator is the weight it actually used.
 DEFAULT_WEIGHTS = {
     "aa.coding": 0.30, "aa.agentic": 0.30, "gbench.agentic": 0.15,
     "lmarena.rating": 0.10, "swerebench.resolved": 0.10,
     "community.reddit-localllama": 0.05, "card.*": 0.05,
+    "aa-stt.accuracy": 0.30, "aa-tts.elo": 0.30, "tts-arena.elo": 0.20,
+    # the wildcard, not us english: weighting one language would rank a model on
+    # the slice it happens to be tuned for
+    "voicearena.*": 0.20,
+    "aa-t2i.elo": 1.0,
 }
 
 # facet groups in the order the weighting panel lists them, with what each one
@@ -246,6 +274,15 @@ GROUPS = [
      "evidence here."),
     ("community", "what forums say, per forum. quantitative: mentions damped by "
      "log, times how well those mentions were received."),
+    ("speech", "transcription and synthesis, scored by boards that rank nothing "
+     "else here. the two error rates are stored as the accuracy they leave, so "
+     "higher is better in this column like every other."),
+    ("voice arena languages", "word error rate per language, over a corpus of "
+     "real recordings graded clean to noisy. the languages disagree by twenty "
+     "points, so they are carried one at a time."),
+    ("image", "generation, rated by people picking between two pictures. the "
+     "only board here that scores it, and the only factor an image model "
+     "carries -- so its weight decides nothing but whether they are ranked."),
 ]
 
 
@@ -512,6 +549,28 @@ def with_bpw(quants, params_b):
     return quants
 
 
+# which runtimes load a model, joined here because two of them are stated in
+# other words: an architecture llama.cpp merged, and a crispasr backend. writing
+# either into `engine:` as well would be a second copy that can disagree, so the
+# registry states each fact once and this is where they become one list.
+#
+# vllm is a special case and is not a fact about the weights: it serves a text
+# checkpoint's BASE repo, never a gguf, and nothing here tracks its support
+# matrix. it is offered for text models because that is where the claim holds,
+# and the page's snippet says which repo it would serve.
+def engines_for(model):
+    """Every runtime that can load this model, derived plus written."""
+    out = set(model.get("engine") or [])
+    if (model.get("runtime") or {}).get("arch"):
+        out.add("llama.cpp")
+    if model.get("crispasr") or any(q.get("crispasr")
+                                    for q in (model.get("quants") or [])):
+        out.add("crispasr")
+    if model.get("kind", "text") == "text":
+        out.add("vllm")
+    return sorted(out)
+
+
 def build_model(repo, model, ctx):
     facts = ctx["facts"].get(repo) or {}
     use = (ctx["usecase"].get("models") or {}).get(repo) or {}
@@ -528,6 +587,8 @@ def build_model(repo, model, ctx):
                      % (GITHUB, BRANCH, ctx["lines"].get(repo, 1)),
         "notes": model.get("notes"),
         "runtime": model.get("runtime") or {},
+        "engines": engines_for(model),
+        "crispasr": model.get("crispasr") or {},
         "native_low_bpw": model.get("native_low_bpw"),
         "modalities": model.get("modalities") or {},
         "facts": facts, "quants": quants,
