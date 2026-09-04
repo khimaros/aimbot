@@ -426,12 +426,18 @@ model a choice between `llama-server` and `vllm serve`, which is wrong for 28 of
 ...`, `tts-cli --model-path ...` -- and prints nothing at all for weights no
 runtime here loads, rather than a command that cannot work.
 
-**the ranking presets follow the modality.** `writing code` weights the coding
-index and swe-rebench, and no transcription model carries either, so offering it
-over the speech roster would rank every row on nothing. a preset that cannot
-score the current view is dropped from the list the way a modality nothing
-matches is -- except for whichever one is selected, which stays listed so the
-control keeps saying what the current ranking is.
+**the factor sidebar and the presets follow the modality.** the sidebar lists 97
+factors over the text roster and 8 over the transcription one, because a slider
+that moves nothing on screen is not a decision: a word error rate is not a
+question you can ask of a text model, and 60 text benchmarks are not a question
+you can ask of whisper.
+
+the presets go the same way. `writing code` weights the coding index and
+swe-rebench, and no transcription model carries either, so offering it over the
+speech roster would rank every row on nothing. a preset that cannot score the
+current view is dropped from the list the way a modality nothing matches is --
+except for whichever one is selected, which stays listed so the control keeps
+saying what the current ranking is.
 
 `make test-e2e` runs it: `tests/e2e` boots the shipped `docs/index.html` under
 node against the real `docs/data.json`, behind a dom stub thin enough that it is

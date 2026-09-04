@@ -1315,11 +1315,16 @@ const presetName = () => Object.keys(PRESETS).find(p => sameWeights(W, PRESETS[p
 // on itself -- a dead option is dropped -- except that whatever is SELECTED
 // stays listed, or switching modality would blank the control that says what
 // the current ranking is.
+// whether any model in the current view is even measured on this factor. a
+// slider that moves nothing on screen is not a decision, and the sidebar is a
+// list of decisions: 60 text benchmarks over a roster of transcription models
+// is a wall to scroll past to reach the four that apply.
+const factorApplies = k => D.models.some(m => inModality(m) && asked(m, k));
+
 function presetFits(key) {
   const w = PRESETS[key].w();
   const keys = Object.keys(w).filter(k => w[k]);
-  if (!keys.length) return true;
-  return D.models.some(m => inModality(m) && keys.some(k => asked(m, k)));
+  return !keys.length || keys.some(factorApplies);
 }
 
 // which of the two dropdowns is open, or null. one at a time: they sit beside
@@ -1363,9 +1368,10 @@ function drawMulti(id, attr, items, chosen, summary) {
       chosen.has(k) ? chosen.delete(k) : chosen.add(k);
       saveFilters();
       drawFilterMenus();
-      // the preset list depends on the shapes in view: `writing code` is not
-      // offered over a roster of transcription models
+      // both depend on the shapes in view: `writing code` is not offered over a
+      // roster of transcription models, and neither is a slider for it
       drawPreset();
+      drawFactors();
       drawTable();
     };
   });
@@ -1436,7 +1442,7 @@ function drawPreset() {
 
 function drawFactors() {
   const box = document.querySelector('#factors');
-  const keys = WEIGHT_KEYS();
+  const keys = WEIGHT_KEYS().filter(factorApplies);
   const groups = new Map();
   keys.forEach(k => {
     const g = groupOf(k);
@@ -1591,13 +1597,23 @@ const hideTip = () => {
   document.querySelector('#tip').style.display = 'none';
 };
 
-document.addEventListener('mouseover', e => {
+function onHover(e) {
+  // a dropdown is open: the panel would sit exactly where the menu is, and the
+  // redraw that opened the menu fires `mouseover` for the node that REPLACED
+  // the one under a stationary pointer -- which is how the panel came back the
+  // instant the click dismissed it, and why clicking looked like it did nothing
+  if (openMenu) { hideTip(); return; }
   const ref = e.target.closest('.ref');
   const th = e.target.closest('[data-help]');
   if (ref) { showTip(ref); tipFor = ref; }
   else if (th) { showHelp(th); tipFor = th; }
   else hideTip();
-});
+}
+
+document.addEventListener('mouseover', onHover);
+// pressing anything dismisses it: you are using the control, not asking what it
+// is, and mousedown lands before the click handler redraws anything
+document.addEventListener('mousedown', hideTip);
 
 // mouseover alone leaves one hole: a pointer that leaves the button for a gap
 // no element claims, or for the window, fires no `over` anywhere and the panel

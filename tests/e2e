@@ -277,6 +277,53 @@ test('a filter menu opens on its button and swallows the click', () => {
   RESET();
 });
 
+test('the help panel stays down while a dropdown is open', () => {
+  RESET();
+  const tip = document.querySelector('#tip');
+  // a fake hover target: the stub has no closest(), and what is being checked
+  // is the handler's decision rather than the dom's traversal
+  const over = help => onHover({target: {closest: sel =>
+    sel === '[data-help]' && help
+      ? {dataset: {help}, getBoundingClientRect: () => ({left: 0, bottom: 0})}
+      : null}});
+
+  openMenu = null;
+  over('what this control does');
+  eq(tip.style.display, 'block', 'hovering a control explains it');
+
+  // THE BUG: opening a menu redraws the wrapper, and a redraw under a pointer
+  // that has not moved fires `mouseover` for the node that replaced the one it
+  // was over -- so the panel the click had just dismissed came straight back,
+  // and clicking read as doing nothing
+  openMenu = 'modality-ms';
+  over('what this control does');
+  eq(tip.style.display, 'none', 'with a menu open, nothing explains itself');
+
+  openMenu = null;
+  over(null);
+  eq(tip.style.display, 'none', 'and hovering nothing hides it again');
+  RESET();
+});
+
+test('the factors sidebar lists what the current modality is measured on', () => {
+  RESET();
+  drawFactors();
+  const text = html('#factors');
+  ok(text.includes('aa.coding'), 'the text roster is weighted on coding');
+  eq(text.includes('aa-stt.accuracy'), false,
+     'and not on a word error rate no text model has');
+
+  filters.mods = new Set(['a2t']);
+  drawFactors();
+  const speech = html('#factors');
+  ok(speech.includes('aa-stt.accuracy'), 'transcription is weighted on accuracy');
+  eq(speech.includes('aa.coding'), false,
+     'and not on 60 text benchmarks it would have to be scrolled past');
+  ok(speech.length < text.length, 'which is a shorter panel');
+
+  RESET();
+});
+
 test('publishers are the same control, and the same union', () => {
   RESET();
   const all = visible().length;
