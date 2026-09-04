@@ -170,6 +170,48 @@ def key_spaces(data=None):
     return {"text": out, "speech": spoken, "image": pictured, "diarize": {}}
 
 
+# what each board MEASURES, so a model is offered the ones its own modalities
+# say it could be on. kind was the wrong question and was quietly costing data:
+# gemma 4 e4b is `kind: text` with an audio encoder, crispasr transcribes with
+# it under `--backend gemma4-e4b`, and voice arena publishes its word error rate
+# in seven languages -- none of which the roster could see while the speech
+# boards were offered to `kind: speech` alone.
+BOARD_NEEDS = {
+    "aa": "text", "gbench": "text", "lmarena": "text", "swerebench": "text",
+    "epoch": "text",
+    "aa-stt": "transcribes", "aa-stt-streaming": "transcribes",
+    "voicearena": "transcribes",
+    "aa-tts": "synthesizes", "tts-arena": "synthesizes",
+    "aa-t2i": "draws",
+}
+
+
+def can(model):
+    """What a model does, from its derived modalities and its kind."""
+    mod = model.get("modalities") or {}
+    ins, outs = set(mod.get("input") or []), set(mod.get("output") or [])
+    out = set()
+    if model.get("kind", "text") == "text":
+        out.add("text")
+    if "audio" in ins and "text" in outs:
+        out.add("transcribes")
+    if "audio" in outs:
+        out.add("synthesizes")
+    if "image" in outs:
+        out.add("draws")
+    return out
+
+
+def spaces_for(model, by_kind):
+    """The key spaces this model is a candidate in, as one flat mapping."""
+    able, out = can(model), {}
+    for spaces in by_kind.values():
+        for source, space in spaces.items():
+            if BOARD_NEEDS.get(source) in able:
+                out[source] = space
+    return out
+
+
 # a trailing parameter count, which sources drop as often as they keep: AA and
 # lmarena both call meta-models/Muse-Glimmer-30B just `muse-glimmer`
 SIZE = re.compile(r"[-_](\d+(?:\.\d+)?)b(?:[-_]a\d+(?:\.\d+)?b)?$", re.I)
@@ -366,7 +408,7 @@ def main():
 
     filled, kept, amb = 0, 0, 0
     for repo, m in reg.items():
-        spaces = by_kind.get(m.get("kind", "text")) or {}
+        spaces = spaces_for(m, by_kind)
         if not spaces:
             continue
         # sources drop or keep trailing qualifiers inconsistently: AA writes

@@ -571,6 +571,27 @@ def engines_for(model):
     return sorted(out)
 
 
+# the registry names the backend; crispasr's own catalog says which files that
+# backend was published against. both are needed to write a command: the repo
+# this registry pins is not always one crispasr reads -- kokoro's gguf is a
+# TTS.cpp conversion and crispasr converts the checkpoint itself -- and a
+# command naming the wrong file is worse than one saying `auto`.
+def crispasr_block(model, backends):
+    """The registry's crispasr fact, plus the repos the catalog names for it."""
+    block = dict(model.get("crispasr") or {})
+    names = {block.get("backend")} | {(q.get("crispasr") or {}).get("backend")
+                                      for q in (model.get("quants") or [])}
+    repos = []
+    for name in sorted(n for n in names if n):
+        cat = backends.get(name) or {}
+        for r in (cat.get("gguf") or []) + (cat.get("models") or []):
+            if r not in repos:
+                repos.append(r)
+    if repos:
+        block["repos"] = repos
+    return block
+
+
 def build_model(repo, model, ctx):
     facts = ctx["facts"].get(repo) or {}
     use = (ctx["usecase"].get("models") or {}).get(repo) or {}
@@ -588,7 +609,7 @@ def build_model(repo, model, ctx):
         "notes": model.get("notes"),
         "runtime": model.get("runtime") or {},
         "engines": engines_for(model),
-        "crispasr": model.get("crispasr") or {},
+        "crispasr": crispasr_block(model, ctx["backends"]),
         "native_low_bpw": model.get("native_low_bpw"),
         "modalities": model.get("modalities") or {},
         "facts": facts, "quants": quants,
@@ -652,6 +673,7 @@ def build():
     support = load_json("llama-support")
     ctx = {"facts": load_json("model-facts"), "sizes": load_json("gguf-sizes"),
            "voices": load_json("gguf-voices"),
+           "backends": (load_json("crispasr").get("backends") or {}),
            "probes": load_json("template-probes"),
            "usecase": load_json("usecase"), "cards": load_json("model-cards"),
            "known_quants": set(support.get("quants") or []),
@@ -669,6 +691,12 @@ def build():
         "weights": DEFAULT_WEIGHTS,
         "groups": [{"name": n, "about": a} for n, a in GROUPS],
         "facet_meta": meta,
+        # what each source MEASURES, shipped rather than restated in javascript:
+        # resolve-ids uses it to decide which boards a model is offered, and the
+        # page uses it to decide which factors are questions anybody asks of it.
+        # two copies of that table would drift the day a board is added.
+        "board_needs": load_script(
+            "resolve_ids", os.path.join(HERE, "resolve-ids")).BOARD_NEEDS,
         "retention": retention_curve(),
         "provenance": provenance(),
         "models": models,

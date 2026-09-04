@@ -1005,6 +1005,9 @@ models:
       lmarena: mimo-v2.5
       swerebench: ''
       epoch: mimo-v2.5
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
     sampling:
       thinking:
         source: quant-card
@@ -1623,6 +1626,9 @@ models:
       lmarena: ''
       swerebench: ''
       epoch: ''
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
     modalities:
       input:
       - text
@@ -1791,6 +1797,13 @@ models:
       lmarena: ''
       swerebench: ''
       epoch: ''
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+    # the smaller half of the same pair, and crispasr carries a backend for it
+    # too. no board scores this one: voice arena publishes `Gemma E4B` alone
+    crispasr:
+      backend: gemma4-e2b
     modalities:
       input:
       - text
@@ -1845,6 +1858,14 @@ models:
       lmarena: ''
       swerebench: ''
       epoch: ''
+      voicearena: Gemma E4B
+      aa-stt: ''
+      aa-stt-streaming: ''
+    # a TEXT model that also transcribes: 140+ languages through crispasr's own
+    # backend for it, which is why the speech boards are offered by what a model
+    # DOES rather than by its kind
+    crispasr:
+      backend: gemma4-e4b
     modalities:
       input:
       - text
@@ -1877,8 +1898,15 @@ models:
       `_espeak` in the filename is phonemization, not a quant: those rungs want
       espeak-ng installed, and the `_no_espeak` files in the same repo use the
       library's own phonemizer instead.
+
+      crispasr serves this CHECKPOINT and not these files: its kokoro backend
+      names `hexgrad/Kokoro-82M` and converts it itself under `-m auto`, so the
+      backend belongs on the model while the quants stay TTS.cpp's. that split
+      is the same one qwen3-tts has, one level up.
     engine:
     - TTS.cpp
+    crispasr:
+      backend: kokoro
     quants:
     - repo: mmwillet2/Kokoro_GGUF
       quant: Kokoro_espeak.gguf
@@ -2352,7 +2380,7 @@ models:
       role: model
     ids:
       aa-stt: ''
-      aa-stt-streaming: ''
+      aa-stt-streaming: Voxtral Mini Transcribe Realtime
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
@@ -2915,6 +2943,9 @@ models:
       lmarena: Inkling Small
       swerebench: ''
       epoch: inkling-small
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
     sampling:
       thinking:
         source: tuned-here
@@ -2994,6 +3025,9 @@ models:
       lmarena: inkling
       swerebench: ''
       epoch: Inkling
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
     modalities:
       input:
       - text
@@ -3868,6 +3902,9 @@ models:
       lmarena: ''
       swerebench: ''
       epoch: ''
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
     sampling:
       thinking:
         source: generation-config
@@ -3928,6 +3965,9 @@ models:
       lmarena: ''
       swerebench: ''
       epoch: ''
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
     sampling:
       thinking:
         source: generation-config

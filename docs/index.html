@@ -769,13 +769,32 @@ function facetPct(m, key) {
   return keys.reduce((a, p) => a + p, 0) / keys.length;
 }
 
-// whether a weighted factor is a question anybody asks of this model's kind:
-// true where some model of that kind carries the facet. one weight set spans
-// text, speech and image, and a text model has no word error rate -- counting
-// the speech sliders against it would read in the evidence column as MISSING
-// EVIDENCE rather than as a question nobody put to it.
+// whether a weighted factor is a question anybody asks of this model. one
+// weight set spans text, speech and image, and a text model has no word error
+// rate -- counting the speech sliders against it would read in the evidence
+// column as MISSING EVIDENCE rather than as a question nobody put to it.
+//
+// a board-scored factor asks by CAPABILITY, from `board_needs`, which is
+// resolve-ids' own table of what each source measures. kind is close and wrong
+// at the edges: gemma 4 e4b is a text model with an audio encoder and voice
+// arena publishes its word error rate, and reading `some text model carries
+// this` off that one row put a transcription factor in every text model's
+// denominator. anything not scored by a board -- a card claim, a forum, a
+// per-language rate -- falls back to the kind, where it belongs.
+function can(m) {
+  const ins = m.modalities.input || [], outs = m.modalities.output || [];
+  const out = new Set();
+  if (m.kind === 'text') out.add('text');
+  if (ins.includes('audio') && outs.includes('text')) out.add('transcribes');
+  if (outs.includes('audio')) out.add('synthesizes');
+  if (outs.includes('image')) out.add('draws');
+  return out;
+}
+
 let kindFacets = null;
 function asked(m, key) {
+  const need = (D.board_needs || {})[key.split('.')[0]];
+  if (need) return can(m).has(need);
   if (!kindFacets) {
     kindFacets = {};
     D.models.forEach(x => {
@@ -2647,10 +2666,16 @@ function otherRuntime(m, rt, pick) {
     // conversions of one checkpoint, and only one of them loads
     const backend = ((pick || {}).crispasr || m.crispasr || {}).backend;
     const speaks = (m.modalities.output || []).includes('audio');
-    return {label: `crispasr, ${speaks ? 'synthesis' : 'transcription'}`,
+    // `-m auto` where the pinned file is not one crispasr reads. kokoro is the
+    // case: this registry pins a TTS.cpp conversion and crispasr converts the
+    // checkpoint itself, so naming our file would be a command that fails
+    const reads = (m.crispasr || {}).repos || [];
+    const mine = pick && (!reads.length || reads.includes(pick.repo));
+    return {label: `crispasr, ${speaks ? 'synthesis' : 'transcription'}`
+              + (mine ? '' : ' -- it downloads its own conversion'),
             text: ['crispasr'].concat(
               backend ? ['--backend ' + backend] : [],
-              ['-m ' + ref],
+              ['-m ' + (mine ? ref : 'auto')],
               speaks ? ['--tts "hello world"', '--tts-output out.wav']
                      : ['-f audio.wav']).join(' \\\n  ')};
   }

@@ -310,8 +310,10 @@ test('the factors sidebar lists what the current modality is measured on', () =>
   drawFactors();
   const text = html('#factors');
   ok(text.includes('aa.coding'), 'the text roster is weighted on coding');
-  eq(text.includes('aa-stt.accuracy'), false,
-     'and not on a word error rate no text model has');
+  // a transcription factor IS offered over the text roster, and correctly:
+  // gemma 4 e4b is a text model with an audio encoder that voice arena scores,
+  // so a word error rate is a question somebody asks of that view
+  ok(text.includes('voicearena'), 'and on what its multimodal half transcribes');
 
   filters.mods = new Set(['a2t']);
   drawFactors();
@@ -391,13 +393,17 @@ test('the runtime filter is a multi-select over what actually loads a model', ()
   const shown_ = visible().map(m => m.short);
   ok(shown_.includes('whisper-large-v3-turbo'), 'crispasr models are in');
   ok(shown_.includes('z-image-turbo'), 'and the one stable-diffusion.cpp loads');
-  eq(shown_.includes('kokoro-v1'), false,
-     'kokoro is a TTS.cpp gguf and TTS.cpp is not selected');
+  // breeze-tts-2's gguf needs a C++ reimplementation published beside it, and
+  // that runtime is not selected. kokoro is NOT this case, though its gguf is a
+  // TTS.cpp file: crispasr has a kokoro backend and converts the checkpoint
+  // itself, so it is in under a runtime that reads none of the pinned rungs
+  eq(shown_.includes('breeze-tts-2'), false,
+     'a model whose only runtime is unselected is out');
 
   // multi-select: adding a runtime adds its models rather than replacing
-  filters.engines.add('TTS.cpp');
+  filters.engines.add('Breeze-TTS-2.cpp');
   const more = visible().map(m => m.short);
-  ok(more.includes('kokoro-v1') && more.includes('z-image-turbo'),
+  ok(more.includes('breeze-tts-2') && more.includes('z-image-turbo'),
      'selecting a second runtime keeps the first: ' + more.length + ' rows');
 
   // none selected reads as no filter, the way no flags does
