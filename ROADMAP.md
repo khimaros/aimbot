@@ -211,7 +211,14 @@ built and is marked done when it ships.
   the answer, and the two disagreed exactly where it mattered: with `has gguf`
   off, supertonic-3 still did not appear, because the runtime filter was hiding
   it for its own reason. that toggle and its state are removed rather than
-  hidden -- a filter with no control is one a reader cannot turn off. modality became a multi-select at the same time and by
+  hidden -- a filter with no control is one a reader cannot turn off.
+
+  modality, runtime and publisher are one control now, a dropdown you pick
+  several things from, and picking none of any of them is no filter. the first
+  version of it could not be opened at all: the click that opened a menu redrew
+  the wrapper's innerHTML, which detached the node that was clicked, so the
+  document handler closing menus on an outside click read that click as outside
+  and shut it in the same gesture. the wrapper swallows the click instead. modality became a multi-select at the same time and by
   the same argument -- `text and speech` was a question the old dropdown could
   only answer with `all modalities`.
 

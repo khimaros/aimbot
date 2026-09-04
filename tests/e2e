@@ -90,6 +90,7 @@ const RESET = () => {
   filters.mods = new Set(DEFAULT_MODALITIES);
   filters.flags = new Set(DEFAULT_FLAGS);
   filters.engines = new Set(DEFAULT_ENGINES);
+  filters.pubs = new Set();
   reweigh();
 };
 
@@ -276,6 +277,31 @@ test('a filter menu opens on its button and swallows the click', () => {
   RESET();
 });
 
+test('publishers are the same control, and the same union', () => {
+  RESET();
+  const all = visible().length;
+  const pubs = [...new Set(visible().map(m => m.publisher))];
+  ok(pubs.length > 2, 'the visible roster spans several publishers');
+
+  filters.pubs = new Set([pubs[0]]);
+  const one = visible().length;
+  filters.pubs = new Set([pubs[0], pubs[1]]);
+  const two = visible().length;
+  ok(two > one && two < all, 'two publishers is more than one and fewer than all');
+  ok(visible().every(m => filters.pubs.has(m.publisher)), 'and only those two');
+
+  drawPublishers();
+  const menu = html('#pub-ms');
+  ok(menu.includes('2 publishers'), 'the button counts what is picked: ' + menu.slice(0, 80));
+  // the options explain themselves; a help panel over the menu covered the rows
+  // under the one being read
+  eq(menu.includes('data-help'), false, 'and no per-row hover help');
+
+  filters.pubs = new Set();
+  eq(visible().length, all, 'picking none is every publisher');
+  RESET();
+});
+
 test('modality is a multi-select, and the union of what is picked', () => {
   RESET();
   filters.flags = new Set();
@@ -412,7 +438,7 @@ test('a share link carries only what was changed, and round-trips', () => {
   RESET();
   filters.mods = new Set(DEFAULT_MODALITIES);
   filters.flags = new Set(DEFAULT_FLAGS);
-  filters.q = ''; filters.pub = '';
+  filters.q = ''; filters.pubs = new Set();
   sort = {k: 'score', dir: -1};
 
   // an untouched page has nothing to say

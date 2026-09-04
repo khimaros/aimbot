@@ -177,8 +177,14 @@ b { font-weight: 600; color: var(--fg); }
 /* a reference: hover for the quote we hold, click for the source. */
 .ref { color: var(--faint); cursor: help; font-size: 11px; }
 .ref:hover { color: var(--link); }
+/* the panel opens BELOW whatever explained itself, which is on top of the next
+   control down. `pointer-events: none` is what keeps that from mattering: the
+   pointer passes through, so moving down the toolbar hovers the button under
+   the panel instead of the panel, and the panel follows. nothing inside it is
+   interactive -- the link is the `[src]` marker you hovered, not the text. */
 #tip {
   display: none; position: fixed; z-index: 40; max-width: 46rem;
+  pointer-events: none;
   background: var(--panel); border: 1px solid var(--faint); padding: .6rem .75rem;
   font-size: 11px; line-height: 1.5; color: var(--fg); box-shadow: 0 6px 24px #000a;
 }
@@ -276,7 +282,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <input type="search" id="q" placeholder="full text search" data-help="matches the text: name, repo, architecture, registry notes, card summary, best-for, hub tags, discussed tasks and quant names. not the numeric columns">
     <span class="ms" id="modality-ms" data-help="what the model turns into what, and you can pick several: the shapes are the ones llama-swap-groups derives its group membership from, so this page and a host name them alike. `text models` is the default and is the roster MODELS.md ranks. picking none is every shape"></span>
     <span class="ms" id="engines-ms" data-help="which runtimes you have. a model is shown when one of the selected ones loads its weights: llama.cpp comes from the architecture it merged, crispasr from the backend the registry names, the rest are written on the model because a gguf does not say what wrote it. picking none is no filter at all, which is also how the entries nothing here runs become visible"></span>
-    <select id="pub" data-help="narrow to one publisher, taken from the repo owner"></select>
+    <span class="ms" id="pub-ms" data-help="narrow to the publishers you care about, taken from the repo owner. picking none is every publisher"></span>
     <span id="kinds" class="chips"></span>
     <button id="ladder-btn" aria-pressed="true" data-help="on, one row per model, reading the largest quant that fits. off, one row per quant that fits, so the whole size ladder is on screen -- and with quant adjusted each row scores at its own bits per weight, which merges every model and every quant into one ranked list of what you could actually run. it stays inside the repo the registry pins, since crossing to another build changes more than the size">best quant</button>
   </div>
@@ -359,7 +365,8 @@ let sort = store.get('sort', {k: 'score', dir: -1});
 // question about a box rather than about the models.
 const DEFAULT_ENGINES = ['llama.cpp', 'crispasr', 'stable-diffusion.cpp'];
 let filters = {q: '', kind: new Set(), pub: '', flags: new Set(),
-               engines: new Set(DEFAULT_ENGINES), mods: new Set()};
+               engines: new Set(DEFAULT_ENGINES), mods: new Set(),
+               pubs: new Set()};
 let folded = new Set();             // collapsed factor groups
 let hidden = new Set();
 let order = [];
@@ -1147,7 +1154,7 @@ function visible() {
   const q = filters.q.trim().toLowerCase();
   return D.models.filter(m => {
     if (q && !haystack(m).includes(q)) return false;
-    if (filters.pub && m.publisher !== filters.pub) return false;
+    if (filters.pubs.size && !filters.pubs.has(m.publisher)) return false;
     if (!inModality(m)) return false;
     // no runtime selected means no runtime filter, the way no flags does. a
     // model with an EMPTY engine list is one nothing here loads, so it only
@@ -1329,9 +1336,11 @@ function drawMulti(id, attr, items, chosen, summary) {
   const open = openMenu === id;
   el.innerHTML = `<button class="ms-btn" aria-expanded="${open}">${esc(summary)}</button>`
     + `<div class="ms-menu${open ? ' open' : ''}">`
+    // no `data-help` per row: the help panel opens over the menu and covers the
+    // options under the one being read, and a shape or a runtime name explains
+    // itself. the control keeps its own help, on the wrapper.
     + items.map(it =>
-      `<button ${attr}="${esc(it.k)}" aria-pressed="${chosen.has(it.k)}"`
-      + ` data-help="${esc(it.help || '')}">${esc(it.t)}`
+      `<button ${attr}="${esc(it.k)}" aria-pressed="${chosen.has(it.k)}">${esc(it.t)}`
       + (it.n === undefined ? '' : ` <span class="faint">${it.n}</span>`)
       + '</button>').join('') + '</div>';
 
@@ -1341,7 +1350,10 @@ function drawMulti(id, attr, items, chosen, summary) {
   // event bubbles, and `contains(e.target)` reads a click from inside the menu
   // as one from outside it. that shut each menu in the same gesture that opened
   // it, which is a dropdown that cannot be opened at all.
-  el.onclick = e => e.stopPropagation();
+  el.onclick = e => {
+    hideTip();
+    e.stopPropagation();
+  };
 
   const btn = el.querySelector('.ms-btn');
   if (btn) btn.onclick = () => { openMenu = open ? null : id; drawFilterMenus(); };
@@ -1390,7 +1402,16 @@ function drawEngines() {
             summarize(items, filters.engines, 'any runtime', 'runtimes'));
 }
 
-const drawFilterMenus = () => { drawModalities(); drawEngines(); };
+// every publisher on the roster, with how many models it has there
+function drawPublishers() {
+  const counts = {};
+  D.models.forEach(m => { counts[m.publisher] = (counts[m.publisher] || 0) + 1; });
+  const items = Object.keys(counts).sort().map(p => ({k: p, t: p, n: counts[p]}));
+  drawMulti('pub-ms', 'data-pub', items, filters.pubs,
+            summarize(items, filters.pubs, 'every publisher', 'publishers'));
+}
+
+const drawFilterMenus = () => { drawModalities(); drawEngines(); drawPublishers(); };
 
 // a menu that stays open while you pick has to close on a click that is not a
 // pick. the button that opened it and every option inside it are within the
@@ -1559,12 +1580,33 @@ function showHelp(el) {
   tip.style.top = (box.bottom + 6) + 'px';
 }
 
+// what the panel is currently explaining. the panel belongs to that element and
+// to nothing else: leaving it hides the panel even though the pointer may be
+// over the panel itself, which is the only reading that lets you run down a
+// toolbar without the last explanation following you.
+let tipFor = null;
+
+const hideTip = () => {
+  tipFor = null;
+  document.querySelector('#tip').style.display = 'none';
+};
+
 document.addEventListener('mouseover', e => {
   const ref = e.target.closest('.ref');
   const th = e.target.closest('[data-help]');
-  if (ref) showTip(ref);
-  else if (th) showHelp(th);
-  else if (!e.target.closest('#tip')) document.querySelector('#tip').style.display = 'none';
+  if (ref) { showTip(ref); tipFor = ref; }
+  else if (th) { showHelp(th); tipFor = th; }
+  else hideTip();
+});
+
+// mouseover alone leaves one hole: a pointer that leaves the button for a gap
+// no element claims, or for the window, fires no `over` anywhere and the panel
+// stays up. `out` closes it. moving to a CHILD of the same element is not
+// leaving it -- the count inside a menu row is a child.
+document.addEventListener('mouseout', e => {
+  if (!tipFor || e.target !== tipFor) return;
+  if (e.relatedTarget && tipFor.contains && tipFor.contains(e.relatedTarget)) return;
+  hideTip();
 });
 
 // --- methodology -------------------------------------------------------------
@@ -2714,10 +2756,6 @@ function drawChrome() {
   drawPreset();
   drawFilterMenus();
 
-  const pubs = [...new Set(D.models.map(m => m.publisher))].sort();
-  document.querySelector('#pub').innerHTML = '<option value="">every publisher</option>'
-    + pubs.map(p => `<option value="${esc(p)}"${p === filters.pub ? ' selected' : ''}>`
-      + `${esc(p)}</option>`).join('');
   document.querySelector('#q').value = filters.q;
 
   const n = Object.keys(D.provenance).length;
@@ -2751,11 +2789,11 @@ function shareState() {
   const st = {
     hw: changed(hw, DEFAULT_HARDWARE),
     w: changed(W, D.weights),
-    f: changed({q: filters.q, pub: filters.pub,
+    f: changed({q: filters.q, pubs: [...filters.pubs].sort(),
                 mods: [...filters.mods].sort(),
                 flags: [...filters.flags].sort(),
                 engines: [...filters.engines].sort()},
-               {q: '', pub: '', mods: [...DEFAULT_MODALITIES].sort(),
+               {q: '', pubs: [], mods: [...DEFAULT_MODALITIES].sort(),
                 flags: [...DEFAULT_FLAGS].sort(),
                 engines: [...DEFAULT_ENGINES].sort()}),
   };
@@ -2791,7 +2829,9 @@ function applyState(st) {
   if (st.w) { W = {...D.weights, ...st.w}; rememberWeights(); }
   if (st.f) {
     if (st.f.q !== undefined) filters.q = st.f.q;
-    if (st.f.pub !== undefined) filters.pub = st.f.pub;
+    // `pub` was one publisher before it was several; a link from then still reads
+    if (st.f.pub) filters.pubs = new Set([st.f.pub]);
+    if (st.f.pubs) filters.pubs = new Set(st.f.pubs);
     // `mod` was one shape before it was several; a link from then still reads
     if (st.f.mod !== undefined) filters.mods = new Set([st.f.mod]);
     if (st.f.mods) filters.mods = new Set(st.f.mods);
@@ -2888,7 +2928,8 @@ function boot(payload) {
   // against these: restoring them afterwards left every dropdown showing its
   // default while the value behind it was the stored one
   const f = store.get('filters', null);
-  filters = {q: (f || {}).q || '', kind: new Set(), pub: (f || {}).pub || '',
+  filters = {q: (f || {}).q || '', kind: new Set(),
+             pubs: new Set(f && f.pubs ? f.pubs : f && f.pub ? [f.pub] : []),
              mods: new Set(f && f.mods ? f.mods
                            : f && f.mod ? [f.mod] : DEFAULT_MODALITIES),
              flags: new Set(f ? f.flags || [] : DEFAULT_FLAGS),
@@ -2967,7 +3008,7 @@ function setHardware(patch) {
 });
 
 function saveFilters() {
-  store.set('filters', {q: filters.q, pub: filters.pub,
+  store.set('filters', {q: filters.q, pubs: [...filters.pubs],
                         mods: [...filters.mods],
                         flags: [...filters.flags],
                         engines: [...filters.engines]});
@@ -2975,11 +3016,6 @@ function saveFilters() {
 
 document.querySelector('#q').oninput = e => {
   filters.q = e.target.value;
-  saveFilters();
-  drawTable();
-};
-document.querySelector('#pub').onchange = e => {
-  filters.pub = e.target.value;
   saveFilters();
   drawTable();
 };
@@ -3017,8 +3053,9 @@ document.querySelector('#share').onclick = async () => {
 
 document.querySelector('#reset').onclick = () => {
   W = {...D.weights};
-  filters = {q: '', kind: new Set(), pub: '', mods: new Set(DEFAULT_MODALITIES),
-             flags: new Set(DEFAULT_FLAGS), engines: new Set(DEFAULT_ENGINES)};
+  filters = {q: '', kind: new Set(), pubs: new Set(),
+             mods: new Set(DEFAULT_MODALITIES), flags: new Set(DEFAULT_FLAGS),
+             engines: new Set(DEFAULT_ENGINES)};
   hidden = new Set(DEFAULT_HIDDEN);
   folded = new Set(allGroups());
   order = [...DEFAULT_ORDER];
