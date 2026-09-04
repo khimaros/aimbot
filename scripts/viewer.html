@@ -254,7 +254,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <select id="preset" data-help="a named set of weights. `balanced` is build-tables' composite; the others reweight toward one question. changing any weight yourself moves this to `custom ranking`"></select>
     <button id="factors-btn" aria-pressed="false" data-help="build your own weighting: one slider per measurement, grouped by what measured it. the ranking resorts as you drag, and a model missing a factor is ranked on the ones it has rather than scored zero">custom ranking</button>
     <button id="eff-btn" aria-pressed="true" data-help="off, the scores are what the source published. on, they answer `what would i get from the quant i can actually run`: a benchmark scores the model at the precision the scorer served, so the score is multiplied by the retention that quant's bits per weight predict and the percentiles are recomputed against the discounted cohort. only the coding and software-agent benchmarks are discounted, because the one sweep behind the curve measured a code-editing pass rate and nothing else -- every other number is published as-is and says why on hover. the curve itself is fitted to one model, deepseek v3.1 at 671b, and applied to all of them, which is the weakest step on this page and reads optimistic for a small model at two bits.">quant adjusted</button>
-    <button id="share" data-help="copy a link that reproduces this exact table: the weights, the filters, the hardware, the columns and the sort. only what you changed goes in the link, so it stays short and shows what was actually moved">copy link</button>
+    <button id="gguf-btn" aria-pressed="true" data-help="on, only models something here can actually load: at least one gguf quant in the registry. off, the roster includes what it is MISSING -- supertonic-3 is the most-liked tts model on the hub and publishes onnx only, breeze-tts-2 outscores everything runnable and its gguf needs a runtime nobody here has">has gguf</button>
     <button id="reset" data-help="clear the weights, filters, hardware settings, columns and sort, and forget them">reset</button>
   </div>
   <div class="controls">
@@ -270,6 +270,13 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <aside class="panel side" id="factors"></aside>
     <div class="grid-side">
       <div class="tablebar">
+        <!-- drawn rather than typed, same reason as the gear: two linked rings
+             read as `link` at 14px without asking the font for a glyph -->
+        <button id="share" aria-label="copy link" data-help="copy a link that reproduces this exact table: the weights, the filters, the hardware, the columns and the sort. only what you changed goes in the link, so it stays short and shows what was actually moved"><svg class="icon" viewBox="0 0 16 16"
+          width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round"><path
+          d="M6.6 9.4a2.6 2.6 0 0 0 3.9 .3l2.4-2.4a2.7 2.7 0 0 0-3.8-3.8L7.7 4.9"/><path
+          d="M9.4 6.6a2.6 2.6 0 0 0-3.9-.3L3.1 8.7a2.7 2.7 0 0 0 3.8 3.8l1.3-1.3"/></svg></button>
         <!-- drawn rather than typed: a unicode gear is not ascii and leans on
              the monospace font having the glyph, which several do not -->
         <button id="cols-btn" aria-pressed="false" aria-label="columns" data-help="show, hide and reorder columns. drag to reorder"><svg class="icon" viewBox="0 0 16 16"
@@ -330,6 +337,11 @@ let folded = new Set();             // collapsed factor groups
 let hidden = new Set();
 let order = [];
 let openRepo = null;
+// on by default: a model with no gguf quant is one nothing on this roster can
+// load, and the ranking is a list of what to RUN. turning it off is how the
+// roster says what it is missing -- the entries carried precisely because
+// nothing here serves them
+let ggufOnly = true;
 let tab = 'overview';
 
 const fmt = new Intl.NumberFormat();
@@ -1078,6 +1090,7 @@ function visible() {
     if (q && !haystack(m).includes(q)) return false;
     if (filters.pub && m.publisher !== filters.pub) return false;
     if (!modality().test(m)) return false;
+    if (ggufOnly && !(m.quants || []).length) return false;
     for (const f of filters.flags) {
       const flag = FLAGS.find(x => x.k === f);
       if (flag && !flag.test(m)) return false;
@@ -2529,6 +2542,7 @@ function shareState() {
   if (JSON.stringify(order) !== JSON.stringify(DEFAULT_ORDER)) st.order = order;
   if (allQuants) st.ladder = true;
   if (!effective) st.eff = false;
+  if (!ggufOnly) st.gguf = false;
   // an empty section says nothing, so it is not carried
   Object.keys(st).forEach(k => {
     const v = st[k];
@@ -2569,6 +2583,7 @@ function applyState(st) {
   }
   if (st.ladder !== undefined) store.set('allQuants', !!st.ladder);
   if (st.eff !== undefined) store.set('effective', !!st.eff);
+  if (st.gguf !== undefined) store.set('ggufOnly', !!st.gguf);
 }
 
 // `s=` and not `models=`: anchored so a key ending in s does not match
@@ -2628,6 +2643,7 @@ function boot(payload) {
   if (shared) applyState(shared);
 
   drawChrome();
+  setGguf(store.get('ggufOnly', true));
   setLadder(store.get('allQuants', false));
   setEffective(store.get('effective', true));
   drawFactors();
@@ -2647,6 +2663,15 @@ function setEffective(on) {
   if (openRepo) drawModal(true);
 }
 effBtn().onclick = () => setEffective(!effective);
+
+const ggufBtn = () => document.querySelector('#gguf-btn');
+function setGguf(on) {
+  ggufOnly = on;
+  ggufBtn().setAttribute('aria-pressed', on ? 'true' : 'false');
+  store.set('ggufOnly', on);
+  drawTable();
+}
+ggufBtn().onclick = () => setGguf(!ggufOnly);
 
 const ladderBtn = () => document.querySelector('#ladder-btn');
 // it lives with the filters and behaves like one: pressed is the narrower
@@ -2748,12 +2773,13 @@ document.querySelector('#reset').onclick = () => {
   order = [...DEFAULT_ORDER];
   sort = {k: 'score', dir: -1};
   Object.entries(DEFAULT_HARDWARE).forEach(([k, v]) => HW_SET[k](v));
-  ['weights', 'hidden', 'order', 'sort', 'folded', 'effective', 'filters', 'allQuants']
+  ['weights', 'hidden', 'order', 'sort', 'folded', 'effective', 'filters',
+   'allQuants', 'ggufOnly']
     .concat(Object.keys(DEFAULT_HARDWARE))
     .forEach(k => localStorage.removeItem('aim-' + k));
   // drawChrome rebuilds every control from the state just restored, which is
   // also how the default filters come back pressed rather than looking off
-  drawChrome(); setLadder(false); drawFactors(); drawColumns(); drawTable();
+  drawChrome(); setGguf(true); setLadder(false); drawFactors(); drawColumns(); drawTable();
 };
 document.querySelector('#m-close').onclick = closeModel;
 document.querySelector('#modal').onclick = e => { if (e.target.id === 'modal') closeModel(); };

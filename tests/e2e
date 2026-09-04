@@ -83,6 +83,31 @@ const RESET = () => {
   reweigh();
 };
 
+test('the gguf filter hides what nothing here can load, and says so', () => {
+  RESET();
+  filters.mod = 'all';
+  filters.flags = new Set();
+
+  setGguf(true);
+  const runnable = visible().map(m => m.short);
+  ok(runnable.every(s => model(s).quants.length),
+     'with the filter on, every row has a quant');
+  eq(runnable.includes('supertonic-3'), false, 'onnx-only is hidden');
+
+  setGguf(false);
+  const all = visible().map(m => m.short);
+  ok(all.includes('supertonic-3'),
+     'with it off the roster says what it is MISSING');
+  ok(all.length > runnable.length, 'and that is strictly more rows');
+
+  // the whole point of carrying them: they are the unservable ones
+  const missing = all.filter(s => !model(s).quants.length);
+  ok(missing.length >= 1, 'at least one entry has no gguf at all: ' + missing);
+
+  setGguf(true);
+  RESET();
+});
+
 test('a model with baked speakers lists them on its detail page', () => {
   RESET();
   const withVoices = D.models.filter(m => (m.quants || []).some(q => q.voices));

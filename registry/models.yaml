@@ -4456,3 +4456,40 @@ models:
       - text
       output:
       - audio
+  # TRACKED, NOT SERVED, AND NOT SCORED -- the most-liked TTS model on the hub
+  # that this roster has no path to at all. 941 likes and 28.8k downloads
+  # against kokoro's 2.4k, and no source here scores it: absent from artificial
+  # analysis' text-to-speech board, from tts arena and from voice arena.
+  #
+  # NO quants block on purpose. supertonic publishes four `.onnx` files and
+  # nothing else, and neither the official repo, `onnx-community`, nor any of
+  # the twenty community forks (coreml, mnn, tensorrt, mlx) carries a gguf.
+  # crispasr names no backend for it either. an onnx file is not a quant and
+  # writing one into `quants:` would claim a rung a consumer could select.
+  #
+  # it is here because the roster should be able to say what it is MISSING, and
+  # because it took a human reading a hub page to find it: the discovery sweep
+  # asked only for text-generation repos carrying a gguf, so the whole speech
+  # half was invisible to it. that is fixed -- fetch-hf-catalog sweeps the two
+  # speech pipelines and records `gguf` per row rather than filtering on it --
+  # and this entry is the case that fix exists for.
+  #
+  # what is known about it is speed. a level1techs/reddit thread in the corpus
+  # times Supertonic2 at 358ms to first audio and 19.65x realtime against
+  # kokoro onnx's 713ms and 4.80x, on the same box. that is a forum measurement
+  # rather than a benchmark, and it is the only number this repo has.
+  Supertone/supertonic-3:
+    kind: speech
+    name:
+      short: supertonic-3
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
