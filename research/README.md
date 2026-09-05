@@ -139,6 +139,21 @@ the open-weights filter applies here too, through the board's own
 these boards publishes, a repo path. krea 2 is on the board and is not matched,
 because artificial analysis reports no weights for it.
 
+**lmarena rates pictures too, and had been captured all along.** `fetch-lmarena`
+keeps every board it finds, media ones included, so
+`text_to_image-overall-raw` -- 76 entries over 6.1m votes -- has been in
+`lmarena.json` since that collector was written and nothing read it. it is a
+second opinion rather than a confirmation: artificial analysis puts z-image
+above krea 2 and this board puts it below, so both are carried and neither is
+averaged into the other.
+
+joining it needed the licence allowlist fixed. lmarena publishes a licence
+string and no open-weights flag, and the image half is where "is this
+downloadable" and "is this a free licence" come apart: krea 2 ships under a
+community licence and ideogram 4 under one called `Ideogram Open Model`,
+neither of which is free and both of which have public ggufs this registry
+pins. reading them as closed hid two models the board scores.
+
 `gguf-voices.json` is the one capture read out of gguf BYTES rather than off an
 api. a synthesis model that ships speakers names them in its own header --
 `qwen3tts.spk_names`, `kokoro.voices` -- and huggingface's api serves a parse of

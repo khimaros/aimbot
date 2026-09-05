@@ -128,6 +128,8 @@ SOURCES = {
     "aa-t2i": {"label": "artificial analysis text-to-image",
                "file": "data/artificial-analysis-image.json",
                "url": "https://artificialanalysis.ai/image/leaderboard/text-to-image"},
+    "lmarena-t2i": {"label": "lmarena text-to-image", "file": "data/lmarena.json",
+                    "url": "https://arena.ai/leaderboard/text-to-image"},
 }
 
 # what a strong facet implies the model is FOR. only the axes where a high
@@ -425,24 +427,37 @@ def speech_facets(speech, arena, voicearena, ids):
     return out
 
 
-def image_facets(board, ids):
-    """The one facet anybody publishes for an image model: an arena elo.
+def image_facets(board, lm, ids):
+    """Two arena elos, from the two sites that rate generated pictures.
 
-    No inversion and no second source. Artificial analysis is the only board
-    here that scores generation, its number is a human-preference rating rather
-    than a measurement, and the confidence interval rides along because a model
-    with 700 votes and one with 15,000 are not comparable at one decimal place.
+    Both are human preference rather than measurement, and they are kept apart
+    for the reason the two transcription boards are: they disagree. Artificial
+    analysis has z-image above krea 2 and lmarena has it below, over six million
+    votes. An average of the two would hide that and answer neither question.
     """
+    out = {}
     row = board.get(ids.get("aa-t2i")) or {}
-    if row.get("elo") is None:
-        return {}
-    return {"aa-t2i.elo": {
-        "value": row["elo"], "label": "image arena rating", "unit": "elo",
-        "group": "artificial analysis image", "votes": row.get("appearances"),
-        "ref": ref("aa-t2i", ids.get("aa-t2i"),
-                   "%s appearances, %s to %s" % (row.get("appearances"),
-                                                 row.get("ciLower"),
-                                                 row.get("ciUpper")))}}
+    if row.get("elo") is not None:
+        out["aa-t2i.elo"] = {
+            "value": row["elo"], "label": "image arena rating", "unit": "elo",
+            "group": "artificial analysis image", "votes": row.get("appearances"),
+            "ref": ref("aa-t2i", ids.get("aa-t2i"),
+                       "%s appearances, %s to %s" % (row.get("appearances"),
+                                                     row.get("ciLower"),
+                                                     row.get("ciUpper")))}
+
+    entry = lm.get(ids.get("lmarena-t2i")) or {}
+    if entry.get("rating") is not None:
+        # the board is `-raw`: lmarena style-controls its text boards and not
+        # this one, so the rating carries whatever presentation effects a
+        # picture has and the label says raw rather than pretending otherwise
+        out["lmarena-t2i.rating"] = {
+            "value": entry["rating"], "label": "image arena rating (raw)",
+            "unit": "elo", "group": "lmarena images", "votes": entry.get("votes"),
+            "ref": ref("lmarena-t2i", ids.get("lmarena-t2i"),
+                       "rank %s of the board, %s votes"
+                       % (entry.get("rank"), entry.get("votes")))}
+    return out
 
 
 def build(bt, registry):
@@ -453,6 +468,11 @@ def build(bt, registry):
     speech = load("artificial-analysis-speech")
     arena, voicearena = load("tts-arena"), load("voicearena")
     pictures = load("artificial-analysis-image")
+    # the entries of lmarena's image board, keyed by the name its ids use
+    lm_images = {e["modelDisplayName"]: e for e in
+                 ((load("lmarena").get("boards") or {})
+                  .get("text_to_image-overall-raw") or {}).get("entries") or []
+                 if e.get("modelDisplayName")}
     models = {}
     for repo, m in registry.items():
         ids = m.get("ids") or {}
@@ -465,7 +485,7 @@ def build(bt, registry):
         facets.update(card_facets(cards.get(repo), repo, bt.CARD_BIAS))
         facets.update(community_facet(sent.get(short) or {}))
         facets.update(speech_facets(speech, arena, voicearena, ids))
-        facets.update(image_facets(pictures, ids))
+        facets.update(image_facets(pictures, lm_images, ids))
         rating = bt.lmarena_score(ids)
         if rating is not None:
             facets["lmarena.rating"] = {

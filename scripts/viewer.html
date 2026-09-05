@@ -1152,8 +1152,6 @@ const shown = () => order.filter(k => !hidden.has(k) && available(k));
 const MODALITIES = [
   {k: 'text', t: 'text models', test: m => m.kind === 'text',
    help: 'everything that reads and writes text, whatever else it also takes. this is the roster MODELS.md ranks'},
-  {k: 'all', t: 'all modalities', test: () => true,
-   help: 'no modality filter: speech and image models join the text ones, mostly unscored'},
   {k: 't2t', t: 'text -> text', test: m => m.kind === 'text'
      && !modIn(m, 'image') && !modIn(m, 'audio'),
    help: 'text in, text out, and nothing else in'},
@@ -1441,8 +1439,11 @@ const summarize = (items, chosen, none, plural) => {
 // a shape nothing on the roster has is a dead option, so count first and keep
 // only what would select something. `all` and the default always stay.
 function drawModalities() {
+  // `all modalities` used to sit in this list and does not need to: picking
+  // nothing is every shape, which is what the summary button says when the set
+  // is empty
   const items = MODALITIES.map(x => ({...x, n: D.models.filter(x.test).length}))
-    .filter(x => x.n || x.k === 'all' || x.k === DEFAULT_MODALITY);
+    .filter(x => x.n || x.k === DEFAULT_MODALITY);
   drawMulti('modality-ms', 'data-mod', items, filters.mods,
             summarize(items, filters.mods, 'every modality', 'modalities'));
 }

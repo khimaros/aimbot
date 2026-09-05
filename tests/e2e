@@ -96,7 +96,7 @@ const RESET = () => {
 
 test('the roster can say what it is MISSING, and does it one way', () => {
   RESET();
-  filters.mods = new Set(['all']);
+  filters.mods = new Set();  // no shape picked is every shape
   filters.flags = new Set();
 
   // there used to be a `has gguf` toggle beside the runtime filter, asking the
@@ -182,7 +182,7 @@ test('a factor that did not exist last visit reaches a returning reader', () => 
 
 test('a speech model is scored on the boards that rank speech', () => {
   RESET();
-  filters.mods = new Set(['all']);
+  filters.mods = new Set();  // no shape picked is every shape
   filters.flags = new Set();
 
   // the complaint this exists for: every voice model showed a dash, including
@@ -215,7 +215,9 @@ test('a speech model is scored on the boards that rank speech', () => {
   const scoredPics = pics.filter(m => scored(m).value !== null);
   ok(scoredPics.length >= 3, 'image models carry a rating: ' + scoredPics.length
      + ' of ' + pics.length);
-  eq(scored(scoredPics[0]).want, 1, 'and are judged on that one factor');
+  // two boards rate pictures -- artificial analysis and lmarena -- and they
+  // disagree, which is why both are weighted rather than averaged
+  eq(scored(scoredPics[0]).want, 2, 'and are judged on the two image boards');
 
   RESET();
 });
@@ -390,7 +392,7 @@ test('modality is a multi-select, and the union of what is picked', () => {
 
 test('the runtime filter is a multi-select over what actually loads a model', () => {
   RESET();
-  filters.mods = new Set(['all']);
+  filters.mods = new Set();  // no shape picked is every shape
   filters.flags = new Set();
 
   eq([...filters.engines].sort().join(','),
@@ -679,13 +681,14 @@ test('a modality with no models is not offered as a dead option', () => {
   for (const x of MODALITIES) {
     const n = D.models.filter(x.test).length;
     const listed = html_.includes('data-mod="' + x.k + '"');
-    if (!n && x.k !== 'all' && x.k !== DEFAULT_MODALITY) {
+    if (!n && x.k !== DEFAULT_MODALITY) {
       ok(!listed, x.k + ' selects nothing and must not be offered');
     } else {
       ok(listed, x.k + ' selects ' + n + ' and must be offered');
     }
   }
-  ok(html_.includes('all modalities'), 'the unfiltered option is always there');
+  eq(html_.includes('all modalities'), false,
+     'no `all modalities` row: picking none is every shape');
 });
 
 test('boots against the real data.json and draws every row', () => {

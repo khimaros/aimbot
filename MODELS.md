@@ -1846,13 +1846,13 @@ model over a terse correct one.
 | model | composite rank | text elo | votes | webdev elo |
 |---|--:|--:|--:|--:|
 | deepseek v4 flash 0731 | 1 | 1436 | 48,950 | - |
-| qwen3.8 27b | 2 | 1436 | 6,913 | 1597 |
-| qwen3.8 flash next | 3 | - | - | 1622 |
+| qwen3.8 27b | 2 | 1436 | 6,913 | 1596 |
+| qwen3.8 flash next | 3 | - | - | 1625 |
 | qwen3.6 27b | 4 | - | - | - |
-| hy3 | 5 | 1455 | 6,958 | 1511 |
-| muse glimmer | 6 | 1427 | 3,693 | 1360 |
-| minimax m2.7 | 7 | 1415 | 65,655 | 1398 |
-| mimo v2.5 | 8 | 1434 | 44,530 | 1438 |
+| hy3 | 5 | 1455 | 6,958 | 1512 |
+| muse glimmer | 6 | 1427 | 3,693 | 1359 |
+| minimax m2.7 | 7 | 1415 | 65,655 | 1399 |
+| mimo v2.5 | 8 | 1434 | 44,530 | 1437 |
 | ling 3.0 flash | 9 | - | - | - |
 | inkling small | 10 | 1407 | 15,183 | 1405 |
 | qwen3.5 397b a17b | 11 | 1441 | 73,640 | 1398 |
@@ -1872,7 +1872,7 @@ model over a terse correct one.
 | qwen3 coder next | 25 | - | - | - |
 | laguna xs 2.1 | 26 | - | - | - |
 | laguna s 2.1 | 27 | - | - | - |
-| gemma 4 26b a4b | 28 | 1438 | 5,813 | 1361 |
+| gemma 4 26b a4b | 28 | 1438 | 5,813 | 1362 |
 | granite 4.2 30b | 29 | - | - | - |
 | ling 3.0 tiny | 30 | - | - | - |
 | nemotron 3.5 lightning | 31 | - | - | - |

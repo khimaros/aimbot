@@ -164,6 +164,16 @@ def key_spaces(data=None):
     # spelling rather than trusted as a repo
     pictured = {"aa-t2i": open_keys(load("artificial-analysis-image", data),
                                     "openWeightsUrl", ("openWeightsUrl",))}
+    # lmarena's image board, which the collector has been capturing all along
+    # and nothing read: 76 entries over 6.1m votes, and the same open-weights
+    # filter as everywhere else -- the board is mostly hosted SKUs and three of
+    # its top rows are proprietary tiers of models this registry carries.
+    lm_image = {}
+    for e in ((lm.get("boards") or {}).get("text_to_image-overall-raw") or {}).get("entries") or []:
+        name = e.get("modelDisplayName")
+        if name and ((lm.get("models") or {}).get(name) or {}).get("openWeights"):
+            lm_image.setdefault(norm(name), name)
+    pictured["lmarena-t2i"] = lm_image
     # nothing scores a diarizer: there is no third-party DER board for the
     # embedders and segmenters, which is why crispasr's own figure is the only
     # number this repo has for them and it is quoted in the model's notes
@@ -182,7 +192,7 @@ BOARD_NEEDS = {
     "aa-stt": "transcribes", "aa-stt-streaming": "transcribes",
     "voicearena": "transcribes",
     "aa-tts": "synthesizes", "tts-arena": "synthesizes",
-    "aa-t2i": "draws",
+    "aa-t2i": "draws", "lmarena-t2i": "draws",
 }
 
 
