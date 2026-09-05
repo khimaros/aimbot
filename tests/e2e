@@ -261,10 +261,12 @@ test('the preset list offers only rankings the current modality can be given', (
 test('a filter menu opens on its button and swallows the click', () => {
   RESET();
   drawFilterMenus();
-  eq(html('#modality-ms').includes('ms-menu open'), false, 'it starts shut');
+  // the runtime picker: modality went back to a native single select, and this
+  // control is the one that stayed a menu you pick several things from
+  eq(html('#engines-ms').includes('ms-menu open'), false, 'it starts shut');
 
-  document.querySelector('#modality-ms .ms-btn').onclick();
-  ok(html('#modality-ms').includes('ms-menu open'), 'the button opens it');
+  document.querySelector('#engines-ms .ms-btn').onclick();
+  ok(html('#engines-ms').includes('ms-menu open'), 'the button opens it');
 
   // THE BUG THIS EXISTS FOR: opening it redraws the wrapper's innerHTML, which
   // DETACHES the node that was clicked. the document handler that closes a menu
@@ -278,11 +280,11 @@ test('a filter menu opens on its button and swallows the click', () => {
   // dispatches, so the document handler does not run here the way it does in a
   // browser. this is the half that encodes the fix.
   let stopped = false;
-  document.querySelector('#modality-ms').onclick({stopPropagation: () => { stopped = true; }});
+  document.querySelector('#engines-ms').onclick({stopPropagation: () => { stopped = true; }});
   ok(stopped, 'a click inside the dropdown never reaches the document');
 
-  document.querySelector('#modality-ms .ms-btn').onclick();
-  eq(html('#modality-ms').includes('ms-menu open'), false, 'and it closes again');
+  document.querySelector('#engines-ms .ms-btn').onclick();
+  eq(html('#engines-ms').includes('ms-menu open'), false, 'and it closes again');
   RESET();
 });
 
@@ -360,7 +362,7 @@ test('publishers are the same control, and the same union', () => {
   RESET();
 });
 
-test('modality is a multi-select, and the union of what is picked', () => {
+test('modality is one shape at a time, and the shapes overlap', () => {
   RESET();
   filters.flags = new Set();
   filters.engines = new Set();
@@ -369,23 +371,22 @@ test('modality is a multi-select, and the union of what is picked', () => {
      'text models is the default, and MODELS.md is generated from it');
 
   const text = visible().length;
-  filters.mods = new Set(['t2a']);
-  const tts = visible().length;
-  filters.mods = new Set(['text', 't2a']);
-  const both = visible().length;
-  eq(both, text + tts, 'two shapes shown together are the two shapes: '
-     + text + ' + ' + tts + ' != ' + both);
+  filters.mods = new Set(['any2t']);
+  const anyText = visible().length;
+  ok(anyText > text, '`any to text` is wider than `text models`: '
+     + anyText + ' against ' + text);
 
-  // the dropdown renders the picks rather than a single selected option
+  // and it is not a superset dressed differently: `text models` is the registry
+  // kind, so it carries a model that emits no text at all and misses twelve
+  // that do
+  const kindOnly = D.models.filter(m => m.kind === 'text'
+    && !(m.modalities.output || []).includes('text'));
+  ok(kindOnly.length >= 1, 'a text model that emits embeddings: ' + kindOnly.map(m => m.short));
+
   drawModalities();
-  const menu = document.querySelector('#modality-ms').innerHTML;
-  ok(/data-mod="text"[^>]*aria-pressed="true"/.test(menu), 'text reads on');
-  ok(/data-mod="t2a"[^>]*aria-pressed="true"/.test(menu), 'and so does t2a');
-  ok(/data-mod="v2t"[^>]*aria-pressed="false"/.test(menu), 'what is not picked is off');
-
-  // nothing picked is every model, the way no runtime is every runtime
-  filters.mods = new Set();
-  ok(visible().length > both, 'clearing it filters no shape out');
+  const menu = html('#modality');
+  ok(/value="any2t"/.test(menu) && /selected/.test(menu), 'the select renders the pick');
+  ok(menu.includes('any to text'), 'and reads `to` rather than an arrow: ' + menu.slice(0, 120));
 
   RESET();
 });
@@ -677,10 +678,10 @@ test('each modality selects the shape it names, and only that', () => {
 test('a modality with no models is not offered as a dead option', () => {
   RESET();
   drawModalities();
-  const html_ = html('#modality-ms');
+  const html_ = html('#modality');
   for (const x of MODALITIES) {
     const n = D.models.filter(x.test).length;
-    const listed = html_.includes('data-mod="' + x.k + '"');
+    const listed = html_.includes('value="' + x.k + '"');
     if (!n && x.k !== DEFAULT_MODALITY) {
       ok(!listed, x.k + ' selects nothing and must not be offered');
     } else {
@@ -688,7 +689,7 @@ test('a modality with no models is not offered as a dead option', () => {
     }
   }
   eq(html_.includes('all modalities'), false,
-     'no `all modalities` row: picking none is every shape');
+     'no `all modalities` row: the shapes cover the roster between them');
 });
 
 test('boots against the real data.json and draws every row', () => {
