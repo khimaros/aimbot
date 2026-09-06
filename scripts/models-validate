@@ -166,7 +166,7 @@ def check_runtime(rt, where, f):
 # what a `crispasr:` block may say. `runtime:` answers "which llama.cpp release
 # loads this"; this answers the same question for the other engine on the
 # roster, which is not a llama.cpp release at all but a backend name.
-CRISPASR_FIELDS = {"backend", "diarize"}
+CRISPASR_FIELDS = {"backend", "diarize", "labels_speakers"}
 # what a weight can be to a diarization run. neither transcribes: an embedder
 # turns a span of audio into a speaker vector, a segmenter says only WHEN the
 # speaker changed
@@ -206,6 +206,21 @@ def check_crispasr(cr, where, f):
     if cr.get("diarize") and cr["diarize"] not in DIARIZE_ROLES:
         f.add(where, "crispasr.diarize %r must be one of %s"
               % (cr["diarize"], ", ".join(DIARIZE_ROLES)))
+    # whether the MODEL labels speakers while decoding, which decides whether a
+    # client should ask for diarization at all -- and the two answers want
+    # opposite requests, with no error either way. it belongs beside `backend`
+    # because it is a property of what that backend emits, and it is
+    # hand-written because nothing derives it: crispasr's own feature matrix
+    # carries a `diarize` bit that is true for every ASR backend, since it says
+    # the post-step is available rather than that the model labels anything.
+    if "labels_speakers" in cr:
+        if not isinstance(cr["labels_speakers"], bool):
+            f.add(where, "crispasr.labels_speakers %r must be true or false"
+                  % (cr["labels_speakers"],))
+        elif not cr.get("backend"):
+            f.add(where, "crispasr.labels_speakers describes what a BACKEND "
+                         "emits, so it needs one; a diarizer weight labels "
+                         "nothing by itself")
 
 
 # every runtime this registry knows how to name. two of them are never WRITTEN

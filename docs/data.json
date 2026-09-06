@@ -793,7 +793,7 @@
    "engines": [
     "Breeze-TTS-2.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4580",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4751",
    "facets": {
     "aa-tts.elo": {
      "cohort": 3,
@@ -927,7 +927,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4249",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4373",
    "facets": {
     "aa-stt.accuracy": {
      "cohort": 5,
@@ -1167,7 +1167,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4376",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4500",
    "facets": {},
    "facts": {},
    "ids": {
@@ -4334,7 +4334,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3672",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3796",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -5685,7 +5685,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3815",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3939",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -6168,6 +6168,7 @@
    "components": [],
    "crispasr": {
     "backend": "moss-diarize",
+    "labels_speakers": true,
     "repos": [
      "cstr/MOSS-Transcribe-Diarize-0.9B-GGUF",
      "OpenMOSS-Team/MOSS-Transcribe-Diarize-0.9B"
@@ -6181,7 +6182,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4409",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4533",
    "facets": {},
    "facts": {
     "arch": "MossTranscribeDiarizeForConditionalGeneration",
@@ -6229,7 +6230,7 @@
     ]
    },
    "native_low_bpw": null,
-   "notes": "the only model here that diarizes BY ITSELF: a whisper encoder feeding qwen3 0.6b that emits transcript, timestamps and speaker attribution as one decode, rather than transcribing and then clustering embeddings after the fact. that makes it the one entry whose speaker labels do not depend on the --diarize post-step, and the one to compare foxnose against.\nno third-party suite scores it, so there is no number here saying whether joint beats post-hoc. that is the measurement this roster is missing.",
+   "notes": "the only model here that diarizes BY ITSELF: a whisper encoder feeding qwen3 0.6b that emits transcript, timestamps and speaker attribution as one decode, rather than transcribing and then clustering embeddings after the fact. that makes it the one entry whose speaker labels do not depend on the --diarize post-step, and the one to compare foxnose against.\nSO DO NOT SEND `diarize=true` TO IT. the labels are already on the segments -- the backend parses the model's own `[t][Sxx]text[t]` output and writes them during decoding -- and `response_format=diarized_json` returns them without the flag, because that format serialises whatever is on the segments rather than being gated on the flag. asking for diarization instead runs the generic post-step, which assigns `seg.speaker` unconditionally with no guard for a segment that already has one, so the joint model's attribution is computed and then overwritten. the skip that exists in the server is tiron-specific: it looks for `<|speakerN|>` markers left in the transcript text, and this model's markers are `[Sxx]`, consumed by its own parser before the linker sees them.\nmeasured on a file with two known speakers, by a session running its own crispasr server: `diarize=true` gave 8 speakers, no flag gave 3 -- 270 segments on one, 45 on a second, 10 on a third, which reads as two speakers and a 3% tail. the 8 was the post-step, not this model.\nthat rule is SPECIFIC TO A MODEL THAT LABELS DURING DECODING and does not generalise: see the diarization note on the pyannote entry.\nno third-party suite scores it, so there is no number here saying whether joint beats post-hoc. that is the measurement this roster is missing.",
    "params": {},
    "publisher": "OpenMOSS-Team",
    "quants": [
@@ -6807,7 +6808,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4280",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4404",
    "facets": {
     "voicearena.arabic": {
      "cohort": 2,
@@ -15008,7 +15009,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3083",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3207",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -22028,7 +22029,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3565",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3689",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -25387,7 +25388,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4622",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4793",
    "facets": {},
    "facts": {},
    "ids": {
@@ -25487,8 +25488,8 @@
    "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L964",
    "facets": {
     "aa-t2i.elo": {
-     "cohort": 3,
-     "pct": 50,
+     "cohort": 6,
+     "pct": 42,
      "ref": {
       "file": "data/artificial-analysis-image.json",
       "id": "Z-Image Turbo",
@@ -25500,8 +25501,8 @@
      "votes": 7377
     },
     "lmarena-t2i.rating": {
-     "cohort": 2,
-     "pct": 25,
+     "cohort": 5,
+     "pct": 50,
      "ref": {
       "file": "data/lmarena.json",
       "id": "z-image-turbo",
@@ -25671,7 +25672,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4463",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4613",
    "facets": {},
    "facts": {},
    "ids": {},
@@ -25993,7 +25994,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1000",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1124",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -27080,11 +27081,11 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1059",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1183",
    "facets": {
     "aa-t2i.elo": {
-     "cohort": 3,
-     "pct": 17,
+     "cohort": 6,
+     "pct": 25,
      "ref": {
       "file": "data/artificial-analysis-image.json",
       "id": "ERNIE Image Turbo",
@@ -27237,6 +27238,406 @@
    "thinking": {},
    "turns": {},
    "url": "https://huggingface.co/baidu/ERNIE-Image-Turbo"
+  },
+  {
+   "assessed": {},
+   "card": {},
+   "community": {},
+   "components": [
+    {
+     "quant": "flux2-vae.safetensors",
+     "repo": "unsloth/FLUX.2-VAE",
+     "role": "vae"
+    },
+    {
+     "quant": "Q4_K_M",
+     "repo": "unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF",
+     "role": "llm"
+    }
+   ],
+   "crispasr": {},
+   "derived": {
+    "best_for": [],
+    "best_languages": [],
+    "weak_for": []
+   },
+   "engines": [
+    "stable-diffusion.cpp"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1083",
+   "facets": {
+    "aa-t2i.elo": {
+     "cohort": 6,
+     "pct": 75,
+     "ref": {
+      "file": "data/artificial-analysis-image.json",
+      "id": "FLUX.2 [dev]",
+      "note": "18643 appearances, 1190.27 to 1204.27",
+      "source": "artificial analysis text-to-image",
+      "url": "https://artificialanalysis.ai/image/leaderboard/text-to-image"
+     },
+     "value": 1197.27,
+     "votes": 18643
+    },
+    "lmarena-t2i.rating": {
+     "cohort": 5,
+     "pct": 90,
+     "ref": {
+      "file": "data/lmarena.json",
+      "id": "flux-2-dev",
+      "note": "rank 33 of the board, 73979 votes",
+      "source": "lmarena text-to-image",
+      "url": "https://arena.ai/leaderboard/text-to-image"
+     },
+     "value": 1145.610925863536,
+     "votes": 73979
+    }
+   },
+   "facts": {},
+   "ids": {
+    "aa-t2i": "FLUX.2 [dev]",
+    "lmarena-t2i": "flux-2-dev"
+   },
+   "kind": "image",
+   "languages": [],
+   "match": null,
+   "modalities": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "image"
+    ]
+   },
+   "native_low_bpw": null,
+   "notes": "CARRIED FOR THE SCORE. 1197 on artificial analysis and 1146 on lmarena, which is above every other image model on this roster, and two things stand between that number and running it here.\nthe licence is `flux-non-commercial-license`. it is downloadable and it is not free, and this registry only reads it as open weights at all because that filter asks `can you fetch these` rather than `is this OSI open` -- the same widening that let krea 2 and ideogram 4 be matched. a consumer pointing a business at it should read the licence rather than the flag.\nthe stack is the other reason: sd.cpp wants a 24b mistral as the TEXT ENCODER, so the three files are a 18gib diffusion model, a 320mib vae and a 24b llm. the klein entries buy most of the family's quality for a quarter of that, which is why they are the ones with a serving story.",
+   "params": {},
+   "publisher": "black-forest-labs",
+   "quants": [
+    {
+     "available": [
+      {
+       "gib": 11.98,
+       "quant": "Q2_K"
+      },
+      {
+       "gib": 14.7,
+       "quant": "Q3_K_S"
+      },
+      {
+       "gib": 14.86,
+       "quant": "Q3_K_M"
+      },
+      {
+       "gib": 17.97,
+       "quant": "Q4_0"
+      },
+      {
+       "gib": 17.97,
+       "quant": "Q4_K_S"
+      },
+      {
+       "gib": 18.7,
+       "quant": "Q4_K_M"
+      },
+      {
+       "gib": 19.8,
+       "quant": "Q4_1"
+      },
+      {
+       "gib": 21.63,
+       "quant": "Q5_0"
+      },
+      {
+       "gib": 21.63,
+       "quant": "Q5_K_S"
+      },
+      {
+       "gib": 22.41,
+       "quant": "Q5_K_M"
+      },
+      {
+       "gib": 23.46,
+       "quant": "Q5_1"
+      },
+      {
+       "gib": 25.51,
+       "quant": "Q6_K"
+      },
+      {
+       "gib": 32.6,
+       "quant": "Q8_0"
+      },
+      {
+       "gib": 60.02,
+       "quant": "BF16"
+      }
+     ],
+     "bytes": 19299128288,
+     "gib": 17.97,
+     "note": "17.97 gib; the BF16 is 60 and nothing here would load it",
+     "quant": "Q4_K_S",
+     "repo": "city96/FLUX.2-dev-gguf",
+     "role": "diffusion",
+     "url": "https://huggingface.co/city96/FLUX.2-dev-gguf"
+    }
+   ],
+   "repo": "black-forest-labs/FLUX.2-dev",
+   "runtime": {},
+   "sampling": {},
+   "short": "flux-2-dev",
+   "speculative": {},
+   "tasks": {},
+   "templates": {},
+   "thinking": {},
+   "turns": {},
+   "url": "https://huggingface.co/black-forest-labs/FLUX.2-dev"
+  },
+  {
+   "assessed": {},
+   "card": {},
+   "community": {},
+   "components": [
+    {
+     "quant": "flux2-vae.safetensors",
+     "repo": "unsloth/FLUX.2-VAE",
+     "role": "vae"
+    },
+    {
+     "quant": "Q8_0",
+     "repo": "unsloth/Qwen3-4B-GGUF",
+     "role": "llm"
+    }
+   ],
+   "crispasr": {},
+   "derived": {
+    "best_for": [],
+    "best_languages": [],
+    "weak_for": []
+   },
+   "engines": [
+    "stable-diffusion.cpp"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1010",
+   "facets": {
+    "aa-t2i.elo": {
+     "cohort": 6,
+     "pct": 8,
+     "ref": {
+      "file": "data/artificial-analysis-image.json",
+      "id": "FLUX.2 [klein] 4B",
+      "note": "6137 appearances, 1049.31 to 1067.31",
+      "source": "artificial analysis text-to-image",
+      "url": "https://artificialanalysis.ai/image/leaderboard/text-to-image"
+     },
+     "value": 1058.31,
+     "votes": 6137
+    },
+    "lmarena-t2i.rating": {
+     "cohort": 5,
+     "pct": 10,
+     "ref": {
+      "file": "data/lmarena.json",
+      "id": "flux-2-klein-4b",
+      "note": "rank 64 of the board, 144507 votes",
+      "source": "lmarena text-to-image",
+      "url": "https://arena.ai/leaderboard/text-to-image"
+     },
+     "value": 1030.0262734954572,
+     "votes": 144507
+    }
+   },
+   "facts": {},
+   "ids": {
+    "aa-t2i": "FLUX.2 [klein] 4B",
+    "lmarena-t2i": "flux-2-klein-4b"
+   },
+   "kind": "image",
+   "languages": [],
+   "match": null,
+   "modalities": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "image"
+    ]
+   },
+   "native_low_bpw": null,
+   "notes": "the cheap rung of the family: a 4b diffusion model against a qwen3 4b text encoder, where the 9b sibling wants qwen3 8b and `dev` wants a 24b mistral. sd.cpp's own docs/flux2.md gives the three files and this entry is those three.\ndistilled for few-step sampling -- upstream's example runs it at 4 steps and cfg 1.0, where `klein base` is the undistilled model at 20 steps and cfg 4.0. the two are separate checkpoints and both are on the board.",
+   "params": {},
+   "publisher": "black-forest-labs",
+   "quants": [
+    {
+     "available": [
+      {
+       "gib": 2.29,
+       "quant": "Q4_0"
+      },
+      {
+       "gib": 4.01,
+       "quant": "Q8_0"
+      }
+     ],
+     "bytes": 4300629440,
+     "gib": 4.01,
+     "quant": "Q8_0",
+     "repo": "leejet/FLUX.2-klein-4B-GGUF",
+     "role": "diffusion",
+     "url": "https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF"
+    },
+    {
+     "available": [
+      {
+       "gib": 2.29,
+       "quant": "Q4_0"
+      },
+      {
+       "gib": 4.01,
+       "quant": "Q8_0"
+      }
+     ],
+     "bytes": 2460378560,
+     "gib": 2.29,
+     "quant": "Q4_0",
+     "repo": "leejet/FLUX.2-klein-4B-GGUF",
+     "role": "diffusion",
+     "url": "https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF"
+    }
+   ],
+   "repo": "black-forest-labs/FLUX.2-klein-4B",
+   "runtime": {},
+   "sampling": {},
+   "short": "flux-2-klein-4b",
+   "speculative": {},
+   "tasks": {},
+   "templates": {},
+   "thinking": {},
+   "turns": {},
+   "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B"
+  },
+  {
+   "assessed": {},
+   "card": {},
+   "community": {},
+   "components": [
+    {
+     "quant": "flux2-vae.safetensors",
+     "repo": "unsloth/FLUX.2-VAE",
+     "role": "vae"
+    },
+    {
+     "quant": "Q8_0",
+     "repo": "unsloth/Qwen3-8B-GGUF",
+     "role": "llm"
+    }
+   ],
+   "crispasr": {},
+   "derived": {
+    "best_for": [],
+    "best_languages": [],
+    "weak_for": []
+   },
+   "engines": [
+    "stable-diffusion.cpp"
+   ],
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1047",
+   "facets": {
+    "aa-t2i.elo": {
+     "cohort": 6,
+     "pct": 58,
+     "ref": {
+      "file": "data/artificial-analysis-image.json",
+      "id": "FLUX.2 [klein] 9B",
+      "note": "9977 appearances, 1132.34 to 1148.34",
+      "source": "artificial analysis text-to-image",
+      "url": "https://artificialanalysis.ai/image/leaderboard/text-to-image"
+     },
+     "value": 1140.34,
+     "votes": 9977
+    },
+    "lmarena-t2i.rating": {
+     "cohort": 5,
+     "pct": 30,
+     "ref": {
+      "file": "data/lmarena.json",
+      "id": "flux-2-klein-9b",
+      "note": "rank 56 of the board, 142658 votes",
+      "source": "lmarena text-to-image",
+      "url": "https://arena.ai/leaderboard/text-to-image"
+     },
+     "value": 1069.5496383313998,
+     "votes": 142658
+    }
+   },
+   "facts": {},
+   "ids": {
+    "aa-t2i": "FLUX.2 [klein] 9B",
+    "lmarena-t2i": "flux-2-klein-9b"
+   },
+   "kind": "image",
+   "languages": [],
+   "match": null,
+   "modalities": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "image"
+    ]
+   },
+   "native_low_bpw": null,
+   "notes": "the larger klein, and the best-scoring open weights in this family that a local runtime loads: 1140 on artificial analysis against the 4b's 1058, and the only flux row lmarena's image board marks open that is not `dev`.\nit costs a bigger text encoder as well as a bigger diffusion model -- qwen3 8b rather than 4b -- so the three files together are roughly twice the 4b stack.",
+   "params": {},
+   "publisher": "black-forest-labs",
+   "quants": [
+    {
+     "available": [
+      {
+       "gib": 5.23,
+       "quant": "Q4_0"
+      },
+      {
+       "gib": 9.29,
+       "quant": "Q8_0"
+      }
+     ],
+     "bytes": 9978284192,
+     "gib": 9.29,
+     "quant": "Q8_0",
+     "repo": "leejet/FLUX.2-klein-9B-GGUF",
+     "role": "diffusion",
+     "url": "https://huggingface.co/leejet/FLUX.2-klein-9B-GGUF"
+    },
+    {
+     "available": [
+      {
+       "gib": 5.23,
+       "quant": "Q4_0"
+      },
+      {
+       "gib": 9.29,
+       "quant": "Q8_0"
+      }
+     ],
+     "bytes": 5616208032,
+     "gib": 5.23,
+     "quant": "Q4_0",
+     "repo": "leejet/FLUX.2-klein-9B-GGUF",
+     "role": "diffusion",
+     "url": "https://huggingface.co/leejet/FLUX.2-klein-9B-GGUF"
+    }
+   ],
+   "repo": "black-forest-labs/FLUX.2-klein-9B",
+   "runtime": {},
+   "sampling": {},
+   "short": "flux-2-klein-9b",
+   "speculative": {},
+   "tasks": {},
+   "templates": {},
+   "thinking": {},
+   "turns": {},
+   "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-9B"
   },
   {
    "assessed": {
@@ -27652,7 +28053,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1443",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1567",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -29117,7 +29518,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3621",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3745",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -30222,7 +30623,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1498",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1622",
    "facets": {
     "aa-tts.elo": {
      "cohort": 3,
@@ -30410,7 +30811,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1526",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1650",
    "facets": {},
    "facts": {
     "context_gguf": 2048,
@@ -30588,7 +30989,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1566",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1690",
    "facets": {
     "community.reddit-localllama": {
      "approval": null,
@@ -31206,7 +31607,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1611",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1735",
    "facets": {
     "aa.coding": {
      "cohort": 38,
@@ -32389,7 +32790,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1668",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1792",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -34008,7 +34409,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1724",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1848",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -35551,7 +35952,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1782",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1906",
    "facets": {
     "aa.coding": {
      "cohort": 38,
@@ -36453,7 +36854,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1842",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1966",
    "facets": {
     "aa.coding": {
      "cohort": 38,
@@ -37201,7 +37602,7 @@
     "TTS.cpp",
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1906",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2030",
    "facets": {
     "aa-tts.elo": {
      "cohort": 3,
@@ -37538,7 +37939,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1949",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2073",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -38022,7 +38423,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2007",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2131",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -38480,11 +38881,11 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2063",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2187",
    "facets": {
     "aa-t2i.elo": {
-     "cohort": 3,
-     "pct": 83,
+     "cohort": 6,
+     "pct": 92,
      "ref": {
       "file": "data/artificial-analysis-image.json",
       "id": "Ideogram 4.0",
@@ -38726,7 +39127,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3135",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3259",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -39405,7 +39806,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3863",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3987",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -39935,7 +40336,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2092",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2216",
    "facets": {},
    "facts": {
     "params_source": "name",
@@ -40076,7 +40477,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2125",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2249",
    "facets": {},
    "facts": {
     "params_source": "name",
@@ -40212,7 +40613,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2166",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2290",
    "facets": {},
    "facts": {
     "params_source": "name",
@@ -40366,7 +40767,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2196",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2320",
    "facets": {},
    "facts": {
     "params_source": "name",
@@ -40503,7 +40904,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2223",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2347",
    "facets": {},
    "facts": {
     "params_source": "safetensors",
@@ -40675,11 +41076,11 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2248",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2372",
    "facets": {
     "lmarena-t2i.rating": {
-     "cohort": 2,
-     "pct": 75,
+     "cohort": 5,
+     "pct": 70,
      "ref": {
       "file": "data/lmarena.json",
       "id": "krea-2-turbo",
@@ -41061,7 +41462,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2273",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2397",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -42078,7 +42479,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2336",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2460",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -42557,7 +42958,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3186",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3310",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -43547,7 +43948,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4309",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4433",
    "facets": {
     "aa-stt.accuracy": {
      "cohort": 5,
@@ -43737,7 +44138,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2401",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2525",
    "facets": {
     "aa-stt-streaming.accuracy": {
      "cohort": 1,
@@ -44213,7 +44614,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3237",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3361",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -45719,7 +46120,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2426",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2550",
    "facets": {
     "aa.critpt": {
      "cohort": 44,
@@ -46552,7 +46953,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2489",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2613",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -47758,7 +48159,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3290",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3414",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -48427,7 +48828,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4183",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4307",
    "facets": {},
    "facts": {
     "arch": "CanaryForConditionalGeneration",
@@ -48607,7 +49008,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4219",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4343",
    "facets": {
     "aa-stt.accuracy": {
      "cohort": 5,
@@ -48817,7 +49218,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4339",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4463",
    "facets": {},
    "facts": {
     "arch": "Nemotron3_5AsrForRNNT",
@@ -48965,7 +49366,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4153",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4277",
    "facets": {
     "aa-stt.accuracy": {
      "cohort": 5,
@@ -49157,7 +49558,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4122",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4246",
    "facets": {},
    "facts": {
     "arch": "ParakeetForTDT",
@@ -49299,7 +49700,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4532",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4703",
    "facets": {},
    "facts": {},
    "ids": {},
@@ -49605,7 +50006,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2569",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2693",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -50915,7 +51316,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2629",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2753",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -51757,7 +52158,7 @@
     "crispasr",
     "whisper.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2686",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2810",
    "facets": {
     "aa-stt.accuracy": {
      "cohort": 5,
@@ -52101,7 +52502,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1084",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1208",
    "facets": {
     "card.swebench_pro": {
      "cohort": 10,
@@ -52726,7 +53127,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1156",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1280",
    "facets": {
     "card.swebench_pro": {
      "cohort": 10,
@@ -53336,7 +53737,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1298",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1422",
    "facets": {
     "card.deepswe": {
      "cohort": 8,
@@ -53901,7 +54302,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1371",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1495",
    "facets": {
     "card.deepswe": {
      "cohort": 8,
@@ -54402,7 +54803,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1227",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1351",
    "facets": {
     "card.gpqa": {
      "cohort": 25,
@@ -54781,7 +55182,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2840",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2964",
    "facets": {
     "epoch.proofbench": {
      "cohort": 13,
@@ -55643,7 +56044,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2720",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2844",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -56526,7 +56927,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2785",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2909",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -57314,7 +57715,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3335",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3459",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -57831,7 +58232,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3393",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3517",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -58232,7 +58633,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4034",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4158",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -58508,7 +58909,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4507",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4657",
    "facets": {},
    "facts": {},
    "ids": {},
@@ -58517,7 +58918,7 @@
    "match": null,
    "modalities": {},
    "native_low_bpw": null,
-   "notes": "the diarizer actually in use. `--diarize-method pyannote` runs this once over the whole audio for a global speaker-turn timeline, then splits ASR segments at its boundaries. it decides WHEN the speaker changes and nothing about who, so it is paired with titanet for identities that hold across a long file.\nchosen over foxnose by measurement here, and the publisher's own numbers later agreed: the 7.3-versus-7.8 DER that favoured foxnose came off an 8-file subset its card now calls unrepresentative. see the wespeaker entry.\nthe base repo is gated on huggingface and the gguf conversion is not, which is why the quant repo is not the model's own.",
+   "notes": "the diarizer actually in use. `--diarize-method pyannote` runs this once over the whole audio for a global speaker-turn timeline, then splits ASR segments at its boundaries. it decides WHEN the speaker changes and nothing about who, so it is paired with titanet for identities that hold across a long file.\nchosen over foxnose by measurement here, and the publisher's own numbers later agreed: the 7.3-versus-7.8 DER that favoured foxnose came off an 8-file subset its card now calls unrepresentative. see the wespeaker entry.\nWHETHER TO ASK FOR IT DEPENDS ON THE ASR MODEL, and the two cases want opposite requests. a model that labels speakers DURING DECODING already has them on its segments, and `diarize=true` overwrites its work with this pass -- moss-transcribe-diarize is the one such entry here and its note has the numbers. every other ASR model on this roster labels nothing by itself, and for those this post-step is the only route to a speaker at all: measured elsewhere, whisper and parakeet asked for `diarized_json` WITHOUT the flag return everything under a single label rather than returning no labels, which reads like a working diarizer that found one speaker. so `never send diarize` is not a general rule; it is the rule for the joint model and the exact wrong rule for the rest.\n`diarize_max_speakers` is not a ceiling. two observations, and they disagree about how badly: here, `--diarize-method foxnose` produced byte-identical output whatever the value was, which is a parameter not reaching a clusterer; elsewhere, on whatever method that server defaulted to, it REDUCED the count (whisper 5 to 3) without ever reaching the requested 2. neither is the parameter doing what its name says, and the method is not selectable per request, so a client cannot even tell which behaviour it is getting.\nthe base repo is gated on huggingface and the gguf conversion is not, which is why the quant repo is not the model's own.",
    "params": {},
    "publisher": "pyannote",
    "quants": [
@@ -58725,7 +59126,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2896",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3020",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -60076,7 +60477,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3448",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3572",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -60813,7 +61214,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3017",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3141",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -61979,7 +62380,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2954",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3078",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -62882,7 +63283,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3502",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3626",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -63303,7 +63704,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3970",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4094",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -63579,7 +63980,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3911",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4035",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -64045,7 +64446,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3765",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3889",
    "facets": {
     "aa.critpt": {
      "cohort": 44,
@@ -65155,7 +65556,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3717",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3841",
    "facets": {
     "aa.agentic": {
      "cohort": 34,
@@ -66640,7 +67041,7 @@
   }
  ],
  "provenance": {
-  "registry/models.yaml": "75d0554e8764",
+  "registry/models.yaml": "f1af3b478e1f",
   "registry/sampling.yaml": "e38566d41643",
   "research/data/artificial-analysis-image.json": "40745f9fe8bf",
   "research/data/artificial-analysis-speech.json": "e1a259673af7",
@@ -66650,7 +67051,7 @@
   "research/data/epoch.json": "d3db8590d4f7",
   "research/data/gbench-compare-observed.json": "0dcbab2b65f1",
   "research/data/gbench.json": "d332d8f7e116",
-  "research/data/gguf-sizes.json": "81cd78125567",
+  "research/data/gguf-sizes.json": "21606e220b46",
   "research/data/gguf-voices.json": "9e27120305f1",
   "research/data/github-issues.json": "83848a5519c1",
   "research/data/hackernews.json": "31424ee52a94",
@@ -66664,14 +67065,14 @@
   "research/data/model-facts.json": "9875fbff437a",
   "research/data/proposals.json": "ea3d41634f04",
   "research/data/reddit-localllama.json": "4bf677f6136f",
-  "research/data/sdcpp-support.json": "8892080c81b7",
+  "research/data/sdcpp-support.json": "0383047bb392",
   "research/data/sentiment-llm.json": "2f29dc349d8f",
   "research/data/sentiment.json": "58e45888ab6d",
   "research/data/swe-rebench.json": "623251230b61",
   "research/data/tbench.json": "e2c3969a875a",
   "research/data/template-probes.json": "5b61af3296e2",
   "research/data/tts-arena.json": "b45a573f36e4",
-  "research/data/usecase.json": "8362226cfd92",
+  "research/data/usecase.json": "fc3f3ea8ae95",
   "research/data/voicearena.json": "b64566c32a13"
  },
  "repo_url": "https://github.com/khimaros/aimbot",

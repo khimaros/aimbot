@@ -91,15 +91,27 @@ def parse_signatures(source):
     end = body.find("\n}\n")
     body = body[:end] if end > 0 else body
 
-    out, pending = {}, []
+    out, pending, dirty = {}, [], False
     for line in body.splitlines():
-        pending += FIND.findall(line)
+        found = FIND.findall(line)
+        # a rule this cannot model EXACTLY is dropped rather than approximated.
+        # two shapes qualify: a nested lookup (`tensor_storage_map.find(...)`
+        # then `->second.ne[0] == 128`) and any dimension test. mage flow is
+        # both -- its outer condition is qwen image's own signature and the
+        # inner test is what separates them -- so flattening it into two
+        # alternatives made every flux model match mage flow, since they carry
+        # `img_in.weight` too. an AND read as an OR is how a detector table
+        # starts claiming models it would never return.
+        if "->second" in line or ".ne[" in line or "tensor_storage_map.find" in line:
+            dirty = True
+        pending += found
         hit = OUTCOME.search(line)
         if hit and pending:
-            outcome = hit.group(1) or hit.group(2)
-            for sig in pending:
-                out.setdefault(sig, outcome)
-            pending = []
+            if not dirty:
+                outcome = hit.group(1) or hit.group(2)
+                for sig in pending:
+                    out.setdefault(sig, outcome)
+            pending, dirty = [], False
     return out
 
 
@@ -133,19 +145,46 @@ def tensor_names(reader, repo, filename):
     return None
 
 
+# the post-loop branches that are decided by FLAGS ALONE, transcribed from
+# `get_sd_version()`. only these: the sibling branch that resolves plain flux
+# reads `input_block_weight.ne[0]` to tell fill from controls from flex, and a
+# reader that does not read dimensions has no business guessing between them.
+#
+#     if (is_flux2) { return has_single_block_47 ? VERSION_FLUX2
+#                                                : VERSION_FLUX2_KLEIN; }
+FLAG_RESOLVE = {
+    "is_flux2": lambda got: ("VERSION_FLUX2" if "has_single_block_47" in got
+                             else "VERSION_FLUX2_KLEIN"),
+}
+
+
 def match(names, signatures):
-    """(version, signature) for the first rule these tensors satisfy.
+    """(version, signature) for what these tensors resolve to.
 
     `find` in sd.cpp is a substring test against the prefixed name, so the tail
-    of the signature is matched against the tensor as the gguf spells it. a
-    signature that names no version -- the flags a later branch resolves, like
-    `is_flux` -- is reported as itself rather than guessed at.
+    of the signature is matched against the tensor as the gguf spells it.
+
+    Some families are decided AFTER the tensor loop, from flags rather than from
+    one signature, and only the branches that are pure flag logic are modelled
+    here -- see FLAG_RESOLVE. The rest of that post-loop code reads tensor
+    DIMENSIONS (`input_block_weight.ne[0] == 384` separates flux fill from flux
+    controls), which this does not read, so those land on the flag itself. A
+    flag is a real answer: `is_flux` means sd.cpp recognises the file as that
+    family and will pick a generation within it.
     """
-    for sig, outcome in signatures.items():
-        tail = sig[len(PREFIX):] if sig.startswith(PREFIX) else sig
-        if any(tail in n for n in names):
+    hits = [(outcome, sig) for sig, outcome in signatures.items()
+            for tail in [sig[len(PREFIX):] if sig.startswith(PREFIX) else sig]
+            if any(tail in n for n in names)]
+    if not hits:
+        return None, None
+    got = {outcome for outcome, _ in hits}
+    for flag, decide in FLAG_RESOLVE.items():
+        if flag in got:
+            return decide(got), next(s for o, s in hits if o == flag)
+    for outcome, sig in hits:
+        if outcome.startswith("VERSION_"):
             return outcome, sig
-    return None, None
+    return hits[0]
 
 
 def diffusion_quants(registry):

@@ -603,6 +603,19 @@ test('a share link carries only what was changed, and round-trips', () => {
   filters.q = ''; filters.mods = new Set(DEFAULT_MODALITIES); sort = {k: 'score', dir: -1};
 });
 
+test('the copy button puts its icon back, not its text', () => {
+  // THE BUG: `#share` is an svg icon, and the handler saved `btn.textContent`
+  // before overwriting it with `copied`. an svg contributes no text, so the
+  // save read "" -- and writing textContent destroyed the icon -- leaving a
+  // blank gap where the button had been. the button became an icon after that
+  // handler was written and nothing connected the two.
+  const el = document.querySelector('#share');
+  el.innerHTML = '<svg class="icon"></svg>';
+  const saved = flashLabel(el, 'copied', 0);
+  eq(saved, '<svg class="icon"></svg>',
+     'what gets restored is the markup, not the empty string its text reads as');
+});
+
 test('a share link that is garbage does not blank the page', () => {
   // a truncated paste is the common case and must not throw during boot
   eq(hashState(), null, 'no fragment is null, not a crash');

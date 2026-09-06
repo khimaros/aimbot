@@ -1886,6 +1886,21 @@ function closeModel() {
   if (location.hash) history.replaceState(null, '', location.pathname + location.search);
 }
 
+// say something on a button for a moment and put it back exactly as it was.
+//
+// innerHTML rather than textContent, which is the whole reason this is a
+// function: `#share` and `#reset` are SVG icons, an svg contributes no text, so
+// saving `textContent` saved "" -- and assigning textContent DESTROYS the svg.
+// the icon went blank on the first copy and never came back. the handler was
+// written when that button had a text label and nothing connected the two when
+// it became an icon.
+function flashLabel(btn, text, ms) {
+  const was = btn.innerHTML;
+  btn.textContent = text;
+  setTimeout(() => { btn.innerHTML = was; }, ms);
+  return was;
+}
+
 function drawModal(keepScroll) {
   if (openDoc) return drawDoc();
   const m = D.models.find(x => x.repo === openRepo);
@@ -1933,8 +1948,7 @@ function drawModal(keepScroll) {
     b.onclick = e => {
       e.stopPropagation();
       navigator.clipboard.writeText(b.parentElement.querySelector('pre').textContent);
-      b.textContent = 'copied';
-      setTimeout(() => { b.textContent = 'copy'; }, 1200);
+      flashLabel(b, 'copied', 1200);
     };
   });
 }
@@ -3172,9 +3186,7 @@ document.querySelector('#share').onclick = async () => {
   } catch (e) {
     ok = false;
   }
-  const was = btn.textContent;
-  btn.textContent = ok ? 'copied' : 'in the address bar';
-  setTimeout(() => { btn.textContent = was; }, 1600);
+  flashLabel(btn, ok ? 'copied' : 'in the address bar', 1600);
 };
 
 document.querySelector('#reset').onclick = () => {

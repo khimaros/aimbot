@@ -997,6 +997,130 @@ models:
     - repo: unsloth/Qwen3-4B-Instruct-2507-GGUF
       quant: Q8_0
       role: llm
+  # the FLUX.2 family, which this registry depended on before it carried it:
+  # `unsloth/FLUX.2-VAE` is the vae component of ernie image turbo and ideogram
+  # 4, so the roster shipped flux's autoencoder while listing none of its
+  # models. discovery had been saying so -- `resolve-ids --unclaimed` printed
+  # three klein gguf repos scored by boards already collected here -- and
+  # nobody had acted on it.
+  #
+  # klein is the half worth serving: apache-2.0, and the gguf conversions are
+  # leejet's own, which is the same signal that settled ideogram. `dev` is
+  # carried for the score rather than to run -- see its entry.
+  black-forest-labs/FLUX.2-klein-4B:
+    kind: image
+    name:
+      short: flux-2-klein-4b
+    notes: >-
+      the cheap rung of the family: a 4b diffusion model against a qwen3 4b text
+      encoder, where the 9b sibling wants qwen3 8b and `dev` wants a 24b
+      mistral. sd.cpp's own docs/flux2.md gives the three files and this entry
+      is those three.
+
+      distilled for few-step sampling -- upstream's example runs it at 4 steps
+      and cfg 1.0, where `klein base` is the undistilled model at 20 steps and
+      cfg 4.0. the two are separate checkpoints and both are on the board.
+    engine:
+    - stable-diffusion.cpp
+    quants:
+    - repo: leejet/FLUX.2-klein-4B-GGUF
+      quant: Q8_0
+      role: diffusion
+    - repo: leejet/FLUX.2-klein-4B-GGUF
+      quant: Q4_0
+      role: diffusion
+    ids:
+      aa-t2i: FLUX.2 [klein] 4B
+      lmarena-t2i: flux-2-klein-4b
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: unsloth/FLUX.2-VAE
+      quant: flux2-vae.safetensors
+      role: vae
+    - repo: unsloth/Qwen3-4B-GGUF
+      quant: Q8_0
+      role: llm
+  black-forest-labs/FLUX.2-klein-9B:
+    kind: image
+    name:
+      short: flux-2-klein-9b
+    notes: >-
+      the larger klein, and the best-scoring open weights in this family that a
+      local runtime loads: 1140 on artificial analysis against the 4b's 1058,
+      and the only flux row lmarena's image board marks open that is not `dev`.
+
+      it costs a bigger text encoder as well as a bigger diffusion model --
+      qwen3 8b rather than 4b -- so the three files together are roughly twice
+      the 4b stack.
+    engine:
+    - stable-diffusion.cpp
+    quants:
+    - repo: leejet/FLUX.2-klein-9B-GGUF
+      quant: Q8_0
+      role: diffusion
+    - repo: leejet/FLUX.2-klein-9B-GGUF
+      quant: Q4_0
+      role: diffusion
+    ids:
+      aa-t2i: FLUX.2 [klein] 9B
+      lmarena-t2i: flux-2-klein-9b
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: unsloth/FLUX.2-VAE
+      quant: flux2-vae.safetensors
+      role: vae
+    - repo: unsloth/Qwen3-8B-GGUF
+      quant: Q8_0
+      role: llm
+  black-forest-labs/FLUX.2-dev:
+    kind: image
+    name:
+      short: flux-2-dev
+    notes: >-
+      CARRIED FOR THE SCORE. 1197 on artificial analysis and 1146 on lmarena,
+      which is above every other image model on this roster, and two things
+      stand between that number and running it here.
+
+      the licence is `flux-non-commercial-license`. it is downloadable and it is
+      not free, and this registry only reads it as open weights at all because
+      that filter asks `can you fetch these` rather than `is this OSI open` --
+      the same widening that let krea 2 and ideogram 4 be matched. a consumer
+      pointing a business at it should read the licence rather than the flag.
+
+      the stack is the other reason: sd.cpp wants a 24b mistral as the TEXT
+      ENCODER, so the three files are a 18gib diffusion model, a 320mib vae and
+      a 24b llm. the klein entries buy most of the family's quality for a
+      quarter of that, which is why they are the ones with a serving story.
+    engine:
+    - stable-diffusion.cpp
+    quants:
+    - repo: city96/FLUX.2-dev-gguf
+      quant: Q4_K_S
+      role: diffusion
+      note: 17.97 gib; the BF16 is 60 and nothing here would load it
+    ids:
+      aa-t2i: FLUX.2 [dev]
+      lmarena-t2i: flux-2-dev
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: unsloth/FLUX.2-VAE
+      quant: flux2-vae.safetensors
+      role: vae
+    - repo: unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF
+      quant: Q4_K_M
+      role: llm
   XiaomiMiMo/MiMo-V2.5:
     kind: text
     name:
@@ -4417,6 +4541,27 @@ models:
       the fact. that makes it the one entry whose speaker labels do not depend
       on the --diarize post-step, and the one to compare foxnose against.
 
+      SO DO NOT SEND `diarize=true` TO IT. the labels are already on the
+      segments -- the backend parses the model's own `[t][Sxx]text[t]` output
+      and writes them during decoding -- and `response_format=diarized_json`
+      returns them without the flag, because that format serialises whatever is
+      on the segments rather than being gated on the flag. asking for
+      diarization instead runs the generic post-step, which assigns
+      `seg.speaker` unconditionally with no guard for a segment that already has
+      one, so the joint model's attribution is computed and then overwritten.
+      the skip that exists in the server is tiron-specific: it looks for
+      `<|speakerN|>` markers left in the transcript text, and this model's
+      markers are `[Sxx]`, consumed by its own parser before the linker sees
+      them.
+
+      measured on a file with two known speakers, by a session running its own
+      crispasr server: `diarize=true` gave 8 speakers, no flag gave 3 -- 270
+      segments on one, 45 on a second, 10 on a third, which reads as two
+      speakers and a 3% tail. the 8 was the post-step, not this model.
+
+      that rule is SPECIFIC TO A MODEL THAT LABELS DURING DECODING and does not
+      generalise: see the diarization note on the pyannote entry.
+
       no third-party suite scores it, so there is no number here saying whether
       joint beats post-hoc. that is the measurement this roster is missing.
     quants:
@@ -4434,6 +4579,11 @@ models:
       voicearena: ''
     crispasr:
       backend: moss-diarize
+      # the one model here that labels while decoding. a consumer reads this to
+      # decide whether to ASK for diarization: true means the labels are already
+      # there and asking overwrites them, false or absent means asking is the
+      # only way to get any
+      labels_speakers: true
     modalities:
       input:
       - text
@@ -4519,6 +4669,27 @@ models:
       later agreed: the 7.3-versus-7.8 DER that favoured foxnose came off an
       8-file subset its card now calls unrepresentative. see the wespeaker
       entry.
+
+      WHETHER TO ASK FOR IT DEPENDS ON THE ASR MODEL, and the two cases want
+      opposite requests. a model that labels speakers DURING DECODING already
+      has them on its segments, and `diarize=true` overwrites its work with this
+      pass -- moss-transcribe-diarize is the one such entry here and its note has
+      the numbers. every other ASR model on this roster labels nothing by
+      itself, and for those this post-step is the only route to a speaker at
+      all: measured elsewhere, whisper and parakeet asked for
+      `diarized_json` WITHOUT the flag return everything under a single label
+      rather than returning no labels, which reads like a working diarizer that
+      found one speaker. so `never send diarize` is not a general rule; it is
+      the rule for the joint model and the exact wrong rule for the rest.
+
+      `diarize_max_speakers` is not a ceiling. two observations, and they
+      disagree about how badly: here, `--diarize-method foxnose` produced
+      byte-identical output whatever the value was, which is a parameter not
+      reaching a clusterer; elsewhere, on whatever method that server defaulted
+      to, it REDUCED the count (whisper 5 to 3) without ever reaching the
+      requested 2. neither is the parameter doing what its name says, and the
+      method is not selectable per request, so a client cannot even tell which
+      behaviour it is getting.
 
       the base repo is gated on huggingface and the gguf conversion is not,
       which is why the quant repo is not the model's own.
