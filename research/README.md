@@ -36,7 +36,7 @@ date is in each file's provenance below.
 | `data/model-cards.json` | 2026-08-17 | huggingface model cards: benchmark tables (self-reported), opening prose, hub metadata |
 | `data/usecase.json` | derived | analyze-usecase: every facet per model, with a ref each |
 | `usecase-assessed.json` | written | the judgement analyze-usecase carries into it |
-| `data/hf-discussions.json` | 2026-08-17 | huggingface per-repo discussion tabs |
+| `data/hf-discussions.json` | 2026-09-07 | huggingface per-repo discussion tabs, for every repo the registry names -- base, quants and components -- with each box naming the model it belongs to |
 | `data/github-issues.json` | 2026-08-17 | api.github.com, ggml-org/llama.cpp |
 | `data/sentiment-llm.json` and `data/proposals.json` are written by `make llm`; see CONTRIBUTING.md. six collectors write through `capture.py`, which refuses to replace a capture with a smaller one -- `fetch-reddit --refresh` against the dead scrape would otherwise have emptied a corpus nothing here can rebuild. |
 | `data/proposals.json` | derived | a model's triage of the discovery backlog. PROPOSALS, not facts: nothing downstream reads it |

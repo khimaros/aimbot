@@ -8,8 +8,19 @@ good; the discussion tab on unsloth/Laguna-S-2.1-GGUF is where someone says
 UD-Q5_K_XL emits no tokens under rocm on strix halo. MODELS.md and the roadmap
 already cite that kind of report by hand -- this collects it.
 
-Repos come from repos.txt, the same list fetch-gguf-sizes sizes, so the
-discussions line up one-to-one with the quants in the tables.
+Repos come from THE REGISTRY -- every base repo, every quant and every
+component -- unioned with repos.txt. That claim used to read "the same list
+fetch-gguf-sizes sizes", and it stopped being true when sizes moved to the
+registry and this did not: sizes covered 112 repos while this covered 41, and
+everything added to the roster since, including the whole speech and image half,
+had no discussion coverage at all.
+
+Bodies are pulled PER MODEL rather than per repo. A model is several repos here
+-- its own, one or more gguf conversions, sometimes a vae or a text encoder --
+and the question "what are people reporting about qwen3-tts" is answered across
+all of them at once. Per-repo would also multiply the fetch by however many
+conversions a model happens to have, which is not a measure of how much there is
+to read.
 
 The listing carries titles, comment counts and reactions but no bodies, so
 --bodies fetches the full thread for the most-discussed N per repo. Everything
@@ -70,12 +81,53 @@ def thread_text(detail):
     return out
 
 
+def registry_repos(path):
+    """{repo: the model it belongs to} for every repo the registry names.
+
+    A model is its base repo plus its quants and components, and all of them
+    have a discussion tab. The base repo is where the vendor's own users report;
+    a gguf repo is where somebody says UD-Q5_K_XL emits no tokens under rocm.
+    """
+    try:
+        import yaml
+    except ImportError:
+        sys.exit("!!! pyyaml not found")
+    models = (yaml.safe_load(open(path)) or {}).get("models") or {}
+    out = {}
+    for base, m in models.items():
+        out.setdefault(base, base)
+        for w in (m.get("quants") or []) + (m.get("components") or []):
+            if w.get("repo"):
+                # first writer wins: two models can share a conversion, and the
+                # aggregate should not claim it twice
+                out.setdefault(w["repo"], base)
+    return out
+
+
+def by_model(out):
+    """{model: [(repo, discussion), ...]} over everything collected.
+
+    The aggregate the roster actually wants: what is being reported about THIS
+    MODEL, wherever it was posted. A repo that belongs to no registry model --
+    repos.txt carries a few -- is grouped under its own name so nothing is lost.
+    """
+    groups = {}
+    for repo, box in out.items():
+        model = box.get("model") or repo
+        for disc in box.get("discussions") or []:
+            groups.setdefault(model, []).append((repo, disc))
+    return groups
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--repos", default="repos.txt")
+    ap.add_argument("--registry",
+                    default=os.path.join(HERE, "..", "registry", "models.yaml"))
     ap.add_argument("--out", default="data/hf-discussions.json")
     ap.add_argument("--bodies", type=int, default=12, metavar="N",
-                    help="pull full threads for the N most-discussed per repo (0 = titles only)")
+                    help="pull full threads for the N most-discussed per MODEL, "
+                         "across all of its repos (0 = titles only)")
     ap.add_argument("--pages", type=int, default=2, help="listing pages per repo")
     ap.add_argument("--max-age", type=int, default=6 * 3600)
     ap.add_argument("--refresh", action="store_true")
@@ -86,8 +138,11 @@ def main():
     args = ap.parse_args()
 
     with open(args.repos) as f:
-        repos = [l.split("#")[0].strip() for l in f]
-    repos = [r for r in repos if r]
+        listed = [l.split("#")[0].strip() for l in f]
+    owner = registry_repos(args.registry)
+    # registry order first, then whatever repos.txt adds on its own: the
+    # registry is the roster and repos.txt is a hand-kept extra
+    repos = list(owner) + [r for r in listed if r and r not in owner]
 
     out, threads = {}, 0
     for repo in repos:
@@ -114,26 +169,43 @@ def main():
                 reaction_users=x.get("numReactionUsers") or 0,
                 reactions={r["reaction"]: r["count"] for r in (x.get("topReactions") or [])}))
 
-        # bodies are where the useful detail is, and issues attract replies, so
-        # comment count is the cheapest proxy for "worth reading"
-        for r in sorted(rows, key=lambda r: -r["comments"])[:args.bodies]:
+        out[repo] = dict(count=len(rows), discussions=rows,
+                         model=owner.get(repo))
+        print("  %-52s %3d discussions" % (repo, len(rows)), file=sys.stderr)
+
+    # bodies are where the useful detail is, and issues attract replies, so
+    # comment count is the cheapest proxy for "worth reading". the ranking is
+    # ACROSS a model's repos: the loudest thread about qwen3-tts may be on the
+    # cstr conversion rather than on the checkpoint, and a per-repo budget would
+    # spend the same number of fetches on a repo with two discussions as on one
+    # with two hundred.
+    for model, group in by_model(out).items():
+        want = sorted(group, key=lambda x: -x[1]["comments"])[:args.bodies]
+        for repo, r in want:
             time.sleep(args.delay)
             det = get(DETAIL % (repo, r["num"]), "hfd-%s-%d" % (slug(repo), r["num"]),
                       args.max_age, args.refresh)
             if det:
                 r["thread"] = thread_text(det)
                 threads += 1
-        out[repo] = dict(count=len(rows), discussions=rows)
-        print("  %-52s %3d discussions, %d bodies" %
-              (repo, len(rows), sum(1 for r in rows if "thread" in r)), file=sys.stderr)
+        if want:
+            print("  %-52s %d bodies over %d repo(s)"
+                  % (model, len(want), len({r for r, _ in want})), file=sys.stderr)
 
     written, now, before = capture.write(args.out, out, len, args.allow_shrink,
                                          "repos")
     if not written:
         sys.exit(capture.refused(args.out, now, before, "repos"))
+    groups = by_model(out)
     total = sum(v["count"] for v in out.values())
-    print("wrote %s: %d repos, %d discussions, %d full threads"
-          % (args.out, len(out), total, threads))
+    print("wrote %s: %d repos over %d model(s), %d discussions, %d full threads"
+          % (args.out, len(out), len(groups), total, threads))
+    # the aggregate, printed rather than stored: it is a GROUP BY over what was
+    # just written, so a consumer can recompute it from the capture and a second
+    # copy in the file could only ever disagree with the first
+    for model, group in sorted(groups.items(), key=lambda kv: -len(kv[1]))[:10]:
+        print("  %-46s %3d discussions over %d repo(s)"
+              % (model, len(group), len({r for r, _ in group})))
 
 
 if __name__ == "__main__":
