@@ -2,6 +2,13 @@
 
 """Fetch hacker news stories and comments into data/hackernews.json.
 
+Queries are the REGISTRY plus a handful of themes: one search per model, from
+the name a person would type, so a model added to the roster is asked about on
+the next sweep instead of waiting for somebody to think of it. Nine hand-written
+queries used to be the whole corpus, which meant the speech and image halves --
+and every text model nobody had written a query for -- were scored on whatever
+prose the other nine happened to drag in.
+
 Unlike reddit, hn needs no browser: the algolia search api is open and returns
 comment bodies directly. Stories are matched per query, then the top comments
 of each matching story are pulled by story id.
@@ -26,10 +33,37 @@ import urllib.parse
 HERE = os.path.dirname(os.path.abspath(__file__))
 API = "https://hn.algolia.com/api/v1/search?%s"
 
-QUERIES = [
+# the queries no model name covers: a box, a practice, a size class. these are
+# about the CONVERSATION rather than about one checkpoint, which is why they
+# stay hand-written while the model queries are derived.
+THEMES = [
     "Qwen 3.6", "GLM 5.2", "Kimi K3", "MiniMax", "DeepSeek V4",
     "gpt-oss", "Strix Halo", "benchmaxxing", "local LLM 128GB",
 ]
+
+# a name too short or too common to search for. `hn.algolia` has no notion of
+# "this sense of the word", so a two-character query returns the whole site.
+MIN_QUERY = 4
+
+
+def model_queries(path):
+    """One query per registry model, from the name a person would type.
+
+    `name.short` rather than the repo: a comment says `kokoro` or `qwen3.8 27b`,
+    not `hexgrad/Kokoro-82M`. This is deliberately NOT `name.match` -- that is a
+    regex for scoring prose already collected, and algolia takes a phrase.
+    """
+    try:
+        import yaml
+    except ImportError:
+        sys.exit("!!! pyyaml not found")
+    models = (yaml.safe_load(open(path)) or {}).get("models") or {}
+    out = []
+    for m in models.values():
+        short = ((m.get("name") or {}).get("short") or "").strip()
+        if len(short) >= MIN_QUERY and short not in out:
+            out.append(short)
+    return sorted(out)
 
 
 def api(cache, refresh, max_age, **params):
@@ -50,7 +84,15 @@ def clean(s):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--stories", type=int, default=6)
+    ap.add_argument("--stories", type=int, default=6,
+                    help="stories per THEME query")
+    ap.add_argument("--model-stories", type=int, default=3,
+                    help="stories per registry-model query, which there are two "
+                         "orders more of")
+    ap.add_argument("--models", action=argparse.BooleanOptionalAction, default=True,
+                    help="also query for every model in the registry")
+    ap.add_argument("--registry",
+                    default=os.path.join(HERE, "..", "registry", "models.yaml"))
     ap.add_argument("--comments", type=int, default=12)
     ap.add_argument("--out", default="data/hackernews.json")
     ap.add_argument("--max-age", type=int, default=6 * 3600, metavar="SECONDS",
@@ -64,14 +106,29 @@ def main():
     def get(cache, **params):
         return api(cache, args.refresh, args.max_age, **params)
 
-    out = {}
-    for q in QUERIES:
+    queries = [(q, args.stories) for q in THEMES]
+    if args.models:
+        queries += [(q, args.model_stories) for q in model_queries(args.registry)]
+
+    # ONE STORY, ONE PLACE. the same thread answers several queries once the
+    # roster is asking -- three qwen entries and a `Qwen 3.6` theme all match the
+    # same launch thread -- and analyze-task-mentions counts a mention per
+    # sentence per THREAD. it dedupes threads by url when counting how many a
+    # model appeared in, but not when counting the mentions themselves, so a
+    # story stored under three queries would score triple. it is also the
+    # difference between one comment fetch and three.
+    out, seen = {}, {}
+    for q, want in queries:
         slug = re.sub(r"\W+", "_", q)
         hits = get("q-" + slug, query=q, tags="story",
-                   hitsPerPage=args.stories).get("hits", [])
-        stories = []
+                   hitsPerPage=want).get("hits", [])
+        stories, dupes = [], 0
         for h in hits:
             sid = h["objectID"]
+            if sid in seen:
+                dupes += 1
+                continue
+            seen[sid] = q
             cs = get("s-" + sid, tags="comment,story_%s" % sid, hitsPerPage=60).get("hits", [])
             comments = [clean(c.get("comment_text"))[:1200] for c in cs]
             comments = [c for c in comments if len(c) > 120][:args.comments]
@@ -81,13 +138,15 @@ def main():
                                 url="https://news.ycombinator.com/item?id=%s" % sid,
                                 comments=comments))
         out[q] = stories
-        print("  %-20s %d stories" % (q, len(stories)))
+        print("  %-28s %d stories%s" % (q, len(stories),
+                                        ", %d already had" % dupes if dupes else ""))
 
     written, now, before = capture.write(args.out, out, len, args.allow_shrink,
                                          "queries")
     if not written:
         sys.exit(capture.refused(args.out, now, before, "queries"))
-    print("wrote %s" % args.out)
+    print("wrote %s: %d queries, %d unique stories"
+          % (args.out, len(out), len(seen)))
 
 
 if __name__ == "__main__":

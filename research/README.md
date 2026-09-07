@@ -24,7 +24,7 @@ date is in each file's provenance below.
 | `data/gbench-compare-observed.json` | 2026-08-10 | gertlabs compare view |
 | `data/reddit-localllama.json` | 2026-08-17 | old.reddit.com r/LocalLLaMA |
 | `data/sentiment.json` | derived | analyze-task-mentions --json |
-| `data/hackernews.json` | 2026-08-17 | hn.algolia.com |
+| `data/hackernews.json` | 2026-09-04 | hn.algolia.com: one query per registry model plus nine themes, stories deduped across queries |
 | `data/lmarena.json` | 2026-08-17 | lmarena.ai/leaderboard |
 | `data/swe-rebench.json` | 2026-08-17 | swe-rebench.com |
 | `data/tbench.json` | 2026-08-17 | hf datasets, harborframework/terminal-bench-2-leaderboard |
