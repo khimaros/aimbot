@@ -206,18 +206,52 @@ def load_registry(path):
     return (yaml.safe_load(open(path)) or {}).get("models") or {}
 
 
+# an outcome that names an architecture, against one that refines another.
+# sd.cpp's table mixes them: `VERSION_SD3` and `is_wan` are models it loads,
+# `has_multiple_encoders` and `has_middle_block_1` are follow-up bits that tell
+# two variants of one family apart. only the first kind can be a roster gap.
+ARCHITECTURE = re.compile(r"^(VERSION_|is_)")
+
+
 def report(payload, registry):
     found = payload.get("models") or {}
+    signatures = payload.get("signatures") or {}
     print("stable-diffusion.cpp: %d signatures, %d model(s) tested"
-          % (len(payload.get("signatures") or {}), len(found)))
+          % (len(signatures), len(found)))
+    # image AND video: they run on the same binary and the same detector reads
+    # both, so filtering to one kind hid three entries this collector had just
+    # finished identifying
     for repo, m in sorted(registry.items()):
-        if m.get("kind") != "image":
+        if m.get("kind") not in ("image", "video"):
             continue
         claims = "stable-diffusion.cpp" in (m.get("engine") or [])
         hit = found.get(repo) or {}
         print("  %-34s registry=%-5s detector=%s"
               % ((m.get("name") or {}).get("short"), "yes" if claims else "no",
                  hit.get("version") or "no signature"))
+
+    # the other direction, which this report used to leave out. crispasr's
+    # README names a repo per backend and can be listed as models; sd.cpp names
+    # none, so the widest true statement is which ARCHITECTURES the detector
+    # knows that nothing in the roster has matched -- each one is a family to go
+    # and find a checkpoint for rather than a model to add
+    carried = {(v or {}).get("version") for v in found.values() if v}
+    # an `is_X` is the family gate a `VERSION_X...` sits behind, so flux 2 being
+    # carried as VERSION_FLUX2 answers `is_flux2` too. the comparison is on the
+    # family TOKEN and not a substring: `is_flux` is flux 1 and VERSION_FLUX2
+    # does not cover it, though one name contains the other
+    families = {v.split("_")[1] for v in carried if v and "_" in v}
+    known = sorted({o for o in signatures.values() if ARCHITECTURE.match(o)})
+    missing = [o for o in known
+               if o not in carried
+               and not (o.startswith("is_") and o[3:].upper() in families)]
+    print()
+    print("%d architecture(s) the detector knows that the roster does not carry:"
+          % len(missing))
+    for o in missing:
+        print("   %s" % o)
+    print("  sd.cpp publishes no repo for any of them, so each needs a "
+          "checkpoint found by hand before it can be an entry")
 
 
 def main():

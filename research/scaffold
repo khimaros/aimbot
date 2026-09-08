@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+
+"""Draft registry entries for what an engine loads and the roster does not carry.
+
+    ./scaffold                          # every uncarried crispasr backend
+    ./scaffold --kind tts               # just the synthesis half
+    ./scaffold --backend chatterbox     # one of them
+    ./scaffold --report                 # counts, for the punch list
+
+CONTRIBUTING's "adding a model" is six steps and only the first is manual: write
+the entry, and the sweep derives `turns`, `thinking`, `ids`, `runtime` and each
+profile's `source` from it. That first step is the one that does not scale. The
+roster carried 3 of crispasr's 28 synthesis backends not because anybody decided
+against the other 25 but because nobody typed 25 entries, and the report naming
+them reached no punch list until it was wired into one.
+
+Everything that step needs is already captured:
+
+  crispasr.json     the backend name, its kind, the gguf repo crispasr's own
+                    README names for it, and the languages and licence it claims
+  hf-catalog.json   `base_model` per repo, which `scripts/resolve-base` turns
+                    into "the weights this conversion converts" -- the registry
+                    key, because the key is what every capture joins on
+  gguf-sizes.json   the quant tags that actually exist in that repo, so the
+                    pinned rung is one somebody can download
+
+So this drafts the entry and a human keeps the decision. It writes to stdout and
+never to the registry, for the reason `propose` does not either: a scaffold is an
+argument that a row belongs, and `registry/models.yaml` is where somebody says it
+does. What it CANNOT know is written as a `TODO` in the draft rather than
+guessed -- notes are prose about why a model is worth carrying, and no capture
+holds that.
+
+The modalities it writes are the shape of the backend, not a reading of the
+model: tts is text in and audio out, asr is audio in and text out. Both are
+sometimes wrong in the same direction -- a cloning TTS takes a reference clip --
+and `models-validate --modalities` is the step that says so, against the model's
+own config, which is step 4 of the same six.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import publishers  # noqa: E402  the `[role]` table, shared with propose
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+CRISPASR = os.path.join(HERE, "data", "crispasr.json")
+SIZES = os.path.join(HERE, "data", "gguf-sizes.json")
+REGISTRY = os.path.join(ROOT, "registry", "models.yaml")
+RESOLVE_BASE = os.path.join(ROOT, "scripts", "resolve-base")
+
+# the rung to pin, best first. this is the order the speech half already uses --
+# cstr publishes Q8_0 for most of its conversions and the registry pins it --
+# with F16 last because it is the fallback for a repo that quantized nothing
+QUANT_ORDER = ("Q8_0", "Q6_K", "Q5_K", "Q4_K", "F16")
+# not a rung. cstr ships a reference tensor dump beside some conversions for its
+# own diff harness, and it appears in the file listing like a quant does
+NOT_A_QUANT = ("diff-harness-ref",)
+
+# what each backend kind takes and emits, as an INTERFACE rather than a claim
+# about the decoder. `models-validate --modalities` corrects it from config.json
+MODALITIES = {
+    "tts": (["text"], ["audio"]),
+    "asr": (["text", "audio"], ["text"]),
+    "s2s": (["text", "audio"], ["audio"]),
+    "translate": (["text"], ["text"]),
+    "post": (["text"], ["text"]),
+}
+# kinds the registry has a `kind:` for. post-processing and translation weights
+# are neither speech nor text in the sense the roster means -- they are what runs
+# BESIDE a transcript -- so they are drafted and flagged rather than assigned one
+REGISTRY_KIND = {"tts": "speech", "asr": "speech", "s2s": "speech"}
+
+
+def carried_backends(models):
+    """Every crispasr backend some registry entry already names."""
+    out = set()
+    for m in models.values():
+        blocks = [m.get("crispasr")] + [q.get("crispasr") for q in (m.get("quants") or [])]
+        for b in blocks:
+            if b and b.get("backend"):
+                out.add(b["backend"])
+    return out
+
+
+def base_map():
+    """{conversion: base repo}, from resolve-base over the catalog."""
+    out = subprocess.run([RESOLVE_BASE, "--json"], stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True)
+    if out.returncode:
+        print("resolve-base failed, keys will be TODO: %s" % out.stderr.strip(),
+              file=sys.stderr)
+        return {}
+    return json.loads(out.stdout)
+
+
+def quant_for(repo, sizes):
+    """The rung to pin out of what the repo actually publishes."""
+    have = {k for k in (sizes.get(repo) or {}) if not k.endswith(".gguf")}
+    have -= set(NOT_A_QUANT)
+    for q in QUANT_ORDER:
+        if q in have:
+            return q
+    return sorted(have)[0] if have else None
+
+
+def key_for(backend, spec, bases):
+    """The repo to key the entry on, and how sure the draft is of it.
+
+    crispasr's README puts the base checkpoint in the link text and the
+    conversion in the href, so `models` IS the base -- except where it names one
+    repo for both, which happens two ways that need opposite handling. For bark
+    the single repo is cstr's conversion and keying on it would be the bug this
+    whole join exists to avoid. For voxtral-tts it is `mistralai/Voxtral-4B-TTS-
+    2603`, which carries safetensors and no gguf at all: mistral's own weights,
+    and the right key.
+
+    publishers.txt separates them, the same list that breaks the mirror tie in
+    resolve-base: a repo owned by a republisher is somebody's conversion, and a
+    lab's own repo is the model. Only then does the hub's `base_model` answer,
+    with `agrees` saying whether the name backs it up -- it names a codec
+    instead of the model often enough that an unbacked answer is worth a second
+    look rather than a silent key.
+    """
+    ggufs = spec.get("gguf") or []
+    roles = publishers.roles()
+    for m in spec.get("models") or []:
+        if m not in ggufs:
+            return m, "crispasr README"
+        if not publishers.republishes(m, roles):
+            return m, "crispasr README (the vendor's own weights repo)"
+    for g in ggufs:
+        row = bases.get(g)
+        if row:
+            return row["base"], ("hub base_model" if row["agrees"]
+                                 else "hub base_model, NAME DOES NOT MATCH -- check")
+    return None, None
+
+
+def draft(backend, spec, bases, sizes):
+    """One registry entry as yaml lines, plus what the draft could not settle."""
+    kind = spec["kind"]
+    key, how = key_for(backend, spec, bases)
+    ins, outs = MODALITIES.get(kind, (["text"], ["text"]))
+    lines, todo = [], []
+
+    if not key:
+        key = (spec.get("gguf") or ["TODO/unknown"])[0]
+        todo.append("no base repo: the README repeats the conversion and the hub "
+                    "names no base_model. key this on the weights it converts")
+    lines.append("  %s:" % key)
+    if kind in REGISTRY_KIND:
+        lines.append("    kind: %s" % REGISTRY_KIND[kind])
+    else:
+        lines.append("    kind: TODO  # crispasr calls this %r, which is neither"
+                     % kind)
+        lines.append("                # speech nor text -- it runs beside a transcript")
+        todo.append("kind: crispasr %r has no registry kind yet" % kind)
+    lines.append("    name:")
+    lines.append("      short: %s" % backend)
+    lines.append("    notes: TODO  # what it is for, and why the roster carries it")
+    todo.append("notes: no capture holds prose about why a model is worth having")
+
+    lines.append("    quants:")
+    for i, repo in enumerate(spec.get("gguf") or []):
+        q = quant_for(repo, sizes)
+        lines.append("    - repo: %s" % repo)
+        if q:
+            lines.append("      quant: %s" % q)
+        else:
+            lines.append("      quant: TODO  # nothing sized this repo; add it to "
+                         "repos.txt and run fetch-gguf-sizes")
+            todo.append("quant: %s is not in gguf-sizes.json" % repo)
+        # crispasr dispatches on ONE file, so only the first carries the backend.
+        # what the others ARE is not derivable and was guessed at once: drafting
+        # them as codecs is right for orpheus and zonos, which decode through
+        # SNAC and DAC, and wrong for every ASR row -- parakeet-ctc names 0.6b,
+        # 1.1b and a japanese finetune, which are three models. so the extra
+        # repos are listed without a role for somebody to assign
+        if i == 0:
+            lines.append("      role: model")
+            lines.append("      crispasr:")
+            lines.append("        backend: %s" % backend)
+        else:
+            lines.append("      role: TODO  # a rung of the same model, a sibling"
+                         " that wants its own entry,")
+            lines.append("                  # or a codec this one decodes through")
+            todo.append("role: %s is the %s repo this backend names; decide "
+                        "whether it is a rung, a sibling or a component"
+                        % (repo, "second" if i == 1 else "%dth" % (i + 1)))
+
+    lines.append("    modalities:")
+    lines.append("      input:")
+    lines.extend("      - %s" % x for x in ins)
+    lines.append("      output:")
+    lines.extend("      - %s" % x for x in outs)
+
+    header = ["  # scaffolded from crispasr --backend %s" % backend]
+    if how:
+        header.append("  # key from %s" % how)
+    if spec.get("languages"):
+        header.append("  # languages: %s" % str(spec["languages"])[:70])
+    if spec.get("license"):
+        header.append("  # license: %s" % str(spec["license"])[:60])
+    return header + lines, todo
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--crispasr", default=CRISPASR)
+    ap.add_argument("--sizes", default=SIZES)
+    ap.add_argument("--registry", default=REGISTRY)
+    ap.add_argument("--kind", help="only this crispasr kind (tts, asr, post, ...)")
+    ap.add_argument("--backend", help="only this backend")
+    ap.add_argument("--report", action="store_true",
+                    help="how many candidates are draftable, and what blocks the rest")
+    args = ap.parse_args()
+
+    import yaml
+    models = (yaml.safe_load(open(args.registry)) or {}).get("models") or {}
+    backends = (json.load(open(args.crispasr)) or {}).get("backends") or {}
+    sizes = json.load(open(args.sizes)) if os.path.exists(args.sizes) else {}
+    carried = carried_backends(models)
+    bases = base_map()
+
+    todo_backends = sorted(
+        (k, v) for k, v in backends.items()
+        if k not in carried and v.get("gguf")
+        and (not args.kind or v["kind"] == args.kind)
+        and (not args.backend or k == args.backend))
+
+    if args.report:
+        from collections import Counter
+        # a backend whose weights are already an entry is not a gap: the roster
+        # holds the model and reaches it another way, which is what every
+        # `crispasr.post` and `crispasr.diarize` role means. counting those as
+        # missing overstates the work by an order of magnitude at the tail
+        held = [(k, v) for k, v in todo_backends if (key_for(k, v, bases)[0] or "") in models]
+        fresh = [(k, v) for k, v in todo_backends if (key_for(k, v, bases)[0] or "") not in models]
+        by_kind = Counter(v["kind"] for _, v in fresh)
+        keyed = sum(1 for k, v in fresh if key_for(k, v, bases)[0])
+        quanted = sum(1 for _, v in fresh
+                      if all(quant_for(r, sizes) for r in (v.get("gguf") or [])))
+        print("scaffold: %d crispasr backend(s) name weights the roster does not "
+              "hold" % len(fresh))
+        if by_kind:
+            print("  by kind: %s" % ", ".join("%s %d" % (k, n)
+                                              for k, n in sorted(by_kind.items())))
+            print("  %d have a base repo to key on, %d do not"
+                  % (keyed, len(fresh) - keyed))
+            print("  %d have every gguf sized, %d need repos.txt + fetch-gguf-sizes"
+                  % (quanted, len(fresh) - quanted))
+            print("  draft them with: ./scaffold --kind tts")
+        print("  %d more name weights that ARE carried, reached by another "
+              "backend or by a post/diarize role" % len(held))
+        return 0
+
+    blocked = drafted = existing = 0
+    for backend, spec in todo_backends:
+        key, _ = key_for(backend, spec, bases)
+        # the backend is unclaimed but the WEIGHTS are already carried, which is
+        # a one-line edit to an entry that exists rather than a new one. drafting
+        # a second entry on the same key would be a duplicate the registry has no
+        # way to hold: gemma 4's two on-device sizes are text models here and
+        # crispasr loads them as ASR backends too
+        if key and key in models:
+            short = ((models[key].get("name") or {}).get("short")) or key
+            print("  # `%s` loads %s, which this registry already carries as `%s`."
+                  % (backend, key, short))
+            print("  # add this to that entry's quant rather than drafting a new one:")
+            print("  #     crispasr:")
+            print("  #       backend: %s" % backend)
+            print()
+            existing += 1
+            continue
+        lines, todo = draft(backend, spec, bases, sizes)
+        print("\n".join(lines))
+        for t in todo:
+            print("  # TODO %s" % t)
+        print()
+        drafted += 1
+        blocked += bool(todo)
+    print("# %d entr(ies) drafted, %d carrying a TODO a human has to settle; "
+          "%d backend(s) load weights already carried and need a crispasr block "
+          "instead" % (drafted, blocked, existing), file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

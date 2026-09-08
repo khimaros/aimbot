@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+
+"""Frontier reference points, joined to the scores artificial analysis publishes.
+
+    ./milestones                # the milestones and where the roster stands
+    ./milestones --json         # the joined rows, for a script
+    ./milestones --check        # fail if a milestone is not what it claims
+
+`milestones.json` names WHICH models are worth reading the roster against and
+why; every number comes from `data/artificial-analysis.json`, joined on slug at
+run time. Freezing the numbers into that file would be the obvious thing and the
+wrong one: artificial analysis restates a score when it re-runs a model, so a
+frozen milestone slowly stops being comparable to the roster it is drawn
+against. Joining live means both sides move together.
+
+The rule this enforces is the one that keeps the ranking honest. Every percentile
+on the dashboard is computed inside the open-weights cohort -- that is what `the
+cohort is this registry` means, and it is why a 27b is not ranked against a
+frontier api model. A milestone is a LINE OVER that cohort and never a member of
+it, so a slug whose `isOpenWeights` is true is refused here: it is a roster
+question wearing a milestone's clothes, and admitting it would move every
+percentile on the page without saying so.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+AA = os.path.join(HERE, "data", "artificial-analysis.json")
+MILESTONES = os.path.join(HERE, "milestones.json")
+REGISTRY = os.path.join(ROOT, "registry", "models.yaml")
+INDEX = "intelligenceIndex"
+
+
+def load(path, what):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (IOError, ValueError) as e:
+        sys.exit("!!! cannot read %s (%s): %s" % (what, path, e))
+
+
+def join(aa, declared):
+    """{slug: row} with the file's judgement and the capture's numbers."""
+    out = {}
+    for slug, spec in sorted(declared.items()):
+        row = aa.get(slug)
+        if not row:
+            sys.exit("!!! %s: no such slug in artificial-analysis.json" % slug)
+        if row.get("isOpenWeights"):
+            sys.exit("!!! %s is open weights, so it belongs in the registry "
+                     "rather than beside it: a milestone is a line over the "
+                     "cohort and admitting a member of the cohort moves every "
+                     "percentile on the page" % slug)
+        if row.get(INDEX) is None:
+            sys.exit("!!! %s carries no %s to compare against" % (slug, INDEX))
+        out[slug] = {"label": spec.get("label") or row.get("name"),
+                     "as_of": spec.get("as_of") or row.get("releaseDate"),
+                     "arm": spec.get("arm"),
+                     "name": row.get("name"),
+                     "released": row.get("releaseDate"),
+                     "index": round(row[INDEX], 1),
+                     "creator": row.get("modelCreatorName")}
+    return out
+
+
+def roster_against(aa, line):
+    """Registry models artificial analysis scores, split by the milestone."""
+    import yaml
+    models = (yaml.safe_load(open(REGISTRY)) or {}).get("models") or {}
+    rows = []
+    for m in models.values():
+        slug = ((m.get("ids") or {}).get("aa") or "").strip()
+        row = aa.get(slug) if slug else None
+        if not row or row.get(INDEX) is None:
+            continue
+        rows.append((round(row[INDEX], 1), (m.get("name") or {}).get("short")))
+    rows.sort(reverse=True)
+    return [r for r in rows if r[0] >= line], [r for r in rows if r[0] < line]
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--aa", default=AA)
+    ap.add_argument("--milestones", default=MILESTONES)
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--check", action="store_true",
+                    help="exit non-zero if a milestone is missing or not closed weights")
+    args = ap.parse_args()
+
+    aa = load(args.aa, "the artificial analysis capture")
+    declared = (load(args.milestones, "the milestone list") or {}).get("milestones") or {}
+    joined = join(aa, declared)
+
+    if args.json:
+        print(json.dumps(joined, indent=1, sort_keys=True))
+        return 0
+    if args.check:
+        print("milestones: %d declared, all closed weights and all scored"
+              % len(joined))
+        return 0
+
+    for slug, ms in sorted(joined.items(), key=lambda kv: -kv[1]["index"]):
+        print("%s -- %s, %s, intelligence index %.1f"
+              % (ms["label"], ms["creator"] or "?", ms["as_of"], ms["index"]))
+        over, under = roster_against(aa, ms["index"])
+        print("  %d of %d scored registry models reach it; %d do not"
+              % (len(over), len(over) + len(under), len(under)))
+        for i, s in over:
+            print("     %5.1f  %s" % (i, s))
+        if under:
+            print("  nearest below:")
+            for i, s in under[:3]:
+                print("     %5.1f  %s" % (i, s))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

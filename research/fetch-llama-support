@@ -37,14 +37,22 @@ consumer of this repo has no reason to have a clone.
 """
 
 import argparse
+import importlib.machinery
+import importlib.util
 import json
 import os
 import re
+import struct
 import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GGUF_API = "https://huggingface.co/api/models/%s?expand[]=gguf"
+TREE = "https://huggingface.co/api/models/%s/tree/main?recursive=true"
+# a repo with more files than this is a quant ladder rather than a multi-model
+# conversion, and reading every rung's header would fetch the same architecture
+# a dozen times
+MAX_FILES_PER_REPO = 12
 
 # must match fetch-model-facts and fetch-chat-templates: all three read the same
 # url under the same key, so whichever runs second transfers nothing
@@ -161,6 +169,139 @@ def gguf_repos(registry):
     return seen
 
 
+# enough of the file to hold the preamble and the first few metadata pairs.
+# `general.architecture` is conventionally first and 8k has held for every
+# conversion this roster pins; a file that buries it deeper reads as unknown
+# rather than wrong, which is the safe direction
+GGUF_HEAD_BYTES = 8192
+GGUF_FILE = "https://huggingface.co/%s/resolve/main/%s"
+
+
+def load_voices_reader():
+    """fetch-gguf-voices' gguf walker, imported rather than restated.
+
+    The same borrow fetch-sdcpp-support makes, and for the same reason: that
+    module already decodes every gguf value type, and a second parser here
+    started out handling only strings -- which reads `general.architecture` in
+    the files that happen to lead with it and returns nothing for the ones that
+    put a `general.file_type` first.
+    """
+    # that module imports `capture`, a sibling, so the directory has to be
+    # importable whatever the caller's cwd is -- the tests load this file from
+    # tests/ and would otherwise fail on the nested import rather than on
+    # anything about gguf
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    path = os.path.join(HERE, "fetch-gguf-voices")
+    spec = importlib.util.spec_from_loader(
+        "gguf_voices", importlib.machinery.SourceFileLoader("gguf_voices", path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_READER = None
+
+
+def gguf_arch(blob):
+    """`general.architecture` out of a gguf header, or None."""
+    global _READER
+    if _READER is None:
+        _READER = load_voices_reader()
+    try:
+        h = _READER.Header(blob)
+        if h.take(4) != b"GGUF":
+            return None
+        h.u32(), h.u64()
+        for _ in range(h.u64()):
+            key = h.string()
+            val = h.value(h.u32())
+            if key == "general.architecture":
+                return str(val)
+    except (EOFError, ValueError, struct.error):
+        return None
+    return None
+
+
+def file_arch(repo, name, max_age, refresh):
+    """The architecture one gguf FILE declares, read from its own header."""
+    key = "arch-%s-%s" % (repo.replace("/", "_"), name.replace("/", "_"))
+    cmd = [os.path.join(HERE, "httpcache"), GGUF_FILE % (repo, name),
+           "--key", key, "--max-age", str(max_age), "--path",
+           "--header", "Range: bytes=0-%d" % (GGUF_HEAD_BYTES - 1)]
+    if refresh:
+        cmd.append("--refresh")
+    path = subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout.strip()
+    if not path or not os.path.exists(path):
+        return None
+    with open(path, "rb") as f:
+        return gguf_arch(f.read())
+
+
+def repo_files(repo, max_age, refresh):
+    """Every .gguf in a repo, from the tree API fetch-gguf-sizes also reads."""
+    rows = get(TREE % repo, "tree-%s" % repo.replace("/", "_"), max_age, refresh)
+    if not isinstance(rows, list):
+        return []
+    return [r["path"] for r in rows
+            if isinstance(r, dict) and str(r.get("path", "")).endswith(".gguf")]
+
+
+# the rung part of a filename: a quant tag, a precision, or a shard counter.
+# stripping it leaves the model's own name, and a repo whose files all reduce to
+# one name is a ladder rather than a collection
+RUNG = re.compile(
+    r"[-_.]?(?:i?q\d[_a-z0-9]*|bf?16|f\d{2}|tq\d|ud-\S+|\d{5}-of-\d{5})(?=\.|$)",
+    re.I)
+
+
+def multi_model(names):
+    """Whether a repo's gguf filenames name more than one model.
+
+    Reading a header costs a range request and a quant ladder answers the same
+    thing every time -- twelve reads of `Qwen3.6-35B-A3B` at twelve precisions.
+    Two stems is what makes a repo worth walking: `chatterbox-t3` beside
+    `chatterbox-s3gen`, or a model beside the codec it decodes through.
+    """
+    stems = set()
+    for n in names:
+        stem = os.path.basename(n)[:-len(".gguf")] if n.endswith(".gguf") else n
+        while True:
+            stripped = RUNG.sub("", stem)
+            if stripped == stem:
+                break
+            stem = stripped
+        stems.add(stem.strip("-_.").lower())
+    return len(stems) > 1
+
+
+def per_file_architectures(repos, max_age, refresh):
+    """{repo: [arch, ...]}, one entry per gguf the repo publishes.
+
+    The repo-level summary huggingface returns names ONE architecture, and a
+    repo holding several models makes that a coin toss: cstr/chatterbox-GGUF
+    carries `chatterbox-t3` and `chatterbox-s3gen` at three rungs each and the
+    summary said s3gen, which crispasr's table does not know. Nine correct
+    entries read as unloadable on that.
+    """
+    out = {}
+    for repo in sorted(repos):
+        names = repo_files(repo, max_age, refresh)
+        # a single file, or several rungs of one model, leaves the repo-level
+        # summary unambiguous and there is nothing here to disagree with it
+        if len(names) < 2 or not multi_model(names):
+            continue
+        archs = []
+        for name in names[:MAX_FILES_PER_REPO]:
+            a = file_arch(repo, name, max_age, refresh)
+            if a and a not in archs:
+                archs.append(a)
+        if archs:
+            out[repo] = archs
+            print("  %-52s %s" % (repo, ", ".join(archs)), file=sys.stderr)
+    return out
+
+
 def architectures(repos, max_age, refresh):
     """{repo: architecture} from huggingface's parse of each gguf header."""
     out = {}
@@ -191,7 +332,12 @@ def main():
     except (IOError, ValueError):
         prev = {}
 
-    repos = architectures(gguf_repos(args.registry), args.max_age, args.refresh)
+    named = gguf_repos(args.registry)
+    repos = architectures(named, args.max_age, args.refresh)
+    # every architecture a multi-file repo publishes, beside the one-per-repo
+    # summary above. `repos` stays a scalar because resolve-runtime and
+    # report_runtime read it that way; this is additive
+    repo_archs = per_file_architectures(named, args.max_age, args.refresh)
     clone = find_clone(args.llama)
     if not clone:
         print("no llama.cpp clone found; keeping the %d architecture(s) already "
@@ -212,7 +358,8 @@ def main():
 
     with open(args.out, "w") as f:
         json.dump({"llama_cpp": head, "arch": arch, "repos": repos,
-                   "quants": quants}, f, indent=1, sort_keys=True)
+                   "repo_archs": repo_archs, "quants": quants},
+                  f, indent=1, sort_keys=True)
     absent = sorted(a for a, v in arch.items() if not v.get("mainline"))
     near = sorted(a for a, v in arch.items() if v.get("near"))
     print("wrote %s: %d repos over %d architectures, %d absent from mainline%s"

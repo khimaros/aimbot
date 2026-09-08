@@ -22,6 +22,7 @@ lint:
 	cd research && ./fetch-quant-sweeps --check
 	./research/refresh-tables --check
 	cd research && ./analyze-usecase --check
+	cd research && ./analyze-usecase --check-citations
 	./scripts/build-viewer --check
 .PHONY: lint
 

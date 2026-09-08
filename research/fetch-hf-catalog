@@ -154,7 +154,14 @@ def main():
     ap.add_argument("--out", default="data/hf-catalog.json")
     ap.add_argument("--repos", default="repos.txt")
     ap.add_argument("--authors", default="publishers.txt")
-    ap.add_argument("--pages", type=int, default=3, help="%d repos per page" % PER_PAGE)
+    # 6, because a capped author sweep is a silent hole rather than a smaller
+    # one: `base_model` is only readable for a repo this capture holds, so a
+    # publisher cut off at 300 leaves `scripts/resolve-base` unable to say what
+    # its remaining conversions convert. cstr has 513 gguf repos and five of the
+    # speech conversions the roster wants were past page 3. the big quantizers
+    # run to 1000+ and stay capped by design -- sorted by lastModified, so the
+    # cap keeps the most recent -- and the run already prints which authors hit it
+    ap.add_argument("--pages", type=int, default=6, help="%d repos per page" % PER_PAGE)
     # `created` in the website URL is `createdAt` in the api, and is the one
     # sort that surfaces a model on its release day rather than after it has
     # accumulated enough downloads to trend

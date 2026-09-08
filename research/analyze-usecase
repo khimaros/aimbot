@@ -561,6 +561,75 @@ def load_authored(path):
         return {}
 
 
+# the two figures a verdict quotes from sentiment.json: `hf-discussions 123
+# mentions` and `reddit ... 14% approval`. the source name as the verdicts spell
+# it, mapped to the key that file uses
+CITED = re.compile(r"\b(hf-discussions|reddit|hackernews|level1techs)\s+(\d+)\s+mentions",
+                   re.I)
+CITED_APPROVAL = re.compile(
+    r"\b(hf-discussions|reddit|hackernews|level1techs)\b[^.;,]{0,40}?(\d+)%\s*approval",
+    re.I)
+# a line names more than one forum -- "hf-discussions 65 mentions, reddit 62 at
+# 100% approval" -- so the gap between a source and its figure must not cross a
+# comma, or the first source is charged with the second one's number. this check
+# caught itself doing exactly that
+CLAUSE = re.compile(r"[,;.]")
+CITED_SOURCE = {"hf-discussions": "hf-discussions", "reddit": "reddit-localllama",
+                "hackernews": "hackernews", "level1techs": "level1techs"}
+# where a verdict can quote one. `evidence` is the list MODELS.md prints as the
+# grounds for the judgement; the prose fields restate the same figures and drift
+# the same way
+QUOTING_FIELDS = ("evidence", "notes", "one_liner")
+
+
+def cited_lines(blk):
+    for field in QUOTING_FIELDS:
+        v = blk.get(field)
+        for line in (v if isinstance(v, list) else [v] if v else []):
+            yield line
+
+
+def check_citations(authored, sentiment, names):
+    """Every figure a verdict quotes, against the capture it came from.
+
+    The judgement in these blocks is a human's and stays theirs. The FIGURES are
+    not: they sit in data/sentiment.json, and a verdict citing one that file
+    disagrees with prints a wrong number in MODELS.md as the grounds for its own
+    argument. That is what happened -- the captures moved and the prose did not.
+
+    It is not a rounding problem. bonsai 27b's verdict called it the
+    worst-received model in the corpus on "14% approval" where the capture says
+    75%, and ornith 1.0 35b cited 0% where it says 50%. A count being stale
+    misstates the weight of the evidence; an approval rate being stale can
+    invert what it says.
+
+    Only quoted figures are checked, and only in the shape the verdicts already
+    use. Prose that describes without quoting is left alone.
+    """
+    bad = []
+    for repo, blk in sorted(authored.items()):
+        by = ((sentiment.get(names.get(repo)) or {}).get("by_source") or {})
+        for line in cited_lines(blk):
+            for pat, field, unit in ((CITED, "mentions", ""),
+                                     (CITED_APPROVAL, "approval", "%")):
+                for src, claimed in pat.findall(line):
+                    actual = (by.get(CITED_SOURCE[src.lower()]) or {}).get(field)
+                    if actual is None or int(actual) != int(claimed):
+                        bad.append((repo, src, field, int(claimed), actual, unit))
+    seen = set()
+    for row in bad:
+        if row in seen:
+            continue
+        seen.add(row)
+        repo, src, field, claimed, actual, unit = row
+        print("!!! %s: verdict cites %s %s%s %s, the capture says %s"
+              % (repo, src, claimed, unit, field,
+                 "nothing" if actual is None else "%s%s" % (actual, unit)))
+    print("citations: %d figure(s) quoted that the capture disagrees with"
+          % len(seen))
+    return 1 if seen else 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -571,7 +640,23 @@ def main():
                     help="exit 1 if the file on disk is not what this would write")
     ap.add_argument("--missing", action="store_true",
                     help="list models with no assessed block")
+    ap.add_argument("--check-citations", action="store_true",
+                    help="exit 1 if a verdict quotes a mention count the "
+                         "capture disagrees with")
+    ap.add_argument("--sentiment", help="override data/sentiment.json")
+    ap.add_argument("--names", help="a {repo: short} map, for the fixtures")
     args = ap.parse_args()
+
+    if args.check_citations:
+        sentiment = (json.load(open(args.sentiment)) if args.sentiment
+                     else load("sentiment"))
+        if args.names:
+            names = json.load(open(args.names))
+        else:
+            bt = load_build_tables()
+            names = {r: (m.get("name") or {}).get("short") or r
+                     for r, m in (bt.registry() or {}).items()}
+        return check_citations(load_authored(args.assessed), sentiment, names)
 
     bt = load_build_tables()
     registry = bt.registry()
@@ -615,4 +700,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)

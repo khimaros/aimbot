@@ -166,12 +166,23 @@ def check_runtime(rt, where, f):
 # what a `crispasr:` block may say. `runtime:` answers "which llama.cpp release
 # loads this"; this answers the same question for the other engine on the
 # roster, which is not a llama.cpp release at all but a backend name.
-CRISPASR_FIELDS = {"backend", "diarize", "labels_speakers"}
+CRISPASR_FIELDS = {"backend", "diarize", "post", "labels_speakers"}
 # what a weight can be to a diarization run. neither transcribes: an embedder
 # turns a span of audio into a speaker vector, a segmenter says only WHEN the
 # speaker changed
 DIARIZE_ROLES = ("embedder", "segmentation")
 DIARIZE_KIND = "diarize"
+# what a weight can be to a transcript AFTER it exists. crispasr's README lists
+# six of these and its feature matrix carries none of them, because punctuation
+# and language id are flags over the output rather than `--backend` names --
+# the same reason the diarizers carry a role instead of a backend
+POST_ROLES = ("punctuation", "language-id")
+POST_KIND = "post"
+
+# what a publisher appends to say "this repo is the gguf of that one". the
+# registry key is never one of these, because a conversion carries no
+# config.json and every capture joins on the key
+CONVERSION_NAME = re.compile(r"[-_.](gguf|ggml)$", re.I)
 
 
 def check_crispasr(cr, where, f):
@@ -198,14 +209,18 @@ def check_crispasr(cr, where, f):
     if unknown:
         f.add(where, "unknown crispasr field(s) %s (known: %s)"
               % (", ".join(unknown), ", ".join(sorted(CRISPASR_FIELDS))))
-    named = [k for k in ("backend", "diarize") if cr.get(k)]
+    named = [k for k in ("backend", "diarize", "post") if cr.get(k)]
     if len(named) != 1:
         f.add(where, "crispasr names %s; it takes exactly one of backend (an ASR "
-                     "runtime) or diarize (a weight --diarize loads)"
-              % (", ".join(named) or "neither backend nor diarize"))
+                     "runtime), diarize (a weight --diarize loads) or post (a "
+                     "weight that runs over a finished transcript)"
+              % (", ".join(named) or "none of backend, diarize or post"))
     if cr.get("diarize") and cr["diarize"] not in DIARIZE_ROLES:
         f.add(where, "crispasr.diarize %r must be one of %s"
               % (cr["diarize"], ", ".join(DIARIZE_ROLES)))
+    if cr.get("post") and cr["post"] not in POST_ROLES:
+        f.add(where, "crispasr.post %r must be one of %s"
+              % (cr["post"], ", ".join(POST_ROLES)))
     # whether the MODEL labels speakers while decoding, which decides whether a
     # client should ask for diarization at all -- and the two answers want
     # opposite requests, with no error either way. it belongs beside `backend`
@@ -267,13 +282,25 @@ def check_diarize_kind(m, where, f):
     -- a quant carries no kind, and a diarizer has one conversion anyway.
     """
     kind = m.get("kind", "text")
-    role = ((m.get("crispasr") or {}).get("diarize"))
+    cr = m.get("crispasr") or {}
+    role = cr.get("diarize")
     if kind == DIARIZE_KIND and not role:
         f.add(where, "kind %s needs a crispasr.diarize saying what --diarize "
                      "loads it as; nothing else here can use the file" % DIARIZE_KIND)
     elif role and kind != DIARIZE_KIND:
         f.add(where, "crispasr.diarize and kind %s go together; this says kind %s"
               % (DIARIZE_KIND, kind))
+
+    # the same agreement for the post-processing weights, and for the same
+    # reason: without the kind, a punctuation model sits in the speech roster
+    # looking like something a consumer could transcribe with
+    post = cr.get("post")
+    if kind == POST_KIND and not post:
+        f.add(where, "kind %s needs a crispasr.post saying what it does to a "
+                     "transcript; nothing else here can use the file" % POST_KIND)
+    elif post and kind != POST_KIND:
+        f.add(where, "crispasr.post and kind %s go together; this says kind %s"
+              % (POST_KIND, kind))
 
 
 def check_registry(models, sampling, f):
@@ -327,8 +354,15 @@ def check_registry(models, sampling, f):
         # README, model-facts its config.json, hf-catalog its downloads. keyed on
         # a conversion, all three answer about whoever ran the quantizer -- and a
         # gguf repo carries no config.json, so the facts degrade to what the name
-        # spells. the tell is the key appearing in the entry's own quants
-        if repo in {q.get("repo") for q in quants}:
+        # spells.
+        #
+        # the key appearing in the entry's own quants is necessary and not
+        # sufficient: a lab that ships gguf inside its weights repo is keyed
+        # exactly right and hits it too. mistral's Voxtral-4B-TTS-2603 is that
+        # case, safetensors and no separate conversion. what separates them is
+        # that a conversion says so in its name, which is the same kind of
+        # evidence `TOTAL_IN_NAME` reads a parameter count off in fetch-model-facts
+        if repo in {q.get("repo") for q in quants} and CONVERSION_NAME.search(repo):
             f.add(repo, "key is a conversion of itself: it is listed in this "
                         "entry's own quants. key the entry on the weights and "
                         "keep the conversion as a quant")
@@ -681,7 +715,14 @@ def check_backend_reachable(models, data, f):
     """
     crispasr = data.get("crispasr") or {}
     table, names = crispasr.get("arch") or {}, crispasr.get("caps") or {}
-    repo_arch = (data.get("llama-support") or {}).get("repos") or {}
+    support = data.get("llama-support") or {}
+    repo_arch = support.get("repos") or {}
+    # a repo holding several models has several architectures and huggingface's
+    # summary names one of them arbitrarily. where fetch-llama-support has read
+    # the headers per file, those win: cstr/chatterbox-GGUF summarises as
+    # `chatterbox-s3gen`, which this table does not know, while the t3 file
+    # beside it declares the `chatterbox` it does
+    per_file = support.get("repo_archs") or {}
     if not table or not repo_arch or not names:
         return
     for repo, m in sorted((models.get("models") or {}).items()):
@@ -698,8 +739,13 @@ def check_backend_reachable(models, data, f):
                              "them" % (backend, len(names)))
             # every file this model pins, since a model-level block speaks for
             # the whole entry and a quant-level one still ships in a repo
-            archs = {repo_arch[q["repo"]] for q in (m.get("quants") or [])
-                     if q.get("repo") in repo_arch}
+            archs = set()
+            for q in (m.get("quants") or []):
+                r = q.get("repo")
+                if r in per_file:
+                    archs.update(per_file[r])
+                elif r in repo_arch:
+                    archs.add(repo_arch[r])
             if not archs:
                 continue  # no gguf header anywhere: whisper ships ggml .bin
             if not any(a in table for a in archs):

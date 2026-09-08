@@ -277,6 +277,214 @@ built and is marked done when it ships.
   neither. that is exactly the split the registry note had claimed from the gguf
   headers, now confirmed from the vendor.
 
+- **the speech roster grows from a process rather than from typing.** the roster
+  carried 3 of crispasr's 28 synthesis backends, and the reason was plumbing:
+  CONTRIBUTING's six steps for adding a model derive five of them and leave the
+  first, writing the entry, entirely manual. so three pieces now do that first
+  step's research.
+
+  `scripts/resolve-base` answers which weights a conversion converts, from the
+  hub's own `base_model` as `fetch-hf-catalog` already captures it -- 1999
+  conversions mapped off a file in the repo. `research/publishers.py` holds the
+  `[role]` parser `propose` had, because the same list breaks three separate
+  ties: a quantizer's mirror against the original it mirrors, a vendor's own
+  gguf repo against somebody's conversion, and a repo that is a quant decision
+  against one that is a roster decision. `research/scaffold` puts them together
+  and drafts an entry per uncarried backend, with the quant tag read from
+  gguf-sizes and a TODO wherever no capture holds the answer.
+
+  two data fixes were needed underneath. `cstr` was untracked, and crispasr's
+  README names a cstr repo for 95 of its backends, so the conversions were
+  invisible to discovery AND their `base_model` unavailable. and the author
+  sweep capped at 300 repos per publisher against cstr's 513, which is a silent
+  hole rather than a smaller one: five of the bases the roster needed were past
+  page 3. `--pages` is 6 now and the run already printed which authors capped.
+
+  what the process does NOT do is decide. `base_model` is the hub's claim and it
+  is sometimes a component -- cstr's miotts repo names the codec and never
+  mentions the model -- so an `agrees` flag rides beside every row and a human
+  keeps the key. that flag caught both wrong keys in the first batch.
+
+- **the 22 crispasr TTS backends are carried, as 23 entries.** registry 92 -> 115
+  models, speech roster 20 -> 43, crispasr backends carrying the roster 14 -> 35.
+  chatterbox is the one artificial analysis scores, which makes it the only
+  synthesis entry here whose quality is a measurement rather than an absence.
+
+  four of them needed a human and the scaffolder said which. miotts' key was the
+  codec. voxtral-tts' was the LLM backbone, because the draft skipped crispasr's
+  README wherever it named one repo for both columns -- a rule that is right for
+  bark, where the single repo is cstr's conversion, and wrong for mistral, whose
+  repo carries safetensors and no gguf at all. vibevoice is two models rather
+  than a model and a codec. and lint rejected `vibevoice-tts` outright: it is a
+  README row absent from the 148-backend feature matrix, exactly the `gemma4-e4b`
+  case that check exists for, so the 1.5b carries `vibevoice-1.5b` and the
+  realtime rung carries no backend at all rather than a guess.
+
+- **the 33 crispasr ASR backends are carried, as 30 entries plus two quants.**
+  registry 115 -> 145, speech roster 43 -> 73, crispasr backends covering the
+  roster 35 -> 66, uncarried backends 66 -> 17. three of the 33 needed something
+  other than a new entry: `foxnose` is a `--diarize-method` the wespeaker entry
+  already carries, and `gemma4-e2b`/`gemma4-e4b` load text models this registry
+  holds, so those two gained cstr's ASR conversion as a second quant -- which is
+  what their comments had been describing since before the conversion was sized.
+
+  lint caught three errors that would otherwise have shipped. `MiMo-V2.5`'s
+  alias also matched `MiMo-V2.5-ASR`, so forum sentiment about the transcriber
+  counted for the text model. `gemma4-e4b` is not a backend -- crispasr's README
+  names a row after the model and its own footnote says the E4B runs on
+  `--backend gemma4-e2b`. and `foxnose` is absent from the feature matrix for
+  the same reason `vibevoice-tts` is.
+
+- **a conversion repo's architecture is read per FILE.** huggingface summarises
+  a repo with one `gguf.architecture`, and for a repo holding several models
+  that is whichever file it picked. cstr/chatterbox-GGUF carries `chatterbox-t3`
+  and `chatterbox-s3gen` at three rungs each; the summary said s3gen, crispasr's
+  table knows `chatterbox`, and nine correct TTS entries read as unloadable on
+  it. `fetch-llama-support` now range-fetches 8k of each gguf and parses
+  `general.architecture` out of the header itself, recording `repo_archs`
+  alongside the old scalar so `resolve-runtime` and `report_runtime` keep
+  reading what they read before.
+
+  the entries were latently wrong either way: `quant: Q8_0` names four different
+  files in the chatterbox repo, and `gguf-sizes` collapses a listing by tag so
+  the ladder looked clean. the check only became able to see it once there was
+  an architecture to test against.
+
+- **the three natively low-bpw bonsai entries are exempt from the retention
+  curve, which they always should have been.** `native_low_bpw` was carried by
+  the two gpt-oss models and nothing else, while bonsai 27b's own note calls it
+  a binary-weight rebuild, both ternary entries say the bpw curve does not model
+  their weights, and bonsai's written verdict in `usecase-assessed.json` asserts
+  outright that it "carries native_low_bpw". it did not. a model quantization-
+  AWARE-trained to one bit is not paying a penalty for being reduced, and the
+  flag is what says so; the prose had been describing a behaviour no code
+  implemented. found while checking what the quesma sweep changes.
+
+- **`kind: post` and `kind: translate`, for the weights that run beside a
+  transcript.** crispasr's last ten uncarried backends were not more of the same
+  thing: three are real translation backends, one restores audio, and six are
+  punctuation and language-id rows the feature matrix does not carry at all,
+  because those are flags over a finished transcript rather than `--backend`
+  names. that is the fifth time this sweep found a README row that is not a
+  backend, after vibevoice-tts, foxnose, gemma4-e4b and qwen3-ja-anime.
+
+  so `crispasr.post` follows `crispasr.diarize` exactly -- a role from a closed
+  set, a kind that has to agree with it, and the same exclusivity that stops one
+  weight claiming two jobs -- and both kinds carry no `modalities` block, for
+  the reason the diarizers do not: declaring text in and text out would put a
+  punctuation restorer in `any to text` beside the language models. a kind with
+  no chip is unreachable in the ui, which is now a test rather than a thing to
+  remember.
+
+  cld3 and lid-176 are deliberately NOT carried. both exist on the hub only as
+  cstr's conversion -- cld3's upstream is a C++ library, fasttext's lid.176 is a
+  `.bin` from fasttext.cc -- so the only available key is a gguf repo, which
+  lint rejects and should. `facebook/fasttext-language-identification` is not
+  their upstream: it does 217 languages where lid.176 does 176. glotlid-v3
+  covers the same job with a real upstream, so the roster loses a duplicate
+  rather than a capability.
+
+  registry 145 -> 153. crispasr coverage is now 2 backends naming weights the
+  roster does not hold, both of them the unkeyable pair above, and 10 more
+  naming weights it does hold under another backend or a post/diarize role --
+  which `scaffold --report` had been counting as missing until it learned the
+  difference.
+
+- **the first `score` curve, and the fix that makes a short one safe.** quesma's
+  qwen3.8 27b sweep is in `quant-curves.json` as `Qwen/Qwen3.8-27B` -- the first
+  entry the viewer will actually multiply by, where the four before it are
+  perplexity and kl proxies it never touches. three terminal-bench arms: no
+  measurable change at Q8_0 and Q4_K_M, a small decline at UD-Q2_K_XL. so the
+  model stops being discounted at fat quants (x1.000 against the fit's 0.991 at
+  9.06 bpw) and is discounted harder at thin ones (0.906 against 0.937 at 3.15).
+
+  the points are read off a CHART and the entry says so: the article publishes
+  graphs and prose and prints no score for any arm. its file sizes are exact, so
+  the bits per weight are solid and the third decimal of the retention is
+  decoration. the 1-bit collapse it also found is NOT in the points, because
+  that arm is GPQA and these are terminal-bench, and one curve mixing two
+  benchmarks is the thing this file's schema forbids.
+
+  the general fix underneath: a measured curve that stops above the rungs a
+  reader can select used to clamp on its lowest point, so this one would have
+  answered 0.904 for a two-bit quant where the fit says 0.778 -- one model's
+  measurement making its own thin quants look better than the general case,
+  purely because nobody ran that arm. below its range a measured curve now
+  defers to the fitted one.
+
+- **both engine collectors report coverage outward, and the punch list prints
+  it.** `fetch-sdcpp-support --report` walked the registry's image models and
+  asked the detector about each, which answers `does what we carry load` and
+  never `what loads that we do not carry`. it now reports 15 architectures
+  sd.cpp knows and the roster has nothing for. it cannot be a list of models the
+  way crispasr's is -- sd.cpp names no repos, it detects on tensor names -- so
+  each row is a family to go and find a checkpoint for. the family gate is
+  matched on the token: `is_flux2` is answered by the carried VERSION_FLUX2 and
+  `is_flux` is flux 1 and is not, though one name contains the other.
+
+- **a carry decision that never became an entry stops reading as settled.**
+  decided.txt says it outright -- "`carry` is a decision to add it, not the
+  entry itself" -- and nothing checked the difference, so all three of this
+  repo's carries had sat decided and unwritten. `./propose --report` now names
+  them against the registry.
+
+  all three were then wrong, and the check that disagrees with them is one this
+  repo already had: `scored_siblings`, whose docstring names two of them as the
+  rows it was written to catch. granite 4.1 30b scores 8.70 against the 4.2 30b
+  already carried at 23.74, same lab and same size; LFM2 24B A2B scores 4.63
+  against LFM2.5-2.6B at 10.99 from the same lab at a tenth the parameters; and
+  the fp8 row is granite weights in a format llama.cpp does not load. they are
+  `[skip]` now, with the numbers written beside them.
+
+- **a written verdict cannot quote a figure the capture disagrees with.**
+  `build-sections` pulls rank and quant live from the dashboard and takes
+  `one_liner`, `evidence` and `notes` from usecase-assessed.json, which is
+  hand-written -- so the prose drifted while the numbers moved and nothing
+  noticed. 51 quoted figures were stale: 28 mention counts and 23 approval
+  rates.
+
+  it was not a rounding problem. bonsai 27b's verdict called it "the
+  worst-received model in the corpus" on 0% and 14% approval where the capture
+  says 0% over 42 hf-discussions mentions and 75% over 12 on reddit -- the
+  conclusion was the opposite of what the data shows on one of its two forums.
+  ornith 1.0 35b argued from "two forums disagree completely" on 0% against
+  100%, where the capture has one forum evenly split at 50% and three reddit
+  posts the polarity reader scores no signal for at all. three more verdicts
+  asserted "100% approval" from zero positive and zero negative.
+
+  `analyze-usecase --check-citations` is in `make lint` now. only quoted figures
+  are checked and only in the shapes the verdicts use; the argument around them
+  stays the author's. it found its own false positive on the way in -- a 40
+  character window that spanned a comma and charged one forum with the next
+  clause's number.
+
+- **seven stable-diffusion.cpp families are carried, and `kind: video` exists.**
+  flux 1 dev and schnell, sd 3.5 large and ovis image 7b on the image side; wan
+  2.1, LTX video and hunyuan video on the new one. uncarried architectures 15 ->
+  9, image roster 8 -> 12, and three models that emit frames.
+
+  no VERSION here is written by hand. sd.cpp identifies a model by TENSOR NAMES
+  rather than an architecture string, so `fetch-sdcpp-support` reads each gguf
+  header and reports what matched -- is_flux, VERSION_SD3, VERSION_OVIS_IMAGE,
+  is_wan, VERSION_LTXAV, VERSION_HUNYUAN_VIDEO. leejet publishing three of the
+  image conversions is the stronger warrant still: he wrote the loader, so his
+  files are the ones it is tested against.
+
+  `kind: video` is a claim about the OUTPUT and not the loader -- these run on
+  the same binary as the image entries. it exists for the reason `diarize` and
+  `post` do: without it a model emitting a clip sits in the image roster
+  answering a question nobody asked it, and its percentiles would be computed
+  against models no image board scores. the reachability test caught the missing
+  chip before the ui could hide three entries, and the sd.cpp report was
+  filtering its own inward listing to `kind == image`, so it detected the three
+  video models and then declined to print them.
+
+  two families stay uncarried for want of weights rather than want of a kind:
+  SVD and lingbot have no gguf in any repo a search finds. the other seven are
+  obscure enough that no gguf-and-ungated-base pairing turned up on a first
+  pass, `is_unet` -- the SD1.5/SDXL family -- being the one most likely to
+  reward a second.
+
 - **the punch list reports crispasr coverage in both directions.**
   `models-validate --speech` said which of the roster's 20 speech models a
   backend carries and that was the only direction reported, so a sweep could
@@ -335,6 +543,41 @@ built and is marked done when it ships.
    w8a16, nvfp4, awq w4a16) and carries no llama.cpp rung, so none of its
    numbers can enter `quant-curves.json`. it bounds what the curve can honestly
    claim rather than filling it in.
+
+   a THIRD bound, and the first from a llama.cpp sweep of a small model:
+   quesma ran qwen3.8 27b at bf16, Q8_0, Q4_K_M, UD-Q2_K_XL and UD-IQ1_S on
+   GPQA diamond, IFBench and terminal-bench 2.1 (89 tasks, 3h timeout).
+   https://quesma.com/blog/qwen38-27b-quantizations-benchmarked/
+
+   it CANNOT enter `quant-curves.json` and the reason is worth writing down:
+   the article publishes charts and prose, not tables. it names no percentage
+   for any arm, so a `score` curve built from it would be numbers read off a
+   graph wearing the precision of a measurement. the file sizes it does print
+   (55 / 29 / 17 / 10.7 / 6.2 GB) give bits per weight; the scores do not exist
+   as text anywhere in it.
+
+   what it settles is the SHAPE, and the fitted curve agrees down to two bits
+   and breaks below them. against the sizes above -- 8.44, 4.95, 3.11 and 1.80
+   bpw -- the curve predicts 0.990, 0.977, 0.934 and 0.778, and quesma reports
+   no measurable change, no measurable change, a small decline, and collapse to
+   roughly random guessing. the first three corroborate. the fourth does not:
+   the curve's lowest fitted point is deepseek v3.1 at 2.21 bpw, below which
+   `retention` returns that point forever, so a 1.67 bpw rung reads as keeping
+   77.8% of its score when the only sweep anybody has run down there found a
+   27b at chance.
+
+   the page says so now rather than fixing a number it has no measurement for:
+   `belowCurve` marks a rung under the curve's lowest measured point and the
+   quality cell's hover calls it a floor rather than a prediction. four models
+   hit it at a 96gb budget -- minimax-m2.5, mistral medium 3.5, laguna m.1 and
+   solar open2 250b -- and none of them said anything about it before.
+
+   the caveat is real in both directions: quesma tested a 27b DENSE model and
+   the four above are large MoEs, where the redundancy argument cuts the other
+   way. one small-model sweep does not establish where the cliff is for a 250b,
+   which is the same "sweeping ONE small model at several quants would settle
+   it" this item already asks for -- now with one of the two sweeps done, by
+   somebody else, and unusable as points.
 
 3. **a consumer-side memory budget check.** gguf sizes join by repo but nothing
    enforces a consumer's budget with them; that check belongs to the consumer,

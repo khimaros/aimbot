@@ -48,6 +48,18 @@ function eq(got, want, what) {
     + ', want ' + JSON.stringify(want));
 }
 function ok(cond, what) { if (!cond) throw new Error(what); }
+// linear interpolation over [bpw, retention] points, clamped at both ends --
+// the arithmetic the page's `retention` does, restated so a case can assert
+// which CURVE was used without depending on how the page picked it
+function interpAt(pts, x) {
+  if (x <= pts[0][0]) return pts[0][1];
+  if (x >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
+    if (x >= x0 && x <= x1) return y0 + (y1 - y0) * (x - x0) / (x1 - x0);
+  }
+  return 1;
+}
 const model = short => {
   const m = D.models.find(x => x.short === short);
   if (!m) throw new Error('no model named ' + short);
@@ -865,6 +877,151 @@ test('the quant a tts row is read at is the one that actually loads', () => {
     ok(q.crispasr && q.crispasr.backend, m.short + ' carries its backend on that'
       + ' rung, got ' + JSON.stringify(q.crispasr));
   });
+});
+
+// a kind with no chip is unreachable: `post` and `translate` carry no
+// `modalities` block -- deliberately, so a punctuation restorer does not land in
+// `any to text` beside the language models -- so no shape filter selects them
+// and the default `text` view hides them. diarize had the same problem and got
+// a chip; these are the same argument.
+test('every registry kind is reachable by some modality chip', () => {
+  RESET();
+  const kinds = new Set(D.models.map(m => m.kind));
+  kinds.forEach(k => {
+    const some = D.models.filter(m => m.kind === k);
+    const reachable = MODALITIES.some(mod => some.some(m => mod.test(m)));
+    ok(reachable, 'kind ' + k + ' (' + some.length + ' models) is selected by no'
+      + ' chip, so nothing in the ui can show it');
+  });
+});
+
+// the curve's lowest fitted point is deepseek v3.1 at 2.21 bpw, and below that
+// `retention` returns that point's value forever -- a 1.30 bpw rung reads as
+// keeping 77.8% of its score because the curve has nothing to say and says the
+// last thing it knew. quesma's qwen3.8 27b sweep is the first measurement in
+// that region and it found collapse to chance at 1.8 bpw, so the flat part is
+// not merely unevidenced, it is evidenced against on at least one model.
+test('a quant below the curve is marked as a floor, not a prediction', () => {
+  RESET();
+  // 96gb is where the clamp actually bites: four models drop to a rung under
+  // 2.21 bpw and each is multiplied by the curve's last known value
+  setHardware({...DEFAULT_HARDWARE, budget: 96, cap: 'none', floor: 'none'});
+  const lowest = curveFor(model('kimi k3')).points[0][0];
+  ok(lowest > 1.5, 'the curve starts well above one bit (' + lowest + ')');
+
+  const under = D.models.filter(m => {
+    const q = activeQuant(m);
+    return q && q.bpw && q.bpw < lowest && !m.native_low_bpw;
+  });
+  ok(under.length > 0, 'some model is served a rung under the curve at 96gb');
+  under.forEach(m => ok(belowCurve(m),
+    m.short + ' is under the curve at ' + activeQuant(m).bpw
+      + ' bpw and nothing says so'));
+
+  const over = D.models.find(m => {
+    const q = activeQuant(m);
+    return q && q.bpw && q.bpw > lowest + 1;
+  });
+  eq(belowCurve(over), false, over.short + ' is inside the curve and must not be marked');
+
+  // a natively low-bpw model is exempt from the curve, so it is not extrapolating
+  // off the end of one -- the flag and the marker must not fight
+  const native = D.models.filter(m => m.native_low_bpw);
+  ok(native.length >= 3, 'the roster carries natively low-bpw weights');
+  native.forEach(m => eq(belowCurve(m), false,
+    m.short + ' is exempt from the curve, so it is not below it'));
+  RESET();
+});
+
+// a milestone is a frontier model the roster is READ AGAINST, never ranked
+// with: every percentile on this page is computed inside the open-weights
+// cohort, so a closed model entering it would move all of them silently.
+test('a milestone is carried as a line, not as a row', () => {
+  RESET();
+  const ms = D.milestones || {};
+  const keys = Object.keys(ms);
+  ok(keys.length >= 1, 'the payload carries at least one milestone');
+
+  keys.forEach(k => {
+    const m = ms[k];
+    ok(typeof m.index === 'number' && m.index > 0, k + ' carries an index');
+    ok(m.label && m.as_of, k + ' says what it is and as of when');
+    ok(!D.models.some(x => x.repo === k || x.short === m.label),
+      k + ' is in the roster as well as beside it, which would move every'
+      + ' percentile on the page');
+  });
+
+  // and the comparison it exists for: the raw index, not the composite, since
+  // the milestone is on artificial analysis' scale and the quality column is a
+  // percentile within this registry
+  const line = ms[keys[0]].index;
+  const scored = D.models.filter(m => m.facets['aa.intelligence']);
+  ok(scored.length > 20, 'enough models carry the index to compare');
+  const over = scored.filter(m => m.facets['aa.intelligence'].value >= line);
+  ok(over.length > 0 && over.length < scored.length,
+    'the milestone splits the roster rather than including or excluding all of it'
+    + ' (' + over.length + ' of ' + scored.length + ')');
+});
+
+// the milestone earns its place as a FILTER: composed with `fits vram` it
+// answers the question the roster exists for -- what beats the november 2025
+// frontier and still runs on the card I have.
+test('a milestone is a filter, and composes with the hardware one', () => {
+  RESET();
+  const slug = Object.keys(D.milestones)[0];
+  const ms = D.milestones[slug];
+  const flag = FLAGS.find(f => f.k === 'ms-' + slug);
+  ok(flag, 'the milestone is offered as a flag, got ' + FLAGS.map(f => f.k).join(','));
+  ok(flag.t.includes(ms.label), 'and names the model it is a line for');
+
+  const over = D.models.filter(f => flag.test(f));
+  ok(over.length > 0, 'some model clears it');
+  over.forEach(m => ok(m.facets['aa.intelligence'].value >= ms.index,
+    m.short + ' is marked as clearing ' + ms.label + ' and is not'));
+
+  // an unmeasured model does not clear a line nothing measured it against
+  const unscored = D.models.find(m => !m.facets['aa.intelligence']);
+  eq(flag.test(unscored), false,
+    unscored.short + ' carries no index, so it cannot be said to beat anything');
+
+  // and the composition that matters
+  filters.flags = new Set(['fits', 'ms-' + slug]);
+  setHardware({...DEFAULT_HARDWARE, budget: 32});
+  const both = visible();
+  ok(both.length > 0, 'something beats the frontier and fits 32gb');
+  both.forEach(m => ok(fitsBudget(m) && flag.test(m),
+    m.short + ' passed both filters without satisfying both'));
+  RESET();
+});
+
+// a measured curve can be SHORT: quesma ran qwen3.8 27b on terminal-bench at
+// three arms and the lowest is 3.11 bpw. clamping on its last point below that
+// would read 0.904 where the fitted curve says 0.778 -- a measurement making
+// thin quants look BETTER than the fit, which is backwards. below its own range
+// a measured curve defers to the fitted one instead.
+test('a short measured curve defers to the fitted one below its range', () => {
+  RESET();
+  const m = D.models.find(x => (D.retention.measured || {})[x.repo]);
+  ok(m, 'some model carries a measured curve');
+  const own = curveFor(m);
+  eq(own.kind, 'measured', m.short + ' uses its own curve');
+
+  const lo = own.points[0][0];
+  const fit = D.retention.fitted.points;
+  const below = lo - 0.5;
+  ok(below > 0, 'there is room under the measured range');
+
+  // inside its range the measurement wins
+  const inside = (lo + own.points[own.points.length - 1][0]) / 2;
+  near(retention(inside, m), interpAt(own.points, inside), 1e-9,
+    'inside the measured range the measurement is used');
+
+  // below it, the fitted curve -- and NOT the measured curve's floor
+  near(retention(below, m), interpAt(fit, below), 1e-9,
+    'below the measured range the fitted curve is used');
+  ok(Math.abs(retention(below, m) - own.points[0][1]) > 1e-9,
+    'and not the measured curve clamped at its lowest point, which would be '
+    + own.points[0][1] + ' against the fit\'s ' + interpAt(fit, below).toFixed(3));
 });
 
 test('the kv cache follows each model\'s own attention geometry', () => {

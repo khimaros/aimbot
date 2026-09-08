@@ -4,8 +4,24 @@
 #
 # `carry` is a decision to add it, not the entry itself -- the registry is
 # still written by hand, and this file only records that you looked.
+# `./propose --report` lists the carries the registry does not name, so a
+# decision that never became an entry stops reading as settled.
 
-[carry]
-LiquidAI/LFM2-24B-A2B-GGUF                              
-ibm-granite/granite-4.1-30b-GGUF                        
-ibm-granite/granite-4.1-30b-fp8                         
+[skip]
+# all three were decided `carry` before `scored_siblings` existed, and its
+# docstring names two of them as the rows it was written to catch. the check
+# now disagrees with the decision, and the numbers are not close.
+#
+# artificial analysis, on the same board this roster ranks by:
+#   granite 4.1 30b   8.70   against granite 4.2 30b at 23.74, same lab, same
+#                            size, four months newer, and already carried
+#   LFM2 24B A2B      4.63   against LFM2.5-2.6B at 10.99 from the same lab,
+#                            a tenth the parameters and six months later
+#
+# carrying either would put a superseded model in a roster whose whole claim is
+# `best of what i can run`. the fp8 row is the same granite weights in a format
+# llama.cpp does not load at all, so it could not be served even if it were
+# worth serving.
+ibm-granite/granite-4.1-30b-GGUF    # superseded by the 4.2 30b already carried
+ibm-granite/granite-4.1-30b-fp8     # same weights, and fp8 is not a gguf rung
+LiquidAI/LFM2-24B-A2B-GGUF          # superseded by LFM2.5-2.6B at a tenth the size

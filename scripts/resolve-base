@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+
+"""Which weights a gguf conversion converts, from the hub's own `base_model`.
+
+    resolve-base                    # every conversion the catalog knows a base for
+    resolve-base --json             # the mapping, for a script to join on
+    resolve-base --check            # fail if a registry entry is keyed on a conversion
+
+The registry is keyed on the base repo, because the key is what every capture
+joins on: model-cards reads that repo's README, model-facts its config.json,
+hf-catalog its downloads. Keyed on a conversion, all three answer about whoever
+ran the quantizer, and a gguf repo carries no config.json to read at all.
+
+Working out what a conversion is OF used to be a manual lookup, which is why
+four qwen3-tts entries sat keyed on a gguf repo until somebody noticed the
+publisher column said the wrong name. The hub publishes the answer as
+`base_model` and `fetch-hf-catalog` already captures it per repo, so this is a
+local join over a file in the repo rather than a question for the network.
+
+The field is a string or a list, and a list is ambiguous in two ways this has to
+resolve rather than guess at:
+
+  a mirror and an ancestor beside the finetune
+      cstr/orpheus-3b-0.1-ft-GGUF names unsloth's mirror, canopylabs' original
+      and the meta-llama model that original was finetuned from. All three are
+      true statements about its lineage and only one is the model.
+
+  a codec beside the model
+      cstr/miotts-0.6b-GGUF names MioTTS-0.6B and MioCodec, which are different
+      weights that ship together. The codec is a component, not the entry.
+
+A list is broken by the conversion's own name, with publishers.txt deciding
+which owner is the republisher. A single claim cannot be broken that way, and
+some single claims are simply wrong: cstr's miotts repo names the codec and
+never mentions the model.
+
+So `agrees` rides beside every row -- whether the base's name looks like the
+conversion's -- and it is a FLAG rather than a filter. 15% of the real mapping
+does not corroborate and most of that 15% is right, because a rename
+(`fullstop-punc-multilang` from `fullstop-punctuation-multilang-large`) fails
+the same check a wrong answer does. Filtering on it would drop good rows to
+catch a handful of bad ones. Reporting it puts the handful in front of somebody.
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+sys.path.insert(0, os.path.join(ROOT, "research"))
+import publishers  # noqa: E402  the `[role]` table, shared with propose
+CATALOG = os.path.join(ROOT, "research", "data", "hf-catalog.json")
+REGISTRY = os.path.join(ROOT, "registry", "models.yaml")
+
+# what publishers append to say "this is the gguf of that". stripped before the
+# stem match, so `orpheus-3b-0.1-ft-GGUF` and `orpheus-3b-0.1-ft` compare equal
+GGUF_SUFFIX = re.compile(r"[-_.]?(gguf|ggml)$", re.I)
+# separators differ across a conversion and its base -- `Qwen3-TTS-12Hz-1.7B`
+# against `qwen3_tts_12hz_1.7b` -- and neither spelling is more correct
+NOT_ALNUM = re.compile(r"[^a-z0-9]+")
+
+
+def stem(repo):
+    """The comparable part of a repo id: its name, minus any gguf suffix."""
+    name = repo.rsplit("/", 1)[-1]
+    return NOT_ALNUM.sub("", GGUF_SUFFIX.sub("", name).lower())
+
+
+def pick(conversion, bases, roles=None):
+    """The base a conversion is OF, out of everything its card claims.
+
+    Exact stem match first, then a base whose stem the conversion's contains --
+    which covers a conversion that adds a rung to the name -- and only then the
+    first listed, because a single-element list has nothing to disambiguate.
+
+    Two bases can share a stem: `cstr/orpheus-3b-0.1-ft-GGUF` names both
+    canopylabs' original and unsloth's mirror of it, and by name alone they are
+    indistinguishable. publishers.txt already records that unsloth publishes
+    other people's models, so the tie goes to the owner it does NOT call a
+    republisher -- the same list, and the same argument, that stops `propose`
+    reading a bartowski repo as an original release.
+    """
+    bases = [b for b in bases if isinstance(b, str) and b.count("/") == 1]
+    if not bases:
+        return None
+    roles = roles or {}
+
+    def first(cands):
+        if not cands:
+            return None
+        owned = [b for b in cands if not publishers.republishes(b, roles)]
+        return (owned or cands)[0]
+
+    want = stem(conversion)
+    exact = first([b for b in bases if stem(b) == want])
+    if exact:
+        return exact
+    inside = first([b for b in bases if stem(b) and stem(b) in want])
+    if inside:
+        return inside
+    return bases[0] if len(bases) == 1 else None
+
+
+def catalog_repos(path):
+    """Every repo record the catalog carries, author sweeps and trending alike."""
+    data = json.load(open(path))
+    for rows in (data.get("authors") or {}).values():
+        for m in rows:
+            yield m
+    for m in data.get("trending") or []:
+        yield m
+
+
+def corroborates(conversion, base):
+    """Whether the base's name looks like the conversion's, either way round."""
+    a, b = stem(conversion), stem(base)
+    return bool(a and b) and (a == b or b in a or a in b)
+
+
+def resolve(path, roles=None):
+    """{conversion: {base, agrees}}, for every repo the hub names a base for."""
+    roles = publishers.roles() if roles is None else roles
+    out = {}
+    for m in catalog_repos(path):
+        repo = m.get("id")
+        raw = m.get("base_model")
+        if not repo or not raw:
+            continue
+        base = pick(repo, raw if isinstance(raw, list) else [raw], roles)
+        # a repo that IS its own base states nothing, and a base outside the
+        # hub's namespace is not a repo anybody can fetch
+        if base and base != repo:
+            out[repo] = {"base": base, "agrees": corroborates(repo, base)}
+    return out
+
+
+def check(mapping, roles=None):
+    """Fail on a registry entry keyed on a REPUBLISHER's conversion.
+
+    `models-validate` catches the case where the key is listed in the entry's own
+    quants, which needs no capture. This is the wider one, and it has to be
+    narrowed to stay true: the hub's `base_model` means "derived from" in every
+    sense, not "is a gguf of". Read literally it says kokoro is a conversion of
+    StyleTTS2, whisper-large-v3-turbo of whisper-large-v3, and canary-qwen of
+    Qwen3-1.7B -- four distinct models each keyed exactly right, and rekeying any
+    of them onto its ancestor would be the actual mistake.
+
+    What separates the two is who owns the repo, which publishers.txt already
+    records: a repo owned by somebody that file calls a quantizer or a community
+    republisher IS somebody else's weights, and a lab's own finetune of its own
+    base is not. So only republisher-owned keys are an error here.
+    """
+    import yaml
+    roles = publishers.roles() if roles is None else roles
+    models = (yaml.safe_load(open(REGISTRY)) or {}).get("models") or {}
+    bad = [(r, mapping[r]["base"]) for r in models
+           if r in mapping and publishers.republishes(r, roles)]
+    for repo, base in bad:
+        print("!!! %s is a conversion of %s; key the entry on the weights"
+              % (repo, base), file=sys.stderr)
+    print("resolve-base: %d conversion(s) mapped, %d registry key(s) wrong"
+          % (len(mapping), len(bad)))
+    return 1 if bad else 0
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--catalog", default=CATALOG)
+    ap.add_argument("--json", action="store_true", help="the mapping, nothing else")
+    ap.add_argument("--check", action="store_true",
+                    help="exit non-zero if a registry key is a conversion")
+    args = ap.parse_args()
+
+    if not os.path.exists(args.catalog):
+        sys.exit("!!! %s is missing, run: cd research && ./fetch-hf-catalog"
+                 % args.catalog)
+    mapping = resolve(args.catalog)
+
+    if args.json:
+        print(json.dumps(mapping, indent=1, sort_keys=True))
+        return 0
+    if args.check:
+        return check(mapping)
+    unsure = 0
+    for conversion, row in sorted(mapping.items()):
+        # a row the name does not back up is the one worth reading, so it is
+        # marked here rather than left to be spotted
+        mark = "  " if row["agrees"] else "? "
+        unsure += not row["agrees"]
+        print("  %s%-54s %s" % (mark, conversion, row["base"]))
+    print("resolve-base: %d conversion(s) the hub names a base for, %d where the "
+          "name does not corroborate it (marked ?)" % (len(mapping), unsure))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -45,6 +45,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import llm  # noqa: E402
+import publishers  # noqa: E402  the `[role]` parser, shared with resolve-base
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = "data/proposals.json"
@@ -298,25 +299,6 @@ def review(path, decided_path, only_carry=True):
         print("CONTRIBUTING.md 'adding a model' is the six steps.")
 
 
-def publisher_roles(path):
-    """{owner: role} from publishers.txt's `[role]` sections."""
-    roles, cur = {}, None
-    try:
-        lines = open(path).read().split("\n")
-    except IOError:
-        return roles
-    for line in lines:
-        text = line.split("#")[0].strip()
-        if not text:
-            continue
-        if text.startswith("[") and text.endswith("]"):
-            cur = text[1:-1]
-            continue
-        if cur:
-            roles[text.lower()] = cur
-    return roles
-
-
 def mechanical(row, roles):
     """The verdict the curated lists already imply, or None to go and ask.
 
@@ -326,7 +308,7 @@ def mechanical(row, roles):
     `bartowski/Qwen2.5-Coder-32B-Instruct-GGUF` came back as an original
     release by the lab that trained it.
     """
-    role = roles.get(row["id"].split("/", 1)[0].lower())
+    role = publishers.role_of(row["id"], roles)
     if role == "quantizer":
         return {"kind": "requant", "base": "", "verdict": "skip",
                 "reason": "owned by a publisher publishers.txt lists as a quantizer",
@@ -362,24 +344,73 @@ def load_json(name):
         return {}
 
 
-def show(path, decided_path):
+def carried_repos(registry_path):
+    """Every repo the registry names, as a key or as a quant."""
+    try:
+        import yaml
+        models = (yaml.safe_load(open(registry_path)) or {}).get("models") or {}
+    except (IOError, ImportError, ValueError):
+        return set()
+    out = set()
+    for repo, m in models.items():
+        out.add(repo.lower())
+        for q in (m.get("quants") or []) + (m.get("components") or []):
+            if q.get("repo"):
+                out.add(q["repo"].lower())
+    return out
+
+
+def outstanding(decided_path, registry_path):
+    """Repos decided `carry` that no registry entry names.
+
+    decided.txt says it plainly -- "`carry` is a decision to add it, not the
+    entry itself" -- and nothing was checking the difference, so a carry could
+    be recorded once and read as settled forever. These are the rows where
+    somebody said yes and the registry never heard about it.
+    """
+    carried = carried_repos(registry_path)
+    if not carried:
+        return []
+    out = []
+    for repo, verdict in sorted(read_decisions(decided_path).items()):
+        if verdict != "carry":
+            continue
+        stem = re.sub(r"[-_.]?gguf$", "", repo, flags=re.I).lower()
+        if repo.lower() in carried or any(c == stem or c.startswith(stem + "-")
+                                          for c in carried):
+            continue
+        out.append(repo)
+    return out
+
+
+def show(path, decided_path, registry_path):
     """What is already captured and still undecided, without asking anything."""
     try:
         prev = json.load(open(path))
     except (IOError, ValueError):
-        print("no proposals captured yet")
-        return
+        prev = {}
     props = prev.get("proposals") or {}
     decisions = read_decisions(decided_path)
     carry = {k: v for k, v in props.items()
              if v.get("verdict") == "carry" and k not in decisions}
-    print("%d proposal(s) captured by %s; %d already decided; %d awaiting you\n"
-          % (len(props), prev.get("model") or "?", len(decisions), len(carry)))
+    if props:
+        print("%d proposal(s) captured by %s; %d already decided; %d awaiting you\n"
+              % (len(props), prev.get("model") or "?", len(decisions), len(carry)))
+    elif not decisions:
+        print("no proposals captured yet")
     for k, v in sorted(carry.items()):
         print("\n".join(evidence(k, v)))
     if carry:
         print("\nnothing above is in the registry. run `make llm-review` to decide "
               "them;\nan answer is recorded and the row never comes back.")
+
+    late = outstanding(decided_path, registry_path)
+    if late:
+        print("\n%d repo(s) decided `carry` that the registry does not name. a "
+              "carry is a\ndecision to add it, not the entry -- these are the "
+              "ones nobody wrote:" % len(late))
+        for repo in late:
+            print("   %s" % repo)
 
 
 def triage(rows, roles, roster, aa, captured, refresh):
@@ -395,7 +426,7 @@ def triage(rows, roles, roster, aa, captured, refresh):
                   % (row["id"][:58], known["kind"], known["verdict"]), file=sys.stderr)
             continue
         prop, from_cache = ask(row, refresh, captured,
-                               roles.get(row["id"].split("/", 1)[0].lower()))
+                               publishers.role_of(row["id"], roles))
         if not prop:
             counts["missed"] += 1
             print("  %-58s no answer" % row["id"][:58], file=sys.stderr)
@@ -418,6 +449,9 @@ def main():
     ap.add_argument("--refresh", action="store_true")
     ap.add_argument("--publishers", default=os.path.join(HERE, "publishers.txt"))
     ap.add_argument("--decided", default=os.path.join(HERE, DECIDED))
+    ap.add_argument("--registry",
+                    default=os.path.join(HERE, "..", "registry", "models.yaml"),
+                    help="to tell a carry that landed from one that did not")
     ap.add_argument("--review", action="store_true",
                     help="walk the undecided proposals and record an answer")
     ap.add_argument("--all", action="store_true",
@@ -431,7 +465,7 @@ def main():
     if args.review:
         return review(args.out, args.decided, only_carry=not args.all)
     if args.report:
-        return show(args.out, args.decided)
+        return show(args.out, args.decided, args.registry)
 
     cfg = llm.configured()
     if not cfg:
@@ -453,7 +487,7 @@ def main():
     decisions = read_decisions(args.decided)
     aa = load_json("artificial-analysis")
     out, counts = triage(candidates(args.limit, decisions),
-                         publisher_roles(args.publishers), roster_names(), aa,
+                         publishers.roles(args.publishers), roster_names(), aa,
                          captured, args.refresh)
 
     # a proposal nobody re-asked about is still a proposal; keep it

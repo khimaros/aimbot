@@ -275,7 +275,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <span class="lbl">ranking</span>
     <select id="preset" data-help="a named set of weights. `balanced` is build-tables' composite; the others reweight toward one question. changing any weight yourself moves this to `custom ranking`"></select>
     <button id="factors-btn" aria-pressed="false" data-help="build your own weighting: one slider per measurement, grouped by what measured it. the ranking resorts as you drag, and a model missing a factor is scored as typical on it rather than zero or exempt">custom ranking</button>
-    <button id="eff-btn" aria-pressed="true" data-help="off, the scores are what the source published. on, they answer `what would i get from the quant i can actually run`: a benchmark scores the model at the precision the scorer served, so the score is multiplied by the retention that quant's bits per weight predict and the percentiles are recomputed against the discounted cohort. only the coding and software-agent benchmarks are discounted, because the one sweep behind the curve measured a code-editing pass rate and nothing else -- every other number is published as-is and says why on hover. the curve itself is fitted to one model, deepseek v3.1 at 671b, and applied to all of them, which is the weakest step on this page and reads optimistic for a small model at two bits.">quant adjusted</button>
+    <button id="eff-btn" aria-pressed="true" data-help="off, the scores are what the source published. on, they answer `what would i get from the quant i can actually run`: a benchmark scores the model at the precision the scorer served, so the score is multiplied by the retention that quant's bits per weight predict and the percentiles are recomputed against the discounted cohort. only the coding and software-agent benchmarks are discounted, because the one sweep behind the curve measured a code-editing pass rate and nothing else -- every other number is published as-is and says why on hover. the curve itself is fitted to one model, deepseek v3.1 at 671b, and applied to all of them, which is the weakest step on this page. below its lowest measured rung at 2.21 bpw it stops falling and returns that value forever, so a one-bit quant reads as keeping 77.8%; the quality cell says so on hover where that happens, because the only sweep anybody has run that low found a 27b at chance.">quant adjusted</button>
   </div>
   <div class="controls">
     <span class="lbl">filter</span>
@@ -729,8 +729,7 @@ function curveFor(m) {
   return {points: r.fitted.points, kind: 'fitted', src: r.fitted};
 }
 
-function retention(bpw, m) {
-  const c = curveFor(m).points;
+function interpolate(c, bpw) {
   if (bpw <= c[0][0]) return c[0][1];
   for (let i = 0; i < c.length - 1; i++) {
     const [x0, y0] = c[i], [x1, y1] = c[i + 1];
@@ -739,12 +738,40 @@ function retention(bpw, m) {
   return 1;
 }
 
+// a MEASURED curve can be shorter than the fitted one and stop well above the
+// rungs a reader can select. quesma ran qwen3.8 27b at three arms on
+// terminal-bench and the lowest is 3.11 bpw; clamping there would answer 0.904
+// for a two-bit quant where the fit says 0.778 -- a measurement of one model
+// making its thin quants look BETTER than the general case, purely because
+// nobody ran that arm. below its own range a measured curve therefore defers to
+// the fitted one, which is the wider evidence rather than the narrower silence.
+function retention(bpw, m) {
+  const c = curveFor(m);
+  if (c.kind === 'measured' && bpw < c.points[0][0]) {
+    return interpolate(D.retention.fitted.points, bpw);
+  }
+  return interpolate(c.points, bpw);
+}
+
 // a model whose weights are natively low-bpw is not paying a quantization
 // penalty for being small, so it is exempt -- the registry says which
 function modelRetention(m) {
   if (!effective || m.native_low_bpw) return 1;
   const q = activeQuant(m);
   return q && q.bpw ? retention(q.bpw, m) : 1;
+}
+
+// whether the rung being served sits below everything the curve measured, where
+// `retention` returns the lowest fitted point forever rather than continuing to
+// fall. the fitted curve stops at deepseek v3.1's 2.21 bpw and a 1.67 bpw rung
+// reads as keeping 77.8%, which is not a prediction -- it is the last thing the
+// curve knew. quesma's qwen3.8 27b sweep is the only measurement in that region
+// and it found a 27b collapsing to chance at 1.8 bpw, so the flat part is
+// evidenced against on the one model anybody has run there.
+function belowCurve(m) {
+  if (!m || m.native_low_bpw) return false;
+  const q = activeQuant(m);
+  return !!(q && q.bpw && q.bpw < curveFor(m).points[0][0]);
 }
 
 // an ALLOWLIST: a facet is discounted only where the curve is evidence about
@@ -925,9 +952,16 @@ const COLUMNS = [
      // the whole way. say what the discount was, so a flat column reads as
      // "still ahead of everything" rather than as a number that never updated
      const r = modelRetention(m), q = activeQuant(m);
+     // below the curve's lowest measured point the multiplier stops falling, so
+     // the number is a floor rather than a prediction and has to say which
+     const floored = effective && belowCurve(m)
+       ? `; ${q.bpw} bpw is below the lowest rung the curve measured `
+         + `(${curveFor(m).points[0][0]}), so this is its floor rather than a `
+         + `prediction -- the only sweep run that low found a 27b at chance`
+       : '';
      const title = effective && r < 1 && q
        ? ` title="${num(s.value, 1)}, scored at x${r.toFixed(3)} `
-         + `${curveFor(m).kind} retention for ${esc(q.quant)} at ${q.bpw} bpw"`
+         + `${curveFor(m).kind} retention for ${esc(q.quant)} at ${q.bpw} bpw${floored}"`
        : ` title="${num(s.value, 1)}"`;
      return `<td class="n"${title}><span class="bar" style="--w:${s.value}%">`
        + `<span>${num(s.value, 0)}</span></span></td>`;
@@ -1199,10 +1233,25 @@ const MODALITIES = [
    help: 'speech synthesis'},
   {k: 't2i', t: 'text to image', test: m => modOut(m, 'image'),
    help: 'image generation'},
+  // the same binary as `text to image` and a different output. without its own
+  // chip a model that emits frames sits in the image roster answering a
+  // question it was not asked, and its percentiles would be computed against
+  // models no image board scores
+  {k: 't2v', t: 'text to video', test: m => modOut(m, 'video'),
+   help: 'video generation, on the same stable-diffusion.cpp binary as the image models. no board this repo collects rates them, so they carry no score'},
   {k: 't2e', t: 'text to embeddings', test: m => modOut(m, 'embeddings'),
    help: 'embedding models'},
   {k: 'diar', t: 'diarization', test: m => m.kind === 'diarize',
    help: 'weights --diarize loads beside an ASR model. they transcribe nothing and are scored by nobody'},
+  // `post` and `translate` carry no `modalities` block on purpose, the way the
+  // diarizers do not: they run inside crispasr's pipeline rather than being
+  // served, and declaring text in / text out would put a punctuation restorer
+  // in `any to text` beside the language models. that leaves the kind as the
+  // only thing to select them by
+  {k: 'post', t: 'transcript post', test: m => m.kind === 'post',
+   help: 'punctuation and language id, applied to a transcript after it exists. crispasr runs them by flag rather than by --backend, and no board scores them'},
+  {k: 'mt', t: 'translation', test: m => m.kind === 'translate',
+   help: 'text in, text in another language out. crispasr loads them to translate a transcript, and they are scored by nobody here'},
 ];
 const modIn = (m, x) => (m.modalities.input || []).includes(x);
 const modOut = (m, x) => (m.modalities.output || []).includes(x);
@@ -1223,6 +1272,38 @@ const FLAGS = [
   {k: 'fits', t: 'fits vram', test: m => fitsBudget(m),
    help: 'some quant of it fits your vram, after the reserve and the context kv cache'},
 ];
+
+// one flag per milestone, built at boot rather than written here, so declaring a
+// second one in research/milestones.json needs no javascript.
+//
+// the comparison is on artificial analysis' raw index and NOT on the quality
+// column, which is a percentile inside the open-weights cohort and has no
+// frontier model in it by construction. a model artificial analysis has not
+// scored fails the test rather than passing it: `we cannot say it beats this`
+// is not the same claim as `it beats this`, and a filter has to pick one.
+function milestoneFlags() {
+  return Object.entries(D.milestones || {}).map(([slug, ms]) => ({
+    k: 'ms-' + slug,
+    t: 'beats ' + ms.label,
+    test: m => {
+      const f = m.facets['aa.intelligence'];
+      return !!f && f.value >= ms.index;
+    },
+    help: `artificial analysis scores it at or above ${ms.label} (${ms.index} on `
+      + `the intelligence index, ${ms.as_of}) -- the frontier this roster is read `
+      + `AGAINST rather than a member of it, since every percentile here is `
+      + `computed inside the open-weights cohort. compose it with \`fits vram\` `
+      + `for the question worth asking: what beats that line and runs on your `
+      + `card. two caveats. a model that board has not scored does not pass, `
+      + `because unmeasured against a line is not above it. and the comparison is `
+      + `on the UNDISCOUNTED index either side -- the intelligence index is a `
+      + `composite of the others, so quant adjustment leaves it alone rather than `
+      + `applying the curve twice, and the frontier model is served at full `
+      + `precision anyway. today every model that clears this line and fits would `
+      + `still clear it discounted, but a model sitting within a point of it `
+      + `might not`,
+  }));
+}
 
 function haystack(m) {
   return m._hay || (m._hay = [m.repo, m.short, m.match, m.facts.arch, m.facts.model_type,
@@ -3083,6 +3164,9 @@ function rememberWeights() {
 
 function boot(payload) {
   D = payload;
+  // before anything reads FLAGS: the stored filter set can name a milestone
+  // flag, and restoring one that is not in the list yet would drop it silently
+  FLAGS.push(...milestoneFlags());
   W = restoreWeights();
   // shut on a first visit: eight headers is a menu, sixty sliders is a wall.
   // a stored [] is a reader who opened them, so only a MISSING key defaults

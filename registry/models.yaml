@@ -1125,7 +1125,9 @@ models:
     kind: text
     name:
       short: mimo v2.5
-      match: mimo[\s-]*v?2\.5
+      # not the ASR sibling, which the speech roster carries separately: a
+      # sentence about `MiMo-V2.5-ASR` is not a sentence about this model
+      match: mimo[\s-]*v?2\.5(?![\s-]*asr)
     quants:
     - repo: unsloth/MiMo-V2.5-GGUF
       quant: UD-Q2_K_XL
@@ -1911,6 +1913,16 @@ models:
     quants:
     - repo: unsloth/gemma-4-E2B-it-GGUF
       quant: Q8_0
+    # the ASR conversion, which is a DIFFERENT FILE from the one above and the
+    # reason this entry never named a backend: the text gguf declares `gemma4`
+    # and crispasr's table knows `gemma4_e2b`, so pointing `--backend gemma4-e2b`
+    # at unsloth's file gets the wrong graph. the block therefore sits on cstr's
+    # rung rather than on the model, the same split qwen3-tts uses
+    - repo: cstr/gemma4-e2b-it-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: gemma4-e2b
     runtime:
       arch: gemma4
       mainline: true
@@ -1971,6 +1983,19 @@ models:
     quants:
     - repo: unsloth/gemma-4-E4B-it-GGUF
       quant: Q8_0
+    # cstr's ASR conversion; see the e2b entry for why the backend rides on this
+    # rung and not on the model. voice arena publishes a word error rate for
+    # `Gemma E4B` and this is the half that scores it.
+    #
+    # the backend is `gemma4-e2b` and not `gemma4-e4b`, which reads wrong and is
+    # right: crispasr's README has a `gemma4-e4b` row named after the model, the
+    # feature matrix has no such backend, and the README's own footnote says the
+    # E4B runs on `--backend gemma4-e2b`. lint rejected the obvious spelling
+    - repo: cstr/gemma4-e4b-it-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: gemma4-e2b
     runtime:
       arch: gemma4
       mainline: true
@@ -2344,6 +2369,220 @@ models:
       - text
       output:
       - audio
+  # image families stable-diffusion.cpp detects that the roster did not carry.
+  # `fetch-sdcpp-support --report` reports 15 of them; these are the ones with a
+  # gguf somebody has published and an ungated base to key on. the rest are
+  # mostly VIDEO -- wan, LTX, hunyuan, SVD, lingbot -- and this registry has no
+  # kind for a model that emits frames.
+  #
+  # the VERSION each resolves to is NOT asserted here. sd.cpp identifies a model
+  # by tensor names rather than by an architecture string, so the collector reads
+  # the gguf header and says which signature matched; a claim written by hand
+  # would be a guess about somebody else's detector.
+  black-forest-labs/FLUX.1-dev:
+    kind: image
+    name:
+      short: flux-1-dev
+    notes: >-
+      the model that made local diffusion worth doing, and the generation before
+      the FLUX.2 entries this roster already carries. leejet publishes the gguf,
+      which matters here: he wrote stable-diffusion.cpp, so his conversions are
+      the ones its loader is tested against.
+
+      three files, like every flux: the diffusion model below, the t5-xxl text
+      encoder as a component, and `ae.safetensors` out of this repo. the base is
+      `gated: auto` -- a click-through rather than an approval queue -- which is
+      the same shape as the FLUX.2 entries and the same reason this roster reads
+      it as open weights at all.
+    engine:
+    - stable-diffusion.cpp
+    quants:
+    - repo: leejet/FLUX.1-dev-gguf
+      quant: Q4_K
+      role: diffusion
+    ids:
+      aa-t2i: ''
+      lmarena-t2i: ''
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: city96/t5-v1_1-xxl-encoder-gguf
+      quant: t5-v1_1-xxl-encoder-Q8_0.gguf
+      role: text-encoder
+    - repo: black-forest-labs/FLUX.1-dev
+      quant: ae.safetensors
+      role: vae
+  black-forest-labs/FLUX.1-schnell:
+    kind: image
+    name:
+      short: flux-1-schnell
+    notes: >-
+      the four-step distillation of the entry above, under apache 2.0 where the
+      dev weights are non-commercial -- which makes it the only flux on this
+      roster a business can use without reading a licence first. same three-file
+      stack and the same t5 encoder.
+    engine:
+    - stable-diffusion.cpp
+    quants:
+    - repo: leejet/FLUX.1-schnell-gguf
+      quant: Q4_K
+      role: diffusion
+    ids:
+      aa-t2i: ''
+      lmarena-t2i: ''
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: city96/t5-v1_1-xxl-encoder-gguf
+      quant: t5-v1_1-xxl-encoder-Q8_0.gguf
+      role: text-encoder
+    - repo: black-forest-labs/FLUX.1-schnell
+      quant: ae.safetensors
+      role: vae
+  stabilityai/stable-diffusion-3.5-large:
+    kind: image
+    name:
+      short: sd3.5-large
+    notes: >-
+      the last stability model this roster has any path to, and the only MMDiT
+      here that is not a flux derivative. city96's conversion is the diffusion
+      half; sd3.5 wants three text encoders beside it -- t5-xxl, clip-l and
+      clip-g -- where the flux entries want one, which is most of why it is the
+      more awkward of the two stacks to serve.
+    engine:
+    - stable-diffusion.cpp
+    quants:
+    - repo: city96/stable-diffusion-3.5-large-gguf
+      quant: Q4_0
+      role: diffusion
+    ids:
+      aa-t2i: ''
+      lmarena-t2i: ''
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: city96/t5-v1_1-xxl-encoder-gguf
+      quant: t5-v1_1-xxl-encoder-Q8_0.gguf
+      role: text-encoder
+  ATH-MaaS/Ovis-Image-7B:
+    kind: image
+    name:
+      short: ovis-image-7b
+    notes: >-
+      alibaba's ovis image model, and the newest family sd.cpp gained a
+      dedicated signature for. leejet publishes the only gguf. the base repo
+      moved: `AIDC-AI/Ovis-Image-7B` is what the conversion's card names and it
+      307s to this one, which is where the weights are and what the key follows.
+    engine:
+    - stable-diffusion.cpp
+    quants:
+    - repo: leejet/Ovis-Image-7B-GGUF
+      quant: Q8_0
+      role: diffusion
+    ids:
+      aa-t2i: ''
+      lmarena-t2i: ''
+    modalities:
+      input:
+      - text
+      output:
+      - image
+  # VIDEO. `kind: video` is new and it is a claim about the OUTPUT rather than
+  # about the loader: these run on the same stable-diffusion.cpp binary as the
+  # image entries above and emit frames instead of a picture. it exists for the
+  # reason `kind: diarize` and `kind: post` do -- without it a model that emits
+  # a clip sits in the image roster looking like something that answers `draw
+  # me a picture`, and every image-board percentile would be computed against
+  # models no image board scores.
+  #
+  # none of the three is scored by anything. artificial analysis and lmarena
+  # both rate text-to-image and neither publishes a video board this repo
+  # collects, so `ids` carries the image keys empty rather than inventing new
+  # ones for boards that do not exist here yet.
+  #
+  # sd.cpp knows two more video families and neither is addable: SVD and
+  # lingbot have no gguf in any repo a search finds, so they stay in
+  # `fetch-sdcpp-support --report` rather than being written on faith.
+  Wan-AI/Wan2.1-T2V-14B:
+    kind: video
+    name:
+      short: wan-2.1-t2v-14b
+    notes: >-
+      alibaba's wan, and the most-converted video model on the hub -- city96's
+      conversions of this family run to six figures of downloads where the other
+      two here are in the thousands. fourteen rungs from BF16 down to Q3_K_S,
+      which is the fullest quant ladder of any entry in this registry.
+    engine:
+    - stable-diffusion.cpp
+    quants:
+    - repo: city96/Wan2.1-T2V-14B-gguf
+      quant: Q4_K_M
+      role: diffusion
+    ids:
+      aa-t2i: ''
+      lmarena-t2i: ''
+    modalities:
+      input:
+      - text
+      output:
+      - video
+  Lightricks/LTX-Video:
+    kind: video
+    name:
+      short: ltx-video
+    notes: >-
+      the small one: 2b against wan's 14b and hunyuan's 13b, which is what lets
+      it run where the others do not. the hub tags it image-to-video rather than
+      text-to-video, so a consumer feeds it a frame and not only a prompt --
+      `modalities.input` says text here because that is the interface sd.cpp
+      exposes, and the picture is a separate argument rather than a modality
+      this vocabulary has a word for.
+    engine:
+    - stable-diffusion.cpp
+    quants:
+    - repo: city96/LTX-Video-gguf
+      quant: Q8_0
+      role: diffusion
+    ids:
+      aa-t2i: ''
+      lmarena-t2i: ''
+    modalities:
+      input:
+      - text
+      output:
+      - video
+  tencent/HunyuanVideo:
+    kind: video
+    name:
+      short: hunyuan-video
+    notes: >-
+      tencent's video model, from the lab whose hy3 text model this roster also
+      carries. the 720p t2v build is the one city96 converted. its base repo has
+      799 downloads against wan's 42k, which says more about where the community
+      went than about the weights.
+    engine:
+    - stable-diffusion.cpp
+    quants:
+    - repo: city96/HunyuanVideo-gguf
+      quant: Q4_K_M
+      role: diffusion
+    ids:
+      aa-t2i: ''
+      lmarena-t2i: ''
+    modalities:
+      input:
+      - text
+      output:
+      - video
   krea/Krea-2-Raw:
     kind: image
     name:
@@ -3458,6 +3697,11 @@ models:
       default: true
   prism-ml/Bonsai-27B-unpacked:
     kind: text
+    # QAT to one bit: the shipped precision IS the trained one, so this model is
+    # not paying a quantization penalty for being small and the retention curve
+    # does not apply. the note below and this entry's written verdict both said
+    # so; the flag that acts on it was missing
+    native_low_bpw: true
     name:
       short: bonsai 27b
       match: (?<!ternary[\s-])\bbonsai[\s-]*27b\b|(?<!ternary[\s-])\bbonsai\b(?![\s-]*\d)
@@ -3516,6 +3760,8 @@ models:
       default: true
   prism-ml/Ternary-Bonsai-27B-unpacked:
     kind: text
+    # ternary weights are what it was trained to, not what it was reduced to
+    native_low_bpw: true
     name:
       short: ternary bonsai 27b
       match: ternary[\s-]*bonsai(?:[\s-]*27b)?\b(?![\s-]*\d)
@@ -4157,6 +4403,8 @@ models:
       default: false
   prism-ml/Ternary-Bonsai-8B-unpacked:
     kind: text
+    # ternary, like its 27b siblings: trained at the precision it ships
+    native_low_bpw: true
     name:
       short: ternary bonsai 8b
       match: \bbonsai[\s-]*8b\b
@@ -4805,3 +5053,1689 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+  # the crispasr synthesis roster. crispasr compiles in 28 TTS backends and this
+  # registry named three of them, which was an accident of plumbing rather than a
+  # decision: `fetch-crispasr --report` computed the other 25 from the day the
+  # collector landed and no punch list printed it, so nobody was ever asked.
+  # `research/decided.txt` -- the file that records having looked -- holds three
+  # rows and all three are text models.
+  #
+  # every entry below is keyed on the weights, and `scripts/resolve-base` is what
+  # found them: crispasr's README names the conversion, the hub's `base_model`
+  # names what it converts, and 62 of the 66 uncarried backends resolve that way
+  # against a capture. the two it could not settle are marked on the entries.
+  #
+  # every gguf repo here is the one crispasr's own README names, for the reason
+  # the ASR roster above gives: two conversions of one checkpoint are not
+  # interchangeable, and the qwen3-tts pair is this roster's proof of it.
+  #
+  # NONE of these is scored. artificial analysis' TTS board rates chatterbox and
+  # nothing else here; tts arena and voice arena rate hosted SKUs. that is the
+  # same gap ROADMAP item 8 describes for the ASR half, and carrying them
+  # unscored is deliberate -- the roster should be able to say what runs.
+  suno/bark-small:
+    kind: speech
+    name:
+      short: bark
+    notes: >-
+      suno's small bark, the model that made prompt-driven TTS popular: it takes
+      bracketed direction like [laughs] and [sighs] inline rather than a style
+      parameter, and it sings. the hub names no `base_model` on cstr's
+      conversion and crispasr's README repeats the conversion in both columns,
+      so this key is the one fact here a capture did not settle -- it is suno's
+      own repo, matched by name and confirmed as a text-to-speech repo carrying
+      a config.json.
+    quants:
+    - repo: cstr/bark-small-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: bark
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  ResembleAI/chatterbox:
+    kind: speech
+    name:
+      short: chatterbox
+    notes: >-
+      the one synthesis model in this roster a third party scores: artificial
+      analysis rates it on the TTS board, which makes it the only entry here
+      whose quality is a measurement rather than an absence. 23 languages with
+      separate arabic, german and finnish fine-tunes, and it clones from a
+      reference clip.
+    quants:
+    # `t3` is the model and `s3gen` turns its tokens into audio. the repo also
+    # carries a v3 pair of both, so `quant: Q8_0` alone names four different
+    # files here -- which is how the roster came to read this entry's
+    # architecture off the vocoder
+    - repo: cstr/chatterbox-GGUF
+      quant: Q8_0
+      file: chatterbox-t3-q8_0.gguf
+      role: model
+      crispasr:
+        backend: chatterbox
+    components:
+    - repo: cstr/chatterbox-GGUF
+      quant: chatterbox-s3gen-q8_0.gguf
+      role: vocoder
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: chatterbox
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  FunAudioLLM/Fun-CosyVoice3-0.5B-2512:
+    kind: speech
+    name:
+      short: cosyvoice3-tts
+    notes: >-
+      alibaba's cosyvoice line at 0.5b, and the widest dialect coverage here:
+      nine languages plus eighteen chinese dialects, which no other entry in
+      this roster claims. clones from a reference clip and takes a source and
+      target language separately, so it is the one to reach for when the text
+      and the voice are not the same language.
+
+      the most-assembled model in this roster: the repo publishes six pieces and
+      the LLM is only one of them. it also has no Q8_0 rung -- `flow` has one
+      and the llm does not -- so a bare `quant: Q8_0` here pinned a component's
+      precision rather than the model's, which is what `file:` on every row
+      below exists to stop.
+    quants:
+    - repo: cstr/cosyvoice3-0.5b-2512-GGUF
+      quant: Q4_K
+      file: cosyvoice3-llm-q4_k.gguf
+      role: model
+      crispasr:
+        backend: cosyvoice3-tts
+    components:
+    - repo: cstr/cosyvoice3-0.5b-2512-GGUF
+      quant: cosyvoice3-flow-q8_0.gguf
+      role: flow
+    - repo: cstr/cosyvoice3-0.5b-2512-GGUF
+      quant: cosyvoice3-hift-f16.gguf
+      role: vocoder
+    - repo: cstr/cosyvoice3-0.5b-2512-GGUF
+      quant: cosyvoice3-s3tok-q4_k.gguf
+      role: tokenizer
+    - repo: cstr/cosyvoice3-0.5b-2512-GGUF
+      quant: cosyvoice3-campplus-f16.gguf
+      role: speaker-encoder
+    - repo: cstr/cosyvoice3-0.5b-2512-GGUF
+      quant: cosyvoice3-voices.gguf
+      role: voices
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  sesame/csm-1b:
+    kind: speech
+    name:
+      short: csm
+    notes: >-
+      sesame's conversational speech model, the architecture breeze-tts-2 is a
+      fork of -- so this is the upstream of the entry above that nothing can
+      currently serve. english only and no voice cloning knob in crispasr,
+      which makes it the plain baseline of this roster rather than a model to
+      reach for.
+    quants:
+    - repo: cstr/csm-1b-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: csm
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  nari-labs/Dia-1.6B:
+    kind: speech
+    name:
+      short: dia
+    notes: >-
+      a dialogue model rather than a narrator: it is built to voice a script
+      with speaker tags and to place nonverbal sounds between lines, which is a
+      different job from reading a paragraph. english only.
+    quants:
+    - repo: cstr/dia-1.6b-GGUF
+      quant: Q8_0
+      file: dia-1.6b-q8_0.gguf
+      role: model
+      crispasr:
+        backend: dia
+    components:
+    - repo: cstr/dia-1.6b-GGUF
+      quant: dac-44khz.gguf
+      role: codec
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  nvidia/tts_en_fastpitch:
+    kind: speech
+    name:
+      short: fastpitch
+    notes: >-
+      the oldest and smallest thing in this roster, and the only one crispasr
+      gives no auto-download, temperature or cloning: a non-autoregressive
+      mel-spectrogram model from nvidia's nemo line. it is here as the floor --
+      what a consumer can run when nothing larger fits -- rather than as a
+      recommendation. the key is a rename the hub's `base_model` reports and
+      `resolve-base` flags, because `tts_en_fastpitch` does not look like
+      `fastpitch-en`; the rename is real and the mapping is right.
+    quants:
+    - repo: cstr/fastpitch-en-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: fastpitch
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  IndexTeam/IndexTTS-1.5:
+    kind: speech
+    name:
+      short: indextts
+    notes: >-
+      bilibili's index-tts, chinese and english, tuned for cloning a supplied
+      voice. the only rungs cstr published are Q4_K and Q8_0 -- there is no F16
+      here, unlike most of this roster -- so the pin is the top of a two-rung
+      ladder rather than a choice among four.
+    quants:
+    - repo: cstr/indextts-1.5-GGUF
+      quant: Q8_0
+      file: indextts-gpt-q8_0.gguf
+      role: model
+      crispasr:
+        backend: indextts
+    components:
+    - repo: cstr/indextts-1.5-GGUF
+      quant: indextts-bigvgan.gguf
+      role: vocoder
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  kugelaudio/kugelaudio-0-open:
+    kind: speech
+    name:
+      short: kugelaudio
+    notes: >-
+      a multilingual open release with no cloning knob and no temperature in
+      crispasr, so it synthesises one way and takes no direction. the quant pin
+      is Q6_K because that is the top rung cstr published: this is the only
+      entry in the roster where no Q8_0 exists.
+    quants:
+    - repo: cstr/kugelaudio-0-open-GGUF
+      quant: Q6_K
+      role: model
+      crispasr:
+        backend: kugelaudio
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  Aratako/MioTTS-0.6B:
+    kind: speech
+    name:
+      short: miotts
+    notes: >-
+      a japanese-and-english 0.6b, the smallest autoregressive model here. the
+      key is the one `resolve-base` got WRONG and a human corrected: the hub
+      names `Aratako/MioCodec-25Hz-44.1kHz-v2` as this conversion's base_model
+      and never mentions the model at all, so the field points at the codec it
+      decodes through. that is the failure mode the `agrees` flag exists to
+      surface, and it is why the scaffolder proposes a key rather than writing
+      one.
+    quants:
+    - repo: cstr/miotts-0.6b-GGUF
+      quant: Q8_0
+      file: miotts-0.6b-q8_0.gguf
+      role: model
+      crispasr:
+        backend: miotts
+    # four baked voices as separate files, which is how this model does what the
+    # customvoice qwen3-tts builds do with a `spk_names` list inside the weights
+    components:
+    - repo: cstr/miotts-0.6b-GGUF
+      quant: en_female.emb.gguf
+      role: voice
+    - repo: cstr/miotts-0.6b-GGUF
+      quant: en_male.emb.gguf
+      role: voice
+    - repo: cstr/miotts-0.6b-GGUF
+      quant: jp_female.emb.gguf
+      role: voice
+    - repo: cstr/miotts-0.6b-GGUF
+      quant: jp_male.emb.gguf
+      role: voice
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  OpenMOSS-Team/MOSS-TTS-v1.5:
+    kind: speech
+    name:
+      short: moss-tts
+    notes: >-
+      the openmoss synthesis model, multilingual and cloning from a reference
+      clip. it is the sibling of the moss-transcribe-diarize already in the ASR
+      roster above, so carrying it means one publisher's stack covers both
+      directions on the same binary.
+    quants:
+    - repo: cstr/moss-tts-v1.5-GGUF
+      quant: Q8_0
+      file: moss-tts-v1.5-q8_0.gguf
+      role: model
+      crispasr:
+        backend: moss-tts
+    components:
+    - repo: cstr/moss-tts-v1.5-GGUF
+      quant: moss-tts-v1.5-codec.gguf
+      role: codec
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5:
+    kind: speech
+    name:
+      short: moss-tts-local
+    notes: >-
+      the same generation as moss-tts with a local-transformer decoder, which
+      crispasr loads through a separate backend rather than a flag. it is a
+      distinct entry for that reason: `--backend moss-tts` will not read this
+      file and `--backend moss-tts-local` will not read the other.
+    quants:
+    - repo: cstr/moss-tts-local-v1.5-GGUF
+      quant: Q8_0
+      file: moss-tts-local-v1.5-q8_0.gguf
+      role: model
+      crispasr:
+        backend: moss-tts-local
+    # a codec and a separate encoder half of it, where the plain moss-tts above
+    # ships one codec file
+    components:
+    - repo: cstr/moss-tts-local-v1.5-GGUF
+      quant: moss-tts-local-v1.5-codec.gguf
+      role: codec
+    - repo: cstr/moss-tts-local-v1.5-GGUF
+      quant: moss-tts-local-v1.5-codec-enc.gguf
+      role: codec-encoder
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  k2-fsa/OmniVoice:
+    kind: speech
+    name:
+      short: omnivoice
+    notes: >-
+      600+ languages, which is an order of magnitude past anything else in this
+      roster and the reason to carry it: every other entry here covers one
+      language or a couple of dozen. from the k2-fsa/sherpa people, so it comes
+      out of the kaldi lineage rather than the LLM one.
+    quants:
+    - repo: cstr/omnivoice-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: omnivoice
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  OuteAI/OuteTTS-0.3-1B:
+    kind: speech
+    name:
+      short: outetts
+    notes: >-
+      english, clones from a clip, and the only NON-COMMERCIAL licence in this
+      roster -- CC-BY-NC-SA-4.0, where everything else here is apache, MIT,
+      CC-BY or a llama community licence. that is the fact worth carrying: it
+      rules the model out of exactly the deployments the rest of this roster is
+      for.
+    quants:
+    - repo: cstr/outetts-0.3-1b-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: outetts
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  parler-tts/parler-tts-mini-v1.1:
+    kind: speech
+    name:
+      short: parler-tts
+    notes: >-
+      the voice is described in prose rather than selected or cloned -- "a
+      female speaker with a slightly low-pitched voice, very close-sounding" --
+      which makes it the english counterpart to qwen3-tts voicedesign already
+      in the roster. english only.
+    quants:
+    # the `-ref` file beside this one is cstr's diff-harness reference, not a
+    # component the model loads, so it is named nowhere in this entry
+    - repo: cstr/parler-tts-mini-v1.1-GGUF
+      quant: Q8_0
+      file: parler-tts-mini-v1.1-q8_0.gguf
+      role: model
+      crispasr:
+        backend: parler-tts
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  kyutai/pocket-tts:
+    kind: speech
+    name:
+      short: pocket-tts
+    notes: >-
+      kyutai's small multilingual model -- english, german, spanish, italian and
+      portuguese, with french in a 24-language preview. its licence is CC-BY-4.0
+      with gated-use conditions attached, which is not the same thing as CC-BY
+      and is the reason that is written here rather than left to the card.
+    quants:
+    - repo: cstr/pocket-tts-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: pocket-tts
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  microsoft/speecht5_tts:
+    kind: speech
+    name:
+      short: speecht5
+    notes: >-
+      microsoft's speecht5, english, and the only entry in this roster with a
+      single rung: cstr published F16 and nothing else, so there is no ladder to
+      trade down and the pin is the whole file. no temperature and no cloning in
+      crispasr either -- like fastpitch, it is a floor rather than a pick.
+
+      it DOES take audio in, which the roster only learned from the config:
+      speecht5 conditions on a speaker x-vector extracted from a reference clip,
+      so `SpeechT5ForTextToSpeech` declares an audio input even though crispasr
+      exposes no cloning knob for it. drafted `text` out of the backend's shape
+      and corrected by `models-validate --modalities`, which is the step that
+      exists for exactly this.
+    quants:
+    - repo: cstr/speecht5-tts-GGUF
+      quant: F16
+      role: model
+      crispasr:
+        backend: speecht5
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - audio
+  openbmb/VoxCPM2:
+    kind: speech
+    name:
+      short: voxcpm2-tts
+    notes: >-
+      openbmb's synthesis model at 30 languages with cloning. crispasr also
+      carries a `voxcpm2-vae` backend against the same weights, which is the
+      speech-to-speech half of the release rather than a second TTS rung -- this
+      entry is the synthesis one.
+    quants:
+    - repo: cstr/voxcpm2-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: voxcpm2-tts
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  # the four below load more than one file, which is why they are apart from the
+  # single-rung entries above. two carry a neural codec the model decodes
+  # through, one is a pair of sizes crispasr reaches by the same backend name,
+  # and one publishes no gguf at all.
+  canopylabs/orpheus-3b-0.1-ft:
+    kind: speech
+    name:
+      short: orpheus
+    notes: >-
+      a llama-3.2-3b finetuned into a speech model, english and german, and one
+      of two entries here that decode through a separate neural codec: the
+      model emits SNAC tokens and `cstr/snac-24khz-GGUF` turns them into audio,
+      so both files have to be present. the codec is a `components:` entry
+      rather than a second quant because a consumer does not choose it -- there
+      is one, it is not a rung, and picking it is not a decision.
+
+      the hub names three base models on the conversion: this repo, an unsloth
+      mirror of it, and the meta-llama model the finetune came from.
+      publishers.txt is what breaks that tie, since it already records unsloth
+      as a publisher of other people's models.
+    quants:
+    - repo: cstr/orpheus-3b-0.1-ft-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: orpheus
+    components:
+    - repo: cstr/snac-24khz-GGUF
+      quant: snac-24khz.gguf
+      role: codec
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  Zyphra/Zonos-v0.1-transformer:
+    kind: speech
+    name:
+      short: zonos-tts
+    notes: >-
+      the other codec pair: zonos emits descript-audio-codec tokens and
+      `cstr/dac-44khz-GGUF` decodes them at 44.1khz, which is the highest sample
+      rate in this roster. english, clones from a clip. zyphra also publish a
+      hybrid-mamba variant of the same release and crispasr names the
+      transformer one, which is the repo pinned here.
+    quants:
+    - repo: cstr/zonos-v0.1-transformer-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: zonos-tts
+    components:
+    - repo: cstr/dac-44khz-GGUF
+      quant: dac-44khz-f16.gguf
+      role: codec
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  HumeAI/tada-1b:
+    kind: speech
+    name:
+      short: tada
+    notes: >-
+      hume's tada, english, under the llama 3.2 community licence. the
+      conversion ships four files beside the model -- an aligner, a codec and an
+      encoder -- and the top rung of the model itself is Q4_K: cstr published no
+      Q8_0 here, so the pin is lower than everywhere else in this roster and it
+      is the ladder rather than a choice.
+    quants:
+    - repo: cstr/tada-tts-1b-GGUF
+      quant: Q4_K
+      role: model
+      crispasr:
+        backend: tada
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  microsoft/VibeVoice-Realtime-0.5B:
+    kind: speech
+    name:
+      short: vibevoice-realtime-0.5b
+    notes: >-
+      the smaller of the two vibevoice synthesis rungs, english and chinese, and
+      the one to serve when latency matters. separate entries from the 1.5b
+      because they are separate weights rather than two quants of one
+      checkpoint -- the scaffolder drafted the second as a codec and it is not
+      one.
+
+      NO `crispasr:` block, and that is the point of this entry. crispasr's
+      README has a `vibevoice-tts` row naming both conversions, and lint
+      rejected it: the feature matrix the binary generates lists 148 backends
+      and `vibevoice-tts` is not among them, exactly like the `gemma4-e4b` row
+      that check was written for. the 1.5b resolves to a real backend name and
+      this rung does not, so asserting one here would be the guess CONTRIBUTING
+      forbids.
+    quants:
+    - repo: cstr/vibevoice-realtime-0.5b-GGUF
+      quant: Q8_0
+      role: model
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  microsoft/VibeVoice-1.5B:
+    kind: speech
+    name:
+      short: vibevoice-1.5b
+    notes: >-
+      the 1.5b rung of the same family, three times the weights of the realtime
+      variant. the backend is `vibevoice-1.5b` rather than the `vibevoice-tts`
+      crispasr's README labels the row: the feature matrix carries the first and
+      not the second, and it is the matrix the binary dispatches through. it is
+      also the only vibevoice backend whose capability row claims voice cloning.
+
+      microsoft also publish a VibeVoice-ASR line, which crispasr reaches under
+      `vibevoice` and `vibevoice-bitnet` and this roster does not carry: same
+      family name, opposite direction.
+    quants:
+    - repo: cstr/vibevoice-1.5b-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: vibevoice-1.5b
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  # CARRIED WITH NO QUANTS, like supertonic-3 above and for the same reason: the
+  # repo holds safetensors and not one gguf file, so there is no rung a consumer
+  # could select and writing one would claim a download that does not exist.
+  # crispasr names the repo itself in the column its README uses for
+  # conversions, which is how the roster ends up pointing at weights nothing
+  # here can currently load.
+  #
+  # it is also the entry that corrected `scaffold`: keying on crispasr's README
+  # was skipped wherever it named one repo for both columns, to avoid keying on
+  # a conversion, and that rule sent this one to the hub -- which answered
+  # `mistralai/Ministral-3-3B-Base-2512`, the LLM backbone it was built from
+  # rather than the model. publishers.txt separates the two cases now.
+  mistralai/Voxtral-4B-TTS-2603:
+    kind: speech
+    name:
+      short: voxtral-tts
+    notes: >-
+      mistral's own synthesis model across nine languages, under CC-BY-NC-4.0 --
+      the second non-commercial licence in this roster. no gguf exists for it in
+      any repo crispasr names, so it is tracked rather than servable.
+
+      and it is the best-scoring synthesis model here: artificial analysis rates
+      it 1078 elo against chatterbox's 1021, which are the only two numbers this
+      roster has for TTS at all. both rows are `openWeights: true` on the board,
+      which is what makes them matchable -- AA's `chatterbox-hd` beside it is
+      marked closed and is correctly not claimed by anything here. so the entry
+      with the highest measured quality in the synthesis roster is the one
+      nothing in it can run.
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: voxtral-tts
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  # the crispasr transcription roster. the other half of the same gap: 33 of
+  # crispasr's 43 ASR backends named weights this roster carried nothing for,
+  # and `research/scaffold` resolved 29 of the 30 keys below from the captures.
+  #
+  # three of the 33 are NOT here and each is its own kind of no. `foxnose` is a
+  # `--diarize-method` rather than a `--backend` -- it is absent from the
+  # 148-entry feature matrix, so lint would have rejected it -- and the
+  # wespeaker entry above already carries that recipe. `gemma4-e2b` and
+  # `gemma4-e4b` load models this registry holds as text entries, so they gained
+  # a quant there rather than an entry here: crispasr reads cstr's separate ASR
+  # conversion and not the text gguf those entries pin, which is a distinction
+  # their comments have recorded since before a conversion existed to point at.
+  AutoArk-AI/ARK-ASR-3B:
+    kind: speech
+    name:
+      short: ark-asr
+    notes: >-
+      19 european languages out of one 3b encoder-decoder. the vendor's repo
+      carries the weights and cstr's carries the conversion, which is the
+      ordinary shape for this roster.
+    quants:
+    - repo: cstr/ark-asr-3b-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: ark-asr
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  nvidia/parakeet-ctc-0.6b:
+    kind: speech
+    name:
+      short: parakeet-ctc-0.6b
+    notes: >-
+      the CTC parakeet, a different head from the transducer parakeet-tdt
+      already carried above: CTC emits per-frame labels with no duration model,
+      so it is cheaper and weaker on long silences. crispasr reaches three
+      conversions through this one backend -- 0.6b, 1.1b and a japanese 1.1b --
+      and they are three models rather than three rungs, so this entry pins the
+      0.6b and the siblings are left out rather than stacked in as quants.
+    quants:
+    - repo: cstr/parakeet-ctc-0.6b-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: fastconformer-ctc
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  FunAudioLLM/Fun-ASR-MLT-Nano-2512:
+    kind: speech
+    name:
+      short: fun-asr-mlt-nano
+    notes: >-
+      alibaba's multilingual nano transcriber, the sibling of the fun-asr entry
+      below and reached by its own backend rather than a flag.
+    quants:
+    - repo: cstr/funasr-mlt-nano-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: fun-asr-mlt-nano
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  FunAudioLLM/Fun-ASR-Nano-2512:
+    kind: speech
+    name:
+      short: funasr
+    notes: >-
+      the monolingual nano of the same december release. same publisher as
+      sensevoice-small already in the roster, and the paraformer entry below
+      comes out of the same funasr project.
+    quants:
+    - repo: cstr/funasr-nano-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: funasr
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  ai-sage/GigaAM-v3:
+    kind: speech
+    name:
+      short: gigaam
+    notes: >-
+      sber's russian transcriber, and the only model in this roster built for
+      russian specifically rather than covering it in a multilingual set.
+    quants:
+    - repo: cstr/gigaam-v3-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: gigaam
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  LiquidAI/LFM2.5-Audio-1.5B:
+    kind: speech
+    name:
+      short: lfm2-audio
+    notes: >-
+      liquid's audio model on their LFM2 backbone. crispasr names a japanese
+      conversion beside the base one under the same backend; that is a sibling
+      rather than a rung, so this entry pins the base and the japanese build is
+      left out rather than stacked in.
+    quants:
+    - repo: cstr/lfm2-audio-1.5b-GGUF
+      quant: Q8_0
+      file: lfm2-audio-1.5b-q8_0.gguf
+      role: model
+      crispasr:
+        backend: lfm2-audio
+    components:
+    - repo: cstr/lfm2-audio-1.5b-GGUF
+      quant: lfm2-audio-1.5b-f16-detokenizer.gguf
+      role: detokenizer
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  XiaomiMiMo/MiMo-V2.5-ASR:
+    kind: speech
+    name:
+      short: mimo-asr
+    notes: >-
+      xiaomi's transcriber off the MiMo line whose v2.5 text model this roster
+      already carries. cstr published F16 and Q4_K only, so the pin is Q4_K --
+      there is no Q8_0 rung here.
+    quants:
+    - repo: cstr/mimo-asr-GGUF
+      quant: Q4_K
+      role: model
+      crispasr:
+        backend: mimo-asr
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  UsefulSensors/moonshine-base:
+    kind: speech
+    name:
+      short: moonshine
+    notes: >-
+      built for short utterances on small hardware: moonshine takes variable
+      length audio without padding to a fixed 30s window the way whisper does,
+      so the compute scales with what was actually said. that is the argument
+      for it over whisper-large-v3-turbo at this size.
+    quants:
+    - repo: cstr/moonshine-base-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: moonshine
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  UsefulSensors/moonshine-streaming-tiny:
+    kind: speech
+    name:
+      short: moonshine-streaming
+    notes: >-
+      the streaming tiny of the same family, and one of two entries in this
+      roster built for live transcription rather than a file -- the other is
+      nemotron-3.5-asr-streaming already carried. Q4_K is the only rung cstr
+      published.
+    quants:
+    - repo: cstr/moonshine-streaming-tiny-GGUF
+      quant: Q4_K
+      role: model
+      crispasr:
+        backend: moonshine-streaming
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  OpenMOSS-Team/MOSS-Audio-4B-Instruct:
+    kind: speech
+    name:
+      short: moss-audio
+    notes: >-
+      the largest transcriber in this roster at 4b, and an instruct model rather
+      than a plain ASR head -- it takes a prompt about what to do with the
+      audio. cstr published F16 and Q4_K only.
+    quants:
+    - repo: cstr/MOSS-Audio-4B-Instruct-GGUF
+      quant: Q4_K
+      role: model
+      crispasr:
+        backend: moss-audio
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  OpenMOSS-Team/MOSS-Transcribe-preview-2B:
+    kind: speech
+    name:
+      short: moss-transcribe
+    notes: >-
+      the transcribe-only 2b of the same family, and the sibling of the
+      moss-transcribe-diarize already carried: that one labels speakers while
+      decoding and this one does not, which is the whole difference.
+    quants:
+    - repo: cstr/MOSS-Transcribe-preview-2B-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: moss-transcribe
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  aadel4/omniASR-CTC-1B-v2:
+    kind: speech
+    name:
+      short: omniasr
+    notes: >-
+      a CTC transcriber over meta's omnilingual ASR work, the transcription-side
+      counterpart to omnivoice's 600+ language synthesis. cstr's listing carries
+      a `Q4_K_OLD` beside the current rungs, which is a superseded conversion
+      rather than a rung and is not pinned.
+    quants:
+    - repo: cstr/omniASR-CTC-1B-v2-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: omniasr
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  facebook/omniASR-LLM-300M:
+    kind: speech
+    name:
+      short: omniasr-llm
+    notes: >-
+      the LLM-decoder variant of the same omnilingual line at 300m, against the
+      CTC head above. crispasr names an `unlimited` conversion beside it under
+      the same backend -- a longer-context build rather than a rung -- and this
+      entry pins the base one.
+    quants:
+    - repo: cstr/omniasr-llm-300m-v2-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: omniasr-llm
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  funasr/paraformer-zh:
+    kind: speech
+    name:
+      short: paraformer
+    notes: >-
+      non-autoregressive chinese transcription, the same single-pass shape as
+      sensevoice-small and from the same funasr project. mandarin only, which is
+      what lets it be this small.
+    quants:
+    - repo: cstr/paraformer-zh-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: paraformer
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  reazon-research/reazonspeech-nemo-v2:
+    kind: speech
+    name:
+      short: reazonspeech
+    notes: >-
+      japanese transcription trained on reazon's broadcast corpus, on a nemo
+      backbone. the japanese counterpart to gigaam's russian: a model for one
+      language rather than a multilingual set that happens to include it.
+    quants:
+    - repo: cstr/reazonspeech-nemo-v2-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: reazonspeech
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  microsoft/VibeVoice-ASR:
+    kind: speech
+    name:
+      short: vibevoice-asr
+    notes: >-
+      the transcription half of the vibevoice family whose two synthesis rungs
+      are in the roster above: same name, opposite direction, separate weights.
+      its capability row claims native punctuation and CTC timestamps.
+    quants:
+    - repo: cstr/vibevoice-asr-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: vibevoice
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  microsoft/VibeVoice-ASR-BitNet:
+    kind: speech
+    name:
+      short: vibevoice-bitnet
+    notes: >-
+      the ternary-weight build of the same transcriber, and the only entry in
+      the speech roster whose rungs are named `Q4`, `Q5`, `Q8` and `TQ2` rather
+      than the usual K-quant tags -- bitnet weights are not what the rest of this
+      ladder measures. `TQ2` is the format it exists FOR and Q4 is the pin, the
+      same trade the ternary bonsai entries record on the text side.
+    quants:
+    - repo: cstr/vibevoice-asr-bitnet-GGUF
+      quant: Q4
+      role: model
+      crispasr:
+        backend: vibevoice-bitnet
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  facebook/data2vec-audio-base-960h:
+    kind: speech
+    name:
+      short: wav2vec2
+    notes: >-
+      the wav2vec2 family backend, and the one row in crispasr's README naming
+      three unrelated checkpoints: a wav2vec2 xlsr english finetune, this
+      data2vec model and a hubert one. three architectures sharing a dispatch
+      path rather than one model with three conversions, so this entry pins the
+      data2vec conversion that is sized and leaves the other two out rather than
+      claiming them as rungs.
+    quants:
+    - repo: cstr/data2vec-audio-960h-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: wav2vec2
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  # CARRIED WITH NO QUANTS. crispasr's README names only the vendor's own repo
+  # for each of these -- no cstr conversion exists and `fetch-gguf-sizes` finds
+  # no gguf in the repo itself -- so there is no rung a consumer could select.
+  # the `crispasr:` block sits on the MODEL rather than a quant for the same
+  # reason: it is a fact about the architecture, and with no file to attach it
+  # to there is nothing narrower to say. most of these carry crispasr's
+  # `auto-download` capability, which is the binary fetching the weights itself
+  # rather than loading something from this roster.
+  FireRedTeam/FireRedASR2-AED:
+    kind: speech
+    name:
+      short: firered-asr
+    notes: >-
+      xiaohongshu's attention-encoder-decoder transcriber, second generation.
+      no conversion exists in any repo crispasr names.
+    crispasr:
+      backend: firered-asr
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  zai-org/GLM-ASR-Nano-2512:
+    kind: speech
+    name:
+      short: glm-asr
+    notes: >-
+      zhipu's nano transcriber, from the lab whose GLM text models this roster
+      already carries. no conversion exists.
+    crispasr:
+      backend: glm-asr
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  ibm-granite/granite-speech-3.3-2b:
+    kind: speech
+    name:
+      short: granite-speech-3.3
+    notes: >-
+      the 3.3 generation of ibm's speech line, and the oldest of the four
+      granite transcribers crispasr carries. the 4.1 entries below supersede it;
+      it is here because the backend is distinct and a roster that lists what
+      runs should say so.
+    crispasr:
+      backend: granite
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  ibm-granite/granite-speech-4.1-2b:
+    kind: speech
+    name:
+      short: granite-speech-4.1
+    notes: >-
+      the current granite speech 2b. ibm ships three 4.1 variants and crispasr
+      gives each its own backend -- this base one, a non-autoregressive `-nar`
+      and a `-plus` -- so they are three entries rather than one with rungs.
+    crispasr:
+      backend: granite-4.1
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  ibm-granite/granite-speech-4.1-2b-nar:
+    kind: speech
+    name:
+      short: granite-speech-4.1-nar
+    notes: >-
+      the non-autoregressive 4.1: one forward pass with no decode loop, the same
+      trade sensevoice-small and paraformer make. faster, and with no beam
+      search to fall back on.
+    crispasr:
+      backend: granite-4.1-nar
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  ibm-granite/granite-speech-4.1-2b-plus:
+    kind: speech
+    name:
+      short: granite-speech-4.1-plus
+    notes: the `-plus` 4.1 variant, carried because crispasr dispatches it separately.
+    crispasr:
+      backend: granite-4.1-plus
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  bosonai/higgs-audio-v3-stt:
+    kind: speech
+    name:
+      short: higgs-stt
+    notes: >-
+      the transcription half of boson's higgs-audio v3. no conversion exists in
+      any repo crispasr names.
+    crispasr:
+      backend: higgs-stt
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  kyutai/stt-1b-en_fr:
+    kind: speech
+    name:
+      short: kyutai-stt
+    notes: >-
+      kyutai's streaming transcriber, english and french, from the same lab as
+      the pocket-tts in the synthesis roster above. crispasr names a 2.6b
+      english-only sibling under the same backend, which is a separate model
+      rather than a rung and is not pinned here.
+    crispasr:
+      backend: kyutai-stt
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  zhifeixie/Mega-ASR:
+    kind: speech
+    name:
+      short: mega-asr
+    notes: no conversion exists; carried because crispasr compiles in the backend.
+    crispasr:
+      backend: mega-asr
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  gpt-omni/mini-omni2:
+    kind: speech
+    name:
+      short: mini-omni2
+    notes: >-
+      an early end-to-end speech-in speech-out model that crispasr reaches for
+      transcription. it predates most of this roster and is carried for
+      coverage rather than as a pick.
+    crispasr:
+      backend: mini-omni2
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  Qwen/Qwen3-ASR-0.6B:
+    kind: speech
+    name:
+      short: qwen3-asr-0.6b
+    notes: >-
+      the 0.6b rung of the qwen3-asr line whose 1.7b this roster already
+      carries. crispasr reaches this one through `--backend qwen3` and the 1.7b
+      through `qwen3-1.7b`, so they are separate entries rather than two rungs
+      of one -- which is also why the 1.7b's `crispasr` block is written
+      `qwen3-1.7b` where its gguf detects as the base `qwen3`.
+    crispasr:
+      backend: qwen3
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  # NO `crispasr:` BLOCK, on the same rule as vibevoice-realtime-0.5b above:
+  # `qwen3-ja-anime` is a row in crispasr's README and is absent from the
+  # 148-entry feature matrix the binary generates, so it is a documentation
+  # label rather than a backend. the model is real and the weights are real;
+  # what nothing here can state is which backend loads them.
+  jaykwok/Qwen3-ASR-1.7B-JA-Anime-Galgame-hf:
+    kind: speech
+    name:
+      short: qwen3-asr-ja-anime
+    notes: >-
+      a japanese finetune of qwen3-asr-1.7b on anime and visual-novel speech,
+      which is a domain the broadcast-trained reazonspeech above does not cover.
+      no conversion exists and no backend can be asserted.
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  # what crispasr runs BESIDE a transcript. three shapes and they are not
+  # interchangeable:
+  #
+  #   translate   a real `--backend`, in the feature matrix, that takes text in
+  #               and emits text in another language
+  #   post        punctuation and language id, which the README lists as rows
+  #               and the matrix does NOT carry: they are flags over a finished
+  #               transcript rather than backends. `crispasr.post` names the job
+  #               the way `crispasr.diarize` does for the embedders, and
+  #               `kind: post` is what stops a punctuation model sitting in the
+  #               speech roster looking like something to transcribe with
+  #   s2s         audio in, audio out: restoration rather than recognition
+  #
+  # none carries a `modalities:` block, for the reason the diarizers do not.
+  # these run inside crispasr's pipeline; a reader does not send them a prompt,
+  # and declaring text in / text out would put a punctuation restorer in the
+  # `any to text` roster beside the language models.
+  facebook/m2m100_418M:
+    kind: translate
+    name:
+      short: m2m100
+    notes: >-
+      100 languages any-to-any, which is what "any" means here: it translates
+      between pairs without routing through english, unlike the wmt21 pair
+      below.
+    quants:
+    - repo: cstr/m2m100-418m-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: m2m100
+  facebook/wmt21-dense-24-wide-en-x:
+    kind: translate
+    name:
+      short: m2m100-wmt21
+    notes: >-
+      english to seven languages, and the direction is baked into the weights --
+      meta ship a separate `x-en` checkpoint for the way back, which crispasr
+      names under the same backend. this entry pins the `en-x` half and carries
+      the other as a component, because they are two files of one job rather
+      than two rungs of one model.
+    quants:
+    - repo: cstr/wmt21-dense-24-wide-en-x-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: m2m100-wmt21
+    components:
+    - repo: cstr/wmt21-dense-24-wide-x-en-GGUF
+      quant: Q8_0
+      role: reverse-direction
+  google/madlad400-3b-mt:
+    kind: translate
+    name:
+      short: madlad
+    notes: >-
+      419 languages, the widest coverage of anything in this registry in any
+      modality -- omnivoice's 600+ is synthesis and omniasr's is recognition;
+      this is translation. the repo also ships a `-ref` diff-harness file, which
+      is not a rung and is named nowhere here.
+    quants:
+    - repo: cstr/madlad400-3b-mt-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: madlad
+  sarulab-speech/sidon-v0.1:
+    kind: speech
+    name:
+      short: sidon
+    notes: >-
+      not recognition and not synthesis: it takes 16 kHz mono in and emits
+      restored 48 kHz mono, so it is the one entry in the speech roster whose
+      job is to repair audio rather than to read or write it. crispasr carries
+      one other backend of that shape, `voxcpm2-vae`, against the VoxCPM2
+      weights this roster already holds for synthesis.
+    quants:
+    - repo: KevinAHM/Sidon-GGUF
+      quant: F16
+      role: model
+      crispasr:
+        backend: sidon
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - audio
+      output:
+      - audio
+  cis-lmu/glotlid:
+    kind: post
+    name:
+      short: glotlid-v3
+    notes: >-
+      language identification over a transcript, and the broadest of the three
+      here. crispasr applies it as a step rather than a backend, which is why
+      this carries `crispasr.post` and no `--backend` name exists for it.
+    quants:
+    - repo: cstr/glotlid-GGUF
+      quant: Q8_0
+      role: model
+    crispasr:
+      post: language-id
+  # NOT CARRIED: `cld3` and `lid-176`, crispasr's other two language-id steps.
+  # both exist on the hub only as cstr's conversion -- cld3's upstream is a C++
+  # library and fasttext's lid.176 ships as a `.bin` from fasttext.cc -- so the
+  # only key available for either is a gguf repo, which `make lint` rejects and
+  # should: the key is what every capture joins on, and pointed at a conversion
+  # all of them answer about the converter.
+  #
+  # `facebook/fasttext-language-identification` is on the hub and is NOT the
+  # upstream of lid-176: it identifies 217 languages where lid.176 does 176, so
+  # keying on it would assert a lineage that is not there. glotlid-v3 above
+  # covers the same job with a real upstream, which is why losing these two
+  # costs the roster a duplicate rather than a capability.
+  oliverguhr/fullstop-punctuation-multilang-large:
+    kind: post
+    name:
+      short: fullstop-punc
+    notes: >-
+      punctuation restoration across several languages. the key is a rename the
+      hub reports and `resolve-base` flags -- `fullstop-punctuation-multilang-
+      large` does not look like `fullstop-punc-multilang` -- and the rename is
+      real, which is why that flag reports rather than filters.
+    quants:
+    - repo: cstr/fullstop-punc-multilang-GGUF
+      quant: Q8_0
+      role: model
+    crispasr:
+      post: punctuation
+  kredor/punctuate-all:
+    kind: post
+    name:
+      short: punctuate-all
+    notes: punctuation restoration; the smaller alternative to fullstop-punc above.
+    quants:
+    - repo: cstr/punctuate-all-GGUF
+      quant: Q4_K
+      role: model
+    crispasr:
+      post: punctuation
+  FireRedTeam/FireRedPunc:
+    kind: post
+    name:
+      short: fireredpunc
+    notes: >-
+      xiaohongshu's punctuation model, from the team behind the firered-asr
+      entry above. its conversion is the only one in the post set with an
+      imatrix rung, and it ships an untagged `fireredpunc.gguf` beside the
+      tagged ones, so the pin names its file.
+    quants:
+    - repo: cstr/fireredpunc-GGUF
+      quant: Q8_0
+      role: model
+    crispasr:
+      post: punctuation

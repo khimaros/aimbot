@@ -19,6 +19,7 @@ import json
 import os
 import shutil
 import socketserver
+import struct
 import subprocess
 import sys
 import tempfile
@@ -872,6 +873,83 @@ def a_crispasr_block_names_one_use_for_a_weight():
        "a backend on a speech model is the ordinary case and must not fire")
 
 
+POST_REGISTRY = """version: 1
+models:
+  Fixture/Punctuator:
+    kind: post
+    name: {short: fixture-punc}
+    quants:
+    - {repo: Q/Punctuator-GGUF, quant: Q8_0}
+    crispasr: {post: punctuation}
+  Fixture/Post-Kind-No-Role:
+    kind: post
+    name: {short: fixture-post-bare}
+    quants:
+    - {repo: Q/Bare-GGUF, quant: Q8_0}
+  Fixture/Role-Mislabelled:
+    kind: speech
+    name: {short: fixture-mislabelled}
+    quants:
+    - {repo: Q/Mislabelled-GGUF, quant: Q8_0}
+    crispasr: {post: language-id}
+    modalities: {input: [text, audio], output: [text]}
+  Fixture/Unknown-Post-Role:
+    kind: post
+    name: {short: fixture-unknown}
+    quants:
+    - {repo: Q/Unknown-GGUF, quant: Q8_0}
+    crispasr: {post: transcribing}
+  Fixture/Post-And-Backend:
+    kind: post
+    name: {short: fixture-both}
+    quants:
+    - {repo: Q/Both-GGUF, quant: Q8_0}
+    crispasr: {post: punctuation, backend: whisper}
+"""
+
+
+@test
+def a_post_processing_weight_is_its_own_kind_with_its_own_role():
+    """Punctuation and language id are not backends, the way diarizers are not.
+
+    crispasr's README lists six post-processing rows and none of them is among
+    the 148 backends its own feature matrix carries: `--punctuate` and the
+    language-id step are flags over a transcript, not `--backend` names. So an
+    entry for one cannot say `crispasr.backend` -- lint already rejects a
+    backend the binary does not carry -- and saying nothing would leave the file
+    in the speech roster looking like something to serve.
+
+    `crispasr.diarize` solved exactly this shape for the embedders and
+    segmenters, so `crispasr.post` follows it: a role from a closed set, a kind
+    that has to agree with it, and the same exclusivity that stops one weight
+    claiming two jobs.
+    """
+    code, findings, _ = validate(POST_REGISTRY)
+    eq(code, 1, "the fixture carries errors")
+    where = {}
+    for x in findings:
+        where.setdefault(x["where"], []).append(x["error"])
+
+    def says(repo, fragment):
+        return any(fragment in e for e in where.get(repo, []))
+
+    eq("Fixture/Punctuator" in where, False,
+       "kind post with a post role is the ordinary case, got %r"
+       % where.get("Fixture/Punctuator"))
+    eq(says("Fixture/Post-Kind-No-Role", "needs a crispasr.post"), True,
+       "the post kind with no role is an error, got %r"
+       % where.get("Fixture/Post-Kind-No-Role"))
+    eq(says("Fixture/Role-Mislabelled", "go together"), True,
+       "a post role on a speech kind is an error, got %r"
+       % where.get("Fixture/Role-Mislabelled"))
+    eq(says("Fixture/Unknown-Post-Role", "must be one of"), True,
+       "an invented post role is an error, got %r"
+       % where.get("Fixture/Unknown-Post-Role"))
+    eq(says("Fixture/Post-And-Backend", "exactly one of"), True,
+       "post and backend together describes no invocation, got %r"
+       % where.get("Fixture/Post-And-Backend"))
+
+
 SPEECH_CAPTURE = {
     "speech-to-text": {
         "Open Transcriber": {"name": "Open Transcriber", "openWeights": True,
@@ -1228,6 +1306,91 @@ def an_asr_config_declares_audio_at_whatever_depth_it_says_it():
         eq(mod.takes_audio(cfg), want, "%s takes audio" % repo)
 
 
+BASE_CATALOG = {
+    "authors": {"cstr": [
+        # a plain string, which is what the hub returns for a single base
+        {"id": "cstr/zonos-v0.1-transformer-GGUF", "author": "cstr", "gguf": True,
+         "base_model": "Zyphra/Zonos-v0.1-transformer"},
+        # a one-element list, the other shape the same field takes
+        {"id": "cstr/chatterbox-GGUF", "author": "cstr", "gguf": True,
+         "base_model": ["ResembleAI/chatterbox"]},
+        # three bases: the finetune this IS, a mirror of it, and the model that
+        # finetune came from. the stem match is what picks the first
+        {"id": "cstr/orpheus-3b-0.1-ft-GGUF", "author": "cstr", "gguf": True,
+         "base_model": ["unsloth/orpheus-3b-0.1-ft", "canopylabs/orpheus-3b-0.1-ft",
+                        "meta-llama/Llama-3.2-3B-Instruct"]},
+        # the hub naming the CODEC as the base and not mentioning the model at
+        # all. this is not ambiguity to break -- there is one value and it is
+        # wrong -- so the only honest handling is to carry it and say the name
+        # does not corroborate
+        {"id": "cstr/miotts-0.6b-GGUF", "author": "cstr", "gguf": True,
+         "base_model": "Aratako/MioCodec-25Hz-44.1kHz-v2"},
+        # a plain rename, which does not corroborate either and IS right. that
+        # is why an uncorroborated row is flagged rather than dropped
+        {"id": "cstr/fullstop-punc-multilang-GGUF", "author": "cstr", "gguf": True,
+         "base_model": "oliverguhr/fullstop-punctuation-multilang-large"},
+        # the hub knows nothing. a guess here would be worse than a blank
+        {"id": "cstr/bark-small-GGUF", "author": "cstr", "gguf": True,
+         "base_model": None},
+    ]},
+    "trending": [], "sort": "downloads",
+}
+
+
+@test
+def a_conversion_resolves_to_the_weights_it_converts():
+    """Which weights a gguf converts, from the hub's own `base_model`.
+
+    This is the join the qwen3-tts entries needed and nothing computed: they sat
+    keyed on `khimaros/*-GGUF` because working out what they were conversions OF
+    was a manual lookup. The catalog carries the field per repo, so the answer is
+    local once the publisher is swept.
+
+    The field is a string or a list, and a list can name a mirror beside the
+    original. The conversion's own name breaks that tie, with publishers.txt
+    deciding which owner is the republisher.
+
+    What the name canNOT decide is whether a single claim is right. cstr's
+    miotts repo names the CODEC as its base and never mentions the model; its
+    fullstop-punc repo names a differently-spelled upstream and is correct. Both
+    fail a stem check, so a stem check cannot be a filter -- 15% of the real
+    mapping does not corroborate and most of that 15% is right. Uncorroborated
+    rows are therefore carried WITH a flag, so the scaffolder proposes and a
+    human checks, rather than the tool silently dropping good rows or asserting
+    bad ones.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        cat = os.path.join(tmp, "hf-catalog.json")
+        with open(cat, "w") as f:
+            json.dump(BASE_CATALOG, f)
+        r = subprocess.run(
+            [os.path.join(ROOT, "scripts", "resolve-base"), "--catalog", cat, "--json"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    finally:
+        shutil.rmtree(tmp)
+    if r.returncode:
+        raise AssertionError("resolve-base exited %d: %s" % (r.returncode, r.stderr.strip()))
+    got = json.loads(r.stdout)
+    base = lambda k: (got.get(k) or {}).get("base")
+    eq(base("cstr/zonos-v0.1-transformer-GGUF"), "Zyphra/Zonos-v0.1-transformer",
+       "a string base_model")
+    eq(base("cstr/chatterbox-GGUF"), "ResembleAI/chatterbox",
+       "a single-element list")
+    eq(base("cstr/orpheus-3b-0.1-ft-GGUF"), "canopylabs/orpheus-3b-0.1-ft",
+       "the finetune it is, not the mirror and not what that came from")
+    eq("cstr/bark-small-GGUF" in got, False,
+       "a repo the hub has no base for is left out rather than guessed at")
+
+    # the flag, which is the whole point: both of these are uncorroborated and
+    # only one of them is wrong, so the tool reports and does not adjudicate
+    eq(got["cstr/chatterbox-GGUF"]["agrees"], True, "the name backs this one up")
+    eq(got["cstr/miotts-0.6b-GGUF"]["agrees"], False,
+       "a codec named as the base does not look like the model")
+    eq(got["cstr/fullstop-punc-multilang-GGUF"]["agrees"], False,
+       "and neither does a correct rename -- which is why this is a flag, not a filter")
+
+
 CONVERSION_KEYED_REGISTRY = """version: 1
 models:
   Vendor/Real-Weights:
@@ -1242,6 +1405,12 @@ models:
     quants:
     - {repo: other/Also-Real-GGUF, quant: Q8_0}
     - {repo: converter/Also-Real-GGUF, quant: Q8_0}
+    modalities: {input: [text], output: [audio]}
+  Vendor/Voxtral-4B-TTS-2603:
+    kind: speech
+    name: {short: ships-its-own}
+    quants:
+    - {repo: Vendor/Voxtral-4B-TTS-2603, quant: Q8_0}
     modalities: {input: [text], output: [audio]}
 """
 
@@ -1271,33 +1440,335 @@ def a_model_is_keyed_on_weights_not_on_a_conversion_of_itself():
     eq("Vendor/Real-Weights" in where, False,
        "an entry keyed on the weights, carrying a conversion as a quant, is the "
        "ordinary case and must not fire")
+    # a lab that publishes gguf INSIDE its weights repo is keyed exactly right,
+    # and the key is legitimately one of its own quants. mistral's
+    # Voxtral-4B-TTS-2603 is the real one: safetensors, no separate conversion.
+    # what makes the other case wrong is that the key names a conversion, which
+    # the repo says in its name
+    eq("Vendor/Voxtral-4B-TTS-2603" in where, False,
+       "a vendor shipping gguf in its own weights repo is not a conversion")
 
 
 @test
-def the_punch_list_says_what_crispasr_loads_that_the_roster_does_not():
-    """The sweep reported coverage in one direction only.
+def the_punch_list_says_what_each_engine_loads_that_the_roster_does_not():
+    """The sweep reported coverage inward only, for every engine it collects.
 
-    `models-validate --speech` prints which of the roster's 20 speech models a
-    crispasr backend carries, and that has always been in the punch list. The
-    other direction -- the backends crispasr compiles in whose weights the
-    registry carries nothing for, which is where the TTS roster grows from --
-    lives in `fetch-crispasr --report` and was never wired into it. So a sweep
-    could report full coverage of what we already have and stay silent about the
-    64 backends we do not.
+    `models-validate --speech` prints which of the roster's speech models a
+    crispasr backend carries, and that was always in the punch list. The other
+    direction -- what an engine loads that the registry has nothing for, which
+    is where the roster GROWS from -- was computed by both engine collectors
+    from the day they landed and printed by neither. So a sweep could report
+    full coverage of what we already have and stay silent about the rest.
+
+    Both engines now report both ways. sd.cpp's outward half cannot be a list of
+    models the way crispasr's is, because it names no repos: it detects on
+    tensor names, so the widest true statement is which ARCHITECTURES it knows
+    that nothing in the roster has matched.
     """
     r = subprocess.run([os.path.join(ROOT, "scripts", "sweep"), "--report"],
                        cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                        text=True)
     eq(r.returncode, 0, "the punch list runs offline and exits clean")
     out = r.stdout
+
     eq("crispasr backend(s) carry the roster" in out, True,
-       "the inward direction is still reported")
+       "crispasr's inward direction is still reported")
     eq("name weights the registry does not carry at all" in out, True,
-       "and so is the outward one")
-    # the heading alone would pass with an empty body, so pin a TTS backend that
-    # is in crispasr and not in the registry
+       "and so is its outward one")
+    # a heading alone would pass with an empty body, so pin a backend that is in
+    # crispasr and not in the registry
     eq("vibevoice-tts" in out, True,
        "with the backends themselves, not just the count")
+
+    eq("architecture(s) the detector knows" in out, True,
+       "sd.cpp's outward direction reaches the punch list too")
+    eq("VERSION_SD3" in out, True,
+       "with the architectures themselves, not just the count")
+
+
+def gguf_header(arch, extra_kv=0, lead_numeric=False):
+    """A GGUF v3 header carrying general.architecture among its kv pairs."""
+    def s(text):
+        b = text.encode()
+        return struct.pack("<Q", len(b)) + b
+    pairs = []
+    # a uint32 before the architecture, which is what most real headers look
+    # like and what a string-only walker cannot step over
+    if lead_numeric:
+        pairs.append(s("general.file_type") + struct.pack("<I", 4)
+                     + struct.pack("<I", 7))
+    pairs.append(s("general.architecture") + struct.pack("<I", 8) + s(arch))
+    for i in range(extra_kv):
+        pairs.append(s("general.pad.%d" % i) + struct.pack("<I", 8) + s("x"))
+    return (b"GGUF" + struct.pack("<I", 3) + struct.pack("<Q", 7)
+            + struct.pack("<Q", len(pairs)) + b"".join(pairs))
+
+
+@test
+def a_multi_model_repo_reports_the_arch_of_each_file_not_one_of_them():
+    """One conversion repo, several models, and the roster read the wrong one.
+
+    huggingface summarises a repo with a single `gguf.architecture`, and for a
+    repo holding more than one model that is whichever file it happened to pick.
+    cstr/chatterbox-GGUF holds `chatterbox-t3` and `chatterbox-s3gen` at three
+    rungs each; the summary said `chatterbox-s3gen`, crispasr's table knows
+    `chatterbox`, and lint therefore called nine correct TTS entries unloadable.
+
+    So the arch is read per FILE, out of the gguf header itself, which is 24
+    bytes of preamble and then key/type/value triples. `general.architecture` is
+    conventionally first but nothing requires it, so the parser walks the pairs
+    rather than trusting position.
+    """
+    import importlib.util
+    path = os.path.join(RESEARCH, "fetch-llama-support")
+    spec = importlib.util.spec_from_loader(
+        "fetch_llama_support",
+        importlib.machinery.SourceFileLoader("fetch_llama_support", path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    eq(mod.gguf_arch(gguf_header("chatterbox")), "chatterbox",
+       "the architecture out of a header that leads with it")
+    eq(mod.gguf_arch(gguf_header("moss-tts", extra_kv=3)), "moss-tts",
+       "and out of one carrying other keys too")
+    # the reason this walks through fetch-gguf-voices' Header rather than a
+    # second parser: a string-only walker stops at the first numeric value, and
+    # most real headers put one before the architecture
+    eq(mod.gguf_arch(gguf_header("qwen3-tts", lead_numeric=True)), "qwen3-tts",
+       "stepping over a numeric value to reach it")
+    eq(mod.gguf_arch(b"NOTGGUF" + b"\0" * 64), None,
+       "a file that is not a gguf yields nothing rather than a guess")
+    eq(mod.gguf_arch(gguf_header("chatterbox")[:12]), None,
+       "and so does a header truncated before the value")
+
+    # reading a header costs a range request, and a quant ladder is one model
+    # spelled several ways -- twelve reads for one answer. only a repo whose
+    # filenames carry more than one stem can hold more than one architecture
+    eq(mod.multi_model(["Qwen3.6-35B-A3B-Q8_0.gguf", "Qwen3.6-35B-A3B-Q4_K.gguf",
+                        "Qwen3.6-35B-A3B-f16.gguf"]), False,
+       "a quant ladder of one model needs no per-file read")
+    eq(mod.multi_model(["chatterbox-t3-q8_0.gguf", "chatterbox-s3gen-q8_0.gguf"]), True,
+       "two stems in one repo is the case this exists for")
+    eq(mod.multi_model(["dia-1.6b-q8_0.gguf", "dac-44khz.gguf"]), True,
+       "and so is a model beside its codec")
+    eq(mod.multi_model(["solo-f16.gguf"]), False, "one file decides nothing")
+
+
+MILESTONE_AA = {
+  "claude-opus-4-5-thinking": {
+    "name": "Claude Opus 4.5 (Reasoning)", "slug": "claude-opus-4-5-thinking",
+    "isOpenWeights": False, "isReasoning": True, "releaseDate": "2025-11-24",
+    "intelligenceIndex": 41.9},
+  "an-open-model": {
+    "name": "An Open Model", "slug": "an-open-model", "isOpenWeights": True,
+    "isReasoning": True, "releaseDate": "2026-01-01", "intelligenceIndex": 50.0},
+}
+
+
+@test
+def a_milestone_is_a_line_over_the_cohort_and_never_a_member_of_it():
+    """The frontier reference points, and the one rule that makes them safe.
+
+    Every percentile on the page is computed within the open-weights roster --
+    `the cohort is this registry` is the claim the whole ranking rests on. A
+    milestone that entered the cohort would move every percentile and every
+    quality score silently, so `isOpenWeights: false` is checked rather than
+    trusted: a slug that is open weights is a roster question, not a milestone.
+
+    The numbers come from the capture rather than the milestone file, which is
+    what stops the two drifting apart as artificial analysis re-runs models.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        aa = os.path.join(tmp, "aa.json")
+        ms = os.path.join(tmp, "milestones.json")
+        with open(aa, "w") as f:
+            json.dump(MILESTONE_AA, f)
+        with open(ms, "w") as f:
+            json.dump({"version": 1, "milestones": {
+                "claude-opus-4-5-thinking": {"label": "Claude Opus 4.5",
+                                             "as_of": "2025-11-24",
+                                             "arm": "reasoning"}}}, f)
+        r = subprocess.run([os.path.join(RESEARCH, "milestones"),
+                            "--aa", aa, "--milestones", ms, "--json"],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if r.returncode:
+            raise AssertionError("milestones exited %d: %s" % (r.returncode, r.stderr.strip()))
+        got = json.loads(r.stdout)
+        one = got["claude-opus-4-5-thinking"]
+        eq(one["index"], 41.9, "the score comes from the capture, not the file")
+        eq(one["label"], "Claude Opus 4.5", "and the label from the file")
+        eq(one["as_of"], "2025-11-24", "with the date it is a milestone AS OF")
+
+        # an open-weights slug is a roster candidate, and taking it as a
+        # milestone would put a cohort member on both sides of the comparison
+        with open(ms, "w") as f:
+            json.dump({"version": 1, "milestones": {
+                "an-open-model": {"label": "Oops", "as_of": "2026-01-01"}}}, f)
+        bad = subprocess.run([os.path.join(RESEARCH, "milestones"),
+                              "--aa", aa, "--milestones", ms, "--json"],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        eq(bad.returncode != 0, True, "an open-weights milestone is refused")
+        eq("open weights" in bad.stderr, True,
+           "and says why, got %r" % bad.stderr.strip()[:120])
+    finally:
+        shutil.rmtree(tmp)
+
+
+SDCPP_PAYLOAD = {
+    "signatures": {
+        "model.diffusion_model.double_blocks.": "is_flux",
+        "embed_image_indicator.weight": "VERSION_IDEOGRAM4",
+        "model.diffusion_model.joint_blocks.": "VERSION_SD3",
+        "model.diffusion_model.blocks.0.cross_attn.norm_k.weight": "is_wan",
+        "cond_stage_model.1": "has_multiple_encoders",
+    },
+    "models": {"ideogram-ai/ideogram-4-fp8": {"version": "VERSION_IDEOGRAM4"}},
+}
+
+SDCPP_REGISTRY = """version: 1
+models:
+  ideogram-ai/ideogram-4-fp8:
+    kind: image
+    name: {short: ideogram-4}
+    engine: [stable-diffusion.cpp]
+    quants:
+    - {repo: leejet/ideogram-4-GGUF, quant: Q4_0}
+    modalities: {input: [text], output: [image]}
+"""
+
+
+@test
+def the_sdcpp_report_says_what_the_roster_does_not_carry():
+    """Coverage reported in one direction only, which crispasr had too.
+
+    The report walked the registry's image models and asked the detector about
+    each. That answers `does what we carry load` and never `what loads that we
+    do not carry` -- and the second is where the roster grows from. sd.cpp names
+    no repos, so the outward direction cannot be a list of models the way
+    crispasr's README is; what it CAN be is the set of architecture versions the
+    detector knows and nothing in the registry has been matched to.
+
+    The sub-detectors are not versions and must not be counted as gaps: sd.cpp's
+    table mixes `VERSION_*` outcomes with helpers like `has_multiple_encoders`
+    that refine one, and reporting those as missing models would be noise.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        out = os.path.join(tmp, "sdcpp.json")
+        reg = os.path.join(tmp, "models.yaml")
+        with open(out, "w") as f:
+            json.dump(SDCPP_PAYLOAD, f)
+        with open(reg, "w") as f:
+            f.write(SDCPP_REGISTRY)
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-sdcpp-support"),
+                            "--report", "--out", out, "--registry", reg],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        eq(r.returncode, 0, "the report runs: %s" % r.stdout.strip()[:200])
+        text = r.stdout
+        eq("ideogram-4" in text, True, "the inward direction still reports")
+        eq("VERSION_SD3" in text, True,
+           "a version the detector knows and the roster does not carry is named")
+        eq("is_wan" in text or "wan" in text.lower(), True,
+           "and so is a non-VERSION_ architecture outcome like wan")
+        eq("has_multiple_encoders" in text, False,
+           "a sub-detector that refines another is not a missing model")
+        eq("VERSION_IDEOGRAM4" in text.split("does not carry")[-1], False,
+           "and a version the roster DOES carry is not listed as missing")
+    finally:
+        shutil.rmtree(tmp)
+
+
+@test
+def a_carry_decision_that_never_landed_is_still_outstanding():
+    """`decided` and `done` are different things, and the report conflated them.
+
+    decided.txt's own comment says it: "`carry` is a decision to add it, not the
+    entry itself -- the registry is still written by hand, and this file only
+    records that you looked." So a repo can be decided `carry`, never added, and
+    read as settled forever -- which is what all three of this repo's carries
+    are.
+
+    Worse, two of them are the exact rows `scored_siblings` was written to
+    catch: granite-4.1-30b against the 4.2 already carried, and LFM2-24B-A2B
+    against the smaller LFM2.5 the same lab shipped later. Those decisions
+    predate the verification that contradicts them, so the report has to say
+    they are outstanding rather than quietly count them as done.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        props = os.path.join(tmp, "proposals.json")
+        decided = os.path.join(tmp, "decided.txt")
+        with open(props, "w") as f:
+            json.dump({"model": "fixture", "proposals": {}}, f)
+        with open(decided, "w") as f:
+            f.write("[carry]\nvendor/Landed-GGUF\nvendor/Never-Added-GGUF\n")
+        reg = os.path.join(tmp, "models.yaml")
+        with open(reg, "w") as f:
+            f.write("version: 1\nmodels:\n"
+                    "  vendor/Landed:\n"
+                    "    kind: text\n"
+                    "    name: {short: landed}\n"
+                    "    quants:\n"
+                    "    - {repo: vendor/Landed-GGUF, quant: Q8_0}\n"
+                    "    modalities: {input: [text], output: [text]}\n")
+        r = subprocess.run([os.path.join(RESEARCH, "propose"), "--report",
+                            "--out", props, "--decided", decided,
+                            "--registry", reg],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        eq(r.returncode, 0, "the report runs: %s" % r.stdout.strip()[:200])
+        out = r.stdout
+        eq("Never-Added" in out, True,
+           "a carry with no registry entry is reported as outstanding, got %r"
+           % out.strip()[:240])
+        eq("vendor/Landed-GGUF" in out, False,
+           "and one whose weights are carried is not")
+    finally:
+        shutil.rmtree(tmp)
+
+
+@test
+def a_written_verdict_cannot_cite_a_count_the_capture_disagrees_with():
+    """Prose drifts from the numbers it quotes, and nothing was checking.
+
+    `build-sections` pulls rank, quant and evidence-count live from the
+    dashboard but takes `one_liner`, `evidence` and `notes` from
+    usecase-assessed.json, which is SOURCE and hand-written. So a verdict can
+    cite "123 hf-discussions mentions" long after the capture has settled at 42,
+    and MODELS.md prints the stale figure as the evidence for its judgement. 28
+    of the 31 evidence lines citing a mention count were wrong that way.
+
+    The count is the checkable part -- a number next to a source name, in a file
+    this repo also holds -- so it is checked. The surrounding argument is a
+    human's and stays theirs.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        sent = os.path.join(tmp, "sentiment.json")
+        assessed = os.path.join(tmp, "assessed.json")
+        with open(sent, "w") as f:
+            json.dump({"fixture-model": {"by_source": {
+                "hf-discussions": {"mentions": 42},
+                "reddit-localllama": {"mentions": 12}}}}, f)
+        with open(assessed, "w") as f:
+            json.dump({"assessed": {"vendor/Fixture": {
+                "one_liner": "x",
+                "evidence": ["hf-discussions 123 mentions at 0% approval",
+                             "reddit 12 mentions"]}}}, f)
+        names = os.path.join(tmp, "names.json")
+        with open(names, "w") as f:
+            json.dump({"vendor/Fixture": "fixture-model"}, f)
+        r = subprocess.run([os.path.join(RESEARCH, "analyze-usecase"),
+                            "--check-citations", "--assessed", assessed,
+                            "--sentiment", sent, "--names", names],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        eq(r.returncode, 1, "a stale citation fails: %s" % r.stdout.strip()[:200])
+        eq("123" in r.stdout and "42" in r.stdout, True,
+           "and says both the claim and the capture, got %r" % r.stdout.strip()[:200])
+        eq("reddit" in r.stdout.split("\n")[0].lower(), False,
+           "the line that agrees is not reported")
+    finally:
+        shutil.rmtree(tmp)
 
 
 def main():

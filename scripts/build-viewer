@@ -39,6 +39,7 @@ import importlib.util
 import json
 import os
 import re
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -767,9 +768,26 @@ def build():
         "board_needs": load_script(
             "resolve_ids", os.path.join(HERE, "resolve-ids")).BOARD_NEEDS,
         "retention": retention_curve(),
+        "milestones": milestones(),
         "provenance": provenance(),
         "models": models,
     }
+
+
+def milestones():
+    """Frontier reference points, from research/milestones -- joined, not restated.
+
+    The comparison these exist for is on artificial analysis' index, which is
+    NOT the page's quality column: that is a weighted mean of percentiles inside
+    the open-weights cohort and has no frontier model in it by construction. So
+    the milestone ships as a raw index for the `aa.intelligence` facet to be read
+    against, and the collector is what refuses a milestone that is open weights.
+    """
+    out = subprocess.run([os.path.join(ROOT, "research", "milestones"), "--json"],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if out.returncode:
+        sys.exit("!!! research/milestones failed: %s" % out.stderr.strip())
+    return json.loads(out.stdout or "{}")
 
 
 def render(payload):
