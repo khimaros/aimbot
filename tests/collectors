@@ -1187,6 +1187,21 @@ AUDIO_CONFIGS = {
     "hexgrad/Kokoro-82M": ({"n_mels": 80, "sample_rate": 24000}, False),
     "fishaudio/s2-pro": (
         {"audio_decoder_config": {"num_mel_bins": 128}}, False),
+    # a TTS model that clones from a reference clip DOES take audio in, and says
+    # so with a speaker encoder rather than a mel count. qwen3-tts base carries
+    # `speaker_encoder_config` and no baked speakers; both customvoice rungs
+    # carry nine baked speakers and no encoder, and voicedesign neither, which
+    # is exactly the split the registry writes for the four of them
+    "Qwen/Qwen3-TTS-12Hz-1.7B-Base": (
+        {"model_type": "qwen3_tts", "tts_model_size": "1.7B",
+         "speaker_encoder_config": {"enc_dim": 2048, "sample_rate": 24000},
+         "talker_config": {"spk_id": {}}}, True),
+    "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice": (
+        {"model_type": "qwen3_tts", "tts_model_size": "1.7B",
+         "talker_config": {"spk_id": {"ethan": 0, "chelsie": 1}}}, False),
+    "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign": (
+        {"model_type": "qwen3_tts", "tts_model_size": "1.7B",
+         "talker_config": {"spk_id": {}}}, False),
 }
 
 
@@ -1211,6 +1226,78 @@ def an_asr_config_declares_audio_at_whatever_depth_it_says_it():
 
     for repo, (cfg, want) in sorted(AUDIO_CONFIGS.items()):
         eq(mod.takes_audio(cfg), want, "%s takes audio" % repo)
+
+
+CONVERSION_KEYED_REGISTRY = """version: 1
+models:
+  Vendor/Real-Weights:
+    kind: speech
+    name: {short: real-weights}
+    quants:
+    - {repo: converter/Real-Weights-GGUF, quant: Q8_0}
+    modalities: {input: [text], output: [audio]}
+  converter/Also-Real-GGUF:
+    kind: speech
+    name: {short: also-real}
+    quants:
+    - {repo: other/Also-Real-GGUF, quant: Q8_0}
+    - {repo: converter/Also-Real-GGUF, quant: Q8_0}
+    modalities: {input: [text], output: [audio]}
+"""
+
+
+@test
+def a_model_is_keyed_on_weights_not_on_a_conversion_of_itself():
+    """The key is the join, so keying it on a gguf joins to the converter.
+
+    Every capture in this repo is keyed on the registry key: model-cards reads
+    that repo's README, model-facts reads its config.json, hf-catalog reads its
+    downloads. Point the key at a conversion and all three answer about the
+    person who ran llama-quantize rather than about the model -- and a gguf repo
+    has no config.json at all, so the facts degrade to what can be read off the
+    name. It also shows up in the table, where publisher is the converter.
+
+    The tell is cheap and exact: the key appearing in the entry's own `quants`.
+    A conversion listed as a quant is the ordinary case and must not fire.
+    """
+    code, findings, _ = validate(CONVERSION_KEYED_REGISTRY)
+    where = {}
+    for x in findings:
+        where.setdefault(x["where"], []).append(x["error"])
+    eq(code, 1, "an entry keyed on its own quant fails the lint")
+    eq(any("conversion of itself" in e
+           for e in where.get("converter/Also-Real-GGUF", [])), True,
+       "the self-keyed entry is named, got %r" % where.get("converter/Also-Real-GGUF"))
+    eq("Vendor/Real-Weights" in where, False,
+       "an entry keyed on the weights, carrying a conversion as a quant, is the "
+       "ordinary case and must not fire")
+
+
+@test
+def the_punch_list_says_what_crispasr_loads_that_the_roster_does_not():
+    """The sweep reported coverage in one direction only.
+
+    `models-validate --speech` prints which of the roster's 20 speech models a
+    crispasr backend carries, and that has always been in the punch list. The
+    other direction -- the backends crispasr compiles in whose weights the
+    registry carries nothing for, which is where the TTS roster grows from --
+    lives in `fetch-crispasr --report` and was never wired into it. So a sweep
+    could report full coverage of what we already have and stay silent about the
+    64 backends we do not.
+    """
+    r = subprocess.run([os.path.join(ROOT, "scripts", "sweep"), "--report"],
+                       cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                       text=True)
+    eq(r.returncode, 0, "the punch list runs offline and exits clean")
+    out = r.stdout
+    eq("crispasr backend(s) carry the roster" in out, True,
+       "the inward direction is still reported")
+    eq("name weights the registry does not carry at all" in out, True,
+       "and so is the outward one")
+    # the heading alone would pass with an empty body, so pin a TTS backend that
+    # is in crispasr and not in the registry
+    eq("vibevoice-tts" in out, True,
+       "with the backends themselves, not just the count")
 
 
 def main():

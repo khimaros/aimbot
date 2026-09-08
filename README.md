@@ -36,7 +36,9 @@ itself.
 ## layout
 
 ```
-registry/models.yaml      per-model facts, keyed by huggingface base repo
+registry/models.yaml      per-model facts, keyed by huggingface base repo. the
+                          key is what every capture joins on, so `make lint`
+                          rejects an entry keyed on a conversion of itself
 registry/sampling.yaml    the named sampling profiles, and what each one means
 scripts/sweep             the whole research sweep in one command
 scripts/models-validate   check that the registry is internally consistent
@@ -279,7 +281,14 @@ role disagree. without the separate kind a 24mb speaker embedder with no chat
 template and no transcript sits in the speech roster looking like something to
 serve.
 
+coverage is reported in both directions, because they answer different
+questions. `models-validate --speech` says which of the roster's speech models a
+crispasr backend carries; `fetch-crispasr --report` says which of the ~119
+backends name weights the roster has nothing for, which is where the roster
+grows from. 64 backends are in that second list today, about twenty of them TTS.
+
     make sweep-report          # includes speech models with no engine, and no score
+                               # and the crispasr backends the roster does not carry
 
 ## how good is the speech roster
 
@@ -300,8 +309,9 @@ a text model against the text leaderboards, never across.
 real work.** these boards are mostly hosted endpoints, and a vendor's API SKU
 shares a family name with the checkpoint it grew from while being neither the
 same weights nor the same stack. artificial analysis scores
-`qwen3-tts-vc-realtime` at 925 elo on alibaba cloud; this registry carries gguf
-conversions of the open Qwen3-TTS at a different codec rate. those names match
+`qwen3-tts-vc-realtime` at 925 elo on alibaba cloud; this registry carries the
+open Qwen3-TTS at a different codec rate, served through gguf conversions of
+it that are listed as its quants. those names match
 on every fuzzy test there is, so the guard cannot be a matching rule -- a row
 the source itself marks closed-weights is never offered to the matcher at all.
 

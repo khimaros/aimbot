@@ -323,6 +323,16 @@ def check_registry(models, sampling, f):
             where = "%s/%s" % (repo, q.get("quant"))
             check_runtime(q.get("runtime"), where, f)
             check_crispasr(q.get("crispasr"), where, f)
+        # the key is what every capture joins on: model-cards reads that repo's
+        # README, model-facts its config.json, hf-catalog its downloads. keyed on
+        # a conversion, all three answer about whoever ran the quantizer -- and a
+        # gguf repo carries no config.json, so the facts degrade to what the name
+        # spells. the tell is the key appearing in the entry's own quants
+        if repo in {q.get("repo") for q in quants}:
+            f.add(repo, "key is a conversion of itself: it is listed in this "
+                        "entry's own quants. key the entry on the weights and "
+                        "keep the conversion as a quant")
+
         check_runtime(m.get("runtime"), repo, f)
         check_crispasr(m.get("crispasr"), repo, f)
         check_engine(m, repo, f)

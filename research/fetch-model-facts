@@ -213,7 +213,14 @@ def sampler_facts(gen):
 # encoder is the whole model. `audio_locator_tag` is nemo's SALM placeholder,
 # and canary-qwen declares its input no other way: its mel count is
 # `perception.preprocessor.features`, a name far too generic to match on.
-AUDIO_IN_KEYS = ("audio_config", "num_mel_bins", "audio_locator_tag")
+# `speaker_encoder_config` is a TTS model saying it clones from a reference
+# CLIP: it encodes incoming audio to a speaker embedding, which is why it also
+# carries the sample rate to encode at. the split it draws is exactly the one
+# the registry writes by hand for the qwen3-tts four -- base has the encoder and
+# no baked speakers, both customvoice rungs have nine baked speakers and no
+# encoder, voicedesign has neither because its voice is prose
+AUDIO_IN_KEYS = ("audio_config", "num_mel_bins", "audio_locator_tag",
+                 "speaker_encoder_config")
 # a DECODER's mel count is an output, not an input. kokoro spells its `n_mels`
 # and s2-pro nests its under `audio_decoder_config`, so neither is reached even
 # now -- but the search below is recursive, and a subtree named for a decoder is

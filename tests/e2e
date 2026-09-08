@@ -835,6 +835,38 @@ test('every forum a model carries enters the composite, not just one', () => {
      'which is below the one forum that used to be the whole of it (' + best + ')');
 });
 
+// the four qwen3-tts entries were keyed on a gguf conversion, so `repo` and
+// `publisher` -- which every join in this registry runs on -- named the person
+// who converted the weights rather than the team that trained them, and there
+// was no link to the qwen weights anywhere on the page.
+test('a model is read from the weights, not from a conversion of them', () => {
+  RESET();
+  D.models.forEach(m => {
+    const conversions = new Set(m.quants.map(q => q.repo));
+    ok(!conversions.has(m.repo), m.short + ' is keyed on ' + m.repo
+      + ', which is one of its own quants');
+  });
+  const tts = D.models.filter(m => m.short.startsWith('qwen3-tts'));
+  eq(tts.length, 4, 'the four qwen3-tts entries are carried');
+  tts.forEach(m => eq(m.publisher, 'Qwen',
+    m.short + ' is published by the team that trained it'));
+});
+
+// the two conversions are not interchangeable: only cstr's carries the metadata
+// namespace crispasr reads, and only it carries the speaker list. the registry
+// lists it first for that reason and the page has to honour the order.
+test('the quant a tts row is read at is the one that actually loads', () => {
+  RESET();
+  D.models.filter(m => m.short.startsWith('qwen3-tts')).forEach(m => {
+    const q = activeQuant(m);
+    ok(q, m.short + ' resolves a quant');
+    ok(q.repo.startsWith('cstr/'), m.short + ' is read at the conversion crispasr'
+      + ' can load, got ' + q.repo);
+    ok(q.crispasr && q.crispasr.backend, m.short + ' carries its backend on that'
+      + ' rung, got ' + JSON.stringify(q.crispasr));
+  });
+});
+
 test('the kv cache follows each model\'s own attention geometry', () => {
   // gemma 4 31b runs a 1024-token window on all but every fifth layer, so its
   // cache at 128k is a fraction of what layers * kv_heads * head_dim implies

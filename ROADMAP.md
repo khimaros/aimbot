@@ -252,6 +252,39 @@ built and is marked done when it ships.
   forum was in the default set -- for bonsai, the highest of its three on the
   fewest mentions.
 
+- **a model is keyed on the weights, not on a conversion of them.** the four
+  qwen3-tts entries were keyed on `khimaros/Qwen3-TTS-12Hz-*-GGUF`, the only
+  four of 92 whose key was one of their own quant repos. the key is what every
+  capture joins on, so all of them answered about the converter: model-cards
+  read that repo's README, model-facts its config.json -- which a gguf repo does
+  not have, so params fell back to what the name spells -- and the table said
+  the publisher was khimaros. there was no link to the qwen weights anywhere,
+  though hf-catalog had been carrying all five `Qwen/Qwen3-TTS-12Hz-*` repos the
+  whole time. rekeyed onto those, with both conversions kept as quants and cstr
+  still first; `make lint` now rejects an entry that appears in its own quants.
+
+  the quant pick was never the problem and the case that pins it is green from
+  both sides of the change: `defaultRepo` and `activeQuant` resolve to cstr on
+  all four, which is the conversion crispasr can actually load.
+
+  reading the right config also settled two things the old key could not. the
+  sizes were wrong -- `params_source: name` read "0.6B" and "1.7B" off the repo,
+  and the safetensors index counts 0.91b and 1.93b. and `--modalities` fired on
+  the base rung the moment it had a real config to check against, because
+  `takes_audio` did not know `speaker_encoder_config`: qwen's own config carries
+  it at enc_dim 2048 and sample_rate 24000 with zero baked speakers, where both
+  customvoice rungs carry nine speakers and no encoder and voicedesign carries
+  neither. that is exactly the split the registry note had claimed from the gguf
+  headers, now confirmed from the vendor.
+
+- **the punch list reports crispasr coverage in both directions.**
+  `models-validate --speech` said which of the roster's 20 speech models a
+  backend carries and that was the only direction reported, so a sweep could
+  show full coverage of what we have and stay silent about what we do not.
+  `fetch-crispasr --report` had computed the other direction since the collector
+  landed and nothing printed it: 64 backends naming weights the registry carries
+  nothing for, about twenty of them TTS. it is in `make sweep-report` now.
+
 ## next
 
 1. **finish deduplicating MODELS.md against the dashboard.** the headline
