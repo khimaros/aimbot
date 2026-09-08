@@ -502,7 +502,11 @@ composite weights -- 0.30 coding, 0.30 agentic, 0.15 gbench, 0.10 arena,
 0.10 swe-rebench, 0.05 community, 0.05 card claims, set by a redundancy
 analysis rather than by taste -- and every one of them is a slider. weight gbench to
 zero if games do not persuade you. weight the forums to 1.0 if they do. the
-table re-ranks as you drag.
+table re-ranks as you drag. `community` and `card` are one slider over every
+forum and every claim under them, averaged, because the question a reader has is
+"how much do i trust what people say" rather than one per venue -- and because
+weighting a single forum made a community-only model's whole rank a fact about
+which forum was in the default set.
 
 the sliders are behind `custom ranking`, because most readers want a stance
 rather than sixty decisions. the stances are a dropdown in the ranking row:
@@ -681,12 +685,23 @@ means it beat 79% of the registry models that also carry a coding index. the
 question a local roster asks is "best of what i can run", and ranking a 27b
 against gpt-5.6 answers a different one.
 
-**an absence is never a zero.** a model gbench has not played simply has no
-gbench facet, its composite renormalizes over the facets it does carry, and the
-`evidence` column says how many of the weighted factors it was actually
-measured on. 3/7 in that column is a warning about the evidence, not a verdict
-on the model. 26 of the 48 text models are not on the gbench board at all --
-that is upstream, the api publishes 98 models and no more.
+**an absence is never a zero, and never a free pass.** a model gbench has not
+played simply has no gbench facet, and the `evidence` column says how many of
+the weighted factors it was actually measured on. 3/7 in that column is a
+warning about the evidence, not a verdict on the model. 26 of the 48 text models
+are not on the gbench board at all -- that is upstream, the api publishes 98
+models and no more.
+
+what the composite then does with the gap is the part that decides ranks.
+dividing by the weight actually used sounds neutral and is not: it hands the
+missing weight to whatever the model DOES have, so a model measured by one
+source has that source counted twenty times harder than a model measured by
+seven. bonsai 27b took 19th of 92 that way, on a single forum percentile at
+weight 0.05, ahead of the qwen3.6 27b it is a 1-bit rebuild of. so the uncovered
+weight is scored as the MIDDLE instead. these are percentiles, whose median is
+50 by construction, and half the uncovered weight enters at 50 -- unmeasured
+reads as typical rather than as whatever the one remaining factor says. a model
+measured on every factor asked of it has no uncovered weight and does not move.
 
 every number carries a reference: hover a `[src]` for the source, the file it
 came from, and -- for a community claim -- the sentence somebody actually wrote

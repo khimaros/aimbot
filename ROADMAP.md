@@ -232,6 +232,26 @@ built and is marked done when it ships.
   snapshot and stays off. it was invisible to every test until the test booted
   as a returning reader rather than a new one.
 
+- **an unmeasured model reads as unremarkable, not as whatever its one remaining
+  factor says.** the composite divided by the weight it actually used, which
+  hands the missing weight to whatever the model DOES have, so the fewer factors
+  a model carried the harder each one counted. bonsai 27b was 4th of the ranked
+  roster in MODELS.md at quality 68 on evidence 1/7, and that 68 WAS one forum
+  percentile at weight 0.05 -- ahead of the qwen3.6 27b it is a 1-bit rebuild of
+  at 6/7, and beside a verdict already calling it the worst-received model in the
+  corpus. `research/build-tables` had rejected the same arithmetic in its
+  `composite()` docstring and the page had not. the uncovered weight is now
+  scored as the middle: these are percentiles, whose median is 50, so half of it
+  enters at 50 and a model measured on everything is untouched by construction.
+  bonsai lands 14th at 50.0, ornith 1.5 9b rises from 19th to 12th on the same
+  rule, and the models carrying 7/7 move up under both.
+
+  the forums became one `community.*` slider in the same change. build-tables
+  carries ONE `sentiment` component at 0.05, and splitting it four ways while
+  weighting only reddit made a community-only model's rank a fact about which
+  forum was in the default set -- for bonsai, the highest of its three on the
+  fewest mentions.
+
 ## next
 
 1. **finish deduplicating MODELS.md against the dashboard.** the headline

@@ -274,7 +274,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
   <div class="controls">
     <span class="lbl">ranking</span>
     <select id="preset" data-help="a named set of weights. `balanced` is build-tables' composite; the others reweight toward one question. changing any weight yourself moves this to `custom ranking`"></select>
-    <button id="factors-btn" aria-pressed="false" data-help="build your own weighting: one slider per measurement, grouped by what measured it. the ranking resorts as you drag, and a model missing a factor is ranked on the ones it has rather than scored zero">custom ranking</button>
+    <button id="factors-btn" aria-pressed="false" data-help="build your own weighting: one slider per measurement, grouped by what measured it. the ranking resorts as you drag, and a model missing a factor is scored as typical on it rather than zero or exempt">custom ranking</button>
     <button id="eff-btn" aria-pressed="true" data-help="off, the scores are what the source published. on, they answer `what would i get from the quant i can actually run`: a benchmark scores the model at the precision the scorer served, so the score is multiplied by the retention that quant's bits per weight predict and the percentiles are recomputed against the discounted cohort. only the coding and software-agent benchmarks are discounted, because the one sweep behind the curve measured a code-editing pass rate and nothing else -- every other number is published as-is and says why on hover. the curve itself is fitted to one model, deepseek v3.1 at 671b, and applied to all of them, which is the weakest step on this page and reads optimistic for a small model at two bits.">quant adjusted</button>
   </div>
   <div class="controls">
@@ -343,11 +343,13 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
 // actually asks for them: which models are good, why they are good, and how to
 // run the one you picked.
 //
-// NOTHING is imputed. a model with no gbench entry has no gbench facet, its
-// composite renormalizes over the facets it does carry, and the evidence
-// column says how many of the weighted factors it actually had. an absence is
-// never scored as a zero, because a model nobody has measured is not a bad
-// model.
+// NOTHING is measured that was not measured. a model with no gbench entry has
+// no gbench facet, and the evidence column says how many of the weighted
+// factors it actually had. an absence is never scored as a zero, because a
+// model nobody has measured is not a bad model -- but it is not scored as
+// exempt either: the composite shrinks toward the middle by the weight that
+// measured nothing, so an unmeasured model reads as unremarkable rather than as
+// whatever its one remaining factor says.
 const DATA_URL = '__DATA_URL__';
 
 const store = {
@@ -837,19 +839,37 @@ function asked(m, key) {
     : have.has(key);
 }
 
-// the composite: weighted mean of percentiles over the facets PRESENT. the
-// denominator is the weight actually used, so a model measured by three of
-// five sources is ranked on those three rather than penalised for the two.
+// the composite: weighted mean of percentiles over the facets PRESENT, shrunk
+// toward the middle by the weight that measured nothing.
+//
+// dividing by the weight actually used and stopping there is the obvious
+// choice and the wrong one, and research/build-tables rejected it first: it
+// redistributes the missing weight onto whatever the model DOES have, so a
+// model measured by one source has that source counted twenty times harder
+// than a model measured by seven. bonsai 27b took 19th of 92 that way, on a
+// single forum percentile at weight 0.05 -- ahead of the qwen3.6 27b it is a
+// 1-bit rebuild of, which carries six of the seven factors.
+//
+// so the uncovered weight is scored as the middle instead of as nothing. these
+// are percentiles, whose median is 50 by construction, which is what makes the
+// prior a constant rather than a fit: `unmeasured` becomes `typical`, which is
+// the honest reading of an absence. a model measured on everything has no
+// uncovered weight and is untouched by construction.
+const SHRINK_PRIOR = 50;            // the percentile an unmeasured factor is worth
+const SHRINK_LAMBDA = 0.5;          // how much of the uncovered weight speaks
+
 function score(m) {
-  let num = 0, den = 0, have = 0, want = 0;
+  let num = 0, den = 0, denMax = 0, have = 0, want = 0;
   for (const [key, w] of Object.entries(W)) {
     if (!w || !asked(m, key)) continue;
-    want++;
+    want++; denMax += w;
     const p = facetPct(m, key);
     if (p === null) continue;
     have++; num += w * p; den += w;
   }
-  return {value: den ? num / den : null, have, want};
+  if (!den) return {value: null, have, want};
+  const k = SHRINK_LAMBDA * (denMax - den);
+  return {value: (num + k * SHRINK_PRIOR) / (den + k), have, want};
 }
 
 const scored = m => (m._s || (m._s = score(m)));
@@ -896,7 +916,7 @@ const COLUMNS = [
    cell: m => `<td>${esc(m.short)}<span class="sub"> ${esc(m._q ? m._q.quant
      : m.publisher)}</span></td>`},
   {k: 'score', t: 'quality', num: true, get: m => scored(m).value ?? -1,
-   help: "the weighted mean of its percentiles, over the factors it was actually measured on. set the weights under factors",
+   help: "the weighted mean of its percentiles, over the factors it was actually measured on, pulled toward 50 by the weight that measured nothing. set the weights under factors",
    cell: m => {
      const s = scored(m);
      if (s.value === null) return '<td class="n faint" title="none of the weighted factors measured this model">-</td>';
@@ -1531,8 +1551,8 @@ function drawFactors() {
     .concat([...groups.keys()].filter(n => !about[n]));
 
   box.innerHTML = '<div class="hint">quality is whatever you say it is. a weight of zero '
-    + 'drops the factor; a model missing a factor is ranked on the ones it has, never '
-    + 'scored zero for the absence.</div>'
+    + 'drops the factor; a model missing a factor is scored as typical on it, never '
+    + 'zero for the absence and never exempt from it.</div>'
     + order.map(g => {
       const shut = folded.has(g);
       // 22 artificial analysis benchmarks and 11 languages do not all need to
@@ -1736,13 +1756,19 @@ function methodology() {
     + ' tab says how many models each percentile was computed against.</p>',
     src('research/analyze-usecase', 'research/analyze-usecase'))
 
-  + sec('a missing measurement is never a zero',
-    '<p>a model gbench has not played simply has no gbench facet. its composite'
-    + ' renormalizes over the facets it does carry, and the evidence column says'
-    + ' how many of the weighted factors it was actually measured on. 3/7 there is'
-    + ' a gap in the evidence, not a verdict on the model. 22 of the 41 text models'
-    + ' are not on the gbench board at all -- that is upstream; the api publishes'
-    + ' 98 models and no more.</p>')
+  + sec('a missing measurement is never a zero, and never a free pass',
+    '<p>a model gbench has not played simply has no gbench facet, and the evidence'
+    + ' column says how many of the weighted factors it was actually measured on.'
+    + ' 3/7 there is a gap in the evidence, not a verdict on the model. 22 of the'
+    + ' 41 text models are not on the gbench board at all -- that is upstream; the'
+    + ' api publishes 98 models and no more.</p>'
+    + `<p>the gap is scored as the MIDDLE, not dropped. dividing by the weight`
+    + ' actually used sounds neutral and is not: it hands the missing weight to'
+    + ' whatever the model does have, so one forum percentile at weight 0.05 can'
+    + ' carry a whole ranking. these are percentiles, whose median is 50, so half'
+    + ' the uncovered weight is scored at 50 instead -- unmeasured reads as'
+    + ' typical. a model measured on every factor asked of it has no uncovered'
+    + ' weight and is not moved at all.</p>')
 
   + sec('quant adjusted, and what it is evidence for',
     '<p>a benchmark scores the model at the precision the scorer served. this'
@@ -2904,7 +2930,8 @@ function drawChrome() {
     + `content-addressed in data.json under <code>provenance</code>. `
     + `click a row for the model, hover a [src] for the sentence or the source behind a number.`
     + `<br>quality is a weighted mean of percentiles within this registry -- not against `
-    + `frontier api models -- renormalized over the factors each model actually carries.`;
+    + `frontier api models -- over the factors each model actually carries, pulled toward `
+    + `50 by the weight that measured nothing.`;
 }
 
 // --- share links -------------------------------------------------------------

@@ -238,7 +238,12 @@ GIB = 2 ** 30
 # a starting point rather than a claim.
 # a key ending in `.*` is a wildcard over every facet under it, averaged. card
 # claims and epoch runs are per benchmark, and a reader wants one knob for "how
-# much do i trust what the vendor says", not eleven.
+# much do i trust what the vendor says", not eleven. the forums are a wildcard
+# for a second reason: build-tables carries ONE `sentiment` component at 0.05,
+# and splitting it across four per-forum facets while weighting only reddit made
+# a community-only model's composite whichever forum happened to be in this
+# table. bonsai 27b is talked about on three and reddit is its highest on the
+# fewest mentions, so the one that counted was the flattering one.
 # the speech keys are weighted here for the same reason the text ones are: a
 # facet nothing weights produces no score, and a roster that ranks 70 models and
 # shows a dash beside the other 19 reads as "unmeasured" when the measurement
@@ -247,7 +252,7 @@ GIB = 2 ** 30
 DEFAULT_WEIGHTS = {
     "aa.coding": 0.30, "aa.agentic": 0.30, "gbench.agentic": 0.15,
     "lmarena.rating": 0.10, "swerebench.resolved": 0.10,
-    "community.reddit-localllama": 0.05, "card.*": 0.05,
+    "community.*": 0.05, "card.*": 0.05,
     "aa-stt.accuracy": 0.30, "aa-tts.elo": 0.30, "tts-arena.elo": 0.20,
     # the wildcard, not us english: weighting one language would rank a model on
     # the slice it happens to be tuned for
