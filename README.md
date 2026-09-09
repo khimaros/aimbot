@@ -740,11 +740,21 @@ every number carries a reference: hover a `[src]` for the source, the file it
 came from, and -- for a community claim -- the sentence somebody actually wrote
 and a link to the thread. a model's detail opens as a modal deep-linked in the
 url (`#model=Qwen/Qwen3.6-27B&tab=operate`) with six tabs, one per kind of
-claim: `overview` what it is, `quality` what third parties measured, `analysis`
-what we concluded and why, `community` what each forum said, `vendor` what the
-people selling it say, and `operate` how to run it. keeping the vendor's own
-paragraph on its own tab is the point rather than tidiness -- it used to open
-the overview, which gave marketing copy the position the measurements earned.
+claim: `overview` what it is, `quality` what third parties measured, `community`
+what each forum said, `vendor` what the people selling it say, `quantization`
+what each published rung is and what reading it at one cost, and `operate` how to
+run it. keeping the vendor's own paragraph on its own tab is the point rather
+than tidiness -- it used to open the overview, which gave marketing copy the
+position the measurements earned.
+
+the `quantization` tab carries the rung ladder: every quant each repo publishes,
+with the bits per weight derived from file size beside the bits per weight READ
+out of that file's tensor table, and the ggml type mix behind the label -- next
+to what the retention discount cost this model, which curve said so, and who
+measured it. the ladder is drawn for every repo rather than for the one the
+`operate` chips have picked, and the rung in bold is the one the ranking is
+scoring: a tab about what a quant IS should not redraw because somebody chose a
+file to write a command for.
 
 the `operate` tab emits a `llama-server` argv, a pi `models.json` provider
 block, the request body carrying the thinking knob, and a vllm line -- built

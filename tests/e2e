@@ -642,19 +642,21 @@ test('quantization is its own tab, and says what the discount did', () => {
   ok(html_.includes(D.retention.measured[measured.repo].metric),
      'and names what was measured: ' + D.retention.measured[measured.repo].metric);
 
-  // NOTHING here follows the operate tab's chips. the ladder was drawn here
-  // first and it filters by the picked repo and bolds the picked rung, so
-  // choosing a quant to write a command for silently redrew a tab about
-  // scoring. it lives with the chips that drive it instead, and what is left is
-  // true of the model however you are running it
-  eq(html_.includes('quants in this repo'), false,
-     'the ladder follows the picker, so it is not here');
+  // the rung ladder is here, and NOTHING here follows the operate tab's chips:
+  // it is every rung of every repo that publishes one, with the rung the page
+  // SCORES in bold -- the one the discount above was computed at. drawn against
+  // the picked repo instead, choosing a quant to write a command for would
+  // silently redraw a tab about scoring.
+  ok(html_.includes('quants in'), 'the ladder is on the tab about quants');
   eq(html_.includes('data-pick-quant'), false, 'and there is nothing to pick');
+  const repos = [...new Set(quantChoices(measured).map(c => c.repo))];
+  repos.forEach(r => ok(html_.includes('quants in <span class="faint">' + r),
+     'every publishing repo gets its ladder, missing ' + r));
 
   openModel(measured.repo, 'operate');
   const op = html('#body');
-  ok(op.includes('quants in this repo'), 'the ladder is with its pickers');
-  ok(op.includes('data-pick-quant'), 'which are on the same tab');
+  eq(op.includes('quants in'), false, 'the ladder is not on operate as well');
+  ok(op.includes('data-pick-quant'), 'the pickers stay, since a snippet reads them');
   // the run snippets are long and are not what a reader opens the tab for
   ok(op.includes('<details'), 'the sample configs are collapsed');
   eq(/<details[^>]*\bopen\b/.test(op), false, 'and closed by default');

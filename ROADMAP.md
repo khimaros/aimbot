@@ -611,6 +611,17 @@ built and is marked done when it ships.
   the way a stored column order drops a column since removed -- otherwise the
   dead `ms-` key rides along in every link that browser produces.
 
+- **the rung ladder is on the quantization tab.** it sat on `operate`, drawn for
+  the picked repo and bolding the picked rung, which made it a view of that
+  selection -- while the two columns that make it worth reading, the bits per
+  weight READ out of the file's tensor table and the ggml type mix behind the
+  label, answer `what is this quant`, which is the other tab's whole question. it
+  is drawn for every repo publishing rungs now, and bolds the rung the ranking is
+  scoring rather than the one a snippet is being written for, so nothing on that
+  tab follows a chip on another one. twelve models publish rungs into more than
+  one repo and get a ladder each; the tensor-table note under them is printed
+  once rather than per repo.
+
 ## next
 
 1. **finish deduplicating MODELS.md against the dashboard.** the headline

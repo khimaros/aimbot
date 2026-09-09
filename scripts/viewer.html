@@ -2438,9 +2438,9 @@ const SAMPLERS = [['temp', 'temp'], ['top_p', 'top_p'], ['top_k', 'top_k'],
                   ['min_p', 'min_p'], ['presence_penalty', 'presence'],
                   ['repeat_penalty', 'repeat']];
 
-// every quant the chosen repo publishes, with what it weighs. it was crammed
-// into the buttons, where twenty-five chips carrying three numbers each is a
-// wall rather than a menu.
+// every quant a repo publishes, with what it weighs. it was crammed into the
+// buttons, where twenty-five chips carrying three numbers each is a wall rather
+// than a menu.
 const out_link = (url, label) =>
   `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a>`;
 
@@ -2485,7 +2485,7 @@ function quantTable(m, repo, pick) {
   // model publishes no parameter count -- most of the speech half -- the
   // derived one is blank and the read one is the only figure there is
   const anyRead = rows.some(c => c.realBpw);
-  return `<h3>quants in this repo</h3>`
+  return `<h3>quants in <span class="faint">${esc(repo)}</span></h3>`
     + '<table><thead><tr><th>quant</th><th class="n">gib</th>'
     + '<th class="n">bpw</th>'
     + (anyRead ? '<th class="n" data-help="read from the file\'s tensor table'
@@ -2501,7 +2501,7 @@ function quantTable(m, repo, pick) {
       // rows in ten to say something about the tenth
       return `<tr><td class="nw${c.forkType ? ' warn' : ''}"${c.forkType
         ? ` data-help="${esc(c.forkType)}. this rung needs the fork that published it"`
-        : ''}>${pick && c.quant === pick.quant
+        : ''}>${pick && c.repo === pick.repo && c.quant === pick.quant
           ? `<b>${esc(c.quant)}</b>` : esc(c.quant)}`
         + (c.forkType ? ' <span class="faint">a fork</span>' : '') + '</td>'
         + `<td class="n${over ? ' warn' : ''}"${over
@@ -2510,8 +2510,21 @@ function quantTable(m, repo, pick) {
         + `<td class="n dim">${num(c.bpw, 2) || '-'}</td>`
         + (anyRead ? `<td class="n dim">${num(c.realBpw, 2) || '-'}</td>`
           + `<td>${typeChips(c.types)}</td>` : '') + '</tr>';
-    }).join('') + '</tbody></table>'
-    + (anyRead ? '<p class="faint">`read` and the layer mix come out of each'
+    }).join('') + '</tbody></table>';
+}
+
+// a ladder per repo that publishes one, which is what makes the set a fact about
+// the model rather than a view of a selection: the rung in bold is the one the
+// page is SCORING, so it is the rung the discount above was computed at. the
+// note goes once at the end, since three repos said it three times.
+function quantLadders(m) {
+  const rows = quantChoices(m);
+  const pick = activeQuant(m);
+  const tables = [...new Set(rows.map(c => c.repo))]
+    .map(r => quantTable(m, r, pick)).join('');
+  if (!tables) return '';
+  return tables + (rows.some(c => c.realBpw)
+    ? '<p class="faint">`read` and the layer mix come out of each'
       + ' file\'s own tensor table; `bpw` beside them is file size over parameter'
       + ' count. the share is of WEIGHTS rather than of tensors, because a'
       + " model's hundreds of f32 norms are most of its tensors and almost none"
@@ -2622,15 +2635,16 @@ function measuredTable(m) {
 }
 
 // NOTHING here reads the operate tab's chips, and that is the whole rule for
-// what belongs. the rung ladder was drawn here first and it filters by the
-// picked repo and bolds the picked rung, so choosing a quant to write a command
-// for silently redrew a tab about scoring -- and the runtime chip reached even
-// further, because `repoChoices` narrows to the conversions a runtime declares.
-// the ladder lives with the chips that drive it. what is left is true of the
-// model however you happen to be running it: what the discount cost, what curve
-// says so, and who measured it.
+// what belongs. the ladder is here because this is the tab about what a quant IS
+// -- the read bpw and the layer mix are its columns -- and it is drawn for EVERY
+// repo publishing rungs rather than for the picked one. filtered by that pick it
+// was a view of a selection: choosing a quant to write a command for silently
+// redrew a tab about scoring, and the runtime chip reached further still, because
+// `repoChoices` narrows to the conversions a runtime declares. what is here is
+// true of the model however you happen to be running it: what each rung is, what
+// the discount cost, what curve says so, and who measured it.
 function tabQuantization(m) {
-  return discountBlock(m) + measuredTable(m) + sweepTable(m);
+  return discountBlock(m) + quantLadders(m) + measuredTable(m) + sweepTable(m);
 }
 
 function sweepTable(m) {
@@ -2703,10 +2717,9 @@ function templateSection(m, repo) {
     ;
 }
 
-// the selection chips, shared because two tabs now ask the same question in
-// different words: operate asks which file to write a command for, quantization
-// asks which file to read a tensor table out of. the click handlers are bound
-// on the modal body rather than per tab, so a row works wherever it is drawn.
+// the selection rows of the operate tab, one shape for all four of them. the
+// click handlers are bound on the modal body rather than per tab, so a row still
+// works wherever it is drawn.
 const pickRow = (label, body) =>
   `<div class="pickrow"><span class="k">${label}</span>`
   + `<span class="chips">${body}</span></div>`;
@@ -2756,11 +2769,7 @@ function tabOperate(m) {
         + `<button class="copy">copy</button><pre>${esc(o.text)}</pre></details>`)
         .join('') : '')
     + samplerTable(m, profile)
-    + templateSection(m, repo)
-    // the ladder belongs with the chips that drive it: it shows the picked
-    // repo's rungs and bolds the picked one, so it is a view OF the selection
-    // above rather than a fact about the model
-    + quantTable(m, repo, pick);
+    + templateSection(m, repo);
 
   out += runtimeBlock(m);
 
