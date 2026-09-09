@@ -1097,34 +1097,17 @@ test('a milestone is carried as a line, not as a row', () => {
     + ' (' + over.length + ' of ' + scored.length + ')');
 });
 
-// the milestone earns its place as a FILTER: composed with `fits vram` it
-// answers the question the roster exists for -- what beats the november 2025
-// frontier and still runs on the card I have.
-test('a milestone is a filter, and composes with the hardware one', () => {
+// the milestone is a line the payload carries, not a control on the page: no
+// flag is built from one, and a stored or shared filter set naming a flag this
+// page does not offer is dropped rather than travelling in every later link.
+test('a milestone is not offered as a filter', () => {
   RESET();
-  const slug = Object.keys(D.milestones)[0];
-  const ms = D.milestones[slug];
-  const flag = FLAGS.find(f => f.k === 'ms-' + slug);
-  ok(flag, 'the milestone is offered as a flag, got ' + FLAGS.map(f => f.k).join(','));
-  ok(flag.t.includes(ms.label), 'and names the model it is a line for');
+  eq(FLAGS.some(f => f.k.startsWith('ms-')), false,
+    'no flag is built from a milestone, got ' + FLAGS.map(f => f.k).join(','));
 
-  const over = D.models.filter(f => flag.test(f));
-  ok(over.length > 0, 'some model clears it');
-  over.forEach(m => ok(m.facets['aa.intelligence'].value >= ms.index,
-    m.short + ' is marked as clearing ' + ms.label + ' and is not'));
-
-  // an unmeasured model does not clear a line nothing measured it against
-  const unscored = D.models.find(m => !m.facets['aa.intelligence']);
-  eq(flag.test(unscored), false,
-    unscored.short + ' carries no index, so it cannot be said to beat anything');
-
-  // and the composition that matters
-  filters.flags = new Set(['fits', 'ms-' + slug]);
-  setHardware({...DEFAULT_HARDWARE, budget: 32});
-  const both = visible();
-  ok(both.length > 0, 'something beats the frontier and fits 32gb');
-  both.forEach(m => ok(fitsBudget(m) && flag.test(m),
-    m.short + ' passed both filters without satisfying both'));
+  applyState({f: {flags: ['fits', 'ms-' + Object.keys(D.milestones)[0]]}});
+  eq([...filters.flags].join(','), 'fits',
+    'the flag the page offers survives and the one it does not is dropped');
   RESET();
 });
 

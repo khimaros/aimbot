@@ -1326,37 +1326,10 @@ const FLAGS = [
    help: 'some quant of it fits your vram, after the reserve and the context kv cache'},
 ];
 
-// one flag per milestone, built at boot rather than written here, so declaring a
-// second one in research/milestones.json needs no javascript.
-//
-// the comparison is on artificial analysis' raw index and NOT on the quality
-// column, which is a percentile inside the open-weights cohort and has no
-// frontier model in it by construction. a model artificial analysis has not
-// scored fails the test rather than passing it: `we cannot say it beats this`
-// is not the same claim as `it beats this`, and a filter has to pick one.
-function milestoneFlags() {
-  return Object.entries(D.milestones || {}).map(([slug, ms]) => ({
-    k: 'ms-' + slug,
-    t: 'beats ' + ms.label,
-    test: m => {
-      const f = m.facets['aa.intelligence'];
-      return !!f && f.value >= ms.index;
-    },
-    help: `artificial analysis scores it at or above ${ms.label} (${ms.index} on `
-      + `the intelligence index, ${ms.as_of}) -- the frontier this roster is read `
-      + `AGAINST rather than a member of it, since every percentile here is `
-      + `computed inside the open-weights cohort. compose it with \`fits vram\` `
-      + `for the question worth asking: what beats that line and runs on your `
-      + `card. two caveats. a model that board has not scored does not pass, `
-      + `because unmeasured against a line is not above it. and the comparison is `
-      + `on the UNDISCOUNTED index either side -- the intelligence index is a `
-      + `composite of the others, so quant adjustment leaves it alone rather than `
-      + `applying the curve twice, and the frontier model is served at full `
-      + `precision anyway. today every model that clears this line and fits would `
-      + `still clear it discounted, but a model sitting within a point of it `
-      + `might not`,
-  }));
-}
+// a stored or shared filter set can name a flag this page no longer offers, the
+// way a stored column order can name a column since dropped -- carrying the key
+// would put it in every share link with nothing left to test it
+const knownFlags = ks => ks.filter(k => FLAGS.some(f => f.k === k));
 
 function haystack(m) {
   return m._hay || (m._hay = [m.repo, m.short, m.match, m.facts.arch, m.facts.model_type,
@@ -3262,7 +3235,7 @@ function applyState(st) {
     // `mod` was one shape before it was several; a link from then still reads
     if (st.f.mod !== undefined) filters.mods = new Set([st.f.mod]);
     if (st.f.mods) filters.mods = new Set(st.f.mods);
-    if (st.f.flags) filters.flags = new Set(st.f.flags);
+    if (st.f.flags) filters.flags = new Set(knownFlags(st.f.flags));
     if (st.f.engines) filters.engines = new Set(st.f.engines);
     saveFilters();
     // a shared link can land on a different shape than the one booted, and the
@@ -3346,9 +3319,6 @@ function rememberWeights() {
 
 function boot(payload) {
   D = payload;
-  // before anything reads FLAGS: the stored filter set can name a milestone
-  // flag, and restoring one that is not in the list yet would drop it silently
-  FLAGS.push(...milestoneFlags());
   W = restoreWeights();
   // shut on a first visit: eight headers is a menu, sixty sliders is a wall.
   // a stored [] is a reader who opened them, so only a MISSING key defaults
@@ -3365,7 +3335,7 @@ function boot(payload) {
              pubs: new Set(f && f.pubs ? f.pubs : f && f.pub ? [f.pub] : []),
              mods: new Set(f && f.mods ? f.mods
                            : f && f.mod ? [f.mod] : DEFAULT_MODALITIES),
-             flags: new Set(f ? f.flags || [] : DEFAULT_FLAGS),
+             flags: new Set(knownFlags(f ? f.flags || [] : DEFAULT_FLAGS)),
              engines: new Set(f && f.engines ? f.engines : DEFAULT_ENGINES)};
   Object.entries(DEFAULT_HARDWARE).forEach(([k, v]) => HW_SET[k](store.get(k, v)));
 

@@ -602,6 +602,15 @@ built and is marked done when it ships.
   landed and nothing printed it: 64 backends naming weights the registry carries
   nothing for, about twenty of them TTS. it is in `make sweep-report` now.
 
+- **the frontier milestone is no longer a dashboard filter.** `beats Claude Opus
+  4.5` was a flag built at boot from `research/milestones.json`, and the flag row
+  is the hardware and registry questions again. the milestone itself stays as
+  data: joined live from artificial analysis, shipped in the payload, and
+  `research/milestones` still prints where the roster stands against it. a stored
+  or shared filter set naming a flag the page does not offer now drops the key,
+  the way a stored column order drops a column since removed -- otherwise the
+  dead `ms-` key rides along in every link that browser produces.
+
 ## next
 
 1. **finish deduplicating MODELS.md against the dashboard.** the headline
@@ -789,3 +798,30 @@ built and is marked done when it ships.
    would sit in a document whose whole claim is that its numbers are third
    party. the measurement/judgement split has a third column now and nothing
    names it.
+
+9. **expose `nearest sota` from milestones.json.** not now, and worth writing
+   down while the reason is fresh: `beats Claude Opus 4.5` was a filter and is
+   gone, but the underlying question a reader asks of a local model is not a
+   yes/no -- it is `how far behind the frontier is this, and which frontier model
+   is it nearest`. the data for it is already joined: `research/milestones`
+   resolves each declared slug against `data/artificial-analysis.json` on the
+   intelligence index, `roster_against` already splits the roster at that line,
+   and the payload already ships `milestones`. what is missing is the reading --
+   a per-model nearest line and the distance to it, on the model page rather than
+   as a toggle over the whole roster.
+
+   the design fork to settle first is where the frontier set comes from.
+   `milestones.json` holds one declared line because each one is a judgement with
+   a reason attached, and one line answers `above or below` but not `nearest`.
+   either declare several (a judgement each, which is what that file is for) or
+   read every closed-weights row in the capture (full coverage, no judgement, and
+   the SOTA drifts with whatever the last fetch got). the second is the honest
+   fit for a nearest-neighbour reading and it gives up the thing the file exists
+   to record.
+
+   two constraints hold either way. the comparison is on the RAW index, never the
+   quality column, which is a percentile inside the open-weights cohort and has
+   no frontier model in it by construction. and a model artificial analysis has
+   not scored has no nearest line at all -- 44 registry models carry the index
+   and 11 of them clear the one declared line -- so the field is absent rather
+   than estimated.
