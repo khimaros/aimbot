@@ -228,8 +228,11 @@ test('a speech model is scored on the boards that rank speech', () => {
   ok(scoredPics.length >= 3, 'image models carry a rating: ' + scoredPics.length
      + ' of ' + pics.length);
   // two boards rate pictures -- artificial analysis and lmarena -- and they
-  // disagree, which is why both are weighted rather than averaged
-  eq(scored(scoredPics[0]).want, 2, 'and are judged on the two image boards');
+  // disagree, which is why both are weighted rather than averaged. the third is
+  // reception: every non-text model carries a `name.match` now, so what forums
+  // say reaches an image model the same way it reaches a language one
+  eq(scored(scoredPics[0]).want, 3,
+     'and are judged on the two image boards plus what forums said');
 
   RESET();
 });
@@ -261,10 +264,13 @@ test('the preset list offers only rankings the current modality can be given', (
      + ' them: it weights the speech boards too');
   ok(forSpeech.includes('clear'), 'so is nothing weighted');
 
+  // what forums say USED to be dropped here, because no image model carried a
+  // `name.match` and the whole modality scored zero on it. every non-text model
+  // has one now, so the preset is live and the roster it ranks is real
   filters.mods = new Set(['t2i']);
   drawPreset();
-  ok(!presetOptions().includes('community'),
-     'nor is what forums say, which no image model carries');
+  ok(presetOptions().includes('community'),
+     'what forums say does rank pictures: ' + presetOptions());
 
   filters.mods = new Set(DEFAULT_MODALITIES);
   RESET();
@@ -333,10 +339,24 @@ test('the factors sidebar lists what the current modality is measured on', () =>
   drawFactors();
   const text = html('#factors');
   ok(text.includes('aa.coding'), 'the text roster is weighted on coding');
-  // a transcription factor IS offered over the text roster, and correctly:
-  // gemma 4 e4b is a text model with an audio encoder that voice arena scores,
-  // so a word error rate is a question somebody asks of that view
-  ok(text.includes('voicearena'), 'and on what its multimodal half transcribes');
+  // a word error rate used to be offered here, on the grounds that gemma 4 e4b
+  // is a text model with an audio encoder that voice arena scores. that reads
+  // as a fact about one member rather than about the view: `language models` is
+  // the registry kind, an LLM you serve as a chat endpoint, and a WER is not
+  // evidence about that. eight models are `kind: text` AND transcribe, and an
+  // existential over the roster let those eight switch on every speech slider
+  // for the other 53 -- which is how this list and `audio to text` came out
+  // BYTE-IDENTICAL at 105 factors each
+  eq(text.includes('voicearena'), false,
+     'and not on a word error rate, which is a different question');
+
+  filters.mods = new Set(['a2t']);
+  drawFactors();
+  const a2t = html('#factors');
+  ok(a2t.includes('open-asr'), 'transcription is weighted on the asr boards');
+  eq(a2t.includes('aa.coding'), false,
+     'and not on how well the eight LLMs in that roster write code');
+  ok(a2t.length < text.length, 'which is a shorter panel');
 
   filters.mods = new Set(['t2a']);
   drawFactors();
@@ -346,6 +366,72 @@ test('the factors sidebar lists what the current modality is measured on', () =>
      'and not on 60 text benchmarks it would have to be scrolled past');
   ok(speech.length < text.length, 'which is a shorter panel');
 
+  // no shape picked is every shape, so it is about every question at once and
+  // nothing is filtered out -- the same rule `inModality` already follows
+  filters.mods = new Set();
+  drawFactors();
+  const all = html('#factors');
+  ok(all.includes('aa.coding') && all.includes('open-asr'),
+     'every shape asks every question');
+
+  RESET();
+});
+
+test('a model is scored on the evidence the current view is asking about', () => {
+  RESET();
+  // the a2t roster is two populations: transcription models, and LLMs that also
+  // take audio. they were scored on disjoint evidence and ranked in one column,
+  // so inkling sat 12th on an AUDIO TO TEXT board on the strength of its
+  // reasoning scores -- 34th on what it is measured to transcribe.
+  const transcribes = m => (m.modalities.input || []).includes('audio')
+    && (m.modalities.output || []).includes('text');
+  const both = D.models.filter(m => m.kind === 'text' && transcribes(m));
+  const pure = D.models.filter(m => m.kind === 'speech' && transcribes(m));
+  ok(both.length >= 5, 'several models are in both rosters: ' + both.length);
+  ok(pure.length > 20, 'and most of the a2t roster is not: ' + pure.length);
+
+  const scoreIn = (mod, m) => {
+    filters.mods = new Set([mod]);
+    clearScores();
+    return scored(m);
+  };
+
+  // a pure transcriber is asked nothing outside its own half, so restricting
+  // the view to that half cannot move it. this is the guarantee that makes the
+  // change safe: the roster the board is FOR does not re-rank
+  pure.forEach(m => {
+    const a = scoreIn('a2t', m).value, b = scoreIn('any2t', m).value;
+    eq(a, b, m.short + ' scores the same whichever view asks');
+  });
+
+  // the dual-capability models are the whole of the difference
+  const moved = both.filter(m =>
+    scoreIn('a2t', m).want !== scoreIn('text', m).want);
+  eq(moved.length, both.length,
+     'every model in both rosters is judged on fewer factors in a2t');
+  both.forEach(m => {
+    ok(scoreIn('a2t', m).want < scoreIn('text', m).want,
+       m.short + ' is asked fewer questions as a transcriber than as an LLM');
+  });
+
+  RESET();
+});
+
+test('changing the shape re-scores, rather than serving a cached answer', () => {
+  RESET();
+  // `scored` memoizes onto the model, and the score now depends on the view, so
+  // the memo has to be dropped where the view changes. it is dropped in four
+  // other places already -- weights, effective, hardware, boot -- and this is
+  // the one that goes through a control rather than a function
+  const both = D.models.find(m => m.kind === 'text'
+    && (m.modalities.input || []).includes('audio')
+    && (m.modalities.output || []).includes('text'));
+  drawModalities();
+  const asText = scored(both).want;
+  document.querySelector('#modality').onchange({target: {value: 'a2t'}});
+  ok(scored(both).want < asText, both.short
+     + ' is re-scored on the shape switch, got want=' + scored(both).want
+     + ' against ' + asText);
   RESET();
 });
 
@@ -650,9 +736,17 @@ test('a model that publishes no context window still fits', () => {
   eq(bad.join(', '), '', 'sized models with no window must fit');
 
   // and the fit is still doing its job: a window SHORTER than asked for is
-  // still a miss, which is the case the check exists for
+  // still a miss, which is the case the check exists for.
+  //
+  // only for a model there is something to download, though. a vram budget
+  // weighs FILES, and eight of the speech roster publish a short window and no
+  // gguf at all -- granite-speech 4.1 and its two variants, glm-asr, higgs-stt.
+  // failing them on size would hide them behind a filter about size they have
+  // none of, which is the same reasoning `fitsBudget` already applies to a model
+  // with no quants and no window.
   const short = D.models.filter(m => m.facts.context_native
-    && m.facts.context_native < minCtx);
+    && m.facts.context_native < minCtx && m.quants.length);
+  ok(short.length > 10, 'enough short-window models have files to be a real test');
   ok(short.every(m => !fitsBudget(m)),
      'a model whose window is genuinely too short still does not fit');
 });
@@ -1022,6 +1116,30 @@ test('a short measured curve defers to the fitted one below its range', () => {
   ok(Math.abs(retention(below, m) - own.points[0][1]) > 1e-9,
     'and not the measured curve clamped at its lowest point, which would be '
     + own.points[0][1] + ' against the fit\'s ' + interpAt(fit, below).toFixed(3));
+});
+
+// lmarena's collector captures eleven boards and the roster read one of them.
+// `image_edit` rates three models this registry already carries, on millions of
+// votes, and the data was sitting in the capture unused. editing is not
+// generation, so it is a SEPARATE facet rather than more evidence for the same
+// question -- a model that edits well has not thereby been shown to draw well.
+test('the image roster carries lmarena edit ratings where the board has them', () => {
+  RESET();
+  const scored = D.models.filter(m => m.facets['lmarena-edit.rating']);
+  ok(scored.length >= 3, 'several carried models are on the edit board, got '
+    + scored.length);
+  scored.forEach(m => {
+    eq(m.kind, 'image', m.short + ' is on an image board and is not an image model');
+    const f = m.facets['lmarena-edit.rating'];
+    ok(f.value > 500 && f.value < 2000, m.short + ' has an elo-shaped rating');
+    ok(f.votes > 0, m.short + ' carries the vote count the rating rests on');
+  });
+  // and it is not silently the same number as the generation board
+  const both = scored.filter(m => m.facets['lmarena-t2i.rating']);
+  ok(both.length > 0, 'some model is on both boards');
+  ok(both.some(m => m.facets['lmarena-edit.rating'].value
+                 !== m.facets['lmarena-t2i.rating'].value),
+     'editing and generation are scored separately, not copied');
 });
 
 test('the kv cache follows each model\'s own attention geometry', () => {

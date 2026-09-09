@@ -205,9 +205,16 @@ a token budget that is generous for the answer returns an empty string instead;
 ## adding a speech model
 
 the same six steps, minus the ones that describe a text model: there is no
-sampling profile to name, no thinking knob and no `name.match` worth writing,
-because no forum prose to match it against reaches this corpus. two things
-replace them.
+sampling profile to name and no thinking knob. two things replace them.
+
+`name.match` used to be skipped here too, on the grounds that no forum prose to
+match it against reached this corpus. that stopped being true when the
+discussion collector began reading the whole registry rather than the text
+fraction of it: the capture now holds 4233 hugging face mentions of speech,
+image and video models, and every one of them reached no model because no
+non-text model had an alias. write one. `models-validate --aliases` reports any
+model with captured prose and nothing to match it with, and fails on an alias
+that also claims a sibling's name.
 
 **`crispasr:` says which engine loads it.** `runtime:` answers "which llama.cpp
 release loads this" and is derived; the speech half runs on a different engine

@@ -888,7 +888,11 @@ const SHRINK_LAMBDA = 0.5;          // how much of the uncovered weight speaks
 function score(m) {
   let num = 0, den = 0, denMax = 0, have = 0, want = 0;
   for (const [key, w] of Object.entries(W)) {
-    if (!w || !asked(m, key)) continue;
+    // two different questions, and both have to pass: `relevant` is whether the
+    // VIEW is asking this, `asked` is whether this model could answer it. a
+    // transcription board over the language-model roster fails the first; a
+    // coding score for whisper fails the second
+    if (!w || !relevant(key) || !asked(m, key)) continue;
     want++; denMax += w;
     const p = facetPct(m, key);
     if (p === null) continue;
@@ -900,6 +904,10 @@ function score(m) {
 }
 
 const scored = m => (m._s || (m._s = score(m)));
+// the memo is only valid for the weights, the quant discount and the SHAPE the
+// score was computed under, so every setter that moves one of those drops it.
+// it was four hand-written copies of this loop before the shape joined them.
+const clearScores = () => D.models.forEach(m => { m._s = null; });
 
 // --- columns -----------------------------------------------------------------
 //
@@ -1260,6 +1268,45 @@ const modOut = (m, x) => (m.modalities.output || []).includes(x);
 const modsOn = () => MODALITIES.filter(x => filters.mods.has(x.k));
 const inModality = m => !filters.mods.size || modsOn().some(x => x.test(m));
 
+// what each shape is ABOUT, in the same capability vocabulary `board_needs`
+// uses. this is a claim about the VIEW rather than about whichever model in it
+// happens to qualify, and that distinction is the whole point: eight models are
+// `kind: text` and also transcribe -- the gemma 4 family, mimo v2.5, inkling --
+// so asking "can any model here be asked this" turned on all 105 factors in
+// both `language models` and `audio to text`, and the two lists came out
+// byte-identical. it also put inkling 12th on an audio-to-text board on the
+// strength of its reasoning scores, where its transcription evidence puts it
+// 34th.
+//
+// `any to text` is the one that is genuinely about both, and says so: its help
+// text calls it the language models plus the transcribers. the shapes with an
+// empty list are the ones no board this repo collects rates at all.
+const MODALITY_ABOUT = {
+  text: ['text'], t2t: ['text'], v2t: ['text'],
+  any2t: ['text', 'transcribes'],
+  a2t: ['transcribes'], t2a: ['synthesizes'], t2i: ['draws'],
+  t2v: [], t2e: [], diar: [], post: [], mt: [],
+};
+
+// the capabilities the current view is asking about, or null for no restriction
+// -- nothing picked is every shape, so it is every question.
+function askingAbout() {
+  if (!filters.mods.size) return null;
+  const out = new Set();
+  filters.mods.forEach(k => (MODALITY_ABOUT[k] || []).forEach(c => out.add(c)));
+  return out;
+}
+
+// whether the view is asking this question at all, as distinct from whether a
+// model could answer it. a group with no declared capability is asked
+// everywhere: `community` is the only one, because any model can be discussed.
+function relevant(key) {
+  const need = (D.board_needs || {})[key.split('.')[0]];
+  if (!need) return true;
+  const about = askingAbout();
+  return !about || about.has(need);
+}
+
 // `shown: false` keeps the filter without the button. speculative and the
 // thinking knob are columns and detail-page facts as well, and as toggles they
 // answered a question nobody was asking of the whole roster -- a shared link
@@ -1481,11 +1528,22 @@ const presetName = () => Object.keys(PRESETS).find(p => sameWeights(W, PRESETS[p
 // slider that moves nothing on screen is not a decision, and the sidebar is a
 // list of decisions: 60 text benchmarks over a roster of transcription models
 // is a wall to scroll past to reach the four that apply.
-const factorApplies = k => D.models.some(m => inModality(m) && asked(m, k));
+const factorApplies = k => relevant(k)
+  && D.models.some(m => inModality(m) && asked(m, k));
+
+// what forums said and what the card documents, which any model can carry
+// whatever it does. they are tie-breakers WITHIN a ranking rather than the thing
+// it measures, so they do not decide whether one is worth offering: `writing
+// code` weights them 0.15 between them, and once every non-text model gained a
+// `name.match` and started scoring on reddit, that alone made the preset live
+// over a roster of synthesis models -- ranking them by chatter under a heading
+// that says code. the community preset weights nothing else and is unaffected:
+// it falls through to the empty case below.
+const CROSSCUTTING = /^(?:community|card)\./;
 
 function presetFits(key) {
   const w = PRESETS[key].w();
-  const keys = Object.keys(w).filter(k => w[k]);
+  const keys = Object.keys(w).filter(k => w[k] && !CROSSCUTTING.test(k));
   return !keys.length || keys.some(factorApplies);
 }
 
@@ -1564,8 +1622,11 @@ function drawModalities() {
     filters.mods = new Set([e.target.value]);
     saveFilters();
     hideTip();
-    // both depend on the shapes in view: `writing code` is not offered over a
-    // roster of transcription models, and neither is a slider for it
+    // the score depends on the shape now -- a model that both transcribes and
+    // reasons is judged on one half or the other -- so the memo goes first
+    clearScores();
+    // all three depend on the shapes in view: `writing code` is not offered
+    // over a roster of transcription models, and neither is a slider for it
     drawPreset();
     drawFactors();
     drawTable();
@@ -1676,7 +1737,7 @@ function drawFactors() {
 }
 
 function reweigh() {
-  D.models.forEach(m => { m._s = null; });
+  clearScores();
   rememberWeights();
   drawPreset();
   drawTable();
@@ -3086,6 +3147,9 @@ function applyState(st) {
     if (st.f.flags) filters.flags = new Set(st.f.flags);
     if (st.f.engines) filters.engines = new Set(st.f.engines);
     saveFilters();
+    // a shared link can land on a different shape than the one booted, and the
+    // score is computed under a shape
+    clearScores();
   }
   if (st.sort) { sort = st.sort; store.set('sort', sort); }
   if (st.hidden) { hidden = new Set(st.hidden); store.set('hidden', [...hidden]); }
@@ -3206,7 +3270,7 @@ const effBtn = () => document.querySelector('#eff-btn');
 function setEffective(on) {
   effective = on;
   pctCache = null;
-  D.models.forEach(m => { m._s = null; });
+  clearScores();
   effBtn().setAttribute('aria-pressed', on ? 'true' : 'false');
   store.set('effective', on);
   drawTable();
@@ -3244,7 +3308,7 @@ function setHardware(patch) {
     store.set(k, HW_GET[k]());
   });
   pctCache = null;
-  D.models.forEach(m => { m._s = null; });
+  clearScores();
   drawColumns();
   drawTable();
   if (openRepo) drawModal(true);

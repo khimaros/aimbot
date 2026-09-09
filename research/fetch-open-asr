@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+
+"""The open ASR leaderboard's results, which are keyed the way this registry is.
+
+    fetch-open-asr                  # write data/open-asr.json
+    fetch-open-asr --report         # what it rates that the roster does and does not carry
+
+Every other speech board here is matched on a display name, and the open-weights
+filter and the fuzzy-match trap exist because of it: `Whisper Large v3 Turbo,
+Telnyx` is a hosted SKU of a checkpoint this roster carries, and `Zonos-v0.1`
+is the same weights under a name no normaliser turns into `zonos-tts`. This
+board publishes a HUGGINGFACE REPO ID per row, so the join is the registry key
+itself and there is nothing to guess.
+
+It is also the only board that rates the transcription half at any depth: 62
+rows against artificial analysis' 13 open-weights entries, over eight datasets
+per model -- AMI, Earnings22, Gigaspeech, LibriSpeech clean and other,
+SPGISpeech, VoxPopuli and Voice Arena Monsoon -- plus an inverse real-time
+factor for each.
+
+WER IS INVERTED ON THE WAY IN. Every facet on the page is higher-is-better and
+the percentile pass has no notion of direction, so a word error rate stored
+verbatim would rank the worst transcriber first and do it silently. `accuracy`
+is `100 - WER`, the same shape the artificial analysis transcription facets use,
+and `tests/collectors` checks it was inverted exactly once.
+
+`open_weights` is read off the licence string rather than asserted: the board
+carries proprietary systems beside the open ones, and a row this cannot place is
+kept with its licence verbatim rather than assumed permissive.
+"""
+
+import argparse
+import csv
+import io
+import json
+import os
+import subprocess
+import sys
+
+import capture
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = "data/open-asr.json"
+URL = ("https://huggingface.co/datasets/hf-audio/open-asr-leaderboard-results"
+       "/resolve/main/english_short_latest.csv")
+MAX_AGE = 24 * 3600
+# the columns that are not a per-dataset measurement
+META = {"model", "avg", "RTFx", "License", "Size (B)", "# Languages",
+        "Encoder", "Decoder", "Training data disclosure"}
+# a licence the board itself marks as not open. anything else is kept verbatim
+# and read as open only when it does not say this
+CLOSED = ("proprietary", "closed")
+
+
+def fetch(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    return out.stdout
+
+
+def number(text):
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse(text):
+    """{repo id: row}, with the word error rate turned into an accuracy."""
+    out = {}
+    for row in csv.DictReader(io.StringIO(text)):
+        repo = (row.get("model") or "").strip()
+        avg = number(row.get("avg"))
+        if not repo or avg is None:
+            continue
+        lic = (row.get("License") or "").strip()
+        datasets = {}
+        for col, val in row.items():
+            if col in META or not col:
+                continue
+            n = number(val)
+            if n is None:
+                continue
+            # a WER column becomes the accuracy it leaves; an RTFx is a speed
+            # and is already higher-is-better
+            if col.endswith(" WER"):
+                datasets[col[:-4].strip()] = {"accuracy": 100.0 - n, "wer": n}
+            elif col.endswith(" RTFx"):
+                datasets.setdefault(col[:-5].strip(), {})["rtfx"] = n
+        out[repo] = {
+            "accuracy": 100.0 - avg,
+            "wer": avg,
+            "rtfx": number(row.get("RTFx")),
+            "license": lic,
+            "open_weights": bool(lic) and lic.lower() not in CLOSED,
+            "size_b": number(row.get("Size (B)")),
+            "languages": number(row.get("# Languages")),
+            "datasets": datasets,
+        }
+    return out
+
+
+def report(rows, registry_path):
+    import yaml
+    models = (yaml.safe_load(open(registry_path)) or {}).get("models") or {}
+    keys = {k.lower(): k for k in models}
+    for repo, m in models.items():
+        for q in (m.get("quants") or []):
+            if q.get("repo"):
+                keys.setdefault(q["repo"].lower(), repo)
+    hit = {r: v for r, v in rows.items() if r.lower() in keys}
+    miss = {r: v for r, v in rows.items()
+            if r.lower() not in keys and v.get("open_weights")}
+    print("open asr leaderboard: %d rows, %d rating a model this roster carries"
+          % (len(rows), len(hit)))
+    for repo, v in sorted(hit.items(), key=lambda kv: -kv[1]["accuracy"]):
+        print("   %.2f%% accurate (%.2f WER)  %s" % (v["accuracy"], v["wer"], repo))
+    print()
+    print("%d open-weights model(s) it rates that the roster does not carry:"
+          % len(miss))
+    for repo, v in sorted(miss.items(), key=lambda kv: -kv[1]["accuracy"])[:15]:
+        print("   %.2f%% accurate (%.2f WER)  %-44s %s"
+              % (v["accuracy"], v["wer"], repo, v["license"]))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--url", default=URL)
+    ap.add_argument("--cache-key", default="open-asr")
+    ap.add_argument("--max-age", type=int, default=MAX_AGE)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--report", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even if the board lost rows since last sweep")
+    ap.add_argument("--registry",
+                    default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    args = ap.parse_args()
+
+    if args.report and os.path.exists(args.out):
+        report((json.load(open(args.out)) or {}).get("models") or {}, args.registry)
+        return 0
+
+    text = fetch(args.url, args.cache_key, args.max_age, args.refresh)
+    rows = parse(text)
+    if not rows:
+        sys.exit("!!! no rows parsed from %s" % args.url)
+    doc = {"version": 1, "source": args.url, "models": rows}
+    written, now, before = capture.write(
+        args.out, doc, count=lambda d: len((d or {}).get("models") or {}),
+        allow_shrink=args.allow_shrink, label="models")
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "models"))
+    print("wrote %s: %d models, %d open weights"
+          % (args.out, now, sum(1 for v in rows.values() if v["open_weights"])))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

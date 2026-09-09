@@ -226,10 +226,36 @@ AUDIO_IN_KEYS = ("audio_config", "num_mel_bins", "audio_locator_tag",
 # now -- but the search below is recursive, and a subtree named for a decoder is
 # exactly where a false positive would come from.
 NOT_INPUT_SUBTREE = re.compile(r"decoder|vocoder|synth", re.I)
+# a `preprocessor` is by definition applied to what comes IN, so the guard above
+# is not needed under one: the framing it declares is the framing of an input
+# signal. gigaam buries its four levels down under nemo's cfg.model.cfg
+INPUT_SUBTREE = re.compile(r"preprocess", re.I)
+AUDIO_FRAMING = ("sample_rate", "sampling_rate", "win_length", "hop_length",
+                 "num_mel_bins", "n_mels", "mel_scale")
+# wav2vec2 and data2vec read the raw waveform, so they declare no filterbank at
+# all: the strided conv stack that stands in for one is the declaration. both
+# keys are required because either alone appears on models that are not audio
+RAW_WAVEFORM = ("num_feat_extract_layers", "conv_stride")
+# the LAST resort, for a config that carries no audio geometry anywhere.
+# moonshine's is a model_type, an architecture and transformer geometry that
+# would fit a text model exactly; kyutai's stt is barely more. deliberately NOT
+# case-folded: `ASR` is an acronym and matching it case-insensitively would
+# claim every word that happens to spell it, so the lowercase forms are spelled
+# out separately. `audio` is not here on purpose -- it is the substring of a
+# dozen TTS architectures, which emit audio rather than read it
+AUDIO_IN_NAME = re.compile(
+    r"wav2vec|data2vec[_-]?audio|hubert|wavlm|whisper|moonshine|gigaam"
+    r"|speech[a-z_-]*encoder|ASR|(?:^|[_-])(?:asr|stt)(?:[_-]|$)")
+
+
+def names_audio(cfg):
+    """Whether what this component calls itself says it reads audio."""
+    names = [cfg.get("model_type")] + list(cfg.get("architectures") or [])
+    return any(isinstance(n, str) and AUDIO_IN_NAME.search(n) for n in names)
 
 
 def takes_audio(cfg):
-    """Whether this config declares an audio input, at whatever depth it says it.
+    """Whether this config declares an audio input, however it says it.
 
     Only the top level used to be read, which was true of whisper
     (`num_mel_bins`) and voxtral (`audio_config`) and of nothing else on the
@@ -238,9 +264,17 @@ def takes_audio(cfg):
     qwen3-asr hides its `audio_config` under `thinker_config` -- so five
     transcription models derived as taking TEXT ONLY, which is the one modality
     an asr model definitely does not take by itself.
+
+    Depth turned out to be only the first of the ways a config says this, and
+    fifteen more models arrived declaring it some other way: framing under a
+    preprocessor, a conv stack over the raw waveform, or nothing but a name.
+    They are tried in that order, because a name is evidence about a config
+    rather than evidence in it.
     """
     if not isinstance(cfg, dict):
         return False
+    if names_audio(cfg) or all(cfg.get(k) for k in RAW_WAVEFORM):
+        return True
     for key, val in cfg.items():
         # the VALUE has to be there, not just the key. gemma 4 declares
         # `"audio_config": null` -- the slot its family's config schema has,
@@ -249,8 +283,11 @@ def takes_audio(cfg):
         # truthiness
         if key in AUDIO_IN_KEYS and val:
             return True
-        if (isinstance(val, dict) and not NOT_INPUT_SUBTREE.search(key)
-                and takes_audio(val)):
+        if not isinstance(val, dict):
+            continue
+        if INPUT_SUBTREE.search(key) and any(val.get(k) for k in AUDIO_FRAMING):
+            return True
+        if not NOT_INPUT_SUBTREE.search(key) and takes_audio(val):
             return True
     return False
 

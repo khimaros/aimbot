@@ -470,18 +470,41 @@ model a choice between `llama-server` and `vllm serve`, which is wrong for 28 of
 ...`, `tts-cli --model-path ...` -- and prints nothing at all for weights no
 runtime here loads, rather than a command that cannot work.
 
-**the factor sidebar and the presets follow the modality.** the sidebar lists 97
-factors over the text roster and 8 over the transcription one, because a slider
-that moves nothing on screen is not a decision: a word error rate is not a
-question you can ask of a text model, and 60 text benchmarks are not a question
-you can ask of whisper.
+**the factor sidebar, the presets and the SCORE follow the modality.** the
+sidebar lists 97 factors over the text roster, 13 over the transcription one, 6
+over synthesis and 7 over image generation, because a slider that moves nothing
+on screen is not a decision: a word error rate is not a question you can ask of
+a text model, and 60 text benchmarks are not a question you can ask of whisper.
+
+each shape declares what it is ABOUT rather than deriving it from whichever
+model is in view, and that distinction is load-bearing. eight models are `kind:
+text` and also transcribe -- the gemma 4 family, mimo v2.5, inkling -- so a
+sidebar built by asking "can any model here be asked this" let those eight
+switch on every slider for the other 53, and the text and transcription lists
+came out byte-identical at 105 factors each. `any to text` is the one shape
+genuinely about both halves, and is the only one that still lists all 105.
+
+the composite follows the same rule, which is the part that changes an answer.
+a model that both transcribes and reasons carries two bodies of evidence, and
+ranking it on the wrong one put inkling TWELFTH on an audio-to-text board on the
+strength of its reasoning scores -- 34th on what it is measured to transcribe.
+no transcriber moved: they were never asked a text question, so restricting the
+view to transcription cannot touch them. what moved is the eight, and MODELS.md
+with them, where the evidence column reads 4/7 rather than 4/10 now that an LLM
+is not charged for speech coverage it is not judged on.
 
 the presets go the same way. `writing code` weights the coding index and
-swe-rebench, and no transcription model carries either, so offering it over the
-speech roster would rank every row on nothing. a preset that cannot score the
-current view is dropped from the list the way a modality nothing matches is --
-except for whichever one is selected, which stays listed so the control keeps
-saying what the current ranking is.
+swe-rebench, which the transcription view is not asking about, so it is one of
+the two dropped there -- a2t offers `balanced`, `most measured`, `what forums
+say` and `nothing weighted`. a preset that cannot score the current view is
+dropped from the list the way a modality nothing matches is -- except for
+whichever one is selected, which stays listed so the control keeps saying what
+the current ranking is.
+
+what forums say is deliberately not enough to keep one alive. it weighs 0.05 and
+every model carries it, so once the non-text half of the roster gained aliases
+it alone made `writing code` live over a synthesis roster: a heading that says
+code, ranking TTS models by reddit chatter.
 
 `make test-e2e` runs it: `tests/e2e` boots the shipped `docs/index.html` under
 node against the real `docs/data.json`, behind a dom stub thin enough that it is

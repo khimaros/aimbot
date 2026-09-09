@@ -157,6 +157,23 @@ def key_spaces(data=None):
         "tts-arena": open_keys(load("tts-arena", data), "open"),
         "voicearena": open_keys(load("voicearena", data), "openSource"),
     }
+    # the one board keyed the way this registry is. every other space here maps
+    # a display name and needs the open-weights filter to keep a hosted SKU out;
+    # this one publishes a huggingface repo id, so the key space is those ids
+    # under the same normalisation `roster_names` applies to a repo's last
+    # segment -- an exact join rather than a resemblance
+    spoken["open-asr"] = {}
+    for repo, row in ((load("open-asr", data) or {}).get("models") or {}).items():
+        if not row.get("open_weights"):
+            continue
+        stem = repo.split("/")[-1]
+        spoken["open-asr"].setdefault(norm(stem), repo)
+        # `-hf` is the same weights in transformers layout and the only spelling
+        # variant this board uses. it goes in the key space so an exact join
+        # reaches it, rather than being left to the substring pass -- which on a
+        # repo-keyed board finds a DIFFERENT model
+        if stem.lower().endswith("-hf"):
+            spoken["open-asr"].setdefault(norm(stem[:-3]), repo)
     # the image board publishes a huggingface url rather than a flag, so the
     # same field decides openness AND supplies the most precise name any of
     # these boards gives: a repo path. it points at a COLLECTION for a couple of
@@ -168,31 +185,56 @@ def key_spaces(data=None):
     # and nothing read: 76 entries over 6.1m votes, and the same open-weights
     # filter as everywhere else -- the board is mostly hosted SKUs and three of
     # its top rows are proprietary tiers of models this registry carries.
-    lm_image = {}
-    for e in ((lm.get("boards") or {}).get("text_to_image-overall-raw") or {}).get("entries") or []:
-        name = e.get("modelDisplayName")
-        if name and ((lm.get("models") or {}).get(name) or {}).get("openWeights"):
-            lm_image.setdefault(norm(name), name)
-    pictured["lmarena-t2i"] = lm_image
+    def lm_open(board):
+        """{normalized display name: display name} for one board, open weights only.
+
+        The `models` map is the filter and not the licence string: eight
+        image_edit rows carry a non-proprietary licence and only some of those
+        are weights anybody can fetch -- hunyuan-image-3.0-instruct is
+        `tencent-hunyuan-community` and not open by the board's own reckoning.
+        """
+        out = {}
+        for e in ((lm.get("boards") or {}).get(board) or {}).get("entries") or []:
+            name = e.get("modelDisplayName")
+            if name and ((lm.get("models") or {}).get(name) or {}).get("openWeights"):
+                out.setdefault(norm(name), name)
+        return out
+
+    pictured["lmarena-t2i"] = lm_open("text_to_image-overall-raw")
+    # editing is a different job from generation and gets its own id: a model
+    # that rewrites a picture well has not thereby been shown to draw one. the
+    # collector has been capturing this board all along too
+    pictured["lmarena-edit"] = lm_open("image_edit-overall-raw")
     # nothing scores a diarizer: there is no third-party DER board for the
     # embedders and segmenters, which is why crispasr's own figure is the only
     # number this repo has for them and it is quoted in the model's notes
     return {"text": out, "speech": spoken, "image": pictured, "diarize": {}}
 
 
-# what each board MEASURES, so a model is offered the ones its own modalities
-# say it could be on. kind was the wrong question and was quietly costing data:
-# gemma 4 e4b is `kind: text` with an audio encoder, crispasr transcribes with
-# it under `--backend gemma4-e4b`, and voice arena publishes its word error rate
-# in seven languages -- none of which the roster could see while the speech
-# boards were offered to `kind: speech` alone.
+# what each facet group MEASURES, so a model is offered the ones its own
+# modalities say it could be on. kind was the wrong question and was quietly
+# costing data: gemma 4 e4b is `kind: text` with an audio encoder, crispasr
+# transcribes with it under `--backend gemma4-e4b`, and voice arena publishes
+# its word error rate in seven languages -- none of which the roster could see
+# while the speech boards were offered to `kind: speech` alone.
+#
+# the viewer reads this a second way, to decide what the CURRENT VIEW is asking
+# rather than what a model could answer, so a group that is not a leaderboard
+# has to declare itself too. `lang` is gbench's per-language rates under another
+# prefix and `card` is the text benchmarks a vendor printed on its own card;
+# both are evidence about writing and reasoning. `community` is deliberately
+# absent, because it is the one group with no capability behind it -- any model
+# can be discussed, whatever it does.
+#
+# only the leaderboard names are looked up by `spaces_for` below, so the two
+# additions are inert here and load-bearing there.
 BOARD_NEEDS = {
     "aa": "text", "gbench": "text", "lmarena": "text", "swerebench": "text",
-    "epoch": "text",
+    "epoch": "text", "lang": "text", "card": "text",
     "aa-stt": "transcribes", "aa-stt-streaming": "transcribes",
-    "voicearena": "transcribes",
+    "voicearena": "transcribes", "open-asr": "transcribes",
     "aa-tts": "synthesizes", "tts-arena": "synthesizes",
-    "aa-t2i": "draws", "lmarena-t2i": "draws",
+    "aa-t2i": "draws", "lmarena-t2i": "draws", "lmarena-edit": "draws",
 }
 
 
@@ -243,17 +285,30 @@ def tiered(want, key):
     return key[len(want):] in TIER
 
 
-def candidates(space, wants, sized=()):
+# boards whose key space is huggingface repo ids rather than display names. a
+# near miss there is a different MODEL and not a different spelling: the substring
+# pass put `moonshine-base` on `moonshine-tiny`'s row and `omniASR-LLM-300M` on
+# the 7B's, which is the failure the docstring below is about, arriving through
+# the one door it did not cover
+REPO_KEYED = {"open-asr"}
+
+
+def candidates(space, wants, sized=(), exact_only=False):
     """Exact normalized hit first; else a unique substring hit.
 
     `sized` are the same names with the parameter count removed, and they are
     tried EXACT only. Substring matching them would be reckless -- `gemma-4`
     is inside `gemma-4-31b`, so gemma-4-12b would silently take the 31b's
     scores, which is the one failure this whole script is written to avoid.
+
+    `exact_only` turns the rest of it off for a board that publishes repo ids,
+    where resemblance is not evidence of anything.
     """
     for w in wants:
         if w and w in space:
             return space[w], "exact"
+    if exact_only:
+        return None, "miss"
     hits = set()
     for w in wants:
         if len(w) < 6:
@@ -454,7 +509,8 @@ def main():
                 kept += 1
                 marks.append("%s=kept" % source)
                 continue
-            found, how = candidates(space, wants, sized)
+            found, how = candidates(space, wants, sized,
+                                    exact_only=source in REPO_KEYED)
             if found:
                 ids[source] = found
                 filled += 1

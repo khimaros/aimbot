@@ -186,7 +186,7 @@ QUANT_EVIDENCE = [
      "code-editing pass rate on text models and says nothing about what a quant "
      "costs a word error rate -- and half of these are elo anyway",
      ["aa-stt.accuracy", "aa-stt-streaming.accuracy", "aa-tts.elo",
-      "tts-arena.elo",
+      "tts-arena.elo", "open-asr.accuracy",
       # voice arena reports per language, and the slices disagree by twenty
       # points, so they are carried one facet each rather than averaged
       "voicearena.arabic", "voicearena.bengali", "voicearena.hindi",
@@ -197,7 +197,7 @@ QUANT_EVIDENCE = [
      "image generation, rated by people choosing between two pictures. an elo, "
      "and of a diffusion stack the text-model retention curve was never fitted "
      "to",
-     ["aa-t2i.elo", "lmarena-t2i.rating"]),
+     ["aa-t2i.elo", "lmarena-t2i.rating", "lmarena-edit.rating"]),
 ]
 
 SCALED_FACETS = {k for _, yes, _, keys in QUANT_EVIDENCE if yes for k in keys}
@@ -254,11 +254,21 @@ DEFAULT_WEIGHTS = {
     "aa.coding": 0.30, "aa.agentic": 0.30, "gbench.agentic": 0.15,
     "lmarena.rating": 0.10, "swerebench.resolved": 0.10,
     "community.*": 0.05, "card.*": 0.05,
-    "aa-stt.accuracy": 0.30, "aa-tts.elo": 0.30, "tts-arena.elo": 0.20,
+    # the open asr leaderboard carries the transcription half at more depth than
+    # anything else here -- 19 of the roster's models against artificial
+    # analysis' 5, over eight datasets rather than one index -- so it takes the
+    # larger share of the transcription weight
+    "open-asr.accuracy": 0.40, "aa-stt.accuracy": 0.30,
+    "aa-tts.elo": 0.30, "tts-arena.elo": 0.20,
     # the wildcard, not us english: weighting one language would rank a model on
     # the slice it happens to be tuned for
     "voicearena.*": 0.20,
-    "aa-t2i.elo": 0.5, "lmarena-t2i.rating": 0.5,
+    # generation is what the image roster is ranked ON, so the two boards that
+    # rate it keep the weight. editing is carried at zero: it is a real number
+    # about a real capability and it is a DIFFERENT question, so it shows on the
+    # model and a reader who wants it ranked that way moves the slider. giving
+    # it weight by default would quietly redefine what the image score means
+    "aa-t2i.elo": 0.5, "lmarena-t2i.rating": 0.5, "lmarena-edit.rating": 0.0,
 }
 
 # facet groups in the order the weighting panel lists them, with what each one

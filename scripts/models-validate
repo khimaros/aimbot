@@ -23,6 +23,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REGISTRY = os.path.join(HERE, "..", "registry")
+DATA = os.path.join(HERE, "..", "research", "data")
 
 try:
     import yaml
@@ -43,6 +44,14 @@ class Findings:
         self.rows.append({"where": where, "error": msg})
 
 
+# kinds that carry no `modalities` block on purpose. they run inside crispasr's
+# pipeline rather than being served, so the viewer gives each its own chip and
+# selects it by `kind`. a shape would ALSO put them in the shape filters: `text
+# in, text out` on a punctuation restorer lands it in `any to text` beside the
+# language models, which is a roster claim nobody made.
+UNSHAPED_KINDS = {"post", "translate", "diarize"}
+
+
 def check_modalities(models, facts, f):
     """`modalities.input` against what the model's own config says it consumes.
 
@@ -53,9 +62,22 @@ def check_modalities(models, facts, f):
 
     Only `input` is checked: nothing here derives what a model emits, so
     `output` stays typed and unverified.
+
+    A pipeline kind is exempt, and exempt in both directions. An absent block
+    reads as `[]` here, so the first facts refresh that reached those repos
+    failed all ten of them at once, and filling them in to make lint pass is
+    what put seven punctuation and translation models into the language-model
+    roster. Demanding one was the bug; declaring one is now the error.
     """
     rows = []
     for repo, m in (models.get("models") or {}).items():
+        if m.get("kind") in UNSHAPED_KINDS:
+            if m.get("modalities"):
+                f.add(repo, "kind %s carries no modalities block: a shape puts it "
+                            "in the viewer's shape filters beside the models that "
+                            "are served, and it is selected by kind instead"
+                      % m["kind"])
+            continue
         want = (facts.get(repo) or {}).get("input")
         if not want:
             continue
@@ -98,22 +120,54 @@ def check_aliases(models, f):
                     break
 
 
-def report_aliases(models):
-    """Text models with no `name.match`, which sentiment therefore scores zero.
+def report_aliases(models, discussions=None):
+    """Models with no `name.match`, which sentiment therefore scores zero.
 
     match-models builds its lexicon out of the models that have one, so a
     missing alias never errors anywhere: the model matches no sentence and
-    reads as undiscussed. Whether one is worth writing is a judgement -- an
-    image or speech model has no forum prose to match at all -- so this prints.
+    reads as undiscussed.
+
+    This used to count TEXT models only, on the grounds that a speech or image
+    model has no forum prose to match against. That stopped being true when the
+    discussion collector started reading the whole registry rather than a
+    fraction of it: the capture holds hundreds of threads on the speech and
+    image halves, every one of them reaching no model. So a non-text model is
+    reported too, but only where prose was actually captured for it -- an alias
+    for a model nobody has posted about is a regex with no job.
     """
-    rows = [(repo, (m.get("name") or {}).get("short"))
-            for repo, m in sorted((models.get("models") or {}).items())
-            if m.get("kind", "text") == "text"
-            and not (m.get("name") or {}).get("match")]
+    everything = (models.get("models") or {})
+    # {registry repo: threads captured across its own repo and its conversions}
+    captured = {}
+    for repo, m in everything.items():
+        names = [repo] + [q.get("repo") for q in
+                          (m.get("quants") or []) + (m.get("components") or [])]
+        n = 0
+        for name in names:
+            rec = (discussions or {}).get(name) or {}
+            n += len(rec.get("discussions") or [])
+        captured[repo] = n
+
+    rows, prose = [], []
+    for repo, m in sorted(everything.items()):
+        if (m.get("name") or {}).get("match"):
+            continue
+        short = (m.get("name") or {}).get("short")
+        if m.get("kind", "text") == "text":
+            rows.append((repo, short))
+        elif captured.get(repo):
+            prose.append((repo, short, captured[repo]))
+
     print("\naliases: %d text model(s) with no name.match, scored zero by sentiment"
           % len(rows))
     for repo, short in rows:
         print("  %-46s %s" % (repo, short))
+    if prose:
+        total = sum(n for _, _, n in prose)
+        print("\n%d non-text model(s) have captured discussion and no alias, so "
+              "%d thread(s)\nreach no model. sentiment scores them zero and the "
+              "roster reads them as undiscussed:" % (len(prose), total))
+        for repo, short, n in sorted(prose, key=lambda r: -r[2]):
+            print("  %-46s %-28s %4d threads" % (repo, short, n))
     return rows
 
 
@@ -830,8 +884,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--registry", default=REGISTRY)
-    ap.add_argument("--facts", default=os.path.join(HERE, "..", "research",
-                                                    "data", "model-facts.json"))
+    ap.add_argument("--data", default=DATA,
+                    help="where the captures live; every check that reads one "
+                         "reads it from here")
+    ap.add_argument("--facts", help="default: <data>/model-facts.json")
     ap.add_argument("--samplers", action="store_true",
                     help="report profiles that disagree with generation_config.json")
     ap.add_argument("--thinking", action="store_true",
@@ -841,29 +897,30 @@ def main():
     ap.add_argument("--cards", action="store_true",
                     help="report profiles against the sampler sets cards document")
     ap.add_argument("--aliases", action="store_true",
-                    help="report text models with no name.match to score them by")
+                    help="report models with no name.match to score them by")
     ap.add_argument("--runtime", action="store_true",
                     help="report what a stock llama.cpp build will not load")
     ap.add_argument("--speech", action="store_true",
                     help="report speech models with no engine and no score")
-    ap.add_argument("--model-cards", default=os.path.join(HERE, "..", "research",
-                                                          "data", "model-cards.json"))
-    ap.add_argument("--support", default=os.path.join(HERE, "..", "research",
-                                                      "data", "llama-support.json"))
-    ap.add_argument("--sizes", default=os.path.join(HERE, "..", "research",
-                                                    "data", "gguf-sizes.json"))
-    ap.add_argument("--crispasr", default=os.path.join(HERE, "..", "research",
-                                                       "data", "crispasr.json"))
-    ap.add_argument("--sdcpp", default=os.path.join(HERE, "..", "research",
-                                                    "data", "sdcpp-support.json"))
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
+
+    def capture(name):
+        """A capture by name, or {} if it was never fetched.
+
+        A capture is an artefact of running a collector, not of checking out the
+        repo, so a check that reads one has to be able to skip. The alternative
+        is a validator that cannot run until every collector has.
+        """
+        path = os.path.join(args.data, name + ".json")
+        return (load(path) or {}) if os.path.exists(path) else {}
 
     models = load(os.path.join(args.registry, "models.yaml"))
     sampling = load(os.path.join(args.registry, "sampling.yaml"))
 
     f = Findings()
-    facts = load(args.facts) or {}
+    facts = load(args.facts) if args.facts else capture("model-facts")
+    facts = facts or {}
     check_registry(models, sampling, f)
     # an overlap silently inflates one model and empties another, and neither
     # shows up as a wrong number anywhere downstream, so it fails rather than
@@ -875,24 +932,24 @@ def main():
     # the over-reporting guard: a hand-written engine claim against the engine's
     # own dispatch table. both inputs are captures, so a checkout without them
     # skips it rather than failing on a missing file
-    check_backend_reachable(models, {"crispasr": load(args.crispasr) or {},
-                                     "llama-support": load(args.support) or {}}, f)
-    check_sdcpp_detected(models, {"sdcpp": load(args.sdcpp) or {}}, f)
+    check_backend_reachable(models, {"crispasr": capture("crispasr"),
+                                     "llama-support": capture("llama-support")}, f)
+    check_sdcpp_detected(models, {"sdcpp": capture("sdcpp-support")}, f)
     if args.modalities:
         print("\nmodalities: %d model(s) disagreeing with their own config" % len(rows))
         for repo, got, want in sorted(rows):
             print("  %-46s registry=%-24s config=%s"
                   % (repo, ",".join(got) or "-", ",".join(want)))
     if args.samplers:
-        report_samplers(models, load(args.facts) or {})
+        report_samplers(models, facts)
     if args.thinking:
-        report_thinking(models, load(args.facts) or {})
+        report_thinking(models, facts)
     if args.cards:
-        report_cards(models, load(args.model_cards) or {})
+        report_cards(models, capture("model-cards"))
     if args.aliases:
-        report_aliases(models)
+        report_aliases(models, capture("hf-discussions"))
     if args.runtime:
-        report_runtime(models, load(args.support) or {}, load(args.sizes) or {})
+        report_runtime(models, capture("llama-support"), capture("gguf-sizes"))
     if args.speech:
         report_speech(models)
 

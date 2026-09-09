@@ -35,6 +35,43 @@ built and is marked done when it ships.
   ornith sentences in the corpus were about a generation the registry did not
   carry. `make lint` fails on it now, and a text model with no alias at all,
   which sentiment silently scores zero, prints in the sweep's punch list.
+- **a model is scored on the evidence the current view is asking about.** the
+  factor list claimed to be per-modality and was not: `factorApplies` asked
+  whether ANY model in view could be asked a factor, and eight models are `kind:
+  text` and also transcribe -- the gemma 4 family, mimo v2.5, inkling -- so
+  those eight switched on every slider for the other 53. `language models` and
+  `audio to text` came out byte-identical at 105 factors each.
+  the composite had the same hole and it cost more than a long sidebar: inkling
+  sat TWELFTH on an audio-to-text board on the strength of its reasoning scores,
+  where its transcription evidence puts it 34th. each shape now declares what it
+  is about in the capability vocabulary `board_needs` already uses, `card` and
+  `lang` declare themselves (per-language rates are gbench's, card claims are
+  text benchmarks), and `community` stays cross-cutting because any model can be
+  discussed. a2t offers 13 factors and the text view 97.
+  no transcriber's score moved -- they were never asked a text question -- and
+  MODELS.md re-ranked only where a dual-capability model stopped being charged
+  for speech coverage it is not judged on as an LLM: inkling small 9th to 8th,
+  gemma 4 12b 32nd to 35th, the evidence column going 4/10 to 4/7.
+- **pipeline kinds are never asked for a `modalities` block, and an error when
+  they carry one.** `post`, `translate` and `diarize` run inside crispasr rather
+  than being served, so the viewer selects them by kind; declaring a shape also
+  puts them in the shape filters, and `text in, text out` on a punctuation
+  restorer lands it in `any to text` beside the language models. the drift check
+  read an absent block as `[]` and failed all ten the first time a facts refresh
+  reached those repos, filling them in is the obvious way to make it pass, and
+  seven punctuation and translation models duly appeared in the language-model
+  roster. the rule is enforced from both sides now.
+- **every NON-text model has an alias too, and the check can see when one is
+  missing.** `--aliases` counted text models only, on CONTRIBUTING's stated
+  grounds that no forum prose reaches a speech or image model. that was true
+  while the discussion collector read a fraction of the registry; it reads all
+  of it now, and the capture held 4233 hugging face mentions across 102 speech,
+  image, video, translate and diarize models, every one of them reaching no
+  model and scoring zero. the report covers any model with captured prose and no
+  alias, all 110 non-text models now carry one, and sentiment went from 60
+  models to 154. the viewer follows: an image model is ranked on what forums
+  said alongside the two image boards, and `writing code` is no longer offered
+  over a synthesis roster on the strength of its community tie-breaker alone.
 - **every text model has an alias.** twelve did not, and a missing one costs
   twice: sentiment scored those models zero, and `analyze-catalog` could not
   tell that a repo was a requant of one, so it read as a model nobody had
@@ -484,6 +521,36 @@ built and is marked done when it ships.
   obscure enough that no gguf-and-ungated-base pairing turned up on a first
   pass, `is_unet` -- the SD1.5/SDXL family -- being the one most likely to
   reward a second.
+
+- **the open ASR leaderboard, and two boards the collector was already
+  capturing.** speech models carrying any score went 12 of 74 to 27, and the
+  image roster gained an editing rating for three entries, without a single new
+  question being asked of a source that was not already answering.
+
+  `fetch-open-asr` is the first board here keyed the way this registry is. every
+  other speech space is matched on a display name, which is why the open-weights
+  filter exists at all -- `Whisper Large v3 Turbo, Telnyx` is a hosted SKU of a
+  checkpoint the roster carries. this one publishes a huggingface repo id per
+  row, so the join is the registry key and there is nothing to guess: 19 exact
+  matches, eight datasets behind each mean, and 32 open-weights transcribers it
+  rates that the roster does not carry -- `Qwen/Qwen3-ASR-1.7B` at 4.31 WER
+  being better than anything the roster held.
+
+  it also found the failure mode it was supposed to avoid. keying on repo ids
+  and then letting the substring pass run put `moonshine-base` on
+  `moonshine-tiny`'s row and `omniASR-LLM-300M` on the 7B's -- two models
+  wearing another's word error rate, which is the one failure resolve-ids says
+  it exists to prevent, arriving through the door it had not covered. boards in
+  `REPO_KEYED` are exact-only now, with `-hf` folded into the key space because
+  that is a layout and not a different model.
+
+  lmarena's collector captures eleven boards and the roster read one. `image_edit`
+  rates flux-2-dev, klein-9b and klein-4b on hundreds of thousands of votes and
+  is carried at WEIGHT ZERO: editing is a different question from generation,
+  so it shows on the model and a reader who wants it ranked moves the slider.
+  the video boards are captured too and are not wired, because they rate newer
+  weights than the roster carries -- wan 2.2 against our 2.1, ltx-2 against
+  LTX-Video -- and matching those would be the version trap in a new costume.
 
 - **the punch list reports crispasr coverage in both directions.**
   `models-validate --speech` said which of the roster's 20 speech models a

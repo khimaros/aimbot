@@ -965,6 +965,7 @@ models:
     kind: image
     name:
       short: z-image-turbo
+      match: \bz[\s-]*image\b
     notes: >-
       stable-diffusion.cpp detects this as `VERSION_Z_IMAGE`, off the tensor
       `cap_embedder.0.weight` its loader looks for, and the three files it wants
@@ -985,6 +986,7 @@ models:
     ids:
       aa-t2i: Z-Image Turbo
       lmarena-t2i: z-image-turbo
+      lmarena-edit: ''
     modalities:
       input:
       - text
@@ -1011,6 +1013,7 @@ models:
     kind: image
     name:
       short: flux-2-klein-4b
+      match: flux[\s.-]*2[\s.-]*klein[\s-]*4b|\bklein[\s-]*4b\b
     notes: >-
       the cheap rung of the family: a 4b diffusion model against a qwen3 4b text
       encoder, where the 9b sibling wants qwen3 8b and `dev` wants a 24b
@@ -1032,6 +1035,7 @@ models:
     ids:
       aa-t2i: FLUX.2 [klein] 4B
       lmarena-t2i: flux-2-klein-4b
+      lmarena-edit: flux-2-klein-4b
     modalities:
       input:
       - text
@@ -1048,6 +1052,7 @@ models:
     kind: image
     name:
       short: flux-2-klein-9b
+      match: flux[\s.-]*2[\s.-]*klein[\s-]*9b|\bklein[\s-]*9b\b
     notes: >-
       the larger klein, and the best-scoring open weights in this family that a
       local runtime loads: 1140 on artificial analysis against the 4b's 1058,
@@ -1068,6 +1073,7 @@ models:
     ids:
       aa-t2i: FLUX.2 [klein] 9B
       lmarena-t2i: flux-2-klein-9b
+      lmarena-edit: flux-2-klein-9b
     modalities:
       input:
       - text
@@ -1084,6 +1090,7 @@ models:
     kind: image
     name:
       short: flux-2-dev
+      match: flux[\s.-]*2[\s.-]*dev
     notes: >-
       CARRIED FOR THE SCORE. 1197 on artificial analysis and 1146 on lmarena,
       which is above every other image model on this roster, and two things
@@ -1109,6 +1116,7 @@ models:
     ids:
       aa-t2i: FLUX.2 [dev]
       lmarena-t2i: flux-2-dev
+      lmarena-edit: flux-2-dev
     modalities:
       input:
       - text
@@ -1149,6 +1157,7 @@ models:
       aa-stt: ''
       aa-stt-streaming: ''
       voicearena: ''
+      open-asr: ''
     sampling:
       thinking:
         source: quant-card
@@ -1186,6 +1195,7 @@ models:
     kind: image
     name:
       short: ernie-image-turbo
+      match: ernie[\s-]*image
     engine:
     - stable-diffusion.cpp
     quants:
@@ -1195,6 +1205,7 @@ models:
     ids:
       aa-t2i: ERNIE Image Turbo
       lmarena-t2i: ''
+      lmarena-edit: ''
     modalities:
       input:
       - text
@@ -1625,6 +1636,7 @@ models:
     kind: speech
     name:
       short: fish-s2-pro
+      match: \bs2[\s-]*pro\b|fish[\s-]*audio[\s-]*s2
     quants:
     - repo: rodrigomt/s2-pro-gguf
       quant: Q8_0
@@ -1773,6 +1785,7 @@ models:
       aa-stt: ''
       aa-stt-streaming: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -1954,6 +1967,7 @@ models:
       aa-stt: ''
       aa-stt-streaming: ''
       voicearena: ''
+      open-asr: ''
     # the smaller half of the same pair, and the same story: `--backend
     # gemma4-e2b` is real and reads cstr's conversion rather than this one. no
     # board scores this half either -- voice arena publishes `Gemma E4B` alone
@@ -2027,6 +2041,7 @@ models:
       voicearena: Gemma E4B
       aa-stt: ''
       aa-stt-streaming: ''
+      open-asr: ''
     # NO `crispasr:` block, though crispasr transcribes with this checkpoint in
     # 140+ languages under `--backend gemma4-e2b`. it reads its own conversion,
     # `cstr/gemma4-e4b-it-GGUF`, whose header declares `gemma4_e2b`; the gguf
@@ -2056,6 +2071,7 @@ models:
     kind: speech
     name:
       short: kokoro-v1
+      match: kokoro
     notes: >-
       the gguf is a TTS.cpp conversion by that project's author -- its card says
       so in a sentence -- and the `role: model-path` on each rung is TTS.cpp's
@@ -2213,6 +2229,7 @@ models:
     kind: image
     name:
       short: ideogram-4
+      match: ideogram[\s-]*4
     engine:
     - stable-diffusion.cpp
     quants:
@@ -2223,6 +2240,7 @@ models:
     ids:
       aa-t2i: Ideogram 4.0
       lmarena-t2i: ''
+      lmarena-edit: ''
     modalities:
       input:
       - text
@@ -2242,6 +2260,7 @@ models:
     kind: speech
     name:
       short: qwen3-tts-0.6b-customvoice
+      match: qwen3[\s.-]*tts[\s-]*(?:12hz[\s-]*)?0\.6b[\s-]*custom
     notes: >-
       two conversions of one checkpoint, and they are not interchangeable. both
       carry the same 480 talker tensors, but the khimaros conversion namespaces
@@ -2275,6 +2294,7 @@ models:
     kind: speech
     name:
       short: qwen3-tts-1.7b-base
+      match: qwen3[\s.-]*tts[\s-]*(?:12hz[\s-]*)?1\.7b[\s-]*base
     notes: >-
       see the 0.6b customvoice entry: the khimaros conversion's metadata
       namespace is `qwen3-tts` and crispasr reads `qwen3tts`, so only the cstr
@@ -2316,6 +2336,7 @@ models:
     kind: speech
     name:
       short: qwen3-tts-1.7b-customvoice
+      match: qwen3[\s.-]*tts[\s-]*(?:12hz[\s-]*)?1\.7b[\s-]*custom
     notes: >-
       the nine premium built-in speakers live in the weights, under
       `qwen3tts.spk_names` in the cstr conversion. see the 0.6b customvoice
@@ -2346,6 +2367,7 @@ models:
     kind: speech
     name:
       short: qwen3-tts-1.7b-voicedesign
+      match: qwen3[\s.-]*tts[\s-]*(?:12hz[\s-]*)?(?:1\.7b[\s-]*)?voice[\s-]*design
     notes: >-
       voice design takes the style as prose through `--instruct` rather than
       selecting a baked speaker. see the 0.6b customvoice entry for why only the
@@ -2383,6 +2405,7 @@ models:
     kind: image
     name:
       short: flux-1-dev
+      match: flux[\s.-]*1[\s.-]*dev
     notes: >-
       the model that made local diffusion worth doing, and the generation before
       the FLUX.2 entries this roster already carries. leejet publishes the gguf,
@@ -2401,8 +2424,9 @@ models:
       quant: Q4_K
       role: diffusion
     ids:
-      aa-t2i: ''
+      aa-t2i: FLUX.1 [dev]
       lmarena-t2i: ''
+      lmarena-edit: ''
     modalities:
       input:
       - text
@@ -2419,6 +2443,7 @@ models:
     kind: image
     name:
       short: flux-1-schnell
+      match: flux[\s.-]*1[\s.-]*schnell|\bschnell\b
     notes: >-
       the four-step distillation of the entry above, under apache 2.0 where the
       dev weights are non-commercial -- which makes it the only flux on this
@@ -2431,8 +2456,9 @@ models:
       quant: Q4_K
       role: diffusion
     ids:
-      aa-t2i: ''
+      aa-t2i: FLUX.1 [schnell]
       lmarena-t2i: ''
+      lmarena-edit: ''
     modalities:
       input:
       - text
@@ -2449,6 +2475,7 @@ models:
     kind: image
     name:
       short: sd3.5-large
+      match: (?:stable[\s-]*diffusion|\bsd)[\s-]*3\.5
     notes: >-
       the last stability model this roster has any path to, and the only MMDiT
       here that is not a flux derivative. city96's conversion is the diffusion
@@ -2462,8 +2489,9 @@ models:
       quant: Q4_0
       role: diffusion
     ids:
-      aa-t2i: ''
+      aa-t2i: Stable Diffusion 3.5 Large
       lmarena-t2i: ''
+      lmarena-edit: ''
     modalities:
       input:
       - text
@@ -2477,6 +2505,7 @@ models:
     kind: image
     name:
       short: ovis-image-7b
+      match: ovis[\s-]*image
     notes: >-
       alibaba's ovis image model, and the newest family sd.cpp gained a
       dedicated signature for. leejet publishes the only gguf. the base repo
@@ -2491,6 +2520,7 @@ models:
     ids:
       aa-t2i: ''
       lmarena-t2i: ''
+      lmarena-edit: ''
     modalities:
       input:
       - text
@@ -2516,6 +2546,7 @@ models:
     kind: video
     name:
       short: wan-2.1-t2v-14b
+      match: \bwan[\s-]*2\.1
     notes: >-
       alibaba's wan, and the most-converted video model on the hub -- city96's
       conversions of this family run to six figures of downloads where the other
@@ -2539,6 +2570,7 @@ models:
     kind: video
     name:
       short: ltx-video
+      match: \bltx[\s-]*video\b|\bltx\b(?![\s-]*2)
     notes: >-
       the small one: 2b against wan's 14b and hunyuan's 13b, which is what lets
       it run where the others do not. the hub tags it image-to-video rather than
@@ -2564,6 +2596,7 @@ models:
     kind: video
     name:
       short: hunyuan-video
+      match: hunyuan[\s-]*video
     notes: >-
       tencent's video model, from the lab whose hy3 text model this roster also
       carries. the 720p t2v build is the one city96 converted. its base repo has
@@ -2587,6 +2620,7 @@ models:
     kind: image
     name:
       short: krea-2-raw
+      match: krea[\s-]*2[\s-]*raw
     engine:
     - stable-diffusion.cpp
     quants:
@@ -2596,6 +2630,7 @@ models:
     ids:
       aa-t2i: ''
       lmarena-t2i: ''
+      lmarena-edit: ''
     modalities:
       input:
       - text
@@ -2612,6 +2647,7 @@ models:
     kind: image
     name:
       short: krea-2-turbo
+      match: krea[\s-]*2[\s-]*turbo
     engine:
     - stable-diffusion.cpp
     quants:
@@ -2621,6 +2657,7 @@ models:
     ids:
       aa-t2i: ''
       lmarena-t2i: krea-2-turbo
+      lmarena-edit: ''
     modalities:
       input:
       - text
@@ -2765,6 +2802,7 @@ models:
     kind: speech
     name:
       short: voxtral-mini-4b-realtime-2602
+      match: voxtral[\s-]*mini[\s-]*4b|voxtral[\s-]*realtime
     quants:
     - repo: andrijdavid/Voxtral-Mini-4B-Realtime-2602-GGUF
       quant: Q8_0
@@ -2778,6 +2816,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: mistralai/Voxtral-Mini-4B-Realtime-2602
     crispasr:
       backend: voxtral4b
     modalities:
@@ -3050,6 +3089,7 @@ models:
     kind: speech
     name:
       short: whisper-large-v3-turbo
+      match: whisper[\s-]*(?:large[\s-]*)?v3[\s-]*turbo|large[\s-]*v3[\s-]*turbo
     notes: >-
       the pinned files are whisper.cpp's own ggml conversions, so stock
       whisper.cpp loads them as well as crispasr does -- the second runtime is
@@ -3072,6 +3112,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: openai/whisper-large-v3-turbo
     crispasr:
       backend: whisper
     modalities:
@@ -3342,6 +3383,7 @@ models:
       aa-stt: ''
       aa-stt-streaming: ''
       voicearena: ''
+      open-asr: ''
     sampling:
       thinking:
         source: tuned-here
@@ -3424,6 +3466,7 @@ models:
       aa-stt: ''
       aa-stt-streaming: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -4308,6 +4351,7 @@ models:
       aa-stt: ''
       aa-stt-streaming: ''
       voicearena: ''
+      open-asr: ''
     sampling:
       thinking:
         source: generation-config
@@ -4371,6 +4415,7 @@ models:
       aa-stt: ''
       aa-stt-streaming: ''
       voicearena: ''
+      open-asr: ''
     sampling:
       thinking:
         source: generation-config
@@ -4495,6 +4540,7 @@ models:
     kind: speech
     name:
       short: parakeet-tdt-0.6b-v3
+      match: parakeet[\s-]*(?:tdt[\s-]*)?0\.6b[\s-]*v3
     notes: >-
       the fast one: a FastConformer encoder with a token-and-duration transducer
       head and no language model to decode through, so it transcribes at roughly
@@ -4514,6 +4560,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: nvidia/parakeet-tdt-0.6b-v3
     crispasr:
       backend: parakeet
     modalities:
@@ -4526,6 +4573,7 @@ models:
     kind: speech
     name:
       short: parakeet-tdt-0.6b-v2
+      match: parakeet[\s-]*(?:tdt[\s-]*)?0\.6b[\s-]*v2
     notes: >-
       the english-only generation before v3, and the one artificial analysis
       scores. carried because that score is the only third-party number this
@@ -4544,6 +4592,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: nvidia/parakeet-tdt-0.6b-v2
     crispasr:
       backend: parakeet
     modalities:
@@ -4556,6 +4605,7 @@ models:
     kind: speech
     name:
       short: canary-1b-v2
+      match: canary[\s-]*1b[\s-]*v2
     notes: >-
       transcription and translation in one pass over 25 european languages, with
       the direction given explicitly as -sl/-tl rather than detected. the pair
@@ -4574,6 +4624,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: nvidia/canary-1b-v2
     crispasr:
       backend: canary
     modalities:
@@ -4592,6 +4643,7 @@ models:
     kind: speech
     name:
       short: canary-qwen-2.5b
+      match: canary[\s-]*qwen
     notes: >-
       the best-scoring open-weights entry on artificial analysis' batch board
       that is not a voxtral. a FastConformer encoder feeding a qwen3 1.7b
@@ -4610,6 +4662,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: nvidia/canary-qwen-2.5b
     crispasr:
       backend: canary-qwen
     modalities:
@@ -4622,6 +4675,7 @@ models:
     kind: speech
     name:
       short: cohere-transcribe-03-2026
+      match: cohere[\s-]*transcribe
     notes: >-
       crispasr's own diarization examples all reach for this backend, which is
       the reason it is here rather than only for its score: a conformer encoder
@@ -4641,6 +4695,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: Cohere Transcribe (03-2026)
+      open-asr: CohereLabs/cohere-transcribe-03-2026
     crispasr:
       backend: cohere
     modalities:
@@ -4653,6 +4708,7 @@ models:
     kind: speech
     name:
       short: qwen3-asr-1.7b
+      match: qwen3[\s.-]*asr[\s-]*1\.7b\b(?![\s-]*ja)
     notes: >-
       a whisper-style audio encoder in front of qwen3 1.7b, so it takes a prompt
       and biases on it. 30 languages plus 22 chinese dialects is the widest
@@ -4670,6 +4726,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: Qwen3-ASR
+      open-asr: Qwen/Qwen3-ASR-1.7B-hf
     crispasr:
       backend: qwen3-1.7b
     modalities:
@@ -4682,6 +4739,7 @@ models:
     kind: speech
     name:
       short: voxtral-mini-3b-2507
+      match: voxtral[\s-]*mini[\s-]*3b
     notes: >-
       the batch sibling of the realtime 4b this roster already carries, and the
       better-scoring of the two on artificial analysis' non-streaming board --
@@ -4700,6 +4758,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: mistralai/Voxtral-Mini-3B-2507
     crispasr:
       backend: voxtral
     modalities:
@@ -4712,6 +4771,7 @@ models:
     kind: speech
     name:
       short: nemotron-3.5-asr-streaming-0.6b
+      match: nemotron[\s-]*3\.5[\s-]*asr
     notes: >-
       cache-aware FastConformer with a transducer head, where accuracy is a
       function of how long the model is allowed to wait: one checkpoint, four
@@ -4737,6 +4797,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: nvidia/nemotron-3.5-asr-streaming-0.6b
     crispasr:
       backend: nemotron
     modalities:
@@ -4749,6 +4810,7 @@ models:
     kind: speech
     name:
       short: sensevoice-small
+      match: sense[\s-]*voice
     notes: >-
       non-autoregressive: a SANM encoder and a CTC head emit the transcript, the
       language id and an audio-event tag in ONE forward pass, with no decode
@@ -4770,6 +4832,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     crispasr:
       backend: sensevoice
     modalities:
@@ -4782,6 +4845,7 @@ models:
     kind: speech
     name:
       short: moss-transcribe-diarize
+      match: moss[\s-]*transcribe[\s-]*diarize
     notes: >-
       the only model here that diarizes BY ITSELF: a whisper encoder feeding
       qwen3 0.6b that emits transcript, timestamps and speaker attribution as
@@ -4825,6 +4889,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: OpenMOSS-Team/MOSS-Transcribe-Diarize
     crispasr:
       backend: moss-diarize
       # the one model here that labels while decoding. a consumer reads this to
@@ -4862,6 +4927,7 @@ models:
     kind: diarize
     name:
       short: wespeaker-resnet34-lm
+      match: we[\s-]*speaker
     notes: >-
       the foxnose recipe's embedder: 256-d speaker embeddings over sliding
       windows, counted by GMM/BIC and clustered spectrally, which ESTIMATES the
@@ -4906,6 +4972,7 @@ models:
     kind: diarize
     name:
       short: pyannote-seg-3.0
+      match: pyannote
     notes: >-
       the diarizer actually in use. `--diarize-method pyannote` runs this once
       over the whole audio for a global speaker-turn timeline, then splits ASR
@@ -4952,6 +5019,7 @@ models:
     kind: diarize
     name:
       short: titanet-large
+      match: titanet
     notes: >-
       192-d speaker embeddings, and what `--diarize-embedder auto` resolves to
       on the pyannote path -- pinned rather than left to `auto`, which fetches
@@ -5000,6 +5068,7 @@ models:
     kind: speech
     name:
       short: breeze-tts-2
+      match: breeze[\s-]*tts
     engine:
     - Breeze-TTS-2.cpp
     quants:
@@ -5042,6 +5111,7 @@ models:
     kind: speech
     name:
       short: supertonic-3
+      match: supertonic
     modalities:
       input:
       - text
@@ -5077,6 +5147,7 @@ models:
     kind: speech
     name:
       short: bark
+      match: \bbark[\s-]*small\b|suno[\s-]*bark
     notes: >-
       suno's small bark, the model that made prompt-driven TTS popular: it takes
       bracketed direction like [laughs] and [sighs] inline rather than a style
@@ -5106,6 +5177,7 @@ models:
     kind: speech
     name:
       short: chatterbox
+      match: chatterbox
     notes: >-
       the one synthesis model in this roster a third party scores: artificial
       analysis rates it on the TTS board, which makes it the only entry here
@@ -5142,6 +5214,7 @@ models:
     kind: speech
     name:
       short: cosyvoice3-tts
+      match: cosy[\s-]*voice[\s-]*3
     notes: >-
       alibaba's cosyvoice line at 0.5b, and the widest dialect coverage here:
       nine languages plus eighteen chinese dialects, which no other entry in
@@ -5192,6 +5265,7 @@ models:
     kind: speech
     name:
       short: csm
+      match: \bcsm[\s-]*1b\b|sesame[\s-]*csm
     notes: >-
       sesame's conversational speech model, the architecture breeze-tts-2 is a
       fork of -- so this is the upstream of the entry above that nothing can
@@ -5219,6 +5293,7 @@ models:
     kind: speech
     name:
       short: dia
+      match: \bdia[\s-]*1\.6b\b|nari[\s-]*labs
     notes: >-
       a dialogue model rather than a narrator: it is built to voice a script
       with speaker tags and to place nonverbal sounds between lines, which is a
@@ -5249,6 +5324,7 @@ models:
     kind: speech
     name:
       short: fastpitch
+      match: fast[\s-]*pitch
     notes: >-
       the oldest and smallest thing in this roster, and the only one crispasr
       gives no auto-download, temperature or cloning: a non-autoregressive
@@ -5278,6 +5354,7 @@ models:
     kind: speech
     name:
       short: indextts
+      match: index[\s-]*tts
     notes: >-
       bilibili's index-tts, chinese and english, tuned for cloning a supplied
       voice. the only rungs cstr published are Q4_K and Q8_0 -- there is no F16
@@ -5309,6 +5386,7 @@ models:
     kind: speech
     name:
       short: kugelaudio
+      match: kugel[\s-]*audio
     notes: >-
       a multilingual open release with no cloning knob and no temperature in
       crispasr, so it synthesises one way and takes no direction. the quant pin
@@ -5335,6 +5413,7 @@ models:
     kind: speech
     name:
       short: miotts
+      match: \bmio[\s-]*tts
     notes: >-
       a japanese-and-english 0.6b, the smallest autoregressive model here. the
       key is the one `resolve-base` got WRONG and a human corrected: the hub
@@ -5380,6 +5459,7 @@ models:
     kind: speech
     name:
       short: moss-tts
+      match: moss[\s-]*tts\b(?![\s-]*local)
     notes: >-
       the openmoss synthesis model, multilingual and cloning from a reference
       clip. it is the sibling of the moss-transcribe-diarize already in the ASR
@@ -5411,6 +5491,7 @@ models:
     kind: speech
     name:
       short: moss-tts-local
+      match: moss[\s-]*tts[\s-]*local
     notes: >-
       the same generation as moss-tts with a local-transformer decoder, which
       crispasr loads through a separate backend rather than a flag. it is a
@@ -5447,6 +5528,7 @@ models:
     kind: speech
     name:
       short: omnivoice
+      match: omni[\s-]*voice
     notes: >-
       600+ languages, which is an order of magnitude past anything else in this
       roster and the reason to carry it: every other entry here covers one
@@ -5473,6 +5555,7 @@ models:
     kind: speech
     name:
       short: outetts
+      match: oute[\s-]*tts
     notes: >-
       english, clones from a clip, and the only NON-COMMERCIAL licence in this
       roster -- CC-BY-NC-SA-4.0, where everything else here is apache, MIT,
@@ -5500,6 +5583,7 @@ models:
     kind: speech
     name:
       short: parler-tts
+      match: parler[\s-]*tts
     notes: >-
       the voice is described in prose rather than selected or cloned -- "a
       female speaker with a slightly low-pitched voice, very close-sounding" --
@@ -5529,6 +5613,7 @@ models:
     kind: speech
     name:
       short: pocket-tts
+      match: pocket[\s-]*tts
     notes: >-
       kyutai's small multilingual model -- english, german, spanish, italian and
       portuguese, with french in a 24-language preview. its licence is CC-BY-4.0
@@ -5555,6 +5640,7 @@ models:
     kind: speech
     name:
       short: speecht5
+      match: speech[\s-]*t5
     notes: >-
       microsoft's speecht5, english, and the only entry in this roster with a
       single rung: cstr published F16 and nothing else, so there is no ladder to
@@ -5589,6 +5675,7 @@ models:
     kind: speech
     name:
       short: voxcpm2-tts
+      match: vox[\s-]*cpm
     notes: >-
       openbmb's synthesis model at 30 languages with cloning. crispasr also
       carries a `voxcpm2-vae` backend against the same weights, which is the
@@ -5619,6 +5706,7 @@ models:
     kind: speech
     name:
       short: orpheus
+      match: orpheus
     notes: >-
       a llama-3.2-3b finetuned into a speech model, english and german, and one
       of two entries here that decode through a separate neural codec: the
@@ -5656,12 +5744,23 @@ models:
     kind: speech
     name:
       short: zonos-tts
+      match: \bzonos\b
     notes: >-
       the other codec pair: zonos emits descript-audio-codec tokens and
       `cstr/dac-44khz-GGUF` decodes them at 44.1khz, which is the highest sample
       rate in this roster. english, clones from a clip. zyphra also publish a
       hybrid-mamba variant of the same release and crispasr names the
       transformer one, which is the repo pinned here.
+
+      the `aa-tts` id is hand-written. artificial analysis calls it `zonos-v0-1`
+      and this roster calls it `zonos-tts`, which no normalisation turns into
+      the other, so `resolve-ids` correctly declined to guess -- its matcher is
+      exact for the reason the whole open-weights filter exists. what the board
+      does NOT say is which of zyphra's two variants it rated: the entry is
+      `Zonos-v0.1` flat, and they publish a transformer and a hybrid-mamba. this
+      claims it for the transformer because that is the one crispasr loads and
+      the one served here, and that is a judgement rather than something the
+      board states.
     quants:
     - repo: cstr/zonos-v0.1-transformer-GGUF
       quant: Q8_0
@@ -5675,7 +5774,7 @@ models:
     ids:
       aa-stt: ''
       aa-stt-streaming: ''
-      aa-tts: ''
+      aa-tts: zonos-v0-1
       tts-arena: ''
       voicearena: ''
     modalities:
@@ -5687,6 +5786,7 @@ models:
     kind: speech
     name:
       short: tada
+      match: \btada[\s-]*1b\b|hume[\s-]*ai[\s-]*tada
     notes: >-
       hume's tada, english, under the llama 3.2 community licence. the
       conversion ships four files beside the model -- an aligner, a codec and an
@@ -5714,6 +5814,7 @@ models:
     kind: speech
     name:
       short: vibevoice-realtime-0.5b
+      match: vibe[\s-]*voice[\s-]*(?:realtime|0\.5b)
     notes: >-
       the smaller of the two vibevoice synthesis rungs, english and chinese, and
       the one to serve when latency matters. separate entries from the 1.5b
@@ -5747,6 +5848,7 @@ models:
     kind: speech
     name:
       short: vibevoice-1.5b
+      match: vibe[\s-]*voice[\s-]*1\.5b
     notes: >-
       the 1.5b rung of the same family, three times the weights of the realtime
       variant. the backend is `vibevoice-1.5b` rather than the `vibevoice-tts`
@@ -5790,6 +5892,7 @@ models:
     kind: speech
     name:
       short: voxtral-tts
+      match: voxtral[\s-]*(?:4b[\s-]*)?tts
     notes: >-
       mistral's own synthesis model across nine languages, under CC-BY-NC-4.0 --
       the second non-commercial licence in this roster. no gguf exists for it in
@@ -5829,6 +5932,7 @@ models:
     kind: speech
     name:
       short: ark-asr
+      match: ark[\s-]*asr[\s-]*3b|\bark[\s-]*asr\b(?![\s-]*0\.6)
     notes: >-
       19 european languages out of one 3b encoder-decoder. the vendor's repo
       carries the weights and cstr's carries the conversion, which is the
@@ -5845,6 +5949,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: AutoArk-AI/ARK-ASR-3B
     modalities:
       input:
       - text
@@ -5855,6 +5960,7 @@ models:
     kind: speech
     name:
       short: parakeet-ctc-0.6b
+      match: parakeet[\s-]*ctc[\s-]*0\.6b
     notes: >-
       the CTC parakeet, a different head from the transducer parakeet-tdt
       already carried above: CTC emits per-frame labels with no duration model,
@@ -5874,6 +5980,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: nvidia/parakeet-ctc-0.6b
     modalities:
       input:
       - text
@@ -5884,6 +5991,7 @@ models:
     kind: speech
     name:
       short: fun-asr-mlt-nano
+      match: fun[\s-]*asr[\s-]*mlt
     notes: >-
       alibaba's multilingual nano transcriber, the sibling of the fun-asr entry
       below and reached by its own backend rather than a flag.
@@ -5899,6 +6007,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -5909,6 +6018,7 @@ models:
     kind: speech
     name:
       short: funasr
+      match: fun[\s-]*asr[\s-]*nano\b
     notes: >-
       the monolingual nano of the same december release. same publisher as
       sensevoice-small already in the roster, and the paraformer entry below
@@ -5925,6 +6035,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -5935,6 +6046,7 @@ models:
     kind: speech
     name:
       short: gigaam
+      match: giga[\s-]*am\b
     notes: >-
       sber's russian transcriber, and the only model in this roster built for
       russian specifically rather than covering it in a multilingual set.
@@ -5950,6 +6062,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -5960,6 +6073,7 @@ models:
     kind: speech
     name:
       short: lfm2-audio
+      match: lfm[\s-]*2(?:\.5)?[\s-]*audio
     notes: >-
       liquid's audio model on their LFM2 backbone. crispasr names a japanese
       conversion beside the base one under the same backend; that is a sibling
@@ -5982,6 +6096,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -5992,6 +6107,7 @@ models:
     kind: speech
     name:
       short: mimo-asr
+      match: mimo[\s-]*(?:v?2\.5[\s-]*)?asr
     notes: >-
       xiaomi's transcriber off the MiMo line whose v2.5 text model this roster
       already carries. cstr published F16 and Q4_K only, so the pin is Q4_K --
@@ -6008,6 +6124,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6018,6 +6135,7 @@ models:
     kind: speech
     name:
       short: moonshine
+      match: \bmoonshine\b(?![\s-]*streaming)
     notes: >-
       built for short utterances on small hardware: moonshine takes variable
       length audio without padding to a fixed 30s window the way whisper does,
@@ -6035,6 +6153,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6045,6 +6164,7 @@ models:
     kind: speech
     name:
       short: moonshine-streaming
+      match: moonshine[\s-]*streaming
     notes: >-
       the streaming tiny of the same family, and one of two entries in this
       roster built for live transcription rather than a file -- the other is
@@ -6062,6 +6182,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: usefulsensors/moonshine-streaming-tiny
     modalities:
       input:
       - text
@@ -6072,6 +6193,7 @@ models:
     kind: speech
     name:
       short: moss-audio
+      match: moss[\s-]*audio
     notes: >-
       the largest transcriber in this roster at 4b, and an instruct model rather
       than a plain ASR head -- it takes a prompt about what to do with the
@@ -6088,6 +6210,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6098,6 +6221,7 @@ models:
     kind: speech
     name:
       short: moss-transcribe
+      match: moss[\s-]*transcribe\b(?![\s-]*diarize)
     notes: >-
       the transcribe-only 2b of the same family, and the sibling of the
       moss-transcribe-diarize already carried: that one labels speakers while
@@ -6114,6 +6238,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: OpenMOSS-Team/MOSS-Transcribe-preview-2B
     modalities:
       input:
       - text
@@ -6124,6 +6249,7 @@ models:
     kind: speech
     name:
       short: omniasr
+      match: omni[\s-]*asr[\s-]*ctc
     notes: >-
       a CTC transcriber over meta's omnilingual ASR work, the transcription-side
       counterpart to omnivoice's 600+ language synthesis. cstr's listing carries
@@ -6141,6 +6267,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6151,6 +6278,7 @@ models:
     kind: speech
     name:
       short: omniasr-llm
+      match: omni[\s-]*asr[\s-]*(?:llm|300m)
     notes: >-
       the LLM-decoder variant of the same omnilingual line at 300m, against the
       CTC head above. crispasr names an `unlimited` conversion beside it under
@@ -6168,6 +6296,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6178,6 +6307,7 @@ models:
     kind: speech
     name:
       short: paraformer
+      match: paraformer
     notes: >-
       non-autoregressive chinese transcription, the same single-pass shape as
       sensevoice-small and from the same funasr project. mandarin only, which is
@@ -6194,6 +6324,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6204,6 +6335,7 @@ models:
     kind: speech
     name:
       short: reazonspeech
+      match: reazon[\s-]*speech
     notes: >-
       japanese transcription trained on reazon's broadcast corpus, on a nemo
       backbone. the japanese counterpart to gigaam's russian: a model for one
@@ -6220,6 +6352,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6230,6 +6363,7 @@ models:
     kind: speech
     name:
       short: vibevoice-asr
+      match: vibe[\s-]*voice[\s-]*asr\b(?![\s-]*bitnet)
     notes: >-
       the transcription half of the vibevoice family whose two synthesis rungs
       are in the roster above: same name, opposite direction, separate weights.
@@ -6246,6 +6380,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: microsoft/VibeVoice-ASR-HF
     modalities:
       input:
       - text
@@ -6256,6 +6391,7 @@ models:
     kind: speech
     name:
       short: vibevoice-bitnet
+      match: vibe[\s-]*voice[\s-]*(?:asr[\s-]*)?bitnet
     notes: >-
       the ternary-weight build of the same transcriber, and the only entry in
       the speech roster whose rungs are named `Q4`, `Q5`, `Q8` and `TQ2` rather
@@ -6274,6 +6410,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6284,6 +6421,7 @@ models:
     kind: speech
     name:
       short: wav2vec2
+      match: data2vec[\s-]*audio|\bwav2vec2\b
     notes: >-
       the wav2vec2 family backend, and the one row in crispasr's README naming
       three unrelated checkpoints: a wav2vec2 xlsr english finetune, this
@@ -6303,6 +6441,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6317,10 +6456,293 @@ models:
   # to there is nothing narrower to say. most of these carry crispasr's
   # `auto-download` capability, which is the binary fetching the weights itself
   # rather than loading something from this roster.
+  # CARRIED BECAUSE A BOARD ALREADY SCORES THEM. every entry below arrives with
+  # a number rather than needing one: the open ASR leaderboard publishes a word
+  # error rate against a huggingface repo id, and artificial analysis rates the
+  # two synthesis models. that is the opposite of how most of this roster was
+  # filled -- the models above were added because an engine loads them and then
+  # mostly turned out to be scored by nobody.
+  #
+  # three of them share a crispasr backend with a model already carried, which
+  # is why they were left out when the roster grew by engine coverage: a sibling
+  # under one `--backend` was a row with nothing to say. a WER changes that.
+  HojoAI/Hojo-ASR-V1:
+    kind: speech
+    name:
+      short: hojo-asr-v1
+      match: hojo[\s-]*asr
+    notes: >-
+      second on the open ASR leaderboard at 4.33 mean WER over eight datasets,
+      behind qwen3-asr-1.7b and ahead of everything this roster carried before
+      it. apache 2.0. no conversion exists and crispasr names no backend, so it
+      is tracked rather than servable -- the number is the reason it is here.
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+      open-asr: HojoAI/Hojo-ASR-V1
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  AutoArk-AI/ARK-ASR-0.6B:
+    kind: speech
+    name:
+      short: ark-asr-0.6b
+      match: ark[\s-]*asr[\s-]*0\.6b
+    notes: >-
+      the small rung of the ark line whose 3b this roster already runs, and it
+      gives up almost nothing for the size: 4.56 mean WER against the 3b's 4.48,
+      at a sixth of the parameters. no cstr conversion for this rung.
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+      open-asr: AutoArk-AI/ARK-ASR-0.6B
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  nvidia/canary-1b-flash:
+    kind: speech
+    name:
+      short: canary-1b-flash
+      match: canary[\s-]*1b[\s-]*flash
+    notes: >-
+      the flash canary, and better than the canary-1b-v2 this roster carries:
+      4.88 mean WER against 5.71. cc-by-4.0. no conversion, so it is the case
+      for watching this line rather than a model to serve today.
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+      open-asr: nvidia/canary-1b-flash
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  mistralai/Voxtral-Small-24B-2507:
+    kind: speech
+    name:
+      short: voxtral-small-24b
+      match: voxtral[\s-]*small
+    notes: >-
+      the 24b of the voxtral line whose mini this roster serves. 4.99 mean WER
+      against the mini's 5.54, which is a small gain for eight times the
+      weights -- the kind of comparison a roster exists to make.
+    ids:
+      aa-stt: Voxtral Small
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+      open-asr: mistralai/Voxtral-Small-24B-2507
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  ibm-granite/granite-4.0-1b-speech:
+    kind: speech
+    name:
+      short: granite-4.0-1b-speech
+      match: granite[\s-]*4\.0[\s-]*1b[\s-]*speech
+    notes: >-
+      the 1b granite speech, which crispasr reaches through the same `granite`
+      backend as the 3.3-2b already carried. 4.91 mean WER against that model's
+      5.36, so the smaller and older-numbered one is the better transcriber --
+      which is why a sibling sharing a backend is worth carrying once somebody
+      has scored it.
+    crispasr:
+      backend: granite
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+      open-asr: ibm-granite/granite-4.0-1b-speech
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  distil-whisper/distil-large-v3.5:
+    kind: speech
+    name:
+      short: distil-whisper-v3.5
+      match: distil[\s-]*(?:whisper|large)[\s-]*v?3\.5
+    notes: >-
+      the distillation of whisper large v3, and it beats what it was distilled
+      from: 5.40 mean WER against the v3's 5.78. MIT. carried without a
+      conversion, like the rest of this group.
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+      open-asr: distil-whisper/distil-large-v3.5
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  kyutai/stt-2.6b-en:
+    kind: speech
+    name:
+      short: kyutai-stt-2.6b
+      match: kyutai[\s-]*stt[\s-]*2\.6b|\bstt[\s-]*2\.6b
+    notes: >-
+      the english 2.6b kyutai names beside the 1b this roster keys the
+      `kyutai-stt` backend on. 5.57 mean WER. the entry above carries the
+      backend and this one is its larger sibling, scored.
+    crispasr:
+      backend: kyutai-stt
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+      open-asr: kyutai/stt-2.6b-en
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  openai/whisper-large-v3:
+    kind: speech
+    name:
+      short: whisper-large-v3
+      match: whisper[\s-]*large[\s-]*v3\b(?![\s-]*turbo)
+    notes: >-
+      the model whisper-large-v3-turbo is the pruned decoder of, carried so the
+      pair can be read against each other: 5.78 mean WER here against the
+      turbo's 6.36, so the turbo trades about half a point of accuracy for its
+      speed. apache 2.0.
+    ids:
+      aa-stt: Whisper Large v3
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+      open-asr: openai/whisper-large-v3
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  nvidia/parakeet-ctc-1.1b:
+    kind: speech
+    name:
+      short: parakeet-ctc-1.1b
+      match: parakeet[\s-]*ctc[\s-]*1\.1b
+    notes: >-
+      the 1.1b rung of the CTC parakeet, reached by the same
+      `fastconformer-ctc` backend as the 0.6b and with a cstr conversion of its
+      own. 5.92 mean WER against the 0.6b's 6.16 -- twice the weights for a
+      quarter point, which is the trade this entry exists to show.
+    quants:
+    - repo: cstr/parakeet-ctc-1.1b-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: fastconformer-ctc
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+      open-asr: nvidia/parakeet-ctc-1.1b
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  stepfun-ai/Step-Audio-EditX:
+    kind: speech
+    name:
+      short: step-audio-editx
+      match: step[\s-]*audio[\s-]*edit
+    notes: >-
+      the best-scoring open-weights synthesis model artificial analysis rates:
+      1104 elo, above chatterbox at 1021 and voxtral-tts at 1078, which were the
+      only two numbers this roster had for TTS. stepfun publish AWQ and bnb
+      quants and nobody has converted it to gguf, so the top of the synthesis
+      board is tracked and not servable -- the same shape as voxtral-tts.
+
+      the `aa-tts` id is hand-written for the reason zonos' is: the board slugs
+      it `step-audio-editx-mar-2026` where this roster calls it
+      `step-audio-editx`, and resolve-ids matches exactly rather than guessing.
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: step-audio-editx-mar-2026
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  nvidia/magpie_tts_multilingual_357m:
+    kind: speech
+    name:
+      short: magpie-tts-357m
+      match: magpie[\s-]*tts
+    notes: >-
+      nvidia's small multilingual synthesiser, and the only model in this group
+      that arrives scored AND runnable: artificial analysis rates the february
+      build at 1065 elo and m1el published a gguf. 357m, which makes it the
+      cheapest thing on the synthesis board by an order of magnitude.
+
+      the board carries two rows under this name, an original at 1005 and a
+      `(Feb 2026)` rebuild at 1065. the id is hand-written to the february one
+      because that is the build nvidia's repo currently holds -- claiming the
+      older row would score today's weights on a measurement of what they
+      replaced. neither slug normalises to this repo name, so resolve-ids
+      declined both rather than picking, which is the behaviour that made the
+      choice visible.
+    quants:
+    - repo: m1el/magpie-tts-multilingual-357m-gguf
+      quant: Q8
+      role: model
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: magpie-multilingual-357m-feb-2026
+      tts-arena: ''
+      voicearena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
   FireRedTeam/FireRedASR2-AED:
     kind: speech
     name:
       short: firered-asr
+      match: fire[\s-]*red[\s-]*asr
     notes: >-
       xiaohongshu's attention-encoder-decoder transcriber, second generation.
       no conversion exists in any repo crispasr names.
@@ -6332,6 +6754,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6342,6 +6765,7 @@ models:
     kind: speech
     name:
       short: glm-asr
+      match: glm[\s-]*asr
     notes: >-
       zhipu's nano transcriber, from the lab whose GLM text models this roster
       already carries. no conversion exists.
@@ -6353,6 +6777,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: zai-org/GLM-ASR-Nano-2512
     modalities:
       input:
       - text
@@ -6363,6 +6788,7 @@ models:
     kind: speech
     name:
       short: granite-speech-3.3
+      match: granite[\s-]*speech[\s-]*3\.3
     notes: >-
       the 3.3 generation of ibm's speech line, and the oldest of the four
       granite transcribers crispasr carries. the 4.1 entries below supersede it;
@@ -6376,6 +6802,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ibm-granite/granite-speech-3.3-2b
     modalities:
       input:
       - text
@@ -6386,6 +6813,7 @@ models:
     kind: speech
     name:
       short: granite-speech-4.1
+      match: granite[\s-]*speech[\s-]*4\.1(?![\s-]*2b[\s-]*(?:nar|plus))(?![\s-]*(?:nar|plus))
     notes: >-
       the current granite speech 2b. ibm ships three 4.1 variants and crispasr
       gives each its own backend -- this base one, a non-autoregressive `-nar`
@@ -6398,6 +6826,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ibm-granite/granite-speech-4.1-2b
     modalities:
       input:
       - text
@@ -6408,6 +6837,7 @@ models:
     kind: speech
     name:
       short: granite-speech-4.1-nar
+      match: granite[\s-]*speech[\s-]*4\.1[\s-]*(?:2b[\s-]*)?nar
     notes: >-
       the non-autoregressive 4.1: one forward pass with no decode loop, the same
       trade sensevoice-small and paraformer make. faster, and with no beam
@@ -6420,6 +6850,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ibm-granite/granite-speech-4.1-2b-nar
     modalities:
       input:
       - text
@@ -6430,6 +6861,7 @@ models:
     kind: speech
     name:
       short: granite-speech-4.1-plus
+      match: granite[\s-]*speech[\s-]*4\.1[\s-]*(?:2b[\s-]*)?plus
     notes: the `-plus` 4.1 variant, carried because crispasr dispatches it separately.
     crispasr:
       backend: granite-4.1-plus
@@ -6439,6 +6871,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6449,6 +6882,7 @@ models:
     kind: speech
     name:
       short: higgs-stt
+      match: higgs[\s-]*audio[\s-]*(?:v3[\s-]*)?stt|higgs[\s-]*stt
     notes: >-
       the transcription half of boson's higgs-audio v3. no conversion exists in
       any repo crispasr names.
@@ -6460,6 +6894,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: bosonai/higgs-audio-v3-stt
     modalities:
       input:
       - text
@@ -6470,6 +6905,7 @@ models:
     kind: speech
     name:
       short: kyutai-stt
+      match: kyutai[\s-]*stt[\s-]*1b|\bstt[\s-]*1b[\s-]*en
     notes: >-
       kyutai's streaming transcriber, english and french, from the same lab as
       the pocket-tts in the synthesis roster above. crispasr names a 2.6b
@@ -6483,6 +6919,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6493,6 +6930,7 @@ models:
     kind: speech
     name:
       short: mega-asr
+      match: mega[\s-]*asr
     notes: no conversion exists; carried because crispasr compiles in the backend.
     crispasr:
       backend: mega-asr
@@ -6502,6 +6940,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6512,6 +6951,7 @@ models:
     kind: speech
     name:
       short: mini-omni2
+      match: mini[\s-]*omni[\s-]*2
     notes: >-
       an early end-to-end speech-in speech-out model that crispasr reaches for
       transcription. it predates most of this roster and is carried for
@@ -6524,6 +6964,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6534,6 +6975,7 @@ models:
     kind: speech
     name:
       short: qwen3-asr-0.6b
+      match: qwen3[\s.-]*asr[\s-]*0\.6b
     notes: >-
       the 0.6b rung of the qwen3-asr line whose 1.7b this roster already
       carries. crispasr reaches this one through `--backend qwen3` and the 1.7b
@@ -6547,7 +6989,8 @@ models:
       aa-stt-streaming: ''
       aa-tts: ''
       tts-arena: ''
-      voicearena: ''
+      voicearena: Qwen3-ASR
+      open-asr: Qwen/Qwen3-ASR-0.6B-hf
     modalities:
       input:
       - text
@@ -6563,6 +7006,7 @@ models:
     kind: speech
     name:
       short: qwen3-asr-ja-anime
+      match: qwen3[\s.-]*asr[\s-]*(?:1\.7b[\s-]*)?ja[\s-]*anime|anime[\s-]*galgame
     notes: >-
       a japanese finetune of qwen3-asr-1.7b on anime and visual-novel speech,
       which is a domain the broadcast-trained reazonspeech above does not cover.
@@ -6573,6 +7017,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -6600,6 +7045,7 @@ models:
     kind: translate
     name:
       short: m2m100
+      match: \bm2m[\s-]*100\b(?![\s-]*wmt)
     notes: >-
       100 languages any-to-any, which is what "any" means here: it translates
       between pairs without routing through english, unlike the wmt21 pair
@@ -6614,6 +7060,7 @@ models:
     kind: translate
     name:
       short: m2m100-wmt21
+      match: wmt[\s-]*21
     notes: >-
       english to seven languages, and the direction is baked into the weights --
       meta ship a separate `x-en` checkpoint for the way back, which crispasr
@@ -6634,6 +7081,7 @@ models:
     kind: translate
     name:
       short: madlad
+      match: madlad
     notes: >-
       419 languages, the widest coverage of anything in this registry in any
       modality -- omnivoice's 600+ is synthesis and omniasr's is recognition;
@@ -6649,6 +7097,7 @@ models:
     kind: speech
     name:
       short: sidon
+      match: \bsidon\b
     notes: >-
       not recognition and not synthesis: it takes 16 kHz mono in and emits
       restored 48 kHz mono, so it is the one entry in the speech roster whose
@@ -6676,6 +7125,7 @@ models:
     kind: post
     name:
       short: glotlid-v3
+      match: glotlid
     notes: >-
       language identification over a transcript, and the broadest of the three
       here. crispasr applies it as a step rather than a backend, which is why
@@ -6702,6 +7152,7 @@ models:
     kind: post
     name:
       short: fullstop-punc
+      match: fullstop[\s-]*punc
     notes: >-
       punctuation restoration across several languages. the key is a rename the
       hub reports and `resolve-base` flags -- `fullstop-punctuation-multilang-
@@ -6717,6 +7168,7 @@ models:
     kind: post
     name:
       short: punctuate-all
+      match: punctuate[\s-]*all
     notes: punctuation restoration; the smaller alternative to fullstop-punc above.
     quants:
     - repo: cstr/punctuate-all-GGUF
@@ -6728,6 +7180,7 @@ models:
     kind: post
     name:
       short: fireredpunc
+      match: fire[\s-]*red[\s-]*punc
     notes: >-
       xiaohongshu's punctuation model, from the team behind the firered-asr
       entry above. its conversion is the only one in the post set with an

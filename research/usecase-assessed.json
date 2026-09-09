@@ -47,14 +47,14 @@
    "avoid_for": [
     "latency-sensitive chat"
    ],
-   "notes": "both forums that discuss it are unanimously positive, but on small samples (49 and 24 mentions). speed sits at p19, so a long agent loop pays for the quality.",
+   "notes": "the two small forums that discuss it are unanimously positive, on 18 and 10 mentions; the busy one is 79% over 110. speed sits at p19, so a long agent loop pays for the quality.",
    "confidence": "high",
    "evidence": [
     "aa.ifbench p88",
     "aa.lcr p88",
     "aa.scicode p85",
     "aa.speed p19",
-    "hf-discussions 79 mentions at 76% approval"
+    "hf-discussions 110 mentions at 79% approval"
    ],
    "assessed_on": "2026-08-17"
   },
@@ -393,7 +393,7 @@
    "avoid_for": [
     "factual recall"
    ],
-   "notes": "artificial analysis scored it three days after release, and it leads qwen3.8-27b on every axis the two share: II 55.8 against 52.0, coding 73.1 against 68.1, agentic 56.4 against 50.9, terminal-bench 86.1 against 79.8. the exception is the one to know about -- non-hallucination p66 against qwen3.8-27b's p93, so it answers where the 27b declines. what the forums discuss is none of that. 65 huggingface discussion posts, more than any other model here, almost all about speed and memory: 11 t/s reported without MTP, and no mainline gguf has an MTP head because llama.cpp's converter drops it and PR 27836 is still open. 41% of the file is the n-gram table, which is what both the '4x slower than it should be' and the 'keep the n-gram table on nvme' threads are about, and it is also why the quant ladder bottoms out at 67.6gib -- its 160-column rows take only block-32 types. AtomicChat is the one publisher that shards the table separately, so 38 of their 93 gb page from ssd rather than staying resident.",
+   "notes": "artificial analysis scored it three days after release, and it leads qwen3.8-27b on every axis the two share: II 55.8 against 52.0, coding 73.1 against 68.1, agentic 56.4 against 50.9, terminal-bench 86.1 against 79.8. the exception is the one to know about -- non-hallucination p66 against qwen3.8-27b's p93, so it answers where the 27b declines. what the forums discuss is none of that. 75 huggingface discussion posts, almost all about speed and memory: 11 t/s reported without MTP, and no mainline gguf has an MTP head because llama.cpp's converter drops it and PR 27836 is still open. 41% of the file is the n-gram table, which is what both the '4x slower than it should be' and the 'keep the n-gram table on nvme' threads are about, and it is also why the quant ladder bottoms out at 67.6gib -- its 160-column rows take only block-32 types. AtomicChat is the one publisher that shards the table separately, so 38 of their 93 gb page from ssd rather than staying resident.",
    "confidence": "medium",
    "evidence": [
     "aa.terminalbench 86.1 p97",
@@ -402,7 +402,7 @@
     "aa.agentic 56.4 p94",
     "aa.intelligence 55.8 p93",
     "aa.non_hallucination p66",
-    "hf-discussions 65 mentions p97, reddit 62 mentions at 100% approval on two scored posts",
+    "hf-discussions 75 mentions p97, reddit 62 mentions at 100% approval on two scored posts",
     "no gbench, swe-rebench or epoch entry"
    ],
    "assessed_on": "2026-08-29"
@@ -470,12 +470,12 @@
    "avoid_for": [
     "anything where the claim needs to be independently checked"
    ],
-   "notes": "54 huggingface discussion mentions at 50% approval, against three reddit mentions the polarity reader scores no signal for at all. this entry used to read that as two forums flatly contradicting each other; the capture says one busy forum evenly divided and one that has barely spoken, which is a different and weaker thing. no third-party benchmark carries it either way.",
+   "notes": "71 huggingface discussion mentions at 50% approval, against three reddit mentions the polarity reader scores no signal for at all. this entry used to read that as two forums flatly contradicting each other; the capture says one busy forum evenly divided and one that has barely spoken, which is a different and weaker thing. no third-party benchmark carries it either way.",
    "confidence": "low",
    "evidence": [
     "card terminalbench 61.8 claim p71",
     "card swebench verified 68.3 claim p50",
-    "hf-discussions 54 mentions at 50% approval",
+    "hf-discussions 71 mentions at 50% approval",
     "reddit 3 mentions, no polarity either way"
    ],
    "assessed_on": "2026-08-17"
@@ -536,7 +536,7 @@
     "card swebench pro 59.6 claim p50",
     "card deepswe 22.0 claim p0 of 8",
     "reddit 10 mentions over 4 threads p11",
-    "hf-discussions 89 mentions p69"
+    "hf-discussions 95 mentions p69"
    ],
    "assessed_on": "2026-08-30"
   },
@@ -705,7 +705,7 @@
     "gbench.oneshot 0.381 p76",
     "lmarena 1440 p73",
     "aa.agentic p0",
-    "hf-discussions 53 mentions at 100% approval"
+    "hf-discussions 73 mentions at 83% approval"
    ],
    "assessed_on": "2026-08-17"
   },
@@ -1970,7 +1970,109 @@
    ],
    "assessed_on": "2026-08-30"
   },
-  "Wan-AI/Wan2.1-T2V-14B": {
+  "HojoAI/Hojo-ASR-V1": {
+  "one_liner": "second on the open ASR leaderboard, and better than anything this roster ran before it.",
+  "use_for": ["tracking the most accurate open transcriber available"],
+  "avoid_for": ["deployment -- no conversion and no crispasr backend"],
+  "confidence": "medium",
+  "evidence": ["kind speech, audio -> text", "open-asr 4.33 mean WER over eight datasets",
+               "second of 62 rows, behind qwen3-asr-1.7b", "apache-2.0"],
+  "assessed_on": "2026-09-09"
+ },
+ "AutoArk-AI/ARK-ASR-0.6B": {
+  "one_liner": "a sixth of the 3b's parameters for eight hundredths of a point of WER.",
+  "use_for": ["transcription where the 3b will not fit", "the size/accuracy trade in this family"],
+  "avoid_for": ["deployment -- cstr converted the 3b and not this rung"],
+  "confidence": "medium",
+  "evidence": ["kind speech, audio -> text", "open-asr 4.56 mean WER against the 3b's 4.48",
+               "apache-2.0"],
+  "assessed_on": "2026-09-09"
+ },
+ "nvidia/canary-1b-flash": {
+  "one_liner": "beats the canary-1b-v2 this roster carries, and nobody has converted it.",
+  "use_for": ["tracking the better canary"],
+  "avoid_for": ["deployment -- no gguf exists"],
+  "confidence": "medium",
+  "evidence": ["kind speech, audio -> text", "open-asr 4.88 mean WER against canary-1b-v2's 5.71",
+               "cc-by-4.0"],
+  "assessed_on": "2026-09-09"
+ },
+ "mistralai/Voxtral-Small-24B-2507": {
+  "one_liner": "eight times the mini's weights for half a point of word error rate.",
+  "use_for": ["transcription where accuracy outranks footprint"],
+  "avoid_for": ["deployment -- no gguf", "any budget the mini already fits"],
+  "confidence": "medium",
+  "evidence": ["kind speech, audio -> text", "open-asr 4.99 mean WER against the mini's 5.54",
+               "also on artificial analysis' transcription board", "apache-2.0"],
+  "assessed_on": "2026-09-09"
+ },
+ "ibm-granite/granite-4.0-1b-speech": {
+  "one_liner": "the older granite number and the better transcriber: 4.91 WER against the 3.3-2b's 5.36.",
+  "use_for": ["transcription on the granite backend", "the case against reading version order as quality"],
+  "avoid_for": ["deployment -- no gguf exists"],
+  "confidence": "medium",
+  "evidence": ["kind speech, audio -> text", "crispasr backend granite, shared with granite-speech-3.3-2b",
+               "open-asr 4.91 mean WER against that model's 5.36", "apache-2.0"],
+  "assessed_on": "2026-09-09"
+ },
+ "distil-whisper/distil-large-v3.5": {
+  "one_liner": "the distillation that beats what it was distilled from.",
+  "use_for": ["english transcription at whisper quality for less"],
+  "avoid_for": ["deployment -- no gguf exists"],
+  "confidence": "medium",
+  "evidence": ["kind speech, audio -> text",
+               "open-asr 5.40 mean WER against whisper-large-v3's 5.78", "MIT"],
+  "assessed_on": "2026-09-09"
+ },
+ "kyutai/stt-2.6b-en": {
+  "one_liner": "the english 2.6b kyutai names beside the 1b this roster keys their backend on.",
+  "use_for": ["english-only transcription on the kyutai stack"],
+  "avoid_for": ["deployment -- no gguf", "multilingual work, where the 1b en_fr is the pair"],
+  "confidence": "medium",
+  "evidence": ["kind speech, audio -> text", "crispasr backend kyutai-stt, shared with stt-1b-en_fr",
+               "open-asr 5.57 mean WER", "cc-by-4.0"],
+  "assessed_on": "2026-09-09"
+ },
+ "openai/whisper-large-v3": {
+  "one_liner": "what whisper-large-v3-turbo was pruned from, carried so the pair can be read together.",
+  "use_for": ["transcription where the turbo's half point of accuracy matters"],
+  "avoid_for": ["deployment -- the roster serves the turbo, which has the conversion"],
+  "confidence": "medium",
+  "evidence": ["kind speech, audio -> text", "open-asr 5.78 mean WER against the turbo's 6.36",
+               "also on artificial analysis' transcription board", "apache-2.0"],
+  "assessed_on": "2026-09-09"
+ },
+ "nvidia/parakeet-ctc-1.1b": {
+  "one_liner": "twice the 0.6b's weights for a quarter point of WER, and it has a conversion.",
+  "use_for": ["CTC transcription where the 0.6b is not accurate enough"],
+  "avoid_for": ["latency-bound work, where the 0.6b costs a quarter point and half the weights"],
+  "confidence": "medium",
+  "evidence": ["kind speech, audio -> text", "crispasr backend fastconformer-ctc",
+               "open-asr 5.92 mean WER against the 0.6b's 6.16",
+               "cstr publishes a gguf", "cc-by-4.0"],
+  "assessed_on": "2026-09-09"
+ },
+ "stepfun-ai/Step-Audio-EditX": {
+  "one_liner": "the best-scoring open synthesis model anybody rates, and nothing here can run it.",
+  "use_for": ["tracking the top of the TTS board"],
+  "avoid_for": ["deployment -- AWQ and bnb quants only, no gguf"],
+  "confidence": "medium",
+  "evidence": ["kind speech, text -> audio",
+               "aa-tts 1104 elo, above chatterbox at 1021 and voxtral-tts at 1078",
+               "no gguf in any repo a search finds"],
+  "assessed_on": "2026-09-09"
+ },
+ "nvidia/magpie_tts_multilingual_357m": {
+  "one_liner": "the only synthesis model here that is both scored and runnable, at 357m.",
+  "use_for": ["multilingual synthesis on a small budget", "the cheapest scored voice available"],
+  "avoid_for": ["work needing the top of the board, which is step-audio-editx"],
+  "confidence": "medium",
+  "evidence": ["kind speech, text -> audio", "aa-tts 1065 elo on the february build",
+               "357m, an order of magnitude smaller than the rest of the board",
+               "m1el publishes a gguf"],
+  "assessed_on": "2026-09-09"
+ },
+ "Wan-AI/Wan2.1-T2V-14B": {
   "one_liner": "the video model the community actually converted, and the fullest quant ladder in this registry.",
   "use_for": ["text to video", "the video slot where a quant ladder matters"],
   "avoid_for": ["still images -- the image roster is a different job", "text generation"],
@@ -2213,12 +2315,12 @@
     "physics"
    ],
    "avoid_for": [],
-   "notes": "aa long-context reasoning p94 and gbench overall p84, against 58 huggingface discussion mentions at 0% approval and 34 reddit mentions at 100%. read the discussion tab before committing: that pattern is usually a quant that does not load rather than a model that cannot think, and reddit being unanimous the other way is what makes the loading reading the likelier one.",
+   "notes": "aa long-context reasoning p94 and gbench overall p84, against 90 huggingface discussion mentions at 20% approval and 34 reddit mentions at 100%. read the discussion tab before committing: that pattern is usually a quant that does not load rather than a model that cannot think, and reddit being unanimous the other way is what makes the loading reading the likelier one.",
    "confidence": "high",
    "evidence": [
     "aa.lcr 0.8 p94",
     "gbench.overall 0.496 p84",
-    "hf-discussions 58 mentions at 0% approval",
+    "hf-discussions 90 mentions at 20% approval",
     "reddit 34 mentions at 100% approval"
    ],
    "assessed_on": "2026-08-17"
@@ -2370,7 +2472,7 @@
     "aa.speed 298 tok/s p96",
     "aa.intelligence p27",
     "aa.agentic p25",
-    "hf-discussions 8 mentions at 0% approval"
+    "hf-discussions 21 mentions at 0% approval"
    ],
    "assessed_on": "2026-08-17"
   },
@@ -2443,13 +2545,13 @@
    "avoid_for": [
     "agentic / tool use"
    ],
-   "notes": "gbench one-shot p71 against agentic p8 -- the widest such split in the corpus. hf-discussions approval of 33% against reddit's 82% points at quant problems rather than model problems.",
+   "notes": "gbench one-shot p71 against agentic p8 -- the widest such split in the corpus. the reception split this entry used to read as quant problems is not in the capture any more: hf-discussions is 75% approval against reddit's 67%, which is two forums agreeing on a small sample rather than contradicting each other.",
    "confidence": "high",
    "evidence": [
     "gbench.oneshot 0.368 p71",
     "gbench.agentic p8",
     "gbench python 82%",
-    "hf-discussions 32 mentions at 0% approval"
+    "hf-discussions 61 mentions at 75% approval"
    ],
    "assessed_on": "2026-08-17"
   },
@@ -2507,10 +2609,10 @@
    "avoid_for": [
     "production work of any kind"
    ],
-   "notes": "42 huggingface discussion mentions at 0% approval against 12 reddit mentions at 75%. no benchmark carries it, so the reception IS the evidence -- and the two halves of that evidence point opposite ways, which is a weaker claim than this entry used to make. the discussion tab is people failing to load a file; reddit is people describing what the file does when it loads. neither is a measurement. quantization-aware training to one bit is what it exists to demonstrate, so the bits-per-weight retention curve does not model it and the entry carries native_low_bpw.",
+   "notes": "66 huggingface discussion mentions at 0% approval against 12 reddit mentions at 75%. no benchmark carries it, so the reception IS the evidence -- and the two halves of that evidence point opposite ways, which is a weaker claim than this entry used to make. the discussion tab is people failing to load a file; reddit is people describing what the file does when it loads. neither is a measurement. quantization-aware training to one bit is what it exists to demonstrate, so the bits-per-weight retention curve does not model it and the entry carries native_low_bpw.",
    "confidence": "medium",
    "evidence": [
-    "hf-discussions 42 mentions at 0% approval",
+    "hf-discussions 66 mentions at 0% approval",
     "reddit 12 mentions at 75% approval",
     "no facet carried by any source"
    ],
@@ -2524,10 +2626,10 @@
    "avoid_for": [
     "production work of any kind"
    ],
-   "notes": "70 huggingface mentions at 0% approval. ternary weights are outside the quantization curve this repo fits, so a bpw comparison against it is meaningless.",
+   "notes": "72 huggingface mentions at 0% approval. ternary weights are outside the quantization curve this repo fits, so a bpw comparison against it is meaningless.",
    "confidence": "medium",
    "evidence": [
-    "hf-discussions 60 mentions at 0% approval",
+    "hf-discussions 72 mentions at 0% approval",
     "no facet carried by any source"
    ],
    "assessed_on": "2026-08-17"
@@ -2714,14 +2816,14 @@
     "science / reasoning",
     "agentic / tool use"
    ],
-   "notes": "carried because the discussion tab is still busy -- 53 mentions on unsloth's repo, mostly about what speed it gets on a strix halo -- and because a model that is measured and superseded is more useful in the table than absent from it. artificial analysis has it deprecated and every percentile it holds is below p40. neither its card nor unsloth's documents a sampler set, which is why its profile reads tuned-here.",
+   "notes": "carried because the discussion tab is still busy -- 43 hf-discussions mentions over its own repo and unsloth's, mostly about what speed it gets on a strix halo -- and because a model that is measured and superseded is more useful in the table than absent from it. artificial analysis has it deprecated and every percentile it holds is below p40. neither its card nor unsloth's documents a sampler set, which is why its profile reads tuned-here.",
    "confidence": "high",
    "evidence": [
     "aa.intelligence p15",
     "aa.hle p12",
     "lmarena.rating p11",
     "swerebench.resolved p38",
-    "hf-discussions 21 mentions at 75% approval"
+    "hf-discussions 43 mentions at 80% approval"
    ],
    "assessed_on": "2026-08-18"
   },

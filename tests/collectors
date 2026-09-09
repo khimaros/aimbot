@@ -98,11 +98,14 @@ def eq(got, want, what):
         raise AssertionError("%s: got %r, want %r" % (what, got, want))
 
 
-def validate(models_yaml, *flags):
+def validate(models_yaml, *flags, **kw):
     """(returncode, findings, stdout) from models-validate over a fixture registry.
 
     sampling.yaml is the real one: the fixtures here are about names, and a
     profile that does not resolve would fail them for the wrong reason.
+
+    `facts=` supplies model-facts.json, which is empty unless a case is about a
+    check that reads it.
     """
     tmp = tempfile.mkdtemp()
     try:
@@ -111,7 +114,7 @@ def validate(models_yaml, *flags):
         shutil.copy(os.path.join(ROOT, "registry", "sampling.yaml"), tmp)
         facts = os.path.join(tmp, "facts.json")
         with open(facts, "w") as f:
-            f.write("{}")
+            json.dump(kw.get("facts") or {}, f)
         argv = [os.path.join(ROOT, "scripts", "models-validate"),
                 "--registry", tmp, "--facts", facts]
         # a report writes to the same stdout the json goes to, so the findings
@@ -402,6 +405,63 @@ models:
     quants: [{repo: Fixture/Written-GGUF, quant: Q8_0}]
     sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
 """
+
+
+UNSHAPED_REGISTRY = """version: 1
+models:
+  Fixture/Punc:
+    kind: post
+    name: {short: fixture punc}
+    crispasr: {post: punctuation}
+  Fixture/Translate:
+    kind: translate
+    name: {short: fixture translate}
+  Fixture/Diarizer:
+    kind: diarize
+    name: {short: fixture diarizer}
+    crispasr: {diarize: embedder}
+"""
+
+SHAPED_POST_REGISTRY = """version: 1
+models:
+  Fixture/Punc:
+    kind: post
+    name: {short: fixture punc}
+    crispasr: {post: punctuation}
+    modalities: {input: [text], output: [text]}
+"""
+
+
+@test
+def a_pipeline_kind_carries_no_modalities_block_and_is_not_asked_for_one():
+    """`post`, `translate` and `diarize` are selected by kind, never by shape.
+
+    They run inside crispasr's pipeline rather than being served, so the viewer
+    gives each its own chip and tests `m.kind === ...`. Declaring `text in, text
+    out` on a punctuation restorer would also put it in `any to text` BESIDE THE
+    LANGUAGE MODELS, which is a roster claim nobody made -- the viewer says so
+    in a comment on the modality list.
+
+    This check demanded one anyway. It compares the typed block against what the
+    config says, an absent block reads as `[]`, and the moment a facts refresh
+    reached these repos for the first time all ten failed lint. Filling them in
+    is the obvious way to make it pass and put seven punctuation and translation
+    models into the language-model roster, so the rule is enforced from BOTH
+    sides: never demanded, and an error when present.
+    """
+    facts = {"Fixture/Punc": {"input": ["text"]},
+             "Fixture/Translate": {"input": ["text"]},
+             "Fixture/Diarizer": {"input": ["audio"]}}
+    code, findings, _ = validate(UNSHAPED_REGISTRY, facts=facts)
+    eq(findings, [], "a pipeline kind is not asked to declare a shape")
+    eq(code, 0, "so it does not fail lint")
+
+    code, findings, _ = validate(SHAPED_POST_REGISTRY, facts=facts)
+    hits = [x for x in findings if x["where"] == "Fixture/Punc"]
+    eq(len(hits), 1, "declaring one IS the error, got %r" % (findings,))
+    eq("modalities" in hits[0]["error"], True,
+       "and says so: %r" % (hits[0]["error"],))
+    eq(code, 1, "which fails lint rather than printing a note")
 
 
 @test
@@ -1280,19 +1340,97 @@ AUDIO_CONFIGS = {
     "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign": (
         {"model_type": "qwen3_tts", "tts_model_size": "1.7B",
          "talker_config": {"spk_id": {}}}, False),
+    # a `preprocessor` is by definition applied to input, so audio framing under
+    # one is an audio input however deep it sits. nemo buries gigaam's four
+    # levels down under its own cfg.model.cfg; lfm2.5-audio puts its at the top
+    "ai-sage/GigaAM-v3": (
+        {"model_type": "gigaam",
+         "cfg": {"model": {"cfg": {
+             "sample_rate": 16000,
+             "preprocessor": {"sample_rate": 16000, "features": 64,
+                              "win_length": 320, "hop_length": 160}}}}}, True),
+    "LiquidAI/LFM2.5-Audio-1.5B": (
+        {"architectures": ["Lfm2AudioForConditionalGeneration"],
+         "preprocessor": {"sample_rate": 16000, "features": 128},
+         "encoder": {"feat_in": 128}, "lfm": {"model_type": "lfm2"}}, True),
+    # nothing but names: a model_type, an architecture, and transformer geometry
+    # that would fit a text model exactly. there is no third thing to read
+    "UsefulSensors/moonshine-base": (
+        {"model_type": "moonshine", "hidden_size": 416,
+         "architectures": ["MoonshineForConditionalGeneration"]}, True),
+    "UsefulSensors/moonshine-streaming-tiny": (
+        {"model_type": "moonshine_streaming",
+         "encoder_config": {"model_type": "moonshine_streaming_encoder",
+                            "sample_rate": 16000, "hidden_size": 320}}, True),
+    # wav2vec2 and data2vec read the raw waveform, so there is no mel count
+    # anywhere: the strided conv stack that stands in for the filterbank is the
+    # entire declaration
+    "aadel4/omniASR-CTC-1B-v2": (
+        {"model_type": "wav2vec2", "architectures": ["Wav2Vec2ForCTC"],
+         "conv_stride": [5, 2, 2, 2, 2, 2, 2], "num_feat_extract_layers": 7},
+        True),
+    "facebook/data2vec-audio-base-960h": (
+        {"model_type": "data2vec-audio", "architectures": ["Data2VecAudioForCTC"],
+         "conv_stride": [5, 2, 2, 2, 2, 2, 2], "num_feat_extract_layers": 7},
+        True),
+    "kyutai/stt-2.6b-en": (
+        {"model_type": "stt", "stt_config": {"audio_delay_seconds": 2.5}}, True),
+    # the ENCODER names the modality even though the model itself does not, and
+    # the three granite speech variants each infix their own word into the name:
+    # matching the two ends with a literal underscore between them caught two of
+    # the three and left `granite_speech_plus_encoder` deriving as text
+    "ibm-granite/granite-speech-4.1-2b": (
+        {"model_type": "granite_speech", "downsample_rate": 5,
+         "encoder_config": {"model_type": "granite_speech_encoder",
+                            "input_dim": 160},
+         "text_config": {"model_type": "granite"}}, True),
+    "ibm-granite/granite-speech-4.1-2b-nar": (
+        {"model_type": "granite_speech_nar",
+         "encoder_config": {"model_type": "granite_speech_nar_encoder",
+                            "input_dim": 160},
+         "text_config": {"model_type": "granite"}}, True),
+    "ibm-granite/granite-speech-4.1-2b-plus": (
+        {"model_type": "granite_speech_plus", "downsample_rate": 5,
+         "encoder_config": {"model_type": "granite_speech_plus_encoder",
+                            "input_dim": 160},
+         "text_config": {"model_type": "granite"}}, True),
+    # vibevoice's ASR head and its TTS head differ by the architecture name and
+    # by nothing else that bears on modality: same acoustic tokenizer, same
+    # semantic tokenizer, same diffusion head, same qwen2 decoder. so the name
+    # has to be read, and read case-sensitively -- `ASR` is an acronym, and
+    # folding case would let it match inside any word that happens to spell it
+    "microsoft/VibeVoice-ASR": (
+        {"model_type": "vibevoice",
+         "architectures": ["VibeVoiceForASRTraining"],
+         "acoustic_tokenizer_config": {"model_type": "vibevoice_acoustic_tokenizer"},
+         "decoder_config": {"model_type": "qwen2"}}, True),
+    "microsoft/VibeVoice-1.5B": (
+        {"model_type": "vibevoice",
+         "architectures": ["VibeVoiceForConditionalGeneration"],
+         "acoustic_tokenizer_config": {"model_type": "vibevoice_acoustic_tokenizer"},
+         "decoder_config": {"model_type": "qwen2"}}, False),
 }
 
 
 @test
-def an_asr_config_declares_audio_at_whatever_depth_it_says_it():
-    """Five transcription models derived as taking TEXT ONLY.
+def an_asr_config_declares_audio_however_it_says_it():
+    """Twenty transcription models derived as taking TEXT ONLY.
 
-    The check read `audio_config` and `num_mel_bins` at the top level, which is
-    where whisper and voxtral put them and where nobody else does: nemo's whole
-    ASR family nests `encoder_config.num_mel_bins` and qwen3-asr hides its
-    `audio_config` under `thinker_config`. The registry says those models take
-    audio, the deriver said text, and `make lint` failed on all five at once --
-    which is the check working, pointed at the wrong side of the disagreement.
+    Five came first. The check read `audio_config` and `num_mel_bins` at the top
+    level, which is where whisper and voxtral put them and where nobody else
+    does: nemo's ASR family nests `encoder_config.num_mel_bins` and qwen3-asr
+    hides its `audio_config` under `thinker_config`.
+
+    Fifteen more arrived with the speech sweep, and depth was not what they had
+    in common -- they declare audio by some other means entirely. A mel count is
+    only ONE of four ways: an input-side subtree that frames the signal, a conv
+    stack that reads the raw waveform instead of a filterbank, or, where a config
+    carries no audio geometry at all, the architecture's own name.
+
+    The last of those is a last resort and stays one. VibeVoice is why it is
+    needed and also why it is dangerous: the ASR head and the TTS head are the
+    same config down to the tokenizers, and `VibeVoiceForASRTraining` against
+    `VibeVoiceForConditionalGeneration` is the whole of the difference.
     """
     import importlib.util
     path = os.path.join(RESEARCH, "fetch-model-facts")
@@ -1767,6 +1905,208 @@ def a_written_verdict_cannot_cite_a_count_the_capture_disagrees_with():
            "and says both the claim and the capture, got %r" % r.stdout.strip()[:200])
         eq("reddit" in r.stdout.split("\n")[0].lower(), False,
            "the line that agrees is not reported")
+    finally:
+        shutil.rmtree(tmp)
+
+
+EXACT_REGISTRY = """version: 1
+models:
+  UsefulSensors/moonshine-base:
+    kind: speech
+    name: {short: moonshine}
+    quants:
+    - {repo: cstr/moonshine-base-GGUF, quant: Q8_0}
+    modalities: {input: [text, audio], output: [text]}
+  Qwen/Qwen3-ASR-1.7B:
+    kind: speech
+    name: {short: qwen3-asr-1.7b}
+    quants:
+    - {repo: cstr/qwen3-asr-GGUF, quant: Q8_0}
+    modalities: {input: [text, audio], output: [text]}
+"""
+
+EXACT_BOARD = {"version": 1, "models": {
+    "usefulsensors/moonshine-tiny": {"accuracy": 88.2, "wer": 11.8,
+                                     "open_weights": True, "datasets": {}},
+    "Qwen/Qwen3-ASR-1.7B-hf": {"accuracy": 95.7, "wer": 4.31,
+                               "open_weights": True, "datasets": {}},
+}}
+
+
+@test
+def a_repo_keyed_board_matches_exactly_or_not_at_all():
+    """Fuzzy matching a board that publishes repo ids assigns the wrong score.
+
+    Every other space here maps a display name, where a near miss is usually a
+    different spelling of the same model and the substring pass earns its keep.
+    The open ASR leaderboard publishes huggingface repo ids, and there a near
+    miss is a different MODEL: `moonshine-base` matched `moonshine-tiny` and
+    took its 11.8 WER, and `omniASR-LLM-300M` matched the 7B.
+
+    A `-hf` suffix is the one real spelling variant -- the same weights in
+    transformers layout -- so it is stripped into the key space rather than
+    reached by fuzzing.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        data = os.path.join(tmp, "data")
+        os.makedirs(data)
+        with open(os.path.join(data, "open-asr.json"), "w") as f:
+            json.dump(EXACT_BOARD, f)
+        for name in ("artificial-analysis-speech", "tts-arena", "voicearena",
+                     "artificial-analysis", "lmarena", "gbench", "epoch",
+                     "swe-rebench", "artificial-analysis-image"):
+            with open(os.path.join(data, name + ".json"), "w") as f:
+                json.dump({}, f)
+        reg = os.path.join(tmp, "models.yaml")
+        with open(reg, "w") as f:
+            f.write(EXACT_REGISTRY)
+        r = subprocess.run([os.path.join(ROOT, "scripts", "resolve-ids"),
+                            "--registry", reg, "--data", data],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        eq(r.returncode, 0, "resolve-ids runs: %s" % r.stdout.strip()[:200])
+        out = r.stdout
+        eq("moonshine-tiny" in out, False,
+           "moonshine-base must not take the tiny's row, got %r" % out.strip()[:300])
+        eq("Qwen3-ASR-1.7B-hf" in out or "open-asr=exact" in out, True,
+           "the -hf spelling of the same weights still matches, got %r"
+           % out.strip()[:300])
+    finally:
+        shutil.rmtree(tmp)
+
+
+OPEN_ASR_CSV = (
+    "model,avg,RTFx,License,Size (B),# Languages,AMI-Cleaned WER,LS Clean WER\n"
+    "nvidia/parakeet-tdt-0.6b-v3,4.85875,3386.02,cc-by-4.0,0.6,25,11.2,1.69\n"
+    "AutoArk-AI/ARK-ASR-3B,4.475,481.49,apache-2.0,3.75,19,10.1,1.55\n"
+    "assemblyai/universal-3-5-pro,4.34125,,Proprietary,,18,9.9,1.5\n"
+    "abr-ai/niagara-19m-batch.en,10.97875,3717.39,applied-brain-research-open-license,0.02,,20.1,3.2\n"
+)
+
+
+@test
+def the_open_asr_board_is_keyed_on_the_repo_and_stored_as_accuracy():
+    """The one speech board keyed the way this registry is.
+
+    Every other board here is matched on a display name, which is why the
+    open-weights filter and the fuzzy-match trap exist: `Whisper Large v3
+    Turbo, Telnyx` is a hosted SKU of a checkpoint the roster carries. The open
+    ASR leaderboard publishes a huggingface repo id per row, so the join is the
+    registry key itself and there is nothing to guess.
+
+    WER is inverted on the way in, for the reason the artificial analysis
+    transcription facets are: the percentile pass has no notion of direction and
+    would rank the worst transcriber first, silently.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        with open(os.path.join(tmp, "english_short_latest.csv"), "w") as f:
+            f.write(OPEN_ASR_CSV)
+        base, stop = serve(tmp)
+        out = os.path.join(tmp, "open-asr.json")
+        try:
+            r = subprocess.run(
+                [os.path.join(RESEARCH, "fetch-open-asr"), "--out", out,
+                 "--url", base + "/english_short_latest.csv",
+                 "--cache-key", "test-openasr", "--max-age", "0"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        finally:
+            stop()
+            purge("test-openasr")
+        eq(r.returncode, 0, "the collector runs: %s" % r.stdout.strip()[:200])
+        got = json.load(open(out))
+        rows = got.get("models") or got
+
+        park = rows["nvidia/parakeet-tdt-0.6b-v3"]
+        near = lambda a, b: abs(a - b) < 1e-6
+        eq(near(park["accuracy"], 100 - 4.85875), True,
+           "a WER is stored as the accuracy it leaves, got %r" % park.get("accuracy"))
+        eq(park["rtfx"], 3386.02, "the speed figure rides along")
+        eq(park["open_weights"], True, "a permissive licence reads as open")
+        eq(rows["assemblyai/universal-3-5-pro"]["open_weights"], False,
+           "and Proprietary does not")
+        # a licence nobody has heard of is not assumed permissive
+        eq(rows["abr-ai/niagara-19m-batch.en"]["license"],
+           "applied-brain-research-open-license", "the licence string is kept verbatim")
+        eq("AMI-Cleaned" in json.dumps(rows["AutoArk-AI/ARK-ASR-3B"]), True,
+           "the per-dataset columns survive")
+    finally:
+        shutil.rmtree(tmp)
+
+
+ALIAS_REGISTRY = """version: 1
+models:
+  vendor/Chatty-Speech:
+    kind: speech
+    name: {short: chatty-speech}
+    quants:
+    - {repo: vendor/Chatty-Speech-GGUF, quant: Q8_0}
+    modalities: {input: [text, audio], output: [text]}
+  vendor/Quiet-Speech:
+    kind: speech
+    name: {short: quiet-speech}
+    quants:
+    - {repo: vendor/Quiet-Speech-GGUF, quant: Q8_0}
+    modalities: {input: [text, audio], output: [text]}
+  vendor/Aliased-Speech:
+    kind: speech
+    name:
+      short: aliased-speech
+      match: aliased[\\s-]*speech
+    quants:
+    - {repo: vendor/Aliased-Speech-GGUF, quant: Q8_0}
+    modalities: {input: [text, audio], output: [text]}
+"""
+
+ALIAS_DISCUSSIONS = {
+    "vendor/Chatty-Speech-GGUF": {"discussions": [
+        {"num": 1, "title": "does not load", "thread": []},
+        {"num": 2, "title": "rocm crash", "thread": []}]},
+    "vendor/Aliased-Speech-GGUF": {"discussions": [
+        {"num": 1, "title": "works fine", "thread": []}]},
+}
+
+
+@test
+def a_non_text_model_with_discussions_and_no_alias_is_reported():
+    """997 captured threads, scored zero, and invisible to the check for it.
+
+    `analyze-task-mentions` says it plainly -- "a missing alias silently zeroes
+    a model" -- and matching runs off `name.match`, which no speech, image or
+    video model carries. That was defensible while the discussion collector read
+    a fraction of the registry. It reads all of it now, so the capture holds 612
+    speech threads and 365 image ones that reach no model.
+
+    The report only counted TEXT models, so the gap was invisible to exactly the
+    check written to catch it. A non-text model with no alias and no captured
+    prose is still fine and stays quiet: the report is about models there is
+    something to read for.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        data = os.path.join(tmp, "data")
+        os.makedirs(data)
+        with open(os.path.join(data, "hf-discussions.json"), "w") as f:
+            json.dump(ALIAS_DISCUSSIONS, f)
+        reg = os.path.join(tmp, "models.yaml")
+        with open(reg, "w") as f:
+            f.write(ALIAS_REGISTRY)
+        shutil.copy(os.path.join(ROOT, "registry", "sampling.yaml"), tmp)
+        facts = os.path.join(tmp, "facts.json")
+        with open(facts, "w") as f:
+            f.write("{}")
+        r = subprocess.run([os.path.join(ROOT, "scripts", "models-validate"),
+                            "--registry", tmp, "--facts", facts,
+                            "--data", data, "--aliases"],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        out = r.stdout
+        eq("chatty-speech" in out, True,
+           "a speech model with two captured threads and no alias is reported, got %r"
+           % out.strip()[:300])
+        eq("quiet-speech" in out, False,
+           "one with no captured prose is not: there is nothing to miss")
+        eq("aliased-speech" in out, False,
+           "and one that already has an alias is not")
     finally:
         shutil.rmtree(tmp)
 
