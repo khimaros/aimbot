@@ -10,6 +10,14 @@ while the cached copy is younger than that, which matters for the huggingface
 tree API: it does not always send an etag, and quant listings change rarely
 compared to how often the tables get rebuilt.
 
+`--immutable` is the stronger claim, for a url whose content cannot change: a
+cached copy is current whatever its age, and only `--refresh` goes back out. It
+exists for the ranged reads of gguf headers -- a file at a given revision is the
+same bytes forever, and there are 1507 of them totalling about 8 GB, so even a
+conditional request each is a cost with no possible answer but "no". A very
+large `--max-age` was the alternative and says the wrong thing: it means
+"probably fine for a while", which is a guess about a file rather than a fact.
+
 Exit status is 0 whether the body came from the network or the cache. A stale
 cache plus a failed fetch is still a success -- the cached body is served and
 the reason goes to stderr, so a collector keeps working offline rather than
@@ -68,6 +76,9 @@ def main():
     ap.add_argument("--refresh", action="store_true", help="ignore the cache, refetch")
     ap.add_argument("--max-age", type=int, default=0,
                     help="serve the cached body without revalidating if younger than this")
+    ap.add_argument("--immutable", action="store_true",
+                    help="the url addresses content that cannot change: if it is "
+                         "cached it is current, whatever its age. only --refresh refetches")
     ap.add_argument("--timeout", default="90")
     ap.add_argument("--header", action="append", default=[])
     ap.add_argument("--path", action="store_true",
@@ -78,6 +89,11 @@ def main():
     body_p, meta_p = paths(args.url, args.key)
     meta = load_meta(meta_p)
     have = os.path.exists(body_p)
+
+    if have and not args.refresh and args.immutable:
+        print("cache immutable %s" % args.url[:70], file=sys.stderr)
+        emit(body_p, args.path)
+        return
 
     if have and not args.refresh and args.max_age:
         age = time.time() - os.path.getmtime(body_p)

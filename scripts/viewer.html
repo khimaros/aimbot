@@ -638,6 +638,12 @@ const activeQuant = m => m._q !== undefined ? m._q : bestInRepo(m, defaultRepo(m
 // is on by default, so getting this wrong makes those entries unreachable.
 const fitsBudget = m => !budget || !m.quants.length || !!activeQuant(m);
 
+// what goes after the colon in `repo:TAG`, which llama.cpp resolves against a
+// type name or a filename. the type where the rung has one, the filename where
+// it does not -- a vae or a voice embedding ships at one precision and names no
+// rung, so its `quant:` is absent rather than holding the filename it used to.
+const hfTag = q => (q.quant || q.file);
+
 // every quant in the pinned repo that clears the budget, the ceiling and the
 // floor, largest first. same filter the fit uses, without the last step that
 // picks one -- so `every quant that fits` and `the one that fits` can never
@@ -2020,7 +2026,8 @@ function methodology() {
 
 // --- detail modal ------------------------------------------------------------
 
-const TABS = ['overview', 'quality', 'community', 'vendor', 'operate'];
+const TABS = ['overview', 'quality', 'community', 'vendor', 'quantization',
+              'operate'];
 let openDoc = null;                 // the methodology note, when it is up
 
 function drawDoc() {
@@ -2090,6 +2097,7 @@ function drawModal(keepScroll) {
   const y = keepScroll ? body.scrollTop : 0;
   body.innerHTML = ({overview: tabOverview, quality: tabQuality,
                      community: tabCommunity, vendor: tabVendor,
+                     quantization: tabQuantization,
                      operate: tabOperate})[tab](m);
   body.scrollTop = y;
   body.querySelectorAll('[data-pick-repo]').forEach(b => {
@@ -2499,23 +2507,76 @@ function quantTable(m, repo, pick) {
   // no notes column: what the registry says about its own pick is in `what the
   // registry pins` below, and repeating it here said it twice. a size over the
   // budget is coloured instead of captioned.
+  // `bpw` is file size over parameter count; `read` is the same number off the
+  // block geometry of every tensor. they are close and not equal, and where a
+  // model publishes no parameter count -- most of the speech half -- the
+  // derived one is blank and the read one is the only figure there is
+  const anyRead = rows.some(c => c.realBpw);
   return `<h3>quants in this repo</h3>`
     + '<table><thead><tr><th>quant</th><th class="n">gib</th>'
-    + '<th class="n">bpw</th><th>loads on</th></tr></thead><tbody>'
+    + '<th class="n">bpw</th>'
+    + (anyRead ? '<th class="n" data-help="read from the file\'s tensor table'
+       + ' rather than derived from its size">read</th>' : '')
+    + (anyRead ? '<th data-help="the ggml type of every tensor in the file, by'
+       + ' share of weights. a rung\'s name is its publisher\'s label, and most'
+       + ' of them are a mix">layers</th>' : '')
+    + '</tr></thead><tbody>'
     + rows.map(c => {
       const over = budget && c.gib && c.gib > usable();
-      return `<tr><td class="nw">${pick && c.quant === pick.quant
-        ? `<b>${esc(c.quant)}</b>` : esc(c.quant)}</td>`
+      // a size beside a rung reads as an offer, so a rung mainline has no type
+      // for says so ON ITS NAME. a column of its own printed `mainline` nine
+      // rows in ten to say something about the tenth
+      return `<tr><td class="nw${c.forkType ? ' warn' : ''}"${c.forkType
+        ? ` data-help="${esc(c.forkType)}. this rung needs the fork that published it"`
+        : ''}>${pick && c.quant === pick.quant
+          ? `<b>${esc(c.quant)}</b>` : esc(c.quant)}`
+        + (c.forkType ? ' <span class="faint">a fork</span>' : '') + '</td>'
         + `<td class="n${over ? ' warn' : ''}"${over
           ? ' data-help="larger than the vram left after the reserve and the kv cache"' : ''}>`
         + `${gib(c.gib) || '-'}</td>`
         + `<td class="n dim">${num(c.bpw, 2) || '-'}</td>`
-        // a size beside a rung reads as an offer, so a rung mainline has no
-        // type for has to say so in the row rather than in a footnote
-        + `<td class="${c.forkType ? 'warn nw' : 'dim nw'}"${c.forkType
-          ? ` data-help="${esc(c.forkType)}. this rung needs the fork that published it"`
-          : ''}>${c.forkType ? 'a fork' : 'mainline'}</td></tr>`;
-    }).join('') + '</tbody></table>';
+        + (anyRead ? `<td class="n dim">${num(c.realBpw, 2) || '-'}</td>`
+          + `<td>${typeChips(c.types)}</td>` : '') + '</tr>';
+    }).join('') + '</tbody></table>'
+    + (anyRead ? '<p class="faint">`read` and the layer mix come out of each'
+      + ' file\'s own tensor table; `bpw` beside them is file size over parameter'
+      + ' count. the share is of WEIGHTS rather than of tensors, because a'
+      + " model's hundreds of f32 norms are most of its tensors and almost none"
+      + ' of its size.</p>' : '');
+}
+
+// the mix, small enough to sit in a table cell. sorted here rather than trusted
+// from the payload: data.json is written with sorted keys, so the collector's
+// own descending order does not survive the trip.
+//
+// a COUNT rather than a share floor, which was tried first and reads badly at
+// both ends: a two-type file came out `Q4_K 98% +1 2%`, hiding one name to save
+// nothing, and a floor low enough to show it printed all nine of an unsloth
+// rung. four names and a tail bounds the cell whatever the file is.
+const MIX_SHOWN = 4;
+
+// a share that rounds down to nothing is not nothing. `0%` beside a type name
+// reads as "this type is not in the file", which is the opposite of what it
+// means -- the f32 norms of a bf16 rung are real tensors and a thousandth of
+// its weights. a type recorded at an actual zero is left out instead, because
+// there the reading IS correct and the chip is noise.
+const share = v => Math.round(v * 100) ? Math.round(v * 100) + '%' : '&lt;1%';
+
+function typeChips(types) {
+  if (!types) return '<span class="dim">-</span>';
+  const all = Object.entries(types).filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1]);
+  if (!all.length) return '<span class="dim">-</span>';
+  const big = all.slice(0, MIX_SHOWN);
+  const rest = all.slice(MIX_SHOWN);
+  const tail = rest.reduce((s, [, v]) => s + v, 0);
+  return big.map(([t, v]) => '<span class="chip" data-help="'
+    + `${num(v * 100, 2)}% of the weights">${esc(t)} `
+    + `<span class="faint">${share(v)}</span></span>`).join(' ')
+    + (rest.length ? ' <span class="chip dim" data-help="'
+      + esc(rest.map(([t, v]) => `${t} ${num(v * 100, 2)}%`).join(', '))
+      + `">+${rest.length} <span class="faint">${share(tail)}`
+      + '</span></span>' : '');
 }
 
 // a quality sweep somebody actually ran on this model's quants. it is not the
@@ -2523,6 +2584,82 @@ function quantTable(m, repo, pick) {
 // moved, not how much of a benchmark score survived, and nothing published
 // maps one onto the other. shown because it is the only per-model measurement
 // of quantization damage that exists for these models at all.
+// what `quant adjusted` did to THIS model, and on what evidence. the discount
+// moves every scaled number on the page and was explained nowhere per model:
+// the methodology note describes the mechanism and the model's own arithmetic
+// -- which rung, which curve, which multiplier -- was left to be inferred from
+// a tooltip on a cell.
+function discountBlock(m) {
+  const q = activeQuant(m);
+  const c = curveFor(m);
+  const kept = modelRetention(m);
+  const rows = [];
+  // the rung being SCORED, which is the largest that fits the budget in the
+  // default repo rather than anything a reader chose. it is named because the
+  // whole block is arithmetic about one file and which file was left implicit
+  rows.push(['rung scored', q
+    ? `${esc(q.quant)}${q.bpw ? ` at ${num(q.bpw, 2)} bits per weight` : ''}`
+      + ' <span class="dim">-- the largest that fits your budget, which is what'
+      + ' the table ranks</span>'
+    : 'nothing fits the budget']);
+  rows.push(['curve', c.kind === 'measured'
+    ? `<b>measured on this model</b> &middot; ${esc(c.src.metric)}`
+    : c.kind === 'median'
+      ? 'the median of every measured sweep'
+      : `fitted &middot; ${esc(c.src.source || '')}`]);
+  if (c.kind === 'measured' && c.src.ref) rows.push(['source', refMark(c.src.ref)]);
+  rows.push(['keeps', m.native_low_bpw
+    ? 'exempt: the weights are natively low-bpw, so this is not quantization loss'
+    : !effective
+      ? `<span class="dim">nothing, while <b>quant adjusted</b> is off. it would be
+         ${num(retention((q || {}).bpw || 16, m) * 100, 1)}%</span>`
+      : `<b>${num(kept * 100, 1)}%</b> of the measured score, on the facets below`]);
+  if (belowCurve(m)) {
+    rows.push(['note', '<span class="warn">this rung sits below everything the curve'
+      + ' measured, so the figure is the last thing the curve knew rather than a'
+      + ' prediction</span>']);
+  }
+  const scaled = (D.retention.evidence || []).filter(e => e.scaled);
+  const held = (D.retention.evidence || []).filter(e => !e.scaled);
+  const names = es => es.map(e => esc(e.name)).join(', ') || 'nothing';
+  return '<h3>what the quality discount did</h3>'
+    + '<table><tbody>'
+    + rows.map(([k, v]) => `<tr><th class="nw">${k}</th><td>${v}</td></tr>`).join('')
+    + '</tbody></table>'
+    + `<p class="faint">discounted: ${names(scaled)}. published as-is: ${names(held)}`
+    + ' -- the curve is a code-editing pass rate, so it is evidence about writing'
+    + ' code and says nothing about the rest.</p>';
+}
+
+// the arms somebody actually ran, which is where a measured curve comes from.
+// this is the only place they are shown: they drive the discount and were
+// otherwise visible as a shape in the arithmetic and nowhere as numbers.
+function measuredTable(m) {
+  const c = (D.retention.measured || {})[m.repo];
+  if (!c) return '';
+  return `<h3>measured on this model <span class="faint">${esc(c.metric)}</span></h3>`
+    + '<table><thead><tr><th>quant</th><th class="n">bpw</th>'
+    + '<th class="n">retention</th><th>source</th></tr></thead><tbody>'
+    + c.points.map(([bpw, v], i) => `<tr><td>${esc((c.quants || [])[i] || '')}</td>`
+      + `<td class="n dim">${num(bpw, 2)}</td>`
+      + `<td class="n"><span class="bar" style="--w:${Math.round(100 * v)}%">`
+      + `<span>${num(v * 100, 1)}%</span></span></td>`
+      + (i ? '' : `<td rowspan="${c.points.length}">${refMark(c.ref)}</td>`)
+      + '</tr>').join('') + '</tbody></table>';
+}
+
+// NOTHING here reads the operate tab's chips, and that is the whole rule for
+// what belongs. the rung ladder was drawn here first and it filters by the
+// picked repo and bolds the picked rung, so choosing a quant to write a command
+// for silently redrew a tab about scoring -- and the runtime chip reached even
+// further, because `repoChoices` narrows to the conversions a runtime declares.
+// the ladder lives with the chips that drive it. what is left is true of the
+// model however you happen to be running it: what the discount cost, what curve
+// says so, and who measured it.
+function tabQuantization(m) {
+  return discountBlock(m) + measuredTable(m) + sweepTable(m);
+}
+
 function sweepTable(m) {
   const c = (D.retention.proxies || {})[m.repo];
   if (!c) return '';
@@ -2593,53 +2730,78 @@ function templateSection(m, repo) {
     ;
 }
 
+// the selection chips, shared because two tabs now ask the same question in
+// different words: operate asks which file to write a command for, quantization
+// asks which file to read a tensor table out of. the click handlers are bound
+// on the modal body rather than per tab, so a row works wherever it is drawn.
+const pickRow = (label, body) =>
+  `<div class="pickrow"><span class="k">${label}</span>`
+  + `<span class="chips">${body}</span></div>`;
+
+const repoRow = (m, repo, counts) => pickRow('repo', repoChoices(m).map(r =>
+  `<button class="chip${r === repo ? ' on' : ''}" data-pick-repo="${esc(r)}">${esc(r)}`
+  // the count is how many quants this repo publishes, which is nothing to say
+  // about a base repo vllm is going to load whole
+  + (counts
+    ? ` <span class="faint">${quantChoices(m).filter(c => c.repo === r).length}`
+      + (repoSpeculates(m, r) ? ' ' + esc((m.speculative || {}).type || 'drafts') : '')
+      + '</span>' : '')
+  + '</button>').join(''));
+
+const quantRow = (m, repo, pick) =>
+  pickRow('quant', quantChoices(m).filter(c => c.repo === repo).map(c =>
+    `<button class="chip${pick && c.quant === pick.quant ? ' on' : ''}"`
+    + ` data-pick-repo="${esc(c.repo)}" data-pick-quant="${esc(c.quant)}"`
+    + ` data-help="${c.gib ? `${gib(c.gib)} gib${c.bpw ? `, ${c.bpw} bits per weight` : ''}`
+      : 'this repo publishes no file sizes'}">`
+    + `${esc(c.quant)}</button>`).join(''));
+
 function tabOperate(m) {
   const profiles = Object.entries(m.sampling);
   const repo = pickedRepo(m), pick = pickedQuant(m), profile = pickedProfile(m);
-  const repos = repoChoices(m);
-  const pickRow = (label, body) => `<div class="pickrow"><span class="k">${label}</span>`
-    + `<span class="chips">${body}</span></div>`;
+  // a runtime with nothing to say builds none, and a bare heading over nothing
+  // is worse than no heading
+  const configs = snippets(m);
   let out = '<h3>how to run it</h3>'
     + '<div class="picks">'
     + pickRow('runtime', RUNTIMES.map(r =>
       `<button class="chip${r.k === pickedRuntime(m).k ? ' on' : ''}"`
       + ` data-runtime="${esc(r.k)}">${esc(r.k)}</button>`).join(''))
-    + pickRow('repo', repos.map(r =>
-      `<button class="chip${r === repo ? ' on' : ''}" data-pick-repo="${esc(r)}">${esc(r)}`
-      // the count is how many quants this repo publishes, which is nothing to
-      // say about a base repo vllm is going to load whole
-      + (pickedRuntime(m).gguf
-        ? ` <span class="faint">${quantChoices(m).filter(c => c.repo === r).length}`
-          + (repoSpeculates(m, r) ? ' ' + esc((m.speculative || {}).type || 'drafts') : '')
-          + '</span>' : '')
-      + '</button>').join(''))
-    + (pickedRuntime(m).gguf ? pickRow('quant', quantChoices(m).filter(c => c.repo === repo).map(c =>
-      `<button class="chip${pick && c.quant === pick.quant ? ' on' : ''}"`
-      + ` data-pick-repo="${esc(c.repo)}" data-pick-quant="${esc(c.quant)}"`
-      + ` data-help="${c.gib ? `${gib(c.gib)} gib${c.bpw ? `, ${c.bpw} bits per weight` : ''}`
-        : 'this repo publishes no file sizes'}">`
-      + `${esc(c.quant)}</button>`).join('')) : '')
+    + repoRow(m, repo, pickedRuntime(m).gguf)
+    + (pickedRuntime(m).gguf ? quantRow(m, repo, pick) : '')
     + (profiles.length > 1 ? pickRow('samplers', profiles.map(([name]) =>
       `<button class="chip${name === profile ? ' on' : ''}"`
       + ` data-profile="${esc(name)}">${esc(name)}</button>`).join('')) : '')
     + '</div>'
-    + snippets(m).map(o => `<div class="snippet"><div class="faint">${esc(o.label)}</div>`
-      + `<button class="copy">copy</button><pre>${esc(o.text)}</pre></div>`).join('')
-    + sweepTable(m)
+    // closed by default, under a heading like every other section: a snippet is
+    // twenty lines of flags and a reader who came for "which runtime loads
+    // this" scrolled past all of them to reach the samplers. each label stays
+    // visible, so opening one is a decision rather than a search
+    + (configs.length ? '<h3>example configs</h3>'
+      + configs.map(o => '<details class="snippet">'
+        + `<summary class="faint">${esc(o.label)}</summary>`
+        + `<button class="copy">copy</button><pre>${esc(o.text)}</pre></details>`)
+        .join('') : '')
     + samplerTable(m, profile)
     + templateSection(m, repo)
+    // the ladder belongs with the chips that drive it: it shows the picked
+    // repo's rungs and bolds the picked one, so it is a view OF the selection
+    // above rather than a fact about the model
     + quantTable(m, repo, pick);
 
   out += runtimeBlock(m);
 
   out += '<h3>what the registry pins</h3>'
     // "quant tag" rather than "quant": it is the string after the colon in
-    // `--hf-repo repo:TAG`, and for a component it is a filename instead
+    // `--hf-repo repo:TAG`, which llama.cpp resolves against a type name or a
+    // filename. a component is one specific file rather than a rung, so most of
+    // them name the file -- 21 of the 41 have no type to name at all, a vae or a
+    // voice embedding being shipped at whatever precision the publisher chose
     + '<table><thead><tr><th>repo</th><th>quant tag</th><th class="n">gib</th>'
     + '<th class="n">bpw</th><th>role</th><th>note</th></tr></thead><tbody>'
     + m.quants.concat(m.components || []).map(q =>
       `<tr><td><a href="${esc('https://huggingface.co/' + q.repo)}" target="_blank" rel="noopener">${esc(q.repo)}</a></td>`
-      + `<td>${esc(q.quant)}</td><td class="n">${gib(q.gib) || '-'}</td>`
+      + `<td>${esc(hfTag(q))}</td><td class="n">${gib(q.gib) || '-'}</td>`
       + `<td class="n dim">${num(q.bpw, 2) || '-'}</td>`
       + `<td class="dim">${esc(q.role || '')}</td>`
       + `<td class="dim">${esc(q.note || '')}</td></tr>`).join('')
@@ -2703,6 +2865,10 @@ function quantChoices(m) {
       // `ggml-large-v3-turbo-q8_0.bin` is the Q8_0 rung
       seen.set(key, {repo: q.repo, quant: a.quant, file: a.file || a.quant,
                      gib: a.gib, bpw: a.bpw,
+                     // what the file IS, where its tensor table has been read.
+                     // `realBpw` is over the block geometry of every tensor;
+                     // `bpw` beside it is file size over parameter count
+                     types: a.types, realBpw: a.real_bpw,
                      pinned: a.quant === q.quant, speculative: q.speculative,
                      forkType: a.fork_type, crispasr: q.crispasr,
                      note: a.quant === q.quant ? q.note : undefined});
@@ -2770,8 +2936,8 @@ function llamaServer(m, pick, profileName) {
   const cmd = ['llama-server'];
   if (pick) cmd.push(`--hf-repo ${pick.repo}:${pick.quant}`);
   (m.components || []).forEach(w => cmd.push(w.role === 'mmproj'
-    ? `--mmproj hf://${w.repo}:${w.quant}`
-    : `# component (${w.role}): hf://${w.repo}:${w.quant}`));
+    ? `--mmproj hf://${w.repo}:${hfTag(w)}`
+    : `# component (${w.role}): hf://${w.repo}:${hfTag(w)}`));
   // speculative decoding is a property of the GGUF, not of the model: a quant
   // saying `speculative: false` cannot draft whatever the model declares
   const spec = (pick && pick.speculative === false) ? {} : (m.speculative || {});
@@ -2870,50 +3036,6 @@ function piProvider(m, pick, profileName, gguf) {
     api: 'openai-completions', apiKey: 'none', models: [entry]}}}, null, 2);
 }
 
-const OFF_LEVELS = ['off', 'none', 'no_think'];
-
-// the knob is not a server flag: the level rides in the chat template's kwargs,
-// so it is sent per request
-function requestBody(m, profileName) {
-  const t = m.thinking;
-  if (!t.knob) return null;
-  const p = m.sampling[profileName] || {};
-  const accepts = t.accepts || [];
-  const want = p.thinking;
-  // three models read a switch AND a graded knob. `off` is the switch's job --
-  // it is not in the graded vocabulary and sending it there raises -- so the
-  // profile's level decides which knob the request carries
-  if (t.gate && t.kind !== 'boolean') {
-    const off = want !== undefined && OFF_LEVELS.includes(want) && !accepts.includes(want);
-    const kwargs = off ? {[t.gate]: false}
-      : {[t.gate]: true, [t.knob]: accepts.includes(want) ? want
-          : (t.aliases || {})[want] || t.default || accepts[accepts.length - 1]};
-    return {text: JSON.stringify({model: 'local',
-      messages: [{role: 'user', content: 'hello'}],
-      chat_template_kwargs: kwargs}, null, 2), note: ''};
-  }
-  if (t.kind === 'boolean') {
-    // the profile names a level; a switch can only carry off or not-off
-    const on = want === undefined ? t.default !== false : !OFF_LEVELS.includes(want);
-    return {text: JSON.stringify({model: 'local',
-      messages: [{role: 'user', content: 'hello'}],
-      chat_template_kwargs: {[t.knob]: on}}, null, 2),
-      note: want && want !== 'off' && want !== 'on'
-        ? `the ${profileName} profile asks for ${want}; this knob is a switch, `
-          + `so it is on or off` : ''};
-  }
-  // a profile may name a level this knob cannot express: qwen3.8's `instruct`
-  // asks for `off` and its reasoning_effort takes low, medium and xhigh only
-  const known = want && (!accepts.length || accepts.includes(want)
-    || (t.aliases || {})[want]);
-  const level = known ? want : (t.default || accepts[accepts.length - 1] || 'high');
-  return {text: JSON.stringify({model: 'local',
-    messages: [{role: 'user', content: 'hello'}],
-    chat_template_kwargs: {[t.knob]: level}}, null, 2),
-    note: known || !want ? '' : `the ${profileName} profile asks for ${want}, `
-      + `which this template does not accept; showing ${level}`};
-}
-
 // a component by role, as `hf://repo:file` -- which is how every runtime here
 // takes a weight it did not download itself
 const partOf = (m, role) => (m.components || []).find(c => c.role === role);
@@ -2987,10 +3109,6 @@ function snippets(m) {
   } else {
     out.push(otherRuntime(m, rt, pick));
   }
-  // the knob rides in the request whatever is serving it
-  const body = requestBody(m, profile);
-  if (body) out.push({label: 'request body (thinking knob)'
-    + (body.note ? ' -- ' + body.note : ''), text: body.text});
   // pi has to be told the level vocabulary; it cannot read a chat template
   const pi = piProvider(m, pick, profile, rt.gguf);
   if (pi) out.push({label: '~/.pi/agent/models.json', text: pi});

@@ -15,6 +15,8 @@ afterwards, so a run leaves the real cache untouched.
 """
 
 import http.server
+import importlib.machinery
+import importlib.util
 import json
 import os
 import shutil
@@ -29,6 +31,25 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 RESEARCH = os.path.join(ROOT, "research")
 CACHE = os.path.join(RESEARCH, ".cache")
+
+
+def load_script(name, path):
+    """Import one of this repo's extensionless scripts as a module.
+
+    The same loader scripts/build-viewer uses on models-validate, for the same
+    reason: an extension is what `spec_from_file_location` picks its loader by,
+    and nothing in scripts/ or research/ has one.
+
+    A case reads a pure function this way where running the executable would
+    only tell it the exit status -- `takes_audio` over a config shape, or
+    `is_quant_name` over a tag. Anything about what the SWEEP does still runs
+    the executable as a subprocess.
+    """
+    spec = importlib.util.spec_from_loader(
+        name, importlib.machinery.SourceFileLoader(name, path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 # a next.js page ships its data as escaped json inside __next_f chunks. the
 # flight encoding writes a missing value as the STRING "$undefined" rather than
@@ -240,12 +261,26 @@ SIZE_TREE = [
 ]
 
 
+def cache_key(name):
+    """httpcache's own sanitising, so a test can find what it will write."""
+    return "".join(c if c.isalnum() or c in "-._" else "_" for c in name)
+
+
 def seed_cache(key, payload, raw=False):
-    """Put a body in the http cache so a collector replays it offline."""
+    """Put a body in the http cache so a collector replays it offline.
+
+    `payload` may be bytes, which is how a binary body -- a gguf header read
+    over a range request -- gets seeded.
+    """
     os.path.isdir(CACHE) or os.makedirs(CACHE)
+    key = cache_key(key)
     body = os.path.join(CACHE, key + ".body")
-    with open(body, "w") as f:
-        f.write(payload) if raw else json.dump(payload, f)
+    if isinstance(payload, bytes):
+        with open(body, "wb") as f:
+            f.write(payload)
+    else:
+        with open(body, "w") as f:
+            f.write(payload) if raw else json.dump(payload, f)
     with open(os.path.join(CACHE, key + ".meta"), "w") as f:
         json.dump({}, f)
     return [body, os.path.join(CACHE, key + ".meta")]
@@ -405,6 +440,268 @@ models:
     quants: [{repo: Fixture/Written-GGUF, quant: Q8_0}]
     sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
 """
+
+
+QUANT_NAME_REGISTRY = """version: 1
+models:
+  Fixture/Named:
+    kind: speech
+    name: {short: fixture named}
+    quants:
+    - {repo: Fixture/Named-GGUF, quant: Q8_0}
+    components:
+    - {repo: Fixture/Named-GGUF, quant: fixture-bigvgan.gguf, role: vocoder}
+    - {repo: Fixture/Named-GGUF, quant: fixture-vae.safetensors, role: vae}
+    - {repo: Fixture/Named-GGUF, quant: Fixture-27B-bf16, role: codec}
+"""
+
+# every shape a publisher actually ships, against the ones that are a file or a
+# model name wearing a rung's field
+GOOD_QUANTS = ["Q8_0", "Q4_K", "F16", "F32", "BF16", "Q4", "Q8", "Q5", "TQ2",
+               "Q2_0", "Q2_K", "Q2_0_G64", "Q4_K_M", "Q3_K_M-mixed",
+               "Q2_K_XL-mtp", "IQ4_NL", "UD-Q4_K_XL", "UD-IQ3_XXS", "UD-Q1_0",
+               "AD-Q6_K", "AP-Q4_K_XL", "AD-NVFP4_AI2", "MXFP4"]
+BAD_QUANTS = ["indextts-gpt.gguf", "indextts-bigvgan.gguf", "ae.safetensors",
+              "flux2-vae.safetensors", "en_female.emb.gguf", "snac-24khz.gguf",
+              "diff-harness-ref", "Fara1.5-27B-bf16",
+              "NVIDIA-Nemotron-3.5-Lightning-30B-A3B-bf16", "", "model"]
+
+
+TENSOR_REPO = "test-tensors/Fixture-GGUF"
+# one rung whose name says Q4_K and whose tensors say something more interesting,
+# which is the whole point: a mixed ladder is what every publisher actually
+# ships. 1024 elements at Q4_K (144 bytes per 256) and 1024 at Q6_K (210 per
+# 256), plus a 32-element f32 norm
+TENSOR_FILES = [
+    {"type": "file", "path": "Fixture-Q4_K.gguf", "size": 1000},
+    {"type": "file", "path": "Fixture-Q8_0.gguf", "size": 2000},
+]
+Q4_K, Q6_K, Q8_0, F32 = 12, 14, 8, 0
+
+
+@test
+def the_tensor_reader_says_what_a_quant_really_is():
+    """A quant's NAME is a label; its tensor table is what it did.
+
+    Every publisher mixes types, and the family in the filename says nothing
+    about the mix: unsloth's `Qwen3.8-27B-UD-Q4_K_XL` is nine types with Q5_K on
+    42% of the weights and IQ3_S on some, while bartowski's `Q4_K_M` on a model
+    of the same size is a plain Q4_K/Q6_K split. Both land near 5.2 bits per
+    weight by entirely different routes.
+
+    That number is the one the retention discount runs on, and it is derived
+    today as file size over parameter count -- which counts the f32 norms and
+    the embedding and output tensors as if they were quantized body. The header
+    gives it directly, per tensor, so it is read rather than inferred.
+
+    Served from the http cache rather than a socket, the way the sizes case is:
+    the collector builds its own hub urls, so seeding is what makes the REAL
+    executable run offline instead of adding a --url flag only a test passes.
+    """
+    written = seed_cache("hf-" + TENSOR_REPO.replace("/", "_"), TENSOR_FILES)
+    for name, tensors in (
+        ("Fixture-Q4_K.gguf", [("blk.0.attn", [1024], Q4_K),
+                               ("blk.0.ffn", [1024], Q6_K),
+                               ("blk.0.norm", [32], F32)]),
+        ("Fixture-Q8_0.gguf", [("blk.0.attn", [2048], Q8_0)]),
+    ):
+        written += seed_cache(
+            "gtensors-%s-%s" % (TENSOR_REPO.replace("/", "_"), name),
+            gguf_header("fixture", tensors=tensors))
+    tmp = tempfile.mkdtemp()
+    try:
+        repos = os.path.join(tmp, "repos.txt")
+        with open(repos, "w") as f:
+            f.write(TENSOR_REPO + "\n")
+        out = os.path.join(tmp, "tensors.json")
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"),
+                            "--repos", repos, "--out", out],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if r.returncode:
+            raise AssertionError("fetch-gguf-tensors exited %d: %s"
+                                 % (r.returncode, r.stderr.strip()))
+        with open(out) as f:
+            got = json.load(f)
+    finally:
+        for p in written:
+            os.path.exists(p) and os.remove(p)
+        shutil.rmtree(tmp)
+
+    mixed = got["%s:Q4_K" % TENSOR_REPO]
+    eq(mixed["tensors"], 3, "every tensor is counted, norms included")
+    eq(mixed["elements"], 2080, "and every element")
+    # the share is of ELEMENTS, which is what a bit-per-weight average is over
+    eq(mixed["types"]["Q4_K"], 0.4923, "Q4_K holds 1024 of 2080 elements")
+    eq(mixed["types"]["Q6_K"], 0.4923, "and Q6_K the same")
+    eq(mixed["types"]["F32"], 0.0154, "the f32 norm is small and is not dropped")
+    # 1024/256*144 + 1024/256*210 + 32*4 = 576 + 840 + 128 = 1544 bytes
+    eq(mixed["bpw"], round(1544 * 8 / 2080, 3),
+       "bits per weight comes off the block geometry, not the file size")
+
+    plain = got["%s:Q8_0" % TENSOR_REPO]
+    eq(plain["types"], {"Q8_0": 1.0}, "a single-type file says so")
+    eq(plain["bpw"], round(2048 // 32 * 34 * 8 / 2048, 3), "at Q8_0's 8.5 bpw")
+
+
+@test
+def a_rung_already_read_is_not_read_again():
+    """The capture is the durable cache; the downloaded bytes are scratch.
+
+    Reaching one tensor table means transferring the tokenizer vocabulary in
+    front of it -- about 8 GB over the 1507 files this roster publishes. Keeping
+    all of that on disk to answer a question already answered is the wrong
+    trade: the answer is four numbers, and it is already in the output file.
+
+    So a rung the capture holds is skipped without a request, which makes the
+    http bodies disposable after the first run -- `rm research/.cache/gtensors-*`
+    costs a re-download only of what is asked for again. `--refresh` is the way
+    back to the network.
+    """
+    written = seed_cache("hf-" + TENSOR_REPO.replace("/", "_"), TENSOR_FILES)
+    tmp = tempfile.mkdtemp()
+    try:
+        repos = os.path.join(tmp, "repos.txt")
+        with open(repos, "w") as f:
+            f.write(TENSOR_REPO + "\n")
+        out = os.path.join(tmp, "tensors.json")
+        # a capture that already holds both rungs, and NO seeded gguf bodies:
+        # any read at all would fail, so finishing proves none was attempted
+        with open(out, "w") as f:
+            json.dump({"%s:Q4_K" % TENSOR_REPO: {"tensors": 3, "elements": 2080,
+                                                 "bpw": 5.938, "types": {"Q4_K": 1.0}},
+                       "%s:Q8_0" % TENSOR_REPO: {"tensors": 1, "elements": 2048,
+                                                 "bpw": 8.5, "types": {"Q8_0": 1.0}}}, f)
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"),
+                            "--repos", repos, "--out", out],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if r.returncode:
+            raise AssertionError("fetch-gguf-tensors exited %d: %s"
+                                 % (r.returncode, r.stderr.strip()))
+        eq("2 already read" in r.stdout, True,
+           "it says what it skipped: %r" % r.stdout.strip()[-160:])
+        with open(out) as f:
+            got = json.load(f)
+        eq(got["%s:Q4_K" % TENSOR_REPO]["bpw"], 5.938,
+           "and the recorded answer is left alone")
+    finally:
+        for p in written:
+            os.path.exists(p) and os.remove(p)
+        shutil.rmtree(tmp)
+
+
+@test
+def an_immutable_cache_entry_is_never_refetched_unless_forced():
+    """Some bytes cannot change, and revalidating them is pure cost.
+
+    A gguf at a given revision is the same file forever, and the tensor reader
+    pulls the front of every published one -- 1507 files and about 8 GB. Asking
+    the hub whether any of that changed is 1507 conditional requests to be told
+    no, and `--max-age` only postpones them.
+
+    `--immutable` says the content is addressed by its url: if it is cached it
+    is current, whatever its age, and only `--refresh` goes back to the network.
+    A large `--max-age` was the alternative and says the wrong thing -- it means
+    "probably fine for a while", which is a guess about a file rather than a
+    fact about it.
+    """
+    key = "test-immutable"
+    purge(key)
+    tmp = tempfile.mkdtemp()
+    try:
+        with open(os.path.join(tmp, "f.txt"), "w") as f:
+            f.write("first")
+        base, stop = serve(tmp)
+        try:
+            def get(*flags):
+                r = subprocess.run(
+                    [os.path.join(RESEARCH, "httpcache"), base + "/f.txt",
+                     "--key", key] + list(flags),
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                return r.stdout, r.stderr
+
+            body, _ = get("--immutable")
+            eq(body, "first", "the first read populates the cache")
+
+            with open(os.path.join(tmp, "f.txt"), "w") as f:
+                f.write("second")
+            body, err = get("--immutable")
+            eq(body, "first", "a cached immutable body is replayed, not revalidated")
+            eq("cache" in err.lower(), True,
+               "and says it came from the cache: %r" % err.strip()[:120])
+
+            # the escape hatch, which is the only thing that goes back out
+            body, _ = get("--immutable", "--refresh")
+            eq(body, "second", "--refresh is what forces it")
+            body, _ = get("--immutable")
+            eq(body, "second", "and what it fetched is what is cached now")
+        finally:
+            stop()
+    finally:
+        purge(key)
+        shutil.rmtree(tmp)
+
+
+@test
+def a_quant_field_has_to_name_a_quant():
+    """`quant:` is the rung's TYPE, and a filename in it is not a type.
+
+    The split is `quant:` for the tag and `file:` for the object, because a repo
+    is free not to name its files after the tag. There was a check for this and
+    it had two holes, which is how 32 rows walked through it: it ran over
+    `quants:` and never over `components:`, where every one of the 32 sat, and
+    it tested for a `.gguf`/`.bin` SUFFIX rather than asking whether the string
+    names a quant at all -- so `ae.safetensors` passed, and so did
+    `Fara1.5-27B-bf16`, which is a model name with a type glued on the end.
+
+    The positive test is the one that holds, because the ways of not being a
+    quant name are not enumerable. It has to stay generous about what IS one:
+    `UD-Q4_K_XL`, `AP-IQ4_M` and `AD-NVFP4_AI2` are publisher ladders over
+    mainline tensors, `Q4` and `Q8` are bare families two repos really publish,
+    and `Q3_K_M-mixed` is avar6's own recipe label.
+    """
+    mod = load_script("models_validate",
+                      os.path.join(ROOT, "scripts", "models-validate"))
+
+    for q in GOOD_QUANTS:
+        eq(mod.is_quant_name(q), True, "%r is a quant a publisher ships" % q)
+    for q in BAD_QUANTS:
+        eq(mod.is_quant_name(q), False, "%r is not a quant name" % q)
+
+    # and the check reaches components, which is where they all were
+    code, findings, _ = validate(QUANT_NAME_REGISTRY)
+    named = [x["error"] for x in findings if "quant" in x["error"]]
+    eq(len(named), 3, "all three components are reported, got %r" % (findings,))
+    for want in ("fixture-bigvgan.gguf", "fixture-vae.safetensors",
+                 "Fixture-27B-bf16"):
+        eq(any(want in e for e in named), True, "%s is named: %r" % (want, named))
+    eq(code, 1, "which fails lint rather than printing a note")
+
+
+@test
+def the_shipped_quant_ladder_names_only_quants():
+    """`available` is a ladder of TYPES, and the page labels each rung by name.
+
+    It is built from what a repo publishes, and the size collector keys by a
+    quant tag where it can read one and by the filename where it cannot. Those
+    filenames were passing straight through: the ladder under indextts offered
+    `indextts-gpt.gguf` as a rung beside Q4_K and Q8_0, and fara 1.5 offered
+    `Fara1.5-27B-bf16` -- a real BF16 build, wearing its whole filename because
+    the relabel only fired on names that end in `.gguf` or `.bin`.
+
+    A rung the page cannot NAME is a rung a reader cannot pick, so the name is
+    not cosmetic. Read against models-validate's own predicate rather than a
+    second copy of it, so the page and the punch list cannot disagree.
+    """
+    mv = load_script("models_validate", os.path.join(ROOT, "scripts",
+                                                     "models-validate"))
+    with open(os.path.join(ROOT, "docs", "data.json")) as f:
+        data = json.load(f)
+    bad = [(m["short"], q["repo"], a["quant"])
+           for m in data["models"] for q in m.get("quants") or []
+           for a in q.get("available") or []
+           if not mv.is_quant_name(a["quant"])]
+    eq(bad, [], "every offered rung names a quant, got %d that do not: %r"
+       % (len(bad), bad[:6]))
 
 
 UNSHAPED_REGISTRY = """version: 1
@@ -695,11 +992,8 @@ def a_model_with_no_block_gets_one_rather_than_being_skipped():
     and reached MODELS.md unscored. Both cases are checked together because the
     fix has to insert WITHOUT relocating the block the other model already has.
     """
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "registry_patch", os.path.join(ROOT, "scripts", "registry_patch.py"))
-    rp = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(rp)
+    rp = load_script("registry_patch",
+                     os.path.join(ROOT, "scripts", "registry_patch.py"))
 
     tmp = tempfile.mkdtemp()
     try:
@@ -761,11 +1055,7 @@ def a_dead_source_cannot_empty_a_capture():
     Nothing in this repo can rebuild that corpus: it accumulated over months of
     sweeps from a source that no longer answers.
     """
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "capture", os.path.join(RESEARCH, "capture.py"))
-    cap = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(cap)
+    cap = load_script("capture", os.path.join(RESEARCH, "capture.py"))
 
     tmp = tempfile.mkdtemp()
     try:
@@ -813,11 +1103,7 @@ def dotenv_configures_the_llm_without_overriding_the_environment():
     quietly winning over an endpoint somebody exported on purpose. It is also
     the half that is easy to get backwards.
     """
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "llm_under_test", os.path.join(RESEARCH, "llm.py"))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    mod = load_script("llm_under_test", os.path.join(RESEARCH, "llm.py"))
 
     tmp = tempfile.mkdtemp()
     keep = {k: os.environ.get(k) for k in
@@ -1432,13 +1718,8 @@ def an_asr_config_declares_audio_however_it_says_it():
     same config down to the tokenizers, and `VibeVoiceForASRTraining` against
     `VibeVoiceForConditionalGeneration` is the whole of the difference.
     """
-    import importlib.util
-    path = os.path.join(RESEARCH, "fetch-model-facts")
-    spec = importlib.util.spec_from_loader(
-        "fetch_model_facts",
-        importlib.machinery.SourceFileLoader("fetch_model_facts", path))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    mod = load_script("fetch_model_facts",
+                      os.path.join(RESEARCH, "fetch-model-facts"))
 
     for repo, (cfg, want) in sorted(AUDIO_CONFIGS.items()):
         eq(mod.takes_audio(cfg), want, "%s takes audio" % repo)
@@ -1624,11 +1905,18 @@ def the_punch_list_says_what_each_engine_loads_that_the_roster_does_not():
        "with the architectures themselves, not just the count")
 
 
-def gguf_header(arch, extra_kv=0, lead_numeric=False):
-    """A GGUF v3 header carrying general.architecture among its kv pairs."""
-    def s(text):
-        b = text.encode()
-        return struct.pack("<Q", len(b)) + b
+def gguf_str(text):
+    b = text.encode()
+    return struct.pack("<Q", len(b)) + b
+
+
+def gguf_header(arch, extra_kv=0, lead_numeric=False, tensors=None):
+    """A GGUF v3 header carrying general.architecture among its kv pairs.
+
+    `tensors` is [(name, [dims], ggml_type)] and is written as real tensor info
+    records after the kv table, which is where the per-layer types live.
+    """
+    s = gguf_str
     pairs = []
     # a uint32 before the architecture, which is what most real headers look
     # like and what a string-only walker cannot step over
@@ -1638,8 +1926,14 @@ def gguf_header(arch, extra_kv=0, lead_numeric=False):
     pairs.append(s("general.architecture") + struct.pack("<I", 8) + s(arch))
     for i in range(extra_kv):
         pairs.append(s("general.pad.%d" % i) + struct.pack("<I", 8) + s("x"))
-    return (b"GGUF" + struct.pack("<I", 3) + struct.pack("<Q", 7)
-            + struct.pack("<Q", len(pairs)) + b"".join(pairs))
+    infos = b""
+    for name, dims, t in tensors or []:
+        infos += (s(name) + struct.pack("<I", len(dims))
+                  + b"".join(struct.pack("<Q", d) for d in dims)
+                  + struct.pack("<I", t) + struct.pack("<Q", 0))
+    return (b"GGUF" + struct.pack("<I", 3)
+            + struct.pack("<Q", len(tensors) if tensors is not None else 7)
+            + struct.pack("<Q", len(pairs)) + b"".join(pairs) + infos)
 
 
 @test
@@ -1657,13 +1951,8 @@ def a_multi_model_repo_reports_the_arch_of_each_file_not_one_of_them():
     conventionally first but nothing requires it, so the parser walks the pairs
     rather than trusting position.
     """
-    import importlib.util
-    path = os.path.join(RESEARCH, "fetch-llama-support")
-    spec = importlib.util.spec_from_loader(
-        "fetch_llama_support",
-        importlib.machinery.SourceFileLoader("fetch_llama_support", path))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    mod = load_script("fetch_llama_support",
+                      os.path.join(RESEARCH, "fetch-llama-support"))
 
     eq(mod.gguf_arch(gguf_header("chatterbox")), "chatterbox",
        "the architecture out of a header that leads with it")

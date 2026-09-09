@@ -1,0 +1,253 @@
+#!/usr/bin/env python3
+
+"""What each published gguf ACTUALLY is, read out of its own tensor table.
+
+    fetch-gguf-tensors                 # every repo in repos.txt
+    fetch-gguf-tensors --repo R        # one
+    fetch-gguf-tensors --refresh       # go back to the network
+
+A quant's name is a label its publisher chose, and the label says very little.
+`Qwen3.8-27B-UD-Q4_K_XL` is nine ggml types -- Q5_K over 42% of the weights,
+IQ4_XS over 21%, Q4_K over 20%, Q6_K over 13%, IQ3_S over some of the rest --
+while `Fara1.5-27B-Q4_K_M` on a model of the same size is a plain Q4_K/Q6_K
+split. Both land near 5.2 bits per weight by entirely different routes.
+
+That number matters beyond curiosity: the retention discount runs on bits per
+weight, and it is derived elsewhere as file size over parameter count, which
+counts the f32 norms and the embedding and output tensors as though they were
+quantized body. A tensor table gives it directly.
+
+The read is a RANGE request for the front of the file. The tensor infos sit
+behind the metadata, so the tokenizer vocabulary -- which is most of a text
+model's header -- has to be transferred to reach them: 62-327 KiB for a speech
+model, 7.7-10.7 MiB for a text model with a large vocab. That is why it goes
+through `httpcache --immutable`: a file at a given revision is the same bytes
+forever, so even a conditional request each is a cost with no possible answer
+but "no".
+"""
+
+import argparse
+import collections
+import json
+import os
+import re
+import subprocess
+import sys
+
+import capture
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+RESOLVE = "https://huggingface.co/%s/resolve/main/%s"
+
+sizes = __import__("importlib").machinery.SourceFileLoader(
+    "fetch_gguf_sizes", os.path.join(HERE, "fetch-gguf-sizes")).load_module()
+voices = __import__("importlib").machinery.SourceFileLoader(
+    "fetch_gguf_voices", os.path.join(HERE, "fetch-gguf-voices")).load_module()
+
+# every ggml type by the number the format writes, with the block geometry that
+# turns an element count into bytes: (name, elements per block, bytes per block).
+# a type this does not know is still counted -- under `type<n>`, at no size --
+# because an unknown name is a fact worth reporting and a silently dropped
+# tensor is not.
+GGML = {
+    0: ("F32", 1, 4), 1: ("F16", 1, 2),
+    2: ("Q4_0", 32, 18), 3: ("Q4_1", 32, 20),
+    6: ("Q5_0", 32, 22), 7: ("Q5_1", 32, 24),
+    8: ("Q8_0", 32, 34), 9: ("Q8_1", 32, 36),
+    10: ("Q2_K", 256, 84), 11: ("Q3_K", 256, 110), 12: ("Q4_K", 256, 144),
+    13: ("Q5_K", 256, 176), 14: ("Q6_K", 256, 210), 15: ("Q8_K", 256, 292),
+    16: ("IQ2_XXS", 256, 66), 17: ("IQ2_XS", 256, 74), 18: ("IQ3_XXS", 256, 98),
+    19: ("IQ1_S", 256, 50), 20: ("IQ4_NL", 32, 18), 21: ("IQ3_S", 256, 110),
+    22: ("IQ2_S", 256, 82), 23: ("IQ4_XS", 256, 136), 24: ("I8", 1, 1),
+    25: ("I16", 1, 2), 26: ("I32", 1, 4), 27: ("I64", 1, 8), 28: ("F64", 1, 8),
+    29: ("IQ1_M", 256, 56), 30: ("BF16", 1, 2),
+    34: ("TQ1_0", 256, 54), 35: ("TQ2_0", 256, 66),
+}
+
+# a repo holds more than rungs: a projector, a drafter head, an imatrix. none is
+# a rung of the model and none belongs in a ladder of its bits per weight -- the
+# same names build-viewer's SIDECAR_NAME drops.
+#
+# matched at the START of the tag, which catches both spellings the sizes
+# collector produces: it writes `mmproj:F16` where the marker is not already
+# there and a bare `MTP` where it is, so a list of `mmproj:`-style prefixes
+# missed unsloth's MTP draft head and sized it as a 3.663 bpw rung.
+SKIP_TAG = re.compile(r"^(mmproj|mtp|dspark|dflash|eagle3|imatrix)", re.I)
+
+
+def tensors_in(data):
+    """[(name, elements, type name, bytes)] for every tensor in the header.
+
+    The metadata has to be WALKED to be stepped over -- the tensor infos begin
+    wherever the kv table ends -- which is why the voices reader's parser is
+    borrowed rather than a second one written.
+    """
+    h = voices.Header(data)
+    if h.take(4) != b"GGUF":
+        raise ValueError("not a gguf")
+    h.u32()
+    n_tensors, n_kv = h.u64(), h.u64()
+    for _ in range(n_kv):
+        h.string()
+        h.value(h.u32())
+    out = []
+    for _ in range(n_tensors):
+        name = h.string()
+        dims = [h.u64() for _ in range(h.u32())]
+        kind, _offset = h.u32(), h.u64()
+        n = 1
+        for d in dims:
+            n *= d
+        label, per_block, block_bytes = GGML.get(kind, ("type%d" % kind, 0, 0))
+        nbytes = n // per_block * block_bytes if per_block else 0
+        out.append((name, n, label, nbytes))
+    return out
+
+
+# the front of the file, widened only where the vocabulary does not fit. tuned
+# to the two shapes this roster has rather than to powers of two: a speech model
+# lands inside 512 KiB and a text model with a large vocab needs about 11 MiB,
+# so a middle rung would only ever be a wasted request.
+WINDOWS = (512 << 10, 12 << 20, 64 << 20)
+
+
+def read_header(repo, path, refresh, window):
+    """The first `window` bytes of a file, through the immutable cache."""
+    key = "gtensors-%s-%s" % (repo.replace("/", "_"), path.replace("/", "_"))
+    if window != WINDOWS[0]:
+        key += "-w%d" % (window >> 20)
+    cmd = [os.path.join(HERE, "httpcache"), RESOLVE % (repo, path),
+           "--key", key, "--immutable", "--path",
+           "--header", "Range: bytes=0-%d" % (window - 1)]
+    if refresh:
+        cmd.append("--refresh")
+    r = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    if r.returncode or not r.stdout.strip():
+        return None
+    with open(r.stdout.strip(), "rb") as f:
+        return f.read()
+
+
+def read_tensors(repo, path, refresh=False):
+    """One file's tensors, widening the read until the table fits."""
+    for window in WINDOWS:
+        data = read_header(repo, path, refresh, window)
+        if data is None:
+            return None
+        try:
+            return tensors_in(data)
+        except EOFError:
+            continue
+        except Exception as e:  # noqa: BLE001 - one bad file is not a run
+            print("!!! %s/%s: %s" % (repo, path, e), file=sys.stderr)
+            return None
+    print("!!! %s/%s: header exceeds %d bytes" % (repo, path, WINDOWS[-1]),
+          file=sys.stderr)
+    return None
+
+
+def summarise(rows):
+    """{tensors, elements, bpw, types} over every tensor of one rung.
+
+    `types` is each type's share of ELEMENTS rather than of tensors, because a
+    bits-per-weight average is over weights: a model's 400 f32 norms are most of
+    its tensors and almost none of its size.
+    """
+    by = collections.Counter()
+    total = bits = 0
+    for _name, n, label, nbytes in rows:
+        by[label] += n
+        total += n
+        bits += nbytes * 8
+    if not total:
+        return None
+    return {"tensors": len(rows), "elements": total,
+            "bpw": round(bits / total, 3),
+            "types": {k: round(v / total, 4)
+                      for k, v in sorted(by.items(), key=lambda kv: -kv[1])}}
+
+
+def rungs(repo, max_age, refresh):
+    """(tag, [path]) for every rung this repo publishes, sidecars dropped."""
+    by = sizes.files_by_tag(repo, max_age, refresh)
+    if by is None:
+        return []
+    out = []
+    for tag, files in sorted(by.items()):
+        if SKIP_TAG.search(tag):
+            continue
+        out.append((tag, sorted(p for p, _size in files)))
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--repos", default="repos.txt")
+    ap.add_argument("--out", default="data/gguf-tensors.json")
+    ap.add_argument("--repo", help="read one gguf repo rather than the roster")
+    ap.add_argument("--max-age", type=int, default=sizes.MAX_AGE,
+                    help="for the TREE listing; the headers themselves are immutable")
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true")
+    args = ap.parse_args()
+
+    if args.repo:
+        names = [args.repo]
+    else:
+        with open(args.repos) as f:
+            names = [ln.split("#")[0].strip() for ln in f]
+        names = [n for n in names if n]
+
+    # the capture is the durable cache and the downloaded bytes are scratch.
+    # reaching one tensor table means transferring the vocabulary in front of
+    # it, about 8 GB over this roster, and keeping that to re-answer a question
+    # whose answer is four numbers already on disk is the wrong trade. so a rung
+    # already recorded is skipped without a request, and the http bodies can be
+    # deleted -- `rm research/.cache/gtensors-*` -- at the cost of a re-download
+    # only for whatever is asked for again.
+    try:
+        with open(args.out) as f:
+            out = json.load(f)
+    except (IOError, ValueError):
+        out = {}
+    if args.refresh:
+        out = {}
+    known = set(out)
+
+    failed = 0
+    for repo in names:
+        for tag, paths in rungs(repo, args.max_age, args.refresh):
+            if "%s:%s" % (repo, tag) in known:
+                continue
+            rows = []
+            for path in paths:
+                # a sharded rung is one model in several files, and its bits per
+                # weight is over all of them
+                got = read_tensors(repo, path, args.refresh)
+                if got is None:
+                    rows = None
+                    break
+                rows.extend(got)
+            summary = summarise(rows) if rows else None
+            if not summary:
+                failed += 1
+                continue
+            out["%s:%s" % (repo, tag)] = summary
+            print("  %-46s %-16s %6.3f bpw  %s"
+                  % (repo, tag, summary["bpw"],
+                     " ".join("%s %d%%" % (k, round(100 * v))
+                              for k, v in list(summary["types"].items())[:4])))
+
+    if not out:
+        sys.exit("!!! no tensor tables read -- every gguf came back unreadable")
+    written, now, before = capture.write(args.out, dict(sorted(out.items())), len,
+                                         allow_shrink=args.allow_shrink)
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "rung(s)"))
+    print("wrote %s: %d rung(s) over %d repo(s), %d already read, %d unreadable"
+          % (args.out, now, len(names), len(known), failed))
+
+
+if __name__ == "__main__":
+    main()

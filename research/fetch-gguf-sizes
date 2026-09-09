@@ -97,11 +97,18 @@ def tree(repo, max_age=MAX_AGE, refresh=False):
     return t if isinstance(t, list) else None
 
 
-def quants(repo, max_age=MAX_AGE, refresh=False):
+def files_by_tag(repo, max_age=MAX_AGE, refresh=False):
+    """{tag: [(path, size)]} for every weight file, sharded ones grouped.
+
+    Split out from `quants` because the tensor reader needs the same grouping
+    and the PATHS as well: a tag is not a filename, and deciding which file a
+    rung is has to be settled in one place or the two collectors disagree about
+    what a rung even is.
+    """
     t = tree(repo, max_age, refresh)
     if t is None:
         return None
-    agg = collections.defaultdict(int)
+    agg = collections.defaultdict(list)
     for e in t:
         path = e.get("path", "")
         if e.get("type") != "file" or not WEIGHTS.search(path):
@@ -121,8 +128,15 @@ def quants(repo, max_age=MAX_AGE, refresh=False):
             marker = SIDECAR.search(path).group(1).lower()
             if not tag.lower().startswith(marker):
                 tag = "%s:%s" % (marker, tag)
-        agg[tag] += size
+        agg[tag].append((path, size))
     return dict(agg)
+
+
+def quants(repo, max_age=MAX_AGE, refresh=False):
+    by = files_by_tag(repo, max_age, refresh)
+    if by is None:
+        return None
+    return {tag: sum(size for _, size in files) for tag, files in by.items()}
 
 
 def main():

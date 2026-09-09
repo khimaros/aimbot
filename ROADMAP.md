@@ -3,6 +3,32 @@
 what is done, and what is next. a user-visible feature goes here before it is
 built and is marked done when it ships.
 
+## in progress
+
+- **read what a quant ACTUALLY is, layer by layer, instead of trusting its
+  name.** a gguf's tensor table names the ggml type of every tensor, and it sits
+  right behind the metadata the voices reader already parses, so the same ranged
+  read answers it. the label turns out to say very little: unsloth's
+  `Qwen3.8-27B-UD-Q4_K_XL` is NINE types -- Q5_K on 42% of the weights, IQ4_XS
+  on 21%, Q4_K on 20%, Q6_K on 13%, IQ3_S on some of the rest -- while
+  bartowski's `Fara1.5-27B-Q4_K_M` on a same-size model is a classic Q4_K/Q6_K
+  split. both land near 5.2 bits per weight by completely different routes, and
+  the family name says none of it.
+  three uses, in the order they are worth doing:
+  - the bits per weight that drives the retention discount is currently file
+    size over parameter count, which folds the f32 norms and the embedding and
+    output tensors in with the quantized body. the header gives the real number.
+  - a label can then be checked for being TRUE, where `is_quant_name` only
+    checks it is well formed.
+  - and the page can show the mix, so a reader picking a rung can see what they
+    are picking rather than reading a family name.
+  the cost is the tokenizer vocabulary, which sits in FRONT of the tensor table
+  and so has to be transferred to reach it: 62-327 KiB for a speech model,
+  7.7-10.7 MiB for a text model with a large vocab. over all 1507 published
+  files that is about 8 GB, fetched once -- `httpcache --immutable` exists for
+  exactly this, because a file at a given revision is the same bytes forever and
+  even a conditional request each is a cost with no possible answer but "no".
+
 ## done
 
 - **the registry** (74 models, 61 of them text), keyed by huggingface base repo.
@@ -35,6 +61,22 @@ built and is marked done when it ships.
   ornith sentences in the corpus were about a generation the registry did not
   carry. `make lint` fails on it now, and a text model with no alias at all,
   which sentiment silently scores zero, prints in the sweep's punch list.
+- **a `quant:` has to name a quant, and a ladder only offers rungs it can name.**
+  the check for this existed and leaked in both directions: it ran over
+  `quants:` and never over `components:`, where all 32 offenders sat, and it
+  tested for a `.gguf`/`.bin` SUFFIX rather than asking whether the string names
+  a type -- so `ae.safetensors` passed on the extension and `Fara1.5-27B-bf16`
+  passed on having none. the test is positive now, because the ways of not being
+  a quant name are not enumerable, and generous about what is one: `UD-Q4_K_XL`,
+  `AD-NVFP4_AI2`, bare `Q4` and `Q8`, and avar6's `Q3_K_M-mixed` are all real
+  labels. `quant:` is the type and `file:` is the object; a component may give
+  only a file, because a vae or a voice embedding names no rung.
+  the ladder the page offers is guarded by the same predicate, which is where
+  this was visible: indextts offered `indextts-gpt.gguf` as a rung beside Q4_K
+  and Q8_0. a name carrying a type is relabelled by it -- `Fara1.5-27B-bf16` is
+  the BF16 rung, and the relabel used to fire only on names ending `.gguf` -- and
+  the nine that carry no type at all are dropped and PRINTED, since a ladder
+  that quietly got shorter is the same failure one rung further on.
 - **a model is scored on the evidence the current view is asking about.** the
   factor list claimed to be per-modality and was not: `factorApplies` asked
   whether ANY model in view could be asked a factor, and eight models are `kind:

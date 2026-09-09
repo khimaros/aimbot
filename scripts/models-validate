@@ -392,16 +392,25 @@ def check_registry(models, sampling, f):
         quants = m.get("quants") or []
         if not quants and kind == "text":
             f.add(repo, "at least one quant is required")
-        for q in quants:
-            if not q.get("repo") or not q.get("quant"):
-                f.add(repo, "every quant needs both repo and quant: %r" % (q,))
-            # `quant:` names the rung and `file:` names the object where a repo
-            # does not name its files after the tag. a filename in `quant:` is
-            # the thing this split exists to stop
-            if str(q.get("quant") or "").lower().endswith((".gguf", ".bin")):
-                f.add(repo, "quant %r is a filename; put it in `file:` and give "
-                            "`quant:` the tag the rung IS" % q.get("quant"))
-            where = "%s/%s" % (repo, q.get("quant"))
+        # `quant:` names the TYPE and `file:` names the object, because a repo is
+        # free not to name its files after the tag. a rung must say which type it
+        # is; a component is one specific file rather than a rung of a ladder, so
+        # it may say only which file -- a vae or a voice embedding has no rung to
+        # name. either way a `quant:` that is present has to be a type.
+        #
+        # this ran over `quants:` alone and tested for a `.gguf`/`.bin` suffix,
+        # which is how 32 rows walked through it: every one of them was a
+        # component, and `ae.safetensors` was not on the list anyway.
+        for q in quants + (m.get("components") or []):
+            component = q not in quants
+            if not q.get("repo"):
+                f.add(repo, "every quant needs a repo: %r" % (q,))
+            if not q.get("quant") and not (component and q.get("file")):
+                f.add(repo, "every quant needs a quant: %r" % (q,))
+            if q.get("quant") and not is_quant_name(q["quant"]):
+                f.add(repo, "quant %r does not name a quantization type; if it "
+                            "names the object, that is `file:`" % q["quant"])
+            where = "%s/%s" % (repo, q.get("quant") or q.get("file"))
             check_runtime(q.get("runtime"), where, f)
             check_crispasr(q.get("crispasr"), where, f)
         # the key is what every capture joins on: model-cards reads that repo's
@@ -593,6 +602,34 @@ def report_cards(models, cards):
         print("     %s" % label)
         print("     %s" % ", ".join("%s=%s" % kv for kv in sorted(extra.items())))
     return unmatched, diverged
+
+
+# WHAT A QUANT NAME LOOKS LIKE, as distinct from what a file is called.
+#
+# a type name is a family -- Q4, IQ3, TQ2, F16, BF16, MXFP4 -- with an optional
+# publisher ladder in front and an optional recipe behind. it has to stay
+# generous about what counts, because a label is not a promise about tensors:
+# `UD-Q4_K_XL`, `AP-IQ4_M` and `AD-NVFP4_AI2` are publisher ladders over
+# mainline types, `Q4` and `Q8` are bare families that cstr and m1el really
+# publish, and `Q3_K_M-mixed` is avar6's own recipe name.
+#
+# what it rules out is a string naming an OBJECT rather than a type. a suffix
+# blacklist was tried first and leaks in both directions: it passed
+# `ae.safetensors` because the extension was not on the list, and
+# `Fara1.5-27B-bf16`, which is a model name with a type glued on the end and no
+# extension at all. the ways of not being a quant name are not enumerable, so
+# the test is positive.
+QUANT_NAME = re.compile(
+    r"^(?:[A-Z]{2}-)?"                                     # publisher ladder
+    r"(?:I?Q\d+|TQ\d+|BF16|F16|F32|FP8|MXFP\d+|NVFP\d+)"   # the type family
+    r"(?:_[A-Z0-9]+)*"                                     # block, then recipe
+    r"(?:-[A-Z]+)?$",                                      # a build variant
+    re.I)
+
+
+def is_quant_name(name):
+    """Whether this string names a quantization type rather than an object."""
+    return bool(name and QUANT_NAME.match(str(name)))
 
 
 # a quantizer's own label around a type name: whose ladder it is, then which

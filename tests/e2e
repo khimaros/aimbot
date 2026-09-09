@@ -623,6 +623,46 @@ test('the operations section shows the runtimes that load THIS model', () => {
   RESET();
 });
 
+test('quantization is its own tab, and says what the discount did', () => {
+  RESET();
+  // everything about what a quant IS was spread over the operate tab, between
+  // the run snippets and the sampler table -- the rung ladder, the published
+  // sweep -- and the thing that actually moves a score, the retention discount,
+  // was not shown at all. it has its own tab now.
+  ok(TABS.includes('quantization'), 'the tab exists: ' + TABS);
+
+  // qwen3.8 27b is the model somebody ran at three arms on terminal-bench, so
+  // it is the one whose discount comes off a MEASUREMENT rather than off the
+  // deepseek fit every other model borrows
+  const measured = D.models.find(x => D.retention.measured[x.repo]);
+  ok(measured, 'the roster carries a measured curve');
+  openModel(measured.repo, 'quantization');
+  const html_ = html('#body');
+  ok(html_.includes('measured'), 'the tab says the curve was measured for it');
+  ok(html_.includes(D.retention.measured[measured.repo].metric),
+     'and names what was measured: ' + D.retention.measured[measured.repo].metric);
+
+  // NOTHING here follows the operate tab's chips. the ladder was drawn here
+  // first and it filters by the picked repo and bolds the picked rung, so
+  // choosing a quant to write a command for silently redrew a tab about
+  // scoring. it lives with the chips that drive it instead, and what is left is
+  // true of the model however you are running it
+  eq(html_.includes('quants in this repo'), false,
+     'the ladder follows the picker, so it is not here');
+  eq(html_.includes('data-pick-quant'), false, 'and there is nothing to pick');
+
+  openModel(measured.repo, 'operate');
+  const op = html('#body');
+  ok(op.includes('quants in this repo'), 'the ladder is with its pickers');
+  ok(op.includes('data-pick-quant'), 'which are on the same tab');
+  // the run snippets are long and are not what a reader opens the tab for
+  ok(op.includes('<details'), 'the sample configs are collapsed');
+  eq(/<details[^>]*\bopen\b/.test(op), false, 'and closed by default');
+
+  closeModel();
+  RESET();
+});
+
 test('a model with baked speakers lists them on its detail page', () => {
   RESET();
   const withVoices = D.models.filter(m => (m.quants || []).some(q => q.voices));
@@ -1445,9 +1485,16 @@ test('the ladder marks a rung mainline has no quant type for', () => {
      'each says why, not just that: ' + fork.map(c => c.forkType).join(' | '));
   const pinned = rungs.find(c => c.pinned);
   ok(pinned && !pinned.forkType, 'and the pinned rung is NOT one of them');
+  // the mark rides on the rung's NAME rather than in a column of its own. a
+  // `loads on` column said `mainline` on nine rows in ten to say something
+  // about the tenth, and the tenth is the only one a reader needs told: a size
+  // beside a rung reads as an offer, and this one will not open
   const html_ = quantTable(m, pinned.repo, pinned);
-  ok(html_.includes('a fork'), 'the table says so per row');
-  ok(html_.includes('mainline'), 'and says which rows are fine');
+  ok(html_.includes('a fork'), 'a rung mainline cannot load still says so');
+  const forkRow = html_.split('<tr>').find(r => r.includes(fork[0].quant));
+  ok(forkRow && forkRow.includes('warn'), 'and is marked on the row itself');
+  const okRow = html_.split('<tr>').find(r => r.includes('>' + pinned.quant + '<'));
+  eq(/a fork/.test(okRow || ''), false, 'a rung that loads says nothing');
 });
 
 test('a publisher label is not mistaken for a fork type', () => {

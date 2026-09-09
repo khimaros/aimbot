@@ -512,17 +512,25 @@ def registry_lines(path):
 
 
 @functools.lru_cache(maxsize=1)
+@functools.cache
 def validator():
     """models-validate as a module, so its reduction is shipped not restated.
 
     The page marks exactly the rungs the punch list prints, so the two cannot
     come to different conclusions about which files a stock build opens.
+
+    Cached because it is asked per RUNG, not per run: re-executing the module a
+    few thousand times to answer a regex was most of this script's runtime.
     """
     return load_script("models_validate", os.path.join(HERE, "models-validate"))
 
 
 def fork_type(tag, known):
     return validator().fork_type(tag, known)
+
+
+def is_quant_name(tag):
+    return validator().is_quant_name(tag)
 
 
 # a filename with its quant token and extension taken off, which is what makes
@@ -540,7 +548,8 @@ def file_stem(name):
     return QUANT_TOKEN.sub("", re.sub(r"\.(gguf|bin)$", "", name, flags=re.I)).lower()
 
 
-def quant_rows(model, sizes, known_quants=(), voices=None):
+def quant_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
+               tensors=None):
     """Each declared quant, with what it weighs and what that is per weight.
 
     A rung also carries whether a stock llama.cpp can load it. The ladder is
@@ -548,9 +557,13 @@ def quant_rows(model, sizes, known_quants=(), voices=None):
     in types only their own fork has -- laguna m.1's ik_llama `_R4` and
     `IQ5_K` are 10 of its 28. Offering those as choices with a size beside them
     is the page answering "what else is there" with files that will not open.
+
+    `unnamed` collects the files dropped for carrying no type name, so a ladder
+    that quietly got shorter says so.
     """
     params = None
     out = []
+    unnamed = [] if unnamed is None else unnamed
     # every file this model pins, under the tag the registry gives it. built
     # first because the ladder is per RUNG and the naming is per MODEL: the Q8_0
     # rung lists the unsuffixed file as an alternate, and without this it stayed
@@ -592,19 +605,46 @@ def quant_rows(model, sizes, known_quants=(), voices=None):
             ({"quant": k, "gib": round(v / GIB, 2)}
              for k, v in alt if not drop.search(k)),
             key=lambda x: x["gib"])
+        # a ladder is a list of TYPES and the page labels each rung by name, so a
+        # rung it cannot name is a rung a reader cannot pick. three things get
+        # here that are not type names, and they want three different answers.
+        named = []
         for a in row["available"]:
             fork = known_quants and fork_type(a["quant"], known_quants)
             if fork:
                 a["fork_type"] = fork
-            # a filename that carries a quant token is shown under that token:
-            # `ggml-large-v3-turbo-q5_0.bin` is the Q5_0 rung, and a ladder
-            # reading half tags and half filenames is the mess this replaced
+            # one the registry already pins, which knows the tag for its file
             if a["quant"] in pinned:
                 a["file"], a["quant"] = a["quant"], pinned[a["quant"]]
-                continue
-            token = QUANT_TOKEN.search(a["quant"]) if is_filename(a["quant"]) else None
-            if token:
+            elif not is_quant_name(a["quant"]):
+                # a name carrying a quant token is shown under that token:
+                # `ggml-large-v3-turbo-q5_0.bin` is the Q5_0 rung, and a ladder
+                # reading half tags and half filenames is the mess this
+                # replaced. the extension is NOT the test and used to be --
+                # bartowski uploads bf16 as `Fara1.5-27B-bf16`, with no
+                # extension at all, and it reached the page wearing the whole
+                # stem. the gate is instead whether the name is ALREADY a type,
+                # because `UD-Q4_K_XL` carries a token too and reading it would
+                # throw the publisher's prefix away
+                token = QUANT_TOKEN.search(a["quant"])
+                if not token:
+                    # nothing in the name says what it is. cstr's
+                    # `diff-harness-ref` is a reference file rather than a rung;
+                    # `indextts-gpt.gguf` is a real full-precision build whose
+                    # publisher tagged nothing. neither can be offered as a
+                    # choice, so both are dropped and counted
+                    unnamed.append("%s:%s" % (q["repo"], a["quant"]))
+                    continue
                 a["file"], a["quant"] = a["quant"], token.group(0).strip("-_").upper()
+            # what the file IS, where its tensor table has been read. the label
+            # is the publisher's and says very little: `UD-Q4_K_XL` is nine ggml
+            # types with Q5_K over 42% of the weights. keyed by the tag the
+            # sizes collector used, which is the same grouping this ladder is
+            t = (tensors or {}).get("%s:%s" % (q["repo"], a.get("file") or a["quant"]))
+            if t:
+                a["types"], a["real_bpw"] = t["types"], t["bpw"]
+            named.append(a)
+        row["available"] = named
         # the speakers this FILE ships, read out of its own header. per quant
         # rather than per model because two conversions of one checkpoint
         # answer differently: cstr's qwen3-tts carries nine names where ours
@@ -676,7 +716,9 @@ def build_model(repo, model, ctx):
     facts = ctx["facts"].get(repo) or {}
     use = (ctx["usecase"].get("models") or {}).get(repo) or {}
     card = ctx["cards"].get(repo) or {}
-    quants, _ = quant_rows(model, ctx["sizes"], ctx["known_quants"], ctx["voices"])
+    quants, _ = quant_rows(model, ctx["sizes"], ctx["known_quants"],
+                           ctx["voices"], ctx.setdefault("unnamed", []),
+                           ctx["tensors"])
     quants = with_bpw(quants, facts.get("params_total_b"))
     name = model.get("name") or {}
     rec = {
@@ -753,6 +795,7 @@ def build():
     support = load_json("llama-support")
     ctx = {"facts": load_json("model-facts"), "sizes": load_json("gguf-sizes"),
            "voices": load_json("gguf-voices"),
+           "tensors": load_json("gguf-tensors"),
            "backends": (load_json("crispasr").get("backends") or {}),
            "probes": load_json("template-probes"),
            "usecase": load_json("usecase"), "cards": load_json("model-cards"),
@@ -761,6 +804,14 @@ def build():
     registry = load_yaml(reg_path).get("models") or {}
     sampling = load_yaml(os.path.join(ROOT, "registry", "sampling.yaml"))
     models = [build_model(repo, m, ctx) for repo, m in sorted(registry.items())]
+    # a ladder that got shorter says so. these are files a repo publishes that
+    # name no type, so the page has no label to offer them under -- a reference
+    # build for a diff harness, or an untagged full-precision upload
+    unnamed = sorted(set(ctx.get("unnamed") or []))
+    if unnamed:
+        print("  note: %d published file(s) name no quant and are not offered as "
+              "rungs:\n    %s" % (len(unnamed), "\n    ".join(unnamed)),
+              file=sys.stderr)
     meta = facet_meta(models)
     check_evidence(meta)
     return {
