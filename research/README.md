@@ -21,6 +21,7 @@ date is in each file's provenance below.
 | `data/crispasr.json` | 2026-09-04 | crispasr's own catalog: 83 backends with the repos each was published against, plus the capability bits it generates from `--list-backends-json` |
 | `data/gbench.json` | 2026-08-17 | gertlabs.com/rankings |
 | `data/gguf-sizes.json` | 2026-08-17 | huggingface hub tree api |
+| `data/gguf-tensors.json` | 2026-09-09 | the ggml type of every tensor in each published rung, read from its own tensor table: 1805 rungs over 177 repos |
 | `data/gbench-compare-observed.json` | 2026-08-10 | gertlabs compare view |
 | `data/reddit-localllama.json` | 2026-08-17 | old.reddit.com r/LocalLLaMA |
 | `data/sentiment.json` | derived | analyze-task-mentions --json |
@@ -154,8 +155,8 @@ community licence and ideogram 4 under one called `Ideogram Open Model`,
 neither of which is free and both of which have public ggufs this registry
 pins. reading them as closed hid two models the board scores.
 
-`gguf-voices.json` is the one capture read out of gguf BYTES rather than off an
-api. a synthesis model that ships speakers names them in its own header --
+`gguf-voices.json` is one of two captures read out of gguf BYTES rather than off
+an api. a synthesis model that ships speakers names them in its own header --
 `qwen3tts.spk_names`, `kokoro.voices` -- and huggingface's api serves a parse of
 that header carrying three fields, none of them this one. so the collector does
 a ranged GET and walks the KV table itself, widening the read from 1mb only for
@@ -171,6 +172,38 @@ worth knowing what this is NOT: crispasr's `GET /v1/voices` enumerates the
 registry. it can never list the speakers baked into a model, and this can never
 list a cloned one. neither is a substitute for the other, and llama-tools
 carries this list as `/v1/models` metadata for that reason.
+
+`gguf-tensors.json` is the other, and it borrows the voices reader's parser to
+step over the same KV table and reach the tensor infos behind it. a quant's NAME
+is a label its publisher chose: `Qwen3.8-27B-UD-Q4_K_XL` is nine ggml types with
+Q5_K over 42% of the weights, while a `Q4_K_M` on a same-size model is a plain
+Q4_K/Q6_K split, and both land near 5.2 bits per weight by different routes. the
+tensor table says which, and gives bits per weight off the block geometry rather
+than as file size over parameter count -- the derived one counts the f32 norms
+and the embedding and output tensors as if they were quantized body.
+
+it is keyed `repo:tag` on the same tags `files_by_tag` produces, so a rung is
+the same thing to both collectors, and both resolve the same roster: repos.txt
+unioned with every repo the registry's `quants:` and `components:` name. reading
+repos.txt alone left 30 registry-only repos unread, which on the page is a
+ladder drawn with sizes and no layer mix at all -- the columns are dropped
+rather than blanked, so nothing said the data was missing.
+
+the cost is the tokenizer vocabulary, which sits in FRONT of the tensor table
+and has to be transferred to reach it: 62-327 KiB for a speech model, 7.7-10.7
+MiB for a text model with a large vocab, and a 64 MiB widening for the few whose
+header exceeds that. it goes through `httpcache --immutable` rather than a
+`--max-age` window, because a file at a given revision is the same bytes forever
+and a conditional request each is a cost with no possible answer but "no". a
+rung already in the capture is then skipped without any request, which makes the
+http bodies disposable -- `rm research/.cache/gtensors-*` costs a re-download
+only of whatever is asked for again.
+
+whisper.cpp is the one repo this reads nothing from. it publishes 33 ggml `.bin`
+weights and not a single gguf; the sizer counts them on purpose, since a
+`.gguf`-only filter dropped the repo outright, but ggml is a different container
+with no GGUF tensor table in it, so a rung with no gguf in it is skipped rather
+than fetched and reported unreadable.
 
 `gbench.json` holds the gert labs GBENCH rankings, which score models by having
 them play complex games against each other. worth carrying alongside artificial
@@ -518,7 +551,8 @@ the cleanest signal in the set.
 ```
 cd research
 ./fetch-artificial-analysis
-./fetch-gguf-sizes                 # repos read from repos.txt
+./fetch-gguf-sizes                 # registry quants and components, unioned with repos.txt
+./fetch-gguf-tensors               # the same roster, read again for its types
 ./fetch-hackernews
 ./fetch-gbench
 ./fetch-lmarena
@@ -604,6 +638,7 @@ rather than uniformly:
 | `fetch-model-facts`, `fetch-chat-templates` | 48h | config and template files, which move when a repo is re-uploaded. the two share cache keys, so the windows must agree |
 | `fetch-model-cards`, `fetch-quant-sweeps` | 48h | cards, edited in the days after release and then still. also shared keys |
 | `fetch-gguf-sizes` | 48h | a quantizer adds rungs early, then stops |
+| `fetch-gguf-tensors` | 48h listings, immutable contents | the tree listing gains rungs; the bytes of a file at a revision never change, so its header is cached by url and only `--refresh` goes back |
 | `fetch-llama-support` | 48h | reads the same gguf headers as chat templates, under the same keys, so it transfers nothing after that one. the git history it joins them against is local |
 | `fetch-tbench` | 6h listings, 30d contents | a listing gains submissions and re-runs; the files inside a published job never change, and there are five of them per listing |
 | `fetch-tts-arena`, `fetch-voicearena` | 24h | an arena moves only as fast as people vote, and a rating built on 600 votes does not turn over in an afternoon |

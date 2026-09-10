@@ -76,6 +76,7 @@ def is_sidecar(path):
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+REGISTRY = os.path.join(HERE, "..", "registry", "models.yaml")
 
 # a quantizer adds rungs to a repo in the days after release and then stops. the
 # etag makes each revalidation free in bytes but not in round trips, and there
@@ -139,9 +140,36 @@ def quants(repo, max_age=MAX_AGE, refresh=False):
     return {tag: sum(size for _, size in files) for tag, files in by.items()}
 
 
+def roster(repos_path, registry=REGISTRY):
+    """Every gguf repo to read, from the registry unioned with repos.txt.
+
+    Shared with the tensor reader for the same reason `files_by_tag` is: sizes
+    and tensors answer two halves of one question about one file, and a reader
+    that resolves a shorter roster than the sizer produces a ladder with sizes
+    on it and no tensor table behind them.
+
+    Keyed case-insensitively because the hub resolves either spelling, and
+    repos.txt's gemma-4-31b-it against the registry's gemma-4-31B-it was
+    fetching one repo twice and storing it as two.
+    """
+    with open(repos_path) as f:
+        extra = [l.split("#")[0].strip() for l in f]
+    repos = {r.lower(): r for r in extra if r}
+    try:
+        import yaml
+        for m in ((yaml.safe_load(open(registry)) or {}).get("models") or {}).values():
+            for q in (m.get("quants") or []) + (m.get("components") or []):
+                if q.get("repo"):
+                    repos[q["repo"].lower()] = q["repo"]
+    except (IOError, ImportError):
+        pass
+    return sorted(repos.values())
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--repos", default="repos.txt")
+    ap.add_argument("--registry", default=REGISTRY)
     ap.add_argument("--out", default="data/gguf-sizes.json")
     ap.add_argument("--max-age", type=int, default=MAX_AGE,
                     help="skip revalidation entirely below this age; 0 always revalidates")
@@ -151,26 +179,11 @@ def main():
                          "than the capture on disk")
     args = ap.parse_args()
 
-    with open(args.repos) as f:
-        extra = [l.split("#")[0].strip() for l in f]
     # the registry names every gguf repo a consumer can select; repos.txt adds
     # the ones sized only to show they do NOT fit. union, so neither list has to
-    # be the complete one -- keyed case-insensitively because the hub resolves
-    # either spelling, and repos.txt's gemma-4-31b-it against the registry's
-    # gemma-4-31B-it was fetching one repo twice and storing it as two
-    repos = {r.lower(): r for r in extra if r}
-    try:
-        import yaml
-        reg = os.path.join(HERE, "..", "registry", "models.yaml")
-        for m in ((yaml.safe_load(open(reg)) or {}).get("models") or {}).values():
-            for q in (m.get("quants") or []) + (m.get("components") or []):
-                if q.get("repo"):
-                    repos[q["repo"].lower()] = q["repo"]
-    except (IOError, ImportError):
-        pass
-
+    # be the complete one
     out = {}
-    for repo in sorted(repos.values()):
+    for repo in roster(args.repos, args.registry):
         q = quants(repo, args.max_age, args.refresh)
         if q is None:
             print("  %-52s unavailable" % repo, file=sys.stderr)

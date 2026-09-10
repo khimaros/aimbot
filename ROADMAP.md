@@ -6,28 +6,14 @@ built and is marked done when it ships.
 ## in progress
 
 - **read what a quant ACTUALLY is, layer by layer, instead of trusting its
-  name.** a gguf's tensor table names the ggml type of every tensor, and it sits
-  right behind the metadata the voices reader already parses, so the same ranged
-  read answers it. the label turns out to say very little: unsloth's
-  `Qwen3.8-27B-UD-Q4_K_XL` is NINE types -- Q5_K on 42% of the weights, IQ4_XS
-  on 21%, Q4_K on 20%, Q6_K on 13%, IQ3_S on some of the rest -- while
-  bartowski's `Fara1.5-27B-Q4_K_M` on a same-size model is a classic Q4_K/Q6_K
-  split. both land near 5.2 bits per weight by completely different routes, and
-  the family name says none of it.
-  three uses, in the order they are worth doing:
-  - the bits per weight that drives the retention discount is currently file
-    size over parameter count, which folds the f32 norms and the embedding and
-    output tensors in with the quantized body. the header gives the real number.
-  - a label can then be checked for being TRUE, where `is_quant_name` only
-    checks it is well formed.
-  - and the page can show the mix, so a reader picking a rung can see what they
-    are picking rather than reading a family name.
-  the cost is the tokenizer vocabulary, which sits in FRONT of the tensor table
-  and so has to be transferred to reach it: 62-327 KiB for a speech model,
-  7.7-10.7 MiB for a text model with a large vocab. over all 1507 published
-  files that is about 8 GB, fetched once -- `httpcache --immutable` exists for
-  exactly this, because a file at a given revision is the same bytes forever and
-  even a conditional request each is a cost with no possible answer but "no".
+  name.** the reader is done and the roster is read -- 1805 rungs over 177 repos
+  -- so the page shows the mix and the read bits per weight for 147 of 171
+  models. what is left is the use that motivated it: the retention discount
+  still runs on file size over parameter count, which folds the f32 norms and
+  the embedding and output tensors in with the quantized body, and the read
+  figure sits beside it as a column rather than replacing it. the third use is
+  untouched too -- a label can now be checked for being TRUE, where
+  `is_quant_name` only checks it is well formed, and nothing checks it yet.
 
 ## done
 
@@ -621,6 +607,31 @@ built and is marked done when it ships.
   tab follows a chip on another one. twelve models publish rungs into more than
   one repo and get a ladder each; the tensor-table note under them is printed
   once rather than per repo.
+
+- **a collector nothing runs is a capture that never grows.** the tensor reader
+  shipped with the ladder and was never wired into `scripts/sweep`, so the only
+  rungs it ever held were the two repos it had been pointed at by hand: 29 over
+  2 repos of 172. every other ladder on the page therefore lost both columns
+  that make it worth reading, and lost them SILENTLY -- `quantTable` drops the
+  `read` and `layers` headers when no row in that repo carries a mix, so a
+  ladder with nothing read looks like a ladder that never had those columns
+  rather than one missing its data.
+
+  wiring it in was half the fix. the other half is that it resolved a shorter
+  roster than the sizer: `fetch-gguf-sizes` unions repos.txt with every repo the
+  registry's `quants:` and `components:` name, and the tensor reader read
+  repos.txt alone, so 30 registry-only repos could never be reached however
+  often it ran. both now go through one `roster()`, the way both already go
+  through one `files_by_tag()` -- the two collectors answer halves of one
+  question about one file, and a rung has to be the same thing to both.
+
+  the roster read is 1805 rungs over 177 repos, and it turned the collector's
+  own error path into noise: whisper.cpp publishes 33 ggml `.bin` weights and no
+  gguf, which the sizer counts on purpose and which have no GGUF tensor table in
+  them at all, so every sweep would have printed 33 `!!!` lines nothing can act
+  on. a rung with no gguf in it is skipped without a request now. it is the one
+  repo on the roster this reads nothing from, and the one model on the page with
+  rungs and no mix.
 
 ## next
 

@@ -286,6 +286,22 @@ def seed_cache(key, payload, raw=False):
     return [body, os.path.join(CACHE, key + ".meta")]
 
 
+def roster_args(tmp, *repos, **kw):
+    """`--repos`/`--registry` over fixtures in `tmp`, as argv.
+
+    Both have to be named. The sizer and the tensor reader resolve their roster
+    from the union of the two, so a case passing only repos.txt falls back to
+    the REAL registry and goes to the network for every repo on it.
+    """
+    path = os.path.join(tmp, "repos.txt")
+    with open(path, "w") as f:
+        f.write("".join(r + "\n" for r in repos))
+    reg = os.path.join(tmp, "models.yaml")
+    with open(reg, "w") as f:
+        f.write(kw.get("registry", "models: {}\n"))
+    return ["--repos", path, "--registry", reg]
+
+
 @test
 def every_publisher_naming_convention_yields_a_quant_tag():
     """A tag the sizer cannot parse is not an error, it is a missing model.
@@ -299,12 +315,10 @@ def every_publisher_naming_convention_yields_a_quant_tag():
     written = seed_cache(key, SIZE_TREE)
     tmp = tempfile.mkdtemp()
     try:
-        repos = os.path.join(tmp, "repos.txt")
-        with open(repos, "w") as f:
-            f.write(SIZE_REPO + "\n")
         out = os.path.join(tmp, "sizes.json")
         r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-sizes"),
-                            "--repos", repos, "--out", out, "--max-age", "3600"],
+                            "--out", out, "--max-age", "3600"]
+                           + roster_args(tmp, SIZE_REPO),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if r.returncode:
             raise AssertionError("fetch-gguf-sizes exited %d: %s"
@@ -478,6 +492,14 @@ TENSOR_FILES = [
 ]
 Q4_K, Q6_K, Q8_0, F32 = 12, 14, 8, 0
 
+# whisper.cpp's container, beside a gguf: the sizer counts both and the tensor
+# reader can only parse one of them
+GGML_REPO = "test-tensors/Ggml-Bin"
+GGML_FILES = [
+    {"type": "file", "path": "ggml-large-v3-turbo-q8_0.bin", "size": 800},
+    {"type": "file", "path": "Fixture-Q4_K.gguf", "size": 1000},
+]
+
 
 @test
 def the_tensor_reader_says_what_a_quant_really_is():
@@ -510,12 +532,9 @@ def the_tensor_reader_says_what_a_quant_really_is():
             gguf_header("fixture", tensors=tensors))
     tmp = tempfile.mkdtemp()
     try:
-        repos = os.path.join(tmp, "repos.txt")
-        with open(repos, "w") as f:
-            f.write(TENSOR_REPO + "\n")
         out = os.path.join(tmp, "tensors.json")
-        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"),
-                            "--repos", repos, "--out", out],
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out]
+                           + roster_args(tmp, TENSOR_REPO),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if r.returncode:
             raise AssertionError("fetch-gguf-tensors exited %d: %s"
@@ -543,6 +562,135 @@ def the_tensor_reader_says_what_a_quant_really_is():
     eq(plain["bpw"], round(2048 // 32 * 34 * 8 / 2048, 3), "at Q8_0's 8.5 bpw")
 
 
+# a repo the registry serves and repos.txt does not name. this is the shape the
+# roster actually has -- repos.txt is the hand-kept sizing list and the registry
+# is what the page offers -- and agentionai's flash-next ladder is the live case
+TENSOR_REGISTRY_REPO = "test-tensors/Registry-Only-GGUF"
+TENSOR_REGISTRY_FIXTURE = """
+models:
+  Vendor/Registry-Only:
+    kind: text
+    quants:
+    - repo: %s
+      quant: Q6_K
+""" % TENSOR_REGISTRY_REPO
+
+
+@test
+def the_tensor_reader_covers_the_registry_not_just_repos_txt():
+    """The two collectors that read a repo have to read the SAME repos.
+
+    fetch-gguf-sizes unions repos.txt with every repo the registry's `quants:`
+    and `components:` name; the tensor reader read repos.txt alone. So a repo
+    reachable only through the registry got a ladder with sizes on it and no
+    tensor table behind them, and the viewer drops the `read` and `layers`
+    columns for a ladder where nothing was read -- the mix is not blank, it is
+    absent. agentionai's flash-next ladder is the case that showed it, and it is
+    the ladder that needs the mix most: its tier names are base ftype names that
+    do NOT describe the experts, which only the tensor table says.
+    """
+    written = seed_cache("hf-" + TENSOR_REPO.replace("/", "_"), TENSOR_FILES)
+    written += seed_cache("hf-" + TENSOR_REGISTRY_REPO.replace("/", "_"),
+                          [{"type": "file", "path": "Registry-Q6_K.gguf", "size": 9}])
+    for name, tensors in (
+        ("Fixture-Q4_K.gguf", [("blk.0.attn", [1024], Q4_K)]),
+        ("Fixture-Q8_0.gguf", [("blk.0.attn", [2048], Q8_0)]),
+    ):
+        written += seed_cache(
+            "gtensors-%s-%s" % (TENSOR_REPO.replace("/", "_"), name),
+            gguf_header("fixture", tensors=tensors))
+    written += seed_cache(
+        "gtensors-%s-Registry-Q6_K.gguf" % TENSOR_REGISTRY_REPO.replace("/", "_"),
+        gguf_header("fixture", tensors=[("blk.0.attn", [512], Q6_K)]))
+    tmp = tempfile.mkdtemp()
+    try:
+        out = os.path.join(tmp, "tensors.json")
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out]
+                           + roster_args(tmp, TENSOR_REPO,
+                                           registry=TENSOR_REGISTRY_FIXTURE),
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if r.returncode:
+            raise AssertionError("fetch-gguf-tensors exited %d: %s"
+                                 % (r.returncode, r.stderr.strip()))
+        with open(out) as f:
+            got = json.load(f)
+    finally:
+        for p in written:
+            os.path.exists(p) and os.remove(p)
+        shutil.rmtree(tmp)
+
+    eq("%s:Q6_K" % TENSOR_REGISTRY_REPO in got, True,
+       "a registry-only repo is read: %s" % sorted(got))
+    eq("%s:Q4_K" % TENSOR_REPO in got, True, "and repos.txt still counts")
+
+
+@test
+def a_ggml_bin_is_not_asked_for_a_gguf_tensor_table():
+    """whisper.cpp publishes 33 ggml `.bin` files and not a single gguf.
+
+    The sizer counts them on purpose -- a `.gguf`-only filter skipped the repo
+    outright and it never appeared in the output at all -- but ggml is a
+    different container with no GGUF tensor table in it, so asking each one for
+    its types printed 33 `!!!` lines per sweep. That is the failure mode the
+    collector exists to avoid: a wall of errors nothing can act on is where a
+    real one goes unnoticed.
+
+    So a rung with no gguf in it is not a rung this reads, and it is skipped
+    without a request rather than fetched and failed.
+    """
+    written = seed_cache("hf-" + GGML_REPO.replace("/", "_"), GGML_FILES)
+    written += seed_cache(
+        "gtensors-%s-Fixture-Q4_K.gguf" % GGML_REPO.replace("/", "_"),
+        gguf_header("fixture", tensors=[("blk.0.attn", [1024], Q4_K)]))
+    # a real ggml header, which is what makes today's read FAIL rather than skip
+    written += seed_cache(
+        "gtensors-%s-ggml-large-v3-turbo-q8_0.bin" % GGML_REPO.replace("/", "_"),
+        b"ggml" + b"\x00" * 64)
+    tmp = tempfile.mkdtemp()
+    try:
+        out = os.path.join(tmp, "tensors.json")
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out]
+                           + roster_args(tmp, GGML_REPO),
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if r.returncode:
+            raise AssertionError("fetch-gguf-tensors exited %d: %s"
+                                 % (r.returncode, r.stderr.strip()))
+        with open(out) as f:
+            got = json.load(f)
+    finally:
+        for p in written:
+            os.path.exists(p) and os.remove(p)
+        shutil.rmtree(tmp)
+
+    eq("!!!" in r.stderr, False,
+       "a container this cannot read is not an error: %r" % r.stderr.strip()[-200:])
+    eq("0 unreadable" in r.stdout, True,
+       "and is not counted as one: %r" % r.stdout.strip()[-160:])
+    # the tag rather than the key: a `.bin` the sizer could not parse a type out
+    # of is tagged with its whole filename, which is what must not appear
+    eq([k for k in got if k.rsplit(":", 1)[1].endswith(".bin")], [],
+       "no ggml rung reaches the capture: %s" % sorted(got))
+    eq("%s:Q4_K" % GGML_REPO in got, True, "the gguf beside it is still read")
+
+
+@test
+def the_sweep_reads_a_tensor_table_for_every_repo_it_sizes():
+    """A collector nothing runs is a capture that never grows.
+
+    `fetch-gguf-tensors` was absent from the sweep's collect stage, so the only
+    rungs it ever read were the two repos it had been pointed at by hand: 29
+    rungs over 2 repos of 172, and every other ladder on the page lost its
+    `read` bpw and its layer mix. Sizes and tensors answer two halves of the
+    same question about the same file, so whatever sizes a repo reads it too.
+    """
+    sweep = load_script("sweep", os.path.join(ROOT, "scripts", "sweep"))
+    collect = [argv[0] for _label, argv in sweep.COLLECT]
+    eq("./fetch-gguf-tensors" in collect, True,
+       "the tensor reader runs in a sweep: %s" % collect)
+    eq(collect.index("./fetch-gguf-tensors") > collect.index("./fetch-gguf-sizes"),
+       True, "after the sizer, whose tree listing it reuses")
+
+
 @test
 def a_rung_already_read_is_not_read_again():
     """The capture is the durable cache; the downloaded bytes are scratch.
@@ -560,9 +708,6 @@ def a_rung_already_read_is_not_read_again():
     written = seed_cache("hf-" + TENSOR_REPO.replace("/", "_"), TENSOR_FILES)
     tmp = tempfile.mkdtemp()
     try:
-        repos = os.path.join(tmp, "repos.txt")
-        with open(repos, "w") as f:
-            f.write(TENSOR_REPO + "\n")
         out = os.path.join(tmp, "tensors.json")
         # a capture that already holds both rungs, and NO seeded gguf bodies:
         # any read at all would fail, so finishing proves none was attempted
@@ -571,8 +716,8 @@ def a_rung_already_read_is_not_read_again():
                                                  "bpw": 5.938, "types": {"Q4_K": 1.0}},
                        "%s:Q8_0" % TENSOR_REPO: {"tensors": 1, "elements": 2048,
                                                  "bpw": 8.5, "types": {"Q8_0": 1.0}}}, f)
-        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"),
-                            "--repos", repos, "--out", out],
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out]
+                           + roster_args(tmp, TENSOR_REPO),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if r.returncode:
             raise AssertionError("fetch-gguf-tensors exited %d: %s"

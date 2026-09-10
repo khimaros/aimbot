@@ -74,6 +74,13 @@ GGML = {
 # missed unsloth's MTP draft head and sized it as a 3.663 bpw rung.
 SKIP_TAG = re.compile(r"^(mmproj|mtp|dspark|dflash|eagle3|imatrix)", re.I)
 
+# the sizer counts whisper.cpp's ggml `.bin` weights on purpose -- it publishes
+# 33 of them and not one gguf, and a `.gguf`-only filter dropped the repo
+# outright -- but ggml is a different container with no GGUF tensor table in it.
+# asking anyway is a request that can only fail, so a rung with no gguf in it is
+# skipped rather than fetched and reported unreadable
+GGUF_FILE = re.compile(r"\.gguf$", re.I)
+
 
 def tensors_in(data):
     """[(name, elements, type name, bytes)] for every tensor in the header.
@@ -176,7 +183,9 @@ def rungs(repo, max_age, refresh):
     for tag, files in sorted(by.items()):
         if SKIP_TAG.search(tag):
             continue
-        out.append((tag, sorted(p for p, _size in files)))
+        paths = sorted(p for p, _size in files if GGUF_FILE.search(p))
+        if paths:
+            out.append((tag, paths))
     return out
 
 
@@ -184,6 +193,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repos", default="repos.txt")
+    ap.add_argument("--registry", default=sizes.REGISTRY)
     ap.add_argument("--out", default="data/gguf-tensors.json")
     ap.add_argument("--repo", help="read one gguf repo rather than the roster")
     ap.add_argument("--max-age", type=int, default=sizes.MAX_AGE,
@@ -192,12 +202,10 @@ def main():
     ap.add_argument("--allow-shrink", action="store_true")
     args = ap.parse_args()
 
-    if args.repo:
-        names = [args.repo]
-    else:
-        with open(args.repos) as f:
-            names = [ln.split("#")[0].strip() for ln in f]
-        names = [n for n in names if n]
+    # the same roster the sizer reads, from the same function: a rung this skips
+    # is a ladder the viewer draws with sizes and no layer mix, and reading
+    # repos.txt alone silently left out every repo named only in the registry
+    names = [args.repo] if args.repo else sizes.roster(args.repos, args.registry)
 
     # the capture is the durable cache and the downloaded bytes are scratch.
     # reaching one tensor table means transferring the vocabulary in front of
