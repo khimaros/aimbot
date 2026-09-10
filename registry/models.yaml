@@ -1673,9 +1673,30 @@ models:
         precision everywhere else -- so the label carries `-mixed` the way avar6''s does. it is
         uncalibrated (no imatrix, unit importance) and it omits the two engram tables, the
         mtp/dspark blocks and the vision tensors, which is why the vision half of this entry is
-        a fact about the checkpoint and not about this file. the other two conversions on the
-        hub are not rungs: vcruz305 published 3 of 7 q2_k shards and says so on its card, and
-        AMAImedia mirrors those same three shards beside the original safetensors'
+        a fact about the checkpoint and not about this file. it is the pin because it is the
+        rung that is all there; the vcruz305 ladder below is the one to watch. the third
+        conversion on the hub is not a rung at all -- AMAImedia mirrors vcruz305''s three
+        shards beside the original safetensors'
+    - repo: vcruz305/DeepSeek-V4.1-Flash-GGUF
+      quant: Q2_K
+      runtime:
+        mainline: false
+        tracking: https://github.com/ggml-org/llama.cpp/pull/28696
+        note: two reasons rather than one, and the second outlives the first. the v4.1 runtime
+          gap is the same one the pin above hits. beyond it, llama.cpp reads `split.count` and
+          refuses a split it cannot complete, so this file does not open on ANY build until the
+          remaining four shards land -- including the build the converter PR will eventually
+          produce
+      note: 'carried to track the ladder, because this is the only conventional k-quant attempt
+        at the model and the community is waiting on it. it is 3 of 7 shards. that is the file''s
+        own claim rather than a reading of the filenames: shard 1 declares `split.count` 7 and
+        `split.tensors.count` 1046, and the three uploaded shards hold 71, 236 and 76 of those
+        tensors -- 383, or 37% of the model, in 95.75 gib. DISTRUST THE SIZE on this rung. 95.75
+        gib is 37% of a pack rather than a rung that fits a 128gb box, and it is the one number
+        here that reads as good news. the card is behind the uploads and still says "weights are
+        not in this repo yet"; it announces q2_k_m, q3_k_m, q4_k_m and q5_k_m, where what has
+        landed is plain q2_k (`general.file_type` 10). the header agrees with the pin on
+        `deepseek4`, so the derived block below is unaffected by carrying this'
     ids:
       aa: ''
       gbench: ''
