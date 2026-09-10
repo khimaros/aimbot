@@ -1,0 +1,32 @@
+{%- macro to_text(content) -%}
+{%- if content is string -%}
+{{- content -}}
+{%- elif content is iterable and content is not mapping -%}
+{%- for item in content -%}
+{%- if item is mapping and item.type == 'text' and item.text is defined -%}
+{{- item.text -}}
+{%- elif item is mapping and (item.type == 'audio' or 'audio' in item) -%}
+<|begin_of_audio|><|pad|><|end_of_audio|><|user|>
+{% elif item is string -%}
+{{- item -}}
+{%- endif -%}
+{%- endfor -%}
+{%- else -%}
+{{- content -}}
+{%- endif -%}
+{%- endmacro -%}
+{%- for m in messages -%}
+{%- if m.role == 'system' -%}
+<|system|>
+{{ to_text(m.content) | trim }}
+{%- elif m.role == 'user' -%}
+<|user|>
+{{ to_text(m.content) | trim }}
+{%- elif m.role == 'assistant' -%}
+<|assistant|>
+{{ to_text(m.content) | trim }}
+{%- endif -%}
+{%- endfor -%}
+{%- if add_generation_prompt -%}
+<|assistant|>
+{% endif -%}

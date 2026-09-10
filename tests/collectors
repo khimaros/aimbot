@@ -257,6 +257,13 @@ SIZE_TREE = [
     # whisper.cpp publishes ggml `.bin`, never gguf
     {"type": "file", "path": "ggml-large-v3-turbo-q8_0.bin", "size": 40},
     {"type": "file", "path": "mmproj-F16.gguf", "size": 5},
+    # sharded AND carrying no tag the regex can read: apetersson's v4.1 pack
+    # ships `DSV41-mixedq2-00001-of-00005.gguf`, where `mixedq2` is not a type
+    # name. the tag match fails, so the shard suffix never comes off and a
+    # 170gib model reads as five rungs that each fit
+    {"type": "file", "path": "Fixture-mixedq2-00001-of-00003.gguf", "size": 1000},
+    {"type": "file", "path": "Fixture-mixedq2-00002-of-00003.gguf", "size": 2000},
+    {"type": "file", "path": "Fixture-mixedq2-00003-of-00003.gguf", "size": 3000},
     {"type": "file", "path": "README.md", "size": 1},
 ]
 
@@ -341,6 +348,13 @@ def every_publisher_naming_convention_yields_a_quant_tag():
     eq(got.get("Fixture_espeak_Q8.gguf"), 100, "an `_`-separated variant keeps its name")
     eq(got.get("Fixture_no_espeak_Q8.gguf"), 200, "and so does the one beside it")
     eq(got.get("Q8"), None, "the two never collapse into one bogus rung")
+    # shards aggregate on the filename fallback too. the suffix is what says a
+    # file is PART of something, and that is true whether or not the rest of
+    # the name resolved to a type
+    eq(got.get("Fixture-mixedq2.gguf"), 6000,
+       "untagged shards aggregate under the name the whole file would have had")
+    eq(got.get("Fixture-mixedq2-00001-of-00003.gguf"), None,
+       "and no shard is left standing as a rung of its own")
 
 # the shape that reached the vendor tab as literal markup. a card is markdown
 # WITH html in it, and qwen3.8-flash-next's benchmark footnote opens with a
@@ -787,6 +801,34 @@ def an_immutable_cache_entry_is_never_refetched_unless_forced():
 
 
 @test
+def a_rung_pinned_by_filename_is_still_sized():
+    """`file:` answers the size table before `quant:` does, in BOTH documents.
+
+    The size table is keyed by whatever the repo publishes -- a quant tag where
+    the filenames carry one, the filename where they do not -- which is exactly
+    why a rung may carry both. build-viewer resolved it in that order and
+    build-tables looked up the tag alone, so six pinned rungs sized as `?` in
+    MODELS.md while the page showed them: kokoro's two espeak builds, whisper
+    turbo's two ggml `.bin` files, pyannote, titanet, and deepseek v4.1, whose
+    only complete gguf is `DSV41-mixedq2.gguf` at 157 gib.
+    """
+    bt = load_script("build_tables", os.path.join(RESEARCH, "build-tables"))
+    sizes = {"DSV41-mixedq2.gguf": 168929929664, "Q8_0": 42}
+
+    eq(bt.pinned_size(sizes, {"quant": "IQ2_XXS-mixed",
+                              "file": "DSV41-mixedq2.gguf"}), 168929929664,
+       "the filename answers where the tag names no key")
+    eq(bt.pinned_size(sizes, {"quant": "Q8_0"}), 42,
+       "and the tag still answers on its own")
+    # a rung whose `file:` the repo does not publish falls through rather than
+    # silently reporting the tag's bytes: they are different objects
+    eq(bt.pinned_size(sizes, {"quant": "Q8_0", "file": "absent.gguf"}), None,
+       "a named file that is not there is not the tag")
+    eq(bt.pinned_size(sizes, {"quant": "IQ3_XXS"}), None,
+       "and an unpublished tag is still nothing")
+
+
+@test
 def a_quant_field_has_to_name_a_quant():
     """`quant:` is the rung's TYPE, and a filename in it is not a type.
 
@@ -1102,6 +1144,48 @@ models:
 """)
     eq(code != 0, True, "a date where a release tag belongs is an error")
     eq("release tag" in " ".join(f["error"] for f in findings), True, "and says so")
+
+
+UNLOADABLE_FIXTURE = """version: 1
+models:
+  Vendor/Carried-Arch-Unloadable-File:
+    kind: text
+    name: {short: unloadable model, match: 'unloadable[\\s-]*model'}
+    quants:
+    - repo: Quanter/Unloadable-GGUF
+      quant: Q4_K_M
+      runtime:
+        mainline: false
+        tracking: https://github.com/ggml-org/llama.cpp/pull/28696
+    runtime:
+      arch: llama
+      mainline: true
+      since: b1046
+    sampling:
+      instruct: {source: quant-card, temp: 0.7}
+"""
+
+
+@test
+def a_carried_architecture_can_still_mean_an_unloadable_file():
+    """The punch list has to name a model no stock build loads, however it fails.
+
+    Two ways to fail and only one of them was reported. An architecture absent
+    from mainline is recorded on the MODEL, and the report read that field
+    alone. The other way is a header that is true and useless: deepseek v4.1
+    files declare `deepseek4`, which mainline has carried since b9840, so the
+    derived block says mainline true while a stock build accepts the arch
+    string and then dies on the tensor table. That fact can only be stated per
+    quant -- it is a property of one conversion -- so a model whose every
+    pinned rung says `mainline: false` was in neither list, and a reader of the
+    punch list concluded the roster could run it.
+    """
+    code, _, out = validate(UNLOADABLE_FIXTURE, "--runtime")
+    eq(code, 0, "the registry itself is consistent: this is a report, not an error")
+    eq("Vendor/Carried-Arch-Unloadable-File" in out, True,
+       "the model is named in the runtime report: %r" % out)
+    eq("pull/28696" in out, True,
+       "and the quant's tracking link is where a reader is sent: %r" % out)
 
 
 PATCH_FIXTURE = """version: 1

@@ -183,6 +183,12 @@ a token budget that is generous for the answer returns an empty string instead;
 
 ## adding a model
 
+the six steps below are the shape of it. `.claude/skills/add-model/SKILL.md` is
+the same thing at working depth -- the field vocabularies, which blocks a
+derive step will overwrite and which it reads back, and the traps that cost an
+afternoon each -- and it is what an agent asked to add a model should read
+instead of rediscovering them.
+
 1. add the base repo as a key in `registry/models.yaml` with `kind`,
    `name.short`, `name.match`, at least one `quants[]` entry and `modalities`.
    write the sampling profile's values from the card; leave `source` off and

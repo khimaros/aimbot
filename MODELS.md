@@ -177,22 +177,22 @@ model missing three of them is a gap in the evidence, not a verdict.
 | 29 | glm-4.5-air | Q6_K | 92.2 | 128k | 3/7 | **44.5** |
 | 30 | qwen3.5-35b-a3b | UD-Q8_K_XL | 45.3 | 256k | 4/7 | **44.3** |
 | 31 | qwen3-coder-30b-a3b-instruct | UD-Q8_K_XL | 33.5 | 256k | 2/7 | **43.6** |
-| 32 | minimax-m2.5 | UD-Q2_K_XL | 80.0 | 148k | 5/7 | **42.6** |
+| 32 | minimax-m2.5 | UD-Q2_K_XL | 80.0 | 148k | 5/7 | **42.7** |
 | 33 | laguna xs 2.1 | Q4_K_M | 18.9 | 256k | 2/7 | **41.4** |
 | 34 | gemma 4 31b | UD-Q8_K_XL | 32.6 | 256k | 7/7 | **40.5** |
-| 35 | gemma 4 12b | UD-Q8_K_XL | 12.7 | 256k | 3/7 | **38.8** |
+| 35 | gemma 4 12b | UD-Q8_K_XL | 12.7 | 256k | 3/7 | **38.9** |
 | 36 | laguna s 2.1 | UD-Q6_K_XL | 99.7 | 345k | 2/7 | **38.5** |
 | 37 | qwen3 coder next | UD-Q8_K_XL | 80.4 | 256k | 4/7 | **33.5** |
-| 38 | gemma 4 26b a4b | UD-Q8_K_XL | 25.7 | 256k | 6/7 | **32.6** |
-| 39 | granite 4.2 30b | Q8_0 | 29.0 | 128k | 3/7 | **30.8** |
-| 40 | gemma-4-e4b-it | UD-Q8_K_XL | 8.1 | 128k | 3/7 | **30.8** |
+| 38 | gemma 4 26b a4b | UD-Q8_K_XL | 25.7 | 256k | 6/7 | **32.7** |
+| 39 | gemma-4-e4b-it | UD-Q8_K_XL | 8.1 | 128k | 3/7 | **30.8** |
+| 40 | granite 4.2 30b | Q8_0 | 29.0 | 128k | 3/7 | **30.8** |
 | 41 | ling 3.0 tiny | Q8_0 | 7.8 | 128k | 3/7 | **30.5** |
-| 42 | gemma-4-e2b-it | UD-Q8_K_XL | 4.9 | 128k | 3/7 | **29.3** |
-| 43 | nemotron 3.5 lightning | Q8_0 | 32.6 | 256k | 4/7 | **26.9** |
+| 42 | gemma-4-e2b-it | UD-Q8_K_XL | 4.9 | 128k | 3/7 | **29.2** |
+| 43 | nemotron 3.5 lightning | Q8_0 | 32.6 | 256k | 4/7 | **27.0** |
 | 44 | qwen3.5-0.8b | Q8_0 | 0.8 | 256k | 3/7 | **26.3** |
-| 45 | nemotron 3 super | UD-Q5_K_XL | 100.2 | 184k | 5/7 | **24.7** |
+| 45 | nemotron 3 super | UD-Q5_K_XL | 100.2 | 184k | 5/7 | **24.8** |
 | 46 | granite 4.2 8b | Q8_0 | 8.7 | 128k | 3/7 | **23.0** |
-| 47 | qwen3.5-9b | UD-Q8_K_XL | 12.3 | 256k | 4/7 | **22.2** |
+| 47 | qwen3.5-9b | UD-Q8_K_XL | 12.3 | 256k | 4/7 | **22.3** |
 | 48 | gpt-oss-120b | F16 | 60.9 | 128k | 6/7 | **21.1** |
 | 49 | gpt-oss-20b | F16 | 12.8 | 128k | 4/7 | **15.4** |
 
@@ -598,12 +598,12 @@ be extrapolation.
 | qwen3.8 flash next | **83.4** | 71.4 | 55.1 | - | - | - | 3.1 | 80 | 4/7 |
 | qwen3.8 27b | **79.4** | 68.1 | 50.9 | 0.405 | 1436 | - | 3.4 | 73 | 6/7 |
 | deepseek v4 flash 0731 | **73.6** | 61.0 | 42.8 | 0.479 | 1436 | 34.0 | 4.0 | 58 | 7/7 |
-| qwen3.6 27b | **64.3** | 53.3 | 27.3 | 0.372 | - | 34.1 | 4.5 | 69 | 6/7 |
+| qwen3.6 27b | **64.3** | 53.3 | 27.3 | 0.372 | - | 34.1 | 4.5 | 70 | 6/7 |
 | ling 3.0 flash | **60.2** | 50.1 | 29.0 | - | - | - | 1.9 | - | 3/7 |
 | muse glimmer | **59.1** | 48.5 | 22.7 | 0.427 | 1427 | - | 4.4 | - | 5/7 |
 | minimax m2.7 | **56.9** | 48.4 | 23.8 | 0.281 | 1415 | 47.7 | 3.7 | - | 6/7 |
 | inkling small | **56.5** | 48.8 | 29.4 | - | 1407 | - | 2.3 | - | 4/7 |
-| qwen3.5-27b | **54.8** | - | - | - | 1408 | 58.4 | 2.5 | 60 | 4/7 |
+| qwen3.5-27b | **54.8** | - | - | - | 1408 | 58.4 | 2.5 | 61 | 4/7 |
 | mimo v2.5 | **54.8** | 49.2 | 21.1 | 0.361 | 1434 | - | 2.7 | - | 5/7 |
 | gemma 4 12b coder | **54.0** | - | - | - | - | - | - | - | 1/7 |
 | solar open2 250b | **50.5** | 41.8 | 25.8 | - | - | - | - | - | 3/7 |
@@ -613,7 +613,7 @@ be extrapolation.
 | fara 1.5 27b | **49.2** | - | - | - | - | - | - | - | 1/7 |
 | gemma 4 12b agentic | **49.2** | - | - | - | - | - | - | - | 1/7 |
 | ornith 1.5 35b a3b | **48.8** | - | - | - | - | - | 0.8 | 52 | 2/7 |
-| qwen3.5 122b a10b | **48.1** | 45.2 | 21.0 | - | 1417 | - | 4.3 | 62 | 5/7 |
+| qwen3.5 122b a10b | **48.1** | 45.2 | 21.0 | - | 1417 | - | 4.3 | 63 | 5/7 |
 | ornith 1.5 9b | **48.1** | - | - | - | - | - | - | 37 | 2/7 |
 | ornith 1.0 35b | **47.2** | - | - | - | - | - | 0.0 | 46 | 2/7 |
 | nemotron-3-nano-30b-a3b | **46.8** | - | - | - | - | - | 1.0 | 25 | 2/7 |
@@ -622,26 +622,26 @@ be extrapolation.
 | ornith-1.0-9b | **46.1** | - | - | - | - | - | - | 15 | 2/7 |
 | laguna m.1 | **46.1** | - | - | 0.253 | - | - | - | - | 2/7 |
 | step 3.7 flash | **45.5** | 38.4 | 21.1 | 0.265 | - | - | 2.1 | - | 4/7 |
-| qwen3.6 35b a3b | **44.7** | 41.5 | 21.4 | 0.256 | - | 29.8 | 4.1 | 57 | 6/7 |
+| qwen3.6 35b a3b | **44.7** | 41.5 | 21.4 | 0.256 | - | 29.8 | 4.1 | 58 | 6/7 |
 | glm-4.5-air | **44.5** | - | - | - | 1373 | 32.4 | 3.4 | - | 3/7 |
 | qwen3.5-35b-a3b | **44.3** | - | - | - | 1395 | 30.6 | 2.7 | 44 | 4/7 |
 | qwen3-coder-30b-a3b-instruct | **43.6** | - | - | - | - | 21.9 | 3.5 | - | 2/7 |
-| minimax-m2.5 | **42.6** | - | - | 0.188 | 1391 | 43.7 | 1.6 | 35 | 5/7 |
+| minimax-m2.5 | **42.7** | - | - | 0.188 | 1391 | 43.7 | 1.6 | 36 | 5/7 |
 | laguna xs 2.1 | **41.4** | - | - | 0.173 | - | - | 1.3 | - | 2/7 |
-| gemma 4 31b | **40.5** | 43.0 | 14.3 | 0.184 | 1451 | 22.2 | 3.6 | 60 | 7/7 |
-| gemma 4 12b | **38.8** | 30.7 | - | - | - | - | 2.8 | 27 | 3/7 |
+| gemma 4 31b | **40.5** | 43.0 | 14.3 | 0.184 | 1451 | 22.2 | 3.6 | 61 | 7/7 |
+| gemma 4 12b | **38.9** | 30.7 | - | - | - | - | 2.8 | 28 | 3/7 |
 | laguna s 2.1 | **38.5** | - | - | 0.129 | - | - | 3.0 | - | 2/7 |
 | qwen3 coder next | **33.5** | 35.9 | 8.8 | - | - | 47.3 | 3.7 | - | 4/7 |
-| gemma 4 26b a4b | **32.6** | 38.9 | 10.9 | 0.139 | 1438 | - | 4.2 | 42 | 6/7 |
-| granite 4.2 30b | **30.8** | 29.6 | 13.8 | - | - | - | - | - | 3/7 |
+| gemma 4 26b a4b | **32.7** | 38.9 | 10.9 | 0.139 | 1438 | - | 4.2 | 43 | 6/7 |
 | gemma-4-e4b-it | **30.8** | 9.3 | - | - | - | - | 3.8 | 15 | 3/7 |
+| granite 4.2 30b | **30.8** | 29.6 | 13.8 | - | - | - | - | - | 3/7 |
 | ling 3.0 tiny | **30.5** | 26.3 | 15.9 | - | - | - | 0.0 | - | 3/7 |
-| gemma-4-e2b-it | **29.3** | 7.2 | - | - | - | - | 3.0 | 8 | 3/7 |
-| nemotron 3.5 lightning | **26.9** | 26.5 | 13.6 | - | - | - | 1.0 | 24 | 4/7 |
+| gemma-4-e2b-it | **29.2** | 7.2 | - | - | - | - | 3.0 | 8 | 3/7 |
+| nemotron 3.5 lightning | **27.0** | 26.5 | 13.6 | - | - | - | 1.0 | 25 | 4/7 |
 | qwen3.5-0.8b | **26.3** | 0.0 | - | - | - | - | 2.3 | 4 | 3/7 |
-| nemotron 3 super | **24.7** | 37.3 | 8.7 | - | 1361 | - | 0.9 | 43 | 5/7 |
+| nemotron 3 super | **24.8** | 37.3 | 8.7 | - | 1361 | - | 0.9 | 44 | 5/7 |
 | granite 4.2 8b | **23.0** | 22.2 | 9.1 | - | - | - | - | - | 3/7 |
-| qwen3.5-9b | **22.2** | 28.5 | 7.0 | - | - | - | 2.0 | 25 | 4/7 |
+| qwen3.5-9b | **22.3** | 28.5 | 7.0 | - | - | - | 2.0 | 26 | 4/7 |
 | gpt-oss-120b | **21.1** | 30.4 | 13.4 | 0.165 | 1352 | 26.8 | 3.6 | - | 6/7 |
 | gpt-oss-20b | **15.4** | 20.7 | 3.1 | - | - | 9.4 | 5.1 | - | 4/7 |
 
@@ -1420,7 +1420,18 @@ hold a tool loop.
 aa agentic p0 with gbench one-shot p76 is as clean a split as this corpus
 contains: ask it for a whole answer, not for a sequence of steps.
 
-#### 39. granite 4.2 30b
+#### 39. gemma-4-e4b-it
+
+the larger on-device gemma; the same shape as e2b with a little more of
+everything.
+
+- **use for** on-device chat, phone and edge deployment
+- **avoid for** coding, agentic / tool use, long context
+- **runs at** UD-Q8_K_XL, 8.1 gib, 3/7 of the weighted factors measured it
+- **evidence** aa.ifbench p21; aa.gpqa p12; aa.hle p3
+- **confidence in that evidence** medium
+
+#### 40. granite 4.2 30b
 
 knows the least of anything here and admits it the most: omniscience p9
 against non-hallucination p93.
@@ -1439,17 +1450,6 @@ shape ibm builds for. 4.2 is the first granite generation with a thinking
 mode and the jump from 4.1 is large enough that 4.1 is not worth carrying
 beside it: AA intelligence 23.7 against 8.7. artificial analysis is the only
 source that scores it, so one source is all this rests on.
-
-#### 40. gemma-4-e4b-it
-
-the larger on-device gemma; the same shape as e2b with a little more of
-everything.
-
-- **use for** on-device chat, phone and edge deployment
-- **avoid for** coding, agentic / tool use, long context
-- **runs at** UD-Q8_K_XL, 8.1 gib, 3/7 of the weighted factors measured it
-- **evidence** aa.ifbench p21; aa.gpqa p12; aa.hle p3
-- **confidence in that evidence** medium
 
 #### 41. ling 3.0 tiny
 
@@ -2378,6 +2378,7 @@ kl divergence against the bf16 original:
 |---|---|--:|---|--:|--:|---|
 | minimax m3 | UD-IQ1_M | 119.6 | 427.04b / ? | 5,716 | 158 | 428b total; the smallest rung is 120 gib, so it clears a 128gb box only with nothing left for context. the roster carries it for the comparison rather than to run |
 | motif 3 | Q3_K_M-mixed | 132.5 | 314.84b / ? | - | - | no unsloth or bartowski repo exists, so the five hand-rolled rungs here are what there is; the mixed Q3 is the only one under 145 gib |
+| deepseek v4.1 flash | IQ2_XXS-mixed | 157.3 | 763.21b / ? | - | - | the only complete gguf of this model: 157.33 gib over five shards, sha256 covered and byte-reproducible over two runs. a routed-expert requant rather than a ladder rung -- iq2_xxs on gate/up, q2_k on down, 2.25 bits per weight over the experts and native precision everywhere else -- so the label carries `-mixed` the way avar6's does. it is uncalibrated (no imatrix, unit importance) and it omits the two engram tables, the mtp/dspark blocks and the vision tensors, which is why the vision half of this entry is a fact about the checkpoint and not about this file. the other two conversions on the hub are not rungs: vcruz305 published 3 of 7 q2_k shards and says so on its card, and AMAImedia mirrors those same three shards beside the original safetensors |
 | glm-5.2 | UD-IQ1_S | 201.8 | 753.33b / ? | 396,929 | 642 | 753b total and the smallest rung is 202 gib. the second most discussed model in this corpus after the qwen3.x line, and nothing here runs it |
 | ornith 1.5 397b | Q4_K_M | 227.5 | 403.4b / ? | 951,999 | 35 | the smallest rung published, and still 227 gib |
 | inkling | UD-IQ1_S | 251.6 | 952.38b / ? | 657,216 | 135 | 251.6 gib, the smallest rung published, and still over any local budget. carried for the comparison rather than the slot |
@@ -3405,6 +3406,7 @@ than a judgement.
 | motif 3 | aa | no quant of it fits this box |
 | qwen3.8 2.4t a95b | aa | no quant of it fits this box |
 | deepseek v4 pro 0813 | aa, epoch, gbench, lmarena, swerebench | no quant of it fits this box |
+| deepseek v4.1 flash | - | no source measures it, so the composite has nothing to place it on |
 | embeddinggemma-300m | - | no source measures it, so the composite has nothing to place it on |
 | functiongemma-270m-it | - | no source measures it, so the composite has nothing to place it on |
 | kimi k3 | aa, epoch, gbench | no quant of it fits this box |

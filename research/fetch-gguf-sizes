@@ -46,6 +46,12 @@ TREE = "https://huggingface.co/api/models/%s/tree/main?recursive=true"
 # IQ4_XS, Q8_0, BF16, MXFP4, TQ1_0 -- so requiring one is what keeps `^` safe.
 QUANT = re.compile(r"(?:^|-)((?:UD-|AD-)?(?:IQ|Q|BF|F|MXFP|NVFP|TQ)\d[A-Za-z0-9_]*?)"
                    r"(?:(?:\.gguf)?-\d{5}-of-\d{5})?\.gguf$", re.I)
+# the same suffix, for a name the tag regex could not read at all. stripping it
+# was reachable only THROUGH a successful tag match, so a pack whose stem names
+# no type kept one key per shard: apetersson's `DSV41-mixedq2-00001-of-00005`
+# is 170gib over five files and read as five rungs that each fit in 40. what a
+# shard is part of does not depend on whether the rest of the name resolved
+SHARD = re.compile(r"(?:\.gguf)?-\d{5}-of-\d{5}\.gguf$", re.I)
 # what counts as weights. whisper.cpp publishes 33 ggml `.bin` files and not a
 # single gguf, so a `.gguf`-only filter skipped the repo entirely and it never
 # appeared in the output at all -- a different failure from a mis-parsed tag,
@@ -122,7 +128,7 @@ def files_by_tag(repo, max_age=MAX_AGE, refresh=False):
             # uppercased so `s2-pro-q8_0.gguf` and `Model-Q8_0.gguf` are one
             # rung. every tag that matched before this was already uppercase,
             # so no existing key moves
-            tag = m.group(1).upper() if m else path
+            tag = m.group(1).upper() if m else SHARD.sub(".gguf", path)
         if "mmproj" in path.lower():
             tag = "mmproj:" + tag
         elif is_sidecar(path):

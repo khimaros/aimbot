@@ -646,6 +646,19 @@ def hub_popularity():
     return pop
 
 
+def pinned_size(repo_sizes, quant):
+    """The bytes of one pinned rung, by `file:` first and the tag second.
+
+    The size table is keyed by whatever the repo publishes -- a quant tag where
+    the filenames carry one, the filename where they do not -- so a rung may
+    carry both and only `file:` names the key. build-viewer resolves a rung in
+    this order; this document looked up the tag alone and sized kokoro,
+    whisper turbo, pyannote, titanet and deepseek v4.1 as `?`.
+    """
+    q = quant or {}
+    return (repo_sizes or {}).get(q.get("file") or q.get("quant") or "")
+
+
 def unranked(budget=BUDGET_GIB):
     """(short, repo, quant, gib, facts, model) for every roster model not ranked.
 
@@ -663,8 +676,9 @@ def unranked(budget=BUDGET_GIB):
         # the registry's own pin, not this document's budget rule: a model that
         # does not fit is being SIZED here rather than ranked, and the size to
         # report is the one the registry recommends
-        rp = next((q["quant"] for q in m.get("quants") or [] if q["repo"] == repo), None)
-        b = (sizes.get(repo) or {}).get(rp or "")
+        q = next((q for q in m.get("quants") or [] if q["repo"] == repo), None)
+        rp = (q or {}).get("quant")
+        b = pinned_size(sizes.get(repo), q)
         if b is None:
             quant, gib = quant_at(repo, sizes, pin, budget, f.get("params_total_b"))
         else:

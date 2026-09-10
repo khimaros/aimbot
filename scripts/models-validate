@@ -694,15 +694,41 @@ def _families(known):
     return {FAMILY.match(k).group(1) for k in known if FAMILY.match(k)}
 
 
+def unloadable(m):
+    """The block saying a stock build will not load this model, or None.
+
+    Two ways to get here and only the first is a model-level fact. An
+    architecture mainline has no entry for is derived onto the model, so
+    `runtime.mainline` answers directly.
+
+    The second is a header that is true and useless. A converter subclassing an
+    older architecture ships the older string: deepseek v4.1 files declare
+    `deepseek4`, which mainline has carried since b9840, so the derived block
+    says mainline true while a stock build accepts the arch string and then
+    fails on the tensor table. Whether a FILE loads is a property of how that
+    one file was converted, so it can only be stated per quant -- and a model
+    whose every pinned rung says `mainline: false` is unloadable however
+    carried its architecture is.
+    """
+    rt = m.get("runtime") or {}
+    if rt.get("mainline") is False:
+        return rt
+    blocks = [q.get("runtime") or {} for q in (m.get("quants") or [])]
+    if blocks and all(b.get("mainline") is False for b in blocks):
+        return dict(rt, **blocks[0])
+    return None
+
+
 def report_runtime(models, support, sizes):
     """What a stock llama.cpp will not load, from both ends.
 
-    Two different failures, so two lists. An architecture mainline has no entry
-    for refuses the file outright and is already recorded per model. A quant
-    TYPE mainline has no name for is subtler: the model loads at other rungs, so
-    the pin is fine and only part of the ladder is unreachable -- laguna m.1
-    publishes 28 rungs and 10 of them are ik_llama.cpp's, which the dashboard
-    otherwise offers a reader as if they were choices.
+    Two different failures, so two lists. A model no stock build loads at all
+    refuses the file outright, whether because mainline has no entry for its
+    architecture or because the file needs more than the name it declares. A
+    quant TYPE mainline has no name for is subtler: the model loads at other
+    rungs, so the pin is fine and only part of the ladder is unreachable --
+    laguna m.1 publishes 28 rungs and 10 of them are ik_llama.cpp's, which the
+    dashboard otherwise offers a reader as if they were choices.
 
     The name list is what mainline's own headers enumerate, so it needs no
     maintenance here, but a tag is a directory name rather than a declared type
@@ -721,10 +747,11 @@ def report_runtime(models, support, sizes):
     if not known:
         print("\nruntime: no quant name list captured; run research/fetch-llama-support")
         return [], []
-    off = [(repo, (m.get("runtime") or {}))
-           for repo, m in sorted((models.get("models") or {}).items())
-           if (m.get("runtime") or {}).get("mainline") is False]
-    print("\nruntime: %d model(s) whose architecture mainline does not carry" % len(off))
+    off = [(repo, rt) for repo, rt in
+           ((repo, unloadable(m))
+            for repo, m in sorted((models.get("models") or {}).items()))
+           if rt]
+    print("\nruntime: %d model(s) a stock llama.cpp build will not load" % len(off))
     for repo, rt in off:
         print("  %-44s %-16s %s" % (repo, rt.get("arch") or "-",
                                     rt.get("tracking") or rt.get("fork")

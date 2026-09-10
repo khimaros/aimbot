@@ -17,6 +17,28 @@ built and is marked done when it ships.
 
 ## done
 
+- **a shard is part of something whether or not its name says what.** the size
+  collector stripped the `-00001-of-00005` suffix only THROUGH a successful
+  quant-tag match, so a pack whose stem names no type kept one key per shard:
+  apetersson's deepseek v4.1 pack is 157 gib over five files and read as five
+  rungs that each fit in 40. the suffix comes off first now, and the whole file
+  is keyed under the name it would have had unsharded. the comment warning
+  about exactly this failure was already in the file, one branch away.
+- **`file:` sizes a rung in MODELS.md, not just on the page.** the size table is
+  keyed by whatever the repo publishes -- a quant tag where the filenames carry
+  one, the filename where they do not -- and build-viewer resolved a rung in
+  that order while build-tables looked up the tag alone. six pinned rungs sized
+  as `?` in the document while the dashboard showed them: kokoro's two espeak
+  builds, whisper turbo's two ggml `.bin` files, pyannote and titanet.
+- **the punch list names a model no build loads, however it fails.** it read
+  `runtime.mainline` on the model and nothing else, which covers an
+  architecture mainline has no entry for and misses the header that is true and
+  useless. deepseek v4.1's gguf declares `deepseek4`, an architecture carried
+  since b9840, so the derived block says mainline true while a stock build
+  accepts the string and then dies on the tensor table -- a fact only a quant
+  can state, since it is a property of one conversion. a model whose every
+  pinned rung says `mainline: false` is now in the list with the rung's
+  tracking link beside it.
 - **the registry** (74 models, 61 of them text), keyed by huggingface base repo.
 - **named sampling profiles**, with each profile's `source:` derived rather than
   asserted.

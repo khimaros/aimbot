@@ -1581,7 +1581,10 @@ models:
     kind: text
     name:
       short: deepseek v4 flash 0731
-      match: deepseek[\s-]*v?4[\s-]*flash|ds4[\s-]*f?\b|dsv4(?![\s-]*pro)
+      # the two short forms have to refuse the 4.1 sibling explicitly: `ds4` and
+      # `dsv4` are prefixes of `ds4.1` and `dsv4.1`, so without these every 4.1
+      # mention counted for this model too
+      match: deepseek[\s-]*v?4[\s-]*flash|ds4(?!\.1)[\s-]*f?\b|dsv4(?!\.1|[\s-]*pro)
     quants:
     - repo: unsloth/DeepSeek-V4-Flash-0731-GGUF
       quant: UD-IQ3_XXS
@@ -1632,6 +1635,91 @@ models:
       gate: enable_thinking
       gate_default: false
       accepts: [high, max]
+  deepseek-ai/DeepSeek-V4.1-Flash:
+    kind: text
+    name:
+      short: deepseek v4.1 flash
+      match: deepseek[\s-]*v?4\.1|dsv?4\.1
+    notes: 'released 2026-09-10. a 552b causal encoder-decoder -- 8b active in prefill, 16b in
+      decode -- beside a 196b engram lookup table the backbone count leaves out, so the
+      checkpoint is 763b of parameters in total. two blocks here are hand-written where every
+      other text model has them derived, and both for the same reason: the release ships NO
+      jinja chat template. the prompt format is a python reference encoder in `encoding/` on
+      the base repo, so `turns:` and `thinking:` are read off that file rather than off a
+      template probe, and the sweep''s template stage will keep skipping this model. the values
+      are still MEASURED: encoding.py runs, so the same probe conversations analyze-chat-
+      templates renders were encoded through it. it raises on the developer role outright,
+      keeps four leading system messages, and takes a mid-conversation system message through
+      its own `<|System|>` token. thinking is selected by a `thinking_mode` argument of `chat`
+      or `thinking` rather than by a boolean flag, which is why there is no `gate:` here, and
+      the effort knob takes an int in [1, 100] as well as the three names below, which map to
+      50, 75 and 100. no unsloth conversion exists yet.'
+    quants:
+    - repo: apetersson/DeepSeek-V4.1-Flash-MixedQ2-GGUF
+      quant: IQ2_XXS-mixed
+      file: DSV41-mixedq2.gguf
+      runtime:
+        mainline: false
+        tracking: https://github.com/ggml-org/llama.cpp/pull/28696
+        note: the derived block below reads the header, which says `deepseek4` -- the v4
+          architecture mainline has carried since b9840 -- and that is the one case where the
+          header is not the answer. the converter PR is a draft and converter-only, and a v4.1
+          file ships no `output_hc_*` tensors, so a stock build accepts the arch string and
+          then fails on the tensor table. the quantizer's own matrix records the same result
+          from the other side, and says the file has not been run end to end on ANY runtime
+      note: 'the only complete gguf of this model: 157.33 gib over five shards, sha256 covered
+        and byte-reproducible over two runs. a routed-expert requant rather than a ladder rung
+        -- iq2_xxs on gate/up, q2_k on down, 2.25 bits per weight over the experts and native
+        precision everywhere else -- so the label carries `-mixed` the way avar6''s does. it is
+        uncalibrated (no imatrix, unit importance) and it omits the two engram tables, the
+        mtp/dspark blocks and the vision tensors, which is why the vision half of this entry is
+        a fact about the checkpoint and not about this file. the other two conversions on the
+        hub are not rungs: vcruz305 published 3 of 7 q2_k shards and says so on its card, and
+        AMAImedia mirrors those same three shards beside the original safetensors'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    runtime:
+      arch: deepseek4
+      mainline: true
+      since: b9840
+      merged: '2026-06-29'
+    speculative:
+      type: draft-dspark
+      n_max: 3
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 40
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - tools
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    turns:
+      source: deepseek-ai/DeepSeek-V4.1-Flash
+      developer: rejected
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: rejected
+    thinking:
+      knob: reasoning_effort
+      accepts: [low, high, max]
+      default: high
   fishaudio/s2-pro:
     kind: speech
     name:
@@ -5464,6 +5552,12 @@ models:
       - text
       output:
       - audio
+    turns:
+      source: Aratako/MioTTS-0.6B
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
   OpenMOSS-Team/MOSS-TTS-v1.5:
     kind: speech
     name:
@@ -5496,6 +5590,12 @@ models:
       - text
       output:
       - audio
+    turns:
+      source: OpenMOSS-Team/MOSS-TTS-v1.5
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
   OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5:
     kind: speech
     name:
@@ -5533,6 +5633,16 @@ models:
       - text
       output:
       - audio
+    turns:
+      source: OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   k2-fsa/OmniVoice:
     kind: speech
     name:
@@ -5560,6 +5670,16 @@ models:
       - text
       output:
       - audio
+    turns:
+      source: k2-fsa/OmniVoice
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   OuteAI/OuteTTS-0.3-1B:
     kind: speech
     name:
@@ -5588,6 +5708,12 @@ models:
       - text
       output:
       - audio
+    turns:
+      source: OuteAI/OuteTTS-0.3-1B
+      developer: dropped
+      leading_system_max: 1
+      mid_system: dropped
+      mid_developer: dropped
   parler-tts/parler-tts-mini-v1.1:
     kind: speech
     name:
@@ -5707,6 +5833,12 @@ models:
       - text
       output:
       - audio
+    turns:
+      source: openbmb/VoxCPM2
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
   # the four below load more than one file, which is why they are apart from the
   # single-rung entries above. two carry a neural codec the model decodes
   # through, one is a pair of sizes crispasr reaches by the same backend name,
@@ -5966,6 +6098,12 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: AutoArk-AI/ARK-ASR-3B
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
   nvidia/parakeet-ctc-0.6b:
     kind: speech
     name:
@@ -6114,6 +6252,12 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: LiquidAI/LFM2.5-Audio-1.5B
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
   XiaomiMiMo/MiMo-V2.5-ASR:
     kind: speech
     name:
@@ -6142,6 +6286,16 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: XiaomiMiMo/MiMo-V2.5-ASR
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
   UsefulSensors/moonshine-base:
     kind: speech
     name:
@@ -6228,6 +6382,16 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: OpenMOSS-Team/MOSS-Audio-4B-Instruct
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   OpenMOSS-Team/MOSS-Transcribe-preview-2B:
     kind: speech
     name:
@@ -6256,6 +6420,16 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: OpenMOSS-Team/MOSS-Transcribe-preview-2B
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   aadel4/omniASR-CTC-1B-v2:
     kind: speech
     name:
@@ -6428,6 +6602,12 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: microsoft/VibeVoice-ASR-BitNet
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
   facebook/data2vec-audio-base-960h:
     kind: speech
     name:
@@ -6522,6 +6702,12 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: AutoArk-AI/ARK-ASR-0.6B
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
   nvidia/canary-1b-flash:
     kind: speech
     name:
@@ -6592,6 +6778,12 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: ibm-granite/granite-4.0-1b-speech
+      developer: dropped
+      leading_system_max: 1
+      mid_system: dropped
+      mid_developer: dropped
   distil-whisper/distil-large-v3.5:
     kind: speech
     name:
@@ -6716,6 +6908,12 @@ models:
       - text
       output:
       - audio
+    turns:
+      source: stepfun-ai/Step-Audio-EditX
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
   nvidia/magpie_tts_multilingual_357m:
     kind: speech
     name:
@@ -6795,6 +6993,12 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: zai-org/GLM-ASR-Nano-2512
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
   ibm-granite/granite-speech-3.3-2b:
     kind: speech
     name:
@@ -6820,6 +7024,16 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: ibm-granite/granite-speech-3.3-2b
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: thinking
+      kind: boolean
+      default: false
   ibm-granite/granite-speech-4.1-2b:
     kind: speech
     name:
@@ -6844,6 +7058,12 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: ibm-granite/granite-speech-4.1-2b
+      developer: dropped
+      leading_system_max: 1
+      mid_system: dropped
+      mid_developer: dropped
   ibm-granite/granite-speech-4.1-2b-nar:
     kind: speech
     name:
@@ -6868,6 +7088,12 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: ibm-granite/granite-speech-4.1-2b-nar
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
   ibm-granite/granite-speech-4.1-2b-plus:
     kind: speech
     name:
@@ -6889,6 +7115,12 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: ibm-granite/granite-speech-4.1-2b-plus
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
   bosonai/higgs-audio-v3-stt:
     kind: speech
     name:
@@ -6912,6 +7144,16 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: bosonai/higgs-audio-v3-stt
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   kyutai/stt-1b-en_fr:
     kind: speech
     name:
@@ -6982,6 +7224,12 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: gpt-omni/mini-omni2
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
   Qwen/Qwen3-ASR-0.6B:
     kind: speech
     name:
@@ -7035,6 +7283,12 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: jaykwok/Qwen3-ASR-1.7B-JA-Anime-Galgame-hf
+      developer: dropped
+      leading_system_max: 1
+      mid_system: reordered
+      mid_developer: dropped
   # what crispasr runs BESIDE a transcript. three shapes and they are not
   # interchangeable:
   #
