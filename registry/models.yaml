@@ -4240,6 +4240,72 @@ models:
       leading_system_max: 1
       mid_system: dropped
       mid_developer: dropped
+  zai-org/GLM-5.3-Flash:
+    kind: text
+    name:
+      short: glm-5.3-flash
+      # the 500b GLM-5.3 is a different model and is not on this roster, so the
+      # alias requires `flash` rather than claiming the whole point release
+      match: glm[\s-]*5\.3[\s-]*flash
+    notes: >-
+      on the hub since 2026-08-25. 321b of parameters over 288 experts with 8 active, which
+      the card rounds to 320b/18b, and the first natively multimodal model in the glm-5
+      series: image and video reach the backbone through a vision tower unsloth ships as a
+      1.1 gib mmproj beside the rungs. the shape is what the architecture gap is about -- 11
+      of its 45 layers are full attention and the other 34 are linear, which is what makes a
+      1m context affordable and is also why no mainline llama.cpp loads it.
+
+      `reasoning_effort` reads as two levels rather than the card's three. the template branches
+      on `low` and `high` and folds every other value, `max` included, into one render, so `max`
+      is not a level a caller can select -- it is what sending nothing already gets.
+    quants:
+    - repo: unsloth/GLM-5.3-Flash-GGUF
+      quant: UD-Q2_K_XL
+      note: 101.3 gib, the largest rung whose weights fit on their own, plus a 1.1 gib mmproj
+        for the vision half. that leaves nothing for a kv cache, so the page's 128k-minimum
+        rule runs the model a rung down at UD-IQ1_M and 90.9 gib. the ladder bottoms out at
+        86.7 gib and the next rung up is 137.4
+    runtime:
+      arch: glm5next
+      mainline: false
+      tracking: https://github.com/ggml-org/llama.cpp/pull/27754
+      note: unmerged, and three PRs are open for the same architecture. 27754 is the one tracked
+        because it is the one unsloth's card tells a reader to build to run these files; 27773 is
+        the one under review, and mtp is a fourth PR behind both. the header says `glm5next` and
+        means it -- this is not a converter reusing an older arch string
+    ids:
+      aa: glm-5-3-flash
+      gbench: z.ai/glm-5.3-flash
+      lmarena: glm-5.3-flash
+      swerebench: ''
+      epoch: glm-5.3-flash
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: unsloth/GLM-5.3-Flash-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: reasoning_effort
+      accepts: [low, high]
   zai-org/GLM-5.2:
     kind: text
     name:
