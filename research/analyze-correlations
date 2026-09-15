@@ -40,9 +40,13 @@ import sys
 GIB = 2 ** 30
 
 # AA fields worth correlating: the two the composite uses, the index it excludes,
-# and the task-level scores that decide whether AA is one axis or several.
-AA_FIELDS = ["intelligenceIndex", "codingIndex", "agenticIndex", "terminalbenchV21",
-             "gpqa", "hle", "scicode", "ifbench", "tauBanking", "lcr", "mmmuPro",
+# and the task-level scores that decide whether AA is one axis or several. the
+# two of them are single evals since the site retired its coding and agentic
+# indices, which is a change in what the composite's two heaviest weights MEAN
+# and the reason to re-run this rather than trust the numbers it printed before.
+AA_FIELDS = ["intelligenceIndex", "scicode", "terminalbenchV40",
+             "terminalbenchV21", "livecodebench",
+             "gpqa", "hle", "ifbench", "tauBanking", "lcr", "mmmuPro",
              "gdpvalNormalized", "critpt", "omniscienceAccuracy"]
 
 # how each non-AA source names its score, and where to dig it out
@@ -213,11 +217,12 @@ def roster_vectors(here, aa, gbench, lm, sw, epoch, sentiment, sizes):
         # and crashed the whole redundancy analysis on the first one that was not
         a = aa.get(ids.get("aa")) if ids.get("aa") else None
         if a:
-            for f in ("intelligenceIndex", "codingIndex", "agenticIndex",
-                      "terminalbenchV21", "gpqa", "hle"):
+            for f in ("intelligenceIndex", "scicode", "terminalbenchV21",
+                      "terminalbenchV40", "gpqa", "hle"):
                 if isinstance(a.get(f), (int, float)):
-                    rec["aa " + {"intelligenceIndex": "II", "codingIndex": "coding",
-                                 "agenticIndex": "agentic", "terminalbenchV21": "tbench",
+                    rec["aa " + {"intelligenceIndex": "II", "scicode": "scicode",
+                                 "terminalbenchV21": "tbench",
+                                 "terminalbenchV40": "tbench4",
                                  "gpqa": "gpqa", "hle": "hle"}[f]] = float(a[f])
         for source, table, col in (("gbench", gb, "gbench"),
                                    ("lmarena", arena, "lmarena"),
@@ -280,7 +285,7 @@ def main():
     ap.add_argument("--pair", help="only pairs involving this metric")
     ap.add_argument("--regress", metavar="Y~X1,X2",
                     help="least squares instead of a matrix, e.g. "
-                         "intelligenceIndex~codingIndex,agenticIndex")
+                         "intelligenceIndex~scicode,terminalbenchV21")
     ap.add_argument("--redundancy", action="store_true",
                     help="rank every non-AA source by how much of it AA already explains")
     ap.add_argument("--min-n", type=int, default=6,
@@ -310,7 +315,9 @@ def main():
         # AA is the reference because it is the widest source and the one the
         # composite already spends half its weight on. what matters for a fourth
         # or fifth source is not whether it agrees, but what is left over.
-        preds = ["aa coding", "aa agentic"]
+        # the two the composite weights, named for the evals they are. they were
+        # `aa coding` and `aa agentic` while the site published those indices
+        preds = ["aa scicode", "aa tbench"]
         if any(p not in cols for p in preds):
             raise SystemExit("--redundancy needs the roster scope")
         rows = []
@@ -326,7 +333,7 @@ def main():
                 rows.append((m, n, r2))
         rows.sort(key=lambda r: -r[2])
         if args.markdown:
-            print("| source | n | r2 vs AA coding+agentic | new information |")
+            print("| source | n | r2 vs AA scicode+tbench | new information |")
             print("|---|--:|--:|--:|")
             for m, n, r2 in rows:
                 print("| %s | %d | %.3f | %.0f%% |" % (m, n, r2, 100 * (1 - r2)))

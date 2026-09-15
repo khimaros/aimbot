@@ -24,6 +24,9 @@ import sys
 import time
 import urllib.parse
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import roster  # noqa: E402  the model names to search for, from the registry
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 API = "https://api.github.com/search/issues?%s"
 REPO = "ggml-org/llama.cpp"
@@ -74,12 +77,14 @@ def main():
     ap.add_argument("--per-query", type=int, default=30)
     ap.add_argument("--max-age", type=int, default=6 * 3600)
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--registry", default=roster.REGISTRY,
+                    help="the roster whose model names are searched for")
     ap.add_argument("--delay", type=float, default=7.0,
                     help="unauthenticated search allows ~10/min")
     args = ap.parse_args()
 
     out, seen = {}, {}
-    for q in QUERIES:
+    for q in QUERIES + roster.model_queries(args.registry):
         params = urllib.parse.urlencode({
             "q": "repo:%s %s" % (args.repo, q),
             "per_page": args.per_query, "sort": "updated", "order": "desc"})

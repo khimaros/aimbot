@@ -17,6 +17,49 @@ built and is marked done when it ships.
 
 ## done
 
+- **a credential somebody pasted into a forum never reaches a capture.** one
+  huggingface discussion was TITLED with its author's access token, and
+  `fetch-hf-discussions` captured the title the way it captures every title. it
+  sat in the corpus until github's push protection refused the commit, which is
+  the wrong place to find out: by then it is in a local commit and the fix is a
+  history rewrite. `capture.write` scrubs on the way in now, so every collector
+  is covered rather than the one that happened to catch it. the patterns are
+  narrow on purpose -- `hf_` and thirty characters is a token, `hf_hub` is a
+  package somebody is talking about.
+- **every model on the roster is searched for, on every forum.** the four
+  collectors that ask a forum about the roster each kept their own hand-written
+  list of who is on it, and a literal drifts: reddit had 13 model names against
+  63 text models, so 51 had nobody asking -- deepseek v4.1 flash among them the
+  week it was added. `roster.model_queries` derives one query per model from
+  `name.short`, every kind of it, and all four read that one list. 170 queries
+  where there were 13, 9, 2 and 10. what stays hand-written is the questions no
+  model name covers: the box, the practice, the size class.
+- **reddit is read from whichever of three sources answers.** the api as an
+  app-only client when a reddit app is configured, arctic shift's mirror when
+  not, and a redlib instance on request -- `--source`. the scrape is last and
+  kept only because it would work again the day logged-out access does.
+- **four collectors repaired after a sweep found them.** two were sources that
+  moved and two were shrink guards doing their job. epoch turned
+  `epoch_capabilities_index.csv` into a directory and renamed every column the
+  ECI is read by, leaving `Model version` -- the id every join here runs on --
+  empty in all 266 rows; `model_metadata.csv` is the link it factored that out
+  into, so the index is expanded back over its versions and nothing downstream
+  noticed. reddit closed logged-out access entirely, so `fetch-reddit` reads the
+  api as an app-only client when one is configured and names the login wall when
+  one is not. the voice reader ignored `file:` and so found nothing for the two
+  rungs whose filenames name a phonemizer rather than a quant. and the artificial
+  analysis speech board lost six retired hosted SKUs, which is churn rather than
+  a source going away.
+- **every artificial analysis facet is named for the benchmark it reads.** the
+  site retired its coding and agentic indices, and the two facets named after
+  them carried 0.30 each. nothing is mapped onto the old names: `aa.coding` and
+  `aa.agentic` are gone, `aa.scicode` and `aa.terminalbench` carry the weight,
+  and `aa.livecodebench` and `aa.terminalbench_v40` are carried at zero because
+  they reach 5 and 29 of the 46 models the board scores here -- 14 of those 29
+  at exactly zero. the reshape that retired them also narrowed the leaderboard
+  row, so the text capture is two boards merged per model: the leaderboard for
+  the creator and the decode speed, a `/models/<slug>` page for the license, the
+  parameter counts, the weights url and the per-eval scores.
 - **a shard is part of something whether or not its name says what.** the size
   collector stripped the `-00001-of-00005` suffix only THROUGH a successful
   quant-tag match, so a pack whose stem names no type kept one key per shard:

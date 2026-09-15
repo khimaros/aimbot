@@ -21,6 +21,7 @@ import re
 import subprocess
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import roster  # noqa: E402  the model names to search for
 import capture  # noqa: E402  the do-not-shrink guard
 
 import time
@@ -33,6 +34,8 @@ TOPIC = BASE + "/t/%d.json"
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/140.0.0.0 Safari/537.36")
 
+# the box and the practice; the model names beside these are DERIVED from the
+# registry, because a hand-kept list drifts from the roster it is meant to cover
 QUERIES = [
     "strix halo llm", "strix halo llama.cpp", "ryzen ai max 395 llm",
     "strix halo tokens per second", "128gb unified memory model",
@@ -68,13 +71,15 @@ def main():
     ap.add_argument("--max-age", type=int, default=2 * 86400)
     ap.add_argument("--refresh", action="store_true")
     ap.add_argument("--delay", type=float, default=1.0)
+    ap.add_argument("--registry", default=roster.REGISTRY,
+                    help="the roster whose model names are searched for")
     ap.add_argument("--allow-shrink", action="store_true",
                     help="write even when the result holds fewer records "
                          "than the capture on disk")
     args = ap.parse_args()
 
     searches, found = {}, {}
-    for q in QUERIES:
+    for q in QUERIES + roster.model_queries(args.registry):
         d = get(SEARCH % urllib.parse.quote(q), "l1-q-" + re.sub(r"\W+", "_", q),
                 args.max_age, args.refresh)
         if not d or not d.get("topics"):

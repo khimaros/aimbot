@@ -27,6 +27,7 @@ import subprocess
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import capture  # noqa: E402  the do-not-shrink guard
+import roster  # noqa: E402  the model names to search for
 
 import urllib.parse
 
@@ -41,29 +42,8 @@ THEMES = [
     "gpt-oss", "Strix Halo", "benchmaxxing", "local LLM 128GB",
 ]
 
-# a name too short or too common to search for. `hn.algolia` has no notion of
-# "this sense of the word", so a two-character query returns the whole site.
-MIN_QUERY = 4
-
-
-def model_queries(path):
-    """One query per registry model, from the name a person would type.
-
-    `name.short` rather than the repo: a comment says `kokoro` or `qwen3.8 27b`,
-    not `hexgrad/Kokoro-82M`. This is deliberately NOT `name.match` -- that is a
-    regex for scoring prose already collected, and algolia takes a phrase.
-    """
-    try:
-        import yaml
-    except ImportError:
-        sys.exit("!!! pyyaml not found")
-    models = (yaml.safe_load(open(path)) or {}).get("models") or {}
-    out = []
-    for m in models.values():
-        short = ((m.get("name") or {}).get("short") or "").strip()
-        if len(short) >= MIN_QUERY and short not in out:
-            out.append(short)
-    return sorted(out)
+# `model_queries` lives in roster.py: four collectors search a forum for the
+# roster and each one used to keep its own list of who is on it.
 
 
 def api(cache, refresh, max_age, **params):
@@ -91,8 +71,7 @@ def main():
                          "orders more of")
     ap.add_argument("--models", action=argparse.BooleanOptionalAction, default=True,
                     help="also query for every model in the registry")
-    ap.add_argument("--registry",
-                    default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--registry", default=roster.REGISTRY)
     ap.add_argument("--comments", type=int, default=12)
     ap.add_argument("--out", default="data/hackernews.json")
     ap.add_argument("--max-age", type=int, default=6 * 3600, metavar="SECONDS",
@@ -108,7 +87,7 @@ def main():
 
     queries = [(q, args.stories) for q in THEMES]
     if args.models:
-        queries += [(q, args.model_stories) for q in model_queries(args.registry)]
+        queries += [(q, args.model_stories) for q in roster.model_queries(args.registry)]
 
     # ONE STORY, ONE PLACE. the same thread answers several queries once the
     # roster is asking -- three qwen entries and a `Qwen 3.6` theme all match the

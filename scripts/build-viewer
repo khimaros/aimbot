@@ -85,8 +85,8 @@ QUANT_EVIDENCE = [
     ("code", True,
      "the curve was fitted to a code-editing pass rate, so it is evidence "
      "about writing code and driving a tool loop through a software task",
-     ["aa.coding", "aa.agentic", "aa.terminalbench", "aa.terminalbench_hard",
-      "aa.scicode", "aa.itbench_sre",
+     ["aa.scicode", "aa.livecodebench", "aa.terminalbench",
+      "aa.terminalbench_v40", "aa.terminalbench_hard", "aa.itbench_sre",
       "gbench.agentic", "gbench.decision", "gbench.oneshot", "gbench.overall",
       "lang.clojure", "lang.cpp", "lang.csharp", "lang.go", "lang.java",
       "lang.javascript", "lang.kotlin", "lang.ocaml", "lang.python",
@@ -190,7 +190,7 @@ QUANT_EVIDENCE = [
       # voice arena reports per language, and the slices disagree by twenty
       # points, so they are carried one facet each rather than averaged
       "voicearena.arabic", "voicearena.bengali", "voicearena.hindi",
-      "voicearena.brazilian-portuguese", "voicearena.romanian",
+      "voicearena.portuguese", "voicearena.romanian",
       "voicearena.us-english", "voicearena.vietnamese"]),
 
     ("image", False,
@@ -250,8 +250,16 @@ GIB = 2 ** 30
 # shows a dash beside the other 19 reads as "unmeasured" when the measurement
 # exists. they cost the text ranking nothing -- no text model carries one, and
 # the composite's denominator is the weight it actually used.
+# the two artificial analysis keys carried the coding and agentic INDICES until
+# the site retired both. the facets are named for evals now, so these name evals
+# -- scicode for writing code and terminal-bench 2.1 for driving a terminal --
+# chosen over the alternatives on roster coverage: an axis the composite has to
+# impute for most of the roster moves ranks on absence rather than on evidence.
+# livecodebench scores 5 of the 46 models artificial analysis rates here and
+# terminal-bench 4.0 scores 29 with 14 of them at exactly zero, so both are
+# carried at no weight until the boards fill in.
 DEFAULT_WEIGHTS = {
-    "aa.coding": 0.30, "aa.agentic": 0.30, "gbench.agentic": 0.15,
+    "aa.scicode": 0.30, "aa.terminalbench": 0.30, "gbench.agentic": 0.15,
     "lmarena.rating": 0.10, "swerebench.resolved": 0.10,
     "community.*": 0.05, "card.*": 0.05,
     # the open asr leaderboard carries the transcription half at more depth than
@@ -275,9 +283,11 @@ DEFAULT_WEIGHTS = {
 # actually measures. a reader deciding what to trust needs this more than the
 # numbers.
 GROUPS = [
-    ("artificial analysis", "one harness across every model, third party. "
-     "the coding and agentic indices are the two axes; the intelligence index "
-     "is ~0.4*coding + 0.4*agentic and would count them twice."),
+    ("artificial analysis", "one harness across every model, third party. every "
+     "facet here is one benchmark: the coding and agentic indices that used to "
+     "be the two axes were retired by the site, so scicode and terminal-bench "
+     "2.1 carry the default weight instead. the intelligence index is a "
+     "composite over these runs and would count them twice."),
     ("gbench", "models play generated games against each other, so there is no "
      "public problem set to train against and outcomes are decided by play."),
     ("gbench languages", "success rate per language, rolled up from the games "

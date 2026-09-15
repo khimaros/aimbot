@@ -1642,18 +1642,21 @@ models:
       match: deepseek[\s-]*v?4\.1|dsv?4\.1
     notes: 'released 2026-09-10. a 552b causal encoder-decoder -- 8b active in prefill, 16b in
       decode -- beside a 196b engram lookup table the backbone count leaves out, so the
-      checkpoint is 763b of parameters in total. two blocks here are hand-written where every
-      other text model has them derived, and both for the same reason: the release ships NO
-      jinja chat template. the prompt format is a python reference encoder in `encoding/` on
-      the base repo, so `turns:` and `thinking:` are read off that file rather than off a
-      template probe, and the sweep''s template stage will keep skipping this model. the values
-      are still MEASURED: encoding.py runs, so the same probe conversations analyze-chat-
-      templates renders were encoded through it. it raises on the developer role outright,
-      keeps four leading system messages, and takes a mid-conversation system message through
-      its own `<|System|>` token. thinking is selected by a `thinking_mode` argument of `chat`
-      or `thinking` rather than by a boolean flag, which is why there is no `gate:` here, and
-      the effort knob takes an int in [1, 100] as well as the three names below, which map to
-      50, 75 and 100. no unsloth conversion exists yet.'
+      checkpoint is 763b of parameters in total. the release ships NO jinja chat template: the
+      vendor''s prompt format is a python reference encoder in `encoding/` on the base repo.
+      `turns:` and `thinking:` below are derived anyway, off a template vcruz305 wrote into
+      its own gguf header, because that is the one a consumer serving these files actually
+      runs. the two disagree wherever both have an answer, and the vendor''s side is MEASURED
+      rather than read off a card: encoding.py runs, so the same probe conversations analyze-
+      chat-templates renders were encoded through it. it raises on a developer message where
+      the template takes it as a user turn, and it takes a mid-conversation system message
+      through its own `<|System|>` token where the template reorders it to the front. both
+      keep four leading system messages. the vendor selects thinking with a `thinking_mode`
+      argument of `chat` or `thinking` rather than a boolean, and its effort knob takes an int
+      in [1, 100] as well as `low`, `high` and `max`, which map to 50, 75 and 100. the
+      template has neither shape: it gates on `enable_thinking` and reacts to a
+      `reasoning_effort` of `max` alone, ignoring every other name, which is why one level is
+      accepted below and no default is stated. no unsloth conversion exists yet.'
     quants:
     - repo: apetersson/DeepSeek-V4.1-Flash-MixedQ2-GGUF
       quant: IQ2_XXS-mixed
@@ -1698,8 +1701,8 @@ models:
         landed is plain q2_k (`general.file_type` 10). the header agrees with the pin on
         `deepseek4`, so the derived block below is unaffected by carrying this'
     ids:
-      aa: ''
-      gbench: ''
+      aa: deepseek-v4-1-flash
+      gbench: deepseek/deepseek-v4.1-flash
       lmarena: ''
       swerebench: ''
       epoch: ''
@@ -1732,15 +1735,16 @@ models:
       output:
       - text
     turns:
-      source: deepseek-ai/DeepSeek-V4.1-Flash
-      developer: rejected
+      source: vcruz305/DeepSeek-V4.1-Flash-GGUF
+      developer: as-user
       leading_system_max: unlimited
-      mid_system: ok
-      mid_developer: rejected
+      mid_system: reordered
+      mid_developer: ok
     thinking:
       knob: reasoning_effort
-      accepts: [low, high, max]
-      default: high
+      gate: enable_thinking
+      gate_default: false
+      accepts: [max]
   fishaudio/s2-pro:
     kind: speech
     name:
@@ -1894,7 +1898,7 @@ models:
       aa-stt: ''
       aa-stt-streaming: ''
       voicearena: ''
-      open-asr: ''
+      open-asr: google/gemma-4-12B-it
     modalities:
       input:
       - text
@@ -2076,7 +2080,7 @@ models:
       aa-stt: ''
       aa-stt-streaming: ''
       voicearena: ''
-      open-asr: ''
+      open-asr: google/gemma-4-E2B-it
     # the smaller half of the same pair, and the same story: `--backend
     # gemma4-e2b` is real and reads cstr's conversion rather than this one. no
     # board scores this half either -- voice arena publishes `Gemma E4B` alone
@@ -2150,7 +2154,7 @@ models:
       voicearena: Gemma E4B
       aa-stt: ''
       aa-stt-streaming: ''
-      open-asr: ''
+      open-asr: google/gemma-4-E4B-it
     # NO `crispasr:` block, though crispasr transcribes with this checkpoint in
     # 140+ languages under `--backend gemma4-e2b`. it reads its own conversion,
     # `cstr/gemma4-e4b-it-GGUF`, whose header declares `gemma4_e2b`; the gguf
@@ -4269,10 +4273,10 @@ models:
       arch: glm5next
       mainline: false
       tracking: https://github.com/ggml-org/llama.cpp/pull/27754
-      note: unmerged, and three PRs are open for the same architecture. 27754 is the one tracked
-        because it is the one unsloth's card tells a reader to build to run these files; 27773 is
-        the one under review, and mtp is a fourth PR behind both. the header says `glm5next` and
-        means it -- this is not a converter reusing an older arch string
+      note: unmerged, and three PRs are open for the same architecture. 27754 is the one tracked because
+        it is the one unsloth's card tells a reader to build to run these files; 27773 is the one
+        under review, and mtp is a fourth PR behind both. the header says `glm5next` and means it
+        -- this is not a converter reusing an older arch string
     ids:
       aa: glm-5-3-flash
       gbench: z.ai/glm-5.3-flash
@@ -6270,7 +6274,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
-      open-asr: ''
+      open-asr: FunAudioLLM/Fun-ASR-Nano-2512-hf
     modalities:
       input:
       - text
@@ -6567,7 +6571,7 @@ models:
       aa-stt-streaming: ''
       aa-tts: ''
       tts-arena: ''
-      voicearena: ''
+      voicearena: omniASR-LLM-7B
       open-asr: ''
     modalities:
       input:

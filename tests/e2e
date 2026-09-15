@@ -167,7 +167,7 @@ test('a factor that did not exist last visit reaches a returning reader', () => 
   // the page before still saw a dash beside every voice model. their weights
   // were in localStorage from before those factors existed, and a stored map
   // wins over the defaults -- so the new keys were simply not in it.
-  const before = {'aa.coding': 0.3, 'aa.agentic': 0.3, 'lmarena.rating': 0.1};
+  const before = {'aa.scicode': 0.3, 'aa.terminalbench': 0.3, 'lmarena.rating': 0.1};
   store.set('weights', before);
   store.set('weights-base', before);
 
@@ -175,16 +175,16 @@ test('a factor that did not exist last visit reaches a returning reader', () => 
   ok(back['aa-stt.accuracy'] > 0,
      'a factor added since is adopted at its default: ' + JSON.stringify(back));
   ok(back['aa-t2i.elo'] > 0, 'the image board too');
-  eq(back['aa.coding'], 0.3, 'and what the reader set is untouched');
+  eq(back['aa.scicode'], 0.3, 'and what the reader set is untouched');
 
   // a factor they turned OFF is a decision, not an absence: it is missing from
   // the stored map and present in the snapshot beside it, which is how the two
   // are told apart
   const zeroed = {...D.weights};
-  delete zeroed['aa.agentic'];
+  delete zeroed['aa.terminalbench'];
   store.set('weights', zeroed);
   store.set('weights-base', D.weights);
-  eq('aa.agentic' in restoreWeights(), false,
+  eq('aa.terminalbench' in restoreWeights(), false,
      'a weight dropped to zero stays dropped');
 
   store.set('weights', null);
@@ -215,7 +215,7 @@ test('a speech model is scored on the boards that rank speech', () => {
   // a text model is not measured by a word error rate, and counting the speech
   // sliders against it would read as missing evidence rather than as a
   // question nobody asked of it
-  const text = D.models.find(m => m.kind === 'text' && m.facets['aa.coding']);
+  const text = D.models.find(m => m.kind === 'text' && m.facets['aa.scicode']);
   ok(scored(text).want <= 7, text.short + ' is judged on the text weights only,'
      + ' got want=' + scored(text).want);
   ok(scored(rated[0]).want <= 4, rated[0].short + ' likewise, got want='
@@ -248,7 +248,7 @@ test('the preset list offers only rankings the current modality can be given', (
   ok(forText.includes('default') && forText.includes('clear'),
      'the balanced and empty rankings are always offered');
 
-  // `writing code` weights aa.coding and swerebench: no synthesis model has
+  // `writing code` weights aa.scicode and swerebench: no synthesis model has
   // either, so picking it would rank every visible row on nothing and print a
   // column of dashes. a dead option is dropped the way a dead modality is.
   //
@@ -338,7 +338,7 @@ test('the factors sidebar lists what the current modality is measured on', () =>
   RESET();
   drawFactors();
   const text = html('#factors');
-  ok(text.includes('aa.coding'), 'the text roster is weighted on coding');
+  ok(text.includes('aa.scicode'), 'the text roster is weighted on coding');
   // a word error rate used to be offered here, on the grounds that gemma 4 e4b
   // is a text model with an audio encoder that voice arena scores. that reads
   // as a fact about one member rather than about the view: `language models` is
@@ -354,7 +354,7 @@ test('the factors sidebar lists what the current modality is measured on', () =>
   drawFactors();
   const a2t = html('#factors');
   ok(a2t.includes('open-asr'), 'transcription is weighted on the asr boards');
-  eq(a2t.includes('aa.coding'), false,
+  eq(a2t.includes('aa.scicode'), false,
      'and not on how well the eight LLMs in that roster write code');
   ok(a2t.length < text.length, 'which is a shorter panel');
 
@@ -362,7 +362,7 @@ test('the factors sidebar lists what the current modality is measured on', () =>
   drawFactors();
   const speech = html('#factors');
   ok(speech.includes('aa-tts.elo'), 'synthesis is weighted on the arena elo');
-  eq(speech.includes('aa.coding'), false,
+  eq(speech.includes('aa.scicode'), false,
      'and not on 60 text benchmarks it would have to be scrolled past');
   ok(speech.length < text.length, 'which is a shorter panel');
 
@@ -371,7 +371,7 @@ test('the factors sidebar lists what the current modality is measured on', () =>
   filters.mods = new Set();
   drawFactors();
   const all = html('#factors');
-  ok(all.includes('aa.coding') && all.includes('open-asr'),
+  ok(all.includes('aa.scicode') && all.includes('open-asr'),
      'every shape asks every question');
 
   RESET();
@@ -882,7 +882,7 @@ test('every ranking preset round-trips through the select', () => {
 test('moving one weight off a preset reads as custom', () => {
   RESET();
   eq(presetName(), 'default', 'opens on the default weighting');
-  W = {...D.weights, 'aa.coding': 0.31};
+  W = {...D.weights, 'aa.scicode': 0.31};
   eq(presetName(), '', 'a nudged weight is no longer a preset');
   drawPreset();
   ok(html('#preset').includes('custom ranking'), 'the select says so');
@@ -1393,11 +1393,11 @@ test('an expanded row is scored at its own quant', () => {
 test('the ladder leaves the percentile cohort alone', () => {
   RESET();
   setEffective(true);
-  const rated = D.models.filter(m => m.facets['aa.coding']);
-  const before = rated.map(m => facetPctRaw(m, 'aa.coding'));
+  const rated = D.models.filter(m => m.facets['aa.scicode']);
+  const before = rated.map(m => facetPctRaw(m, 'aa.scicode'));
   setLadder(true);
   pctCache = null;
-  const after = rated.map(m => facetPctRaw(m, 'aa.coding'));
+  const after = rated.map(m => facetPctRaw(m, 'aa.scicode'));
   eq(after.join(','), before.join(','),
      'a model is still ranked against models, not against every model-quant pair');
   setLadder(false);
@@ -1520,10 +1520,10 @@ test('quant adjustment discounts a ratio scale and reranks on it', () => {
   setEffective(true);
   // a coding index has a real zero, so discounting it is a statement about
   // measured skill rather than about where a scale starts
-  const m = squeezed('aa.coding');
+  const m = squeezed('aa.scicode');
   ok(modelRetention(m) < 0.95,
      m.short + ' is discounted at the quant that fits, x' + modelRetention(m).toFixed(3));
-  ok(facetValue(m, 'aa.coding') < m.facets['aa.coding'].value,
+  ok(facetValue(m, 'aa.scicode') < m.facets['aa.scicode'].value,
      'the coding index comes down with it');
 });
 
@@ -1535,7 +1535,7 @@ test('the discount reaches only what the curve is evidence for', () => {
   ok(scaled.length > 20 && scaled.length < meta.length / 2,
      'a minority of facets, not almost all (' + scaled.length + ' of ' + meta.length + ')');
   // the sweep behind the curve is a code-editing pass rate
-  ['aa.coding', 'swerebench.resolved', 'gbench.oneshot', 'lang.rust',
+  ['aa.scicode', 'swerebench.resolved', 'gbench.oneshot', 'lang.rust',
    'epoch.aider_polyglot', 'card.swebench_verified'].forEach(k =>
     ok(scaled.includes(k), k + ' is code, so the curve answers for it'));
   ['aa.non_hallucination', 'card.mmlu', 'epoch.chess_puzzles',
@@ -1565,7 +1565,7 @@ test('an un-discounted facet does not move with the quant', () => {
   eq(facetPctRaw(m, 'aa.non_hallucination'), raw, 'hallucination is left alone');
   ok(modelRetention(m) < 0.95,
      'while ' + m.short + ' is genuinely discounted, x' + modelRetention(m).toFixed(3));
-  ok(scaledFacet('aa.coding') && !scaledFacet('aa.non_hallucination'),
+  ok(scaledFacet('aa.scicode') && !scaledFacet('aa.non_hallucination'),
      'the two sit on opposite sides of the evidence line');
 });
 

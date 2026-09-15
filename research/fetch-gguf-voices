@@ -115,20 +115,30 @@ def read_voices(repo, quant_file):
 
 
 def emitters(models):
-    """(repo, quant) for every registry model that emits audio.
+    """(base, repo, quant, file) for every registry model that emits audio.
 
     Only synthesis has speakers to name, so a transcription model is not read
     -- the point is the list a `voice` field can be set to.
+
+    `file:` comes along because a rung whose filenames name no quant carries the
+    type in `quant:` and the object beside it, and this reader wants the object.
     """
     for repo, m in sorted((models.get("models") or {}).items()):
         if "audio" not in ((m.get("modalities") or {}).get("output") or []):
             continue
         for q in m.get("quants") or []:
-            yield repo, q["repo"], q["quant"]
+            yield repo, q["repo"], q["quant"], q.get("file")
 
 
-def resolve_filename(repo, quant):
+def voices_key(repo, quant, file=None):
+    """How a rung is keyed here, which is how build-viewer looks one up."""
+    return "%s:%s" % (repo, file or quant)
+
+
+def resolve_filename(repo, quant, file=None):
     """The file in `repo` that `quant` names, since a tag is not a filename."""
+    if file:
+        return file
     if quant.endswith((".gguf", ".bin")):
         return quant
     url = "https://huggingface.co/api/models/%s" % repo
@@ -170,22 +180,23 @@ def main():
     models = yaml.safe_load(open(args.registry))
 
     out = {}
-    for base, repo, quant in emitters(models):
+    for base, repo, quant, file in emitters(models):
         if args.repo and repo != args.repo:
             continue
-        name = resolve_filename(repo, quant)
+        name = resolve_filename(repo, quant, file)
         if not name:
             continue
         found = read_voices(repo, name)
         if not found:
-            print("  %-46s %-28s no voice list" % (repo, quant))
+            print("  %-46s %-28s no voice list" % (repo, file or quant))
             continue
         # one gguf, one list: the key is the backend's own name for it and a
         # consumer wants the names rather than which key they came under
         names = sorted({v for vs in found.values() for v in vs})
-        out["%s:%s" % (repo, quant)] = {"model": base, "key": sorted(found)[0],
-                                        "voices": names}
-        print("  %-46s %-28s %d voices" % (repo, quant, len(names)))
+        out[voices_key(repo, quant, file)] = {"model": base,
+                                              "key": sorted(found)[0],
+                                              "voices": names}
+        print("  %-46s %-28s %d voices" % (repo, file or quant, len(names)))
 
     if not out:
         sys.exit("!!! no voice lists found -- every gguf read came back without one")

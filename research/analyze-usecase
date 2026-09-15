@@ -53,16 +53,27 @@ OUT = "data/usecase.json"
 ASSESSED = "usecase-assessed.json"
 
 # artificial analysis fields worth carrying, as (facet key, label, aa field).
-# the intelligence index is included for display but is NOT a separate axis:
-# it is ~0.4*coding + 0.4*agentic, so a reader who weights all three is
-# counting the same measurement twice. build-tables says so at length.
+# there were two facets here named after indices rather than after evals --
+# `aa.coding` and `aa.agentic` -- and artificial analysis has retired both. they
+# are gone rather than repointed: a key that says `coding` over a number that is
+# one benchmark's pass rate is a claim the source no longer makes, and pointing
+# it at whichever eval is nearest would hide the change in exactly the place a
+# reader goes to check. every facet below is named for the eval it reads.
+# which of them the ranking LEANS on is a separate question, answered in
+# build-viewer's DEFAULT_WEIGHTS and build-tables' WEIGHTS: scicode and
+# terminal-bench 2.1 carry it, because they are the two here that measure
+# writing code and driving a terminal AND cover the roster -- 34 and 39 of the
+# 46 models artificial analysis scores here, against 5 for livecodebench and 29
+# for terminal-bench 4.0, where 14 of those 29 are exactly zero.
+# the intelligence index is included for display but is NOT a separate axis: it
+# is a composite over the rest of this list, so a reader who weights it beside
+# them is counting the same runs twice. build-tables says so at length.
 AA_FACETS = [
-    ("aa.coding", "coding index", "codingIndex", "index"),
-    ("aa.agentic", "agentic index", "agenticIndex", "index"),
     ("aa.intelligence", "intelligence index", "intelligenceIndex", "index"),
+    ("aa.scicode", "scicode", "scicode", "share"),
+    ("aa.livecodebench", "livecodebench", "livecodebench", "share"),
     ("aa.gpqa", "gpqa diamond", "gpqa", "share"),
     ("aa.hle", "humanity's last exam", "hle", "share"),
-    ("aa.scicode", "scicode", "scicode", "share"),
     ("aa.tau2", "tau2 (tool use)", "tau2", "share"),
     ("aa.tau_banking", "tau2 banking split", "tauBanking", "share"),
     ("aa.ifbench", "instruction following", "ifbench", "share"),
@@ -70,6 +81,7 @@ AA_FACETS = [
     ("aa.critpt", "critpt (physics)", "critpt", "share"),
     ("aa.mmmu_pro", "mmmu pro (vision)", "mmmuPro", "share"),
     ("aa.terminalbench", "terminal-bench 2.1", "terminalbenchV21", "share"),
+    ("aa.terminalbench_v40", "terminal-bench 4.0", "terminalbenchV40", "share"),
     ("aa.terminalbench_hard", "terminal-bench hard", "terminalbenchHard", "score"),
     ("aa.gdpval", "gdpval (economic tasks)", "gdpvalNormalized", "share"),
     ("aa.apex_agents", "apex agents", "apexAgents", "share"),
@@ -141,11 +153,13 @@ SOURCES = {
 # score means a use case rather than a property; speed and context are
 # operational and say nothing about fit.
 USE_FOR = {
-    "aa.coding": "coding", "aa.agentic": "agentic / tool use",
+    "aa.livecodebench": "coding", "aa.scicode": "scientific code",
+    "aa.terminalbench": "agentic / tool use",
+    "aa.terminalbench_v40": "agentic / tool use",
     "aa.tau2": "agentic / tool use", "gbench.agentic": "agentic / tool use",
     "gbench.oneshot": "one-shot coding", "swerebench.resolved": "real-world bug fixing",
     "aa.gpqa": "science / reasoning", "aa.hle": "science / reasoning",
-    "aa.scicode": "scientific code", "aa.critpt": "physics",
+    "aa.critpt": "physics",
     "aa.ifbench": "instruction following", "aa.lcr": "long context",
     "lmarena.rating": "chat / general use", "gbench.decision": "planning",
 }
@@ -607,18 +621,31 @@ def load_authored(path):
 
 # the two figures a verdict quotes from sentiment.json: `hf-discussions 123
 # mentions` and `reddit ... 14% approval`. the source name as the verdicts spell
-# it, mapped to the key that file uses
-CITED = re.compile(r"\b(hf-discussions|reddit|hackernews|level1techs)\s+(\d+)\s+mentions",
-                   re.I)
-CITED_APPROVAL = re.compile(
-    r"\b(hf-discussions|reddit|hackernews|level1techs)\b[^.;,]{0,40}?(\d+)%\s*approval",
-    re.I)
+# it -- including the way prose spells it, which is not the way a key does --
+# mapped to the key that file uses
+SOURCE = r"hf-discussions|huggingface discussions?|reddit|hackernews|level1techs"
+CITED = re.compile(r"\b(%s)\s+(\d+)\s+mentions" % SOURCE, re.I)
+# and the same count with the source AFTER the number, which is how a sentence
+# says it: `34 reddit mentions`. the evidence lists put the source first and the
+# notes put it second, so reading only one order checks half the file -- the
+# half that does not carry the argument
+CITED_PROSE = re.compile(r"\b(\d+)\s+(%s)\s+mentions" % SOURCE, re.I)
+CITED_APPROVAL = re.compile(r"\b(%s)\b[^.;,]{0,40}?(\d+)%%\s*approval" % SOURCE, re.I)
+# an approval rate written as a bare `at 86%` with no `approval` after it. a
+# percentage on its own is not a claim about reception -- it could be a
+# benchmark -- so this only reads one that rides on a mention count of a named
+# forum, which is the shape the notes actually use
+CITED_PROSE_APPROVAL = re.compile(
+    r"\b(\d+)\s+(%s)\s+mentions\s+at\s+(\d+)%%" % SOURCE, re.I)
 # a line names more than one forum -- "hf-discussions 65 mentions, reddit 62 at
 # 100% approval" -- so the gap between a source and its figure must not cross a
 # comma, or the first source is charged with the second one's number. this check
 # caught itself doing exactly that
 CLAUSE = re.compile(r"[,;.]")
-CITED_SOURCE = {"hf-discussions": "hf-discussions", "reddit": "reddit-localllama",
+CITED_SOURCE = {"hf-discussions": "hf-discussions",
+                "huggingface discussion": "hf-discussions",
+                "huggingface discussions": "hf-discussions",
+                "reddit": "reddit-localllama",
                 "hackernews": "hackernews", "level1techs": "level1techs"}
 # where a verdict can quote one. `evidence` is the list MODELS.md prints as the
 # grounds for the judgement; the prose fields restate the same figures and drift
@@ -654,12 +681,17 @@ def check_citations(authored, sentiment, names):
     for repo, blk in sorted(authored.items()):
         by = ((sentiment.get(names.get(repo)) or {}).get("by_source") or {})
         for line in cited_lines(blk):
-            for pat, field, unit in ((CITED, "mentions", ""),
-                                     (CITED_APPROVAL, "approval", "%")):
-                for src, claimed in pat.findall(line):
-                    actual = (by.get(CITED_SOURCE[src.lower()]) or {}).get(field)
-                    if actual is None or int(actual) != int(claimed):
-                        bad.append((repo, src, field, int(claimed), actual, unit))
+            # (source, figure) whichever order the sentence puts them in, plus
+            # the approval a prose count carries along behind it
+            quoted = [(s, n, "mentions", "") for s, n in CITED.findall(line)]
+            quoted += [(s, n, "mentions", "") for n, s in CITED_PROSE.findall(line)]
+            quoted += [(s, n, "approval", "%") for s, n in CITED_APPROVAL.findall(line)]
+            quoted += [(s, pct, "approval", "%")
+                       for _, s, pct in CITED_PROSE_APPROVAL.findall(line)]
+            for src, claimed, field, unit in quoted:
+                actual = (by.get(CITED_SOURCE[src.lower()]) or {}).get(field)
+                if actual is None or int(actual) != int(claimed):
+                    bad.append((repo, src, field, int(claimed), actual, unit))
     seen = set()
     for row in bad:
         if row in seen:

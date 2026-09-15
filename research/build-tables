@@ -103,24 +103,33 @@ LMARENA_BOARD = "text-overall-style_control"
 # research/analyze-correlations --redundancy is the input; re-run it after any
 # data refresh, because these numbers are a property of the current roster.
 #
-# The intelligence index is NOT a component: across the 160 AA models carrying
-# all three, II ~ 0.403*coding + 0.418*agentic at R^2 0.9845, so adding it would
-# count the same measurement twice for 1.5% of new information. Every other AA
-# field is >=0.82 rank-correlated with the index, so artificial analysis is ONE
-# axis of evidence here, not fourteen.
+# The two AA components used to be its coding and agentic INDICES. The site
+# retired both, so they are named for the evals that carry the weight now:
+# scicode and terminal-bench 2.1, picked over livecodebench and terminal-bench
+# 4.0 on roster coverage. analyze-usecase's AA_FACETS has the counts.
+#
+# The intelligence index is NOT a component: across the 168 AA models carrying
+# all three, II ~ 27.3*scicode + 35.6*terminalbenchV21 - 5.2 at R^2 0.896, so
+# adding it would count the same runs twice for a tenth of the variance. Every
+# other AA field is >=0.82 rank-correlated with the index, so artificial
+# analysis is ONE axis of evidence here, not fourteen.
 #
 # What the redundancy check then found, and what these weights answer:
 #
-#   source        r2 vs AA coding+agentic    new info    coverage
-#   gbench        0.961                      4%          11/20
-#   lmarena       0.547                      45%         11/20
-#   swe-rebench   0.476                      52%          7/20
-#   sentiment     0.089                      91%         18/20
+#   source        r2 vs AA scicode+tbench    new info    n
+#   epoch ECI     0.876                      12%         16
+#   gbench        0.732                      27%         18
+#   lmarena       0.472                      53%         16
+#   swe-rebench   0.314                      69%         11
+#   sentiment     0.093                      91%         29
 #
-# GBENCH was on 0.35, the largest single weight, and is 96% predictable from AA.
-# It keeps a premium over its 4% because HOW it measures is a real property --
-# played rather than graded, so there is no public problem set to train against
-# -- but it can no longer outvote everything it agrees with.
+# GBENCH was on 0.35, the largest single weight, and is the source that agrees
+# with AA most after epoch. It keeps a premium over its 27% because HOW it
+# measures is a real property -- played rather than graded, so there is no
+# public problem set to train against -- but it can no longer outvote everything
+# it agrees with. Its r2 was 0.961 against the retired indices and is 0.730
+# against the two evals that replaced them, so these weights were set against a
+# figure that no longer holds and are worth re-deriving rather than trusting.
 #
 # lmarena and swe-rebench were excluded for missing 9 and 13 of the roster. That
 # is still true and is why they enter at 0.10 rather than higher: the composite
@@ -150,7 +159,7 @@ LMARENA_BOARD = "text-overall-style_control"
 # is a reason to carry it, not a reason to let it move a rank by a sixth. AA is
 # the opposite trade: one axis of evidence, but measured on a fixed harness
 # across every model it scores.
-WEIGHTS = {"eff_coding": 0.30, "eff_agentic": 0.30,
+WEIGHTS = {"eff_scicode": 0.30, "eff_terminalbench": 0.30,
            "gbench": 0.15, "lmarena": 0.10, "swerebench": 0.10,
            "sentiment": 0.05, "card": 0.05}
 CARD_BIAS = 1.0
@@ -160,7 +169,7 @@ CARD_BIAS = 1.0
 # only a sentiment count comes out at the set median wearing a model's name.
 # `card` is the model measuring itself and `sentiment` is people talking, so
 # neither qualifies on its own.
-THIRD_PARTY = ("eff_coding", "eff_agentic", "gbench", "lmarena", "swerebench")
+THIRD_PARTY = ("eff_scicode", "eff_terminalbench", "gbench", "lmarena", "swerebench")
 
 # retention vs bits-per-weight, fitted to unsloth's aider polyglot sweep of
 # deepseek v3.1 (671b): bf16 71.6 -> 5bit 70.7 -> 4bit 69.7 -> 3bit 68.4 ->
@@ -426,8 +435,8 @@ def load(budget=BUDGET_GIB):
                 continue
             d = {"name": short, "slug": "", "totalParameters": total,
                  "activeParameters": f.get("params_active_b"),
-                 "intelligenceIndex": None, "codingIndex": None,
-                 "agenticIndex": None}
+                 "intelligenceIndex": None, "scicode": None,
+                 "terminalbenchV21": None}
         quant, gib = quant_at(repo, sizes, pin, budget, total)
         if quant is None:
             continue
@@ -440,8 +449,8 @@ def load(budget=BUDGET_GIB):
         row = dict(name=short, d=d, repo=repo, quant=quant,
                          gib=gib, bpw=bpw, ret=ret,
                          eff=scale(d.get("intelligenceIndex")),
-                         eff_coding=scale(d.get("codingIndex")),
-                         eff_agentic=scale(d.get("agenticIndex")),
+                         eff_scicode=scale(d.get("scicode")),
+                         eff_terminalbench=scale(d.get("terminalbenchV21")),
                          gbench=gbench_score(ids), lmarena=lmarena_score(ids),
                          swerebench=swerebench_score(ids),
                    sentiment=sentiment_score(ids, short),
@@ -521,24 +530,24 @@ def num(v, n=1):
 def table_fit(rows):
     """Benchmark detail, ordered by composite score so it reads against the
     headline table row for row."""
-    print("| model | coding | agentic | TB2.1 | tau-bank | gdpval | hallu |")
+    print("| model | scicode | TB2.1 | TB4.0 | tau-bank | gdpval | hallu |")
     print("|---|--:|--:|--:|--:|--:|--:|")
     for r in sorted(rows, key=lambda r: -r["score"]):
         d, ret = r["d"], r["ret"]
-        # coding and agentic are scaled by the same retention factor as II. that
-        # transfer is best justified for coding: the curve was fitted on aider
-        # polyglot, a coding benchmark. the remaining columns are left raw --
-        # adjusting them would be extrapolation.
-        adj = lambda v: "-" if v in (None, "$undefined") else "%.1f" % (v * ret)
+        # the two weighted columns are scaled by the same retention factor as
+        # II. that transfer is best justified for scicode: the curve was fitted
+        # on aider polyglot, a coding benchmark. the remaining columns are left
+        # raw -- adjusting them would be extrapolation.
+        adj = lambda v: pct(v * ret) if isinstance(v, (int, float)) else "-"
         print("| %s | %s | %s | %s | %s | %s | %s |" % (
-            r["name"], adj(d.get("codingIndex")), adj(d.get("agenticIndex")),
-            pct(d.get("terminalbenchV21")), pct(d.get("tauBanking")),
+            r["name"], adj(d.get("scicode")), adj(d.get("terminalbenchV21")),
+            pct(d.get("terminalbenchV40")), pct(d.get("tauBanking")),
             pct(d.get("gdpvalNormalized")), num(d.get("omniscience"))))
 
 
 def table_score(rows):
     """The composite: every independent signal, weighted, on one row."""
-    print("| model | score | quant | size (gib) | eff coding | eff agentic "
+    print("| model | score | quant | size (gib) | eff scicode | eff tbench "
           "| gbench | arena | swe-reb | sentiment | card | data | (eff II) |")
     print("|---|--:|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|")
     for r in sorted(rows, key=lambda r: -r["score"]):
@@ -547,11 +556,11 @@ def table_score(rows):
         sw = "-" if r["swerebench"] is None else "%.1f" % r["swerebench"]
         se = "-" if r["sentiment"] is None else "%.1f" % r["sentiment"]
         cd = "-" if r["card"] is None else "%.0f" % r["card"]
-        # eff II is shown for reference but excluded from the score: it is 98.4%
-        # explained by the two columns to its left
+        # eff II is shown for reference but excluded from the score: it is a
+        # composite over the evals the two columns to its left are drawn from
         print("| %s | **%.1f** | %s | %.1f | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (
             r["name"], r["score"], quant_label(r["quant"]), r["gib"],
-            num(r["eff_coding"]), num(r["eff_agentic"]), g, a, sw, se, cd,
+            pct(r["eff_scicode"]), pct(r["eff_terminalbench"]), g, a, sw, se, cd,
             r["coverage"], num(r["eff"])))
 
 
@@ -562,8 +571,8 @@ SWEEPS = [
     ("default", {}),
     ("the old weights (gbench 0.35, no arena/swe-reb)",
      {"gbench": 0.35, "lmarena": 0.0, "swerebench": 0.0, "card": 0.0}),
-    ("coding-focused (0.45)", {"eff_coding": 0.45}),
-    ("agentic-focused (0.45)", {"eff_agentic": 0.45}),
+    ("coding-focused (0.45)", {"eff_scicode": 0.45}),
+    ("agentic-focused (0.45)", {"eff_terminalbench": 0.45}),
     ("swe-rebench-heavy (0.25)", {"swerebench": 0.25}),
     ("arena-heavy (0.25)", {"lmarena": 0.25}),
     ("sentiment dropped", {"sentiment": 0.0}),

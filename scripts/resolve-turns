@@ -181,6 +181,10 @@ def toggle_for(probe, existing):
     out["kind"] = "boolean"
     if knobs[knob].get("default") is not None:
         out["default"] = knobs[knob]["default"]
+    elif not isinstance(out.get("default"), bool):
+        # a switch has two states and neither is a level name, so a default
+        # typed when the entry described a graded knob does not carry over
+        out.pop("default", None)
     out.pop("accepts", None)
     out.pop("aliases", None)
     return out
@@ -242,14 +246,21 @@ def thinking_for(probe, base, existing):
         out["accepts"] = accepts
         if aliases:
             out["aliases"] = aliases
+    # a verbatim template's accepts is typed rather than derived, so the default
+    # is only recorded when it is a level the registry declares -- otherwise the
+    # probe's own candidate list would leak into the entry
     default = levels.get("default")
-    if default:
-        # a verbatim template's accepts is typed rather than derived, so the
-        # default is only recorded when it is a level the registry declares --
-        # otherwise the probe's own candidate list would leak into the entry
-        default = aliases.get(default, default)
-        if default in (out.get("accepts") or []):
-            out["default"] = default
+    default = aliases.get(default, default)
+    if default and default in (out.get("accepts") or []):
+        out["default"] = default
+    elif levels["kind"] != "verbatim":
+        # `accepts` was just derived, so a default the registry carried from
+        # before is describing a vocabulary this template does not have. it
+        # cannot simply be kept: deepseek v4.1 flash's `high` was measured off
+        # the vendor's reference encoder and the gguf template reacts to `max`
+        # alone, which left the entry naming a default it also says is not a
+        # level -- exactly what models-validate refuses
+        out.pop("default", None)
     return out if out.get("accepts") else None
 
 
@@ -384,6 +395,9 @@ def main():
             for name, want in blocks.items():
                 got = reg[repo].get(name) or {}
                 bad = {k: (got.get(k), v) for k, v in want.items() if got.get(k) != v}
+                # a field the deriver DROPS is behind in the same way one it
+                # rewrites is, and comparing only what it writes cannot see it
+                bad.update({k: (got[k], None) for k in got if k not in want})
                 if bad:
                     stale.append((repo, name, bad))
         for repo, name, bad in stale:
