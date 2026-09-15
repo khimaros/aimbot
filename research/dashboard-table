@@ -98,14 +98,20 @@ def table_ranking(d):
 
 def table_components(d):
     """The same rows with the per-source columns the page keeps under the gear."""
-    print("| model | quality | eff coding | eff agentic | gbench | arena | swe-reb "
+    print("| model | quality | eff scicode | eff tbench | gbench | arena | swe-reb "
           "| sentiment | card | evidence |")
     print("|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|")
     for r in d["rows"]:
         f = r["facets"]
         cell = lambda k, n=1: num((f.get(k) or {}).get("value"), n)
+        # the two artificial analysis columns are pass rates rather than the
+        # 0-100 indices they were, so one decimal of a fraction would show the
+        # whole roster as 0.4 and 0.5
+        def share(k):
+            v = (f.get(k) or {}).get("value")
+            return "-" if v is None else "%.1f" % (v * 100)
         print("| %s | **%s** | %s | %s | %s | %s | %s | %s | %s | %d/%d |" % (
-            r["short"], num(r["score"], 1), cell("coding"), cell("agentic"),
+            r["short"], num(r["score"], 1), share("scicode"), share("tbench"),
             cell("gbench", 3), num((f.get("arena") or {}).get("value"), 0),
             cell("swe"), num(r["community"], 1),
             num(r["card"], 0),

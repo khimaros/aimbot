@@ -23,7 +23,7 @@ date is in each file's provenance below.
 | `data/gguf-sizes.json` | 2026-08-17 | huggingface hub tree api |
 | `data/gguf-tensors.json` | 2026-09-09 | the ggml type of every tensor in each published rung, read from its own tensor table: 1805 rungs over 177 repos |
 | `data/gbench-compare-observed.json` | 2026-08-10 | gertlabs compare view |
-| `data/reddit-localllama.json` | 2026-08-17 | old.reddit.com r/LocalLLaMA |
+| `data/reddit-localllama.json` | 2026-08-17 | r/LocalLLaMA, via the reddit api: one search per registry model plus four themes |
 | `data/sentiment.json` | derived | analyze-task-mentions --json |
 | `data/hackernews.json` | 2026-09-04 | hn.algolia.com: one query per registry model plus nine themes, stories deduped across queries |
 | `data/lmarena.json` | 2026-08-17 | lmarena.ai/leaderboard |
@@ -38,19 +38,20 @@ date is in each file's provenance below.
 | `data/usecase.json` | derived | analyze-usecase: every facet per model, with a ref each |
 | `usecase-assessed.json` | written | the judgement analyze-usecase carries into it |
 | `data/hf-discussions.json` | 2026-09-07 | huggingface per-repo discussion tabs, for every repo the registry names -- base, quants and components -- with each box naming the model it belongs to |
-| `data/github-issues.json` | 2026-08-17 | api.github.com, ggml-org/llama.cpp |
+| `data/github-issues.json` | 2026-08-17 | api.github.com, ggml-org/llama.cpp: hardware terms plus one query per registry model |
 | `data/sentiment-llm.json` and `data/proposals.json` are written by `make llm`; see CONTRIBUTING.md. six collectors write through `capture.py`, which refuses to replace a capture with a smaller one -- `fetch-reddit --refresh` against the dead scrape would otherwise have emptied a corpus nothing here can rebuild. |
 | `data/proposals.json` | derived | a model's triage of the discovery backlog. PROPOSALS, not facts: nothing downstream reads it |
 | `data/sentiment-llm.json` | derived | a second reading of the captured quotes, toward one named model at a time. nothing downstream reads it either |
 | `data/llama-support.json` | derived | which llama.cpp release carries each architecture, from a local clone's history plus the gguf headers the hub parses |
-| `data/level1techs.json` | 2026-08-17 | forum.level1techs.com discourse api |
+| `data/level1techs.json` | 2026-08-17 | forum.level1techs.com discourse api: box terms plus one query per registry model |
 | `data/hf-catalog.json` | 2026-08-17 | huggingface hub model listing (trending) |
 | `data/hf-catalog-new.json` | 2026-08-17 | huggingface hub model listing (newest) |
 
-`artificial-analysis.json` is keyed by model slug. it carries 609 models, 349
-of them open weights, trimmed to the 34 fields MODELS.md cites. scores are
-third party and run on one harness across every model, which is why MODELS.md
-prefers them to self-reported model card numbers.
+`artificial-analysis.json` is keyed by model slug. it carries 650 models, 368
+of them open weights, trimmed to the fields MODELS.md cites and assembled from
+two pages -- the leaderboard row and a model page, which carry different halves
+of one record. scores are third party and run on one harness across every
+model, which is why MODELS.md prefers them to self-reported model card numbers.
 
 ## the speech sources
 
@@ -233,7 +234,7 @@ the boards they run from 227 to 11.1 million, and on the text board alone from
 897 to 124,894, so two adjacent ratings are not equally well established.
 
 `swe-rebench.json` holds resolved rates per model per *task-date window*, which
-is what makes it worth carrying separately from AA's coding index. because
+is what makes it worth carrying separately from AA's scicode. because
 swe-rebench rebuilds its task set from pull requests merged after the fact, a
 model can be scored on tasks that postdate its own release --
 `analyze-contamination` does that comparison. zero-sample windows are dropped
@@ -436,7 +437,7 @@ substitute: UD-* quants mix precisions per tensor, and gpt-oss-120b is within
 ./analyze-correlations             # do the tracked sources disagree at all?
 ./analyze-correlations --redundancy        # what each source adds over AA
 ./analyze-correlations --scope aa          # AA internals, where n is large
-./analyze-correlations --scope aa --regress 'intelligenceIndex~codingIndex,agenticIndex'
+./analyze-correlations --scope aa --regress 'intelligenceIndex~scicode,terminalbenchV21'
 ./analyze-tbench                   # which terminal-bench tasks track the other sources
 ./analyze-tbench --ref 'epoch ECI' # rank by one reference instead of the mean
 ./analyze-tbench --task fix-git    # the models behind one row
@@ -501,7 +502,7 @@ disagree, but whether a suite agrees with itself. it ranks each terminal-bench
 task by how well its pass/fail pattern orders models the way AA, epoch, lmarena
 and GBENCH do, pooling submissions per model because the reference scores are
 per model. the whole suite's accuracy sits at rho +0.72 against AA's
-intelligence index (n=25), +0.85 against epoch ECI, +0.71 against GBENCH; the
+intelligence index (n=25), +0.86 against epoch ECI, +0.74 against GBENCH; the
 best single tasks -- `circuit-fibsqrt`, `torch-pipeline-parallelism`,
 `large-scale-text-editing`, `write-compressor`, `make-mips-interpreter` -- match
 that on their own, 11 of them clear a bonferroni-corrected threshold against AA
@@ -510,16 +511,18 @@ are passed by more than 90% of runs and cannot separate anybody.
 `configure-git-webserver` is inverted at -0.37: gpt-5.2 and claude opus 4.6 fail
 it where qwen3.5-9b and gpt-5-nano pass.
 
-`--stability` is the part worth running before quoting any of that. five of the
-six references agree with each other about the ranking (rho +0.74 to +0.87 over
-the 89-task vectors), so the pattern is largely a property of the tasks rather
-than of one leaderboard; AA's agentic index is the dissenter, pairing at +0.44
-to +0.72. but the models are the sample here, and there are 25 of them: a
-split-half over models reproduces the ranking at only +0.48, and 89 tasks tested
-at once need |rho| >= 0.63 for a bonferroni-corrected p<0.05. what does survive
-out of sample is the set rather than the order -- a top-10 chosen on half the
-models scores +0.73 on the other half against the full suite's +0.72, and a
-top-20 scores +0.77. a quarter of terminal-bench carries what all of it says.
+`--stability` is the part worth running before quoting any of that. all five
+references that resolve agree with each other about the ranking (rho +0.76 to
++0.90 over the 89-task vectors), so the pattern is a property of the tasks
+rather than of one leaderboard. a sixth is asked for and does not resolve:
+scicode reaches too few of these 25 models to index, which is the same coverage
+problem that decides which AA evals the composite weights. but the models are
+the sample here, and there are 25 of them: a split-half over models reproduces
+the ranking at only +0.48, and 89 tasks tested at once need |rho| >= 0.63 for a
+bonferroni-corrected p<0.05. what does survive out of sample is the set rather
+than the order -- a top-5 chosen on half the models scores +0.78 on the other
+half against the full suite's +0.74, and a top-20 scores +0.72. a quarter of
+terminal-bench carries what all of it says.
 
 `analyze-operational` carries each report's state, age and engagement, because
 a bug report is not a fact about the present: of the 98 strix-halo documents,
@@ -577,19 +580,27 @@ template cannot be executed by reimplementing jinja. `fetch-chat-templates`
 reuses the cache keys `fetch-model-facts` already writes, so whichever of the
 two runs second transfers nothing.
 
-reddit is worth a note, because the obvious approach fails and the working one
-is not obvious. `www.reddit.com` returns an SPA shell, the `.json` endpoints
-403 regardless of user agent, and the public redlib mirrors sit behind browser
-challenges -- so it looks like the site is closed to scripts. it is not:
-**old.reddit serves fully rendered HTML to plain curl**, comments and scores
-included. the one gotcha is that the bare `/comments/<id>/` form 301s to the
-slugged url, so redirects have to be followed.
+reddit is worth a note, because what worked stopped working. `www.reddit.com`
+returns an SPA shell and its `.json` endpoints 403 regardless of user agent;
+**old.reddit served fully rendered HTML to plain curl** for a long time, and
+does not any more -- a logged-out request 302s to `/login/?reason=lor2`, and
+since redirects are followed every url comes back 200 with ~321kb of `Welcome
+to Reddit`. a 200 is why that read as a quiet day on the subreddit for a whole
+sweep rather than as a dead collector.
 
-an earlier version of `fetch-reddit` drove a real chrome under xvfb on the
-assumption that the json 403 applied site-wide. that was both unnecessary and
-worse: partway through a long run reddit began failing those page loads with
+so `fetch-reddit` reads the **api** when `AIMBOT_REDDIT_CLIENT_ID` and
+`AIMBOT_REDDIT_SECRET` are set (a `script` app from
+https://www.reddit.com/prefs/apps; see `.env.example`). the token is app-only --
+`client_credentials`, acting as no user -- because nothing here reads anything a
+logged-out visitor could not. with them unset it still scrapes, and says which
+of the two `0 parsed` means: a parser reading nothing out of a real page is a
+markup change to chase, a parser handed a login page is not.
+
+an earlier version drove a real chrome under xvfb on the assumption that the
+json 403 applied site-wide. that was both unnecessary and worse: partway through
+a long run reddit began failing those page loads with
 `ERR_HTTP_RESPONSE_CODE_FAILURE`, which looks like throttling aimed at the
-automated client. curl has been steady and is far faster.
+automated client. curl was steady while the html lasted.
 
 `--front N` adds the other half of the sub: the hot, new and top-week listings.
 search only ever returns what `QUERIES` already asks about and lags by hours, so
@@ -599,8 +610,25 @@ carry score, comment count and post time as `data-*` attributes, so those come
 out exact rather than scraped from "42 points". the N most-discussed posts not
 already captured get their comments pulled.
 
-edit `QUERIES` and `THREADS` at the top to change coverage; `THREADS` holds the
-ids of the threads MODELS.md quotes, and `TASK_QUERIES` drives `--harvest`.
+the model names searched for are DERIVED, not typed: `roster.model_queries`
+reads `registry/models.yaml` and yields one query per model from its
+`name.short`, every kind of it. the four collectors that search a forum --
+reddit, hacker news, level1techs and github issues -- all read that one list,
+because four hand-kept ones drift and the drift is invisible. it had: 13 model
+names against 63 text models, so 51 of them had nobody asking, deepseek v4.1
+flash among them the week it landed. a model was still SCORED when it came up
+in somebody else's thread, since sentiment matches `name.match` over everything
+captured -- what was lost is the threads actually about it.
+
+what stays hand-written beside them is the questions no model name covers: the
+box, the practice, the size class. edit `QUERIES` for those, and `THREADS` for
+the ids MODELS.md quotes; `TASK_QUERIES` drives `--harvest`.
+
+the cost is real. 170 model queries land on top of each collector's topical
+list, so a cold sweep makes ~174 reddit searches, ~179 on hacker news and
+level1techs, and ~190 against the github search api at its 10-a-minute
+unauthenticated limit -- twenty minutes for that stage alone. every one is
+cached for `--max-age`, so the second run in a window pays for none of it.
 
 `fetch-gbench` needs no browser: the site is client rendered, but it feeds from
 a public JSON API that carries every model's per-language breakdown at once.
@@ -664,10 +692,17 @@ pass `--refresh` to any collector to ignore all of it.
 
 ## caveats
 
-- artificial analysis reports some scores as 0-1 fractions (`terminalbenchV21`,
-  `tau2`, `tauBanking`, `scicode`) and others as 0-100 indices
-  (`intelligenceIndex`, `codingIndex`, `agenticIndex`). MODELS.md scales the
-  former to percentages.
+- artificial analysis reports most scores as 0-1 fractions (`terminalbenchV21`,
+  `tau2`, `tauBanking`, `scicode`) and `intelligenceIndex` as a 0-100 index.
+  MODELS.md scales the fractions to percentages.
+- it retired `codingIndex` and `agenticIndex`, which were the two the composite
+  leaned on. `fetch-artificial-analysis` no longer asks for them and nothing
+  here maps another eval onto their names: scicode and `terminalbenchV21` carry
+  the weight instead, chosen on how much of THIS roster they cover.
+- the leaderboard row went narrow with them, so the text file is two boards
+  merged per model -- `models` for the creator and the decode speed, and
+  `model-detail` off a `/models/<slug>` page for the license, the parameter
+  counts, the weights url and the per-eval scores.
 - `deprecated: true` does not mean bad. it means artificial analysis has
   superseded the entry, usually because the lab shipped a newer model. several
   deprecated entries (minimax m2.7, glm-4.7) are still the best thing that fits

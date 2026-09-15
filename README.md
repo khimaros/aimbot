@@ -493,7 +493,7 @@ view to transcription cannot touch them. what moved is the eight, and MODELS.md
 with them, where the evidence column reads 4/7 rather than 4/10 now that an LLM
 is not charged for speech coverage it is not judged on.
 
-the presets go the same way. `writing code` weights the coding index and
+the presets go the same way. `writing code` weights scicode and
 swe-rebench, which the transcription view is not asking about, so it is one of
 the two dropped there -- a2t offers `balanced`, `most measured`, `what forums
 say` and `nothing weighted`. a preset that cannot score the current view is
@@ -525,7 +525,7 @@ the factors run deep: 23 artificial analysis benchmarks (including
 `omniscience non-hallucination`, the one axis where a model is rewarded for
 declining to answer), the four gbench modes, epoch's runs, card claims,
 community per forum, and a slider per gbench LANGUAGE -- so somebody who writes
-rust can weight rust rather than trusting a coding index that averaged it away.
+rust can weight rust rather than trusting one coding score that averaged it away.
 1676 facets over 74 models, grouped and collapsible, each group saying how many
 of its weights are live.
 
@@ -714,7 +714,7 @@ name on sight and a one-second delay is a description nobody reads.
 two properties hold whatever you set:
 
 **a percentile is against this registry, not against the world.** p79 on coding
-means it beat 79% of the registry models that also carry a coding index. the
+means it beat 79% of the registry models that also carry a coding score. the
 question a local roster asks is "best of what i can run", and ranking a 27b
 against gpt-5.6 answers a different one.
 

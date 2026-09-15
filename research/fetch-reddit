@@ -4,11 +4,18 @@
 
 old.reddit served real server-rendered HTML to plain curl -- comments, scores
 and all -- and the `.json` endpoints were the only thing actually blocked. That
-is no longer true. As of the 2026-09-02 sweep old.reddit.com answers with the
-new client: 352kb titled `Welcome to Reddit`, 132 `shreddit-` custom elements
-and not one `<div class="md">`, so every parser below finds nothing. It comes
-back 200, which is why this reads as a quiet day rather than as a failure. The
-`.json` paths are shut too, 302 without a user-agent and 403 with one.
+is no longer true. old.reddit.com answers a logged-out request with 302 to
+`/login/?reason=lor2`; httpcache follows it, so every url comes back 200 with
+~321kb titled `Welcome to Reddit` and not one `<div class="md">`. A 200 is why
+this read as a quiet day rather than as a failure for a whole sweep.
+
+So there are two paths here. With a reddit app configured -- see `.env.example`
+-- this reads the API as an app-only client, which is what is left and is also
+what should have been used all along. With nothing configured it still scrapes,
+because that path needs no credential and would start working again the day
+logged-out access does, and it now NAMES the login wall instead of blaming the
+markup: a parser reading nothing out of a real page and a parser handed a login
+page are different problems for different people.
 
 An earlier version drove a real chrome under xvfb, on the assumption that the
 403 from the json api applied to the whole site. It does not, and the browser
@@ -16,11 +23,10 @@ turned out to be worse than unnecessary: reddit started failing those page loads
 with ERR_HTTP_RESPONSE_CODE_FAILURE partway through a long run, which looks like
 throttling of the automated client. curl was steady while the html lasted.
 
-So the parsers are kept, because what changed is which document is served rather
-than anything here, and a total miss now EXITS NON-ZERO. That is the point worth
-keeping whatever replaces the scrape: this collector degrades by writing the
-previous capture back out, so a silent breakage leaves sentiment scoring stale
-text forever and no number anywhere looks wrong.
+A total miss EXITS NON-ZERO either way. That is the point worth keeping whatever
+serves the text: this collector degrades by writing the previous capture back
+out, so a silent breakage leaves sentiment scoring stale text forever and no
+number anywhere looks wrong.
 
 One gotcha survives: the bare /comments/<id>/ form 301s to the slugged URL, so
 requests follow redirects (-L via httpcache).
@@ -31,6 +37,8 @@ requested at all.
 """
 
 import argparse
+import base64
+import datetime
 import html
 import json
 import os
@@ -41,7 +49,10 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import capture  # noqa: E402  the do-not-shrink guard
+import llm  # noqa: E402  for load_env, so credentials come from .env like the rest
+import roster  # noqa: E402  the model names to search for, from the registry
 import urllib.parse
+import urllib.request
 from html.parser import HTMLParser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -55,11 +66,19 @@ LISTING = "https://old.reddit.com/r/%s/%s"
 # the sub by hours. the listings are the other half: they show what was actually
 # posted, so a release nobody thought to write a query for still turns up.
 LISTINGS = {"hot": "", "new": "new/", "top-week": "top/?sort=top&t=week"}
+# the same three off the api, which takes its sort as a path and its window as a
+# query parameter rather than old.reddit's mixture of both
+API_LISTINGS = {"hot": "/r/%s/hot?limit=100", "new": "/r/%s/new?limit=100",
+                "top-week": "/r/%s/top?t=week&limit=100"}
+# and off the mirror, where there is no ranking to mirror -- only how far back
+# each window reaches. the names are kept so a capture stays one shape.
+ARCTIC_WINDOW = {"hot": 2 * 86400, "new": 86400, "top-week": 7 * 86400}
 
+# the questions no model name covers. the model names themselves are DERIVED --
+# see roster.model_queries -- because this list was hand-kept and drifted: 13
+# names against 63 text models, so 51 had nobody searching for them.
 QUERIES = [
-    "Qwen3.8 27B", "Qwen3.6 27B", "MiniMax M2.7", "DeepSeek V4 Flash", "Ling 3.0 Flash",
-    "Inkling Small", "Strix Halo 128GB", "benchmaxxing", "gpt-oss-120b",
-    "Muse Glimmer", "Hy3", "MiMo V2.5", "Qwen3 Coder Next",
+    "Strix Halo 128GB", "benchmaxxing",
     "quantization agentic Q4 Q8", "best local model right now",
 ]
 
@@ -155,12 +174,437 @@ THING = re.compile(r'<div class="[^"]*\bthing\b[^"]*\bid-t3_(\w+)[^"]*"([^>]*)>'
 ATTR = re.compile(r'data-([\w-]+)="([^"]*)"')
 
 
-def get(url, key, refresh=False, max_age=0):
+def get(url, key, refresh=False, max_age=0, headers=()):
     cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
            "--max-age", str(max_age), "--header", "User-Agent: " + UA]
+    for h in headers:
+        cmd += ["--header", h]
     if refresh:
         cmd.append("--refresh")
     return subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout
+
+
+# what reddit serves a logged-out client instead of the page asked for. it is a
+# 302 to /login/?reason=lor2 and httpcache follows it, so the fetch looks like a
+# 200 of ~321kb and only the body says what happened
+LOGIN_WALL = re.compile(r"<title>\s*Welcome to Reddit\s*</title>|/login/\?reason=", re.I)
+
+
+def looks_like_login(page):
+    """Whether this is the login wall rather than the thread that was asked for.
+
+    The distinction is the whole diagnosis: a parser that reads nothing out of a
+    real page is a markup change to chase, and a parser that was handed a login
+    page is an access problem no selector fixes.
+    """
+    return bool(page) and bool(LOGIN_WALL.search(page))
+
+
+# the authenticated path. reddit's own api, which is what is left now that the
+# html is behind a login: an app-only (client_credentials) token reads public
+# subreddits without acting as anybody, which is all this collector ever did.
+API = "https://oauth.reddit.com"
+TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
+# reddit blocks the generic browser strings on the api and asks clients to name
+# themselves, so this one does rather than borrowing chrome's
+API_UA = "aimbot-research/1.0 (registry sweep; +https://github.com/khimaros/aimbot)"
+ENV_FILE = os.path.join(HERE, "..", ".env")
+MIN_COMMENT = 90
+BODY_LIMIT = 1200
+
+
+def credentials(env_file=None):
+    """(client_id, secret) from the environment, falling back to `.env`.
+
+    The same contract the llm steps have and for the same reason: unset is the
+    ordinary case, so a sweep on a machine with no reddit app still collects
+    everything else. `load_env` does not override what is already exported.
+    """
+    llm.load_env(env_file or ENV_FILE)
+    return (os.environ.get("AIMBOT_REDDIT_CLIENT_ID") or "",
+            os.environ.get("AIMBOT_REDDIT_SECRET") or "")
+
+
+def token_request(url, client_id, secret):
+    """The POST that trades the app's id and secret for a bearer token."""
+    req = urllib.request.Request(
+        url, data=b"grant_type=client_credentials", method="POST")
+    basic = base64.b64encode(("%s:%s" % (client_id, secret)).encode()).decode()
+    req.add_header("Authorization", "Basic " + basic)
+    req.add_header("User-Agent", API_UA)
+    return req
+
+
+def access_token(client_id, secret, url=TOKEN_URL):
+    """A bearer token, or "" with the reason on stderr.
+
+    Not cached to disk: it is a credential with an hour's life, and re-asking
+    costs one request against a sweep that makes hundreds.
+    """
+    try:
+        with urllib.request.urlopen(token_request(url, client_id, secret),
+                                    timeout=60) as r:
+            return json.load(r).get("access_token") or ""
+    except Exception as e:
+        print("!!! reddit token: %s" % e, file=sys.stderr)
+        return ""
+
+
+def api_get(path, token, key, refresh=False, max_age=0):
+    """One api read, through httpcache so etags still do their work."""
+    out = get(API + path, key, refresh, max_age,
+              headers=["Authorization: bearer " + token])
+    try:
+        return json.loads(out)
+    except ValueError:
+        return None
+
+
+def children(listing, kind=None):
+    """The `data` of each child of a listing, optionally of one kind."""
+    for c in ((listing or {}).get("data") or {}).get("children") or []:
+        if kind is None or c.get("kind") == kind:
+            yield c.get("data") or {}
+
+
+def api_search(payload):
+    """Search results. Only the id is read on, so the rest is what is cheap."""
+    return [dict(id=p.get("id") or "", title=p.get("title") or "",
+                 score=p.get("score") or 0,
+                 when=iso(p.get("created_utc")),
+                 comments=p.get("num_comments") or 0,
+                 url="https://old.reddit.com" + (p.get("permalink") or ""))
+            for p in children(payload, "t3")]
+
+
+def api_listing(payload):
+    """A hot/new/top listing, in the shape the scraped one had."""
+    return [dict(id=p.get("id") or "", title=p.get("title") or "",
+                 score=p.get("score") or 0,
+                 comments=p.get("num_comments") or 0,
+                 author=p.get("author") or "",
+                 flair=p.get("link_flair_text") or "",
+                 created=iso(p.get("created_utc")),
+                 url="https://old.reddit.com" + (p.get("permalink") or ""))
+            for p in children(payload, "t3")]
+
+
+def api_comments(listing, out):
+    """Walk the reply tree, recording each comment's depth.
+
+    `more` children are reddit's load-more stubs and carry no text. Depth comes
+    off the api rather than being counted, but a nested walk is still needed:
+    replies are a listing of their own and `""` when there are none.
+    """
+    for c in children(listing, "t1"):
+        text = re.sub(r"\s+", " ", c.get("body") or "").strip()
+        if len(text) >= MIN_COMMENT:
+            out.append(dict(score=c.get("score"), depth=c.get("depth") or 0,
+                            text=text[:BODY_LIMIT]))
+        api_comments(c.get("replies") or None, out)
+    return out
+
+
+def api_thread(payload, tid, limit):
+    """One thread: the post, then its comments by score."""
+    post = next(iter(children((payload or [None])[0], "t3")), {})
+    rows = api_comments(payload[1] if len(payload or []) > 1 else None, [])
+    rows.sort(key=lambda c: -(c["score"] if c["score"] is not None else -999))
+    return dict(id=tid, title=post.get("title") or "",
+                body=re.sub(r"\s+", " ", post.get("selftext") or "").strip()[:BODY_LIMIT],
+                comments=rows[:limit])
+
+
+# the no-credential path: a third-party mirror of the same comments, which is
+# what is left for a machine with no reddit app. it is an ARCHIVE, so it has no
+# notion of `hot` -- there is no engagement ranking to mirror -- and very fresh
+# comments arrive before their votes do, which is why the api is preferred when
+# there is one
+ARCTIC = "https://arctic-shift.photon-reddit.com/api"
+
+
+def pick_source(want, token):
+    """Which of the three to read, given what was asked for and what is set up.
+
+    `auto` prefers reddit answering for itself, then the mirror, and never the
+    scrape -- that path is behind a login and would only spend a sweep proving
+    it. Naming one explicitly overrides all of that, including into a failure,
+    because a caller checking whether the scrape works needs to be able to.
+    """
+    if want != "auto":
+        return want
+    return "api" if token else "arctic"
+
+
+ARCTIC_BACKOFF = 20
+
+
+def arctic_get(path, key, refresh=False, max_age=0):
+    """One mirror read, waited out once if it asks to be.
+
+    Under load it answers 422 `Timeout. Maybe slow down a bit`, which is a
+    request to wait rather than a missing thread -- dropping it costs a search
+    or a whole thread's comments. httpcache reports that as a failed fetch, so
+    what arrives here is a body that will not parse, and that is also what a
+    genuinely dead endpoint looks like: hence one retry and no more.
+    """
+    for attempt in (0, 1):
+        body = get(ARCTIC + path, key, refresh, max_age)
+        try:
+            payload = json.loads(body) or {}
+        except ValueError:
+            payload = None
+        if payload is not None and payload.get("data") is not None:
+            return payload["data"]
+        if attempt == 0:
+            time.sleep(ARCTIC_BACKOFF)
+    return None
+
+
+ARCTIC_PAGE = 100
+# a TEXT query costs the mirror far more than a window over one subreddit does,
+# and at 100 it answers 422 `Timeout. Maybe slow down a bit`. searches here only
+# turn up thread ids for the pass below -- `--harvest` takes the first handful
+# of each -- so a page that fits inside what the mirror will do is no loss
+ARCTIC_QUERY_PAGE = 10
+
+
+def arctic_paged(fetch, want, page=ARCTIC_PAGE):
+    """Walk `after` until `want` rows, or until the mirror runs out.
+
+    `limit` must be between 1 and 100 and a thread here can carry several
+    hundred, so the window advances on the last `created_utc` seen. `after` is
+    inclusive, so the boundary row comes back in the next page and rows are
+    deduped by id; a page shorter than the cap is the end and stops the walk,
+    without which this asks forever for rows that do not exist.
+    """
+    rows, seen, after = [], set(), None
+    while len(rows) < want:
+        got = fetch(after) or []
+        fresh = [c for c in got if c.get("id") not in seen]
+        if not fresh:
+            break
+        seen.update(c.get("id") for c in fresh)
+        rows += fresh
+        if len(got) < page:
+            break
+        after = max((c.get("created_utc") or 0) for c in got)
+    return rows[:want]
+
+
+def arctic_post(p):
+    """One post, in the shape the scrape recorded."""
+    return dict(id=p.get("id") or "", title=p.get("title") or "",
+                score=p.get("score") or 0,
+                comments=p.get("num_comments") or 0,
+                author=p.get("author") or "",
+                flair=p.get("link_flair_text") or "",
+                created=iso(p.get("created_utc")),
+                url="https://old.reddit.com" + (p.get("permalink") or ""))
+
+
+def arctic_listing(rows):
+    return [arctic_post(p) for p in rows or []]
+
+
+def arctic_search(rows):
+    return [dict(arctic_post(p), when=iso(p.get("created_utc"))) for p in rows or []]
+
+
+def arctic_depths(rows):
+    """{comment id: reply depth}, walked up the `parent_id` chain.
+
+    The mirror returns comments flat where reddit's api nests them and stamps a
+    depth on each, so it is rebuilt here. A parent this fetch did not return --
+    a truncated thread, which any limit produces -- ends the walk, so its child
+    reads as top level. That is the conservative direction: depth only ever
+    discounts a comment's score, and inventing one nobody can check would
+    discount it on a guess.
+    """
+    by_id = {c.get("id"): c for c in rows or [] if c.get("id")}
+    out = {}
+    for cid in by_id:
+        depth, walk, seen = 0, cid, set()
+        while True:
+            parent = (by_id.get(walk) or {}).get("parent_id") or ""
+            if not parent.startswith("t1_"):
+                break
+            walk = parent[3:]
+            if walk in seen or walk not in by_id:
+                break
+            seen.add(walk)
+            depth += 1
+        out[cid] = depth
+    return out
+
+
+def arctic_thread(post, rows, tid, limit):
+    """One thread from the mirror, matching what the api path produces."""
+    depths = arctic_depths(rows)
+    out = []
+    for c in rows or []:
+        text = re.sub(r"\s+", " ", c.get("body") or "").strip()
+        if len(text) >= MIN_COMMENT:
+            out.append(dict(score=c.get("score"),
+                            depth=depths.get(c.get("id"), 0),
+                            text=text[:BODY_LIMIT]))
+    out.sort(key=lambda c: -(c["score"] if c["score"] is not None else -999))
+    post = post or {}
+    return dict(id=tid, title=post.get("title") or "",
+                body=re.sub(r"\s+", " ", post.get("selftext") or "").strip()[:BODY_LIMIT],
+                comments=out[:limit])
+
+
+# the third way in: a redlib instance proxies reddit live, so its scores are
+# current where the mirror's are as-archived. the cost is that instances are
+# mostly gone -- of the seven on the published list, ONE served content and the
+# rest answered with an anubis proof-of-work challenge, 403 or 418 -- so a
+# usable one is detected rather than assumed.
+REDLIB_LIST = "https://raw.githubusercontent.com/redlib-org/redlib-instances/main/instances.json"
+# what answered when this was written, tried after the published list. the
+# second is not on that list at all and was the other one serving.
+REDLIB_SEED = ["https://safereddit.com", "https://red.artemislena.eu"]
+REDLIB_POST = re.compile(r'<div class="post[^"]*" id="(\w+)"(.*?)(?=<div class="post[^"]*" id=|\Z)', re.S)
+
+
+def redlib_serves(page):
+    """Whether an instance answered with reddit content rather than a challenge.
+
+    A challenge comes back 200 with a full page, so the status says nothing.
+    What separates them is that redlib always renders a score element and a
+    challenge never does.
+    """
+    return bool(page) and ("comment_score" in page or "post_score" in page)
+
+
+def redlib_instances(body):
+    """Instance urls from the published list, or none if it cannot be read."""
+    try:
+        return [i["url"] for i in (json.loads(body) or {}).get("instances") or []
+                if i.get("url")]
+    except (ValueError, TypeError, AttributeError):
+        return []
+
+
+class RedlibComments(HTMLParser):
+    """Walk redlib's comment tree, which nests one `div.comment` in another.
+
+    Three things differ from the old.reddit markup the class above reads. Depth
+    is the nesting rather than a counted `child` class. The exact score is the
+    `title` on `p.comment_score`, because the text beside it is abbreviated --
+    `1.2k` where the title says `1204` -- and `Hidden` is a real value meaning
+    the subreddit hides scores, which is not the same as zero. And the body is
+    the `div.md` inside `div.comment_body`, whose class shares no token with
+    the comment div itself.
+    """
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack, self.rows, self.cur, self.buf = [], [], None, []
+        self.grab = 0
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        cls = (a.get("class") or "").split()
+        if tag == "div":
+            self.stack.append("comment" if "comment" in cls else "x")
+            if "comment" in cls:
+                self.cur = dict(
+                    depth=sum(1 for x in self.stack if x == "comment") - 1,
+                    score=None, text="")
+                self.rows.append(self.cur)
+            if "md" in cls and self.cur and not self.cur["text"]:
+                self.grab, self.buf = len(self.stack), []
+        elif tag == "p" and "comment_score" in cls and self.cur:
+            title = (a.get("title") or "").replace(",", "").strip()
+            if re.fullmatch(r"-?\d+", title):
+                self.cur["score"] = int(title)
+
+    def handle_endtag(self, tag):
+        if tag == "div":
+            if self.grab and len(self.stack) <= self.grab:
+                if self.cur and not self.cur["text"]:
+                    self.cur["text"] = re.sub(r"\s+", " ", "".join(self.buf)).strip()
+                self.grab = 0
+            if self.stack:
+                self.stack.pop()
+
+    def handle_data(self, d):
+        if self.grab:
+            self.buf.append(d)
+
+
+def redlib_title(block):
+    """The post's title, whichever of the two shapes it is in.
+
+    A listing wraps it in the link to the thread; a thread page leaves it as a
+    bare text node after the flair anchor, which has to come off first or the
+    flair reads as the first word of the title.
+    """
+    raw = first(r'class="post_title"\s*>(.*?)</h[12]>', block)
+    return strip(re.sub(r'<a[^>]*class="post_flair".*?</a>', "", raw, flags=re.S))
+
+
+def redlib_thread(page, tid, limit):
+    """One thread off an instance, in the shape every other source produces.
+
+    The post is read off the WHOLE page rather than out of a matched block: a
+    thread page carries exactly one `post_title` and one `post_body`, and its
+    post div has no id to anchor a block match on the way a listing's does.
+    """
+    p = RedlibComments()
+    p.feed(page)
+    out = [dict(score=c["score"], depth=c["depth"], text=c["text"][:BODY_LIMIT])
+           for c in p.rows if len(c["text"]) >= MIN_COMMENT]
+    out.sort(key=lambda c: -(c["score"] if c["score"] is not None else -999))
+    return dict(id=tid, title=redlib_title(page),
+                body=strip(first(r'class="post_body[^"]*"[^>]*>(.*?)</div>\s*</div>',
+                                 page))[:BODY_LIMIT],
+                comments=out[:limit])
+
+
+def redlib_listing(page):
+    """A listing or a search result page; redlib renders both the same way."""
+    posts = []
+    for tid, b in REDLIB_POST.findall(page):
+        posts.append(dict(
+            id=tid,
+            title=redlib_title(b),
+            score=int(first(r'class="post_score" title="(-?[\d,]+)"', b).replace(",", "") or 0),
+            comments=int(re.sub(r"\D", "", first(r'class="post_comments"[^>]*>([^<]*)', b)) or 0),
+            author=strip(first(r'class="post_author[^"]*"[^>]*>(.*?)</a>', b)).lstrip("u/"),
+            flair=strip(first(r'class="post_flair"[^>]*>(.*?)</a>', b)),
+            created=strip(first(r'class="created" title="([^"]*)"', b)),
+            url="https://old.reddit.com" + first(r'class="post_title">\s*(?:<[^>]+>\s*)*<a href="([^"]+)"', b),
+        ))
+    return posts
+
+
+def redlib_search(page):
+    return redlib_listing(page)
+
+
+def redlib_base(sub, refresh=False):
+    """The first instance that serves content, or "" if none do.
+
+    The published list before the seeds: it is maintained and they are only
+    what answered the day this was written. Probing costs one page per
+    instance, which is why the answer is resolved once per run rather than per
+    thread.
+    """
+    listed = redlib_instances(get(REDLIB_LIST, "redlib-instances", refresh, 86400))
+    for base in listed + [s for s in REDLIB_SEED if s not in listed]:
+        if redlib_serves(get("%s/r/%s" % (base, sub), "redlib-probe", True)):
+            return base
+    return ""
+
+
+def iso(epoch):
+    """A reddit timestamp as the iso string the scrape recorded."""
+    if not epoch:
+        return ""
+    return datetime.datetime.fromtimestamp(
+        float(epoch), datetime.timezone.utc).isoformat()
 
 
 def strip(s):
@@ -238,6 +682,16 @@ def main():
     ap.add_argument("--refresh", action="store_true", help="refetch everything")
     ap.add_argument("--delay", type=float, default=1.0,
                     help="seconds between requests; reddit 429s a fast loop")
+    ap.add_argument("--registry", default=roster.REGISTRY,
+                    help="the roster whose model names are searched for")
+    ap.add_argument("--source",
+                    choices=["auto", "api", "arctic", "redlib", "html"],
+                    default="auto",
+                    help="where to read from; auto is the api when an app is "
+                         "configured and the arctic shift mirror otherwise. "
+                         "redlib proxies reddit live, so its scores are "
+                         "current where the mirror's are as-archived -- but "
+                         "most instances are behind a challenge")
     ap.add_argument("--allow-shrink", action="store_true",
                     help="write even when the result holds fewer records than the "
                          "capture on disk; the guard exists because --refresh "
@@ -260,15 +714,71 @@ def main():
             return False
         return bool(rec.get("fetched")) and (now - rec["fetched"]) < args.max_age
 
-    reused = fetched = failed = 0
-    for q in QUERIES + (TASK_QUERIES if args.harvest else []):
+    # the api when there is an app to read it with, the html otherwise. the html
+    # path is kept rather than deleted because what changed is which document
+    # reddit serves, not anything here, and it is the only path that needs no
+    # credential -- if logged-out access ever comes back it still works
+    client_id, secret = credentials()
+    token = access_token(client_id, secret) if client_id and secret else ""
+    if not token and (client_id or secret):
+        print("!!! AIMBOT_REDDIT_CLIENT_ID and AIMBOT_REDDIT_SECRET are both "
+              "needed", file=sys.stderr)
+    source = pick_source(args.source, token)
+    redlib = redlib_base(args.sub, args.refresh) if source == "redlib" else ""
+    if source == "redlib" and not redlib:
+        sys.exit("!!! no redlib instance served %s: every one on the published "
+                 "list and every seed answered with a challenge or an error.\n"
+                 "    the committed capture is untouched." % args.sub)
+    print("reading via %s" % {"api": "the reddit api, as an app-only client",
+                              "arctic": "arctic shift, the third-party mirror",
+                              "redlib": "redlib at " + redlib,
+                              "html": "the old.reddit scrape"}[source],
+          file=sys.stderr)
+
+    def arctic_thread_of(tid):
+        post = (arctic_get("/posts/ids?ids=" + tid, "as-post-" + tid,
+                           args.refresh) or [None])[0]
+        rows = arctic_paged(
+            lambda after, t=tid: arctic_get(
+                "/comments/search?link_id=%s&limit=%d&sort=asc%s"
+                % (t, ARCTIC_PAGE, "&after=%d" % after if after else ""),
+                "as-cmt-%s-%s" % (t, after or 0), args.refresh),
+            args.comments)
+        return arctic_thread(post, rows, tid, args.comments)
+
+    reused = fetched = failed = walled = 0
+    searches = QUERIES + roster.model_queries(args.registry) + \
+        (TASK_QUERIES if args.harvest else [])
+    for q in searches:
         if fresh(out["searches"].get(q)):
             reused += 1
             continue
         time.sleep(args.delay)
-        page = get(SEARCH % (args.sub, urllib.parse.quote(q), args.when),
-                   "rd-search-" + re.sub(r"\W+", "_", q), args.refresh)
-        hits = parse_search(page)
+        key = "rd-search-" + re.sub(r"\W+", "_", q)
+        if source == "api":
+            hits = api_search(api_get(
+                "/r/%s/search?q=%s&restrict_sr=on&sort=top&t=%s&limit=100"
+                % (args.sub, urllib.parse.quote(q), args.when),
+                token, key, args.refresh))
+        elif source == "arctic":
+            # NO `sort` here, deliberately. ranking a text search is what the
+            # mirror times out on: `Qwen3.8 27B` at limit 10 is 422 with
+            # `sort=desc` and 200 without it, every time, while the same query
+            # cut to one word is fine either way. these hits are read for their
+            # ids alone, so an unranked page costs nothing
+            hits = arctic_search(arctic_get(
+                "/posts/search?subreddit=%s&query=%s&limit=%d"
+                % (args.sub, urllib.parse.quote(q), ARCTIC_QUERY_PAGE),
+                "as-" + key, args.refresh))
+        elif source == "redlib":
+            hits = redlib_search(get(
+                "%s/r/%s/search?q=%s&restrict_sr=on&sort=top&t=%s"
+                % (redlib, args.sub, urllib.parse.quote(q), args.when),
+                "rl-" + key, args.refresh))
+        else:
+            hits = parse_search(get(
+                SEARCH % (args.sub, urllib.parse.quote(q), args.when),
+                key, args.refresh))
         if not hits:
             failed += 1
             print("  search %-34s no hits" % q, file=sys.stderr)
@@ -283,7 +793,23 @@ def main():
     front = []
     for name, path in (LISTINGS.items() if args.front else []):
         time.sleep(args.delay)
-        posts = parse_listing(get(LISTING % (args.sub, path), "rd-list-" + name, True))
+        if source == "api":
+            posts = api_listing(api_get(API_LISTINGS[name] % args.sub,
+                                        token, "rd-list-" + name, True))
+        elif source == "arctic":
+            # the mirror is an archive: it can answer `what was posted` but has
+            # no engagement ranking to mirror, so all three windows are recency
+            # over the span each one covers and `hot` is the loosest of them
+            posts = arctic_listing(arctic_get(
+                "/posts/search?subreddit=%s&after=%d&limit=%d&sort=desc"
+                % (args.sub, now - ARCTIC_WINDOW[name], ARCTIC_PAGE),
+                "as-list-" + name, True))
+        elif source == "redlib":
+            posts = redlib_listing(get("%s/r/%s/%s" % (redlib, args.sub, path),
+                                       "rl-list-" + name, True))
+        else:
+            posts = parse_listing(get(LISTING % (args.sub, path),
+                                      "rd-list-" + name, True))
         if not posts:
             failed += 1
             print("  listing %-9s no posts parsed" % name, file=sys.stderr)
@@ -320,8 +846,22 @@ def main():
             reused += 1
             continue
         time.sleep(args.delay)
-        page = get(THREAD % (args.sub, tid), "rd-thread-" + tid, args.refresh)
-        t = parse_thread(page, tid, args.comments)
+        if source == "api":
+            t = api_thread(api_get("/r/%s/comments/%s?sort=top&limit=200"
+                                   % (args.sub, tid), token,
+                                   "rd-thread-" + tid, args.refresh),
+                           tid, args.comments)
+        elif source == "arctic":
+            t = arctic_thread_of(tid)
+        elif source == "redlib":
+            t = redlib_thread(get("%s/r/%s/comments/%s/?sort=top"
+                                  % (redlib, args.sub, tid),
+                                  "rl-thread-" + tid, args.refresh),
+                              tid, args.comments)
+        else:
+            page = get(THREAD % (args.sub, tid), "rd-thread-" + tid, args.refresh)
+            walled += looks_like_login(page)
+            t = parse_thread(page, tid, args.comments)
         if not t["comments"]:
             failed += 1
             # keep whatever was captured before rather than dropping the thread
@@ -357,12 +897,30 @@ def main():
     # it is this collector no longer working, and it has to be louder than a
     # summary line: the output file still holds the last good capture, sentiment
     # still scores every model off it, and nothing anywhere would read as wrong
+    if walled:
+        why = ("    the parser is not the problem: %d of those fetches came back as\n"
+               "    the login wall. old.reddit.com answers a logged-out request with\n"
+               "    302 to /login/?reason=lor2 and httpcache follows it, so every url\n"
+               "    returns 200 and ~321kb of `Welcome to Reddit`. www.reddit.com's\n"
+               "    .json is 403 to the same client. anonymous access is gone: set\n"
+               "    AIMBOT_REDDIT_CLIENT_ID and AIMBOT_REDDIT_SECRET, or read the\n"
+               "    mirror with --source arctic.\n" % walled)
+    elif source == "arctic":
+        why = ("    arctic shift is a third-party mirror and answers 422 `Timeout.\n"
+               "    Maybe slow down a bit` under load -- a whole run of them is it\n"
+               "    being busy rather than gone. raise --delay and try again, or\n"
+               "    configure a reddit app and let --source auto take the api.\n")
+    elif source == "api":
+        why = ("    the token was accepted but nothing parsed, so this is reddit's\n"
+               "    api answering differently rather than an access problem.\n")
+    else:
+        why = ("    check what a fetch returns now: old.reddit.com served server-rendered\n"
+               "    html to plain curl until it did not.\n")
     sys.exit(
-        "!!! %d attempted, 0 parsed: the scrape is broken, not the subreddit.\n"
+        "!!! %d attempted, 0 parsed via %s: the collector is broken, not the subreddit.\n"
         "    the committed capture is untouched, so sentiment keeps scoring the\n"
-        "    last good one and NOTHING downstream will look wrong.\n"
-        "    check what a fetch returns now: old.reddit.com served server-rendered\n"
-        "    html to plain curl until it did not." % failed)
+        "    last good one and NOTHING downstream will look wrong.\n%s"
+        % (failed, source, why))
 
 
 if __name__ == "__main__":

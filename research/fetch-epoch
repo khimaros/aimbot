@@ -38,8 +38,20 @@ import zipfile
 
 ZIP = "https://epoch.ai/data/benchmark_data.zip"
 
-ECI_FILE = "epoch_capabilities_index.csv"
-ECI_FIT_FILE = "additional_eci_data/eci_benchmark_difficulties_and_slopes.csv"
+ECI_FILE = "epoch_capabilities_index/eci_scores.csv"
+ECI_FIT_FILE = "epoch_capabilities_index/edi_scores.csv"
+# the version -> model_group link, which is the only thing tying the ECI back to
+# the id every join in this repo runs on
+MODEL_META_FILE = "model_metadata.csv"
+# lookups rather than results: they carry no `Model version`, so `clean` empties
+# them and they would reach the page as benchmarks nobody was scored on
+NOT_BENCHMARKS = {MODEL_META_FILE, "benchmark_metadata.csv"}
+
+# what the ECI's columns were called before epoch moved the file, which is what
+# every consumer here still reads. the score, the date and the country all got
+# new spellings in the same reshape.
+ECI_COLUMNS = {"Model": "Model name", "eci": "ECI Score", "date": "Release date",
+               "Country (of organization)": "Country"}
 
 # airtable record ids, log viewer links and row timestamps say nothing about a
 # model's score and are most of the byte count
@@ -83,12 +95,16 @@ def canon(col, val):
     return ",".join(sorted(v.strip() for v in val.split(","))) if col in MULTI else val
 
 
-def clean(rows, cols):
-    """Drop housekeeping columns and rows carrying no model name."""
+def clean(rows, cols, key=MODEL):
+    """Drop housekeeping columns and rows carrying no model name.
+
+    `key=None` for a table that is not per model: the ECI fit is per BENCHMARK,
+    so requiring a model of it would empty the section.
+    """
     keep = [c for c in cols if c not in DROP]
     out = []
     for r in rows:
-        if not (r.get(MODEL) or "").strip():
+        if key and not (r.get(key) or "").strip():
             continue
         out.append({c: canon(c, r[c]) for c in keep if (r.get(c) or "").strip()})
     return out
@@ -98,6 +114,35 @@ def benchmark_name(path):
     return re.sub(r"_external$", "", os.path.splitext(os.path.basename(path))[0])
 
 
+def eci_rows(eci, meta):
+    """The ECI as one row per model VERSION, under the column names it had.
+
+    Epoch publishes it per model now -- 266 rows where there were 926 -- and
+    ships an empty `model_versions` column where the link used to be. Every
+    consumer here keys on the version base, and the per-benchmark files still
+    do too, so the group is expanded back over its versions from
+    `model_metadata.csv`. The score is a property of the group, so each of its
+    versions carries the same one; `analyze-correlations` has always collapsed
+    exactly that duplication and says so.
+
+    A group with no versions in the metadata still yields its row, because a
+    score with no id is better than a model silently missing from the index.
+    """
+    versions = {}
+    for r in meta:
+        group = (r.get("model_group") or "").strip()
+        version = (r.get("model_version") or "").strip()
+        if group and version:
+            versions.setdefault(group, []).append(version)
+    out = []
+    for r in eci:
+        row = {ECI_COLUMNS.get(k, k): v for k, v in r.items()
+               if k != "model_versions"}
+        for version in sorted(versions.get(r.get("Model") or "", [])) or [""]:
+            out.append(dict(row, **{MODEL: version}))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--url", default=ZIP)
@@ -105,10 +150,13 @@ def main():
     # the zip carries an etag, so a repeat run revalidates to 304
     ap.add_argument("--max-age", type=int, default=0)
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--cache-key", default="epoch-benchmark-data",
+                    help="override the httpcache name, so a run against a "
+                         "fixture leaves the real cache alone")
     args = ap.parse_args()
 
     here = os.path.dirname(os.path.abspath(__file__))
-    cmd = [os.path.join(here, "httpcache"), args.url, "--key", "epoch-benchmark-data",
+    cmd = [os.path.join(here, "httpcache"), args.url, "--key", args.cache_key,
            "--max-age", str(args.max_age), "--path"]
     if args.refresh:
         cmd.append("--refresh")
@@ -124,14 +172,15 @@ def main():
     names = [n for n in zf.namelist() if n.endswith(".csv")]
     out = {"eci": [], "eci_fit": [], "benchmarks": {}}
 
-    eci = rows_of(zf, ECI_FILE)
+    meta = rows_of(zf, MODEL_META_FILE) if MODEL_META_FILE in names else []
+    eci = eci_rows(rows_of(zf, ECI_FILE), meta)
     out["eci"] = clean(eci, list(eci[0].keys()) if eci else [])
     if ECI_FIT_FILE in names:
         fit = rows_of(zf, ECI_FIT_FILE)
-        out["eci_fit"] = clean(fit, list(fit[0].keys()) if fit else [])
+        out["eci_fit"] = clean(fit, list(fit[0].keys()) if fit else [], key=None)
 
     for name in sorted(names):
-        if name in (ECI_FILE, ECI_FIT_FILE):
+        if name in NOT_BENCHMARKS or name.startswith("epoch_capabilities_index/"):
             continue
         rows = rows_of(zf, name)
         if not rows:

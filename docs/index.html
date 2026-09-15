@@ -411,7 +411,7 @@ function activeB(m) {
 
 // --- scoring -----------------------------------------------------------------
 //
-// a weight key is either a facet key (aa.coding) or a prefix wildcard
+// a weight key is either a facet key (aa.scicode) or a prefix wildcard
 // (card.*), which averages every facet under it. the wildcard exists because
 // card claims and epoch runs are per benchmark: a reader wants one knob for
 // "how much do i trust what the vendor says", not eleven.
@@ -1103,12 +1103,12 @@ const COLUMNS = [
      return v === null ? noEstimate(flops, 'set a compute figure under hardware')
        : `<td class="n dim">~${tps(v)}</td>`;
    }},
-  {k: 'coding', t: 'aa coding', num: true, get: m => facetVal(m, 'aa.coding'),
-   help: 'artificial analysis coding index, one harness across every model it scores',
-   cell: m => facetCell(m, 'aa.coding', 1)},
-  {k: 'agentic', t: 'aa agentic', num: true, get: m => facetVal(m, 'aa.agentic'),
-   help: 'artificial analysis agentic index: tool use and multi-step work',
-   cell: m => facetCell(m, 'aa.agentic', 1)},
+  {k: 'scicode', t: 'aa scicode', num: true, get: m => facetVal(m, 'aa.scicode'),
+   help: 'scicode pass rate on artificial analysis\' harness. it carries the coding weight their coding index carried until they retired it',
+   cell: m => facetCell(m, 'aa.scicode', 1)},
+  {k: 'tbench', t: 'aa tbench', num: true, get: m => facetVal(m, 'aa.terminalbench'),
+   help: 'terminal-bench 2.1 pass rate: tool use and multi-step terminal work. it carries the agentic weight their agentic index carried',
+   cell: m => facetCell(m, 'aa.terminalbench', 1)},
   {k: 'gbench', t: 'gbench', num: true, get: m => facetVal(m, 'gbench.agentic'),
    help: 'gbench agentic coding score. models play generated games, so there is no problem set to train against',
    cell: m => facetCell(m, 'gbench.agentic', 3)},
@@ -1165,7 +1165,7 @@ const COLUMNS = [
 ];
 
 // which table columns read a scaled facet, so the header can say so
-const SCALED_COLUMNS = {coding: 'aa.coding', agentic: 'aa.agentic',
+const SCALED_COLUMNS = {scicode: 'aa.scicode', tbench: 'aa.terminalbench',
                         gbench: 'gbench.agentic', swe: 'swerebench.resolved',
                         arena: 'lmarena.rating'};
 
@@ -1175,14 +1175,14 @@ const SCALED_COLUMNS = {coding: 'aa.coding', agentic: 'aa.agentic',
 const DEFAULT_ORDER = ['rank', 'short', 'kind', 'repo', 'license', 'params', 'active',
                        'experts', 'spec', 'pp', 'tg', 'ctx', 'extctx', 'fitctx',
                        'quant', 'bpw', 'think', 'profiles', 'size', 'kv', 'evidence',
-                       'coding', 'agentic', 'gbench', 'swe', 'arena', 'score',
+                       'scicode', 'tbench', 'gbench', 'swe', 'arena', 'score',
                        'langs', 'bestfor', 'community', 'downloads'];
 // `pp` and `tg` are off here AND gated on their hardware figure: switching one
 // on under the gear does nothing until there is a bandwidth or a compute
 // number for it to read
 const DEFAULT_HIDDEN = ['kind', 'repo', 'license', 'params', 'active', 'experts',
                         'spec', 'pp', 'tg', 'ctx', 'extctx', 'bpw', 'think',
-                        'profiles', 'kv', 'coding', 'agentic', 'gbench', 'swe',
+                        'profiles', 'kv', 'scicode', 'tbench', 'gbench', 'swe',
                         'arena', 'langs', 'bestfor', 'community', 'downloads'];
 // a strix halo box, which is what this registry is sized against, down to what
 // it reads and computes at
@@ -1471,10 +1471,10 @@ function groupOf(key) {
 // moves off a preset.
 const PRESETS = {
   default: {t: 'balanced ranking', w: () => ({...D.weights})},
-  coding: {t: 'writing code', w: () => ({'aa.coding': 0.4, 'gbench.oneshot': 0.2,
+  coding: {t: 'writing code', w: () => ({'aa.scicode': 0.4, 'gbench.oneshot': 0.2,
                                          'swerebench.resolved': 0.25, 'card.*': 0.05,
                                          'community.reddit-localllama': 0.1})},
-  agentic: {t: 'agentic and tool use', w: () => ({'aa.agentic': 0.4, 'aa.tau2': 0.15,
+  agentic: {t: 'agentic and tool use', w: () => ({'aa.terminalbench': 0.4, 'aa.tau2': 0.15,
                                                   'gbench.agentic': 0.3,
                                                   'community.reddit-localllama': 0.15})},
   measured: {t: 'third-party measurement only', w: () => {
@@ -1871,7 +1871,7 @@ function methodology() {
 
   + sec('the cohort is this registry',
     '<p>p79 on coding means it beat 79% of the registry models that also carry a'
-    + ' coding index -- not 79% of every model in the world. the question a local'
+    + ' coding score -- not 79% of every model in the world. the question a local'
     + ' roster asks is "best of what i can run", and ranking a 27b against a'
     + ' frontier api model answers a different one. the `of` column on the quality'
     + ' tab says how many models each percentile was computed against.</p>',

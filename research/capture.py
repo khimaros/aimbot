@@ -21,6 +21,38 @@ to zero, not to n-1.
 
 import json
 import os
+import re
+
+# credentials somebody pasted into a forum. these captures are arbitrary text
+# other people wrote, and one of them titled a huggingface discussion with their
+# own access token -- which this repo then carried until github's push
+# protection refused the commit. by that point it is in a local commit and the
+# fix is a history rewrite rather than an edit, so it is caught on the way IN.
+#
+# the patterns are deliberately narrow. `hf_` followed by thirty characters is a
+# token; `hf_hub` and `hf_transfer` are packages people name in the same
+# sentence, and redacting those would quietly edit what a comment said.
+SECRETS = [
+    ("hf-token", re.compile(r"\bhf_[A-Za-z0-9]{30,}")),
+    ("github-pat", re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}"
+                              r"|\bgithub_pat_[A-Za-z0-9_]{50,}")),
+    ("api-key", re.compile(r"\bsk-[A-Za-z0-9]{32,}")),
+    ("slack-token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}")),
+    ("aws-key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+]
+
+
+def scrub(text):
+    """(text, n) with anything credential-shaped replaced by what it was.
+
+    Named rather than blanked, because a reader of the capture should be able to
+    tell a redaction from a comment that happened to say nothing.
+    """
+    total = 0
+    for name, pat in SECRETS:
+        text, n = pat.subn("<redacted:%s>" % name, text)
+        total += n
+    return text, total
 
 
 def previous_count(path, count):
@@ -43,9 +75,16 @@ def write(path, payload, count, allow_shrink=False, label="records"):
     now = count(payload)
     if before and now < before and not allow_shrink:
         return False, now, before
+    # scrubbed once over the serialized form rather than by walking the payload:
+    # one pass, no recursion over a capture holding 65k comments, and it reaches
+    # a key as readily as a value
+    body, redacted = scrub(json.dumps(payload, indent=1))
+    if redacted:
+        print("  redacted %d credential(s) somebody pasted into %s"
+              % (redacted, os.path.basename(path)))
     tmp = path + ".new"
     with open(tmp, "w") as f:
-        json.dump(payload, f, indent=1)
+        f.write(body)
     os.replace(tmp, path)
     return True, now, before
 

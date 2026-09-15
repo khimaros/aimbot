@@ -14,9 +14,11 @@ each case gets its own httpcache key under a `test-` prefix and removes it
 afterwards, so a run leaves the real cache untouched.
 """
 
+import csv
 import http.server
 import importlib.machinery
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -1270,6 +1272,198 @@ def a_model_with_no_block_gets_one_rather_than_being_skipped():
     eq(again.count("      aa: fresh"), 1, "a second pass does not duplicate the block")
 
 
+# two models whose `thinking:` was written against a vocabulary the template a
+# consumer actually serves does not have. the first narrows to one level, the
+# second turns out to be a switch; both carry a `default:` naming a level from
+# the old vocabulary, which is what a hand-written block looks like the day a
+# quantizer's gguf first ships a template for it
+STALE_DEFAULT_REGISTRY = """version: 1
+models:
+  Vendor/Narrowed:
+    kind: text
+    name: {short: fixture narrowed}
+    quants: [{repo: Quanter/Narrowed-GGUF, quant: Q8_0}]
+    sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
+    thinking:
+      knob: reasoning_effort
+      accepts: [low, high, max]
+      default: high
+  Vendor/Toggle:
+    kind: text
+    name: {short: fixture toggle}
+    quants: [{repo: Quanter/Toggle-GGUF, quant: Q8_0}]
+    sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
+    thinking:
+      knob: reasoning_effort
+      accepts: [low, high]
+      default: high
+"""
+
+
+def probe_result(thinking):
+    """one template's probe results, in the shape analyze-chat-templates writes."""
+    return {"entry": {"kind": "gguf", "source": "gguf-header"}, "errors": {},
+            "probes": {"sys x2": "ok", "sys x3": "ok", "sys x4": "ok",
+                       "mid sys": "ok", "mid dev": "ok"},
+            "roles": {"assistant": "own", "developer": "as user",
+                      "system": "own", "user": "own"},
+            "thinking": thinking}
+
+
+@test
+def a_derived_thinking_block_cannot_contradict_itself():
+    """the derived vocabulary and the typed default have to come from one place.
+
+    `resolve-turns` starts from whatever the registry already said and replaces
+    `accepts` with what the template answers for, so a `default:` typed against
+    the OLD vocabulary survives into a block that no longer accepts it. deepseek
+    v4.1 flash is the live case: its levels were measured off the vendor's
+    reference encoder, `default: high` among them, and the day vcruz305's gguf
+    shipped a template reacting to `max` alone the sweep wrote `accepts: [max]`
+    beside it. models-validate rejects that pair, so a sweep produced a registry
+    its own lint fails -- and the only way back was to hand-edit what the next
+    sweep would write again.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmp, "models.yaml")
+        with open(path, "w") as f:
+            f.write(STALE_DEFAULT_REGISTRY)
+        probes = os.path.join(tmp, "probes.json")
+        with open(probes, "w") as f:
+            json.dump({
+                # reacts to `max` and ignores the rest, which is `partial`: the
+                # template states its own vocabulary and the typed one loses
+                "Quanter/Narrowed-GGUF": probe_result({"reasoning_effort": {
+                    "type": "level", "kind": "partial", "accepts": ["max"],
+                    "ignored": ["low", "high"], "rejects": []}}),
+                # no graded knob at all, and no default to read off the switch
+                "Quanter/Toggle-GGUF": probe_result({"enable_thinking": {
+                    "type": "boolean", "kind": "boolean"}}),
+            }, f)
+        r = subprocess.run([os.path.join(ROOT, "scripts", "resolve-turns"),
+                            "--registry", path, "--probes", probes, "--write"],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        eq(r.returncode, 0, "resolve-turns ran: %s" % r.stderr.strip())
+        written = open(path).read()
+    finally:
+        shutil.rmtree(tmp)
+
+    import yaml
+    doc = yaml.safe_load(written)["models"]
+    narrowed = doc["Vendor/Narrowed"]["thinking"]
+    eq(narrowed["accepts"], ["max"], "the served template's vocabulary wins")
+    eq("default" in narrowed, False,
+       "and a level it does not accept is not left behind: %r" % (narrowed,))
+    toggle = doc["Vendor/Toggle"]["thinking"]
+    eq(toggle["kind"], "boolean", "a switch is derived as a switch")
+    eq("default" in toggle, False,
+       "and a level name is not one of its two states: %r" % (toggle,))
+
+    code, findings, _ = validate(written)
+    eq(findings, [], "what the deriver wrote passes the lint that reads it: %r"
+       % (findings,))
+    eq(code, 0, "so a sweep cannot leave the registry failing its own check")
+
+
+# the same entry one sweep later: `accepts` has been brought in line with the
+# template and the default nobody rewrote is the only thing left disagreeing
+SETTLED_STALE_DEFAULT_REGISTRY = """version: 1
+models:
+  Vendor/Narrowed:
+    kind: text
+    name: {short: fixture narrowed}
+    quants: [{repo: Quanter/Narrowed-GGUF, quant: Q8_0}]
+    sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
+    turns:
+      source: Quanter/Narrowed-GGUF
+      developer: as-user
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: reasoning_effort
+      accepts: [max]
+      default: high
+"""
+
+
+@test
+def the_turns_check_sees_a_field_the_deriver_would_delete():
+    """`--check` compared what it writes and never what it removes.
+
+    That is the half of stale it could not see: every field resolve-turns emits
+    matched, the registry held one MORE, and the check printed `0 of 88 behind`
+    over a block the next `--write` would change. `make lint` runs this check
+    and models-validate in the same target, so the two disagreed about the same
+    entry -- one reporting the registry current and the other failing it.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmp, "models.yaml")
+        with open(path, "w") as f:
+            f.write(SETTLED_STALE_DEFAULT_REGISTRY)
+        probes = os.path.join(tmp, "probes.json")
+        with open(probes, "w") as f:
+            json.dump({"Quanter/Narrowed-GGUF": probe_result({"reasoning_effort": {
+                "type": "level", "kind": "partial", "accepts": ["max"],
+                "ignored": ["low", "high"], "rejects": []}})}, f)
+        r = subprocess.run([os.path.join(ROOT, "scripts", "resolve-turns"),
+                            "--registry", path, "--probes", probes, "--check"],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    finally:
+        shutil.rmtree(tmp)
+
+    eq(r.returncode, 1, "a registry the deriver would change is behind it")
+    eq("Vendor/Narrowed" in r.stderr, True, "and the model is named: %r" % r.stderr)
+    eq("default" in r.stderr, True,
+       "as is the field that only exists on one side: %r" % r.stderr)
+
+
+@test
+def a_credential_somebody_pasted_never_reaches_the_capture():
+    """Somebody titled a huggingface discussion with their access token.
+
+    `fetch-hf-discussions` captured the title verbatim, the way it captures
+    every title, and it sat in the corpus until github's push protection
+    refused the commit. That is the wrong place to find out: by then it is in a
+    local commit, and the fix is a rewrite rather than an edit.
+
+    So scrubbing happens where every collector already passes -- capture.write
+    -- rather than in the one collector that happened to catch it. Forum text
+    is arbitrary text somebody else wrote, and any of these sources can carry a
+    credential somebody pasted by accident.
+
+    The pattern has to be specific. `hf_` followed by thirty characters is a
+    token; `hf_hub` is a python package, and redacting that would quietly edit
+    what a comment said.
+    """
+    cap = load_script("capture", os.path.join(RESEARCH, "capture.py"))
+
+    tmp = tempfile.mkdtemp()
+    try:
+        out = os.path.join(tmp, "forum.json")
+        token = "hf_" + "aBcDeF9012" * 3 + "xyz"
+        payload = {"threads": {"t1": {
+            "title": token,
+            "body": "set HF_TOKEN=%s and it works, install hf_transfer first" % token,
+            "clean": "hf_hub is the package, and hf_transfer speeds downloads"}}}
+        written, now, before = cap.write(out, payload, lambda p: len(p["threads"]))
+        eq(written, True, "the capture is still written")
+        body = open(out).read()
+    finally:
+        shutil.rmtree(tmp)
+
+    eq(token in body, False, "the token is not in the file: %r" % body[:200])
+    eq("redacted" in body, True, "and something says a redaction happened")
+    eq("hf_hub is the package" in body, True,
+       "while `hf_hub` is left alone -- it is a package name, not a credential")
+    eq("hf_transfer speeds downloads" in body, True, "and so is `hf_transfer`")
+    eq("and it works" in body, True, "the sentence around the token survives")
+    eq(json.loads(body)["threads"]["t1"]["clean"].startswith("hf_hub"), True,
+       "and what comes out is still the json every consumer reads")
+
+
 @test
 def a_dead_source_cannot_empty_a_capture():
     """the failure that made this necessary, in the order it actually happened.
@@ -1755,6 +1949,97 @@ def an_image_model_is_kept_at_its_overall_elo_not_a_category_slice():
        "the repo path resolve-ids matches on survives")
 
 
+def detail_fixture_html():
+    """One model as a MODEL page ships it, which is a different shape entirely.
+
+    `/models/<slug>` embeds the whole roster so its comparison charts can draw,
+    and each row carries the metadata and the per-eval scores the leaderboard
+    row no longer does -- under the site's own names, which are not this repo's.
+    """
+    record = {"slug": "fixture-model", "name": "Fixture Model (high)",
+              "releaseDate": "2026-03-04", "licenseName": "Apache 2.0",
+              "isOpenWeights": True, "parameters": 117,
+              "inferenceParametersActiveBillions": 5.1,
+              "modelWeightsSourceUrl": "https://huggingface.co/fixture/Model",
+              "contextWindowTokens": 131072,
+              "intelligenceIndex": 12.34, "intelligenceIndexIsEstimated": False,
+              "livecodebench": 0.878306878306878, "terminalbenchV40": 0.42,
+              "aime25": 0.93, "gdpval": 744.74,
+              "openness": {"opennessIndex": 38.88, "modelAvailability": 6}}
+    payload = json.dumps({"currentModel": record, "models": [record]})
+    chunks = "".join(
+        "<script>self.__next_f.push([1,%s])</script>" % json.dumps(part)
+        for part in (payload[:len(payload) // 2], payload[len(payload) // 2:]))
+    return "<!doctype html><html><body><!-- %s -->%s</body></html>" % (
+        "x" * 100000, chunks)
+
+
+@test
+def a_retired_leaderboard_field_is_recovered_from_the_model_page():
+    """The leaderboard row got narrower and nothing said so.
+
+    Artificial analysis reshaped `/leaderboards/models`: the row it ships now
+    has no license, no parameter counts, no weights url, and no coding or
+    agentic index -- the site retired both indices and publishes Intelligence,
+    Omniscience and Openness alone. The capture went from 643 models carrying
+    codingIndex on 255 of them to 650 carrying it on none, and because it GREW
+    by row count nothing refused the write. What failed instead was
+    `analyze-correlations --redundancy`, three steps downstream, on a message
+    about scope.
+
+    The model page still carries all of it for every model, so the text file is
+    two boards merged per model rather than one board truncating.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        with open(os.path.join(tmp, "page.html"), "w") as f:
+            f.write(detail_fixture_html())
+        out = os.path.join(tmp, "text.json")
+        # what the leaderboard board wrote on its own pass: the fields only it
+        # has, for a model this run's page also describes
+        with open(out, "w") as f:
+            json.dump({"fixture-model": {
+                "slug": "fixture-model", "name": "Fixture Model (high)",
+                "modelCreatorName": "Fixture Labs",
+                "medianOutputTokensPerSecond": 137.0,
+                "intelligenceIndex": 12.34}}, f)
+
+        base, stop = serve(tmp)
+        purge("test-aa-detail")
+        try:
+            r = subprocess.run(
+                [os.path.join(RESEARCH, "fetch-artificial-analysis"),
+                 "--board", "model-detail", "--url", base + "/page.html",
+                 "--out", out, "--cache-key", "test-aa-detail", "--max-age", "0"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        finally:
+            stop()
+            purge("test-aa-detail")
+        if r.returncode:
+            raise AssertionError("collector exited %d: %s" % (r.returncode, r.stderr.strip()))
+        got = json.load(open(out))
+    finally:
+        shutil.rmtree(tmp)
+
+    row = got["fixture-model"]
+    eq(row["modelCreatorName"], "Fixture Labs",
+       "a field only the leaderboard has survives the detail pass")
+    eq(row["medianOutputTokensPerSecond"], 137.0, "and so does the decode speed")
+    eq(row["licenseName"], "Apache 2.0", "the license comes back")
+    eq(row["releaseDate"], "2026-03-04", "and the release date")
+    eq(row["huggingfaceUrl"], "https://huggingface.co/fixture/Model",
+       "and the weights url, under this repo's name for it")
+    eq(row["totalParameters"], 117, "`parameters` is the total count")
+    eq(row["activeParameters"], 5.1,
+       "and `inferenceParametersActiveBillions` the active one")
+    eq(row["opennessIndex"], 38.88, "the openness index is nested and reached for")
+    # both are carried as their own facets at no weight: they are what the site
+    # files under Coding and Agentic now, and neither covers this roster well
+    # enough to rank on -- 5 models and 29-with-14-zeroes of the 46 it scores
+    eq(row["livecodebench"], 0.878306878306878, "livecodebench is carried")
+    eq(row["terminalbenchV40"], 0.42, "and so is terminal-bench 4.0")
+
+
 def t2i_fixture_html():
     """One image model as three rows: the board and two category slices."""
     def row(elo, appearances):
@@ -2210,6 +2495,705 @@ def a_multi_model_repo_reports_the_arch_of_each_file_not_one_of_them():
     eq(mod.multi_model(["solo-f16.gguf"]), False, "one file decides nothing")
 
 
+@test
+def a_login_wall_is_not_a_broken_parser():
+    """`0 parsed` has two causes and they need different people to fix them.
+
+    old.reddit.com now answers a logged-out request with 302 to
+    `/login/?reason=lor2`, and the collector follows it to a 321kb "Welcome to
+    Reddit" page for every one of the 135 urls it asks for. The parser is fine;
+    it was never shown a thread. The message said "the scrape is broken" and
+    pointed at the markup, which is the wrong half of the system -- no amount of
+    reading `class="thing"` selectors gets a login page to yield comments.
+    """
+    mod = load_script("fetch_reddit", os.path.join(RESEARCH, "fetch-reddit"))
+
+    login = ('<!doctype html><html><head><title>Welcome to Reddit</title></head>'
+             '<body><shreddit-app></shreddit-app></body></html>')
+    eq(mod.looks_like_login(login), True, "the page reddit serves logged out")
+    eq(mod.looks_like_login(
+        '<html><head><title>r/LocalLLaMA</title></head><body>'
+        '<div class="thing" data-fullname="t3_abc">a real thread</div>'
+        '</body></html>'), False,
+       "a thread is not a login wall however little of it parses")
+    eq(mod.looks_like_login(""), False,
+       "and neither is an empty body -- that is a failed fetch, already reported")
+
+
+# one thread as the api returns it: a post listing, then a comment listing whose
+# replies nest. `more` is reddit's "load more comments" stub and carries no text.
+API_THREAD = [
+    {"kind": "Listing", "data": {"children": [
+        {"kind": "t3", "data": {
+            "id": "1abcdef", "title": "which model for agentic coding",
+            "selftext": "  what is everyone   running at 128gb\n\n", "score": 210}}]}},
+    {"kind": "Listing", "data": {"children": [
+        {"kind": "t1", "data": {
+            "body": "x" * 95, "score": 40, "depth": 0,
+            "replies": {"kind": "Listing", "data": {"children": [
+                {"kind": "t1", "data": {"body": "y" * 100, "score": 12, "depth": 1,
+                                        "replies": ""}},
+                {"kind": "more", "data": {"count": 17}}]}}}},
+        {"kind": "t1", "data": {"body": "z" * 120, "score": 95, "depth": 0,
+                                "replies": ""}},
+        {"kind": "t1", "data": {"body": "too short to score", "score": 500,
+                                "depth": 0, "replies": ""}}]}},
+]
+
+API_LISTING = {"kind": "Listing", "data": {"children": [
+    {"kind": "t3", "data": {
+        "id": "1vzxdui", "title": "We're the Team Behind Apodex 1.1",
+        "score": 48, "num_comments": 65, "author": "wuqiao",
+        "link_flair_text": "AMA", "created_utc": 1787412958.0,
+        "permalink": "/r/LocalLLaMA/comments/1vzxdui/were_the_team/"}}]}}
+
+
+@test
+def the_reddit_api_yields_the_records_the_scrape_did():
+    """The html is gone, so the same records have to come out of the json.
+
+    Only `threads` is read downstream -- analyze-task-mentions takes title, id,
+    body and each comment's score, depth and text -- so that shape is the
+    contract, and `searches` and `listings` exist to turn up thread ids. The
+    filters are part of the contract too: comments under 90 characters were
+    never captured, the list is ordered by score, and depth is what stops a
+    buried reply reading like an endorsement.
+    """
+    mod = load_script("fetch_reddit", os.path.join(RESEARCH, "fetch-reddit"))
+
+    t = mod.api_thread(API_THREAD, "1abcdef", 200)
+    eq(t["id"], "1abcdef", "the thread keeps the id it was asked for")
+    eq(t["title"], "which model for agentic coding", "and its title")
+    eq(t["body"], "what is everyone running at 128gb",
+       "selftext is the body, whitespace collapsed the way strip() did it")
+    eq([c["score"] for c in t["comments"]], [95, 40, 12],
+       "ordered by score, replies included, got %r" % (t["comments"],))
+    eq([c["depth"] for c in t["comments"]], [0, 0, 1],
+       "each comment keeps the reply depth it was found at")
+    eq(any("too short" in c["text"] for c in t["comments"]), False,
+       "a comment under 90 characters is not captured however high it scored")
+    eq(len(mod.api_thread(API_THREAD, "1abcdef", 2)["comments"]), 2,
+       "and the limit is applied after the sort, so it keeps the top ones")
+
+    posts = mod.api_listing(API_LISTING)
+    eq(len(posts), 1, "one post")
+    eq(posts[0]["id"], "1vzxdui", "keyed by id")
+    eq(posts[0]["score"], 48, "score and comment count come out as numbers")
+    eq(posts[0]["comments"], 65, "rather than as the scraped strings")
+    eq(posts[0]["flair"], "AMA", "the flair is the link flair text")
+    eq(posts[0]["created"].startswith("2026-"), True,
+       "created_utc becomes an iso date: %r" % posts[0]["created"])
+    eq(posts[0]["url"],
+       "https://old.reddit.com/r/LocalLLaMA/comments/1vzxdui/were_the_team/",
+       "and the url is the permalink, in the form already captured")
+
+    hits = mod.api_search(API_LISTING)
+    eq([h["id"] for h in hits], ["1vzxdui"],
+       "a search answers in the same listing shape, and only the id is read on")
+
+
+# arctic shift returns flat rows rather than a nested tree, so the reply depth
+# the scrape counted from the markup has to be rebuilt from `parent_id`. `c3`
+# hangs off a comment this fetch did not return, which is what a truncated
+# thread looks like.
+ARCTIC_COMMENTS = [
+    {"id": "c1", "parent_id": "t3_1abcdef", "score": 40, "body": "a" * 95},
+    {"id": "c2", "parent_id": "t1_c1", "score": 12, "body": "b" * 100},
+    {"id": "c4", "parent_id": "t1_c2", "score": 8, "body": "d" * 95},
+    {"id": "c3", "parent_id": "t1_missing", "score": 70, "body": "c" * 95},
+    {"id": "c5", "parent_id": "t3_1abcdef", "score": 500, "body": "too short"},
+]
+
+ARCTIC_POST = {
+    "id": "1abcdef", "title": "which model for agentic coding",
+    "selftext": "  what is everyone   running at 128gb\n\n", "score": 210,
+    "num_comments": 231, "author": "someone", "link_flair_text": "Discussion",
+    "created_utc": 1787412958.0,
+    "permalink": "/r/LocalLLaMA/comments/1abcdef/which_model/",
+}
+
+
+@test
+def arctic_shift_rebuilds_the_thread_the_api_would_have_returned():
+    """The no-credential path, and the one thing it has to reconstruct.
+
+    reddit's own api nests replies and stamps each with a depth. arctic shift
+    mirrors the same comments as FLAT rows, so depth comes from walking
+    `parent_id` instead -- and depth is not cosmetic here: a reply three levels
+    down is seen by a fraction of the people who see a top-level comment, so it
+    scores low whether or not anyone disagreed with it.
+    """
+    mod = load_script("fetch_reddit", os.path.join(RESEARCH, "fetch-reddit"))
+
+    t = mod.arctic_thread(ARCTIC_POST, ARCTIC_COMMENTS, "1abcdef", 200)
+    eq(t["id"], "1abcdef", "keyed on the thread asked for")
+    eq(t["title"], "which model for agentic coding", "title off the post")
+    eq(t["body"], "what is everyone running at 128gb",
+       "selftext is the body, whitespace collapsed as the scrape had it")
+    eq([c["score"] for c in t["comments"]], [70, 40, 12, 8],
+       "ordered by score, got %r" % (t["comments"],))
+    depth = {c["score"]: c["depth"] for c in t["comments"]}
+    eq(depth[40], 0, "a comment whose parent is the POST is top level")
+    eq(depth[12], 1, "one hanging off it is a reply")
+    eq(depth[8], 2, "and the chain is walked the whole way up")
+    eq(depth[70], 0,
+       "a parent this fetch never returned cannot be counted past, so the "
+       "comment reads as top level rather than as a guess")
+    eq(any("too short" in c["text"] for c in t["comments"]), False,
+       "the 90-character floor is the same one the api path applies")
+    eq(len(mod.arctic_thread(ARCTIC_POST, ARCTIC_COMMENTS, "1abcdef", 2)["comments"]),
+       2, "and the limit lands after the sort")
+
+    posts = mod.arctic_listing([ARCTIC_POST])
+    eq(posts[0]["id"], "1abcdef", "a listing row is keyed by id")
+    eq(posts[0]["score"], 210, "with the score as a number")
+    eq(posts[0]["comments"], 231, "and the comment count")
+    eq(posts[0]["flair"], "Discussion", "the link flair")
+    eq(posts[0]["created"].startswith("2026-"), True,
+       "created_utc as an iso date: %r" % posts[0]["created"])
+    eq(posts[0]["url"],
+       "https://old.reddit.com/r/LocalLLaMA/comments/1abcdef/which_model/",
+       "and the permalink in the form already captured")
+    eq([h["id"] for h in mod.arctic_search([ARCTIC_POST])], ["1abcdef"],
+       "search answers in the same shape; only the id is read on")
+
+
+@test
+def the_mirror_is_paged_because_it_caps_a_read_at_a_hundred():
+    """`limit` must be between 1 and 100, and threads here run to hundreds.
+
+    So the window walks forward on `created_utc`. Two things make that subtle:
+    the boundary second can land in both pages, and a short page means there is
+    nothing after it -- without which the walk asks forever for rows that are
+    not there.
+    """
+    mod = load_script("fetch_reddit", os.path.join(RESEARCH, "fetch-reddit"))
+
+    made = [{"id": "c%d" % i, "created_utc": 1000 + i, "body": "x"}
+            for i in range(250)]
+    calls = []
+
+    def fetch(after):
+        calls.append(after)
+        rows = [c for c in made if after is None or c["created_utc"] >= after]
+        return rows[:100]
+
+    got = mod.arctic_paged(fetch, 250)
+    eq(len(got), 250, "every row, across three reads")
+    eq([c["id"] for c in got[:2]], ["c0", "c1"], "in the order the mirror gave")
+    eq(len(got), len({c["id"] for c in got}), "and no row twice, though the "
+       "boundary row comes back in the next page")
+    eq(calls[0], None, "the first read asks for no window")
+    eq(calls[1], 1099, "the next starts at the last timestamp seen")
+
+    eq(len(mod.arctic_paged(fetch, 120)), 120, "a smaller want stops early")
+    short = mod.arctic_paged(lambda after: [{"id": "only", "created_utc": 5}], 250)
+    eq(len(short), 1, "a page shorter than the cap means there is no more to ask for")
+
+
+@test
+def the_mirror_asking_to_be_slowed_down_is_retried_not_dropped():
+    """arctic shift answers 422 `Timeout. Maybe slow down a bit` under load.
+
+    That is a request to wait, not a missing thread, and dropping it loses a
+    search or a whole thread's comments for the run. It arrives through
+    httpcache as a failed fetch, so what this sees is an unparseable body --
+    which is also what a genuinely broken endpoint looks like, so the retry is
+    bounded at one and the second miss is reported as a miss.
+    """
+    mod = load_script("fetch_reddit", os.path.join(RESEARCH, "fetch-reddit"))
+    real_get, real_sleep = mod.get, mod.time.sleep
+    calls = []
+    try:
+        mod.time.sleep = lambda s: calls.append(("slept", s))
+
+        bodies = ['{"data":null,"error":"Timeout. Maybe slow down a bit"}',
+                  '{"data":[{"id":"abc"}]}']
+        mod.get = lambda *a, **kw: (calls.append(("get", a[0])),
+                                    bodies.pop(0))[1]
+        eq(mod.arctic_get("/posts/search?x=1", "k"), [{"id": "abc"}],
+           "a 422 is waited out and the second answer is the one kept")
+        eq([c[0] for c in calls], ["get", "slept", "get"],
+           "which means exactly one wait between exactly two reads: %r" % (calls,))
+
+        calls.clear()
+        mod.get = lambda *a, **kw: (calls.append(("get", a[0])), "not json")[1]
+        eq(mod.arctic_get("/posts/search?x=1", "k"), None,
+           "an answer that is still not json after the wait is a miss")
+        eq(len([c for c in calls if c[0] == "get"]), 2,
+           "and it is not retried forever")
+    finally:
+        mod.get, mod.time.sleep = real_get, real_sleep
+
+
+# the thread page, in the shape an instance really serves it: the post carries
+# no id, the title is an `h1` whose text is a BARE node after the flair anchor
+# rather than a link, and only the listing wraps it in an `<a>`
+REDLIB_THREAD_HTML = """<html><head><title>NPC Engine - r/LocalLLaMA</title></head>
+<body><div id="column_one">
+<div class="post highlighted">
+  <h1 class="post_title">
+    <a href="/r/LocalLLaMA/search?q=flair" class="post_flair"><span>Discussion</span></a>
+    which model for agentic coding
+  </h1>
+  <div class="post_score" title="210">210<span class="label"> Upvotes</span></div>
+  <div class="post_body"><div class="md"><p>what is everyone   running at 128gb</p></div></div>
+</div>
+<div class="thread">
+<div id="c1" class="comment">
+  <div class="comment_left"><p class="comment_score" title="1,204">1.2k</p></div>
+  <details class="comment_right"><summary class="comment_data"></summary>
+  <div class="comment_body "><div class="md"><p>%s</p></div></div>
+  <blockquote class="replies">
+    <div id="c2" class="comment">
+      <div class="comment_left"><p class="comment_score" title="12">12</p></div>
+      <details class="comment_right">
+      <div class="comment_body "><div class="md"><p>%s</p></div></div>
+      </details>
+    </div>
+  </blockquote>
+  </details>
+</div>
+<div id="c3" class="comment">
+  <div class="comment_left"><p class="comment_score" title="Hidden">&bull;</p></div>
+  <details class="comment_right">
+  <div class="comment_body "><div class="md"><p>%s</p></div></div>
+  </details>
+</div>
+<div id="c4" class="comment">
+  <div class="comment_left"><p class="comment_score" title="500">500</p></div>
+  <details class="comment_right">
+  <div class="comment_body "><div class="md"><p>too short</p></div></div>
+  </details>
+</div>
+</div></div></body></html>""" % ("a" * 95, "b" * 100, "c" * 95)
+
+REDLIB_LIST_HTML = """<html><body><div id="posts">
+<div class="post stickied" id="1vzxdui">
+  <p class="post_header">
+    <a class="post_author moderator" href="/u/wuqiao">u/wuqiao</a>
+    <span class="created" title="Sep 14 2026, 19:03:23 UTC">8h ago</span>
+  </p>
+  <a class="post_flair" href="/r/LocalLLaMA/search?q=flair">AMA</a>
+  <h2 class="post_title"><a href="/r/LocalLLaMA/comments/1vzxdui/were_the_team/">We're the Team Behind Apodex 1.1</a></h2>
+  <div class="post_score" title="48">48<span class="label"> Upvotes</span></div>
+  <a class="post_comments" href="/r/LocalLLaMA/comments/1vzxdui/were_the_team/">65 comments</a>
+</div>
+</div></body></html>"""
+
+
+@test
+def redlib_is_the_third_way_in_and_most_instances_are_not():
+    """A redlib instance proxies reddit, so the scores are live rather than mirrored.
+
+    Which makes it worth carrying -- arctic shift is an archive and very fresh
+    comments reach it before their votes do. The catch is that the instances
+    are mostly gone behind proof-of-work challenges: of the seven on the
+    published list, one served content and the rest answered with anubis, 403
+    or 418. So a usable instance is something to detect rather than assume, and
+    a challenge page has to be told apart from a thread with no comments.
+    """
+    mod = load_script("fetch_reddit", os.path.join(RESEARCH, "fetch-reddit"))
+
+    eq(mod.redlib_serves(REDLIB_THREAD_HTML), True, "a real thread serves")
+    eq(mod.redlib_serves(
+        '<html><head><title>Making sure you\'re not a bot!</title></head>'
+        '<body><script src="/.within.website/x/xess/anubis.js"></script></body></html>'),
+       False, "an anubis challenge does not, though it answers 200")
+    eq(mod.redlib_serves(""), False, "and neither does nothing")
+
+    eq(mod.redlib_instances('{"updated":"x","instances":['
+                            '{"url":"https://a.example"},{"url":"https://b.example"},'
+                            '{"country":"US"}]}'),
+       ["https://a.example", "https://b.example"],
+       "the published list is read for its urls, skipping entries without one")
+    eq(mod.redlib_instances("not json"), [],
+       "and an unreachable list is empty rather than an error -- there are seeds")
+
+    t = mod.redlib_thread(REDLIB_THREAD_HTML, "1abcdef", 200)
+    eq(t["id"], "1abcdef", "the thread keeps its id")
+    eq(t["title"], "which model for agentic coding", "title off the post")
+    eq(t["body"], "what is everyone running at 128gb", "and the selftext")
+    eq([c["score"] for c in t["comments"]], [1204, 12, None],
+       "exact scores off the `title` attribute, not the abbreviated `1.2k` "
+       "beside it, got %r" % (t["comments"],))
+    depth = [c["depth"] for c in t["comments"]]
+    eq(depth, [0, 1, 0], "depth is the nesting of one comment inside another")
+    eq(any("too short" in c["text"] for c in t["comments"]), False,
+       "the same 90-character floor")
+    eq(t["comments"][-1]["score"], None,
+       "a hidden score is None rather than zero: nobody said it was unpopular")
+
+    posts = mod.redlib_listing(REDLIB_LIST_HTML)
+    eq(len(posts), 1, "one post in the listing")
+    eq(posts[0]["id"], "1vzxdui", "keyed by id")
+    eq(posts[0]["score"], 48, "exact score off the title attribute")
+    eq(posts[0]["comments"], 65, "and the comment count off its own link")
+    eq(posts[0]["author"], "wuqiao", "author without the u/ prefix, as captured")
+    eq(posts[0]["flair"], "AMA", "the flair")
+    eq(posts[0]["url"],
+       "https://old.reddit.com/r/LocalLLaMA/comments/1vzxdui/were_the_team/",
+       "and the url rewritten to the form every other source records")
+
+
+@test
+def a_redlib_instance_is_chosen_by_what_it_serves():
+    """Most instances answer 200 with a challenge, so status decides nothing.
+
+    The published list is tried first and the seeds after it, because the list
+    is maintained and the seeds are only what happened to work the day this was
+    written. A challenge is skipped rather than parsed into an empty thread.
+    """
+    mod = load_script("fetch_reddit", os.path.join(RESEARCH, "fetch-reddit"))
+    real_get = mod.get
+    asked = []
+    try:
+        pages = {
+            "https://listed.example/r/LocalLLaMA": "<title>not a bot!</title>anubis",
+            "https://safereddit.com/r/LocalLLaMA": '<div class="post_score" title="9">',
+        }
+
+        def fake_get(url, key, *a, **kw):
+            asked.append(url)
+            if url == mod.REDLIB_LIST:
+                return '{"instances":[{"url":"https://listed.example"}]}'
+            return pages.get(url, "")
+
+        mod.get = fake_get
+        eq(mod.redlib_base("LocalLLaMA"), "https://safereddit.com",
+           "the challenged instance is passed over for one that serves")
+        eq(asked[0], mod.REDLIB_LIST, "the published list is consulted first")
+        eq(asked[1], "https://listed.example/r/LocalLLaMA",
+           "then its instances, before the baked-in seeds: %r" % (asked,))
+
+        asked.clear()
+        mod.get = lambda url, key, *a, **kw: (asked.append(url), "")[1]
+        eq(mod.redlib_base("LocalLLaMA"), "",
+           "and nothing serving is an empty answer rather than a wrong one")
+    finally:
+        mod.get = real_get
+
+
+QUERY_REGISTRY = """version: 1
+models:
+  Vendor/Written:
+    kind: text
+    name: {short: widget 3.8 27b}
+    quants: [{repo: Q/W-GGUF, quant: Q8_0}]
+    sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
+  Vendor/Spoken:
+    kind: speech
+    name: {short: widget-asr-0.6b}
+  Vendor/Drawn:
+    kind: image
+    name: {short: widget-image-turbo}
+  Vendor/Duplicate:
+    kind: text
+    name: {short: widget 3.8 27b}
+    quants: [{repo: Q/D-GGUF, quant: Q8_0}]
+    sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
+  Vendor/Nameless:
+    kind: text
+    quants: [{repo: Q/N-GGUF, quant: Q8_0}]
+    sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
+"""
+
+
+@test
+def every_model_on_the_roster_is_searched_for_by_name():
+    """The search list was a hand-kept literal and drifted from the registry.
+
+    15 queries, 13 of them model names, against 63 text models -- so 51 had
+    nobody searching for them, including deepseek v4.1 flash the week it was
+    added. A model still got SCORED when it came up in somebody else's thread,
+    because sentiment matches `name.match` over every captured comment, so the
+    cost was discovery rather than coverage: the threads that are actually
+    about it were never fetched.
+
+    This is the same defect build-tables had -- its own twenty-model literal,
+    so a model added to the registry never reached MODELS.md -- and the same
+    fix. Every KIND is searched, not just text: r/LocalLLaMA argues about
+    whisper and kokoro too, and they are on the roster to be scored.
+    """
+    roster = load_script("roster", os.path.join(RESEARCH, "roster.py"))
+
+    tmp = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmp, "models.yaml")
+        with open(path, "w") as f:
+            f.write(QUERY_REGISTRY)
+        got = roster.model_queries(path)
+    finally:
+        shutil.rmtree(tmp)
+
+    eq(got, ["widget 3.8 27b", "widget-asr-0.6b", "widget-image-turbo"],
+       "every model with a name, once each, whatever its kind")
+    eq(roster.model_queries(os.path.join(tmp, "gone.yaml")), [],
+       "and an unreadable registry yields none rather than raising -- the "
+       "topical queries still have work to do")
+
+    # every collector that searches a forum reads the SAME list, or they drift
+    # apart again one literal at a time
+    for name in ("fetch-reddit", "fetch-hackernews", "fetch-level1techs",
+                 "fetch-github-issues"):
+        src = open(os.path.join(RESEARCH, name)).read()
+        eq("roster" in src and "model_queries" in src, True,
+           "%s asks the shared roster for its model queries" % name)
+
+    live = roster.model_queries()
+    eq(len(live) > 100, True,
+       "and the real registry yields a query per model, got %d" % len(live))
+    for name in ("deepseek v4.1 flash", "kimi k3", "gemma 4 31b"):
+        eq(name in live, True, "%r is searched for now" % name)
+
+
+@test
+def reddit_reads_whichever_source_it_can_reach():
+    """Three paths, in the order of how much they can be trusted.
+
+    The api is first because it is reddit answering for itself. Arctic shift is
+    a third-party mirror and needs no credential, which is the whole reason to
+    carry it -- a sweep on a machine with no reddit app still refreshes. The
+    scrape is last and is kept only because it would start working again the day
+    logged-out access does.
+    """
+    mod = load_script("fetch_reddit", os.path.join(RESEARCH, "fetch-reddit"))
+
+    eq(mod.pick_source("auto", token="a-token"), "api",
+       "a token beats everything: it is the source of record")
+    eq(mod.pick_source("auto", token=""), "arctic",
+       "without one, the mirror rather than the login wall")
+    eq(mod.pick_source("html", token="a-token"), "html",
+       "an explicit choice is honoured even when a better one is available")
+    eq(mod.pick_source("api", token=""), "api",
+       "and asking for the api without a token is the caller's business to see fail")
+
+
+@test
+def reddit_credentials_are_read_but_never_required():
+    """A sweep on a machine with no reddit app must still collect everything else.
+
+    Same contract the llm steps have: configured from `.env` or the environment,
+    the environment wins, and unset is the ordinary case rather than an error.
+    """
+    mod = load_script("fetch_reddit", os.path.join(RESEARCH, "fetch-reddit"))
+
+    tmp = tempfile.mkdtemp()
+    try:
+        env = os.path.join(tmp, ".env")
+        with open(env, "w") as f:
+            f.write("AIMBOT_REDDIT_CLIENT_ID=from-file\n"
+                    "AIMBOT_REDDIT_SECRET=secret-from-file\n")
+        keep = {k: os.environ.pop(k, None)
+                for k in ("AIMBOT_REDDIT_CLIENT_ID", "AIMBOT_REDDIT_SECRET")}
+        try:
+            eq(mod.credentials(env), ("from-file", "secret-from-file"),
+               "read out of .env when the environment says nothing")
+            os.environ["AIMBOT_REDDIT_CLIENT_ID"] = "from-env"
+            eq(mod.credentials(env)[0], "from-env",
+               "and an exported value wins, so one run can be pointed elsewhere")
+            # `.env` loads into the process, which is the point of it, so the
+            # third case has to start from a genuinely empty environment
+            os.environ.pop("AIMBOT_REDDIT_CLIENT_ID")
+            os.environ.pop("AIMBOT_REDDIT_SECRET", None)
+            eq(mod.credentials(os.path.join(tmp, "nothing-here")), ("", ""),
+               "no file and no environment is not an error")
+        finally:
+            for k, v in keep.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+    finally:
+        shutil.rmtree(tmp)
+
+    req = mod.token_request("https://example.invalid/token", "abc", "shh")
+    eq(req.get_method(), "POST", "the token call is a POST")
+    eq(req.data, b"grant_type=client_credentials",
+       "asking for an app-only token, since this reads nothing user-specific")
+    import base64
+    eq(req.get_header("Authorization"),
+       "Basic " + base64.b64encode(b"abc:shh").decode(),
+       "with the app's id and secret as http basic, which is what reddit wants")
+    eq("aimbot" in (req.get_header("User-agent") or "").lower(), True,
+       "and a user-agent naming this client: reddit blocks the generic ones")
+
+
+def epoch_zip(path):
+    """The hub zip in the shape epoch ships it now.
+
+    The ECI moved from a flat `epoch_capabilities_index.csv` into a directory,
+    renamed every column it is read by, and dropped `Model version` entirely --
+    the column is present and empty for all 266 rows. What replaced the link is
+    `model_metadata.csv`, which maps each version to the model_group the ECI is
+    keyed on, so the fixture carries a group with two versions in it.
+    """
+    import zipfile
+    def csv_of(rows):
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
+        w.writeheader()
+        w.writerows(rows)
+        return buf.getvalue()
+
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("epoch_capabilities_index/eci_scores.csv", csv_of([
+            {"Model": "Fixture Large", "Display name": "Fixture Large",
+             "eci": "150.5", "eci_ci_low": "148.0", "eci_ci_high": "153.0",
+             "date": "2026-03-04", "Organization": "Fixture Labs",
+             "Country (of organization)": "Germany,United States of America",
+             "Model accessibility": "Open weights",
+             "Accessibility group": "Open weights", "model_versions": ""},
+            {"Model": "Fixture Small", "Display name": "Fixture Small",
+             "eci": "90.25", "eci_ci_low": "88.0", "eci_ci_high": "93.0",
+             "date": "2026-01-01", "Organization": "Fixture Labs",
+             "Country (of organization)": "Germany",
+             "Model accessibility": "Open weights",
+             "Accessibility group": "Open weights", "model_versions": ""}]))
+        zf.writestr("epoch_capabilities_index/edi_scores.csv", csv_of([
+            {"benchmark_name": "GPQA diamond", "is_anchor": "True",
+             "benchmark_release_date": "2023-11-20", "edi": "120.5",
+             "estimated_slope_scaled": "0.031"}]))
+        zf.writestr("model_metadata.csv", csv_of([
+            {"model_version": "fixture-large_high", "model_group": "Fixture Large",
+             "date": "2026-03-04", "display_name": "Fixture Large (high)",
+             "organization": "Fixture Labs", "country": "Germany",
+             "accessibility": "Open weights", "training_compute_flop": "1e25"},
+            {"model_version": "fixture-large_low", "model_group": "Fixture Large",
+             "date": "2026-03-04", "display_name": "Fixture Large (low)",
+             "organization": "Fixture Labs", "country": "Germany",
+             "accessibility": "Open weights", "training_compute_flop": "1e25"},
+            {"model_version": "fixture-small", "model_group": "Fixture Small",
+             "date": "2026-01-01", "display_name": "Fixture Small",
+             "organization": "Fixture Labs", "country": "Germany",
+             "accessibility": "Open weights", "training_compute_flop": "1e24"}]))
+        zf.writestr("benchmark_metadata.csv", csv_of([
+            {"benchmark": "GPQA diamond", "in_eci": "True",
+             "source_file": "gpqa_diamond.csv", "score_column": "mean_score",
+             "scale": "share", "random_baseline": "0.25",
+             "score_ceiling": "1.0", "release_date": "2023-11-20"}]))
+        zf.writestr("gpqa_diamond.csv", csv_of([
+            {"Model version": "fixture-large_high", "mean_score": "0.81",
+             "Best score (across scorers)": "0.83", "Release date": "2026-03-04",
+             "Organization": "Fixture Labs", "Country": "Germany",
+             "Training compute (FLOP)": "1e25",
+             "Training compute notes": "an estimate nobody cites"}]))
+        zf.writestr("README.md", "not a csv")
+
+
+@test
+def the_eci_survives_epoch_moving_it_into_a_directory():
+    """Epoch restructured the hub zip and the collector died on the KeyError.
+
+    `epoch_capabilities_index.csv` is a directory now, every column the file is
+    read by was renamed, and `Model version` -- the id every downstream join in
+    this repo runs on -- is empty in all 266 rows. Taking the new file at face
+    value would be worse than the crash: `resolve-ids` builds the epoch key
+    space from these rows, so the registry's `ids.epoch` would have been
+    rewritten from version bases to display names, and `epoch_facets` joins the
+    per-benchmark results -- which still carry `Model version` -- on exactly
+    those bases. Every epoch facet on the page would have gone quiet.
+
+    `model_metadata.csv` is what epoch factored the link out into, and all 266
+    ECI names match a `model_group` in it.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        epoch_zip(os.path.join(tmp, "benchmark_data.zip"))
+        out = os.path.join(tmp, "epoch.json")
+        base, stop = serve(tmp)
+        purge("test-epoch")
+        try:
+            r = subprocess.run(
+                [os.path.join(RESEARCH, "fetch-epoch"),
+                 "--url", base + "/benchmark_data.zip", "--out", out,
+                 "--cache-key", "test-epoch"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        finally:
+            stop()
+            purge("test-epoch")
+        if r.returncode:
+            raise AssertionError("collector exited %d: %s" % (r.returncode, r.stderr.strip()))
+        got = json.load(open(out))
+    finally:
+        shutil.rmtree(tmp)
+
+    eci = {(r["Model version"], r["Model name"]): r for r in got["eci"]}
+    eq(sorted(k[0] for k in eci),
+       ["fixture-large_high", "fixture-large_low", "fixture-small"],
+       "one row per model VERSION, which is the shape every join here reads")
+    big = eci[("fixture-large_high", "Fixture Large")]
+    eq(big["ECI Score"], "150.5", "under the name the score has always had")
+    eq(eci[("fixture-large_low", "Fixture Large")]["ECI Score"], "150.5",
+       "and a group's versions share its score rather than one of them keeping it")
+    eq(big["Release date"], "2026-03-04", "`date` is the release date")
+    eq(big["Country"], "Germany,United States of America",
+       "`Country (of organization)` is the country, still sorted as a set")
+    eq(big.get("eci_ci_low"), "148.0",
+       "and the interval epoch added is kept: it is what makes the score quotable")
+
+    eq(len(got["eci_fit"]), 1, "the difficulties and slopes are back, from edi_scores")
+    eq(got["eci_fit"][0]["benchmark_name"], "GPQA diamond", "keyed by benchmark")
+
+    eq(sorted(got["benchmarks"]), ["gpqa_diamond"],
+       "a lookup table is not a benchmark: model_metadata and benchmark_metadata "
+       "carry no model of their own and must not reach the page as empty rows")
+    eq(got["benchmarks"]["gpqa_diamond"]["metric"], "mean_score",
+       "and the per-benchmark files are untouched by any of this")
+
+
+VOICES_REGISTRY = """version: 1
+models:
+  vendor/Speaks:
+    kind: speech
+    name: {short: fixture speaks}
+    quants:
+    - {repo: Q/Speaks-GGUF, quant: F32, file: Speaks_espeak.gguf, role: model-path}
+    - {repo: Q/Speaks-GGUF, quant: Q8_0, file: Speaks_espeak_Q8.gguf, role: model-path}
+    - {repo: Q/Plain-GGUF, quant: Q8_0}
+    modalities: {input: [text], output: [audio]}
+  vendor/Listens:
+    kind: speech
+    name: {short: fixture listens}
+    quants: [{repo: Q/Listens-GGUF, quant: Q8_0}]
+    modalities: {input: [audio], output: [text]}
+"""
+
+
+@test
+def a_rung_pinned_by_filename_is_read_for_its_voices():
+    """The voice reader resolved a rung by `quant:` and never looked at `file:`.
+
+    kokoro publishes `Kokoro_espeak.gguf` and `Kokoro_espeak_Q8.gguf`, whose
+    stems name a phonemizer rather than a quant, so the registry carries the
+    type in `quant:` and the object in `file:` -- the split its own notes
+    explain. build-viewer joins this capture on `file or quant` and has since
+    that split; the collector kept asking the hub which file `F32` meant, got
+    `matches 0 file(s): none` for both rungs, and produced three voice lists
+    where the committed capture holds four. The shrink guard is what caught it,
+    two collectors and a sweep later.
+    """
+    mod = load_script("fetch_gguf_voices",
+                      os.path.join(RESEARCH, "fetch-gguf-voices"))
+    import yaml
+    rows = list(mod.emitters(yaml.safe_load(VOICES_REGISTRY)))
+
+    eq([r[0] for r in rows], ["vendor/Speaks"] * 3,
+       "only a model that EMITS audio is read, got %r" % (rows,))
+    # the tuple is (base, repo, quant, file): the file is what the hub is asked
+    # for and what the capture is keyed by, so losing it here loses both
+    eq([r[3] for r in rows],
+       ["Speaks_espeak.gguf", "Speaks_espeak_Q8.gguf", None],
+       "a pinned filename reaches the reader, and a rung without one is None")
+    eq(mod.resolve_filename("Q/Speaks-GGUF", "F32", "Speaks_espeak.gguf"),
+       "Speaks_espeak.gguf",
+       "and answers for the rung outright rather than asking the hub what F32 is")
+    eq(mod.voices_key("Q/Speaks-GGUF", "F32", "Speaks_espeak.gguf"),
+       "Q/Speaks-GGUF:Speaks_espeak.gguf",
+       "the capture key is the one build-viewer joins on")
+    eq(mod.voices_key("Q/Plain-GGUF", "Q8_0", None), "Q/Plain-GGUF:Q8_0",
+       "which falls back to the tag where no file is pinned")
+
+
 MILESTONE_AA = {
   "claude-opus-4-5-thinking": {
     "name": "Claude Opus 4.5 (Reasoning)", "slug": "claude-opus-4-5-thinking",
@@ -2425,6 +3409,60 @@ def a_written_verdict_cannot_cite_a_count_the_capture_disagrees_with():
            "the line that agrees is not reported")
     finally:
         shutil.rmtree(tmp)
+
+
+@test
+def a_figure_written_as_prose_is_checked_like_one_written_as_evidence():
+    """The check read `reddit 34 mentions` and missed `34 reddit mentions`.
+
+    Which is the order the NOTES use, and notes are where the argument lives.
+    Muse glimmer's said "34 reddit mentions at 100%" and rested on reddit being
+    unanimous; the capture had moved to 56 at 86%, so the note quoted a wrong
+    number and drew a conclusion from it while `--check-citations` passed --
+    the evidence list beside it was caught and corrected, which made the
+    contradiction look deliberate.
+
+    Two shapes were invisible: the count with the source after the number, and
+    an approval rate written as a bare `at N%` with no `approval` after it. A
+    percentage on its own means nothing -- it could be a benchmark -- so only
+    one riding on a mention count of a named forum is read as approval.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        sent = os.path.join(tmp, "sentiment.json")
+        assessed = os.path.join(tmp, "assessed.json")
+        with open(sent, "w") as f:
+            json.dump({"fixture-model": {"by_source": {
+                "hf-discussions": {"mentions": 67, "approval": 0},
+                "reddit-localllama": {"mentions": 56, "approval": 86}}}}, f)
+        with open(assessed, "w") as f:
+            json.dump({"assessed": {"vendor/Fixture": {
+                "one_liner": "x",
+                "notes": "90 huggingface discussion mentions at 20% approval "
+                         "and 34 reddit mentions at 100%. it scores 92% on mmlu.",
+                "evidence": ["reddit 56 mentions at 86% approval"]}}}, f)
+        names = os.path.join(tmp, "names.json")
+        with open(names, "w") as f:
+            json.dump({"vendor/Fixture": "fixture-model"}, f)
+        r = subprocess.run([os.path.join(RESEARCH, "analyze-usecase"),
+                            "--check-citations", "--assessed", assessed,
+                            "--sentiment", sent, "--names", names],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        out = r.stdout
+    finally:
+        shutil.rmtree(tmp)
+
+    eq(r.returncode, 1, "the prose figures are stale and fail: %r" % out.strip()[:300])
+    eq("34" in out and "56" in out, True,
+       "the count with the source after it is claimed and corrected: %r" % out)
+    eq("100" in out and "86" in out, True,
+       "and so is the bare `at 100%%` riding on it: %r" % out)
+    eq("90" in out and "67" in out, True,
+       "`huggingface discussion` is the same forum as `hf-discussions`: %r" % out)
+    eq("92" in out, False,
+       "but a percentage that belongs to a benchmark is not read as approval: %r" % out)
+    eq(out.count("reddit 56 mentions") if "reddit 56 mentions" in out else 0, 0,
+       "and the evidence line that already agrees is not reported")
 
 
 EXACT_REGISTRY = """version: 1
