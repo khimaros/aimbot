@@ -26,6 +26,7 @@ a reader should do about it: a `local` draft has not been read by anybody.
 import argparse
 import json
 import os
+import re
 import sys
 import textwrap
 
@@ -69,14 +70,76 @@ def sheet_for(block, models, note_data=None):
     if block.surface == "registry-note":
         import notes
         at = block.subject or {}
-        return notes.fact_sheet(at.get("repo") or block.grounded, at.get("quant"),
-                                note_data if note_data is not None else notes.load(),
-                                model=block.grounded, entry=at.get("entry"),
-                                pin=at.get("pin"))
+        kind = next((what for pat, what in NOTE_FIELDS if pat.search(block.id)), "a note")
+        lines = ["THIS IS %s." % kind]
+        served = notes.served_by(at.get("entry"))
+        if served:
+            lines.append("served here by: %s" % "; ".join(served))
+        # the block the note hangs off, where that is not the whole entry: the
+        # model note's block is the entry, and the fact sheet below covers it
+        own = at.get("node") or {}
+        if own and not block.id.endswith("#notes"):
+            lines.append("the block this note sits in: %s" % ", ".join(
+                "%s %s" % (k, ", ".join(map(str, v)) if isinstance(v, list) else v)
+                for k, v in sorted(own.items())))
+        lines += current_words(block)
+        return "\n".join(lines) + "\n\n" + notes.fact_sheet(
+            at.get("repo") or block.grounded, at.get("quant"),
+            note_data if note_data is not None else notes.load(),
+            model=block.grounded, entry=at.get("entry"), pin=at.get("pin"))
     return None
 
 
-NOTE_TASK = """Write the registry note for one gguf file, from the evidence below.
+# what each kind of note is FOR. one task over every field wrote a model summary
+# into sampling, speculative and quant-sweep notes alike, because nothing told
+# the writer which of them it was writing. order matters: a rung's runtime note
+# is matched before a rung's own
+NOTE_FIELDS = (
+    (re.compile(r"runtime\.note$"),
+     "a runtime note: what loads these files, and what stops a stock build loading them"),
+    (re.compile(r"#quants\[[^\]]*\]\.note$"),
+     "a rung's note, about this one file: its tensors against its tag, what its card "
+     "warns, what the rung beside it trades"),
+    (re.compile(r"#components\["),
+     "a component's note: what this one file does in the pipeline"),
+    (re.compile(r"#sampling\.[^.]+\.note$"),
+     "a sampler profile's note: where these sampler values came from and why the "
+     "profile uses them -- not what the model is"),
+    (re.compile(r"#speculative\.note$"),
+     "the drafter's note: how drafting behaves for this model -- acceptance, how far "
+     "it is worth drafting -- not what the model is"),
+    (re.compile(r"#quant_sweep\.note$"),
+     "a quant sweep's note: what the published sweep measured and how to read it"),
+    (re.compile(r"#notes$"),
+     "the model's note: what the entry is, and why the roster carries it"),
+)
+
+
+def current_words(block):
+    """What a block says now, as the part of a sheet a redraft starts from.
+
+    Both drafters wrote from nothing, so a draft could not know what this
+    repository had measured, and the worst of 333 drafts repeated a card's claim
+    over the note written to correct it.
+    """
+    return (["WHAT THE REGISTRY SAYS NOW:"]
+            + ["  %s: %s" % (name, text) for name, text in sorted(block.fields.items())])
+
+
+NOTE_TASK = """Write one registry note, from the evidence below.
+
+THE SHEET SAYS WHICH NOTE THIS IS, AND WHAT IT SAYS NOW. A note on a sampler
+profile is about the samplers, a runtime note about what loads the files, a
+rung's note about that one file: write for the field named, never a summary of
+the model. Start from the words already there. Some record something measured
+here, on the files, that no card says -- a header read, a load that failed, a
+correction to the publisher. Keep those unless the evidence below shows them
+out of date, and never replace one with a card's claim that disagrees: the card
+is what they were written to correct.
+
+THE READER RUNS IT THROUGH WHAT THE SHEET NAMES. A card's python,
+transformers, vLLM or NeMo instructions describe the publisher's path, not
+theirs, so do not relay them as requirements.
 
 WRITE WHAT WOULD CHANGE THE READER'S MIND, NOT WHAT THEY CANNOT GET WRONG.
 
@@ -280,7 +343,7 @@ def cmd_draft(args, models):
         for name, text in sorted(block.fields.items()):
             print("  on disk  %-10s %s" % (name, text[:400]))
         if block.surface == "usecase":
-            draft, why = review.propose(block.grounded, {}, [], models, llm)
+            draft, why = review.propose(block.grounded, block.fields, [], models, llm)
         else:
             draft, why = propose_note(block, sheet_for(block, models, note_data),
                                       note_data, llm)

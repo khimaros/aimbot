@@ -108,6 +108,19 @@ TASK = """Write the registry entry for one model, from the evidence below.
 The reader runs models on their own machine. Tell them what this one is for and
 what it is bad at.
 
+REVISE WHAT IS THERE. The message opens with the entry as it stands. Keep its
+reasons for carrying the model -- a drafter, a fill-in-the-middle coder, a world
+model rather than an assistant -- and anything it records that the evidence does
+not contradict. Replace what the evidence shows is out of date.
+
+A COMMENT COUNTS ONLY IF IT IS ABOUT THIS MODEL. Comments are found by name, so
+a sibling's -- a Pro, a Nano, another size or release -- lands in the list too.
+Quote one only when its subject is this model.
+
+A PERCENTILE IS NOT A RANK. p84 is ahead of 84% of the models carrying that
+facet, not first. Say top or bottom only where the sheet shows the high nineties
+or the single digits.
+
 CITE AS YOU WRITE. Put the citation next to the claim it supports, in braces:
 a facet key like {swerebench.resolved}, or a quote id like {q:1a2b3c4d}. Each
 becomes a numbered marker and the figure or the comment is printed beneath, read
@@ -135,11 +148,16 @@ STYLE, matched to the rest of the registry:
 - prefer the specific to the summary: "fails tool calls at q4" beats "mixed
   reception", "the 0.42gib smaller quant" beats "solid performance".
 - two or three sentences each. no preamble, no headings, no bullet points.
+- the notes add to the one_liner and never restate it.
+- where the evidence is thin, say what little it shows and stop: no closing
+  line about what nobody has tested.
 
 READING THE EVIDENCE. The comments are what people actually said. The approval
 percentage comes from a crude word lexicon and is sometimes flatly wrong about
 the text beneath it -- sceptical questions get scored positive, and praise
 negative. Where the percentage and the comments disagree, believe the comments.
+Do not write about the lexicon, the bands or how any of this was gathered: the
+reader wants the model.
 
 Reply with JSON: {"one_liner": "...", "notes": "..."}"""
 
@@ -201,6 +219,13 @@ def propose(repo, blk, moved, models, llm, tries=2):
     sheet = verdicts.fact_sheet(repo, models.get(repo) or {})
     allowed = ", ".join(sorted(facets) + sorted(verdicts.quotes_of(facets)))
     user = "%s\n\nYOU MAY CITE ONLY THESE:\n  %s\n" % (sheet, allowed)
+    # the entry as it stands. a draft written from nothing lost what the verdict
+    # knew and the evidence does not say -- that a model is a drafter, a
+    # fill-in-the-middle coder, a world model rather than an assistant
+    now = ["  %s: %s" % (k, v if isinstance(v, str) else "; ".join(v))
+           for k, v in sorted((blk or {}).items()) if k in prose.VERDICT_FIELDS and v]
+    if now:
+        user = "WHAT THE REGISTRY SAYS NOW:\n%s\n\n%s" % ("\n".join(now), user)
 
     messages = [{"role": "system", "content": TASK},
                 {"role": "user", "content": user}]

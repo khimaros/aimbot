@@ -45,7 +45,13 @@ import urllib.error
 import urllib.request
 
 DEFAULT_URL = "http://localhost:8080/v1"
+# the fixed part of a call's clock: connect, queue and the prompt
 TIMEOUT = 180
+# the slowest decode a call is expected to see, which sizes the rest of the
+# clock from the token budget. the roster's endpoint decodes qwen3.8 flash-next
+# UD-IQ4_XS at 26.8 tok/s, where a flat 180s ran out near 4800 tokens -- a third
+# of the medium budget, so drafts died on the clock with the budget unspent
+DECODE_TOKENS_PER_SECOND = 20
 ENV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env")
 # what a caller that ASKS for thinking gets, unless AIMBOT_LLM_EFFORT says
 # otherwise. the vendor's own default for this family is xhigh and that is not
@@ -153,6 +159,11 @@ def budget_for(answer_tokens, wants):
     return answer_tokens + REASONING_TOKENS.get(want, REASONING_TOKENS[DEFAULT_EFFORT])
 
 
+def timeout_for(max_tokens):
+    """Seconds to wait for a call allowed `max_tokens`, so the budget ends it first."""
+    return TIMEOUT + max_tokens / DECODE_TOKENS_PER_SECOND
+
+
 def prompt_key(*parts):
     """A stable id for a prompt, so a captured answer can be found again."""
     h = hashlib.sha256("\x00".join(str(p) for p in parts).encode())
@@ -185,9 +196,9 @@ def chat(messages, temperature=0.0, max_tokens=1200, schema=None, thinking=False
     if not cfg:
         return None
     base, model, key = cfg
+    budget = budget_for(max_tokens, thinking)
     body = thinking_body({"model": model, "messages": messages,
-                          "temperature": temperature,
-                          "max_tokens": budget_for(max_tokens, thinking)},
+                          "temperature": temperature, "max_tokens": budget},
                          thinking)
     if schema:
         # llama-server and the openai api both take this; a server that does not
@@ -202,7 +213,7 @@ def chat(messages, temperature=0.0, max_tokens=1200, schema=None, thinking=False
         headers={"Content-Type": "application/json",
                  **({"Authorization": "Bearer " + key} if key else {})})
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        with urllib.request.urlopen(req, timeout=timeout_for(budget)) as r:
             got = json.loads(r.read().decode())
     except (urllib.error.URLError, OSError, ValueError, TimeoutError) as e:
         print("  llm: %s" % str(e)[:120], file=sys.stderr)

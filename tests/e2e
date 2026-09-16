@@ -637,12 +637,12 @@ test('the operations section shows the runtimes that load THIS model', () => {
   RESET();
 });
 
-test('quantization is its own tab, and says what the discount did', () => {
+test('quantization is its own tab, and the discount follows the quant you picked', () => {
   RESET();
   // everything about what a quant IS was spread over the operate tab, between
   // the run snippets and the sampler table -- the rung ladder, the published
-  // sweep -- and the thing that actually moves a score, the retention discount,
-  // was not shown at all. it has its own tab now.
+  // sweep -- and it has its own tab now. what the registry pins is one more
+  // fact about the files, so it is there too.
   ok(TABS.includes('quantization'), 'the tab exists: ' + TABS);
 
   // qwen3.8 27b is the model somebody ran at three arms on terminal-bench, so
@@ -671,15 +671,49 @@ test('quantization is its own tab, and says what the discount did', () => {
   const repos = [...new Set(quantChoices(measured).map(c => c.repo))];
   repos.forEach(r => ok(html_.includes('quants in <span class="faint">' + r),
      'every publishing repo gets its ladder, missing ' + r));
+  ok(html_.includes('what the registry pins'), 'the pinned files are on the tab about files');
+  eq(html_.includes('what the quality discount did'), false,
+     'and the discount is not: it is arithmetic about the rung picked on operate');
 
   openModel(measured.repo, 'operate');
   const op = html('#body');
   eq(op.includes('quants in'), false, 'the ladder is not on operate as well');
+  eq(op.includes('what the registry pins'), false, 'nor the pins');
   ok(op.includes('data-pick-quant'), 'the pickers stay, since a snippet reads them');
-  // the run snippets are long and are not what a reader opens the tab for
-  ok(op.includes('<details'), 'the sample configs are collapsed');
-  eq(/<details[^>]*\bopen\b/.test(op), false, 'and closed by default');
+  // the command is what a reader opens the tab for; the other configs are not
+  const opened = [...op.matchAll(/<details[^>]*\bopen\b[^>]*>\s*<summary[^>]*>([^<]*)</g)]
+    .map(x => x[1]);
+  eq(opened.length, 1, 'one config is open: ' + opened);
+  ok(opened[0].startsWith('llama-server'), 'and it is the llama-server one: ' + opened);
+  ok(/<details class="snippet">/.test(op), 'the rest stay closed');
 
+  // the discount is about ONE file, and the file is the one picked. a measured
+  // curve answers only for the repo it ran, so picking a rung out of another
+  // repo has to change the curve as well as the bits
+  const discount = page => {
+    const at = page.indexOf('<h3>what the quality discount did');
+    ok(at !== -1, 'the discount is drawn on operate');
+    return page.slice(at, page.indexOf('<h3>', at + 4));
+  };
+  const seen = new Set();
+  ops = {runtime: 'llama.cpp', repo: null, quant: null, profile: null};
+  repoChoices(measured).forEach(r => {
+    const pick = quantChoices(measured).filter(c => c.repo === r && c.bpw)
+      .sort((a, b) => a.bpw - b.bpw)[0];
+    if (!pick) return;
+    ops = {runtime: 'llama.cpp', repo: r, quant: pick.quant, profile: null};
+    const block = discount(tabOperate(measured));
+    ok(block.includes(esc(pick.quant)), r + ': the block names the picked rung ' + pick.quant);
+    const kept = num(retention(pick.bpw, measured, pick) * 100, 1) + '%';
+    ok(block.includes(kept), r + ': and what that rung keeps, ' + kept + ': ' + block);
+    const ran = D.retention.measured[measured.repo].find(c => c.quant_repo === r);
+    eq(block.includes('measured on these files'), !!ran,
+       r + ': the curve is the one measured on this repo, if anybody measured it');
+    seen.add(block);
+  });
+  ok(seen.size > 1, 'different picks draw different arithmetic');
+
+  ops = {runtime: null, repo: null, quant: null, profile: null};
   closeModel();
   RESET();
 });
@@ -1206,8 +1240,11 @@ test('a note that resolved a reference is hoverable where it is shown', () => {
     // NOT here: the operate tab draws the selected profile's table and the
     // others are a chip away, so a static render cannot prove it reachable and
     // cannot prove it lost either
-    const held = [m.notes, (m.speculative || {}).note]
-      .concat((m.quants || []).concat(m.components || []).map(q => q.note));
+    // a rung's own `runtime` block is here too: it is where a file mainline
+    // cannot load says so, even when the model's architecture is merged
+    const rungs = (m.quants || []).concat(m.components || []);
+    const held = [m.notes, (m.speculative || {}).note, (m.runtime || {}).note]
+      .concat(rungs.map(q => q.note), rungs.map(q => (q.runtime || {}).note));
     const drawn = Object.values(tabs)
       .filter(fn => typeof fn === 'function').map(fn => fn(m));
     held.forEach(note => {
@@ -1294,6 +1331,71 @@ test('a figure in the assessment carries its source, the way the cell does', () 
        'a cross-model figure prints bare and still names its facet: '
        + cross.key + ' -> ' + cross.shown);
   }
+});
+
+// the sentence is printed at build time from the PUBLISHED percentile, and the
+// table under it ranked the quant-discounted cohort beneath a header that said
+// neither: qwen3.8 flash next read `aa.terminalbench p99` over a percentile of
+// 96, and hovering the p99 said p96.
+test('the evidence table agrees with the sentence it sits under', () => {
+  RESET();
+  setEffective(true);
+  const cited = D.models.flatMap(x => ((x.assessed || {}).evidence || [])
+    .map(e => [x, (Array.isArray(e) ? e : []).find(p => typeof p !== 'string')]))
+    .filter(([x, p]) => p && !p.repo && x.facets[p.key] && x.facets[p.key].pct != null
+      && scaledFacet(p.key) && facetPctRaw(x, p.key) !== x.facets[p.key].pct);
+  ok(cited.length, 'some verdict cites a figure the discount re-ranks');
+  const [m, part] = cited[0];
+  const f = m.facets[part.key];
+  const tableOf = () => tabOverview(m).split('<h3>evidence cited</h3>')[1].split('</table>')[0];
+  let table = tableOf();
+  eq(table.includes('<th>source</th>'), false,
+     'the figure in the claim links its source, so no column repeats it');
+  eq(table.includes('value now'), false, 'and no header says "now" about a figure with no date');
+  const row = table.split('<tr>').find(r => r.includes('>' + esc(part.shown) + '<'));
+  ok(row, 'there is a row for ' + part.shown);
+  const cells = [...row.matchAll(/<td class="n"[^>]*>([^<]*)</g)].map(x => x[1]);
+  eq(cells[0], String(num(f.value, DIGITS[(D.facet_meta[part.key] || {}).unit] ?? 2)),
+     'the value is the one the source published');
+  eq(cells[1], String(f.pct), 'the percentile is the one the sentence prints: ' + part.shown);
+  eq(cells[2], String(facetPctRaw(m, part.key)), 'and the discounted rank has a column of its own');
+
+  // the hover on a figure leads with what the figure says
+  const said = proseRef(part, m).note;
+  ok(said.includes('p' + f.pct + ' of ' + f.cohort), 'the hover repeats the printed rank: ' + said);
+  ok(said.includes('p' + facetPctRaw(m, part.key) + ' quant adjusted'),
+     'and names the discounted one as that: ' + said);
+
+  setEffective(false);
+  table = tableOf();
+  eq(table.includes('quant adjusted'), false, 'with the discount off there is no column for it');
+  eq(proseRef(part, m).note.includes('quant adjusted'), false, 'nor a line in the hover');
+  setEffective(true);
+  RESET();
+});
+
+test('a quoted comment in a verdict links to the thread it was said in', () => {
+  RESET();
+  // a verdict quotes reception as `"the words" {q:1a2b3c4d}`. the id is what
+  // makes the words checkable, and it has to print as the words -- hoverable to
+  // the comment and linked to the thread -- rather than as the brace
+  const quoted = D.models.flatMap(m => ['one_liner', 'notes']
+    .flatMap(f => [].concat((m.assessed || {})[f] || []))
+    .filter(p => typeof p === 'object' && /^q:/.test(p.key || ''))
+    .map(p => ({m, p})));
+  ok(quoted.length > 0, 'some verdict quotes a comment');
+  const loose = quoted.filter(({p}) => p.missing);
+  ok(!loose.length, 'every quote id resolves to a comment the capture holds: '
+     + loose.map(({m, p}) => m.short + ' ' + p.key).join(', '));
+  quoted.forEach(({m, p}) => {
+    ok(/^"[^"]+"$/.test(p.shown) && /^https?:\/\//.test(p.url || ''),
+       m.short + ': a quote prints as its words and carries a url: ' + JSON.stringify(p));
+  });
+  const {m, p} = quoted[0];
+  const html_ = tabOverview(m);
+  ok(html_.includes('>' + esc(p.shown) + '</a>'),
+     m.short + ': the quoted words are the anchor in the panel');
+  ok(!/\{q:[0-9a-f]+\}/.test(html_), m.short + ': and no quote id is printed raw');
 });
 
 // the verdicts name their figures now -- `{aa.speed}` rather than `aa.speed

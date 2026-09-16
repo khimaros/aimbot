@@ -365,11 +365,24 @@ def rungs_of(repo, data):
     return out
 
 
-# what this registry sizes against, from research/build-tables BUDGET_GIB. a
-# note's most common judgement is "does this fit", and a sheet that does not say
-# what it has to fit gets a description instead of a decision
-BUDGET_GIB = 105.0
-BOX = "128gb"
+
+def served_by(entry):
+    """[runtime] -- what loads this entry here, in the words a note would use.
+
+    A card documents its publisher's path -- transformers, vLLM, NeMo, a python
+    package -- and a draft handed only the card relayed that path as a
+    requirement to readers who run the model through crispasr or sd.cpp.
+    """
+    entry = entry or {}
+    out = []
+    backends = {(entry.get("crispasr") or {}).get("backend")} | {
+        (q.get("crispasr") or {}).get("backend") for q in entry.get("quants") or []}
+    for name in sorted(b for b in backends if b):
+        out.append("crispasr backend %s" % name)
+    if (entry.get("runtime") or {}).get("arch"):
+        out.append("llama.cpp, arch %s" % entry["runtime"]["arch"])
+    out += [e for e in entry.get("engine") or [] if e not in ("llama.cpp", "crispasr")]
+    return out
 
 
 def _ladders(entry, repo, data):
@@ -397,10 +410,11 @@ def fact_sheet(repo, quant, data, model=None, entry=None, pin=None):
     numbers to believe. The figures are shown as the REFERENCE that renders
     them, so what the writer reads is the token it is supposed to write.
 
-    The registry's own decisions are here too -- what fits, which other repos
-    publish this model, what the entry already says about drafting and runtime
-    -- because a note is a DECISION about a file and a sheet of card text and
-    sizes can only produce a description of one.
+    The registry's own decisions are here too -- which other repos publish this
+    model, what the entry already says about drafting and runtime -- because a
+    note is a DECISION about a file and a sheet of card text and sizes can only
+    produce a description of one. Whether the file fits is not: the reader sets
+    the budget on the page, and a sheet that answered it got the answer written.
     """
     lines = ["%s, rung %s" % (repo, quant or "(the model, not a rung)")]
     # ONLY references that resolve are offered. a sheet that shows `{gib} = -`
@@ -427,12 +441,6 @@ def fact_sheet(repo, quant, data, model=None, entry=None, pin=None):
         for tag, gib, bpw in others:
             lines.append("    %-40s %8.2f gib  %s"
                          % ("{gib@%s}" % tag, gib, ("%.2f bpw" % bpw) if bpw else "-"))
-    gib = _gib(repo, quant, data) if quant else None
-    if gib is not None:
-        lines.append("  the box:     %.1f gib usable on a %s host, so this rung %s"
-                     % (BUDGET_GIB, BOX, "FITS with %.1f gib left for context"
-                        % (BUDGET_GIB - gib) if gib <= BUDGET_GIB
-                        else "DOES NOT FIT, by %.1f gib" % (gib - BUDGET_GIB)))
     for at, rungs in _ladders(entry, repo, data):
         if not rungs:
             lines.append("  the registry also carries %s, which the size capture "
@@ -441,9 +449,15 @@ def fact_sheet(repo, quant, data, model=None, entry=None, pin=None):
         lines.append("  the same model is also published by %s:" % at)
         for tag, other in rungs:
             lines.append("    %-40s %8.2f gib" % ("{gib@%s:%s}" % (at, tag), other))
+    # a rung marked `speculative: false` is the file the entry's drafter is NOT
+    # in, and showing it the entry's drafter is how a draft came to say it drafts
+    if pin and pin.get("speculative") is False:
+        lines.append("  this file cannot draft: the entry's draft head is not in it")
     for field, label in (("speculative", "this entry drafts with"),
                          ("runtime", "llama.cpp support")):
         got = (entry or {}).get(field)
+        if field == "speculative" and pin and pin.get("speculative") is False:
+            continue
         if isinstance(got, dict) and got:
             lines.append("  %s: %s" % (label, ", ".join(
                 "%s %s" % (k, v) for k, v in sorted(got.items()) if k != "note")))

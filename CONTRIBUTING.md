@@ -186,6 +186,10 @@ budget. That is extraction, where reasoning only finds ways to miss the one
 right answer. Composing a note from a sixty-line fact sheet is the other shape,
 so those callers pass `thinking=True` and raise `max_tokens` with it -- a budget
 that truncates mid-thought returns an EMPTY string rather than a short answer.
+The clock is sized from the same budget, at the slowest decode a call is
+expected to see: a flat 180 seconds ran out at a third of the medium budget on
+the roster's own endpoint, and `llm: timed out` is a different failure from
+`llm: empty reply (finish_reason=length)`.
 
 ## the prose
 

@@ -739,17 +739,17 @@ function ppTps(m) {
 }
 
 // the curve for THIS model: its own measurement if somebody ran one ON THE RUNG
-// BEING SCORED, the median of the measured curves once enough models have one,
-// and build-tables' fitted curve otherwise. which one answered is never hidden.
+// ASKED ABOUT -- the one scored, unless a caller names another -- the median of
+// the measured curves once enough models have one, and build-tables' fitted
+// curve otherwise. which one answered is never hidden.
 //
 // a sweep measures FILES, not a model. ISTA's card scores its own GSQ-RCO rungs
 // of qwen3.8 27b and unsloth's UD rungs over the same three benchmarks and they
 // differ by more than eight points of task average at 2.5 bpw, so lending one
 // family's curve to the other's rung would report a number nobody measured.
-function curveFor(m) {
+function curveFor(m, q = activeQuant(m)) {
   const r = D.retention;
   const own = (r.measured || {})[m.repo] || [];
-  const q = activeQuant(m);
   const mine = own.find(c => q && c.quant_repo === q.repo) || own.find(c => !c.quant_repo);
   if (mine) return {points: mine.points, kind: 'measured', src: mine};
   if (r.median && r.median.points) return {points: r.median.points, kind: 'median', src: r.median};
@@ -772,8 +772,8 @@ function interpolate(c, bpw) {
 // making its thin quants look BETTER than the general case, purely because
 // nobody ran that arm. below its own range a measured curve therefore defers to
 // the fitted one, which is the wider evidence rather than the narrower silence.
-function retention(bpw, m) {
-  const c = curveFor(m);
+function retention(bpw, m, q = activeQuant(m)) {
+  const c = curveFor(m, q);
   if (c.kind === 'measured' && bpw < c.points[0][0]) {
     return interpolate(D.retention.fitted.points, bpw);
   }
@@ -785,7 +785,7 @@ function retention(bpw, m) {
 function modelRetention(m) {
   if (!effective || m.native_low_bpw) return 1;
   const q = activeQuant(m);
-  return q && q.bpw ? retention(q.bpw, m) : 1;
+  return q && q.bpw ? retention(q.bpw, m, q) : 1;
 }
 
 // whether the rung being served sits below everything the curve measured, where
@@ -795,10 +795,9 @@ function modelRetention(m) {
 // curve knew. quesma's qwen3.8 27b sweep is the only measurement in that region
 // and it found a 27b collapsing to chance at 1.8 bpw, so the flat part is
 // evidenced against on the one model anybody has run there.
-function belowCurve(m) {
+function belowCurve(m, q = m && activeQuant(m)) {
   if (!m || m.native_low_bpw) return false;
-  const q = activeQuant(m);
-  return !!(q && q.bpw && q.bpw < curveFor(m).points[0][0]);
+  return !!(q && q.bpw && q.bpw < curveFor(m, q).points[0][0]);
 }
 
 // an ALLOWLIST: a facet is discounted only where the curve is evidence about
@@ -2370,8 +2369,10 @@ const proseText = parts => !parts ? ''
 function proseRef(part, m) {
   // a note's vocabulary: `{card}` resolves to somewhere to go, `{gib}` and
   // `{bpw}` to a figure out of a capture. both answer "where did this come
-  // from", which is the only question the panel is for
-  if (part.url) return {url: part.url, source: part.field, id: part.locator || ''};
+  // from", which is the only question the panel is for. a quoted comment in a
+  // verdict is the same shape, and brings the comment it was cut from
+  if (part.url) return {url: part.url, source: part.field, id: part.locator || '',
+                        quote: part.quote};
   if (part.ref) return part.ref;
   // a cross-model reference names the REPO, which is the registry's key for a
   // model and not what `model()` resolves. a comparison against something the
@@ -2382,13 +2383,17 @@ function proseRef(part, m) {
   const f = owner && owner.facets[part.key];
   if (!f) return null;
   const meta = D.facet_meta[part.key] || {};
-  const pct = facetPctRaw(owner, part.key);
   const said = [];
   if (part.repo) said.push(owner.short);
   if (meta.label) said.push(meta.label);
-  if (pct !== null && f.cohort) {
-    said.push('p' + pct + ' of ' + f.cohort + ' models carrying it');
+  // the published rank first, because it is the one the sentence printed at
+  // build time. the discounted rank follows under its own name, or hovering a
+  // `p99` answers p96 and contradicts the figure it sits on
+  if (f.pct != null && f.cohort) {
+    said.push('p' + f.pct + ' of ' + f.cohort + ' models carrying it');
   }
+  const adjusted = effective && scaledFacet(part.key) ? facetPctRaw(owner, part.key) : null;
+  if (adjusted !== null) said.push('p' + adjusted + ' quant adjusted');
   return {...(f.ref || {}), note: said.join(' · ') || undefined};
 }
 
@@ -2406,24 +2411,38 @@ function proseHtml(parts, m) {
 }
 
 
+// the PUBLISHED figures, because they are what the claim prints: it renders its
+// percentile at build time, and a column ranking the discounted cohort beside it
+// read as the sentence being wrong. the discounted rank gets a column of its own
+// while the discount is on, and the source is the figure's own link in the
+// claim rather than a column repeating it.
 function evidenceTable(m, evidence) {
   if (!evidence.length) return '';
   return '<h3>evidence cited</h3>'
-    + '<table><thead><tr><th>claim</th><th class="n">value now</th>'
-    + '<th class="n">percentile</th><th>source</th></tr></thead><tbody>'
+    + '<table><thead><tr><th>claim</th>'
+    + '<th class="n" data-help="the score as its source published it">value</th>'
+    + '<th class="n" data-help="where that score ranks among the registry models'
+    + ' carrying the same measurement: the percentile the claim prints">percentile</th>'
+    + (effective ? '<th class="n" data-help="the same rank once every model\'s score'
+      + ' is discounted to the quant that fits your budget. only the coding and'
+      + ' software-agent benchmarks are discounted">quant adjusted</th>' : '')
+    + '</tr></thead><tbody>'
     + evidence.map(e => {
       // the key is the first part rather than something to find in the words:
       // an evidence line IS a reference and a clause about it
       const lead = (Array.isArray(e) ? e : []).find(p => typeof p !== 'string');
       const key = lead ? lead.key : (FACET_CITED.exec(e) || [])[1];
       const f = key && m.facets[key];
-      if (!f) return `<tr><td colspan="4">${proseHtml(e, m) || esc(e)}</td></tr>`;
+      if (!f) {
+        return `<tr><td colspan="${effective ? 4 : 3}">${proseHtml(e, m) || esc(e)}</td></tr>`;
+      }
       const meta = D.facet_meta[key] || {};
-      const pct = facetPctRaw(m, key);
+      const adjusted = !effective ? ''
+        : scaledFacet(key) ? `<td class="n">${facetPctRaw(m, key) ?? '-'}</td>`
+        : `<td class="n"><span class="faint" data-help="${esc(whyNotScaled(key))}">-</span></td>`;
       return `<tr><td>${proseHtml(e, m)}</td>`
-        + `<td class="n">${num(facetValue(m, key), DIGITS[meta.unit] ?? 2)}</td>`
-        + `<td class="n">${pct === null ? '-' : pct}</td>`
-        + `<td>${refMark(f.ref)}</td></tr>`;
+        + `<td class="n">${num(f.value, DIGITS[meta.unit] ?? 2)}</td>`
+        + `<td class="n">${f.pct ?? '-'}</td>${adjusted}</tr>`;
     }).join('') + '</tbody></table>';
 }
 
@@ -2565,7 +2584,7 @@ function quantTable(m, repo, pick) {
   const rows = quantChoices(m).filter(c => c.repo === repo);
   if (!rows.length) return '';
   // no notes column: what the registry says about its own pick is in `what the
-  // registry pins` below, and repeating it here said it twice. a size over the
+  // registry pins` above, and repeating it here said it twice. a size over the
   // budget is coloured instead of captioned.
   // `bpw` is file size over parameter count; `read` is the same number off the
   // block geometry of every tensor. they are close and not equal, and where a
@@ -2657,24 +2676,26 @@ function typeChips(types) {
 // moved, not how much of a benchmark score survived, and nothing published
 // maps one onto the other. shown because it is the only per-model measurement
 // of quantization damage that exists for these models at all.
-// what `quant adjusted` did to THIS model, and on what evidence. the discount
-// moves every scaled number on the page and was explained nowhere per model:
-// the methodology note describes the mechanism and the model's own arithmetic
-// -- which rung, which curve, which multiplier -- was left to be inferred from
-// a tooltip on a cell.
-function discountBlock(m) {
-  const q = activeQuant(m);
-  const c = curveFor(m);
-  const kept = modelRetention(m);
+// what `quant adjusted` does to the rung picked on operate, and on what
+// evidence. the discount moves every scaled number on the page and was
+// explained nowhere per model: the methodology note describes the mechanism and
+// the model's own arithmetic -- which rung, which curve, which multiplier -- was
+// left to be inferred from a tooltip on a cell. it follows the pick rather than
+// the rung the table scores, because the question beside a command is what
+// THAT file keeps, and the curve can change with the repo as well as the bits.
+function discountBlock(m, q) {
+  if (!q) return '';
+  const c = curveFor(m, q);
+  const kept = retention(q.bpw || 16, m, q);
+  const scored = activeQuant(m);
   const rows = [];
-  // the rung being SCORED, which is the largest that fits the budget in the
-  // default repo rather than anything a reader chose. it is named because the
-  // whole block is arithmetic about one file and which file was left implicit
-  rows.push(['rung scored', q
-    ? `${esc(q.quant)}${q.bpw ? ` at ${num(q.bpw, 2)} bits per weight` : ''}`
-      + ' <span class="dim">-- the largest that fits your budget, which is what'
-      + ' the table ranks</span>'
-    : 'nothing fits the budget']);
+  rows.push(['rung', `${esc(q.quant)}${q.bpw ? ` at ${num(q.bpw, 2)} bits per weight` : ''}`
+    + ' <span class="dim">-- ' + (!scored ? 'nothing fits your budget, so the table ranks no rung'
+      : scored.repo === q.repo && scored.quant === q.quant
+        ? 'also the rung the table ranks, the largest that fits your budget'
+        : `the table ranks ${esc(scored.quant)}`
+          + (scored.repo !== q.repo ? ` out of ${esc(scored.repo)}` : '')
+          + ', the largest that fits your budget') + '</span>']);
   rows.push(['curve', c.kind === 'measured'
     ? `<b>measured on these files</b> &middot; ${esc(c.src.metric)}`
       + ` &middot; ${esc(c.src.quant_repo || '')}`
@@ -2686,9 +2707,9 @@ function discountBlock(m) {
     ? 'exempt: the weights are natively low-bpw, so this is not quantization loss'
     : !effective
       ? `<span class="dim">nothing, while <b>quant adjusted</b> is off. it would be
-         ${num(retention((q || {}).bpw || 16, m) * 100, 1)}%</span>`
+         ${num(kept * 100, 1)}%</span>`
       : `<b>${num(kept * 100, 1)}%</b> of the measured score, on the facets below`]);
-  if (belowCurve(m)) {
+  if (belowCurve(m, q)) {
     rows.push(['note', '<span class="warn">this rung sits below everything the curve'
       + ' measured, so the figure is the last thing the curve knew rather than a'
       + ' prediction</span>']);
@@ -2729,10 +2750,29 @@ function measuredTable(m) {
 // was a view of a selection: choosing a quant to write a command for silently
 // redrew a tab about scoring, and the runtime chip reached further still, because
 // `repoChoices` narrows to the conversions a runtime declares. what is here is
-// true of the model however you happen to be running it: what each rung is, what
-// the discount cost, what curve says so, and who measured it.
+// true of the model however you happen to be running it: what the registry pins,
+// what each rung is, and who measured what. the discount is arithmetic about the
+// picked rung, so it sits beside the picker on operate.
 function tabQuantization(m) {
-  return discountBlock(m) + quantLadders(m) + measuredTable(m) + sweepTable(m);
+  return registryPins(m) + quantLadders(m) + measuredTable(m) + sweepTable(m);
+}
+
+function registryPins(m) {
+  return '<h3>what the registry pins</h3>'
+    // "quant tag" rather than "quant": it is the string after the colon in
+    // `--hf-repo repo:TAG`, which llama.cpp resolves against a type name or a
+    // filename. a component is one specific file rather than a rung, so most of
+    // them name the file -- 21 of the 41 have no type to name at all, a vae or a
+    // voice embedding being shipped at whatever precision the publisher chose
+    + '<table><thead><tr><th>repo</th><th>quant tag</th><th class="n">gib</th>'
+    + '<th class="n">bpw</th><th>role</th><th>note</th></tr></thead><tbody>'
+    + m.quants.concat(m.components || []).map(q =>
+      `<tr><td><a href="${esc('https://huggingface.co/' + q.repo)}" target="_blank" rel="noopener">${esc(q.repo)}</a></td>`
+      + `<td>${esc(hfTag(q))}</td><td class="n">${gib(q.gib) || '-'}</td>`
+      + `<td class="n dim">${num(q.bpw, 2) || '-'}</td>`
+      + `<td class="dim">${esc(q.role || '')}</td>`
+      + `<td class="dim">${proseHtml(q.note, m)}${rungRuntime(q, m)}</td></tr>`).join('')
+    + '</tbody></table>';
 }
 
 function sweepTable(m) {
@@ -2884,38 +2924,34 @@ function tabOperate(m) {
       `<button class="chip${name === profile ? ' on' : ''}"`
       + ` data-profile="${esc(name)}">${esc(name)}</button>`).join('')) : '')
     + '</div>'
-    // closed by default, under a heading like every other section: a snippet is
-    // twenty lines of flags and a reader who came for "which runtime loads
-    // this" scrolled past all of them to reach the samplers. each label stays
-    // visible, so opening one is a decision rather than a search
+    // under a heading like every other section, and only the server command
+    // open: it is what a reader came for, where a client config is twenty lines
+    // that pushed the samplers off the screen. each label stays visible, so
+    // opening another is a decision rather than a search
     + (configs.length ? '<h3>example configs</h3>'
-      + configs.map(o => '<details class="snippet">'
+      + configs.map(o => `<details class="snippet"${o.open ? ' open' : ''}>`
         + `<summary class="faint">${esc(o.label)}</summary>`
         + `<button class="copy">copy</button><pre>${esc(o.text)}</pre></details>`)
         .join('') : '')
+    + discountBlock(m, pick)
     + samplerTable(m, profile)
     + templateSection(m, repo);
 
   out += runtimeBlock(m);
   out += draftBlock(m, pick);
-
-  out += '<h3>what the registry pins</h3>'
-    // "quant tag" rather than "quant": it is the string after the colon in
-    // `--hf-repo repo:TAG`, which llama.cpp resolves against a type name or a
-    // filename. a component is one specific file rather than a rung, so most of
-    // them name the file -- 21 of the 41 have no type to name at all, a vae or a
-    // voice embedding being shipped at whatever precision the publisher chose
-    + '<table><thead><tr><th>repo</th><th>quant tag</th><th class="n">gib</th>'
-    + '<th class="n">bpw</th><th>role</th><th>note</th></tr></thead><tbody>'
-    + m.quants.concat(m.components || []).map(q =>
-      `<tr><td><a href="${esc('https://huggingface.co/' + q.repo)}" target="_blank" rel="noopener">${esc(q.repo)}</a></td>`
-      + `<td>${esc(hfTag(q))}</td><td class="n">${gib(q.gib) || '-'}</td>`
-      + `<td class="n dim">${num(q.bpw, 2) || '-'}</td>`
-      + `<td class="dim">${esc(q.role || '')}</td>`
-      + `<td class="dim">${proseHtml(q.note, m)}</td></tr>`).join('')
-    + '</tbody></table>';
-
   return out;
+}
+
+// a runtime block on a single rung, which is where a file mainline cannot load
+// says so even though the model's architecture is merged -- deepseek v4.1's
+// pins declare `deepseek4` and still fail on the tensor table
+function rungRuntime(q, m) {
+  const r = q.runtime || {};
+  if (!r.note && !r.fork && !r.tracking) return '';
+  const where = r.fork ? out_link('https://github.com/' + r.fork, r.fork)
+    : r.tracking ? out_link(r.tracking, r.tracking.split('/').slice(-2).join(' ')) : '';
+  return '<div class="faint">what loads this file' + (where ? ': ' + where : '')
+    + (r.note ? ' -- ' + proseHtml(r.note, m) : '') + '</div>';
 }
 
 // --- run snippets ------------------------------------------------------------
@@ -3213,7 +3249,7 @@ function snippets(m) {
   if (!rt.k) return out;
   if (rt.k === 'llama.cpp') {
     out.push({label: `llama-server, ${profile || 'no'} samplers`,
-              text: llamaServer(m, pick, profile)});
+              text: llamaServer(m, pick, profile), open: true});
   } else {
     out.push(otherRuntime(m, rt, pick));
   }

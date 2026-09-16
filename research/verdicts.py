@@ -33,6 +33,14 @@ REF = re.compile(r"\{([a-z0-9_.\-]+)(?:@([\w.\-]+/[\w.\-]+))?(?::(value))?\}", r
 # a citation marker in prose: a facet key or a quote id, in braces. the colon in
 # `q:1a2b3c4d` is why this is not REF -- that one reads `:value` as a form
 CITE_REF = re.compile(r"\{(q:[0-9a-f]+|[a-z0-9_.\-]+)\}", re.I)
+# `"the words" {q:1a2b3c4d}` -- a fragment quoted inline and attributed. this is
+# the one thing in the format that can still be false while passing every other
+# check, because quotation marks assert the words are somebody else's
+QUOTED = re.compile(r'"([^"]{4,})"\s*\{(q:[0-9a-f]+)\}')
+# everything a sentence can carry that the renderer substitutes: a quotation
+# with its id, a bare quote id, or a facet reference. one pass over all three,
+# so the parts come out in the order they stand in the sentence
+SPANS = re.compile(r"%s|\{(q:[0-9a-f]+)\}|%s" % (QUOTED.pattern, REF.pattern), re.I)
 
 # how a forum is spelled in prose, which is not how its facet is keyed
 FORUM_SHORT = {"reddit-localllama": "reddit"}
@@ -161,22 +169,44 @@ def render_parts(text, facets, other=None):
     words to match. The renderer is the only thing that knows, so it says.
     """
     out, at, text = [], 0, text or ""
-    for m in REF.finditer(text):
-        key, repo, form = m.group(1), m.group(2), m.group(3)
-        facet = ((facets if not repo else (other(repo) if other else None))
-                 or {}).get(key)
+    for m in SPANS.finditer(text):
         if m.start() > at:
             out.append(text[at:m.start()])
         at = m.end()
-        part = {"key": key, "repo": repo,
-                "shown": m.group(0) if not facet
-                else render_ref(key, facet, form, named=not repo)}
-        if not facet:
-            part["missing"] = True
-        out.append(part)
+        out.append(quote_part(m, facets) if not m.group(4)
+                   else facet_part(m, facets, other))
     if at < len(text):
         out.append(text[at:])
     return out
+
+
+def facet_part(m, facets, other=None):
+    """A facet reference as a part: its key, and the figure it renders as."""
+    key, repo, form = m.group(4), m.group(5), m.group(6)
+    facet = ((facets if not repo else (other(repo) if other else None))
+             or {}).get(key)
+    part = {"key": key, "repo": repo,
+            "shown": m.group(0) if not facet
+            else render_ref(key, facet, form, named=not repo)}
+    if not facet:
+        part["missing"] = True
+    return part
+
+
+def quote_part(m, facets):
+    """A quoted comment as a part: the words as written, and the thread they are from.
+
+    A bare id with no quotation in front of it has no words to carry, so it
+    prints as the forum it points into rather than as nothing to hover.
+    """
+    said, qid = (m.group(1), m.group(2)) if m.group(2) else (None, m.group(3))
+    found = quotes_of(facets).get(qid)
+    if not found:
+        return {"key": qid, "repo": None, "shown": m.group(0), "missing": True}
+    ref, key = found
+    return {"key": qid, "repo": None, "field": forum_name(key),
+            "shown": '"%s"' % said if said else "(%s)" % forum_name(key),
+            "url": ref.get("url"), "quote": excerpt(ref.get("quote"), said)}
 
 
 def render(text, facets, other=None):
@@ -418,12 +448,6 @@ def cite(text, facets):
         return "[%d]" % order[key]
 
     return CITE_REF.sub(one, text or ""), lines
-
-
-# `"the words" {q:1a2b3c4d}` -- a fragment quoted inline and attributed. this is
-# the one thing in the format that can still be false while passing every other
-# check, because quotation marks assert the words are somebody else's
-QUOTED = re.compile(r'"([^"]{4,})"\s*\{(q:[0-9a-f]+)\}')
 
 
 def check_quoted(text, facets):

@@ -766,6 +766,10 @@ def quant_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
             row["note"] = notes.render_parts(row["note"], q["repo"],
                                              q.get("file") or q["quant"],
                                              note_data(), model=repo)
+        # and the rung's own runtime block, whose note is about this file too
+        if isinstance(row.get("runtime"), dict):
+            row["runtime"] = rendered_notes(row["runtime"], q["repo"],
+                                            q.get("file") or q["quant"])
         row["url"] = HF + q["repo"]
         # the size table is keyed by whatever the repo publishes: a quant tag
         # where the filenames carry one, the filename itself where they do not,

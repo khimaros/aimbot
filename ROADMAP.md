@@ -5,6 +5,73 @@ built and is marked done when it ships.
 
 ## in progress
 
+- **the evidence table agrees with the sentence above it.** DONE. a claim prints
+  the published percentile at build time, and the table beside it ranked the
+  quant-discounted cohort under `value now` and `percentile`: qwen3.8 flash next
+  read `aa.terminalbench p99` over a 96, and hovering the p99 said p96 as well.
+  the value and percentile columns are the published figures now, the discounted
+  rank is its own `quant adjusted` column while that toggle is on, and the hover
+  gives the printed rank first and the discounted one by name. the `source`
+  column is gone: the figure in the claim already links it.
+- **the discount follows the rung you picked.** DONE. `what the quality discount
+  did` sat on the quantization tab and described the rung the table scores,
+  which is not the file the operate tab is writing a command for. it is on
+  operate now, computed for the picked rung -- including which repo's measured
+  curve answers, since qwen3.8 27b's two sweeps ran different files -- and says
+  which rung the table ranks where the two differ. `what the registry pins`
+  went the other way, onto the tab about files, and the llama-server command
+  opens by default while the client configs stay closed.
+- **a draft is given the time its budget needs.** DONE. every call that came
+  back with nothing in the last sweep -- seven of 366 -- logged `llm: timed
+  out`, and none a spent budget: a flat 180s
+  clock on an endpoint decoding at 26.8 tok/s runs out near 4800 tokens, a third
+  of the medium budget. the clock is sized from the budget now.
+- **a verdict quotes people, and the quote links to what they said.** DONE. the
+  drafting vocabulary had `"the words" {q:1a2b3c4d}` and the page had no way to
+  print it: `render_parts` read facet references only, so a quote id on disk
+  would have reached the page as a raw brace, and no verdict on disk quoted a
+  forum comment as a result. the quoted words are the part now, the way a figure
+  is -- double-underlined in the sentence, hovering to the comment they were cut
+  from and linked to the thread. a markdown render keeps the words and drops the
+  id. 77 quotes across 63 rewritten verdicts, every one checked against the
+  comment it cites by the same `check_quoted` the drafter is held to.
+- **the useful drafts are in, by hand.** of 333 drafts, the ones worth having --
+  a tensor table that contradicts its tag, a card warning, a licence trap, a
+  failure report from somebody running it -- were written into the verdicts
+  and registry notes, each fact re-read at its source rather than copied. the
+  rewrite found more wrong with the prose on disk than the drafts did: sixteen
+  verdicts said `no board scores it` or `no forum mentions` where a board or a
+  forum now does, deepseek v4.1 flash said no third party had scored it, four
+  synthesis entries each claimed to be the only or the best-scored one on typed
+  elo figures from when this roster had two TTS scores rather than nine, solar
+  open 2's note called a 320-expert moe dense,
+  nemotron lightning's called bartowski's conversion nvidia's own, and a
+  dozen notes and verdicts asserted what fits the box.
+- **qwen3.8 flash next's mtp head, as it stands.** the main ggufs carry none --
+  the converter drops it -- and two heads have been exported on their own since:
+  dzannotti's, which needs the draft-head graph from a llama.cpp PR that was
+  closed unmerged, and unsloth's six files under `MTP/`, which need PR 28243 on
+  top of PR 27836, both open. no drafter is declared on the entry: the page would
+  promise a speedup a stock build cannot deliver, and `speculative()` would
+  charge every file in `MTP/` as though one were loaded. when a PR lands, the
+  size capture needs to key those files separately before the block goes in.
+- **a rung's runtime note is drawn.** deepseek v4.1 flash's two rung-level
+  runtime notes shipped in docs/data.json and were drawn by nothing, the same
+  gap `speculative.note` had. they sit under the rung's own note in `what the
+  registry pins` now, with the fork or tracking link, and the reachability test
+  that should have caught it covers runtime notes at both levels.
+- **a redraft starts from what is there.** both drafters wrote every block from
+  nothing: the verdict drafter was called with an empty block and the note sheet
+  never carried the note on disk, so the worst drafts repeated a card's claim
+  over the note written to correct it. a redraft now sees the current words,
+  which field it is writing for -- a sampler profile's note is about samplers,
+  not the model, which all 16 drafted sampling notes got wrong -- and what serves
+  the model here, so a speech note stops relaying a card's transformers path to
+  a crispasr reader. the note sheet also stopped printing `this rung FITS`
+  beside a prompt forbidding the note to say so, and stopped showing a rung marked
+  `speculative: false` the entry's drafter. the verdict prompt gained three rules
+  for the three commonest errors: a comment counts only if it is about this
+  model, a percentile is not a rank, and the notes never restate the one_liner.
 - **a figure in the prose says where it came from, on hover.** DONE. the
   verdicts and the registry notes reference
   their figures, so what a reader sees is printed from the capture at build

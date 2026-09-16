@@ -2505,6 +2505,128 @@ def a_sheet_offers_no_reference_that_does_not_resolve():
        "and the rung with no tensor table is told so rather than left to guess")
 
 
+def load_write_prose():
+    sys.path.insert(0, RESEARCH)
+    try:
+        return load_script("write_prose", os.path.join(RESEARCH, "write-prose"))
+    finally:
+        sys.path.remove(RESEARCH)
+
+
+@test
+def a_redraft_is_handed_what_the_registry_already_says():
+    """Both drafters wrote every block from nothing.
+
+    The verdict drafter was called with an empty block and the note sheet never
+    carried the note on disk, so a draft could not know what this repository had
+    measured about the file -- and across 333 drafts the worst errors were
+    exactly that: a card's claim repeated over the note written to correct it.
+    ternary bonsai 8b's Q2_0 draft said the fork was no longer needed, where the
+    note records that mainline's Q2_0 is a different block layout that reads the
+    tensor wrong without refusing it.
+
+    A redraft sees the current words, which field it is writing, and what serves
+    the model here -- crispasr, not the transformers path a card documents.
+    """
+    prose = load_prose()
+    notes = load_notes()
+    wp = load_write_prose()
+    gib = 2 ** 30
+    data = dict(notes.load(), sizes={"pub/Main-GGUF": {"Q4_K_M": 4 * gib}})
+    pin = {"repo": "pub/Main-GGUF", "quant": "Q4_K_M"}
+    entry = {"kind": "speech", "quants": [pin], "crispasr": {"backend": "mainasr"}}
+    said = "measured here: a stock build reads this tensor wrong rather than refusing it"
+
+    block = prose.Block("registry-note",
+                        "registry-note:pub/Main#quants[pub/Main-GGUF:Q4_K_M].note",
+                        {"note": said}, "pub/Main",
+                        {"repo": "pub/Main-GGUF", "quant": "Q4_K_M", "entry": entry, "pin": pin})
+    sheet = wp.sheet_for(block, {}, data)
+    eq(said in sheet, True, "the note on disk is on the sheet: %r" % sheet[:300])
+    eq("crispasr backend mainasr" in sheet, True,
+       "and the runtime that serves it here: %r" % sheet[:300])
+    eq(bool(re.search(r"rung|this one file", sheet)), True,
+       "and which field the note is: %r" % sheet[:300])
+
+    sampling = prose.Block("registry-note", "registry-note:pub/Main#sampling.thinking.note",
+                           {"note": "the card says temp 0.6"}, "pub/Main",
+                           {"repo": "pub/Main", "entry": entry})
+    eq("sampler" in wp.sheet_for(sampling, {}, data), True,
+       "a sampling note is told it is about samplers rather than the model")
+
+    review = load_script_with_research("review_verdicts", "review-verdicts")
+    asked = []
+
+    class Endpoint:
+        def chat(self, messages, **kw):
+            asked.append(messages[-1]["content"])
+            return None
+
+        def as_json(self, reply):
+            return json.loads(reply)
+
+    models = {"vendor/Coder": {"facets": VERDICT_FACETS}}
+    review.propose("vendor/Coder", {"one_liner": "a fill-in-the-middle coder, not an agent"},
+                   [], models, Endpoint())
+    eq("a fill-in-the-middle coder, not an agent" in (asked or [""])[0], True,
+       "the verdict drafter sees the verdict it is revising: %r" % (asked[:1],))
+
+
+@test
+def a_note_is_drafted_beside_the_block_it_sits_in():
+    """A sampling note's sheet named the field and not the profile.
+
+    Told it was writing a sampler profile's note, the drafter stayed on topic --
+    and then invented the one fact it needed: kimi k3's draft said the profile
+    "falls back to llama.cpp defaults", where the profile is `tuned-here`, a set
+    chosen for this roster. the values and their `source` were one level up
+    from the note in the registry and nowhere on the sheet.
+    """
+    prose = load_prose()
+    notes = load_notes()
+    wp = load_write_prose()
+    block = next(b for b in prose.blocks("registry-note")
+                 if b.id == "registry-note:moonshotai/Kimi-K3#sampling.thinking.note")
+    sheet = wp.sheet_for(block, {}, notes.load())
+    eq("tuned-here" in sheet, True, "the profile's source is on the sheet: %r" % sheet[:400])
+    eq("temp" in sheet, True, "and its values: %r" % sheet[:400])
+
+
+def load_script_with_research(name, filename):
+    sys.path.insert(0, RESEARCH)
+    try:
+        return load_script(name, os.path.join(RESEARCH, filename))
+    finally:
+        sys.path.remove(RESEARCH)
+
+
+@test
+def the_note_sheet_leaves_fit_to_the_reader_and_drafting_to_the_rung():
+    """The sheet said what the prompt forbids the note to say.
+
+    Every note sheet carried `the box: 105.0 gib usable on a 128gb host, so this
+    rung FITS`, and the prompt beside it said whether a rung fits is not the
+    note's business. Drafts wrote "fits on 8GB GPUs" and "if you are already
+    fitting q6_k"; the reader sets the budget on the page, so none of that was
+    ever true for more than one setting.
+
+    And a rung the registry marks `speculative: false` was still shown the
+    entry's drafter as `this entry drafts with: n_max 6`, which is how a draft
+    came to say qwen3.6 27b's plain Q8_0 drafts -- the one thing that note
+    exists to say it cannot.
+    """
+    notes = load_notes()
+    gib = 2 ** 30
+    data = dict(notes.load(), sizes={"pub/Main-GGUF": {"Q4_K_M": 4 * gib}})
+    pin = {"repo": "pub/Main-GGUF", "quant": "Q4_K_M", "speculative": False}
+    entry = {"quants": [pin], "speculative": {"type": "draft-mtp", "n_max": 6}}
+    sheet = notes.fact_sheet("pub/Main-GGUF", "Q4_K_M", data, entry=entry, pin=pin)
+    eq(re.search(r"\bfits?\b|the box|usable on", sheet, re.I), None,
+       "no fit verdict on the sheet: %r" % sheet)
+    eq("drafts with" in sheet, False, "the entry's drafter is not offered: %r" % sheet)
+    eq("cannot draft" in sheet, True, "and the rung says it cannot: %r" % sheet)
+
+
 @test
 def a_quotation_in_the_wrong_marks_is_still_a_quotation():
     """Both checkers match an ascii double pair, so some quotations were unseen.
@@ -2735,6 +2857,60 @@ def how_hard_the_model_thinks_is_configured_rather_than_hardcoded():
         os.environ.pop("AIMBOT_LLM_EFFORT", None)
         if keep is not None:
             os.environ["AIMBOT_LLM_EFFORT"] = keep
+        shutil.rmtree(tmp)
+
+
+@test
+def a_call_is_given_the_time_its_token_budget_needs():
+    """The budget ends a call, and the clock does not end it first.
+
+    A flat 180 seconds was the same clock for a 1200 token extraction and a
+    16900 token medium draft. The roster's endpoint decodes at 26.8 tok/s, so
+    that clock ran out near 4800 tokens -- a third of the budget -- and every
+    draft that died logged `llm: timed out` with the budget unspent. The long
+    sheets died first, which is where a draft is most wanted.
+
+    Scaled down here: a server that takes 0.6s to answer, a fixed part of 0.1s,
+    and a decode of 1000 tok/s. The thinking call is allowed 16k tokens and
+    waits; the short call is allowed 100 and still gives up.
+    """
+    mod = load_script("llm_under_test", os.path.join(RESEARCH, "llm.py"))
+    reply = json.dumps({"choices": [{"message": {"content": "drafted"}}]}).encode()
+
+    class Slow(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            threading.Event().wait(0.6)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(reply)
+
+        def log_message(self, *a):
+            pass
+
+    httpd = Serve(("127.0.0.1", 0), Slow)
+    httpd.handle_error = lambda *a: None
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    names = ("AIMBOT_LLM_URL", "AIMBOT_LLM_MODEL", "AIMBOT_LLM_KEY", "AIMBOT_LLM_EFFORT")
+    keep = {k: os.environ.get(k) for k in names}
+    tmp = tempfile.mkdtemp()
+    try:
+        mod.ENV_FILE = os.path.join(tmp, "absent")
+        os.environ.update({"AIMBOT_LLM_URL": "http://127.0.0.1:%d/v1" % httpd.server_address[1],
+                           "AIMBOT_LLM_MODEL": "slow", "AIMBOT_LLM_EFFORT": "medium"})
+        os.environ.pop("AIMBOT_LLM_KEY", None)
+        mod.TIMEOUT, mod.DECODE_TOKENS_PER_SECOND = 0.1, 1000
+        eq(mod.chat([{"role": "user", "content": "x"}], max_tokens=100, thinking=True),
+           "drafted", "a call allowed 16k tokens waits for them")
+        eq(mod.chat([{"role": "user", "content": "x"}], max_tokens=100), None,
+           "and one allowed 100 still gives up, so the clock is sized and not removed")
+    finally:
+        httpd.shutdown()
+        for k, v in keep.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
         shutil.rmtree(tmp)
 
 
@@ -4644,6 +4820,47 @@ VERDICT_FACETS = {
     "community.hackernews": {"group": "community", "pct": 40,
                              "mentions": 3, "approval": None},
 }
+
+
+@test
+def a_quoted_comment_in_a_verdict_renders_as_the_words_with_their_thread():
+    """The drafting vocabulary had a quote id and the page had no way to print one.
+
+    A verdict cites a forum comment as `"the words" {q:1a2b3c4d}`, which is
+    what makes the words checkable -- the quote check compares them against the
+    comment the id names. But `render_parts` read only facet references, so a
+    quote id stored on disk would have reached the page as a raw brace, and no
+    verdict on disk quotes anybody as a result: the one form that ties reception
+    to a source was the one form nothing could show.
+
+    The quoted words are the part, the way a figure is: they keep their place in
+    the sentence and carry the thread they came from.
+    """
+    v = load_script("verdicts", os.path.join(RESEARCH, "verdicts.py"))
+    comment = "Honestly the extreme overthinking is the only thing holding it back."
+    facets = dict(VERDICT_FACETS, **{"community.reddit-localllama": dict(
+        VERDICT_FACETS["community.reddit-localllama"],
+        refs=[{"quote": comment, "url": "https://old.reddit.com/r/x/1/"}])})
+    qid = v.quote_id(comment)
+
+    parts = v.render_parts('users mention "extreme overthinking" {%s} at length' % qid,
+                           facets)
+    quoted = [p for p in parts if isinstance(p, dict)]
+    eq(len(quoted), 1, "one quotation, one part: %r" % (parts,))
+    eq(quoted[0].get("shown"), '"extreme overthinking"',
+       "the part is the quoted words themselves: %r" % (quoted[0],))
+    eq(quoted[0].get("url"), "https://old.reddit.com/r/x/1/",
+       "and carries the thread it was said in: %r" % (quoted[0],))
+    eq(quoted[0].get("field"), "reddit", "named the way a reader spells the forum")
+
+    out, missing = v.render('users mention "extreme overthinking" {%s}' % qid, facets)
+    eq(out, 'users mention "extreme overthinking"',
+       "markdown keeps the words and drops the id: %r" % out)
+    eq(missing, [], "with nothing unresolved")
+
+    out, missing = v.render('users mention "extreme overthinking" {q:deadbeef}', facets)
+    eq("{q:deadbeef}" in out and missing == ["q:deadbeef"], True,
+       "a quote the capture no longer holds stays visible: %r %r" % (out, missing))
 
 
 @test

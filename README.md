@@ -758,25 +758,27 @@ comparison against another model prints bare on purpose. a model's detail opens 
 url (`#model=Qwen/Qwen3.6-27B&tab=operate`) with six tabs, one per kind of
 claim: `overview` what it is, `quality` what third parties measured, `community`
 what each forum said, `vendor` what the people selling it say, `quantization`
-what each published rung is and what reading it at one cost, and `operate` how to
-run it. keeping the vendor's own paragraph on its own tab is the point rather
+what the registry pins and what each published rung is, and `operate` how to run
+it and what the rung you picked costs. keeping the vendor's own paragraph on its own tab is the point rather
 than tidiness -- it used to open the overview, which gave marketing copy the
 position the measurements earned.
 
-the `quantization` tab carries the rung ladder: every quant each repo publishes,
-with the bits per weight derived from file size beside the bits per weight READ
-out of that file's tensor table, and the ggml type mix behind the label -- next
-to what the retention discount cost this model, which curve said so, and who
-measured it. the ladder is drawn for every repo rather than for the one the
-`operate` chips have picked, and the rung in bold is the one the ranking is
-scoring: a tab about what a quant IS should not redraw because somebody chose a
-file to write a command for.
+the `quantization` tab carries the files the registry pins, with their notes,
+and the rung ladder: every quant each repo publishes, with the bits per weight
+derived from file size beside the bits per weight READ out of that file's tensor
+table, and the ggml type mix behind the label -- next to who measured what. the
+ladder is drawn for every repo rather than for the one the `operate` chips have
+picked, and the rung in bold is the one the ranking is scoring: a tab about what
+a quant IS should not redraw because somebody chose a file to write a command
+for.
 
-the `operate` tab emits a `llama-server` argv, a pi `models.json` provider
-block, the request body carrying the thinking knob, and a vllm line -- built
-from a quant and a sampling profile you pick, since some repos publish twenty
-quants and a snippet for the one the registry pinned is no use to somebody who
-cannot fit it. every flag in them is a pure function of registry facts -- the
+the `operate` tab emits a `llama-server` argv, open by default, a pi
+`models.json` provider block, the request body carrying the thinking knob, and a
+vllm line -- built from a quant and a sampling profile you pick, since some repos
+publish twenty quants and a snippet for the one the registry pinned is no use to
+somebody who cannot fit it. beside them is what the retention discount does to
+the picked rung and which curve says so, since a measured curve answers only for
+the repo it ran. every flag in them is a pure function of registry facts -- the
 quant repo, the profile's samplers, the native context, the derived knob. what
 context to serve it at, on which host, under which server binary is still
 policy and still absent.

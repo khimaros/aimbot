@@ -163,6 +163,19 @@ def urls_beside(block):
                   if isinstance(v, str) and v.startswith("http"))
 
 
+def own_facts(node):
+    """{key: value} of the block a note sits in, without the note or what nests.
+
+    A sampling note is about the profile beside it -- its `source` and its values
+    -- and a drafter shown only the field name invented them: kimi k3's draft said
+    the profile fell back to llama.cpp defaults where it is `tuned-here`.
+    """
+    return {k: v for k, v in node.items()
+            if k not in NOTE_KEYS and (not isinstance(v, (dict, list))
+                                       or (isinstance(v, list)
+                                           and all(not isinstance(i, (dict, list)) for i in v)))}
+
+
 def _walk_notes(node, repo, path, out, subject=None, entry=None):
     """Every note under one model, keyed by where it hangs.
 
@@ -180,7 +193,8 @@ def _walk_notes(node, repo, path, out, subject=None, entry=None):
                 out.append(Block("registry-note", "registry-note:%s#%s" % (repo, at),
                                  {"note": value}, repo,
                                  dict(subject or {"repo": repo, "quant": None},
-                                      entry=entry, beside=urls_beside(node))))
+                                      entry=entry, beside=urls_beside(node),
+                                      node=own_facts(node))))
             elif isinstance(value, (dict, list)):
                 _walk_notes(value, repo, path + [key] if key in NESTED else path,
                             out, subject, entry)

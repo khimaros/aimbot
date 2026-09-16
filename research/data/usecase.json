@@ -115,7 +115,7 @@
   },
   "AutoArk-AI/ARK-ASR-3B": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "languages outside its 19",
      "synthesis"
@@ -124,7 +124,7 @@
     "evidence": [
      "kind speech, audio -> text",
      "crispasr backend ark-asr",
-     "no board scores it"
+     "{open-asr.accuracy}"
     ],
     "one_liner": "19 european languages out of one 3b encoder-decoder.",
     "use_for": [
@@ -878,10 +878,11 @@
   },
   "FireRedTeam/FireRedPunc": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "transcription",
-     "being served as a model"
+     "being served as a model",
+     "languages beyond english and chinese -- fullstop-punc covers those"
     ],
     "confidence": "low",
     "evidence": [
@@ -891,9 +892,10 @@
      "no board scores it",
      "Apache-2.0"
     ],
-    "one_liner": "xiaohongshu's punctuation model, from the team behind the firered-asr entry.",
+    "notes": "a CTC head emits no punctuation at all, and the recipe crispasr's own threads give is one of two post-steps: \"pair with `--punc-model fireredpunc-q8_0.gguf` (BERT-base, EN+CN) or `fullstop-punc-q4_k.gguf` (XLM-R-large, multilingual)\" {q:3e162a9d}. this is the smaller of the two and the one \"preferred for Mandarin\" {q:bff6d2f1}.",
+    "one_liner": "xiaohongshu's punctuation model, and the english-and-chinese half of the post-step crispasr's CTC transcribers need.",
     "use_for": [
-     "punctuation restoration, particularly beside firered-asr"
+     "restoring punctuation after a CTC transcriber, mandarin especially"
     ]
    },
    "community": {
@@ -1023,7 +1025,7 @@
   },
   "FunAudioLLM/Fun-ASR-MLT-Nano-2512": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "synthesis"
     ],
@@ -1033,6 +1035,7 @@
      "crispasr backend fun-asr-mlt-nano",
      "no board scores it"
     ],
+    "notes": "the card's benchmark tables are not about this file: \"the model card now explicitly marks the existing benchmark tables as Fun-ASR family-level results, not checkpoint-specific results\" {q:09f7fac3}. no board scores the checkpoint either, so nothing here says how well this one transcribes.",
     "one_liner": "alibaba's multilingual nano transcriber, the smaller half of the fun-asr pair.",
     "use_for": [
      "multilingual transcription on a small budget"
@@ -1101,7 +1104,7 @@
   },
   "FunAudioLLM/Fun-ASR-Nano-2512": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "multilingual work -- the MLT sibling is for that",
      "synthesis"
@@ -1110,7 +1113,7 @@
     "evidence": [
      "kind speech, audio -> text",
      "crispasr backend funasr",
-     "no board scores it"
+     "{open-asr.accuracy}"
     ],
     "one_liner": "the monolingual nano of the same release, from the publisher behind sensevoice and paraformer.",
     "use_for": [
@@ -4499,10 +4502,10 @@
   },
   "MiniMaxAI/MiniMax-M3": {
    "assessed": {
-    "assessed_on": "2026-08-18",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "one-shot coding in python or c#",
-     "a 128gb box with context to spare"
+     "the lowest rungs, until somebody confirms it quantizes well"
     ],
     "confidence": "high",
     "evidence": [
@@ -4513,7 +4516,7 @@
      "{lang.python}",
      "{aa.scicode}"
     ],
-    "notes": "the split is the point. {aa.non_hallucination} and {aa.ifbench} against {lang.python} and c# {lang.csharp} describes a model that does what it is told and admits what it does not know, which is not what a coding index measures. it is the only model added this sweep that takes images. the smallest rung is 120 gib, so it clears a 128gb box with nothing left for kv cache.",
+    "notes": "the split is the point. {aa.non_hallucination} and {aa.ifbench} against {lang.python} and c# {lang.csharp} describes a model that does what it is told and admits what it does not know, which is not what a coding index measures. it takes images as well. people who run it put that shape to work as a reviewer -- it \"reviews the output as the Advisor and recommends changes, catches bugs\" {q:a0984a3d} -- and the one report on the low rungs is cautious: \"either is a bad quant or minimax m3 is hard to quantize\" {q:27957180}. the smallest rung is 120 gib.",
     "one_liner": "the registry's most calibrated model: first on non-hallucination and instruction following, middling on the coding benchmarks everyone quotes.",
     "use_for": [
      "instruction following",
@@ -6863,7 +6866,7 @@
   },
   "OpenMOSS-Team/MOSS-Transcribe-preview-2B": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "multi-speaker audio needing labels -- use MOSS-Transcribe-Diarize",
      "synthesis"
@@ -6872,8 +6875,9 @@
     "evidence": [
      "kind speech, audio -> text",
      "crispasr backend moss-transcribe",
-     "no board scores it"
+     "{open-asr.accuracy}"
     ],
+    "notes": "the open asr board puts it at {open-asr.accuracy}, and the one discussion about that figure questions it: a user reports \"a suspicious transcript-matching pattern in the MOSS-Transcribe-preview-2B evaluation results\" {q:780f09b0} and asks about its \"generalization ability\" {q:e579df35}. read the score as unreproduced.",
     "one_liner": "the transcribe-only 2b: the diarizing sibling already carried is the one that labels speakers.",
     "use_for": [
      "plain transcription on the MOSS stack"
@@ -6973,7 +6977,7 @@
   },
   "OuteAI/OuteTTS-0.3-1B": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "any commercial deployment -- CC-BY-NC-SA-4.0",
      "speech recognition"
@@ -6985,6 +6989,7 @@
      "CC-BY-NC-SA-4.0, the only one in this roster",
      "no board scores it"
     ],
+    "notes": "{community.hf-discussions} overstates the reception: the praise is one line on another model's thread, \"Try OprheusTTS or OuteTTS much better easy to train\" {q:46318224}, and the thread on its own repo is an import failure in the python package.",
     "one_liner": "english cloning under the roster's only share-alike non-commercial licence.",
     "use_for": [
      "english voice cloning in non-commercial work"
@@ -7329,7 +7334,7 @@
   },
   "Qwen/Qwen3-ASR-0.6B": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "deployment -- no gguf exists",
      "work the 1.7b already carried covers"
@@ -7339,7 +7344,8 @@
      "kind speech, audio -> text",
      "crispasr backend qwen3, against the 1.7b's qwen3-1.7b",
      "no gguf anywhere",
-     "no board scores it"
+     "{open-asr.accuracy}",
+     "{voicearena.us-english}"
     ],
     "one_liner": "the 0.6b rung of the qwen3-asr line, reached by a different backend from the 1.7b already carried.",
     "use_for": [
@@ -8603,7 +8609,7 @@
   },
   "Qwen/Qwen3-Coder-Next": {
    "assessed": {
-    "assessed_on": "2026-08-18",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "science / reasoning",
      "physics"
@@ -8615,7 +8621,7 @@
      "{aa.scicode}",
      "reddit 59 mentions at 53% approval"
     ],
-    "notes": "the gap is the interesting part: {swerebench.resolved} against {aa.scicode}. swe-rebench builds its tasks from pull requests merged after release, so that number is the one that cannot have been trained against. forum reception is mixed (hf-discussions 0% approval). it is superseded on general capability by either 27b at a third of the size, so the case for a slot is the swe-rebench result and the decode speed rather than the indices. the hallucination score is the worst in the set.",
+    "notes": "the gap is the interesting part: {swerebench.resolved} against {aa.scicode}. swe-rebench builds its tasks from pull requests merged after release, so that number is the one that cannot have been trained against. forum reception is mixed (hf-discussions 0% approval). it is superseded on general capability by either 27b at a third of the size, so the case for a slot is the swe-rebench result and the decode speed rather than the indices. the hallucination score is the worst in the set. the tool calling is what goes first at four bits: \"Q4 sometimes fails with toolcalls\" {q:6821da04}, and an IQ4_NL user reports a \"tool calling issue\" {q:fd6adac8} that the IQ4_XS did not have.",
     "one_liner": "resolves real merged pull requests well above what its benchmark indices predict, on a harness built from commits made after its release.",
     "use_for": [
      "real-world bug fixing",
@@ -15708,7 +15714,7 @@
   },
   "Qwen/Qwen3.5-9B": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "coding",
      "scientific code",
@@ -15719,7 +15725,7 @@
      "{aa.tau2}",
      "{aa.gpqa}"
     ],
-    "notes": "{aa.tau2} with {card.mmmu}, {card.osworld} and scicode at the floor is a narrow shape -- fine as a router or a cheap first pass, not as the model that finishes the job.",
+    "notes": "{aa.tau2} with {card.mmmu}, {card.osworld} and scicode at the floor is a narrow shape -- fine as a router or a cheap first pass, not as the model that finishes the job. keep the reasoning on for even that: \"when I used Qwen3.5 9b sans reasoning it performed horrendously across almost every task\" {q:6aa40f69}.",
     "one_liner": "a small tool-caller: it holds up on tau2 and falls away everywhere else.",
     "use_for": [
      "agentic / tool use at small scale",
@@ -20084,7 +20090,7 @@
   },
   "Qwen/Qwen3.8-2.4T-A95B": {
    "assessed": {
-    "assessed_on": "2026-08-18",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "anything local",
      "latency-sensitive chat"
@@ -20098,7 +20104,7 @@
      "{aa.intelligence}",
      "{aa.speed}"
     ],
-    "notes": "it sets the ceiling rather than joining the ladder: the smallest published rung is 370 gib, so every recommendation on this box is a statement about how far below this a runnable model sits. artificial analysis is so far the only third party to have scored it -- gbench, lmarena, swe-rebench and epoch all have nothing -- so the lead is one harness's answer rather than a consensus. it is also the slowest thing here per token, {aa.speed}.",
+    "notes": "it sets the ceiling rather than joining the ladder: the smallest published rung is 370 gib, so it is a reference point for the models that run rather than one of them. artificial analysis is so far the only third party to have scored it -- gbench, lmarena, swe-rebench and epoch all have nothing -- so the lead is one harness's answer rather than a consensus. it is also the slowest thing here per token, {aa.speed}. and the released weights are in question: a discussion thread reports \"A large number of matrices starting from blk 0, blk 1, blk 2, blk 10 etc are singular\" {q:50fe20cb}, and puts it plainly, \"0.0% zero blocks in Kimi K3 vs 84.3% in Qwen3.8 2.4T is not a stylistic difference\" {q:3852f480}. until that is answered, the score describes the model artificial analysis ran rather than necessarily the file on the hub.",
     "one_liner": "the strongest open-weights model this corpus measures, and the one nothing here can load.",
     "use_for": [
      "agentic / tool use",
@@ -22033,7 +22039,7 @@
   },
   "Qwen/Qwen3.8-Flash-Next": {
    "assessed": {
-    "assessed_on": "2026-08-29",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "factual recall"
     ],
@@ -22048,8 +22054,8 @@
      "{community.hf-discussions}, reddit 85 mentions at 100% approval on two scored posts",
      "no gbench, swe-rebench or epoch entry"
     ],
-    "notes": "artificial analysis scored it three days after release, and it leads qwen3.8-27b on most of the axes the two share: {aa.intelligence:value} against {aa.intelligence@Qwen/Qwen3.8-27B:value}, terminal-bench {aa.terminalbench:value} against {aa.terminalbench@Qwen/Qwen3.8-27B:value}. three go the other way and they are the ones to know about: the 27b answers where this one declines ({aa.non_hallucination} against {aa.non_hallucination@Qwen/Qwen3.8-27B}), holds a longer context better ({aa.lcr} against {aa.lcr@Qwen/Qwen3.8-27B}) and is ahead on tool use ({aa.tau_banking} against {aa.tau_banking@Qwen/Qwen3.8-27B}). what the forums discuss is none of that. 75 huggingface discussion posts, almost all about speed and memory: 11 t/s reported without MTP, and no mainline gguf has an MTP head because llama.cpp's converter drops it and PR 27836 is still open. 41% of the file is the n-gram table, which is what both the '4x slower than it should be' and the 'keep the n-gram table on nvme' threads are about, and it is also why the quant ladder bottoms out at 67.6gib -- its 160-column rows take only block-32 types. AtomicChat is the one publisher that shards the table separately, so 38 of their 93 gb page from ssd rather than staying resident.",
-    "one_liner": "the qwen4 architecture preview, and the highest-measured model here that still fits the box -- bought with a 51b n-gram table that is most of what makes it awkward to serve.",
+    "notes": "artificial analysis scored it three days after release, and it leads qwen3.8-27b on most of the axes the two share: {aa.intelligence:value} against {aa.intelligence@Qwen/Qwen3.8-27B:value}, terminal-bench {aa.terminalbench:value} against {aa.terminalbench@Qwen/Qwen3.8-27B:value}. three go the other way and they are the ones to know about: the 27b answers where this one declines ({aa.non_hallucination} against {aa.non_hallucination@Qwen/Qwen3.8-27B}), holds a longer context better ({aa.lcr} against {aa.lcr@Qwen/Qwen3.8-27B}) and is ahead on tool use ({aa.tau_banking} against {aa.tau_banking@Qwen/Qwen3.8-27B}). what the forums discuss is none of that. {community.hf-discussions}, almost all about speed and memory: \"~ 11ts (no MTP)\" {q:92272aaa} against a 22 for qwen3.5 122b on the same box. the main ggufs carry no MTP head, and the separate heads unsloth has since published need llama.cpp PR 28243, still open, so a stock build decodes without one. 41% of the file is the n-gram table, which is what both the '4x slower than it should be' and the 'keep the n-gram table on nvme' threads are about, and it is also why the quant ladder bottoms out at 67.6gib -- its 160-column rows take only block-32 types. AtomicChat is the one publisher that shards the table separately, so 38 of their 93 gb page from ssd rather than staying resident.",
+    "one_liner": "the qwen4 architecture preview, among the highest-measured models here -- bought with a 51b n-gram table that is most of what makes it awkward to serve.",
     "use_for": [
      "coding",
      "agentic / tool use",
@@ -22894,23 +22900,25 @@
   },
   "ResembleAI/chatterbox": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
-     "speech recognition"
+     "speech recognition",
+     "work where audible artifacts are not acceptable"
     ],
     "confidence": "medium",
     "evidence": [
      "kind speech, text -> audio",
-     "artificial analysis rates it on the TTS board",
+     "{aa-tts.elo}",
      "crispasr caps: tts, voice cloning, src/tgt language",
      "23 languages",
      "MIT"
     ],
-    "one_liner": "the only synthesis model in this roster a third party scores, and it clones from a clip.",
+    "notes": "artificial analysis rates it {aa-tts.elo}, yet it is what other projects aim at -- one small model is \"trying to reach and eventually beat chatterbox quality in <100M parameters\" {q:1480b801} -- and what a production user went back to: \"fallen back to chatterbox models, as they are much more predictable and reliable with broader language support\" {q:9c02ec4a}. the weakness its own maintainers acknowledge is artifacts, \"definitely a known issue with Chatterbox\" {q:dc1dc88f}.",
+    "one_liner": "a cloning synthesiser the board rates below the middle and the forums treat as the reference everyone else is measured against.",
     "use_for": [
      "voice cloning",
      "multilingual text to speech",
-     "the synthesis slot where a number is needed"
+     "a predictable default voice"
     ]
    },
    "community": {
@@ -23688,16 +23696,18 @@
   },
   "Tongyi-MAI/Z-Image-Turbo": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "text generation"
     ],
     "confidence": "low",
     "evidence": [
      "kind image, text -> image",
-     "registry components: vae and llm"
+     "registry components: vae and llm",
+     "{aa-t2i.elo}",
+     "{lmarena-t2i.rating}"
     ],
-    "notes": "needs three weights rather than one: the diffusion model, a vae, and a qwen3-4b text encoder. no benchmark in this corpus scores image models.",
+    "notes": "needs three weights rather than one: the diffusion model, a vae, and a qwen3-4b text encoder. both image boards put it mid-field, {aa-t2i.elo} and {lmarena-t2i.rating}, so the case for it is speed at 6b rather than the top of the board. its own discussion tab notes it \"works best with long and detailed prompts\" {q:5c036ce3}.",
     "one_liner": "a single-stream diffusion transformer for fast text-to-image, run here with a separate vae and text encoder.",
     "use_for": [
      "text to image",
@@ -26014,7 +26024,7 @@
   },
   "XiaomiMiMo/MiMo-V2.5-ASR": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "work needing the top of a quant ladder -- Q4_K is the pin",
      "synthesis"
@@ -26026,6 +26036,7 @@
      "no Q8_0 rung published",
      "no board scores it"
     ],
+    "notes": "it does not read audio the way whisper-shaped models do: it \"consumes 8-channel RVQ codes from a separate audio tokenizer\" {q:64f5d55e} rather than a mel spectrogram, so the tokenizer is a second model in the pipeline and not a preprocessing step.",
     "one_liner": "xiaomi's transcriber off the MiMo line whose text model this roster already ranks.",
     "use_for": [
      "transcription alongside the MiMo text stack"
@@ -26094,7 +26105,7 @@
   },
   "Zyphra/Zonos-v0.1-transformer": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "a single-file deployment -- the codec must be present",
      "non-english work"
@@ -26104,9 +26115,10 @@
      "kind speech, text -> audio",
      "crispasr caps: tts, voice cloning, temperature, flash attention",
      "needs cstr/dac-44khz-GGUF beside it",
-     "no board scores it",
+     "{aa-tts.elo}",
      "Apache-2.0"
     ],
+    "notes": "artificial analysis rates it {aa-tts.elo}, near the floor of the synthesis board, which puts the 44.1khz output rate in perspective: fidelity of the signal rather than of the voice. the one non-english report is that the german model \"doesn't seems to generate speech without an English accent\" {q:684d44ae}.",
     "one_liner": "the highest sample rate in this roster at 44.1khz, decoding through a separate DAC codec.",
     "use_for": [
      "english voice cloning where output fidelity matters"
@@ -26221,7 +26233,7 @@
   },
   "aadel4/omniASR-CTC-1B-v2": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "synthesis"
     ],
@@ -26232,6 +26244,7 @@
      "a superseded Q4_K_OLD rung sits beside the current ones",
      "no board scores it"
     ],
+    "notes": "a CTC head emits no punctuation, so its output wants a post-step: it is on fullstop-punc's own list of the crispasr backends \"that don't emit punctuation natively\" {q:e5349594}.",
     "one_liner": "the transcription-side counterpart to omnivoice: meta's omnilingual work behind a CTC head.",
     "use_for": [
      "low-resource language transcription",
@@ -26485,7 +26498,7 @@
   },
   "black-forest-labs/FLUX.1-dev": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "commercial work -- the dev weights are non-commercial",
      "text generation"
@@ -26496,7 +26509,7 @@
      "sd.cpp detects it as is_flux, read from the gguf header",
      "leejet publishes the gguf and wrote the loader",
      "needs a t5-xxl encoder and ae.safetensors beside it",
-     "no board scores it"
+     "{aa-t2i.elo}"
     ],
     "one_liner": "the generation before FLUX.2, and the one sd.cpp's own author publishes a conversion for.",
     "use_for": [
@@ -26739,19 +26752,21 @@
   },
   "black-forest-labs/FLUX.1-schnell": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "work needing the dev model's fidelity",
-     "text generation"
+     "text generation",
+     "a permissive flux where quality matters -- klein 4b is apache-2.0 too"
     ],
     "confidence": "low",
     "evidence": [
      "kind image, text -> image",
      "sd.cpp detects it as is_flux, read from the gguf header",
      "apache 2.0, against the dev weights' non-commercial licence",
-     "no board scores it"
+     "{aa-t2i.elo}"
     ],
-    "one_liner": "the four-step apache-2.0 flux: the only one here a business can use without reading a licence.",
+    "notes": "artificial analysis rates it {aa-t2i.elo} against dev's {aa-t2i.elo@black-forest-labs/FLUX.1-dev}, near the floor of the image board, so the licence is what it offers rather than the picture. it is no longer the only permissive flux here: FLUX.2-klein-4B is apache-2.0 as well.",
+    "one_liner": "the four-step apache-2.0 flux.1: permissive where dev is not, and rated near the floor of the image board.",
     "use_for": [
      "text to image under a permissive licence",
      "fast generation at four steps"
@@ -27572,7 +27587,7 @@
   },
   "bosonai/higgs-audio-v3-stt": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "deployment -- no gguf exists"
     ],
@@ -27581,11 +27596,12 @@
      "kind speech, audio -> text",
      "crispasr backend higgs-stt",
      "no gguf anywhere",
-     "no board scores it"
+     "{open-asr.accuracy}"
     ],
-    "one_liner": "the transcription half of boson's higgs-audio v3.",
+    "one_liner": "the transcription half of boson's higgs-audio v3, near the top of the open asr board and with no conversion to run.",
     "use_for": [
-     "tracking the higgs-audio stack"
+     "tracking the higgs-audio stack",
+     "tracking one of the most accurate open transcribers"
     ]
    },
    "community": {
@@ -29716,7 +29732,7 @@
   },
   "deepseek-ai/DeepSeek-V4-Pro-0813": {
    "assessed": {
-    "assessed_on": "2026-08-18",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "anything local",
      "questions where declining to answer is the right answer"
@@ -29731,7 +29747,7 @@
      "{aa.non_hallucination}",
      "{lang.rust}"
     ],
-    "notes": "the best-measured model added this sweep -- aa, gbench, lmarena, swe-rebench and its own card all carry it -- and the one clear weakness is non-hallucination, {aa.non_hallucination}: it answers rather than declines, which is the opposite of minimax m3 beside it. the language breakdown is lopsided: {lang.csharp}, {lang.rust} and {lang.kotlin} against {lang.javascript} and {lang.typescript}.",
+    "notes": "the best-measured model added this sweep -- aa, gbench, lmarena, swe-rebench and its own card all carry it -- and the one clear weakness is non-hallucination, {aa.non_hallucination}: it answers rather than declines, which is the opposite of minimax m3 beside it. the language breakdown is lopsided: {lang.csharp}, {lang.rust} and {lang.kotlin} against {lang.javascript} and {lang.typescript}. one reddit comment says \"new testing has come out to suggest that Deepseek V4 Pro August is benchmaxxed\" {q:50251580}; that is a claim rather than a measurement, and five agreeing sources are what it would have to overturn.",
     "one_liner": "the flash model's flagship sibling: the same shape of answer, corroborated by five sources instead of one, at ten times the file size.",
     "use_for": [
      "coding",
@@ -31032,25 +31048,26 @@
   },
   "deepseek-ai/DeepSeek-V4.1-Flash": {
    "assessed": {
-    "assessed_on": "2026-09-10",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "anything local",
      "production work of any kind",
-     "anything where the claim needs to be independently checked"
+     "work where declining to answer beats a confident guess"
     ],
-    "confidence": "low",
+    "confidence": "medium",
     "evidence": [
+     "{aa.intelligence}",
+     "{gbench.overall}",
+     "{aa.non_hallucination}",
      "{card.mmlu_pro}",
-     "{card.mmmu_pro}",
-     "no third-party suite scores it: aa, gbench, lmarena, swerebench and epoch are all empty",
-     "the only complete gguf is 157.33 gib at 2.45 read bits per weight, and no runtime has loaded it"
+     "vcruz305's ladder runs on its own llama.cpp branch, not upstream"
     ],
-    "notes": "released 2026-09-10, so no third-party suite has scored it and every id resolves to nothing; the card is all there is. what it claims is worth watching for this roster specifically: the global kv cache is 890 bytes per token against v4 flash's ~3.5kib, which is the number that decides whether a 1m context is affordable rather than nominal, and only 8b of 552b is active in prefill. the checkpoint also takes images, which v4 flash did not. the practical position is the opposite of the claims. one complete gguf exists -- apetersson's 157gib mixed-q2, uncalibrated, missing the engram tables, the dspark blocks and the vision tensors -- and its own publisher records that no runtime has executed it end to end: llama.cpp's converter PR is a draft and converter-only, vllm has no deepseek tensor map in its gguf plugin, and the sglang path needs a four-rule mapper patch plus a 180-288gb card with the engram tables host-resident. the conventional k-quant ladder everyone is actually waiting for is vcruz305's, and it is 37% uploaded -- 383 of 1046 tensors over 3 of 7 shards -- so the 95.75 gib beside it is a third of a pack rather than a rung that fits. treat the card facets here with more than the usual suspicion: the extractor read the BASE model table, so `card.gpqa` is the 53.1 of supergpqa rather than the 90.9 the instruct model claims on gpqa diamond.",
+    "notes": "released 2026-09-10, and the third parties have caught up since: artificial analysis puts it at {aa.intelligence}, with {aa.lcr} on long context and {aa.terminalbench_v40} on terminal work, and gbench at {gbench.overall}. the axis it falls off is declining to answer, {aa.non_hallucination}: it answers where it should not. what the card claims is worth watching for this roster specifically: the global kv cache is 890 bytes per token against v4 flash's ~3.5kib, which is the number that decides whether a 1m context is affordable rather than nominal, and only 8b of 552b is active in prefill. the checkpoint also takes images, which v4 flash did not. the practical position is the opposite of the scores. apetersson's 157gib mixed-q2 is uncalibrated and missing the engram tables, the dspark blocks and the vision tensors, and its own publisher records that no runtime has executed it end to end. the conventional k-quant ladder is vcruz305's, whole now from Q2_K up, and its card says the files do not run on upstream llama.cpp yet: the converter is an open PR, and the runtime is a branch of vcruz305's own fork with sparse attention still the unfinished piece. treat the card facets here with more than the usual suspicion: the extractor read the BASE model table, so `card.gpqa` is the 53.1 of supergpqa rather than the 90.9 the instruct model claims on gpqa diamond.",
     "one_liner": "a 552b multimodal moe whose whole argument is the kv cache -- 890 bytes a token, a quarter of v4 flash -- and which nothing on this roster can currently run.",
     "use_for": [
      "tracking what the roster cannot currently load",
      "long context",
-     "agentic coding, on its own claims"
+     "agentic coding"
     ]
    },
    "community": {
@@ -32438,8 +32455,9 @@
   },
   "facebook/omniASR-LLM-300M": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
+     "english and vietnamese transcription",
      "latency-bound work, where the CTC variant is cheaper",
      "synthesis"
     ],
@@ -32448,11 +32466,14 @@
      "kind speech, audio -> text",
      "crispasr backend omniasr-llm",
      "an `unlimited` long-context conversion sits under the same backend",
-     "no board scores it"
+     "{voicearena.arabic}",
+     "{voicearena.us-english}"
     ],
+    "notes": "voice arena scores it per language, and the spread is the finding: {voicearena.arabic} and {voicearena.romanian} against {voicearena.us-english} and {voicearena.vietnamese}, with portuguese between at {voicearena.portuguese}. a pick for the languages it leads on, not a general transcriber.",
     "one_liner": "the LLM-decoder variant of the same omnilingual line, against the CTC head beside it.",
     "use_for": [
-     "low-resource transcription where a decoder beats a CTC head"
+     "low-resource transcription where a decoder beats a CTC head",
+     "arabic and romanian transcription"
     ]
    },
    "community": {
@@ -32613,7 +32634,7 @@
   },
   "fishaudio/s2-pro": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "speech recognition",
      "text generation"
@@ -32621,9 +32642,10 @@
     "confidence": "low",
     "evidence": [
      "kind speech, text -> audio",
-     "card: fine-grained inline control of prosody and emotion"
+     "card: fine-grained inline control of prosody and emotion",
+     "{aa-tts.elo}"
     ],
-    "notes": "its chat template drops a developer message and accepts unlimited leading system messages, which is unusual for a speech model and recorded in turns anyway.",
+    "notes": "artificial analysis rates it {aa-tts.elo}, near the top of the synthesis board. the inline control is the claim to test before relying on it: one user reports that across languages and cloned voices \"most tags are simply ignored and do nothing\" {q:512aac7a}, and a cloning benchmark found \"strong German and Arabic speaker similarity\" {q:35a1d8e7} but \"slower than OmniVoice and Chatterbox\" {q:35a1d8e7}. its chat template drops a developer message and accepts unlimited leading system messages, which is unusual for a speech model and recorded in turns anyway.",
     "one_liner": "a text-to-speech model with inline control of prosody and emotion, trained on 10m+ hours.",
     "use_for": [
      "text to speech",
@@ -33148,7 +33170,7 @@
   },
   "google/functiongemma-270m-it": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "chat",
      "reasoning",
@@ -33157,9 +33179,9 @@
     "confidence": "low",
     "evidence": [
      "tuned tags: tools only",
-     "no facet carried by any source"
+     "{community.hf-discussions}"
     ],
-    "notes": "the only registry entry whose sole capability tag is `tools`. nothing here measures routing accuracy, so it is unranked.",
+    "notes": "the only registry entry whose sole capability tag is `tools`. nothing here measures routing accuracy, so it is unranked. the constraint to design around is in its own discussion tab: the tool calling \"isn't implemented as a modular parser, it's learned auto-aggressive behaviour conditioned on the exact tool definition format used during instruction tuning\" {q:73da1293}, so a harness that describes tools its own way should expect prose where a call was wanted. the fine-tuning question on its repo is exactly that, how to get a call \"instead of generating plain text\" {q:be06ee34}.",
     "one_liner": "a 270m model tuned for one job: turning a request into a function call.",
     "use_for": [
      "function-call routing",
@@ -40011,7 +40033,7 @@
   },
   "ibm-granite/granite-speech-3.3-2b": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "deployment -- no gguf exists",
      "anything the 4.1 entries cover"
@@ -40021,7 +40043,7 @@
      "kind speech, audio -> text",
      "crispasr backend granite",
      "no gguf anywhere",
-     "no board scores it"
+     "{open-asr.accuracy}"
     ],
     "one_liner": "the oldest of the four granite transcribers crispasr carries, superseded by the 4.1 line.",
     "use_for": [
@@ -40088,7 +40110,7 @@
   },
   "ibm-granite/granite-speech-4.1-2b": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "deployment -- no gguf exists"
     ],
@@ -40097,7 +40119,7 @@
      "kind speech, audio -> text",
      "crispasr backend granite-4.1",
      "no gguf anywhere",
-     "no board scores it"
+     "{open-asr.accuracy}"
     ],
     "one_liner": "the current granite speech 2b, one of three 4.1 variants each with its own backend.",
     "use_for": [
@@ -40272,7 +40294,7 @@
   },
   "ibm-granite/granite-speech-4.1-2b-nar": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "deployment -- no gguf exists",
      "work needing beam search"
@@ -40282,7 +40304,7 @@
      "kind speech, audio -> text",
      "crispasr backend granite-4.1-nar",
      "no gguf anywhere",
-     "no board scores it"
+     "{open-asr.accuracy}"
     ],
     "one_liner": "the non-autoregressive 4.1: one forward pass, the trade sensevoice and paraformer also make.",
     "use_for": [
@@ -40349,7 +40371,7 @@
   },
   "ibm-granite/granite-speech-4.1-2b-plus": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "deployment -- no gguf exists"
     ],
@@ -40360,6 +40382,7 @@
      "no gguf anywhere",
      "no board scores it"
     ],
+    "notes": "the one report of it at work is a failure in the mode that sets it apart: \"unstable behavior when using granite-speech-4.1-2b-plus in Speaker Attributed ASR (SAA) mode on French conversational meeting audio\" {q:2fe7d974}.",
     "one_liner": "the `-plus` 4.1 variant, carried because crispasr dispatches it separately.",
     "use_for": [
      "tracking the third 4.1 variant"
@@ -40444,15 +40467,18 @@
   },
   "ideogram-ai/ideogram-4-fp8": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
-     "text generation"
+     "text generation",
+     "commercial work before reading the licence"
     ],
     "confidence": "low",
     "evidence": [
      "kind image, text -> image",
-     "no card summary published"
+     "no card summary published",
+     "{aa-t2i.elo}"
     ],
+    "notes": "artificial analysis rates it {aa-t2i.elo}, near the top of the image board. two things the release does not advertise: it \"appears to expose only text-to-image inference locally\" {q:75cb3112}, and its own discussion tab reads the licence as non-commercial -- \"People are saying Ideogram 4 allows commercial usage of the outputs but that's not what I understand when I read the license text\" {q:e2c1603d}.",
     "one_liner": "ideogram 4 at fp8, whose family is known for rendering legible text inside images.",
     "use_for": [
      "text to image",
@@ -40710,16 +40736,17 @@
   },
   "inclusionAI/Ling-3.0-flash": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [],
     "confidence": "medium",
     "evidence": [
      "{aa.terminalbench}",
      "{aa.scicode}",
      "{aa.intelligence}",
-     "reddit 8 mentions, no polarity either way"
+     "{aa.speed}",
+     "{community.hf-discussions}"
     ],
-    "notes": "thinly discussed (8 reddit mentions) and not on the gbench board, so the evidence is artificial analysis plus its own card.",
+    "notes": "not on the gbench board, so the benchmark evidence is artificial analysis plus its own card: {aa.intelligence}, and {aa.speed}, at the top of its speed table. the one report of it at work is better than expected -- it sits \"in the executor slot of my agent setup, which surprised me because I only put it there expecting to watch it fail and it hasn't yet\" {q:a45c6897}. the gguf publisher does not load the MTP layer: \"Ling 3.0 flash has 43 layers - 42 + MTP, which I currently don't support\" {q:e4b38724}.",
     "one_liner": "a hybrid-reasoning moe that lands in the top third on agentic and coding at 5.1b active parameters.",
     "use_for": [
      "coding",
@@ -41282,7 +41309,7 @@
   },
   "inclusionAI/Ling-3.0-tiny": {
    "assessed": {
-    "assessed_on": "2026-08-18",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "coding",
      "science / reasoning",
@@ -41295,10 +41322,10 @@
      "{aa.scicode}",
      "{aa.terminalbench}",
      "{aa.intelligence}",
-     "reddit 6 mentions, no polarity either way"
+     "{community.hf-discussions}"
     ],
-    "notes": "the whole quant ladder fits, so the question is what a 7.9b/1.3b moe is worth rather than whether it runs. coding {aa.scicode} and agentic {aa.terminalbench} say not much; {aa.speed} with {aa.non_hallucination} says the trade is honest rather than bad. the five people who have posted about it are unanimous, and the claim they make is against qwen3.5 9b rather than against anything larger.",
-    "one_liner": "1.3b active in a 7.8gib file: the fastest thing here, and the only model this sweep added that actually fits.",
+    "notes": "a 7.9b/1.3b moe, and the question is what that is worth. coding {aa.scicode} and agentic {aa.terminalbench} say not much; {aa.speed} with {aa.non_hallucination} says the trade is honest rather than bad. one gotcha: the card says to run it with MTP, and it cannot -- the base checkpoints \"ship the pretraining MTP layer\" {q:b5de2d8f} but \"the post-trained release dropped it\" {q:b5de2d8f}, so there is no head of its own to draft with.",
+    "one_liner": "1.3b active in a 7.8gib file: fast, honest about what it does not know, and weak at nearly everything else.",
     "use_for": [
      "latency-sensitive chat",
      "a second slot beside a large model",
@@ -41909,7 +41936,7 @@
   },
   "k2-fsa/OmniVoice": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "speech recognition"
     ],
@@ -41921,6 +41948,7 @@
      "no board scores it",
      "Apache-2.0"
     ],
+    "notes": "nothing third-party scores it, and the forum reports are warm and specific: \"the best (at the moment) in terms of long-form TTS generation\" {q:906d43c0}, and a central kurdish tester found \"the quality is excellent\" {q:84a045d3}, which is the low-resource case it exists for. the licence is less settled than the Apache-2.0 below: a user building a paid product asks whether the pre-trained model is \"still subject to the CC-BY-NC license mentioned on Hugging Face\" {q:be5c4193}.",
     "one_liner": "600+ languages, an order of magnitude past anything else in this roster.",
     "use_for": [
      "low-resource language synthesis",
@@ -44416,17 +44444,19 @@
   },
   "microsoft/VibeVoice-1.5B": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
-     "speech recognition -- the vibevoice ASR line is separate weights"
+     "speech recognition -- the vibevoice ASR line is separate weights",
+     "synthesis where quality comes first"
     ],
     "confidence": "low",
     "evidence": [
      "kind speech, text -> audio",
      "crispasr caps under `vibevoice-1.5b`: tts, voice cloning, diarize, flash attention",
-     "no board scores it",
+     "{aa-tts.elo}",
      "MIT"
     ],
+    "notes": "artificial analysis rates it {aa-tts.elo}, near the floor of the synthesis board, so cloning and its four-speaker long-form mode are the reasons to reach for it rather than how it sounds.",
     "one_liner": "the larger vibevoice, and the only one of the three whose capability row claims cloning.",
     "use_for": [
      "english and chinese text to speech",
@@ -44574,20 +44604,23 @@
   },
   "microsoft/VibeVoice-ASR": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
-     "synthesis -- the vibevoice TTS rungs are separate weights"
+     "synthesis -- the vibevoice TTS rungs are separate weights",
+     "the Q4_K rung where accuracy matters"
     ],
     "confidence": "low",
     "evidence": [
      "kind speech, audio -> text",
      "crispasr backend vibevoice",
      "caps claim punctuation native and timestamps (ctc)",
-     "no board scores it"
+     "{open-asr.accuracy}"
     ],
+    "notes": "the reason to pick it is structure rather than accuracy: it takes \"60-minute long-form audio in a single pass, generating structured transcriptions containing Who (Speaker), When (Timestamps), and What (Content)\" {q:9aff1031}, where the open asr board has its raw accuracy at {open-asr.accuracy}. the one report on the conversions is against the small rung: \"results are pretty bad compared to q8 on mlx\" {q:4db954f4}.",
     "one_liner": "the transcription half of vibevoice, with native punctuation and CTC timestamps.",
     "use_for": [
-     "transcription needing punctuation and word timings"
+     "transcription needing punctuation and word timings",
+     "hour-long recordings with speakers, in one pass"
     ]
    },
    "community": {
@@ -44977,7 +45010,7 @@
   },
   "microsoft/VibeVoice-Realtime-0.5B": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "serving today -- crispasr's README names a backend its feature matrix does not carry"
     ],
@@ -44988,6 +45021,7 @@
      "no board scores it",
      "MIT"
     ],
+    "notes": "what microsoft published looks incomplete from the outside too: one user reports \"these two encoders are missing in VibeVoice-Realtime-0.5B\" {q:f49c5acc}, and another that \"the collab notebook for vibevoice 0.5b is giving an error\" {q:4ee8e7d7}.",
     "one_liner": "the low-latency vibevoice rung, carried without a backend because none is verifiable.",
     "use_for": [
      "tracking what microsoft published",
@@ -46258,7 +46292,7 @@
   },
   "mistralai/Voxtral-4B-TTS-2603": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "any deployment -- there is no conversion to run",
      "commercial work, under CC-BY-NC-4.0"
@@ -46268,9 +46302,10 @@
      "kind speech, text -> audio",
      "no gguf in any repo crispasr names",
      "safetensors only",
-     "no board scores it",
+     "{aa-tts.elo}",
      "CC-BY-NC-4.0"
     ],
+    "notes": "artificial analysis rates it {aa-tts.elo}. the ports that do run it share one defect, \"the first few decoded audio frames are often garbled before normal speech begins\" {q:ff2f7ba8}, seen \"across multiple implementations\" {q:42cd89ed}, so it reads as the model rather than a port. another user finds the cloning \"very strong\" {q:05ca53a5} and reports trouble with \"speech timing and pacing\" {q:05ca53a5}.",
     "one_liner": "mistral's nine-language synthesis model, tracked rather than servable: no gguf exists.",
     "use_for": [
      "tracking what the roster cannot currently load"
@@ -46709,17 +46744,20 @@
   },
   "mistralai/Voxtral-Mini-4B-Realtime-2602": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "speech synthesis",
-     "text generation"
+     "text generation",
+     "batch transcription where accuracy decides"
     ],
     "confidence": "low",
     "evidence": [
      "kind speech, audio -> text",
-     "card: realtime, multilingual, accuracy comparable to closed models"
+     "card: realtime, multilingual, accuracy comparable to offline open models at 480ms",
+     "{open-asr.accuracy}"
     ],
-    "one_liner": "realtime multilingual speech transcription, and one of the first open models to claim parity with closed asr.",
+    "notes": "the card says that at a 480ms delay it matches leading offline open-source transcribers, and the open asr board, which ranks offline open transcribers, puts it at {open-asr.accuracy}. it also gives up a control the batch mini has: \"voxtral realtime doesn't support any language hints like voxtral mini does\" {q:65e054b8}.",
+    "one_liner": "realtime multilingual speech transcription whose card claims offline-grade accuracy, and whose open asr score does not bear that out.",
     "use_for": [
      "realtime speech to text",
      "multilingual transcription"
@@ -46882,7 +46920,7 @@
   },
   "mistralai/Voxtral-Small-24B-2507": {
    "assessed": {
-    "assessed_on": "2026-09-09",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "deployment -- no gguf",
      "any budget the mini already fits"
@@ -46890,10 +46928,11 @@
     "confidence": "medium",
     "evidence": [
      "kind speech, audio -> text",
-     "open-asr 4.99 mean WER against the mini's 5.54",
-     "also on artificial analysis' transcription board",
+     "{open-asr.accuracy:value}",
+     "{aa-stt.accuracy}",
      "apache-2.0"
     ],
+    "notes": "the two transcription boards disagree about it: {aa-stt.accuracy} on artificial analysis against {open-asr.accuracy} on the open asr leaderboard, so whether the extra weight pays depends on which board looks like the audio in front of you.",
     "one_liner": "eight times the mini's weights for half a point of word error rate.",
     "use_for": [
      "transcription where accuracy outranks footprint"
@@ -49033,7 +49072,7 @@
   },
   "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "agentic / tool use",
      "long context",
@@ -49046,7 +49085,7 @@
      "{aa.lcr}",
      "{card.swebench_verified}"
     ],
-    "notes": "{card.aime:value} is its own claim; the third-party numbers around it sit far lower, {aa.lcr} on long context and {aa.terminalbench_hard} on agentic software work. the gap between claim and measurement is the story of this entry.",
+    "notes": "{card.aime:value} is its own claim; the third-party numbers around it sit far lower, {aa.lcr} on long context and {aa.terminalbench_hard} on agentic software work. the gap between claim and measurement is the story of this entry. the conversions add to it: one tester found \"the `Q4_K_M`quant wouldn't load\" {q:18347fc1}, and another that the throughput is not what was promised, \"the results aren't matching what's advertised\" {q:b6b1712b}.",
     "one_liner": "fast and good at contest maths on its own card, weak on everything a third party measured.",
     "use_for": [
      "high-throughput generation",
@@ -50464,7 +50503,7 @@
   },
   "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "coding",
      "science / reasoning",
@@ -50476,9 +50515,9 @@
      "{aa.speed:value}",
      "{aa.intelligence}",
      "{aa.terminalbench}",
-     "hf-discussions 21 mentions at 0% approval"
+     "{community.hf-discussions}"
     ],
-    "notes": "{aa.speed:value} with intelligence at {aa.intelligence}. worth it when volume matters more than the answer; not otherwise.",
+    "notes": "{aa.speed:value} with intelligence at {aa.intelligence}. worth it when volume matters more than the answer; not otherwise. read the low rungs before picking one: \"On Nemotron-3.5-Lightning all four IQ2 rungs are the same 4.58 bpw file under four different names\" {q:7086c554}.",
     "one_liner": "the fastest model in the registry by a wide margin, and it spends all of that speed being average.",
     "use_for": [
      "high-throughput batch generation",
@@ -51697,21 +51736,22 @@
   },
   "nvidia/magpie_tts_multilingual_357m": {
    "assessed": {
-    "assessed_on": "2026-09-09",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
-     "work needing the top of the board, which is step-audio-editx"
+     "work needing the top of the synthesis board",
+     "voice cloning -- out of scope for this model"
     ],
     "confidence": "medium",
     "evidence": [
      "kind speech, text -> audio",
-     "aa-tts 1065 elo on the february build",
-     "357m, an order of magnitude smaller than the rest of the board",
+     "{aa-tts.elo:value}, on the february build",
+     "357m, second smallest on the board after kokoro-82m",
      "m1el publishes a gguf"
     ],
-    "one_liner": "the only synthesis model here that is both scored and runnable, at 357m.",
+    "one_liner": "nvidia's 357m synthesiser: mid-board on artificial analysis, and the second smallest voice it scores after kokoro.",
     "use_for": [
      "multilingual synthesis on a small budget",
-     "the cheapest scored voice available"
+     "a small scored voice"
     ]
    },
    "community": {
@@ -51920,7 +51960,7 @@
   },
   "nvidia/parakeet-ctc-0.6b": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "long silences and disfluent audio, where the tdt head is better",
      "synthesis"
@@ -51930,7 +51970,7 @@
      "kind speech, audio -> text",
      "crispasr backend fastconformer-ctc",
      "no duration model, unlike parakeet-tdt-0.6b-v3",
-     "no board scores it"
+     "{open-asr.accuracy}"
     ],
     "one_liner": "the CTC parakeet: cheaper than the transducer already carried, and weaker on long silences.",
     "use_for": [
@@ -55269,20 +55309,21 @@
   },
   "openai/whisper-large-v3": {
    "assessed": {
-    "assessed_on": "2026-09-09",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "deployment -- the roster serves the turbo, which has the conversion"
     ],
     "confidence": "medium",
     "evidence": [
      "kind speech, audio -> text",
-     "open-asr 5.78 mean WER against the turbo's 6.36",
-     "also on artificial analysis' transcription board",
+     "{open-asr.accuracy:value}",
+     "{aa-stt.accuracy}",
      "apache-2.0"
     ],
+    "notes": "the two boards disagree about which of the pair is better: open asr has it at {open-asr.accuracy} against the turbo's {open-asr.accuracy@openai/whisper-large-v3-turbo}, and artificial analysis has it at {aa-stt.accuracy} against the turbo's {aa-stt.accuracy@openai/whisper-large-v3-turbo}. both are in the lower half of both, so the pair is a reference point now rather than the accuracy pick.",
     "one_liner": "what whisper-large-v3-turbo was pruned from, carried so the pair can be read together.",
     "use_for": [
-     "transcription where the turbo's half point of accuracy matters"
+     "transcription where the open asr board's ordering of the pair is the one that holds"
     ]
    },
    "community": {
@@ -55548,21 +55589,25 @@
   },
   "openai/whisper-large-v3-turbo": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "speech synthesis",
-     "realtime streaming without extra work"
+     "realtime streaming without extra work",
+     "english-only work where a newer transcriber scores higher"
     ],
     "confidence": "low",
     "evidence": [
      "kind speech, audio -> text",
-     "card: state of the art asr and speech translation"
+     "card: state of the art asr and speech translation",
+     "{open-asr.accuracy}",
+     "{aa-stt.accuracy}"
     ],
-    "one_liner": "the distilled whisper large v3: the default open asr, faster than the model it came from.",
+    "notes": "{open-asr.accuracy} and {aa-stt.accuracy}, so it is the default for reach rather than for accuracy. the distil-whisper maintainers still point multilingual users at it: \"For multilingual use cases, I'd recommend openai/whisper-large-v3-turbo or other recent models from HF Open ASR Leaderboard\" {q:601adda9}. it shares large-v3's habit of inventing words, reported for both: \"I am very certain that my audios don't contain these words\" {q:58a88caf}.",
+    "one_liner": "the pruned whisper large v3: the most widely deployed open asr, faster than the model it came from rather than more accurate.",
     "use_for": [
      "speech to text",
      "speech translation",
-     "batch transcription"
+     "multilingual batch transcription"
     ]
    },
    "community": {
@@ -55856,7 +55901,7 @@
   },
   "openbmb/VoxCPM2": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "speech recognition",
      "the speech-to-speech job its voxcpm2-vae backend does"
@@ -55869,6 +55914,7 @@
      "no board scores it",
      "Apache-2.0"
     ],
+    "notes": "the licence is what moves people to it: one user leaving breeze-tts-2 calls it \"a nice choice that you can use for commercial, so I'm going to swap over to that model vs spending time here on a model I can't use for revenue generation\" {q:1ccd4b99}. the one reddit report is on quality, \"its voice cloning follows emotions of the reference\" {q:da4ad457}. nothing third-party scores it.",
     "one_liner": "openbmb synthesis at 30 languages, the TTS half of a release whose other half is speech-to-speech.",
     "use_for": [
      "multilingual text to speech",
@@ -56076,7 +56122,7 @@
   },
   "ornith-ai/Ornith-1.0-35B": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "anything where the claim needs to be independently checked"
     ],
@@ -56087,7 +56133,7 @@
      "hf-discussions 71 mentions at 50% approval",
      "reddit 3 mentions, no polarity either way"
     ],
-    "notes": "71 huggingface discussion mentions at 50% approval, against three reddit mentions the polarity reader scores no signal for at all. this entry used to read that as two forums flatly contradicting each other; the capture says one busy forum evenly divided and one that has barely spoken, which is a different and weaker thing. no third-party benchmark carries it either way.",
+    "notes": "71 huggingface discussion mentions at 50% approval, against three reddit mentions the polarity reader scores no signal for at all. this entry used to read that as two forums flatly contradicting each other; the capture says one busy forum evenly divided and one that has barely spoken, which is a different and weaker thing. no third-party benchmark carries it either way. the one report of it doing work ended there: \"got stuck in a few infinite loops and ended up discarding it\" {q:3c619640}.",
     "one_liner": "an agentic-coding model whose only numbers are its own, and whose busier forum is evenly split on it.",
     "use_for": [
      "agentic coding, on its own claims"
@@ -56439,7 +56485,7 @@
   },
   "ornith-ai/Ornith-1.0-9B": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "production agent loops"
     ],
@@ -56447,9 +56493,9 @@
     "evidence": [
      "{card.terminalbench:value}",
      "{card.swebench_pro:value}",
-     "no forum mentions"
+     "{community.hf-discussions}"
     ],
-    "notes": "nothing third-party has measured it and nobody discusses it. everything known about it is its own card.",
+    "notes": "nothing third-party has measured it, so its own card is the only benchmark. the forum is small and favourable by comparison: one user prefers it to a heavily quantized 27b because they have \"no issues in opencode when i ran on my 3060 12gb\" {q:a959d56a}, and another finds it \"better than empero-ai/Qwythos-9B-Claude-Mythos-5-1M\" {q:21fcd8bd}.",
     "one_liner": "the 9b of the same self-improving family, with claims that put it in the bottom third of the claimants.",
     "use_for": [
      "small agentic coding experiments"
@@ -56623,7 +56669,7 @@
   },
   "ornith-ai/Ornith-1.5-35B-A3B": {
    "assessed": {
-    "assessed_on": "2026-08-30",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "web-grounded or tool-calling work until somebody checks it",
      "anything where the claim needs to be independently checked"
@@ -56637,7 +56683,7 @@
      "{community.reddit-localllama}",
      "{community.hf-discussions}"
     ],
-    "notes": "the generational delta is real and consistent: {card.swebench_pro:value} against 1.0's {card.swebench_pro@ornith-ai/Ornith-1.0-35B:value}, verified {card.swebench_verified:value} against {card.swebench_verified@ornith-ai/Ornith-1.0-35B:value}, terminalbench {card.terminalbench:value} against {card.terminalbench@ornith-ai/Ornith-1.0-35B:value}. it also publishes the active count 1.0 withheld, so this is the first ornith whose speed can be estimated. against that, the most-upvoted thing anyone has said about it reports the opposite of the claim -- writes from memory, does not search despite having the tools, presents the wrong answer as correct -- and its own {card.deepswe:value} is last of the eight models claiming that facet. two of its four reddit threads are about getting it to run at all, one stopping at 13.4 tps.",
+    "notes": "the generational delta is real and consistent: {card.swebench_pro:value} against 1.0's {card.swebench_pro@ornith-ai/Ornith-1.0-35B:value}, verified {card.swebench_verified:value} against {card.swebench_verified@ornith-ai/Ornith-1.0-35B:value}, terminalbench {card.terminalbench:value} against {card.terminalbench@ornith-ai/Ornith-1.0-35B:value}. it also publishes the active count 1.0 withheld, so this is the first ornith whose speed can be estimated. against that, the most-upvoted thing anyone has said about it reports the opposite of the claim -- writes from memory, does not search despite having the tools, presents the wrong answer as correct -- and its own {card.deepswe:value} is last of the eight models claiming that facet. two of its four reddit threads are about getting it to run at all, one stopping at 13.4 tps. and the Q6 rungs from two publishers \"come with the erroneous MTP head\" {q:25296f4c}, so drafting from them is not a test of the model.",
     "one_liner": "beats its own 1.0 on all three claims they share, and the first forum report of it doing real work says the tool use does not fire.",
     "use_for": [
      "agentic coding, on its own claims",
@@ -57049,7 +57095,7 @@
   },
   "ornith-ai/Ornith-1.5-397B": {
    "assessed": {
-    "assessed_on": "2026-08-30",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "running locally at any quant published"
     ],
@@ -57061,7 +57107,7 @@
      "{card.swebench_verified:value}",
      "{card.terminalbench:value}",
      "{card.deepswe:value}",
-     "no forum mentions"
+     "{community.hf-discussions}, all of it logistics rather than use"
     ],
     "notes": "carried for the comparison rather than the slot, the way qwen3.8 2.4t and kimi k3 are. {card.hle:value} and {card.terminalbench:value} are the strongest claims in the registry from a vendor nobody has audited, and the gap to the 35b beside it -- {card.terminalbench:value} against {card.terminalbench@ornith-ai/Ornith-1.5-35B-A3B:value} on the same harness -- is the family's own statement about what the small ones give up. no active parameter count is published for this one, unlike the 35b a3b, so its speed cannot be estimated either.",
     "one_liner": "the head of the family, claiming the top decile on everything it reports, at a size whose smallest published rung is 227 gib.",
@@ -57266,7 +57312,7 @@
   },
   "ornith-ai/Ornith-1.5-9B": {
    "assessed": {
-    "assessed_on": "2026-08-30",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "anything where the claim needs to be independently checked",
      "work its 35b sibling is reported failing at"
@@ -57277,12 +57323,12 @@
      "{card.swebench_verified:value}",
      "{card.terminalbench:value}",
      "{card.swebench_pro:value}",
-     "no forum mentions"
+     "{community.reddit-localllama}"
     ],
-    "notes": "{card.gpqa:value} is the outlier, high in the registry from a model a quarter the size of what it is compared against, on the facet analyze-self-report finds cards inflate most. the coding claims are the sober ones -- {card.swebench_pro}, {card.terminalbench} -- and those are the tasks it is sold for. no forum has mentioned it at all, so there is nothing to weigh the card against.",
+    "notes": "{card.gpqa:value} is the outlier, high in the registry from a model a quarter the size of what it is compared against, on the facet analyze-self-report finds cards inflate most. the coding claims are the sober ones -- {card.swebench_pro}, {card.terminalbench} -- and those are the tasks it is sold for. the forums have only started on it, and what they say is about where it sits rather than how well it scores: one user keeps it \"sometimes for lighter stuff\" {q:4961d21d} beside qwen 3.6 35b and 3.8 27b.",
     "one_liner": "a 9b claiming the middle of a registry whose median entry is three times its size, and nobody has checked a single number.",
     "use_for": [
-     "agentic coding where there is only room for 9 gib",
+     "agentic coding at 9b",
      "trying the family before committing 35"
     ]
    },
@@ -58234,20 +58280,21 @@
   },
   "poolside/Laguna-S-2.1": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
-     "agentic / tool use"
+     "agentic work on the stock template"
     ],
-    "confidence": "high",
+    "confidence": "low",
     "evidence": [
-     "gbench python 82%",
-     "hf-discussions 61 mentions at 75% approval"
+     "{community.hf-discussions}",
+     "{community.reddit-localllama}",
+     "no gbench, aa, lmarena, swe-rebench or epoch facet"
     ],
-    "notes": "the gbench split this entry was written from is not in the capture any more. the reception split this entry used to read as quant problems is not in the capture any more: hf-discussions is 75% approval against reddit's 67%, which is two forums agreeing on a small sample rather than contradicting each other.",
-    "one_liner": "the middle laguna, and the one the forums actually run; no gbench suite carries it any more.",
+    "notes": "no board carries it, so the forums are the evidence, and they are warm: {community.hf-discussions} and {community.reddit-localllama}. people run it for code -- \"Still using Laguna S 2.1 a lot for pure coding\" {q:a3d8b9b5} -- and for agents only after a template fix, which one user credits with making it \"genuinely usable for me: it's now driving both a local agent (Hermes) and a coding lane on an all-Mac fleet, where before it wandered\" {q:21c1fdc2}. the fix combines qwen template corrections with laguna's own, so use it rather than the template the weights ship.",
+    "one_liner": "the middle laguna, and the one the forums actually run, with no benchmark in this corpus left to check them against.",
     "use_for": [
-     "one-shot coding",
-     "python and kotlin work"
+     "coding",
+     "agentic work on a community-fixed template"
     ]
    },
    "community": {
@@ -59463,7 +59510,7 @@
   },
   "prism-ml/Bonsai-27B-unpacked": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "production work of any kind"
     ],
@@ -59473,7 +59520,7 @@
      "reddit 15 mentions at 50% approval",
      "no facet carried by any source"
     ],
-    "notes": "{community.hf-discussions} against {community.reddit-localllama}. no benchmark carries it, so the reception IS the evidence -- and the two halves of that evidence point opposite ways, which is a weaker claim than this entry used to make. the discussion tab is people failing to load a file; reddit is people describing what the file does when it loads. neither is a measurement. quantization-aware training to one bit is what it exists to demonstrate, so the bits-per-weight retention curve does not model it and the entry carries native_low_bpw.",
+    "notes": "{community.hf-discussions} against {community.reddit-localllama}. no benchmark carries it, so the reception IS the evidence -- and the two halves of that evidence point opposite ways, which is a weaker claim than this entry used to make. the discussion tab is people failing to load a file -- \"failed to load draft model, 'Bonsai-27B-dspark-Q4_1.gguf'\" {q:e3d22f68} is typical -- and reddit is people describing what the file does when it loads: it is \"just Qwen 3.6 27b quantized with QAT to 1 bit, and it's better than most Q2 or Q3 quants\" {q:de2440f8} in one account. neither is a measurement. quantization-aware training to one bit is what it exists to demonstrate, so the bits-per-weight retention curve does not model it and the entry carries native_low_bpw.",
     "one_liner": "27b-class reasoning in binary weights: an efficiency experiment the two forums carrying it disagree about.",
     "use_for": [
      "experiments in extreme quantization"
@@ -59967,16 +60014,16 @@
   },
   "prism-ml/Ternary-Bonsai-27B-unpacked": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "production work of any kind"
     ],
     "confidence": "medium",
     "evidence": [
-     "hf-discussions 72 mentions at 0% approval",
+     "{community.hf-discussions}",
      "no facet carried by any source"
     ],
-    "notes": "72 huggingface mentions at 0% approval. ternary weights are outside the quantization curve this repo fits, so a bpw comparison against it is meaningless.",
+    "notes": "{community.hf-discussions}, and the threads are mostly about getting the file to behave. the one to fetch is named in them -- \"Ternary-Bonsai-27B-Q2_0.gguf is the correct one to use right now\" {q:b27dc96a} -- and the looping and broken tool calls people report go away with the cache left alone: \"dont select kv cache q4 or q8, set it as default f16, looping is gone and tool calling works perfect\" {q:086fb7f6}. on language work the one test found it \"largely unusable\" {q:600fe584} for russian rewriting. ternary weights are outside the quantization curve this repo fits, so a bpw comparison against it is meaningless.",
     "one_liner": "the ternary sibling of bonsai, with the same reception and the same absence of measurement.",
     "use_for": [
      "experiments in extreme quantization"
@@ -60632,9 +60679,10 @@
   },
   "sarulab-speech/sidon-v0.1": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
-     "transcription and synthesis -- it does neither"
+     "transcription and synthesis -- it does neither",
+     "recordings far from ordinary speech, such as long-voweled recitation"
     ],
     "confidence": "low",
     "evidence": [
@@ -60644,6 +60692,7 @@
      "no board scores it",
      "MIT"
     ],
+    "notes": "the one detailed report confirms both halves of the claim, \"the restoration quality is excellent and the 500x RTF claim holds up in our testing\" {q:ae15eaa8}, and finds the edge in quranic recitation, which is \"heavily out-of-domain\" {q:e27fcff7} for it: sustained vowels several seconds long and large-room reverb.",
     "one_liner": "audio repair rather than recognition: 16 kHz mono in, restored 48 kHz mono out.",
     "use_for": [
      "upsampling and restoring low-quality recordings before transcription"
@@ -60920,18 +60969,20 @@
   },
   "stabilityai/stable-diffusion-3.5-large": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "a simple serving story -- it wants three text encoders",
-     "text generation"
+     "text generation",
+     "image quality first -- it rates low on the image board"
     ],
     "confidence": "low",
     "evidence": [
      "kind image, text -> image",
      "sd.cpp detects it as VERSION_SD3, read from the gguf header",
      "wants t5-xxl, clip-l and clip-g where the flux entries want one encoder",
-     "no board scores it"
+     "{aa-t2i.elo}"
     ],
+    "notes": "artificial analysis rates it {aa-t2i.elo}, low on the image board, so the three-encoder stack buys an architecture outside the flux family rather than a better picture.",
     "one_liner": "the only MMDiT here that is not a flux derivative, and the most awkward stack to assemble.",
     "use_for": [
      "text to image outside the flux family"
@@ -62295,19 +62346,19 @@
   },
   "stepfun-ai/Step-Audio-EditX": {
    "assessed": {
-    "assessed_on": "2026-09-09",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "deployment -- AWQ and bnb quants only, no gguf"
     ],
     "confidence": "medium",
     "evidence": [
      "kind speech, text -> audio",
-     "aa-tts 1104 elo, above chatterbox at 1021 and voxtral-tts at 1078",
+     "{aa-tts.elo:value}",
      "no gguf in any repo a search finds"
     ],
-    "one_liner": "the best-scoring open synthesis model anybody rates, and nothing here can run it.",
+    "one_liner": "an expressive audio-editing synthesiser rated in the upper part of the board, and nothing here can run it.",
     "use_for": [
-     "tracking the top of the TTS board"
+     "tracking a highly rated synthesiser nothing here serves"
     ]
    },
    "community": {},
@@ -62453,10 +62504,11 @@
   },
   "tencent/HunyuanVideo": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "still images",
-     "text generation"
+     "text generation",
+     "animating a still -- this checkpoint is text to video only"
     ],
     "confidence": "low",
     "evidence": [
@@ -62465,6 +62517,7 @@
      "799 downloads on the base repo against wan's 42k",
      "no board this repo collects rates video"
     ],
+    "notes": "text to video and nothing else: \"HunyuanVideo currently only supports text to video\" {q:4745ce8b}, and image-to-video came from a community \"Image2Video version\" {q:4771df80} rather than this checkpoint. it is also slow at its default schedule, which is what FastHunyuan exists for, advertising \"around 8X speed up compared to the original HunyuanVideo with 50 steps\" {q:ba1b3472}.",
     "one_liner": "tencent's video model, from the lab behind the hy3 text model already carried.",
     "use_for": [
      "text to video at 720p"
@@ -63422,7 +63475,7 @@
   },
   "thinkingmachines/Inkling": {
    "assessed": {
-    "assessed_on": "2026-08-30",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "running locally at any published rung",
      "formal proof work, where the small beats it outright"
@@ -63437,7 +63490,7 @@
      "{epoch.proofbench}, well above inkling small",
      "scored by aa, gbench, lmarena and epoch"
     ],
-    "notes": "the reason to carry it was to find out what inkling small gives up, and the answer is: knowledge and human preference, not reasoning. it wins simpleqa by 43 points, lmarena by 47 and long-context recall by 17, and it LOSES proofbench by 31 and aime by 21 to a model a fraction of its size. {aa.omniscience} with {aa.omniscience_index} says it knows more and does not pay for it in hallucination, which is the clearest case for the extra weight. nothing about that is runnable here -- bf16 is 1.76 tib and the smallest rung is 252 gib, so this is a reference point like kimi k3.",
+    "notes": "the reason to carry it was to find out what inkling small gives up, and the answer is: knowledge and human preference, not reasoning. it wins simpleqa by 43 points, lmarena by 47 and long-context recall by 17, and it LOSES proofbench by 31 and aime by 21 to a model a fraction of its size. {aa.omniscience} with {aa.omniscience_index} says it knows more and does not pay for it in hallucination, which is the clearest case for the extra weight. read those scores at the setting they were run at: the headline benchmarks are \"all reported at `effort = 0.99`, which measures the model under a full internal scratchpad\" {q:c7b76ec2}. nothing about that is runnable here -- bf16 is 1.76 tib and the smallest rung is 252 gib, so this is a reference point like kimi k3.",
     "one_liner": "the flagship the small is small relative to, and it is ahead on only eleven of the twenty-nine facets they share.",
     "use_for": [
      "recall-heavy work and long context",
@@ -64781,7 +64834,7 @@
   },
   "thinkingmachines/Inkling-Small": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "latency-sensitive work"
     ],
@@ -64793,7 +64846,7 @@
      "{aa.speed}",
      "no gbench entry"
     ],
-    "notes": "do not read the flagship inkling's gbench score onto this model -- the generated tables did exactly that once. it is not on the gbench board at all.",
+    "notes": "do not read the flagship inkling's gbench score onto this model -- the generated tables did exactly that once. it is not on the gbench board at all. it is not a chat model either: lmarena puts it at {lmarena.rating}. the {community.hf-discussions} figure is the lexicon misreading the threads, which are warm -- \"Thanks very much for the inkling-small release, it's amazing\" {q:3092983b} -- and ARC Prize calls it \"the highest-scoring open-weight model evaluated by ARC Prize\" {q:fe1081e1}.",
     "one_liner": "a science and physics specialist: {aa.critpt} on critpt, omniscience and scicode at once.",
     "use_for": [
      "science / reasoning",
@@ -65582,17 +65635,18 @@
   },
   "upstage/Solar-Open2-250B": {
    "assessed": {
-    "assessed_on": "2026-08-17",
+    "assessed_on": "2026-09-16",
     "avoid_for": [],
     "confidence": "medium",
     "evidence": [
+     "{aa.non_hallucination}",
      "{aa.critpt}",
      "{aa.scicode}",
      "{aa.terminalbench}",
-     "no forum mentions"
+     "{community.hf-discussions}"
     ],
-    "notes": "its template collapses medium, high and xhigh into one branch, so the thinking knob has one effective setting under three names, and the `none` its card documents changes nothing at all.",
-    "one_liner": "an office-and-document moe whose strongest measured axis is physics, and that nobody in these forums discusses.",
+    "notes": "{aa.non_hallucination} and {aa.critpt} are its two highest, well above {aa.intelligence}. the one sustained forum report is a blind-comparison series whose second instalment cooled on the first -- it \"remained competitive, but the expanded data is less dramatic than the first three-day snapshot suggested\" {q:1e953ff5}. running it locally \"needs a patch on llama cpp and then a build\" {q:e646546b}. its template collapses medium, high and xhigh into one branch, so the thinking knob has one effective setting under three names, and the `none` its card documents changes nothing at all.",
+    "one_liner": "an office-and-document moe whose strongest measured axis is declining to make things up, with physics close behind.",
     "use_for": [
      "agentic / tool use",
      "science / reasoning",
@@ -66921,7 +66975,7 @@
   },
   "zai-org/GLM-5.2": {
    "assessed": {
-    "assessed_on": "2026-08-18",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "anything local",
      "competition mathematics"
@@ -66935,8 +66989,8 @@
      "{epoch.deepswe}",
      "reddit 88 mentions over 42 threads"
     ],
-    "notes": "67 facets across every source carried here, which makes it the best-corroborated entry in the file. the forums agree -- 88 reddit mentions across 42 threads at 85% approval, second only to the qwen3.x line -- and the smallest rung is 202 gib, so this registry can say what it is and not how to run it. epoch's mathematics runs are the dissent: {epoch.deepswe} and otis {card.aime} against {aa.tau2} and terminal-bench hard {aa.terminalbench_hard}.",
-    "one_liner": "the most-measured model in this registry and the second most-discussed, and no quant of it fits.",
+    "notes": "67 facets across every source carried here, which makes it the best-corroborated entry in the file. the forums agree -- {community.reddit-localllama} across 42 threads, second only to the qwen3.x line -- and the people who run it keep it for the work that matters: \"moved over critical, can't-fail workloads to GLM5.2\" {q:6e973ffe}, and one user gave up a faster model because \"glm 5.2 was giving me consistently better outputs\" {q:f30099fa}. epoch's mathematics runs are the dissent: {epoch.deepswe} and otis {card.aime} against {aa.tau2} and terminal-bench hard {aa.terminalbench_hard}.",
+    "one_liner": "the most-measured model in this registry and the second most-discussed, at a size whose smallest rung is 202 gib.",
     "use_for": [
      "agentic / tool use",
      "coding",
@@ -70047,7 +70101,7 @@
   },
   "zai-org/GLM-ASR-Nano-2512": {
    "assessed": {
-    "assessed_on": "2026-09-08",
+    "assessed_on": "2026-09-16",
     "avoid_for": [
      "deployment -- no gguf exists"
     ],
@@ -70056,7 +70110,7 @@
      "kind speech, audio -> text",
      "crispasr backend glm-asr",
      "no gguf anywhere",
-     "no board scores it"
+     "{open-asr.accuracy}"
     ],
     "one_liner": "zhipu's nano transcriber, from the lab whose GLM text models this roster ranks.",
     "use_for": [
