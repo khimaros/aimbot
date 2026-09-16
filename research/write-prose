@@ -337,8 +337,13 @@ def propose_note(block, sheet, note_data, llm, tries=2):
                 got["note"], repo, quant, note_data, model=block.grounded,
                 entry=at.get("entry"))
             got["normalized"] = moved
-            found = notes.check(got["note"], repo, quant, note_data,
-                                model=block.grounded)
+            # the same pair prose.check runs over a block on disk: the style
+            # checks over every surface, the grounding checks over this one. a
+            # draft judged by only half of it is accepted here and refused by
+            # `--check` the moment it is pasted in -- 10 of one 195-draft
+            # sweep, four emoji and six marketing words
+            found = prose.check_text(got["note"]) + notes.check(
+                got["note"], repo, quant, note_data, model=block.grounded)
             if not found:
                 return got, ""
             why = "; ".join(found)
@@ -357,8 +362,9 @@ def rendered_draft(block, draft, models, note_data):
         facets = prose.facts_for(block, models) or {}
         whole = "%s\n%s" % (draft.get("one_liner") or "", draft.get("notes") or "")
         text, cites = verdicts.cite(whole, facets)
-        return text.split("\n") + ["  [%d] %s" % (i, c)
-                                   for i, c in enumerate(cites, 1)]
+        return (text.split("\n")
+                + ["  [%d] %s" % (i, c) for i, c in enumerate(cites, 1)]
+                + ["  [normalized] %s" % m for m in draft.get("normalized") or []])
     at = block.subject or {}
     text, _ = notes.render(draft.get("note") or "", at.get("repo") or block.grounded,
                            at.get("quant"), note_data, model=block.grounded)

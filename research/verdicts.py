@@ -49,6 +49,58 @@ UNIT_DIGITS = {"rate": 0, "elo": 0, "bpw": 2}
 # score, an index or a size, and one place is what the generated tables show
 SMALL, BIG = 3, 1
 
+# what a drafting endpoint answers in, against what this repository is written
+# in. none of these is a disagreement about the sentence, so none is worth
+# refusing a draft over -- they are folded before it is judged, on every surface
+# that drafts. folding is also what lets the quote check SEE a quotation:
+# QUOTED matches an ascii pair, so a paraphrase inside typographic quotes next
+# to a real quote id would read as sourced and be checked by nothing
+ASCII_FOLD = {"‘": "'", "’": "'", "“": '"', "”": '"',
+              "–": "-", "—": " -- ", "‑": "-", "…": "...",
+              " ": " ", "−": "-", "×": "x", "→": "->",
+              "≥": ">=", "≤": "<=", "·": "-"}
+
+
+def fold(text):
+    """(text, [what changed]) -- the typography this repository does not hold.
+
+    What is left non-ascii after this is not typography: a quoted Russian
+    comment or an emoji in a forum post cannot be folded into meaning, and is
+    refused so a human decides whether to transliterate it or not quote it.
+    """
+    out = "".join(ASCII_FOLD.get(c, c) for c in text or "")
+    return out, ["folded to ascii"] if out != (text or "") else []
+
+
+# a quoted fragment in single marks, immediately in front of a citation. the
+# citation is what makes it safe to touch: an apostrophe is not a quotation
+# mark, and `the model's own {q:1a2b}` must not be read as one
+CITED_SINGLE = re.compile(r"'([^'\n]{4,})'(\s*\{(?:q:[0-9a-f]+|"
+                          r"[a-z0-9_.\-]+(?:@[^}\s]+)?)\})")
+
+
+def quote_marks(text):
+    """(text, [what changed]) -- a quotation in the marks the checkers match.
+
+    Both quote checks match an ascii double pair, so a quotation written in
+    single marks is not seen by either -- it reads as sourced and is compared
+    to nothing. An endpoint replying in JSON writes one that way now and then
+    to avoid escaping: 4 of 230 across one sweep, and one draft did it eight
+    times out of eight.
+    """
+    out, n = CITED_SINGLE.subn(r'"\1"\2', text or "")
+    return out, ["%d quotation(s) put in double quotes" % n] if n else []
+
+
+def words_of(text):
+    """A quotation reduced to what it says, so two spellings compare equal.
+
+    A comment is spelled however its author typed it and prose here is ascii,
+    so a faithful quotation cannot match character for character. Folding both
+    sides leaves the words, which is what the quote check is about.
+    """
+    return re.sub(r"\s+", " ", fold(text)[0]).strip().lower()
+
 
 def forum_name(key):
     """`community.reddit-localllama` as a reader spells it."""
@@ -388,8 +440,7 @@ def check_quoted(text, facets):
         found = known.get(qid)
         if not found:
             return False, "quotes %s, which this model does not carry" % qid
-        whole = re.sub(r"\s+", " ", (found[0].get("quote") or "")).lower()
-        if re.sub(r"\s+", " ", said).lower().strip() not in whole:
+        if words_of(said) not in words_of(found[0].get("quote")):
             return False, ('quotes "%s", which is not in the comment it cites' % said)
     return True, ""
 

@@ -21,6 +21,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import socketserver
 import struct
@@ -1740,6 +1741,53 @@ def a_draft_is_put_into_the_vocabulary_before_it_is_judged():
 
 
 @test
+def both_drafting_paths_fold_and_refuse_by_the_same_rules():
+    """The fold was wired into one of the two surfaces that drafts.
+
+    Registry notes were folded on the way back and usecase verdicts were not,
+    so the same endpoint answering the same typography was accepted on one
+    surface and refused on the other. Over a full 155-block sweep 12 of the 138
+    drafts carried a character the validator refuses -- ten of them an em dash
+    and nothing else, which `--check` would reject on disk for a keystroke that
+    means what `--` means.
+
+    The fold is also what lets the quote check see a quotation at all: QUOTED
+    matches an ASCII pair, so a paraphrase inside typographic quotes next to a
+    real quote id reads as sourced and is checked by nothing. That did not
+    happen in the sweep and could have at any time.
+
+    And judging differed from checking. `judge` refused typed percentiles and
+    unknown citations but never ran the style half, so the drafting loop could
+    hand back prose that `--check` would refuse the moment it landed.
+    """
+    sys.path.insert(0, RESEARCH)
+    try:
+        review = load_script("review_verdicts",
+                             os.path.join(RESEARCH, "review-verdicts"))
+    finally:
+        sys.path.remove(RESEARCH)
+    facets = {"aa.intelligence": {"pct": 61, "value": 42.5, "unit": "index"}}
+
+    typography = {"one_liner": "a dense 27b that fixes real bugs — {aa.intelligence}",
+                  "notes": "one user calls the fp8 rung “flawless”."}
+    got, why = review.judge(dict(typography), facets)
+    eq(got is not None, True,
+       "a draft whose only fault is typography is fixed, not refused: %r" % why)
+    text = "%s %s" % (got.get("one_liner"), got.get("notes"))
+    eq(max(text) < "\x80", True, "it is folded into ascii: %r" % text)
+    eq('"flawless"' in text, True,
+       "and the quote marks are the pair QUOTED matches: %r" % text)
+    eq(bool(got.get("normalized")), True,
+       "what moved is reported, as it is for a note: %r" % (got.get("normalized"),))
+
+    puffed = {"one_liner": "a robust 27b that fixes real bugs {aa.intelligence}",
+              "notes": "it leads on nothing."}
+    got, why = review.judge(dict(puffed), facets)
+    eq(got, None, "the style half refuses here too, not only on disk: %r" % (got,))
+    eq("robust" in why, True, "and names the word, to be handed back: %r" % why)
+
+
+@test
 def the_document_ranks_models_exactly_once():
     """MODELS.md's ranking and its sensitivity table agree about who leads.
 
@@ -2318,6 +2366,186 @@ def a_note_quotes_the_source_it_was_built_from_and_the_words_are_checked():
     # http cache is cleared -- which is what makes this different from a cache
     eq(os.path.isdir(os.path.join(RESEARCH, "data", "cards")), True,
        "the card bodies are committed beside the chat templates")
+
+
+@test
+def a_quotation_is_compared_by_its_words_and_not_its_typography():
+    """Both quote checks tested one spelling of a comment against another.
+
+    A forum comment and a publisher's card are whatever their author typed:
+    `It's flawless--zero loss` arrives as `It’s flawless—zero loss`. Prose here
+    is ascii, so a faithful quotation of it cannot be spelled the way the
+    source was, and the substring test then reads the honest quote as a
+    paraphrase and refuses it.
+
+    Folding a draft on the way in made that certain rather than likely, so both
+    sides are folded before they are compared. What the check is for -- a
+    paraphrase inside quotation marks, which reads as sourced and is not -- is
+    untouched, because folding changes typography and not words.
+    """
+    verdicts = load_prose().verdicts
+    comment = "Tested the fp8 rung. It’s flawless—zero loss vs bf16."
+    facets = {"community.reddit-localllama":
+              {"pct": 61, "refs": [{"quote": comment, "url": "https://ex/1"}]}}
+    qid = verdicts.quote_id(comment)
+
+    ok, why = verdicts.check_quoted(
+        'one user calls the fp8 rung "flawless -- zero loss" {%s}' % qid, facets)
+    eq(ok, True, "an ascii quotation of a typographic comment stands: %r" % why)
+
+    ok, why = verdicts.check_quoted(
+        'one user calls the fp8 rung "lossless at fp8" {%s}' % qid, facets)
+    eq(ok, False, "and a paraphrase inside quotation marks is still refused")
+
+    notes = load_notes()
+    tmp = tempfile.mkdtemp()
+    try:
+        cards = os.path.join(tmp, "cards")
+        os.mkdir(cards)
+        with open(os.path.join(cards, "ista_Widget-GGUF.md"), "w") as f:
+            f.write("# Widget\n\nIQ3_S matches the base model’s AIME25 "
+                    "exactly — a task-lossless point.\n")
+        data = dict(notes.load(), cards_dir=cards)
+        found = notes.check(
+            'the card says it "matches the base model\'s aime25 exactly" '
+            '{card@ista/Widget-GGUF}', "ista/Widget-GGUF", "IQ3_S", data)
+        eq(found, [], "the card's words in this repo's spelling stand: %r" % found)
+    finally:
+        shutil.rmtree(tmp)
+
+
+@test
+def a_drafted_note_is_refused_for_what_the_check_refuses_it_for():
+    """The note path judged by the note validator and never by the style one.
+
+    `prose.check` runs both over a block on disk -- the style checks over every
+    surface, the grounding checks over the one that has a grounding -- and the
+    drafting loop ran only the second. So a note could come back, be accepted,
+    and be refused by `--check` the moment somebody pasted it in. Over a
+    195-draft sweep 10 land that way once the fold is applied: four emoji and
+    six marketing words.
+
+    A refusal is handed back and fixed on the second ask, which is the whole
+    point of judging at all rather than after.
+    """
+    prose = load_prose()
+    notes = load_notes()
+    sys.path.insert(0, RESEARCH)
+    try:
+        wp = load_script("write_prose", os.path.join(RESEARCH, "write-prose"))
+    finally:
+        sys.path.remove(RESEARCH)
+
+    data = notes.load()
+    repo = "unsloth/Qwen3.8-27B-GGUF"
+    sizes = ((data.get("sizes") or {}).get(repo) or {})
+    tag = next((k for k in sizes if k.upper().startswith("Q8")), None)
+    if not tag:
+        return
+
+    class Endpoint:
+        """Two canned replies, and a record of what it was asked to fix."""
+
+        def __init__(self, *replies):
+            self.replies, self.asked = list(replies), []
+
+        def chat(self, messages, **kw):
+            self.asked.append(messages[-1]["content"])
+            return self.replies.pop(0) if self.replies else None
+
+        def as_json(self, reply):
+            return json.loads(reply)
+
+    block = prose.Block("registry-note", "registry-note:fixture", {"note": "x"},
+                        repo, {"repo": repo, "quant": tag})
+    llm = Endpoint(json.dumps({"note": "seamlessly carries {gib} of weights"}),
+                   json.dumps({"note": "carries {gib} of weights"}))
+    got, why = wp.propose_note(block, "a sheet", data, llm)
+
+    eq(got is not None, True, "the second ask is accepted: %r" % why)
+    eq("seamless" in (got.get("note") or ""), False,
+       "the marketing draft is not what comes back: %r" % got)
+    eq(len(llm.asked), 2, "it was asked twice, so the first was refused")
+    eq("seamless" in llm.asked[-1], True,
+       "and told which word, in the words --check would use: %r" % llm.asked[-1])
+
+
+@test
+def a_sheet_offers_no_reference_that_does_not_resolve():
+    """The sheet's own rule, applied to the two lines that broke it.
+
+    Every figure on a fact sheet is shown as the reference that renders it, so
+    what the writer reads is the token it is supposed to write -- except for
+    the other rungs in the repo and the other repos publishing the model, which
+    were headed `cite as {gib@TAG}` with the real tags in the rows below. The
+    endpoint wrote the header. Six of the sixteen refusals in a 211-block
+    sweep were `{gib@owner/Repo:TAG}`, refused for naming a rung no capture
+    carries, which is the tool arguing with itself over a placeholder it wrote.
+    """
+    notes = load_notes()
+    gib = 2 ** 30
+    data = dict(notes.load(),
+                sizes={"pub/Main-GGUF": {"Q4_K_M": 4 * gib, "Q6_K": 6 * gib},
+                       "other/Main-GGUF": {"Q8_0": 8 * gib}})
+    entry = {"quants": [{"repo": "pub/Main-GGUF", "quant": "Q4_K_M"},
+                        {"repo": "other/Main-GGUF", "quant": "Q8_0"}]}
+    sheet = notes.fact_sheet("pub/Main-GGUF", "Q4_K_M", data, entry=entry)
+
+    # the one line that names a reference in order to FORBID it is not an offer
+    offered = [r for line in sheet.split("\n") if "NO CAPTURE HOLDS" not in line
+               for r in re.findall(r"\{[^}\s]+\}", line)]
+    eq("{gib@Q6_K}" in offered, True,
+       "a sibling rung is offered as the reference itself: %r" % offered)
+    eq("{gib@other/Main-GGUF:Q8_0}" in offered, True,
+       "and so is a rung in another repo: %r" % offered)
+    for ref in offered:
+        _, missing = notes.render(ref, "pub/Main-GGUF", "Q4_K_M", data)
+        eq(missing, [], "%s is offered and resolves" % ref)
+    eq("NO CAPTURE HOLDS {bpw}" in sheet, True,
+       "and the rung with no tensor table is told so rather than left to guess")
+
+
+@test
+def a_quotation_in_the_wrong_marks_is_still_a_quotation():
+    """Both checkers match an ascii double pair, so some quotations were unseen.
+
+    An endpoint replying in JSON writes the occasional quotation in single
+    quotes to avoid escaping -- 4 of 230 across one sweep, and every one of
+    those four was accepted without anybody comparing it to the comment it
+    cited. The draft that prompted this wrote all eight of its quotations that
+    way, which is the whole check not running and nothing saying so.
+
+    The marks are put right before the draft is judged, anchored on the
+    citation that follows: an apostrophe is not a quotation mark, and `the
+    model's own {q:...}` must not be read as one.
+    """
+    sys.path.insert(0, RESEARCH)
+    try:
+        review = load_script("review_verdicts",
+                             os.path.join(RESEARCH, "review-verdicts"))
+    finally:
+        sys.path.remove(RESEARCH)
+    verdicts = load_prose().verdicts
+    comment = "Tested the fp8 rung, it is flawless, zero loss vs bf16."
+    facets = {"community.reddit-localllama":
+              {"pct": 61, "refs": [{"quote": comment, "url": "https://ex/1"}]}}
+    qid = verdicts.quote_id(comment)
+
+    got, why = review.judge(
+        {"one_liner": "one user calls the fp8 rung 'flawless, zero loss' {%s}" % qid,
+         "notes": "it leads on nothing."}, facets)
+    eq(got is not None, True, "a faithful quotation in the wrong marks stands: %r" % why)
+    eq('"flawless, zero loss"' in got["one_liner"], True,
+       "in the marks the checker matches: %r" % got["one_liner"])
+
+    got, why = review.judge(
+        {"one_liner": "one user calls the fp8 rung 'lossless at fp8' {%s}" % qid,
+         "notes": "it leads on nothing."}, facets)
+    eq(got, None, "and a paraphrase in the wrong marks is no longer waved through")
+
+    kept = "the model's own {%s} rung" % qid
+    got, _ = review.judge({"one_liner": kept, "notes": "it leads on nothing."}, facets)
+    eq(got["one_liner"], kept, "an apostrophe is left alone: %r" % got["one_liner"])
 
 
 @test

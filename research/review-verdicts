@@ -145,12 +145,31 @@ Reply with JSON: {"one_liner": "...", "notes": "..."}"""
 
 
 def judge(got, facets):
-    """(draft, why) -- the refusal reason is phrased to be handed back."""
+    """(draft, why) -- the refusal reason is phrased to be handed back.
+
+    Folded first, and by the same table a registry note is folded by: the
+    endpoint answers in em dashes and typographic quotes, none of which is a
+    disagreement about the sentence, and one sweep refused 12 of 138 drafts
+    over it. The style checks are `prose.check_text`'s rather than a second
+    set, because a draft refused here and prose refused on disk should be
+    refused for the same words.
+    """
     if not isinstance(got, dict) or not got.get("one_liner"):
         return None, "the reply was not the JSON object asked for"
+    moved = []
+    for field in ("one_liner", "notes"):
+        if not got.get(field):
+            continue
+        for step in (verdicts.fold, verdicts.quote_marks):
+            got[field], why = step(got[field])
+            moved += ["%s %s" % (field, w) for w in why]
+    got["normalized"] = moved
     cited = []
     for field in ("one_liner", "notes"):
         text = got.get(field) or ""
+        found = prose.check_text(text)
+        if found:
+            return None, "the %s %s" % (field, "; ".join(found))
         bad = verdicts.TYPED_PCT.findall(verdicts.CITE_REF.sub("", text))
         if bad:
             return None, ("the %s writes %s -- cite the facet instead and let the "
@@ -275,6 +294,8 @@ def main():
                     print("  %s" % line)
                 for i, line in enumerate(cites, 1):
                     print("    [%d] %s" % (i, line))
+                for line in draft.get("normalized") or []:
+                    print("    [normalized] %s" % line)
             else:
                 print("  --- no usable proposal: %s" % why)
         if not args.review:

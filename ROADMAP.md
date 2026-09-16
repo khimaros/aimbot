@@ -46,6 +46,45 @@ built and is marked done when it ships.
   page prints, so it matched some other sentence. it finds a note by the longest
   of its own literal runs now, and only then asks whether the figure inside is
   wrapped.
+- **both drafting paths fold and refuse by the same rules.** DONE. the fold was
+  wired into registry notes and not into usecase verdicts, so the same endpoint
+  answering the same typography was fixed on one surface and refused on the
+  other. the first full 155-block sweep drafted 138 and 12 of them carried a
+  character `--check` refuses -- ten an em dash and nothing else, which would
+  have been rejected on disk for a keystroke that means what `--` means. the
+  fold is `verdicts.fold` now, below both, and folding fixes 8 of the 12. the
+  other 4 are a euro sign, an acute accent, an emoji and a quoted russian
+  sentence, all inside verbatim quotations, and they are handed back rather
+  than re-spelled: whether to paraphrase, transliterate or drop the quote is a
+  decision about the sentence.
+  neither drafting path ran the style half. `prose.check` runs both over a
+  block on disk -- the style checks over every surface, the grounding checks
+  over the one that has a grounding -- and each loop ran only its own. so a
+  draft could be accepted by the drafter and refused by `--check` the moment it
+  was pasted in: 0 of the 138 verdicts, but 10 of the 195 notes once the fold
+  is applied, four emoji and six marketing words. both call the pair now, and a
+  refusal is handed back and fixed on the second ask.
+  the note sheet offered a reference that could not resolve. the other rungs in
+  a repo were headed `cite as {gib@TAG}` with the real tags in the rows
+  beneath, and the endpoint wrote the header: 6 of the 16 refusals in a
+  211-block sweep were `{gib@owner/Repo:TAG}`, refused for naming a rung no
+  capture carries, which is the tool arguing with itself over a placeholder it
+  wrote. every row is the reference itself now, which is what the sheet's own
+  docstring already claimed.
+  folding a draft also broke the quote check, which compared one spelling of a
+  comment against another: a forum post arrives as `It's flawless—zero loss`
+  and an honest ascii quotation of it read as a paraphrase. both sides fold
+  before they are compared now, in `verdicts.words_of`, so the test is about
+  the words.
+  and a quotation is only checked if the checker can SEE it. both checks match
+  an ascii double pair, so a quotation written in single marks -- which an
+  endpoint replying in json does to avoid escaping -- was accepted with nothing
+  compared to anything: 4 of 230 across the sweep, and a later single-block run
+  wrote all eight of its quotations that way. `verdicts.quote_marks` puts them
+  in the pair the checkers match, anchored on the citation that follows,
+  because an apostrophe is not a quotation mark and `the model's own {q:1a2b}`
+  must not become one. all four of the unchecked ones turn out to be faithful,
+  which is luck rather than a check.
 
 - **every written sentence in the repository goes through one door.** prose was
   written in five places and regenerable in one: `review-verdicts` drafted

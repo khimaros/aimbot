@@ -33,6 +33,8 @@ import json
 import os
 import re
 
+import verdicts
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
 CARDS = "cards"
@@ -296,8 +298,7 @@ def check_quoted(text, repo, quant, data, model=None):
         if body is None:
             return False, ('quotes "%s" against %s, which is a link rather than '
                            'a captured body' % (said, locator or repo))
-        whole = re.sub(r"\s+", " ", body).lower()
-        if re.sub(r"\s+", " ", said).lower().strip() not in whole:
+        if verdicts.words_of(said) not in verdicts.words_of(body):
             return False, ('quotes "%s", which is not in the source it cites' % said)
     return True, ""
 
@@ -422,10 +423,10 @@ def fact_sheet(repo, quant, data, model=None, entry=None, pin=None):
             lines.append("  the model:   {%s} = %s" % (field, got))
     others = [(t, g, b) for t, g, b in rungs_of(repo, data) if t != quant]
     if others:
-        lines.append("  other rungs in this repo, cite as {gib@TAG}:")
+        lines.append("  other rungs in this repo:")
         for tag, gib, bpw in others:
-            lines.append("    %-34s %8.2f gib  %s"
-                         % (tag[:34], gib, ("%.2f bpw" % bpw) if bpw else "-"))
+            lines.append("    %-40s %8.2f gib  %s"
+                         % ("{gib@%s}" % tag, gib, ("%.2f bpw" % bpw) if bpw else "-"))
     gib = _gib(repo, quant, data) if quant else None
     if gib is not None:
         lines.append("  the box:     %.1f gib usable on a %s host, so this rung %s"
@@ -437,10 +438,9 @@ def fact_sheet(repo, quant, data, model=None, entry=None, pin=None):
             lines.append("  the registry also carries %s, which the size capture "
                          "has not read" % at)
             continue
-        lines.append("  the same model is also published by %s, cite as "
-                     "{gib@%s:TAG}:" % (at, at))
+        lines.append("  the same model is also published by %s:" % at)
         for tag, other in rungs:
-            lines.append("    %-34s %8.2f gib" % (tag[:34], other))
+            lines.append("    %-40s %8.2f gib" % ("{gib@%s:%s}" % (at, tag), other))
     for field, label in (("speculative", "this entry drafts with"),
                          ("runtime", "llama.cpp support")):
         got = (entry or {}).get(field)
@@ -569,13 +569,6 @@ def convert(text, repo, quant, data, model=None, entry=None):
 NAMES_FILE = re.compile(r"the pin names (?:its|the) file|pin names its file", re.I)
 NO_RUNG = re.compile(r"there is no ([A-Z][\w_]*)\b(?: rung)? here|"
                      r"\bno ([A-Z][\w_]*) rung here", re.I)
-# what a drafting endpoint answers in, against what the vocabulary is written
-# in. none of these is a disagreement about the sentence, so none is worth
-# refusing a draft over -- they are folded before it is judged
-ASCII_FOLD = {"‘": "'", "’": "'", "“": '"', "”": '"',
-              "–": "-", "—": " -- ", "…": "...", " ": " ",
-              "−": "-", "×": "x", "→": "->", "≥": ">=",
-              "≤": "<=", "·": "-"}
 PASTED_CARD = re.compile(r"(?:the card |see )?https?://huggingface\.co/"
                          r"([\w.\-]+/[\w.\-]+)/?(?![\w/])", re.I)
 
@@ -593,10 +586,7 @@ def normalize(text, repo, quant, data, model=None, entry=None):
     leaves a literal alone wherever no capture agrees with it, which is exactly
     how a stale claim stays visible.
     """
-    why = []
-    folded = "".join(ASCII_FOLD.get(c, c) for c in text or "")
-    if folded != (text or ""):
-        why.append("folded to ascii")
+    folded, why = verdicts.fold(text)
 
     def card(m):
         # only the repo this note is ABOUT: a url pointing somewhere else is a
@@ -611,6 +601,10 @@ def normalize(text, repo, quant, data, model=None, entry=None):
     folded, converted, stale = convert(folded, repo, quant, data, model, entry)
     why += ["%s -> %s" % (was, now) for was, now in converted]
     why += ["%s matches no capture and was left alone" % s for s in stale]
+    # after the conversions, because the citation a quotation is anchored on is
+    # sometimes the `{card}` the pasted url just became
+    folded, marks = verdicts.quote_marks(folded)
+    why += marks
     return re.sub(r"[ \t]{2,}", " ", folded).strip(), why
 
 
