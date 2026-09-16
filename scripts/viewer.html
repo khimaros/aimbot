@@ -2368,7 +2368,11 @@ const proseText = parts => !parts ? ''
 // table cell cites, plus what the percentile is OF, which is the part a reader
 // cannot get from the number itself
 function proseRef(part, m) {
+  // a note's vocabulary: `{card}` resolves to somewhere to go, `{gib}` and
+  // `{bpw}` to a figure out of a capture. both answer "where did this come
+  // from", which is the only question the panel is for
   if (part.url) return {url: part.url, source: part.field, id: part.locator || ''};
+  if (part.ref) return part.ref;
   // a cross-model reference names the REPO, which is the registry's key for a
   // model and not what `model()` resolves. a comparison against something the
   // roster has stopped carrying falls back to the words as written
@@ -2828,6 +2832,41 @@ const quantRow = (m, repo, pick) =>
       : 'this repo publishes no file sizes'}">`
     + `${esc(c.quant)}</button>`).join(''));
 
+// what drafts for a model that ships a drafter, beside the command that would
+// turn it on. the drafter's own weights are resident whether it accepts a token
+// or not, so its size belongs with the rung's rather than in a column nobody
+// reads next to it -- and the NOTE here is the measured half: what acceptance
+// somebody actually saw, and how many tokens the head can really yield. two of
+// those were written, validated, rendered and shipped to a page that drew them
+// nowhere.
+function draftBlock(m, pick) {
+  const s = m.speculative || {};
+  const note = Array.isArray(s.note) ? s.note : [];
+  if (!s.draft && !s.type && !note.length) return '';
+  const rows = [];
+  if (s.type) rows.push(['kind', esc(s.type)]);
+  if (s.draft && s.draft.repo) {
+    rows.push(['drafter', out_link('https://huggingface.co/' + s.draft.repo, s.draft.repo)
+      + (s.draft.file ? ` <code>${esc(s.draft.file)}</code>` : '')]);
+  }
+  if (s.draft && s.draft.gib) {
+    rows.push(['costs', `${gib(s.draft.gib)} gib resident, on top of the weights`]);
+  }
+  if (s.n_max) rows.push(['drafts', `${s.n_max} token${s.n_max === 1 ? '' : 's'} at most`]);
+  // the rung decides: a repo may publish one build with the head folded in and
+  // one without, and offering `--draft-max` beside the one that cannot speculate
+  // is a flag that does nothing
+  if (pick && pick.speculative === false) {
+    rows.push(['on this rung',
+               '<span class="warn">it does not draft</span> -- this build ships '
+               + 'without the head']);
+  }
+  if (note.length) rows.push(['', `<span class="dim">${proseHtml(note, m)}</span>`]);
+  return '<h3>what drafts for it</h3><table><tbody>'
+    + rows.map(([k, v]) => `<tr><th class="nw">${k}</th><td>${v}</td></tr>`).join('')
+    + '</tbody></table>';
+}
+
 function tabOperate(m) {
   const profiles = Object.entries(m.sampling);
   const repo = pickedRepo(m), pick = pickedQuant(m), profile = pickedProfile(m);
@@ -2858,6 +2897,7 @@ function tabOperate(m) {
     + templateSection(m, repo);
 
   out += runtimeBlock(m);
+  out += draftBlock(m, pick);
 
   out += '<h3>what the registry pins</h3>'
     // "quant tag" rather than "quant": it is the string after the colon in

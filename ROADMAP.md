@@ -28,6 +28,24 @@ built and is marked done when it ships.
   line it belongs to. the hover binds on `[data-ref]` rather than on either
   class, because a marker beside a cell and an underlined figure in a sentence
   are the same claim about where a number came from.
+- **`speculative.note` was written and never shown.** DONE. two of them --
+  qwen3.8 27b's measured draft acceptance, muse glimmer's dflash block behaviour
+  -- were in the registry, passed the validator, rendered their references and
+  reached docs/data.json, where no part of the page drew them. found by
+  accounting for every resolved reference in the payload against the place it is
+  displayed: 253 of them, and those two landed nowhere.
+  `what drafts for it` in the operate tab now carries the kind, the drafter repo
+  and file, what it costs resident, how many tokens it can yield, whether the
+  PICKED rung drafts at all -- a repo may publish one build with the head folded
+  in and one without -- and the note. it draws for the 12 models that ship a
+  drafter.
+  the test that should have caught it needed two passes of its own. it skipped a
+  figure it could not find, on the grounds that a tab may show a subset, which
+  made a note drawn nowhere indistinguishable from one drawn elsewhere; and once
+  that was closed it still passed, because a `{card}` renders as a url half the
+  page prints, so it matched some other sentence. it finds a note by the longest
+  of its own literal runs now, and only then asks whether the figure inside is
+  wrapped.
 
 - **every written sentence in the repository goes through one door.** prose was
   written in five places and regenerable in one: `review-verdicts` drafted

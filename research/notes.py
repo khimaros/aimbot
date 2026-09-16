@@ -172,6 +172,16 @@ FIELDS = {
 # the note happens to hang off
 MODEL_FIELDS = ("params_b", "context")
 
+# which capture each field is read out of, so a figure standing in a note can
+# say where it came from the way a figure standing in a verdict does. the
+# reader's question is the same one -- 29.30 gib of WHAT, measured by whom
+FIELD_SOURCE = {
+    "gib": ("gguf sizes", "research/data/gguf-sizes.json"),
+    "bpw": ("gguf tensors", "research/data/gguf-tensors.json"),
+    "params_b": ("model facts", "research/data/model-facts.json"),
+    "context": ("model facts", "research/data/model-facts.json"),
+}
+
 
 # a reference that names WHERE a claim came from rather than what it is. these
 # render as somewhere a reader can go, and the words quoted in front of one are
@@ -241,10 +251,16 @@ def render_parts(text, repo, quant, data, model=None):
                 "shown": m.group(0) if got is None else got}
         if got is None:
             part["missing"] = True
-        else:
+        elif field in SOURCES:
             source = source_of(field, locator, repo, quant, data, model)
             if source:
                 part["url"] = source[0]
+        elif field in FIELD_SOURCE:
+            name, path = FIELD_SOURCE[field]
+            keys = _keys(quant)
+            read = locator or (repo if field in MODEL_FIELDS
+                               else "%s:%s" % (repo, keys[0] if keys else "?"))
+            part["ref"] = {"source": name, "file": path, "id": read}
         out.append(part)
     if at < len(text):
         out.append(text[at:])

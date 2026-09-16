@@ -1188,6 +1188,55 @@ test('a measured curve is only applied to the files it measured', () => {
 // rendered form is `key pNN` rather than a bare number precisely so it can be
 // recognised again, which is what makes this possible without shipping anything
 // extra -- the page refuses to print a brace and that has not changed.
+// the quant notes under `what the registry pins` shipped as flat strings after
+// everything else became parts, so they rendered correctly and hovered at
+// nothing -- a silent gap the [object Object] guard below cannot see, because a
+// string is exactly what the renderer handles without complaint. the invariant
+// is not "it draws", it is "a reference that resolved is reachable".
+test('a note that resolved a reference is hoverable where it is shown', () => {
+  RESET();
+  const tabs = {operate: tabOperate, overview: tabOverview,
+                quality: tabQuality, vendor: tabVendor,
+                quantization: tabQuantization, community: tabCommunity};
+  const resolved = v => Array.isArray(v)
+    && v.filter(p => p && typeof p === 'object' && !p.missing && p.shown);
+  let checked = 0;
+  D.models.forEach(m => {
+    // the notes the page draws unconditionally. a sampling profile's note is
+    // NOT here: the operate tab draws the selected profile's table and the
+    // others are a chip away, so a static render cannot prove it reachable and
+    // cannot prove it lost either
+    const held = [m.notes, (m.speculative || {}).note]
+      .concat((m.quants || []).concat(m.components || []).map(q => q.note));
+    const drawn = Object.values(tabs)
+      .filter(fn => typeof fn === 'function').map(fn => fn(m));
+    held.forEach(note => {
+      const parts = resolved(note);
+      if (!parts || !parts.length) return;
+      // find the NOTE by its own words rather than by the figure in it: a
+      // `{card}` renders as a url that half the page also prints, so matching
+      // the figure finds some other sentence and calls this one drawn
+      const mark = (note.filter(p => typeof p === 'string')
+        .map(p => p.trim()).sort((a, b) => b.length - a.length)[0] || '');
+      if (mark.length < 25) return;
+      checked++;
+      const page = drawn.find(html_ => html_.includes(esc(mark)));
+      ok(page, m.short + ': a note is shipped and drawn nowhere -- "'
+         + mark.slice(0, 60) + '"');
+      if (!page) return;
+      parts.forEach(part => {
+        const at = page.indexOf('>' + esc(part.shown) + '<');
+        if (at === -1) return;
+        const open = page.slice(0, at + 1).lastIndexOf('<a ');
+        const tag = open === -1 ? '' : page.slice(open, at + 1);
+        ok(tag.endsWith('>') && tag.includes('data-ref='),
+           m.short + ': "' + part.shown + '" is printed with nothing behind it');
+      });
+    });
+  });
+  ok(checked > 30, 'and there were resolved references to reach, got ' + checked);
+});
+
 // prose ships as parts, so every place that used to `esc()` a note now has to
 // render a list. one that was missed does not throw -- it prints the words
 // `[object Object]` into the page, which is the only way this change can fail
