@@ -23,9 +23,18 @@ metric it actually is:
                  to discount anything
 
 `scripts/build-viewer` enforces that split. A `score` curve replaces the fitted
-one for its model; a `proxy` curve is displayed beside the quants and nothing
-more. Hand-written entries survive a rerun, which is how a `score` curve gets
-in until somebody publishes one in a table this can parse.
+one for the rungs it measured; a `proxy` curve is displayed beside the quants
+and nothing more. Hand-written entries survive a rerun, which is how a `score`
+curve gets in until somebody publishes one in a table this can parse.
+
+A MODEL CAN HAVE BEEN MEASURED MORE THAN ONCE, so `curves[model]` is a list.
+Each entry names the `quant_repo` it ran, because a sweep measures FILES rather
+than a model: ISTA's card scores its own GSQ-RCO rungs of qwen3.8 27b and
+unsloth's UD rungs on the same three benchmarks and they differ by more than
+eight points of task average at 2.5 bpw. Before this was a list, the
+hand-written restore below replaced the card-parsed proxy for the same model,
+which is how qwen3.8 flash next would have lost ten measured kl rungs to gain
+three benchmarked ones.
 
 Cards are heterogeneous, so extraction is deliberately narrow: a markdown table
 with a column naming quants and a column naming a metric this understands.
@@ -289,15 +298,16 @@ def main():
             found = offsite_sweep(spec, params, args.refresh)
             if found:
                 points, metric, better = found
-                curves[repo] = {
+                curves.setdefault(repo, []).append({
                     "kind": "proxy", "metric": metric, "better": better,
+                    "quant_repo": spec.get("repo"),
                     "points": [[p[0], p[1]] for p in points],
                     "quants": [p[2] for p in points],
                     "ref": {"source": spec.get("source") or spec["url"],
                             "url": spec["url"],
                             "note": spec.get("note") or
                                     "published %s per quant, off the card" % metric},
-                }
+                })
                 print("  %-46s %d points of %s from %s"
                       % (repo, len(points), metric, spec["url"]), file=sys.stderr)
                 continue
@@ -315,17 +325,19 @@ def main():
                 continue
             points, metric, better = found
             ghost = unpublished(source, [p[2] for p in points], sizes)
-            curves[repo] = {
+            curve = {
                 "kind": "proxy",
                 "metric": metric,
                 "better": better,
+                "quant_repo": source,
                 "points": [[p[0], p[1]] for p in points],
                 "quants": [p[2] for p in points],
                 "ref": {"source": source, "url": CARD_URL % source,
                         "note": "published %s per quant on the card" % metric},
             }
             if ghost:
-                curves[repo]["ref"]["unpublished"] = ghost
+                curve["ref"]["unpublished"] = ghost
+            curves.setdefault(repo, []).append(curve)
             print("  %-46s %d points of %s from %s%s"
                   % (repo, len(points), metric, source,
                      "  (%d rung(s) the repo does not carry: %s)"
@@ -334,28 +346,36 @@ def main():
             break
 
     # a hand-written score curve is worth more than anything parsed here, and
-    # nothing in this script can produce one
-    kept = 0
-    for repo, curve in (old.get("curves") or {}).items():
-        if curve.get("kind") == "score" or curve.get("hand_written"):
-            curves[repo] = curve
-            kept += 1
+    # nothing in this script can produce one. it is kept BESIDE what was parsed
+    # rather than over it: a model can have been measured twice, and replacing
+    # the card's proxy with the hand-written score was silent data loss -- the
+    # ten unsloth kl rungs of qwen3.8 flash next and ISTA's benchmark table of
+    # the same model are different experiments and both are worth reading
+    kept = {}
+    for repo, entry in (old.get("curves") or {}).items():
+        for curve in (entry if isinstance(entry, list) else [entry]):
+            if curve.get("kind") == "score" or curve.get("hand_written"):
+                kept.setdefault(repo, []).append(curve)
+    for repo, hand in kept.items():
+        curves[repo] = hand + curves.get(repo, [])
 
     doc = dict(old)
-    doc["version"] = 1
+    doc["version"] = 2
     doc["curves"] = dict(sorted(curves.items()))
     text = json.dumps(doc, indent=1, sort_keys=False) + "\n"
+    total = sum(len(v) for v in curves.values())
 
     if args.check:
         current = open(args.out).read() if os.path.exists(args.out) else ""
         if current != text:
             sys.exit("!!! %s is out of date, run: make curves" % args.out)
-        print("quant-curves: %d curves, current" % len(curves))
+        print("quant-curves: %d curves over %d models, current" % (total, len(curves)))
         return
 
     with open(args.out, "w") as f:
         f.write(text)
-    print("wrote %s: %d curves (%d hand-written kept)" % (args.out, len(curves), kept))
+    print("wrote %s: %d curves over %d models (%d hand-written kept)"
+          % (args.out, total, len(curves), sum(len(v) for v in kept.values())))
 
 
 if __name__ == "__main__":

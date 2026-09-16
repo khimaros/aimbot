@@ -48,6 +48,41 @@ def norm_name(name):
     """The spelling resolve-ids --names is keyed on."""
     return re.sub(r"[^a-z0-9]", "", GGUF_SUFFIX.sub("", name).lower())
 
+
+def merged_captures(path):
+    """Every `hf-catalog*.json` beside `path`, as one set of repos.
+
+    The sweep captures the hub on more than one axis and this used to read one
+    of them. Both were `trendingScore` and `createdAt`, so a repo that was
+    neither rising now nor freshly created could not be discovered however many
+    people ran it: ISTA-DASLab's Qwen3.8-27B quant, 884,926 downloads against a
+    model already on the roster, was in neither capture while three of the same
+    author's repos, the largest at 953 downloads, were in one.
+
+    Reading the directory rather than a list means a capture the sweep adds
+    later is picked up here without a second edition of this function.
+    """
+    base = os.path.dirname(os.path.abspath(path))
+    stem = os.path.basename(path).split(".")[0].split("-")[0] + "-catalog"
+    seen, rows, authors = set(), [], {}
+    for name in sorted(os.listdir(base) or []):
+        if not (name.startswith(stem) and name.endswith(".json")):
+            continue
+        try:
+            with open(os.path.join(base, name)) as f:
+                one = json.load(f)
+        except (IOError, ValueError):
+            continue
+        authors.update(one.get("authors") or {})
+        for row in one.get("trending") or []:
+            rid = row.get("id")
+            # the same repo is in several captures; the first wins, and the
+            # captures are read in name order so `hf-catalog.json` leads
+            if rid and rid not in seen:
+                seen.add(rid)
+                rows.append(row)
+    return {"trending": rows, "authors": authors}
+
 # roughly what a 128gb box can hold at a useful quant, in billions of total
 # params. above this a model only fits at precisions the quant curve says cost
 # real accuracy; below it the model is too small to compete on this roster.
@@ -111,7 +146,7 @@ def main():
                          "consumer reads the same filter this prints")
     args = ap.parse_args()
 
-    d = json.load(open(args.data))
+    d = merged_captures(args.data)
     allm = models(d)
     mre = roster_bases()
     exact = roster_exact()

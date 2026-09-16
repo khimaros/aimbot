@@ -299,15 +299,42 @@ def review(path, decided_path, only_carry=True):
         print("CONTRIBUTING.md 'adding a model' is the six steps.")
 
 
-def mechanical(row, roles):
-    """The verdict the curated lists already imply, or None to go and ask.
+def hub_says(row):
+    """`quantized`, `finetune`, or None -- what the hub records about THIS repo.
 
-    A repo owned by a publisher this file calls a quantizer IS somebody's quant
-    of a model that already exists -- that is what being on that list means --
-    and no reading of the repo name can overturn it. Asking anyway is how
-    `bartowski/Qwen2.5-Coder-32B-Instruct-GGUF` came back as an original
-    release by the lab that trained it.
+    Better evidence than the owner, because an owner can be both. `agentionai`
+    ships requants of qwen and its own `Signal` finetunes, and publishers.txt
+    holds one role per owner: calling them a quantizer buries their models and
+    calling them a vendor triages their requants as new releases. The hub tags
+    each repo instead, and the tag is already captured.
     """
+    for tag in (row.get("tags") or []):
+        part = tag.split(":")
+        if len(part) >= 3 and part[0] == "base_model":
+            return part[1]
+    return None
+
+
+def mechanical(row, roles):
+    """The verdict the evidence already implies, or None to go and ask.
+
+    A repo the hub calls a quantization of something IS somebody's quant of a
+    model that already exists, and no reading of the repo name can overturn it.
+    Asking anyway is how `bartowski/Qwen2.5-Coder-32B-Instruct-GGUF` came back
+    as an original release by the lab that trained it.
+
+    The hub's per-repo label answers first and the owner list answers where the
+    hub is silent, which is most of the older captures.
+    """
+    said = hub_says(row)
+    if said == "quantized":
+        return {"kind": "requant", "base": "", "verdict": "skip",
+                "reason": "the hub records it as a quantization of another model",
+                "decided_by": "hub base_model tag"}
+    if said == "finetune":
+        # a finetune is a MODEL, whoever published it. it goes to triage on its
+        # merits rather than being settled by who owns the repo
+        return None
     role = publishers.role_of(row["id"], roles)
     if role == "quantizer":
         return {"kind": "requant", "base": "", "verdict": "skip",

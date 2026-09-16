@@ -7,6 +7,7 @@ help:
 	@echo "to run the steps that ask a model, run 'make llm'"
 	@echo "to decide what they proposed, run 'make llm-review' ('make llm-report' just lists)"
 	@echo "to refresh published quant sweeps, run 'make curves'"
+	@echo "to account for every written sentence, run 'make prose'"
 	@echo "to rebuild the github pages viewer, run 'make site'"
 	@echo "to test the viewer end to end, run 'make test-e2e'"
 	@echo "to run the whole research sweep, run 'make sweep'"
@@ -75,6 +76,22 @@ llm-report:
 	cd research && ./propose --report
 	cd research && ./score-sentiment --report
 .PHONY: llm-report
+
+# every written sentence in the repository, on five surfaces. `prose` reports
+# what is wrong with what is there; the per-surface targets draft replacements
+# and write nothing. see research/prose.py for the inventory.
+prose:
+	cd research && ./write-prose --list
+	cd research && ./write-prose --check
+.PHONY: prose
+
+prose-usecase:
+	cd research && ./write-prose --surface usecase --stale
+.PHONY: prose-usecase
+
+prose-registry:
+	cd research && ./write-prose --surface registry-note
+.PHONY: prose-registry
 
 # the per-model rollup every measurement lands in. sentiment first, because
 # usecase joins it.

@@ -61,7 +61,14 @@ FIELDS = ["id", "likes", "downloads", "trendingScore", "lastModified",
 # it by hand.
 PIPELINES = [("text-generation", True),
              ("text-to-speech", False),
-             ("automatic-speech-recognition", False)]
+             ("automatic-speech-recognition", False),
+             # and the same lesson a third time, for vision. the hub tags a
+             # multimodal gguf `image-text-to-text` and NOT `text-generation`,
+             # so every quant of the 36 roster models that take image input was
+             # invisible here on any sort -- ISTA-DASLab's qwen3.8 27b ladder,
+             # 884,926 downloads against a model already carried, was found by
+             # hand rather than by this
+             ("image-text-to-text", True)]
 
 
 def get(url, key, max_age, refresh):

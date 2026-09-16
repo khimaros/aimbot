@@ -1,0 +1,397 @@
+#!/usr/bin/env python3
+
+"""Regenerate, check and account for every piece of prose in this repository.
+
+Five surfaces hold written sentences -- see research/prose.py for what they are
+and what is deliberately not one. This is the one door into all of them, so a
+surface that exists is a surface that can be checked, drafted and attributed.
+
+    ./write-prose --list                       what is on each surface
+    ./write-prose --check                      style, citations, provenance
+    ./write-prose --surface registry-note      draft each, writing nothing
+    ./write-prose --surface usecase --stale    only where the figures moved
+    ./write-prose --stamp assistant            record who wrote what is there
+
+NOTHING HERE WRITES A SOURCE FILE. A draft is printed beside what is on disk so
+a human can compare them and decide; that is the same rule research/propose and
+review-verdicts already follow, and it is in CONTRIBUTING.md. `--stamp` writes
+the ledger, which is provenance rather than prose.
+
+THE CHECK DOES NOT CARE WHO WROTE THE BLOCK. Prose typed in a session and prose
+drafted by the endpoint go through the same refusals, because the question is
+whether a sentence is true and readable. What the author field changes is what
+a reader should do about it: a `local` draft has not been read by anybody.
+"""
+
+import argparse
+import json
+import os
+import sys
+import textwrap
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import prose  # noqa: E402
+import verdicts  # noqa: E402
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+# how much ANSWER to allow. what a reasoning run spends BEFORE the answer is
+# added by llm.budget_for from the configured effort, because the caller knows
+# how long a note is and only the effort knows how long the thinking is.
+ANSWER_TOKENS = 900
+
+ABOUT = [
+    "who wrote each piece of prose in this repository, and against which",
+    "figures. one ledger for every surface, because most of them have nowhere",
+    "to put it: a yaml `note:` is a string and an html attribute is an",
+    "attribute.",
+    "",
+    "`author` is one of assistant (written in a session, with a human reading",
+    "along), local (drafted by the endpoint through the loop and not yet read",
+    "by anybody) or human (typed by hand).",
+    "",
+    "`authored_against` is the figures the sentence was written from, so that a",
+    "band crossing under it re-opens the block. see research/verdicts.py.",
+]
+
+
+def sheet_for(block, models, note_data=None):
+    """What a writer of this block is allowed to reason from.
+
+    A sheet rather than the captures, on every surface that has one: whatever
+    writes the prose should be picking which evidence matters, not which numbers
+    to believe. The two grounded surfaces have different evidence -- a verdict
+    argues from percentiles and forum quotes, a note from a file and the card
+    that shipped it -- so they get different sheets and different vocabularies.
+    """
+    if block.surface == "usecase":
+        return verdicts.fact_sheet(block.grounded, models.get(block.grounded) or {})
+    if block.surface == "registry-note":
+        import notes
+        at = block.subject or {}
+        return notes.fact_sheet(at.get("repo") or block.grounded, at.get("quant"),
+                                note_data if note_data is not None else notes.load(),
+                                model=block.grounded, entry=at.get("entry"),
+                                pin=at.get("pin"))
+    return None
+
+
+NOTE_TASK = """Write the registry note for one gguf file, from the evidence below.
+
+WRITE WHAT WOULD CHANGE THE READER'S MIND, NOT WHAT THEY CANNOT GET WRONG.
+
+The page hands them a working command: the repo, the file, the projector, the
+draft head, the samplers, the context. So which file to fetch and how to load it
+is NOT worth a sentence -- they cannot fetch the wrong one. Whether it fits is
+not either: they set their own memory, reserve and context, and the page
+recomputes it.
+
+What they cannot get from the command is anything that would make them pick
+something ELSE, or run this one differently. That is the note's whole job:
+
+    a warning        "EXPERIMENTAL", "may have to delete some of the beta ggufs"
+    a constraint     a non-commercial licence, a fork required, an unmerged PR
+    a surprise       the tag says IQ1_M and the tensors are mostly IQ2_XXS
+    a trade          what the rung above costs and what it buys
+    a caveat         a vendor figure measured on a pipeline this does not use
+
+    good:   the card {card} calls these "EXPERIMENTAL" and says support is
+            "preliminary and not yet in a released build"
+    good:   the tag does not describe the experts: this runs IQ3_S 3.44-bit
+            ones, a rung below the file of the same name beside it
+    bad:    the gguf repo is cstr's, and the pin names the file to fetch
+    bad:    it does not fit the box              <- the reader sets the box
+    bad:    a strong general-purpose model with good reasoning  <- not about the file
+    bad:    this is the full model, not a quantized rung        <- says nothing
+
+NO FIGURES IN THE PROSE. Not one size, not one bits-per-weight. Write the
+reference and the number is printed from the capture every time the document is
+built, so it cannot go stale. The sheet shows you each reference next to the
+value it renders as right now, and lists every reference you may write.
+
+    bad:    the small end of the ladder at 10.96 gib      <- a figure in the prose
+
+SAY WHERE IT CAME FROM. A note that names no source is a claim a reader cannot
+check. `{card}` is the publisher's own card. Quote it where the publisher said
+something a reader would want to know -- a warning, a caveat, a recommended
+tier -- in quotation marks, with their words EXACTLY. Do not quote marketing.
+
+    good:   the card {card} calls these "EXPERIMENTAL" and says support is
+            "preliminary and not yet in a released build"
+    bad:    the card says it is basically lossless        <- quote them or drop it
+    bad:    the card {card} calls it "a lossless rung"    <- not what they wrote
+    bad:    the card {card} notes "Tool calling improvements"  <- marketing
+
+STYLE, matched to the rest of the registry:
+- all lowercase, including the first word and model names.
+- prefer the specific to the summary: "the mtp head the draft needs" beats
+  "additional capabilities".
+- two to four sentences. no preamble, no headings, no bullet points.
+- do not open with "this rung" or "this is": start with what is true of it.
+
+Reply with JSON: {"note": "..."}"""
+
+
+def cmd_list(args, models):
+    total = 0
+    for surface in prose.SURFACES:
+        rows = prose.blocks(surface)
+        words = sum(len(t.split()) for b in rows for t in b.fields.values())
+        held = sum(1 for b in rows if b.id in args.ledger)
+        print("  %-14s %4d blocks %7d words  %d with a recorded author"
+              % (surface, len(rows), words, held))
+        total += len(rows)
+    print("\n%d block(s) over %d surface(s)." % (total, len(prose.SURFACES)))
+    if prose.blocks("models-md"):
+        print("models-md is a punch list, not a drafting target: every paragraph")
+        print("there is one MODELS.md still holds by hand rather than generating.")
+
+
+def cmd_check(args, models):
+    """Style and citations over everything, then what the ledger cannot say."""
+    import notes
+    note_data = notes.load()
+    findings, unstamped, stale = [], [], []
+    for surface in ([args.surface] if args.surface else prose.SURFACES):
+        for block in prose.blocks(surface):
+            for field, why in prose.check(block, models, note_data):
+                findings.append((block.id, field, why))
+            if block.id not in args.ledger:
+                unstamped.append(block.id)
+                continue
+            snap = (args.ledger[block.id] or {}).get("authored_against")
+            facets = prose.facts_for(block, models)
+            if snap and facets is not None:
+                for key, why in verdicts.moved(snap, facets):
+                    stale.append((block.id, key, why))
+
+    for bid, field, why in findings:
+        print("  %-52s %-10s %s" % (bid[:52], field, why))
+    print("\n%d finding(s) over %d block(s)."
+          % (len(findings), len({f[0] for f in findings})))
+    if unstamped:
+        print("%d block(s) with no recorded author; run --stamp." % len(unstamped))
+        for bid in unstamped[:args.top]:
+            print("    %s" % bid)
+    if stale:
+        print("%d block(s) standing on a figure that has moved:" % len(stale))
+        for bid, key, why in stale[:args.top]:
+            print("    %-52s %-24s %s" % (bid[:52], key, why))
+    # a finding is a punch list and an unread block is not an error yet, so this
+    # exits clean unless asked to be strict. the sweep reports it either way
+    return 1 if args.strict and (findings or unstamped or stale) else 0
+
+
+def cited_facets(block):
+    """Every facet key the block's own words point at."""
+    out = set()
+    for text in block.fields.values():
+        out.update(verdicts.CITE_REF.findall(text))
+        # only the block's OWN figures: a `{key@other/Repo}` comparison is
+        # another model's number and snapshotting it here would flag this block
+        # when that model moved
+        out.update(k for k, repo, _ in verdicts.REF.findall(text) if not repo)
+    return out
+
+
+def rewritten(surface):
+    """Block ids whose prose differs from the last commit.
+
+    Having just re-read and rewritten a block is the only honest moment to
+    record what it was read against, and a diff against HEAD is exactly that
+    claim. Stamping every unsnapshotted block from today's figures instead
+    would assert somebody had re-read prose they have not, which is the single
+    way this mechanism can lie.
+    """
+    with prose.as_committed():
+        was = dict((b.id, b.fields) for b in prose.blocks(surface))
+    return set(b.id for b in prose.blocks(surface) if was.get(b.id) != b.fields)
+
+
+def cmd_stamp(args, models):
+    """Record an author for every block that has none.
+
+    Run once per surface after a human has read it. It never overwrites an
+    existing row, because the thing it would overwrite is the only record of
+    who wrote the words on disk -- except under --restamp, which refreshes the
+    snapshot of a block whose words have actually changed since the last commit.
+    """
+    led = dict(args.ledger)
+    added = fresh = 0
+    for surface in ([args.surface] if args.surface else prose.SURFACES):
+        touched = rewritten(surface) if args.restamp else set()
+        here = set(b.id for b in prose.blocks(surface))
+        # a row for prose that no longer exists is not provenance, it is a
+        # claim about a block nothing can show the reader. only within the
+        # surfaces actually scanned, so --surface cannot empty the rest
+        for gone in [b for b in led if b.startswith(surface + ":") and b not in here]:
+            del led[gone]
+        for block in prose.blocks(surface):
+            if block.id in led and block.id not in touched:
+                continue
+            facets = prose.facts_for(block, models)
+            row = dict(led.get(block.id) or {})
+            row.setdefault("author", args.stamp)
+            row["written_on"] = args.on
+            if facets:
+                row["authored_against"] = verdicts.snapshot(
+                    sorted(cited_facets(block)), facets)
+            if block.id in led:
+                fresh += 1
+            else:
+                added += 1
+            led[block.id] = row
+    doc = {"_about": ABOUT, "version": 1, "blocks": dict(sorted(led.items()))}
+    with open(prose.LEDGER, "w") as f:
+        json.dump(doc, f, indent=1, sort_keys=False)
+        f.write("\n")
+    print("wrote %s: %d block(s), %d newly stamped as %s, %d re-read"
+          % (prose.LEDGER, len(led), added, args.stamp, fresh))
+    return 0
+
+
+def cmd_draft(args, models):
+    """Ask the endpoint for each block, print it beside what is there."""
+    import llm
+    import notes
+    if not llm.configured():
+        sys.exit("!!! no model configured; see .env.example")
+    if args.surface not in ("usecase", "registry-note"):
+        sys.exit("!!! %s has no fact sheet, so a draft of it could not be checked "
+                 "against anything. `--check` still covers it for style."
+                 % args.surface)
+    note_data = notes.load()
+    rows = prose.blocks(args.surface)
+    if args.stale:
+        rows = [b for b in rows
+                if verdicts.moved((args.ledger.get(b.id) or {}).get("authored_against"),
+                                  prose.facts_for(b, models) or {})]
+    if args.grep:
+        import re
+        rows = [b for b in rows if re.search(args.grep, b.id)]
+    if args.limit:
+        rows = rows[:args.limit]
+
+    review = load_sibling("review_verdicts", "review-verdicts")
+    drafted = 0
+    for n, block in enumerate(rows, 1):
+        print("=" * 72)
+        print("[%d/%d] %s" % (n, len(rows), block.id))
+        for name, text in sorted(block.fields.items()):
+            print("  on disk  %-10s %s" % (name, text[:400]))
+        if block.surface == "usecase":
+            draft, why = review.propose(block.grounded, {}, [], models, llm)
+        else:
+            draft, why = propose_note(block, sheet_for(block, models, note_data),
+                                      note_data, llm)
+        if not draft:
+            print("  --- no usable draft: %s" % why)
+            continue
+        drafted += 1
+        print("  --- drafted")
+        for line in rendered_draft(block, draft, models, note_data):
+            print("  %s" % line)
+    print("\n%d of %d block(s) drafted. nothing was written."
+          % (drafted, len(rows)))
+    return 0
+
+
+def load_sibling(name, filename):
+    """One of this directory's extensionless scripts, as a module."""
+    import importlib.machinery
+    import importlib.util
+    spec = importlib.util.spec_from_loader(
+        name, importlib.machinery.SourceFileLoader(name, os.path.join(HERE, filename)))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def propose_note(block, sheet, note_data, llm, tries=2):
+    """Ask for a note, and hand a refusal back rather than giving up on it.
+
+    Same shape as review-verdicts.propose and for the same reason: the refusals
+    are fixable mistakes -- a typed size, a quote that is a paraphrase -- and a
+    local endpoint makes the second ask nearly free.
+    """
+    import notes
+    at = block.subject or {}
+    repo, quant = at.get("repo") or block.grounded, at.get("quant")
+    messages = [{"role": "system", "content": NOTE_TASK},
+                {"role": "user", "content": sheet}]
+    why = "no reply from the endpoint"
+    for attempt in range(tries):
+        reply = llm.chat(messages, max_tokens=ANSWER_TOKENS, thinking=True)
+        if not reply:
+            return None, why
+        got = llm.as_json(reply)
+        if not isinstance(got, dict) or not got.get("note"):
+            why = "the reply was not the JSON object asked for"
+        else:
+            found = notes.check(got["note"], repo, quant, note_data,
+                                model=block.grounded)
+            if not found:
+                return got, ""
+            why = "; ".join(found)
+        if attempt + 1 < tries:
+            messages += [{"role": "assistant", "content": reply},
+                         {"role": "user", "content":
+                          "That was refused: %s. Fix exactly that and reply "
+                          "again with the same JSON shape." % why}]
+    return None, why
+
+
+def rendered_draft(block, draft, models, note_data):
+    """The draft as a reader would see it: references resolved, sources listed."""
+    import notes
+    if block.surface == "usecase":
+        facets = prose.facts_for(block, models) or {}
+        whole = "%s\n%s" % (draft.get("one_liner") or "", draft.get("notes") or "")
+        text, cites = verdicts.cite(whole, facets)
+        return text.split("\n") + ["  [%d] %s" % (i, c)
+                                   for i, c in enumerate(cites, 1)]
+    at = block.subject or {}
+    text, _ = notes.render(draft.get("note") or "", at.get("repo") or block.grounded,
+                           at.get("quant"), note_data, model=block.grounded)
+    return textwrap.wrap(text, 74)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--surface", choices=prose.SURFACES)
+    ap.add_argument("--list", action="store_true")
+    ap.add_argument("--check", action="store_true")
+    ap.add_argument("--strict", action="store_true",
+                    help="exit non-zero on any finding, for a gate rather than a report")
+    ap.add_argument("--stamp", choices=prose.AUTHORS,
+                    help="record this author for every block that has none")
+    ap.add_argument("--on", default="", help="the date --stamp records")
+    ap.add_argument("--restamp", action="store_true",
+                    help="also refresh every block whose words changed since "
+                         "the last commit, which is when somebody re-read it")
+    ap.add_argument("--stale", action="store_true",
+                    help="only blocks whose figures have moved since they were written")
+    ap.add_argument("--limit", type=int)
+    ap.add_argument("--grep", help="only blocks whose id matches this regex")
+    ap.add_argument("--top", type=int, default=20)
+    args = ap.parse_args()
+    args.ledger = prose.ledger()
+    # a sweep of 211 blocks is an hour of endpoint time, and python buffers
+    # stdout when it is a file -- so a redirected run shows NOTHING until it
+    # ends, and a run nobody can follow is a run nobody interrupts when the
+    # first three drafts come back wrong
+    sys.stdout.reconfigure(line_buffering=True)
+
+    models = prose.read_json(prose.USECASE).get("models") or {}
+    if args.stamp:
+        return cmd_stamp(args, models)
+    if args.check:
+        return cmd_check(args, models)
+    if args.surface and not args.list:
+        return cmd_draft(args, models)
+    return cmd_list(args, models)
+
+
+if __name__ == "__main__":
+    sys.exit(main() or 0)

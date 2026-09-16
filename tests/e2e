@@ -460,6 +460,20 @@ test('publishers are the same control, and the same union', () => {
   RESET();
 });
 
+test('the publisher menu reads in one alphabet, not two', () => {
+  RESET();
+  drawPublishers();
+  const order = [...html('#pub-ms').matchAll(/data-pub="([^"]*)"/g)].map(x => x[1]);
+  ok(order.length > 10, 'the menu lists the roster: ' + order.length);
+  // a publisher name is capitalized however its owner felt -- `Qwen` beside
+  // `google` -- and ascii order puts EVERY capital ahead of every lowercase
+  // one, so the menu read as two alphabets and `zai-org` sat above `Zyphra`
+  const want = [...order].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  eq(order.join(','), want.join(','), 'the menu is ordered case insensitively');
+  ok(order.join(',') !== [...order].sort().join(','),
+     'and the roster mixes cases, so that is a different list from ascii order');
+});
+
 test('modality is one shape at a time, and the shapes overlap', () => {
   RESET();
   filters.flags = new Set();
@@ -634,13 +648,18 @@ test('quantization is its own tab, and says what the discount did', () => {
   // qwen3.8 27b is the model somebody ran at three arms on terminal-bench, so
   // it is the one whose discount comes off a MEASUREMENT rather than off the
   // deepseek fit every other model borrows
-  const measured = D.models.find(x => D.retention.measured[x.repo]);
+  const measured = D.models.find(x => (D.retention.measured[x.repo] || []).length);
   ok(measured, 'the roster carries a measured curve');
   openModel(measured.repo, 'quantization');
   const html_ = html('#body');
   ok(html_.includes('measured'), 'the tab says the curve was measured for it');
-  ok(html_.includes(D.retention.measured[measured.repo].metric),
-     'and names what was measured: ' + D.retention.measured[measured.repo].metric);
+  // EVERY sweep of this model, not just the one its own rung is scored against:
+  // the tab is about what a quant is, and two people measuring the same model
+  // on different files is the most interesting thing that can be true of it
+  D.retention.measured[measured.repo].forEach(c => {
+    ok(html_.includes(c.metric), 'and names what was measured: ' + c.metric);
+    ok(html_.includes(c.quant_repo), 'and whose files: ' + c.quant_repo);
+  });
 
   // the rung ladder is here, and NOTHING here follows the operate tab's chips:
   // it is every rung of every repo that publishes one, with the rung the page
@@ -1143,6 +1162,71 @@ test('a short measured curve defers to the fitted one below its range', () => {
     + own.points[0][1] + ' against the fit\'s ' + interpAt(fit, below).toFixed(3));
 });
 
+// ISTA-DASLab's card runs its own GSQ-RCO rungs and unsloth's UD rungs over the
+// same three benchmarks, and at 2.5 bpw they differ by more than eight points of
+// task average. so "the curve for qwen3.8 27b" is not one thing: a measurement
+// answers for the FILES it ran, and a rung from another repo falls back to the
+// median or the fit rather than borrowing a number nobody measured for it.
+test('a measured curve is only applied to the files it measured', () => {
+  RESET();
+  const carried = D.models.filter(m => ((D.retention.measured || {})[m.repo] || []).length);
+  ok(carried.length, 'some model carries a measured curve');
+  carried.forEach(m => {
+    (D.retention.measured[m.repo]).forEach(c => ok(c.quant_repo,
+      m.short + ': a score curve has to name the gguf repo it ran, got '
+      + JSON.stringify(c.ref)));
+    const c = curveFor(m), q = activeQuant(m);
+    if (c.kind !== 'measured') return;
+    ok(q, m.short + ' is scored on some rung if a measured curve answered');
+    eq(c.src.quant_repo, q.repo, m.short + ' is scored on ' + q.quant + ' out of '
+      + q.repo + ', so the curve used must be the one run on that repo');
+  });
+});
+
+// the verdicts name their figures now -- `{aa.speed}` rather than `aa.speed
+// p77` -- so that the number a reader sees is read from the capture at build
+// time and cannot be the one somebody typed last year. that only holds if
+// something RENDERS them: shipped raw, the page prints the brace.
+test('a verdict ships its figures rendered, never as a raw reference', () => {
+  RESET();
+  const raw = /\{[a-z][a-z0-9_.-]*\}/i;
+  const fields = ['one_liner', 'notes', 'use_for', 'avoid_for', 'evidence'];
+  let checked = 0;
+  D.models.forEach(m => {
+    const a = m.assessed || {};
+    fields.forEach(f => {
+      const v = a[f];
+      if (!v) return;
+      (Array.isArray(v) ? v : [v]).forEach(text => {
+        checked++;
+        ok(!raw.test(text), m.short + ' ' + f + ' still carries a reference: ' + text);
+      });
+    });
+  });
+  ok(checked > 300, 'and there were verdicts to check, got ' + checked);
+
+  // and the registry notes, which reference their own vocabulary -- `{gib}`,
+  // `{card}`. these hang off six different blocks and the renderer only knew
+  // two of them, so `sampling.thinking.note` shipped the brace to the page.
+  let notes = 0;
+  const walk = (o, where) => {
+    if (typeof o === 'string') {
+      notes++;
+      ok(!raw.test(o), where + ' ships a raw reference: ' + o.slice(0, 90));
+    } else if (o && typeof o === 'object') {
+      Object.entries(o).forEach(([k, v]) => {
+        if (k === 'note' || k === 'notes' || (v && typeof v === 'object')) {
+          walk(v, where + '.' + k);
+        }
+      });
+    }
+  };
+  D.models.forEach(m => ['notes', 'sampling', 'speculative', 'runtime', 'thinking',
+                         'turns', 'quants', 'components']
+    .forEach(f => walk(m[f], m.short + '.' + f)));
+  ok(notes > 150, 'and there were notes to check, got ' + notes);
+});
+
 // lmarena's collector captures eleven boards and the roster read one of them.
 // `image_edit` rates three models this registry already carries, on millions of
 // votes, and the data was sitting in the capture unused. editing is not
@@ -1335,6 +1419,32 @@ test('a huge cache shows up as a second, slower figure', () => {
   ok(t.full < t.empty * 0.85, 'past the threshold that prints both');
   ok(col('tg').cell(m).includes(tps(t.full)), 'and both are in the cell');
   RESET();
+});
+
+test('the fitted quant names who built it', () => {
+  RESET();
+  // most rungs on the roster are somebody else's build of the vendor's weights,
+  // and which of them you are about to download is part of the answer
+  const m = model('qwen3.8 27b'), q = activeQuant(m);
+  eq(quantAuthor(q), 'unsloth', 'qwen3.8 27b is read from a third party build');
+  ok(m.publisher !== quantAuthor(q), 'which is not who published the model');
+  const cell = col('quant').cell(m);
+  ok(cell.includes(esc(q.quant)), 'the cell reads the rung: ' + cell);
+  ok(cell.includes('unsloth'), 'and who quantized it: ' + cell);
+
+  // a vendor that ships its own gguf reads its own name rather than a blank
+  const own = model('granite 4.2 8b');
+  eq(quantAuthor(activeQuant(own)), own.publisher, 'ibm publishes its own rungs');
+  ok(col('quant').cell(own).includes(own.publisher), 'and the cell says so');
+
+  // in the ladder every row is a different rung of the SAME repo, so the author
+  // rides along with the rung the row carries
+  setLadder(true);
+  expand([model('muse glimmer')]).forEach(r => {
+    ok(col('quant').cell(r).includes(esc(r._q.quant)), 'the row reads its own rung');
+    ok(col('quant').cell(r).includes(quantAuthor(r._q)), 'beside its author');
+  });
+  setLadder(false);
 });
 
 test('the quant ladder is one row per quant that fits', () => {

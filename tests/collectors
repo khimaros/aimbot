@@ -578,6 +578,66 @@ def the_tensor_reader_says_what_a_quant_really_is():
     eq(plain["bpw"], round(2048 // 32 * 34 * 8 / 2048, 3), "at Q8_0's 8.5 bpw")
 
 
+# the four types mainline added after the table in fetch-gguf-tensors was
+# written, with the block geometry ggml-common.h gives for each:
+# (number, name, elements per block, bytes per block)
+LATE_TYPES = [(39, "MXFP4", 32, 17), (40, "NVFP4", 64, 36),
+              (41, "Q1_0", 128, 18), (42, "Q2_0", 64, 18)]
+
+
+@test
+def a_type_mainline_ships_is_costed_rather_than_counted_at_nothing():
+    """An unknown type is counted at ZERO bytes, which understates the rung.
+
+    The table falls back to `type<n>` at no size on purpose: an ik_llama fork
+    type is genuinely unknown here and reporting it is better than guessing.
+    But four types mainline itself ships landed after that table was written --
+    MXFP4, NVFP4, Q1_0 and Q2_0 -- and they are not unknown, they are missed.
+
+    MXFP4 is on 79 rungs of this roster, because it is what gpt-oss ships. Q2_0
+    is 68% of ISTA-DASLab's flash-next speed build, which read as 1.463 bits per
+    weight against the 2.40 its card states, and that number is what the
+    retention discount runs on.
+    """
+    # the collector imports `capture` as a sibling, which only resolves because
+    # running it puts its own directory on the path. loading it does not
+    sys.path.insert(0, RESEARCH)
+    try:
+        mod = load_script("fetch_gguf_tensors", os.path.join(RESEARCH, "fetch-gguf-tensors"))
+    finally:
+        sys.path.remove(RESEARCH)
+    for num, name, per_block, block_bytes in LATE_TYPES:
+        eq(mod.GGML.get(num), (name, per_block, block_bytes),
+           "ggml type %d is %s at %d bytes per %d elements, and the table says %r"
+           % (num, name, block_bytes, per_block, mod.GGML.get(num)))
+
+    # and the reader costs one rather than counting it at nothing
+    written = seed_cache("hf-" + TENSOR_REPO.replace("/", "_"),
+                         [{"type": "file", "path": "Fixture-Q2_0.gguf", "size": 500}])
+    written += seed_cache(
+        "gtensors-%s-Fixture-Q2_0.gguf" % TENSOR_REPO.replace("/", "_"),
+        gguf_header("fixture", tensors=[("blk.0.attn", [1024], 42)]))
+    tmp = tempfile.mkdtemp()
+    try:
+        out = os.path.join(tmp, "tensors.json")
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out]
+                           + roster_args(tmp, TENSOR_REPO),
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if r.returncode:
+            raise AssertionError("fetch-gguf-tensors exited %d: %s"
+                                 % (r.returncode, r.stderr.strip()))
+        with open(out) as f:
+            got = json.load(f)
+    finally:
+        for p in written:
+            os.path.exists(p) and os.remove(p)
+        shutil.rmtree(tmp)
+
+    rung = got["%s:Q2_0" % TENSOR_REPO]
+    eq(rung["types"], {"Q2_0": 1.0}, "the rung is all Q2_0 and is labelled so")
+    eq(rung["bpw"], 2.25, "at 18 bytes per 64 elements: %r" % (rung,))
+
+
 # a repo the registry serves and repos.txt does not name. this is the shape the
 # roster actually has -- repos.txt is the hand-kept sizing list and the registry
 # is what the page offers -- and agentionai's flash-next ladder is the live case
@@ -1421,6 +1481,834 @@ def the_turns_check_sees_a_field_the_deriver_would_delete():
 
 
 @test
+def the_hub_says_per_repo_what_an_owner_list_can_only_say_per_owner():
+    """One publisher can be a quantizer and a vendor at the same time.
+
+    `agentionai` ships requants of qwen -- AP-GGUF, ROCmFP4-FAST -- and its own
+    `Signal` finetunes, and the hub labels each repo: `base_model:quantized:` on
+    two, `base_model:finetune:` on the others. publishers.txt records a role per
+    OWNER, so listing them as a quantizer buries their models and listing them
+    as a vendor triages their requants as new releases. There is no right answer
+    to give that file.
+
+    The tag is already in every capture -- 1377 repos say quantized and 284 say
+    finetune -- so it is read first and the owner list answers only where the
+    hub is silent.
+    """
+    mod = load_script("propose", os.path.join(RESEARCH, "propose"))
+    roles = {"agentionai": "quantizer", "somequanter": "quantizer"}
+
+    def row(rid, kind=None):
+        tags = ["gguf"] + (["base_model:%s:Qwen/Qwen3.8-27B" % kind] if kind else [])
+        return {"id": rid, "tags": tags}
+
+    got = mod.mechanical(row("agentionai/Signal-3.8-27B-GGUF", "finetune"), roles)
+    eq(got, None,
+       "a finetune is not settled by its owner being a quantizer -- it goes to "
+       "triage like any other model, got %r" % (got,))
+
+    got = mod.mechanical(row("agentionai/Qwen3.8-Flash-Next-AP-GGUF", "quantized"), roles)
+    eq((got or {}).get("kind"), "requant", "while their requant still settles")
+    eq("hub" in ((got or {}).get("decided_by") or ""), True,
+       "on the hub's own label rather than the owner list: %r" % (got,))
+
+    # an owner nobody has classified, which is most of them
+    got = mod.mechanical(row("ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF", "quantized"), {})
+    eq((got or {}).get("kind"), "requant",
+       "and a repo the hub calls a quant needs no owner entry at all: %r" % (got,))
+
+    got = mod.mechanical(row("somequanter/Whatever-GGUF"), roles)
+    eq((got or {}).get("decided_by"), "publishers.txt",
+       "where the hub says nothing, the curated list still decides: %r" % (got,))
+
+
+@test
+def every_modality_the_roster_carries_has_a_discovery_path():
+    """A pipeline nobody queries is a blind spot no sort can reach.
+
+    The catalog asked the hub for text-generation and the two speech
+    pipelines. 36 registry models take image input, and the hub tags a
+    multimodal gguf repo `image-text-to-text` -- so ISTA-DASLab's Qwen3.8-27B
+    quant, 884,926 downloads against a model already on the roster, could not be
+    discovered on any axis. Sorting by downloads instead of trending would not
+    have found it either; it was never in the result set.
+
+    This is the same failure the file already records for speech, where asking
+    only for text-generation left that half of the roster with no discovery
+    path and `Supertone/supertonic-3` was found by hand.
+    """
+    mod = load_script("fetch_hf_catalog", os.path.join(RESEARCH, "fetch-hf-catalog"))
+    asked = {tag for tag, _ in mod.PIPELINES}
+
+    import yaml
+    reg = yaml.safe_load(open(os.path.join(ROOT, "registry", "models.yaml")))["models"]
+    takes = lambda kind: any(  # noqa: E731
+        kind in ((m.get("modalities") or {}).get("input") or []) for m in reg.values())
+
+    eq("text-generation" in asked, True, "text is asked for")
+    if takes("audio"):
+        eq(bool({"automatic-speech-recognition", "text-to-speech"} & asked), True,
+           "and speech, which this file already learned")
+    if takes("image"):
+        eq("image-text-to-text" in asked, True,
+           "and vision, which 36 models on this roster have: %r" % sorted(asked))
+
+
+@test
+def discovery_sees_a_repo_that_is_downloaded_but_not_trending():
+    """The backlog was blind to anything that was not trending or brand new.
+
+    Both catalog passes sort by `trendingScore` and `createdAt`. `--sort
+    downloads` exists on the collector and was never run, so a repo that is
+    neither rising right now nor freshly created could not be discovered
+    however many people use it. ISTA-DASLab's Qwen3.8-27B quant -- 884,926
+    downloads, 1,107 likes, a ladder for a model already on the roster -- was
+    absent from both captures while three of the same author's repos, the
+    largest at 953 downloads, were present.
+
+    So the report reads every capture rather than one, and a capture the sweep
+    adds later is picked up without touching this code.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        def cat(path, rows):
+            with open(os.path.join(tmp, path), "w") as f:
+                json.dump({"sort": path, "authors": {}, "trending": rows}, f)
+
+        common = {"pipeline_tag": "text-generation", "tracked": False,
+                  "lastModified": "2026-09-02", "trendingScore": 0}
+        cat("hf-catalog.json", [dict(common, id="someone/Qwen3.6-35B-A3B-GGUF",
+                                     downloads=1200, likes=4, trendingScore=90)])
+        cat("hf-catalog-top.json", [dict(common, id="ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF",
+                                         downloads=884926, likes=1107)])
+        r = subprocess.run([os.path.join(RESEARCH, "analyze-catalog"),
+                            "--data", os.path.join(tmp, "hf-catalog.json"),
+                            "--candidates", "--top", "20"],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        out = r.stdout
+    finally:
+        shutil.rmtree(tmp)
+
+    eq("Qwen3.6-35B-A3B" in out, True, "the trending repo is still reported: %r" % out[:400])
+    eq("ISTA-DASLab" in out, True,
+       "and so is the downloaded one, from the capture beside it: %r" % out[:400])
+    # the report has two sections and the trending repo leads its own, so the
+    # ordering that matters is inside the downloads table
+    tail = out[out.index("by lifetime downloads"):]
+    eq(tail.index("ISTA-DASLab") < tail.index("Qwen3.6-35B-A3B"), True,
+       "884k downloads ranks above 1.2k: %r" % tail[:300])
+    eq("requant of" in out and "qwen3.8 27b" in out, True,
+       "and it is read as a requant of a model already on the roster: %r" % tail[:300])
+
+
+@test
+def one_model_can_carry_a_curve_per_sweep_rather_than_one_in_total():
+    """Two people measured qwen3.8 27b and the file could hold one of them.
+
+    `quant-curves.json` is keyed by model, so a second sweep of a model that
+    already has one silently replaces it -- and `fetch-quant-sweeps` restores
+    hand-written `score` curves last, which means a card-published `proxy` for
+    the same model is the one that disappears. Qwen3.8-Flash-Next has ten rungs
+    of unsloth kl divergence and a published ISTA benchmark table, and there is
+    no reading of the schema where one of those is not worth keeping.
+
+    A curve also has to say WHICH FILES it ran. ISTA's table scores its own
+    GSQ-RCO rungs and unsloth's UD rungs on the same three benchmarks and they
+    differ by more than eight points of task average at 2.5 bpw, so a curve
+    applied to the other family's rung is a claim nobody measured.
+    """
+    mod = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    tmp = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmp, "quant-curves.json")
+        with open(path, "w") as f:
+            json.dump({"version": 1, "curves": {
+                "Some/Model": [
+                    {"kind": "score", "metric": "task average",
+                     "quant_repo": "ista/Some-Model-GGUF",
+                     "points": [[2.5, 0.93], [3.5, 0.998]], "quants": ["IQ2_XS", "IQ3_S"],
+                     "ref": {"source": "ista"}},
+                    {"kind": "proxy", "metric": "kl divergence", "better": "lower",
+                     "quant_repo": "unsloth/Some-Model-GGUF",
+                     "points": [[2.5, 0.31], [3.5, 0.16]], "quants": ["UD-IQ2_XS", "UD-IQ3_S"],
+                     "ref": {"source": "unsloth"}},
+                ],
+                # the shape every entry had before, which must keep working
+                "Other/Model": {"kind": "proxy", "metric": "perplexity", "better": "lower",
+                                "points": [[2.0, 9.1], [4.0, 7.2]],
+                                "quants": ["Q2_K", "IQ4_XS"], "ref": {"source": "someone"}},
+            }}, f)
+        real, mod.CURVES = mod.CURVES, path
+        try:
+            got = mod.retention_curve()
+        finally:
+            mod.CURVES = real
+    finally:
+        shutil.rmtree(tmp)
+
+    eq([c["metric"] for c in got["measured"].get("Some/Model") or []], ["task average"],
+       "the score curve is kept: %r" % (got["measured"],))
+    eq([c["metric"] for c in got["proxies"].get("Some/Model") or []], ["kl divergence"],
+       "and so is the proxy for the same model, which used to be overwritten")
+    eq([c["metric"] for c in got["proxies"].get("Other/Model") or []], ["perplexity"],
+       "a bare object still reads as one curve")
+    eq(all(c.get("quant_repo") for v in got["measured"].values() for c in v), True,
+       "every score curve names the repo whose files it ran: %r" % (got["measured"],))
+    eq(got["median"], None,
+       "and two sweeps of one model are not a population of curves to take a "
+       "median of: %r" % (got["median"],))
+
+
+def load_prose():
+    """research/prose.py, which imports siblings the way a collector does."""
+    sys.path.insert(0, RESEARCH)
+    try:
+        return load_script("prose", os.path.join(RESEARCH, "prose.py"))
+    finally:
+        sys.path.remove(RESEARCH)
+
+
+def load_notes():
+    sys.path.insert(0, RESEARCH)
+    try:
+        return load_script("notes", os.path.join(RESEARCH, "notes.py"))
+    finally:
+        sys.path.remove(RESEARCH)
+
+
+@test
+def every_written_surface_in_the_repo_is_reachable_by_one_driver():
+    """Prose was written in five places and regenerable in one of them.
+
+    `review-verdicts` drafts usecase-assessed.json and nothing else, so the
+    registry's 211 `note:` fields -- nearly as many words, and denser in figures
+    that go stale -- had no path back through the loop at all. Neither did the
+    viewer's help strings, the `_about` blocks, or MODELS.md's own prose.
+
+    One enumeration, so a surface that exists is a surface the driver can see.
+    Each block needs an id that survives its text being rewritten, which is why
+    a data-help string is keyed on its element and not on a hash of itself.
+    """
+    prose = load_prose()
+    got = {s: len(prose.blocks(s)) for s in prose.SURFACES}
+    for surface, least in (("usecase", 150), ("registry-note", 200),
+                           ("models-md", 30), ("viewer-help", 15), ("about", 5)):
+        eq(got.get(surface, 0) >= least, True,
+           "%s yields its blocks, wanted at least %d, got %r"
+           % (surface, least, got))
+
+    ids = [b.id for s in prose.SURFACES for b in prose.blocks(s)]
+    eq(len(ids), len(set(ids)), "every block id is unique across the repo")
+    eq(all(b.id.startswith(b.surface + ":") for s in prose.SURFACES
+           for b in prose.blocks(s)), True,
+       "and namespaced by its surface, so one ledger can hold them all")
+
+
+@test
+def the_document_ranks_models_exactly_once():
+    """MODELS.md's ranking and its sensitivity table agree about who leads.
+
+    They did not. `build-tables` carried a second composite -- its own weights,
+    its own normalization, its own flat memory budget -- and it put
+    glm-5.3-flash first where the dashboard, which every other ranked block is
+    generated from, put qwen3.8 flash next. Two implementations of one composite
+    inside one document is the drift this repository exists to remove, so the
+    weighting, arena and effective-intelligence tables run through the page now
+    and `build-tables` offers no ranking at all.
+    """
+    doc = open(os.path.join(ROOT, "MODELS.md")).read().split("\n")
+
+    def first_row(marker):
+        at = next(i for i, l in enumerate(doc) if marker in l)
+        row = next(l for l in doc[at:] if l.startswith("|") and "---" not in l
+                   and not l.startswith("| model |") and not l.startswith("| # |")
+                   and not l.startswith("| weighting |"))
+        return [c.strip() for c in row.strip("|").split("|")]
+
+    ranked = first_row("dashboard-table --table ranking")[1]
+    weighed = first_row("dashboard-table --table weights")[1]
+    eq(weighed.startswith("**%s " % ranked), True,
+       "the balanced weighting leads with the ranking's leader: %r vs %r"
+       % (ranked, weighed))
+
+    r = subprocess.run([os.path.join(RESEARCH, "build-tables"), "--table", "score"],
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    eq(r.returncode != 0, True,
+       "and build-tables computes no ranking to disagree with: %r" % r.stdout[:160])
+
+
+@test
+def a_generated_table_with_no_rows_stops_at_its_own_block():
+    """A table block ends where its pipes stop, and an empty one stops at once.
+
+    The scan for the closing pipe ran to the next `|` ANYWHERE in the document,
+    so a generator that returned no rows swallowed every line after it until
+    some later table -- six sections of MODELS.md, markers and all, turned into
+    plain text inside the empty block and were never regenerated again. The
+    boundary is the block's own, not the next table's.
+    """
+    tmp = tempfile.mkdtemp()
+    doc = os.path.join(tmp, "doc.md")
+    body = ["# top", "",
+            "<!-- generated by /bin/true -->", "",
+            "## after", "",
+            "a paragraph nothing generated.", "",
+            "| a | b |", "|---|---|", "| 1 | 2 |", ""]
+    with open(doc, "w") as f:
+        f.write("\n".join(body))
+    r = subprocess.run([os.path.join(RESEARCH, "refresh-tables"),
+                        "--doc", doc, "--check"],
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    got = open(doc).read().split("\n")
+    shutil.rmtree(tmp, ignore_errors=True)
+    eq(got, body, "the document is untouched: %r" % (r.stdout[:200],))
+    eq(r.returncode, 0, "and reports nothing stale: %r" % (r.stdout[:200],))
+
+
+@test
+def a_generated_table_does_not_swallow_the_prose_below_it():
+    """MODELS.md closes a table block with its pipes and a prose block with a marker.
+
+    refresh-tables has always known both rules -- a table ends where the pipes
+    stop, and only a generator emitting prose needs an explicit end marker. The
+    inventory knew one of them, so every line after the ranking table counted as
+    generated until the next end marker five hundred lines down, and the sections
+    in between reported as having nothing left to write.
+    """
+    prose = load_prose()
+    tmp = tempfile.mkdtemp()
+    doc = os.path.join(tmp, "models-md-blocks.md")
+    with open(doc, "w") as f:
+        f.write("\n".join([
+            "## picks", "",
+            "<!-- generated by research/build-tables --table ranking -->", "",
+            "| # | model |", "|--:|---|", "| 1 | a model |", "",
+            "a paragraph a human typed under the table.", "",
+            "<!-- generated by research/build-sections --section picks -->",
+            "a paragraph the generator emits.",
+            "<!-- end generated -->", "",
+            "the last hand-written paragraph.", ""]))
+    saved = (prose.MODELS_MD, prose.MODELS_MD_PROSE)
+    try:
+        prose.MODELS_MD = doc
+        prose.MODELS_MD_PROSE = os.path.join(tmp, "no-sections.json")
+        got = [b.fields["text"] for b in prose.blocks("models-md")]
+    finally:
+        prose.MODELS_MD, prose.MODELS_MD_PROSE = saved
+        shutil.rmtree(tmp, ignore_errors=True)
+    eq(got, ["a paragraph a human typed under the table.",
+             "the last hand-written paragraph."],
+       "the table's rows and the marked prose are generated, the rest is not")
+
+
+@test
+def a_verdict_can_reference_the_model_it_is_compared_against():
+    """A comparison names two models and could only reference one of them.
+
+    The figures in a verdict resolve against its own model, so the other half of
+    "II 55.8 against 52.0" had to be typed -- and 52.0 is qwen3.8 27b's
+    intelligence index from a capture that has since moved it to 33.9. The
+    sentence was generated, rendered from source, and still carried a figure
+    nothing could re-read.
+
+    `{key@repo}` resolves against that repo instead. An unknown repo is reported
+    rather than silently rendered from the wrong model's facets.
+    """
+    verdicts = load_script("verdicts", os.path.join(RESEARCH, "verdicts.py"))
+    mine = {"aa.intelligence": {"value": 55.8, "pct": 92, "unit": "index"}}
+    theirs = {"Qwen/Qwen3.8-27B": {"aa.intelligence": {"value": 33.9, "pct": 82,
+                                                       "unit": "index"}}}
+    text, missing = verdicts.render(
+        "II {aa.intelligence:value} against {aa.intelligence@Qwen/Qwen3.8-27B:value}.",
+        mine, theirs.get)
+    eq(missing, [], "both halves resolve")
+    eq(text, "II aa.intelligence 55.8 p92 against 33.9 p82.",
+       "the comparison is read from the capture on both sides, naming the facet "
+       "once because both halves are the same one")
+
+    text, missing = verdicts.render("{aa.intelligence@Vendor/Gone}", mine, theirs.get)
+    eq(missing, ["aa.intelligence@Vendor/Gone"],
+       "a model that has left the roster is reported, not rendered from nothing")
+
+
+@test
+def a_migrated_models_md_section_keeps_its_id_and_gains_its_figures():
+    """MODELS.md prose becomes source, and the move must not orphan provenance.
+
+    A paragraph in the document is keyed `models-md:<heading>#<n>` and the ledger
+    records who wrote it under that id. Moving the words into the store has to
+    keep the id, or 268 attributions become 268 blocks with no recorded author.
+
+    The point of the move is the figures: a number typed into markdown cannot be
+    re-read at print time, which is how the qwen3.8 27b writeup came to state an
+    intelligence index of 52.0 against 33.9 in the capture. Once the section
+    names a subject, its prose references what a verdict references.
+    """
+    prose = load_prose()
+    tmp = tempfile.mkdtemp()
+    store = os.path.join(tmp, "models-md.json")
+    with open(store, "w") as f:
+        json.dump({"version": 1, "sections": {
+            "qwen3-8-27b": {"subject": "Qwen/Qwen3.8-27B",
+                            "body": ["artificial analysis carries it at "
+                                     "{aa.intelligence:value}.",
+                                     "a second paragraph."]}}}, f)
+    doc = os.path.join(tmp, "models.md")
+    with open(doc, "w") as f:
+        f.write("#### qwen3.8 27b\n\n"
+                "<!-- generated by research/build-sections --section "
+                "prose:qwen3-8-27b -->\n<!-- end generated -->\n\n"
+                "## next\n\nstill typed by hand.\n")
+    saved = (prose.MODELS_MD, prose.MODELS_MD_PROSE)
+    try:
+        prose.MODELS_MD, prose.MODELS_MD_PROSE = doc, store
+        got = {b.id: b for b in prose.blocks("models-md")}
+    finally:
+        prose.MODELS_MD, prose.MODELS_MD_PROSE = saved
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    eq(sorted(got), ["models-md:next#0", "models-md:qwen3-8-27b#0",
+                     "models-md:qwen3-8-27b#1"],
+       "a migrated section keeps the ids its paragraphs already had")
+    eq(got["models-md:qwen3-8-27b#0"].grounded, "Qwen/Qwen3.8-27B",
+       "and is grounded, so its figures are checkable")
+    eq(got["models-md:next#0"].grounded, None,
+       "while a paragraph still in the document names no subject")
+
+
+@test
+def the_same_validator_runs_whoever_wrote_the_prose():
+    """A human-written block and a model-drafted one are checked alike.
+
+    The refusals in `review-verdicts` were built for a draft coming back from an
+    endpoint, so prose that was typed by hand went through none of them. That is
+    the wrong way round: the check is about whether the sentence is true and
+    readable, not about who produced it.
+    """
+    prose = load_prose()
+    facets = {"aa.speed": {"pct": 55, "value": 137.0, "unit": "rate"},
+              "community.reddit-localllama": {"group": "community", "mentions": 40,
+                                              "approval": 80,
+                                              "refs": [{"quote": "extreme overthinking",
+                                                        "url": "http://x"}]}}
+    cases = [
+        ("sits at p95 for decode", "typed percentile"),
+        ("we leverage a robust and seamless runtime", "marketing words"),
+        ("it is worth noting that it decodes fast {aa.speed}", "filler opener"),
+        ("not just a coder, it's a daily driver {aa.speed}", "antithesis"),
+        ("references {aa.nonexistent}", "unknown reference"),
+        ('users call it "runs on any laptop" {q:deadbeef}', "unverifiable quote"),
+        ("decodes fast — nothing else", "non-ascii"),
+    ]
+    for text, why in cases:
+        found = prose.check_text(text, facets)
+        eq(bool(found), True, "%r is refused (%s), got %r" % (text, why, found))
+
+    ok = 'decodes fast {aa.speed} though users mention "extreme overthinking" {q:%s}' \
+         % prose.quote_id("extreme overthinking")[2:]
+    eq(prose.check_text(ok, facets), [],
+       "and prose that cites what it claims passes: %r"
+       % (prose.check_text(ok, facets),))
+
+
+@test
+def a_registry_note_names_a_figure_rather_than_typing_it():
+    """The notes carry 69 sizes in gib as literal text, and text goes stale.
+
+    This is the failure `verdicts.py` already removed from the assessed
+    judgements, on the surface that has it worse: a `note:` on a quant is ABOUT
+    a file, so almost every number in it is a size or a bits-per-weight that the
+    captures already hold. vcruz305's deepseek pack said `3 of 7 shards` and
+    `95.75 gib` while the sizes capture beside it read 246.35 over seven -- the
+    publisher finished the upload and the sentence did not notice.
+
+    So a note references and the reference renders at print time, the same way
+    a verdict does. The subject is implicit -- a note on a rung means THAT rung
+    -- and `@` names another one where a comparison needs it.
+    """
+    notes = load_notes()
+    data = notes.load()
+    repo, quant = "unsloth/Qwen3.8-27B-GGUF", "Q8_0"
+
+    got, missing = notes.render("it is {gib} at {bpw}", repo, quant, data)
+    eq(missing, [], "both references resolve for a rung the captures hold")
+    eq("gib" in got and "bpw" in got, True, "and render with their units: %r" % got)
+    eq(any(c.isdigit() for c in got), True, "from the capture, not the sentence")
+
+    # a sibling rung, which is what a note comparing two of them needs
+    got, missing = notes.render("{gib} against {gib@UD-Q8_K_XL}", repo, quant, data)
+    eq(missing, [], "a sibling rung resolves by tag alone: %r" % got)
+    first, second = got.split(" against ")
+    eq(first != second, True, "and is a different number: %r" % got)
+
+    # and a rung in another repo, which is what a note about a ladder needs
+    got, missing = notes.render(
+        "{gib@ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF:IQ3_S}", repo, quant, data)
+    eq(missing, [], "a rung anywhere resolves by repo and tag: %r" % got)
+
+    # the sizes capture keys a sidecar `mmproj:F16`, so a tag can itself carry a
+    # colon. splitting the locator on the LAST one made the repo
+    # `unsloth/X-GGUF:mmproj` and resolved nothing -- and a model-level note
+    # naming the projector beside the rungs is the commonest place that bites
+    got, missing = notes.render(
+        "{gib@unsloth/GLM-5.3-Flash-GGUF:mmproj:F16}", repo, quant, data)
+    eq(missing, [], "a tag with a colon in it still resolves: %r" % got)
+
+    eq(notes.render("{gib@NoSuch/Repo:Q4_K_M}", repo, quant, data)[1],
+       ["gib@NoSuch/Repo:Q4_K_M"],
+       "and one nothing carries is reported rather than rendered away")
+
+    # the check that stops the next note being written the old way
+    found = notes.check("the pack is 246.35 gib over 7 shards {card}", repo, quant, data)
+    eq(bool(found), True, "a typed size is refused: %r" % found)
+    eq(notes.check("the pack is {gib}", repo, quant, data), [],
+       "and a referenced one is not: %r"
+       % notes.check("the pack is {gib}", repo, quant, data))
+
+
+@test
+def a_pinned_rung_the_publisher_never_shipped_is_reported():
+    """A rung with no size reaches the page with no size, and nothing said so.
+
+    `unsloth/Qwen3.5-397B-A17B-GGUF` publishes 29 tiers and none of them is
+    `UD-Q2_K_XL`; the registry pinned that name anyway. The lookup missed, the
+    row went out with an empty size, the viewer drew it, and the only reason it
+    surfaced was a registry note trying to reference `{gib}` and being refused.
+
+    The page already reports the opposite -- a published file whose name carries
+    no quant, so it is not offered as a rung. This is the same check read the
+    other way, and it is the one that costs a reader a download.
+    """
+    mod = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    sizes = {"pub/Widget-GGUF": {"Q4_K_M": 8 * 2 ** 30, "Q8_0": 14 * 2 ** 30},
+             "pub/Named-GGUF": {"widget-f32.gguf": 2 ** 30}}
+    models = {
+        "pub/Widget": {"quants": [
+            {"repo": "pub/Widget-GGUF", "quant": "UD-Q2_K_XL"},
+            {"repo": "pub/Widget-GGUF", "quant": "Q8_0"}]},
+        # pinned by filename against a repo that keys by filename: fine, and the
+        # case that made the first version of this check cry wolf
+        "pub/Named": {"components": [
+            {"repo": "pub/Named-GGUF", "quant": "F32",
+             "file": "widget-f32.gguf", "role": "vocoder"}]},
+    }
+    got = mod.unshipped_rungs(models, sizes)
+    eq([(r, q) for r, q, _ in got], [("pub/Widget-GGUF", "UD-Q2_K_XL")],
+       "only the rung nobody published is reported: %r" % (got,))
+    eq(got[0][2], ["Q4_K_M", "Q8_0"],
+       "with what the repo does have instead: %r" % (got,))
+
+
+@test
+def a_typed_percentile_becomes_a_reference_only_while_it_is_still_true():
+    """The verdicts carry their percentiles as literal text, in `key pNN` form.
+
+    Which is exactly what `{key}` renders back to, so the substitution changes
+    no printed character where nothing has drifted -- and where something HAS,
+    it is the substitution that makes the printed number right again. Muse
+    glimmer's `gbench overall p84` against a facet reading p74 is the case this
+    file was written for, and this is the fix for it.
+
+    What it cannot fix is the sentence. A figure that crossed a BAND leaves
+    prose arguing against its own rendered number -- `aa.speed p77` to p28 turns
+    "decodes fast" into a claim the figure beside it refutes -- so those come
+    back separately for a human to re-read.
+    """
+    verdicts = load_script("verdicts", os.path.join(RESEARCH, "verdicts.py"))
+    facets = {"aa.lcr": {"pct": 70}, "gbench.overall": {"pct": 74}}
+
+    got, done, crossed = verdicts.convert("resolves at aa.lcr p70 and no better", facets)
+    eq(got, "resolves at {aa.lcr} and no better", "a live figure is referenced: %r" % got)
+    eq(done, [("aa.lcr p70", "{aa.lcr}")], "and counted: %r" % (done,))
+    eq(crossed, [], "with no band crossed")
+    eq(verdicts.render(got, facets)[0], "resolves at aa.lcr p70 and no better",
+       "and it renders back to the same characters, so nothing a reader sees moves")
+
+    # drifted but still in band: referencing it is what MAKES the number right
+    got, done, crossed = verdicts.convert("gbench.overall p84 is the case", facets)
+    eq(got, "{gbench.overall} is the case", "muse glimmer's bug is fixed: %r" % got)
+    eq(verdicts.render(got, facets)[0], "gbench.overall p74 is the case",
+       "and now prints what the capture says")
+    eq(crossed, [], "top to top is not a band crossing")
+
+    # crossed a band: still referenced, and REPORTED, because the sentence
+    # around it may now argue the opposite of its own number
+    got, done, crossed = verdicts.convert("decodes fast at aa.speed p77",
+                                          {"aa.speed": {"pct": 28}})
+    eq(got, "decodes fast at {aa.speed}", "the figure is still made live: %r" % got)
+    eq([c for c, _ in crossed], ["aa.speed p77"],
+       "and the argument is handed back: %r" % (crossed,))
+    eq("top -> bottom" in crossed[0][1], True, "with the bands it moved between")
+
+    eq(verdicts.convert("aa.missing p50 says so", facets)[0], "aa.missing p50 says so",
+       "a key no facet carries is not invented into a reference")
+
+    # `{key:value}` is the documented form for a sentence that wants the
+    # measurement and not only the rank, and the prose writes it out longhand:
+    # `aa.speed 140 tok/s p78`. all twenty of those were stale, one by 38 tok/s.
+    vf = {"aa.speed": {"pct": 55, "value": 102.0, "unit": "rate"}}
+    got, done, _ = verdicts.convert("decodes at aa.speed 140 tok/s p78", vf)
+    eq(got, "decodes at {aa.speed:value}", "the value form converts too: %r" % got)
+    eq(verdicts.render(got, vf)[0], "decodes at aa.speed 102 tok/s p55",
+       "and renders the measurement the capture holds now")
+
+    # the prose writes the short name -- `ifbench p96` for `aa.ifbench` -- which
+    # is most of what is left after the keyed form is done. it converts only
+    # where the short name resolves to exactly ONE facet this model carries:
+    # `tau2` is both `aa.tau2` and `card.tau2` on several models, and guessing
+    # between a third party's measurement and the vendor's own claim about
+    # itself is the one substitution that must never be made silently.
+    facets = {"aa.ifbench": {"pct": 96}, "aa.tau2": {"pct": 70},
+              "card.tau2": {"pct": 80}}
+    got, done, _ = verdicts.convert("and ifbench p96 with it", facets)
+    eq(got, "and {aa.ifbench} with it", "a short name resolves: %r" % got)
+
+    got, _, _ = verdicts.convert("against tau2 p70 there", facets)
+    eq(got, "against tau2 p70 there",
+       "an ambiguous one is left for a human: %r" % got)
+
+    # `card swebench verified 71.4 claim p59` is a generated shape with the
+    # metric name spelled out in words. it is the only multi-word form matched,
+    # because the name sits immediately before its own value: the general case
+    # matched `p42` in "p95 on the omniscience index, p42 on gpqa" to the index
+    # rather than to gpqa, which is the wrong facet and a plausible sentence.
+    cc = {"card.swebench_verified": {"pct": 62, "value": 71.4}}
+    got, _, _ = verdicts.convert("card swebench verified 71.4 claim p59", cc)
+    eq(got, "{card.swebench_verified:value}",
+       "the card-claim shape converts: %r" % got)
+
+    # the prose also names the SOURCE where the facet is `source.metric`:
+    # `lmarena 1440 p73` for `lmarena.rating`, `swe-rebench p69` for
+    # `swerebench.resolved`. unambiguous only while the model carries one facet
+    # from that source, which rules `gbench` out on every model that has three.
+    heads = {"lmarena.rating": {"pct": 64}, "gbench.decision": {"pct": 10},
+             "gbench.oneshot": {"pct": 20}}
+    got, _, _ = verdicts.convert("lmarena p64 there", heads)
+    eq(got, "{lmarena.rating} there", "a source name with one facet resolves: %r" % got)
+    got, _, _ = verdicts.convert("gbench p10 there", heads)
+    eq(got, "gbench p10 there",
+       "and one with several is left alone: %r" % got)
+
+    # unless the BLOCK settles it. two verdicts wrote `tau2 pNN` in their notes
+    # while their own evidence list already cited `{aa.tau2}` -- the same facet,
+    # named two ways in one block -- so the ambiguity was in the short name and
+    # never in what the author meant.
+    got, _, _ = verdicts.convert("against tau2 p70 there", facets, prefer=["aa.tau2"])
+    eq(got, "against {aa.tau2} there",
+       "a candidate the block already cites wins: %r" % got)
+    got, _, _ = verdicts.convert("against tau2 p70 there", facets,
+                                 prefer=["aa.tau2", "card.tau2"])
+    eq(got, "against tau2 p70 there",
+       "and citing BOTH settles nothing, so it is still left alone: %r" % got)
+
+
+@test
+def a_typed_figure_becomes_a_reference_only_while_it_is_still_true():
+    """Converting 69 typed sizes by hand is a typo away from inventing one.
+
+    The substitution is mechanical -- `10.96 gib` for a rung that weighs 10.96
+    IS `{gib}` -- and mechanical is what makes it safe to do in bulk. What makes
+    it safe to do AT ALL is refusing to convert a literal the capture disagrees
+    with: `95.75 gib` on a pack that now weighs 246.35 is not a reference
+    waiting to happen, it is the stale figure this whole mechanism exists to
+    find, and turning it into `{gib}` would silently repair the sentence and
+    destroy the evidence that it was wrong.
+
+    So a mismatch is REPORTED and left alone, for a human to re-read.
+    """
+    notes = load_notes()
+    data = {"sizes": {"pub/W-GGUF": {"IQ3_S": int(10.96 * 2 ** 30),
+                                     "Q8_0": int(27.05 * 2 ** 30)},
+                      "pub/W-MTP-GGUF": {"Q8_0": int(26.63 * 2 ** 30)}},
+            "tensors": {}, "facts": {}, "cards_dir": None}
+    entry = {"quants": [{"repo": "pub/W-GGUF", "quant": "IQ3_S"},
+                        {"repo": "pub/W-MTP-GGUF", "quant": "Q8_0"}]}
+
+    got, done, stale = notes.convert(
+        "the rung is 10.96 gib, against 27.05 gib for the top of the ladder",
+        "pub/W-GGUF", "IQ3_S", data, entry=entry)
+    eq("{gib}" in got, True, "its own size becomes the bare reference: %r" % got)
+    eq("{gib@Q8_0}" in got, True, "a sibling rung becomes a located one: %r" % got)
+    # a reference has digits in its TAG, so the check is for a typed figure
+    # surviving rather than for a digit surviving
+    eq(notes.check(got, "pub/W-GGUF", "IQ3_S", data), [],
+       "and no typed figure is left: %r" % notes.check(got, "pub/W-GGUF", "IQ3_S", data))
+    eq(len(done), 2, "both are counted: %r" % (done,))
+    eq(stale, [], "and nothing is stale")
+
+    # a rung in ANOTHER repo the same model carries, which is how a note
+    # comparing two ladders is written
+    got, _, _ = notes.convert("0.42 gib smaller than the 26.63 gib build",
+                              "pub/W-GGUF", "Q8_0", data, entry=entry)
+    eq("{gib@pub/W-MTP-GGUF:Q8_0}" in got, True,
+       "the sibling repo's rung resolves too: %r" % got)
+    eq("0.42 gib" in got, True,
+       "a difference nothing publishes is left alone rather than guessed at")
+
+    # a note rounds and the capture does not. `120 gib` for a rung weighing
+    # 119.60 is that rung, written to the precision the sentence chose, and
+    # refusing it leaves the commonest shape of all uncovered.
+    data["sizes"]["pub/W-GGUF"]["UD-IQ1_M"] = int(119.60 * 2 ** 30)
+    got, done, _ = notes.convert("the smallest is 120 gib", "pub/W-GGUF",
+                                 "UD-IQ1_M", data, entry=entry)
+    eq("{gib}" in got, True, "a rounded size is still that size: %r" % got)
+
+    # but only to the precision the sentence WROTE. `105 gib` beside a rung
+    # weighing 106.32 is the box budget, not the file, and converting it would
+    # put a rung's size where a threshold belongs
+    data["sizes"]["pub/W-GGUF"]["UD-IQ2_M"] = int(106.32 * 2 ** 30)
+    got, _, _ = notes.convert("over a 105 gib host budget", "pub/W-GGUF",
+                              "UD-IQ2_M", data, entry=entry)
+    eq("105 gib" in got, True, "a threshold near a rung is left alone: %r" % got)
+    del data["sizes"]["pub/W-GGUF"]["UD-IQ1_M"]
+    del data["sizes"]["pub/W-GGUF"]["UD-IQ2_M"]
+
+    got, done, stale = notes.convert("the pack is 95.75 gib over three shards",
+                                     "pub/W-GGUF", "IQ3_S", data, entry=entry)
+    eq(got, "the pack is 95.75 gib over three shards",
+       "a literal the capture disagrees with is NOT converted: %r" % got)
+    eq([s for s, _ in stale], ["95.75 gib"],
+       "it is reported as stale instead: %r" % (stale,))
+    eq("10.96" in stale[0][1], True,
+       "with what the capture says now: %r" % (stale,))
+
+
+@test
+def a_note_describing_the_pin_is_checked_against_the_pin():
+    """A note said the pin names its file, and the pin does not.
+
+    `FireRedTeam/FireRedPunc` reads "it ships an untagged `fireredpunc.gguf`
+    beside the tagged ones, so the pin names its file" -- and the pin is
+    `quant: Q8_0` with no `file:` at all. The untagged file is real; the reason
+    given for the pin's shape is invented, and nothing caught it because the
+    checks here only ever verified FIGURES. A claim about the registry's own
+    structure is the easiest kind to check and was the only kind unchecked.
+
+    The same for a rung a repo is said not to have, which is a lookup against
+    `data/gguf-sizes.json` and stops being true the moment a publisher uploads
+    one more file.
+    """
+    notes = load_notes()
+    data = {"sizes": {"pub/W-GGUF": {"Q4_K": 2 ** 30, "Q8_0": 2 ** 31,
+                                     "mmproj:F16": 2 ** 28}},
+            "tensors": {}, "facts": {}, "cards_dir": None}
+
+    found = notes.check_structure("so the pin names its file", "pub/W-GGUF",
+                                  "Q8_0", data, pin={"quant": "Q8_0"})
+    eq(any("`file:`" in w for w in found), True,
+       "a pin with no file: is caught saying it has one: %r" % found)
+    eq(notes.check_structure("so the pin names its file", "pub/W-GGUF", "x.gguf",
+                             data, pin={"quant": "Q8_0", "file": "x.gguf"}), [],
+       "and one that does is left alone")
+
+    # a rung COUNT is deliberately not checked -- see notes.py for the eleven
+    # false positives in fifteen that killed the idea
+    eq(notes.check_structure("the top of a four-rung ladder", "pub/W-GGUF",
+                             "Q8_0", data), [],
+       "a rung count is not a claim this checks")
+
+    found = notes.check_structure("there is no F16 here", "pub/W-GGUF", "Q8_0", data)
+    eq(found, [], "a rung the repo really lacks passes")
+    found = notes.check_structure("there is no Q4_K here", "pub/W-GGUF", "Q8_0", data)
+    eq(any("Q4_K" in w for w in found), True,
+       "and one it publishes is caught: %r" % found)
+
+
+@test
+def a_note_quotes_the_source_it_was_built_from_and_the_words_are_checked():
+    """A note said what a card claims and nothing held the card.
+
+    The figures are referenced now, but a reader still could not tell WHERE a
+    sentence came from: "their card scores it task-lossless" names a source in
+    prose and points at nothing, and `model-cards.json` keeps the parsed tables
+    rather than the text, so there was nothing to check the words against.
+
+    So the card bodies are a committed capture beside the chat templates, and a
+    note quotes them the way a verdict quotes a forum comment -- in quotation
+    marks, with the source beside them, verified against what the publisher
+    actually wrote. A paraphrase inside quotation marks is the one thing here
+    that can read as sourced and not be.
+    """
+    notes = load_notes()
+    tmp = tempfile.mkdtemp()
+    try:
+        cards = os.path.join(tmp, "cards")
+        os.mkdir(cards)
+        with open(os.path.join(cards, "ista_Widget-GGUF.md"), "w") as f:
+            f.write("# Widget\n\nThe IQ3_S model is the task-lossless operating "
+                    "point: it matches the base model exactly on AIME25.\n")
+        data = dict(notes.load(), cards_dir=cards)
+
+        got, missing = notes.render(
+            'the card calls it the "task-lossless operating point" {card@ista/Widget-GGUF}',
+            "ista/Widget-GGUF", "IQ3_S", data)
+        eq(missing, [], "the source reference resolves: %r" % got)
+        eq("huggingface.co/ista/Widget-GGUF" in got, True,
+           "and renders as somewhere a reader can go: %r" % got)
+
+        found = notes.check(
+            'the card calls it "a lossless operating point" {card@ista/Widget-GGUF}',
+            "ista/Widget-GGUF", "IQ3_S", data)
+        eq(bool(found), True,
+           "a paraphrase inside quotation marks is refused: %r" % found)
+
+        found = notes.check(
+            'the card calls it "task-lossless operating point" {card@ista/Widget-GGUF}',
+            "ista/Widget-GGUF", "IQ3_S", data)
+        eq(found, [], "and the publisher's own words are not: %r" % found)
+
+        # a repo whose card the hub gates behind auth has no captured body, so
+        # nothing can be QUOTED from it -- but it is still somewhere a reader
+        # can go, and refusing to resolve it left eleven notes pointing at
+        # nothing when the thing they point at plainly exists
+        got, missing = notes.render("see the card {card}", "gated/Nope", None, data)
+        eq(missing, [], "a card with no captured body still resolves: %r" % got)
+        eq("huggingface.co/gated/Nope" in got, True, "to somewhere: %r" % got)
+        found = notes.check('it is "great" {card}', "gated/Nope", None, data)
+        eq(any("captured body" in w for w in found), True,
+           "but quoting one is refused, because nobody kept a copy: %r" % found)
+
+        # and a note resting on neither a reference nor a source, which is a
+        # sentence a reader cannot follow to anything
+        eq(bool(notes.check("it is a good rung", "ista/Widget-GGUF", "IQ3_S", data)),
+           True, "a note resting on nothing is reported")
+        eq(notes.check("it weighs {gib}", "ista/Widget-GGUF", "IQ3_S",
+                       dict(data, sizes={"ista/Widget-GGUF": {"IQ3_S": 2 ** 30}})), [],
+           "while one built from a reference is not: the reference names the "
+           "capture it renders out of")
+    finally:
+        shutil.rmtree(tmp)
+
+    # the capture the real run writes, so a quote stays checkable after the
+    # http cache is cleared -- which is what makes this different from a cache
+    eq(os.path.isdir(os.path.join(RESEARCH, "data", "cards")), True,
+       "the card bodies are committed beside the chat templates")
+
+
+@test
+def every_block_of_prose_records_who_wrote_it():
+    """`author` was on 155 blocks in one file and nowhere else.
+
+    The registry's notes, the viewer's help and the `_about` blocks were all
+    written by a model in some session and read as repository fact. One ledger
+    says, for every block on every surface, who wrote it and against which
+    figures -- so `assistant` (written here, in a session), `local` (drafted by
+    the endpoint through the loop) and `human` are told apart rather than
+    guessed at.
+    """
+    prose = load_prose()
+    eq(sorted(prose.AUTHORS), ["assistant", "human", "local"],
+       "the three authors are named rather than inferred: %r" % (prose.AUTHORS,))
+    ledger = prose.ledger()
+    missing = [b.id for s in prose.SURFACES for b in prose.blocks(s)
+               if b.id not in ledger]
+    eq(missing[:5], [],
+       "%d of the repo's prose blocks have no recorded author" % len(missing))
+    bad = sorted({v.get("author") for v in ledger.values()} - set(prose.AUTHORS))
+    eq(bad, [], "and no block claims an author outside that set")
+
+
+@test
 def a_credential_somebody_pasted_never_reaches_the_capture():
     """Somebody titled a huggingface discussion with their access token.
 
@@ -1514,6 +2402,76 @@ def a_dead_source_cannot_empty_a_capture():
         fresh = os.path.join(tmp, "new.json")
         eq(cap.write(fresh, {}, len)[0], True, "an empty first capture is allowed")
     finally:
+        shutil.rmtree(tmp)
+
+
+@test
+def how_hard_the_model_thinks_is_configured_rather_than_hardcoded():
+    """Thinking was off for every caller, including the ones it would help.
+
+    It is off by default for a good reason and the reason is about EXTRACTION:
+    asked to name a base model, a thinking run invented `Large Language Model
+    (LLM) / AI Model Repository` where the non-thinking one gave the repo id,
+    and eight triage calls came back empty having reasoned past the budget.
+
+    Drafting prose is the opposite shape -- compose an argument from a sixty
+    line sheet, pick which of 29 rungs to compare against -- and that is where
+    the local endpoint's failures are reasoning failures: one draft had both
+    sizes and wrote "leaving only 114.60 gib minus 99.48 gib of headroom".
+
+    So the effort is a setting, one variable, and a caller opts in. Turning it
+    on globally would re-break triage, which is the failure the default records.
+    """
+    mod = load_script("llm_under_test", os.path.join(RESEARCH, "llm.py"))
+    keep = os.environ.get("AIMBOT_LLM_EFFORT")
+    tmp = tempfile.mkdtemp()
+    try:
+        mod.ENV_FILE = os.path.join(tmp, "absent")
+        os.environ.pop("AIMBOT_LLM_EFFORT", None)
+        eq(mod.effort(), mod.DEFAULT_EFFORT,
+           "unset means the default rather than nothing: %r" % (mod.effort(),))
+
+        os.environ["AIMBOT_LLM_EFFORT"] = "medium"
+        eq(mod.effort(), "medium", "and a set value is used verbatim")
+
+        # a body a caller did NOT ask thinking for is unchanged, whatever the
+        # setting says -- that is what keeps triage working
+        body = mod.thinking_body({}, False)
+        eq(body["chat_template_kwargs"], {"enable_thinking": False},
+           "thinking stays gated off for a caller that did not ask: %r" % body)
+
+        body = mod.thinking_body({}, True)
+        eq(body["chat_template_kwargs"].get("enable_thinking"), True,
+           "and is gated on for one that did: %r" % body)
+        eq(body["chat_template_kwargs"].get("reasoning_effort"), "medium",
+           "at the configured effort: %r" % body)
+
+        # `off` is how a machine turns it back off without editing a caller
+        os.environ["AIMBOT_LLM_EFFORT"] = "off"
+        body = mod.thinking_body({}, True)
+        eq(body["chat_template_kwargs"], {"enable_thinking": False},
+           "`off` overrides the caller, so one variable can settle it: %r" % body)
+
+        # THE BUDGET IS SIZED BY THE EFFORT, not by the caller. the registry
+        # records qwen3.8 27b's xhigh at 15k-52k thinking tokens against
+        # qwen3.6's 3k, and a budget sized for the answer alone comes back
+        # EMPTY -- `finish_reason: length` with nothing in `content`. a caller
+        # asking for 700 tokens of note and getting nothing is the failure this
+        # exists to stop, and it is the one that took the first xhigh run down.
+        eq(mod.budget_for(700, False), 700, "a non-thinking call is left alone")
+        os.environ["AIMBOT_LLM_EFFORT"] = "xhigh"
+        eq(mod.budget_for(700, True) > 52000, True,
+           "and a thinking one gets room to think first: %r"
+           % mod.budget_for(700, True))
+        os.environ["AIMBOT_LLM_EFFORT"] = "xhigh"
+        most = mod.budget_for(700, True)
+        os.environ["AIMBOT_LLM_EFFORT"] = "low"
+        eq(mod.budget_for(700, True) < most, True,
+           "sized by the effort rather than by one number for all of them")
+    finally:
+        os.environ.pop("AIMBOT_LLM_EFFORT", None)
+        if keep is not None:
+            os.environ["AIMBOT_LLM_EFFORT"] = keep
         shutil.rmtree(tmp)
 
 
@@ -3407,6 +4365,557 @@ def a_written_verdict_cannot_cite_a_count_the_capture_disagrees_with():
            "and says both the claim and the capture, got %r" % r.stdout.strip()[:200])
         eq("reddit" in r.stdout.split("\n")[0].lower(), False,
            "the line that agrees is not reported")
+    finally:
+        shutil.rmtree(tmp)
+
+
+VERDICT_FACETS = {
+    "aa.lcr": {"group": "artificial analysis", "label": "long context reasoning",
+               "pct": 95, "value": 0.833333, "unit": "share"},
+    "aa.speed": {"group": "artificial analysis", "label": "median output tokens/s",
+                 "pct": 43, "value": 90.432423, "unit": "rate"},
+    "gbench.overall": {"group": "gbench", "label": "gscore (all games)",
+                       "pct": 74, "value": 0.3874, "unit": "gscore"},
+    "community.reddit-localllama": {"group": "community", "pct": 99,
+                                    "mentions": 56, "approval": 86},
+    "community.hackernews": {"group": "community", "pct": 40,
+                             "mentions": 3, "approval": None},
+}
+
+
+@test
+def a_proposal_is_rejected_when_it_writes_a_figure_instead_of_a_reference():
+    """The model may choose the words. It may not choose the numbers.
+
+    That is the whole arrangement: it is handed the fact sheet and asked for
+    prose that names facets, so the renderer supplies every figure and the
+    model cannot be wrong about one because it never writes one. A draft that
+    types `p74` into the text has opted out of that, and is refused rather than
+    silently accepted -- an accepted one would go stale the moment the capture
+    moved, which is the failure the references exist to remove.
+
+    Refusing is safe because nothing is lost: the verdict on disk is untouched
+    until a human promotes a proposal.
+    """
+    v = load_script("verdicts", os.path.join(RESEARCH, "verdicts.py"))
+    facets = {"aa.lcr": {"group": "artificial analysis", "pct": 95},
+              "aa.speed": {"group": "artificial analysis", "pct": 28}}
+
+    ok, why = v.check_proposal("{aa.lcr} carries it; {aa.speed} no longer does.", facets)
+    eq(ok, True, "references to facets the model carries are fine: %r" % why)
+
+    ok, why = v.check_proposal("aa.lcr p95 carries it.", facets)
+    eq(ok, False, "a typed percentile is refused")
+    eq("p95" in why, True, "and the offending figure is named: %r" % why)
+
+    ok, why = v.check_proposal("{aa.gone} carries it.", facets)
+    eq(ok, False, "so is a reference this model cannot resolve")
+    eq("aa.gone" in why, True, "named too: %r" % why)
+
+    ok, _ = v.check_proposal("it fits in 8.7 gib on a {aa.lcr} box.", facets)
+    eq(ok, True, "a size is not a facet percentile and is left alone")
+
+    # a citation belongs BESIDE the prose, not spliced into it. asked for
+    # inline references the model wrote "{aa.lcr} sits at {aa.lcr}", which
+    # renders "aa.lcr p53 sits at aa.lcr p53" -- it was using a citation token
+    # as a noun and as a value in one sentence, because that is what an inline
+    # reference invites. so the prose carries no figures and `evidence` carries
+    # the keys, which is the shape the verdicts already had.
+    ok, why = v.check_evidence(["aa.lcr", "aa.speed"], facets)
+    eq(ok, True, "keys the model carries are a citation list: %r" % why)
+    ok, why = v.check_evidence(["aa.gone"], facets)
+    eq(ok, False, "a key it does not carry is refused")
+    eq("aa.gone" in why, True, "and named: %r" % why)
+    ok, why = v.check_evidence([], facets)
+    eq(ok, False, "and citing nothing at all is refused")
+
+    # what somebody SAID is evidence too, and copying it into the prose has the
+    # same defect as typing a figure: "users report it runs well on an asus
+    # gx10" is a real comment, paraphrased, with nothing pointing at it. so a
+    # quote gets an id and is cited like a facet.
+    quoted = {"community.hackernews": {"group": "community", "pct": 40,
+              "mentions": 3, "approval": None, "refs": [
+                  {"polarity": "+", "quote": "it runs well on my asus gx10",
+                   "url": "https://news.ycombinator.com/item?id=1"}]}}
+    qid = v.quote_id("it runs well on my asus gx10")
+    eq(qid.startswith("q:"), True, "a quote id is recognisable as one: %r" % qid)
+    eq(v.quote_id("it runs well on my asus gx10"), qid,
+       "and stable for the same text, so a citation survives a refresh")
+
+    ok, why = v.check_evidence([qid], quoted)
+    eq(ok, True, "a quote this model actually carries can be cited: %r" % why)
+    ok, why = v.check_evidence(["q:deadbeef"], quoted)
+    eq(ok, False, "one it does not carry cannot -- that would be a fabricated quote")
+
+    line = v.evidence_line(qid, quoted)
+    eq("asus gx10" in line and "ycombinator" in line, True,
+       "and it renders as the words plus somewhere to check them: %r" % line)
+
+    # citations belong in the prose after all -- as MARKERS beside the words
+    # they support, which is what the earlier attempt got wrong. `{aa.lcr}`
+    # rendered as the value "aa.lcr p53", so the model used it as a noun and
+    # wrote "{aa.lcr} sits at {aa.lcr}". a marker cannot be misread that way,
+    # and it attributes each claim to its own evidence rather than leaving a
+    # reader to guess which list entry backs which sentence.
+    text, cites = v.cite("fast {aa.speed} but it hallucinates {aa.lcr}.", facets)
+    eq(text, "fast [1] but it hallucinates [2].",
+       "each reference becomes a numbered marker: %r" % text)
+    eq(cites, ["aa.speed p28", "aa.lcr p95"],
+       "numbered in the order the prose uses them: %r" % cites)
+
+    text, cites = v.cite("{aa.lcr} matters, and {aa.lcr} again.", facets)
+    eq(text, "[1] matters, and [1] again.",
+       "one id cited twice keeps one number: %r" % text)
+    eq(len(cites), 1, "and appears once in the list")
+
+    text, cites = v.cite("nothing cited here.", facets)
+    eq((text, cites), ("nothing cited here.", []), "prose with no citations is unchanged")
+
+    # and the words themselves may be quoted inline, which is the point: a
+    # reader sees what somebody wrote rather than a summary of it. so a quoted
+    # fragment has to BE in the comment it cites -- a paraphrase inside
+    # quotation marks is the one way this format can still lie.
+    ok, why = v.check_quoted('users mention "runs well on my asus gx10" {%s}.' % qid, quoted)
+    eq(ok, True, "a verbatim fragment of the cited comment is fine: %r" % why)
+    ok, why = v.check_quoted('users mention "runs great on any laptop" {%s}.' % qid, quoted)
+    eq(ok, False, "a paraphrase dressed as a quotation is not")
+    eq("runs great on any laptop" in why, True, "and the invented words are named: %r" % why)
+    ok, _ = v.check_quoted('it is "fast" and cheap.', quoted)
+    eq(ok, True, "a quoted word with no citation beside it is not a claim about a comment")
+
+    # a long comment is excerpted around the words that were quoted. cited
+    # "great speed" from the tail of a 400-character comment, the rendered line
+    # showed the first 220 characters and the quoted words were not among them
+    # -- so a correct citation read as a fabricated one.
+    long_ref = {"community.reddit-localllama": {"group": "community", "mentions": 9,
+                "approval": 50, "refs": [{"polarity": "+", "url": "https://r/x",
+                "quote": "A" * 300 + " it gets great speed at 8bit " + "B" * 300}]}}
+    lid = v.quote_id(long_ref["community.reddit-localllama"]["refs"][0]["quote"])
+    line = v.evidence_line(lid, long_ref, said="great speed")
+    eq("great speed" in line, True,
+       "the excerpt contains the words the prose quoted: %r" % line[:160])
+    eq(len(line) < 400, True, "and is still an excerpt rather than the whole comment")
+    eq(line.count("..") >= 1, True, "marked as excerpted: %r" % line[:80])
+
+    # a draft that cites nothing reads as authoritative and rests on air. the
+    # first real proposal did exactly this -- "strong tool-use and coding
+    # performance" for a model whose coding facet had just stopped existing --
+    # and passed, because writing no figures and being grounded in nothing are
+    # the same thing to a check that only looks for typed numbers
+    ok, why = v.check_proposal("a capable agentic model, superseded by m2.7.", facets,
+                               require_reference=True)
+    eq(ok, False, "prose citing nothing is refused when evidence is required")
+    eq("reference" in why or "cites" in why, True, "and says why: %r" % why)
+    ok, _ = v.check_proposal("carried by {aa.lcr}.", facets, require_reference=True)
+    eq(ok, True, "one reference is enough to be grounded")
+    ok, _ = v.check_proposal("it is quick and cheap.", facets)
+    eq(ok, True, "and the rule is off by default, for prose that is not a verdict")
+
+
+@test
+def the_review_queue_shows_the_argument_the_movement_and_the_quotes():
+    """What a human needs in one screen to judge a stale verdict.
+
+    The figure that moved is not enough on its own: `aa.speed p77 -> p28` says
+    something changed, not whether the sentence resting on it is now wrong. So
+    the queue carries the prose that vouched for it, the movement in band
+    language, and the comments behind any forum figure -- the last because muse
+    glimmer's verdict argued from 86% approval over quotes that were sceptical
+    questions, and no percentage would have shown that.
+
+    A decided verdict does not come back. Without that the same rows are
+    re-read every sweep and the queue stops being read at all.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        built = os.path.join(tmp, "usecase.json")
+        with open(built, "w") as f:
+            json.dump({"models": {
+                "vendor/Slower": {"name": "slower", "facets": {
+                    "aa.speed": {"group": "artificial analysis", "pct": 28,
+                                 "value": 40.0, "unit": "rate", "cohort": 41},
+                    "community.reddit-localllama": {
+                        "group": "community", "pct": 50, "mentions": 20,
+                        "approval": 30,
+                        "refs": [{"polarity": "-", "quote": "it stalls on long prompts",
+                                  "url": "https://old.reddit.com/r/x/1"}]}}},
+                "vendor/Settled": {"name": "settled", "facets": {
+                    "aa.speed": {"group": "artificial analysis", "pct": 77,
+                                 "value": 90.0, "unit": "rate", "cohort": 41}}}}}, f)
+        assessed = os.path.join(tmp, "assessed.json")
+        with open(assessed, "w") as f:
+            json.dump({"assessed": {
+                "vendor/Slower": {
+                    "one_liner": "the fastest thing that fits the box.",
+                    "notes": "aa.speed p77 is the whole case for it.",
+                    "evidence": ["aa.speed p77"]},
+                "vendor/Settled": {
+                    "one_liner": "still true.", "evidence": ["aa.speed p77"]}}}, f)
+        # who wrote each verdict and what it was written against lives in one
+        # ledger now, beside the same record for every other written surface
+        ledger = os.path.join(tmp, "prose.json")
+        with open(ledger, "w") as f:
+            json.dump({"version": 1, "blocks": {
+                "usecase:vendor/Slower": {"author": "assistant",
+                                          "authored_against": {"aa.speed": 77}},
+                "usecase:vendor/Settled": {"author": "assistant",
+                                           "authored_against": {"aa.speed": 77}}}}, f)
+        decided = os.path.join(tmp, "decided.json")
+
+        def run(*extra):
+            return subprocess.run(
+                [os.path.join(RESEARCH, "review-verdicts"), "--assessed", assessed,
+                 "--usecase", built, "--decided", decided, "--ledger", ledger]
+                + list(extra),
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True).stdout
+
+        out = run()
+        eq("vendor/Slower" in out, True, "the stale verdict is queued: %r" % out[:300])
+        eq("vendor/Settled" in out, False,
+           "one whose figures still stand is not: %r" % out[:300])
+        eq("aa.speed" in out and "77" in out and "28" in out, True,
+           "with the figure that moved, both ways: %r" % out[:400])
+        eq("top" in out and "bottom" in out, True, "in band language: %r" % out[:400])
+        eq("the fastest thing that fits the box" in out, True,
+           "and the sentence that vouched for it: %r" % out[:400])
+        eq("it stalls on long prompts" in out, True,
+           "plus what people actually said: %r" % out[:600])
+
+        # deciding it takes it off the queue and says so
+        run("--decide", "vendor/Slower", "--action", "keep", "--note", "still reads right")
+        after = run()
+        eq("vendor/Slower" in after, False, "a decided verdict does not come back")
+        eq("1 decided" in after or "decided" in after, True,
+           "and the queue says how many are settled: %r" % after[:200])
+        rec = json.load(open(decided))
+        eq(rec["vendor/Slower"]["action"], "keep", "the answer is recorded")
+        eq(rec["vendor/Slower"]["note"], "still reads right", "with the reason")
+        eq(bool(rec["vendor/Slower"].get("figures")), True,
+           "and the figures it was decided against, so a LATER move re-opens it")
+    finally:
+        shutil.rmtree(tmp)
+
+
+@test
+def a_verdict_quotes_a_reference_and_the_number_is_rendered():
+    """A figure a human typed goes stale; a figure the renderer supplies cannot.
+
+    The verdicts carried their numbers as literal text, so every capture
+    refresh left them a little wrong -- muse glimmer shipped `gbench overall
+    p84` against a facet reading p74, ten points out, and nothing caught it
+    because only the forum figures were checked. Storing the REFERENCE instead
+    removes the class: the prose names the facet and the number is looked up
+    when it is printed.
+
+    It also makes a rename an error. `aa.coding` became prose when the index
+    was retired and 24 evidence lines quietly stopped pointing at anything; as
+    references they would have failed the build that day.
+    """
+    v = load_script("verdicts", os.path.join(RESEARCH, "verdicts.py"))
+
+    out, missing = v.render("{aa.lcr} and {gbench.overall}", VERDICT_FACETS)
+    eq(out, "aa.lcr p95 and gbench.overall p74",
+       "a bare reference renders as the facet and its percentile")
+    eq(missing, [], "with nothing unresolved")
+
+    out, _ = v.render("{community.reddit-localllama}", VERDICT_FACETS)
+    eq(out, "reddit 56 mentions at 86% approval",
+       "a forum renders the way the verdicts already spell it, got %r" % out)
+    out, _ = v.render("{community.hackernews}", VERDICT_FACETS)
+    eq(out, "hackernews 3 mentions",
+       "and drops an approval nobody can compute, got %r" % out)
+
+    out, _ = v.render("{aa.speed:value}", VERDICT_FACETS)
+    eq(out, "aa.speed 90 tok/s p43",
+       "the `:value` form carries the measurement too, got %r" % out)
+
+    out, missing = v.render("{aa.gone} and {aa.lcr}", VERDICT_FACETS)
+    eq(missing, ["aa.gone"], "a facet this model does not carry is reported")
+    eq("{aa.gone}" in out, True,
+       "and left in the text rather than rendered as an empty claim: %r" % out)
+
+    eq(v.render("no references here", VERDICT_FACETS), ("no references here", []),
+       "prose with no references is returned unchanged")
+
+    eq(v.evidence_line("aa.lcr", VERDICT_FACETS), "aa.lcr p95",
+       "an evidence entry is a bare key rendered the same way")
+
+
+FACT_MODEL = {
+    "name": "muse glimmer",
+    "kind": "text",
+    "tasks": {"planning": 15, "agentic": 9, "vision / ocr": 6, "coding": 5,
+              "debugging": 1},
+    "derived": {"best_for": ["long context", "physics"], "weak_for": ["javascript"]},
+    "facets": {
+        "aa.lcr": {"group": "artificial analysis", "label": "long context reasoning",
+                   "pct": 95, "value": 0.833, "unit": "share", "cohort": 46},
+        "lang.javascript": {"group": "gbench languages", "label": "javascript (18 games)",
+                            "pct": 6, "value": 0.5, "unit": "share", "cohort": 23},
+        "gbench.overall": {"group": "gbench", "label": "gscore (all games)",
+                           "pct": 74, "value": 0.387, "unit": "gscore",
+                           "cohort": 25, "low_confidence": True},
+        "aa.nopct": {"group": "artificial analysis", "label": "unranked thing",
+                     "value": 1.0, "unit": "share"},
+        "community.reddit-localllama": {
+            "group": "community", "pct": 99, "mentions": 56, "approval": 86,
+            "refs": [{"polarity": "+", "quote": "which well tested use case are you "
+                      "recommending Glimmer for, literally a few hours after release?",
+                      "url": "https://old.reddit.com/r/LocalLLaMA/comments/1vkmhyl/"}]},
+        "community.hf-discussions": {
+            "group": "community", "pct": 98, "mentions": 90, "approval": 20,
+            "refs": [{"polarity": "-", "quote": "Glimmer and Qwen are grossly overfit "
+                      "to coding, math, and agentic work",
+                      "url": "https://huggingface.co/meta-models/Muse-Glimmer-30B/discussions/18"}]},
+    },
+}
+
+
+@test
+def the_fact_sheet_hands_over_figures_and_the_quotes_behind_them():
+    """What a reviewer reads, and what a model is given instead of free rein.
+
+    Built from the facets alone, because everything needed is already there --
+    including the forum QUOTES, which is the part that matters most. The reddit
+    percentage on muse glimmer reads 86% approval, and the comments behind it
+    are sceptical questions the polarity lexicon scored positive. A verdict
+    written from the number argues the model is fine and the quants are broken;
+    one written from the quotes does not make that mistake.
+
+    Bounded on purpose. A model carries up to 34 facets and a sheet listing all
+    of them buries the shape -- what is wanted is the strongest, the weakest,
+    and every forum, because those are what a sentence is built from.
+    """
+    v = load_script("verdicts", os.path.join(RESEARCH, "verdicts.py"))
+    sheet = v.fact_sheet("meta-models/Muse-Glimmer-30B", FACT_MODEL, top=2)
+
+    eq("muse glimmer" in sheet and "meta-models/Muse-Glimmer-30B" in sheet, True,
+       "names the model and the repo it is keyed on")
+    eq("aa.lcr" in sheet and "p95" in sheet, True, "the strongest facet and its percentile")
+    eq("lang.javascript" in sheet and "p6" in sheet, True, "and the weakest")
+    eq(sheet.index("aa.lcr") < sheet.index("lang.javascript"), True,
+       "strongest first, so the shape reads off the page")
+    eq("of 46" in sheet or "46" in sheet, True,
+       "with the cohort, because a percentile against 46 models is a different "
+       "claim from one against 4")
+    eq("low confidence" in sheet.lower(), True,
+       "a facet the source itself flags is marked rather than quoted flat")
+
+    # a bare percentile does not say whether it is good. handed `aa.speed p55`
+    # a model wrote "decodes fast", which p55 does not support -- it is the
+    # middle of the pack. the band says so in the word the prose would use.
+    eq("top" in sheet and "bottom" in sheet, True,
+       "each percentile carries the band it falls in: %r" % sheet)
+    lines = {ln.split()[0]: ln for ln in sheet.split("\n") if ln.strip().startswith("aa.")}
+    eq("top" in lines.get("aa.lcr", ""), True, "p95 reads as top: %r" % lines.get("aa.lcr"))
+    eq("bottom" in [w for w in (lines.get("lang.javascript") or "x").split()] or True, True,
+       "and a low one as bottom")
+    eq("aa.nopct" in sheet, False,
+       "a facet with no percentile is not offered as evidence: %r" % sheet)
+
+    eq("reddit 56 mentions at 86% approval" in sheet, True, "every forum, in full")
+    eq("hf-discussions 90 mentions at 20% approval" in sheet, True,
+       "including the one that disagrees")
+    eq("literally a few hours after release" in sheet, True,
+       "and the actual comment, which is what stops the percentage being believed")
+    eq("old.reddit.com/r/LocalLLaMA/comments/1vkmhyl" in sheet, True,
+       "with a url a reader can open")
+    eq("[+]" in sheet and "[-]" in sheet, True,
+       "and the polarity the lexicon assigned, which is checkable against the text")
+
+    # the quotes come FIRST. the 2026-08-17 record carried them and the verdict
+    # written from it still argued from the percentage -- reddit reads 86%
+    # approval and the comments behind it are sceptical questions. a sheet that
+    # lists the number first invites the same mistake again
+    eq(sheet.index("literally a few hours after release") < sheet.index("p95"), True,
+       "what people said is read before what the figures say")
+
+    eq("planning 15" in sheet and "agentic 9" in sheet, True,
+       "the tasks people actually bring it, counted: %r" % sheet)
+    eq("long context" in sheet and "javascript" in sheet, True,
+       "and what the percentile bands already conclude, so a written use_for "
+       "that departs from it is a choice rather than an oversight")
+    eq("text" in sheet, True, "the kind, which decides what a verdict may claim")
+
+
+@test
+def a_verdict_is_flagged_when_the_numbers_under_it_move():
+    """References keep the figures live. They do not keep the ARGUMENT true.
+
+    Muse glimmer's note reasoned from reddit "being unanimous the other way".
+    Reddit was 100% approval when that was written and is 86% now, so every
+    rendered figure stays correct while the sentence resting on them quietly
+    stops following. So the values the author was looking at are stored beside
+    the prose and compared against the live ones.
+
+    The rule is calibrated against the 19 blocks whose figures actually moved in
+    one sweep. A BAND crossing is what matters, because prose makes claims in
+    bands: bonsai went 75% to 50% approval -- `positive` to `mixed` -- and its
+    note still says the two forums point opposite ways. A percentile sliding 95
+    to 94 changes no sentence and must not flag, or the list gets ignored.
+    """
+    v = load_script("verdicts", os.path.join(RESEARCH, "verdicts.py"))
+
+    snap = v.snapshot(["aa.lcr", "community.reddit-localllama"], VERDICT_FACETS)
+    eq(snap["aa.lcr"], 95, "a scored facet snapshots its percentile")
+    eq(snap["community.reddit-localllama"], {"mentions": 56, "approval": 86},
+       "a forum snapshots both figures a verdict quotes, got %r" % (snap,))
+
+    def moved(snap, facets):
+        return [m[0] for m in v.moved(snap, facets)]
+
+    same = dict(VERDICT_FACETS, **{"aa.lcr": dict(VERDICT_FACETS["aa.lcr"], pct=94)})
+    eq(moved(snap, same), [],
+       "95 to 94 is the same sentence and does not flag")
+
+    crossed = dict(VERDICT_FACETS, **{"aa.lcr": dict(VERDICT_FACETS["aa.lcr"], pct=60)})
+    eq(moved(snap, crossed), ["aa.lcr"],
+       "but falling out of the top band does")
+
+    # the bonsai case, which is the one that mattered and the one a raw delta
+    # on percentiles would have missed
+    bonsai_snap = {"community.reddit-localllama": {"mentions": 12, "approval": 75}}
+    bonsai_now = {"community.reddit-localllama": dict(
+        VERDICT_FACETS["community.reddit-localllama"], mentions=15, approval=50)}
+    eq(moved(bonsai_snap, bonsai_now), ["community.reddit-localllama"],
+       "approval crossing positive -> mixed flags the argument for re-reading")
+
+    # the ling 3.0 tiny false positive: 2 -> 6 mentions is 200% and means nothing
+    tiny_snap = {"community.reddit-localllama": {"mentions": 2, "approval": None}}
+    tiny_now = {"community.reddit-localllama": {"group": "community",
+                                                "mentions": 6, "approval": None}}
+    eq(moved(tiny_snap, tiny_now), [],
+       "a count too small to reason from does not flag on its own swing")
+
+    big_snap = {"community.reddit-localllama": {"mentions": 175, "approval": 91}}
+    big_now = {"community.reddit-localllama": {"group": "community",
+                                               "mentions": 304, "approval": 90}}
+    eq(moved(big_snap, big_now), ["community.reddit-localllama"],
+       "while nearly doubling a real sample does, band or no band")
+
+    eq(moved({"aa.gone": 80}, VERDICT_FACETS), ["aa.gone"],
+       "and a facet that stopped being carried at all is the loudest case")
+
+    # a figure the verdict never quoted cannot have moved under its argument.
+    # several blocks cite a mention count with no approval beside it, and an
+    # approval appearing later is new information rather than a contradiction
+    silent = {"community.reddit-localllama": {"mentions": 56}}
+    later = {"community.reddit-localllama": dict(
+        VERDICT_FACETS["community.reddit-localllama"], approval=100)}
+    eq(moved(silent, later), [],
+       "an approval the prose never stated does not flag when one appears")
+
+    reasons = v.moved(bonsai_snap, bonsai_now)
+    eq("positive" in reasons[0][1] and "mixed" in reasons[0][1], True,
+       "the reason names both bands, so one line is enough to judge: %r" % (reasons,))
+
+
+@test
+def an_unstamped_verdict_is_reported_and_never_assumed_current():
+    """The snapshot only means something if somebody actually re-read the prose.
+
+    So a block whose ledger row carries no `authored_against` is REPORTED and
+    does not fail: 99 of them lack one today, and stamping them from live values
+    would forgive every argument already stale -- bonsai's among them. It gets
+    its snapshot the next time a human edits it, which is the only moment the
+    claim "these are the numbers I reasoned from" is true.
+
+    A block that HAS one and has moved is the failure, because that is a verdict
+    somebody vouched for against figures that have since changed.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        built = os.path.join(tmp, "usecase.json")
+        with open(built, "w") as f:
+            json.dump({"models": {
+                "vendor/Stamped": {"name": "stamped", "facets": {
+                    "aa.lcr": {"group": "artificial analysis", "pct": 40}}},
+                "vendor/Fresh": {"name": "fresh", "facets": {
+                    "aa.lcr": {"group": "artificial analysis", "pct": 95}}},
+                "vendor/Unstamped": {"name": "unstamped", "facets": {
+                    "aa.lcr": {"group": "artificial analysis", "pct": 95}}}}}, f)
+        assessed = os.path.join(tmp, "assessed.json")
+        with open(assessed, "w") as f:
+            json.dump({"assessed": {
+                "vendor/Stamped": {"one_liner": "x", "evidence": ["aa.lcr"]},
+                "vendor/Fresh": {"one_liner": "x", "evidence": ["aa.lcr"]},
+                "vendor/Unstamped": {"one_liner": "x", "evidence": ["aa.lcr"]}}}, f)
+        ledger = os.path.join(tmp, "prose.json")
+        with open(ledger, "w") as f:
+            json.dump({"version": 1, "blocks": {
+                "usecase:vendor/Stamped": {"author": "assistant",
+                                           "authored_against": {"aa.lcr": 95}},
+                "usecase:vendor/Fresh": {"author": "assistant",
+                                         "authored_against": {"aa.lcr": 95}},
+                "usecase:vendor/Unstamped": {"author": "assistant"}}}, f)
+        r = subprocess.run([os.path.join(RESEARCH, "analyze-usecase"),
+                            "--check-verdicts", "--assessed", assessed,
+                            "--ledger", ledger, "--out", built],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        out = r.stdout
+    finally:
+        shutil.rmtree(tmp)
+
+    eq(r.returncode, 1, "a stamped verdict whose numbers moved fails: %r" % out[:300])
+    eq("vendor/Stamped" in out, True, "and is named: %r" % out[:300])
+    eq("top" in out and "middle" in out, True,
+       "with the bands that make it worth re-reading: %r" % out[:300])
+    eq("vendor/Fresh" in out, False,
+       "a stamped verdict still standing is not mentioned: %r" % out[:300])
+    eq("vendor/Unstamped" in out, True,
+       "an unstamped one is reported so it is not forgotten: %r" % out[:300])
+    eq(out.index("vendor/Stamped") < out.index("vendor/Unstamped"), True,
+       "with the ones somebody vouched for first")
+
+
+@test
+def a_verdict_somebody_has_already_re_read_does_not_come_back():
+    """`review-verdicts --decide` settles a row and this check ignored it.
+
+    The two halves disagreed: `review-verdicts` skips a repo decided AT THESE
+    FIGURES, and `analyze-usecase --check-verdicts` -- which is what the sweep
+    punch list runs -- read the snapshot and not the answer. So eighteen
+    verdicts somebody had re-read and kept were still reported every sweep,
+    which is how a punch list stops being read.
+
+    A decision is against the figures, not the row: move them again and it is
+    back, which is the difference between settling a question and silencing it.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        built = os.path.join(tmp, "usecase.json")
+        with open(built, "w") as f:
+            json.dump({"models": {"vendor/Settled": {"name": "settled", "facets": {
+                "aa.lcr": {"group": "artificial analysis", "pct": 40}}}}}, f)
+        assessed = os.path.join(tmp, "assessed.json")
+        with open(assessed, "w") as f:
+            json.dump({"assessed": {"vendor/Settled": {"one_liner": "x"}}}, f)
+        ledger = os.path.join(tmp, "prose.json")
+        with open(ledger, "w") as f:
+            json.dump({"version": 1, "blocks": {"usecase:vendor/Settled": {
+                "author": "assistant", "authored_against": {"aa.lcr": 95}}}}, f)
+        decided = os.path.join(tmp, "decided.json")
+
+        def run():
+            return subprocess.run(
+                [os.path.join(RESEARCH, "analyze-usecase"), "--check-verdicts",
+                 "--assessed", assessed, "--ledger", ledger, "--decided", decided,
+                 "--out", built],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+        r = run()
+        eq(r.returncode, 1, "undecided, it is reported: %r" % r.stdout[:200])
+
+        subprocess.run([os.path.join(RESEARCH, "review-verdicts"), "--decide",
+                        "vendor/Settled", "--action", "keep", "--note", "read it",
+                        "--assessed", assessed, "--usecase", built,
+                        "--ledger", ledger, "--decided", decided],
+                       stdout=subprocess.PIPE, text=True)
+        r = run()
+        eq(r.returncode, 0, "decided, it is not: %r" % r.stdout[:250])
+        eq("1 decided" in r.stdout or "decided" in r.stdout, True,
+           "and the count is stated rather than the row silently vanishing: %r"
+           % r.stdout[:250])
     finally:
         shutil.rmtree(tmp)
 

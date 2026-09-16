@@ -12,6 +12,8 @@ Configured from `.env` at the repo root, or from the environment directly:
     AIMBOT_LLM_URL     an OpenAI-compatible base, default http://localhost:8080/v1
     AIMBOT_LLM_MODEL   the model name to send; llama-server ignores it
     AIMBOT_LLM_KEY     optional bearer token
+    AIMBOT_LLM_EFFORT  how hard to think WHERE A CALLER ASKS: low, medium,
+                       high, xhigh, or `off` to gate it out everywhere
 
 `.env` is gitignored and `.env.example` is the copy that is committed, so an
 endpoint and a key can be kept without either landing in version control. A
@@ -45,6 +47,22 @@ import urllib.request
 DEFAULT_URL = "http://localhost:8080/v1"
 TIMEOUT = 180
 ENV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env")
+# what a caller that ASKS for thinking gets, unless AIMBOT_LLM_EFFORT says
+# otherwise. the vendor's own default for this family is xhigh and that is not
+# what this repository wants: the registry records that level at 15k-52k
+# thinking tokens per call, which over 211 registry notes is a sweep nobody
+# waits for, and the first xhigh run here reasoned past 4000 and returned
+# nothing at all. medium buys the composition this needs at a fraction of it.
+DEFAULT_EFFORT = "medium"
+# and the value that gates thinking out again without editing a caller
+NO_EFFORT = "off"
+# what a reasoning run spends BEFORE the answer starts, per level. the registry
+# records qwen3.8 27b's xhigh at 15k-52k thinking tokens in reported traces
+# against qwen3.6's 3k, so a budget sized for the answer alone returns an EMPTY
+# string rather than a short one: `finish_reason: length` with nothing in
+# `content`. the caller says how much ANSWER it wants and this adds the rest,
+# because the caller knows the one and the effort decides the other.
+REASONING_TOKENS = {"low": 4000, "medium": 16000, "high": 48000, "xhigh": 65536}
 
 
 def load_env(path=None):
@@ -96,6 +114,45 @@ def configured():
     return base.rstrip("/"), model, (os.environ.get("AIMBOT_LLM_KEY") or "").strip()
 
 
+def effort():
+    """How hard to think where a caller asks for it."""
+    load_env()
+    return (os.environ.get("AIMBOT_LLM_EFFORT") or "").strip() or DEFAULT_EFFORT
+
+
+def thinking_body(body, wants):
+    """`body` with the thinking knobs a chat template reads.
+
+    Two separate things, because the roster's own registry records them
+    separately: a GATE (`enable_thinking`) and a graded KNOB
+    (`reasoning_effort`). A template that has one and not the other ignores the
+    field rather than failing the request, which is why both are always sent
+    together rather than sniffed per model.
+
+    A caller that did not ask is gated off whatever the setting says. That is
+    the whole reason this is per-caller: turning thinking on globally is what
+    broke triage, where a reasoning run invented a base model and eight calls
+    came back empty having reasoned past the budget.
+    """
+    want = effort()
+    if not wants or want == NO_EFFORT:
+        body["chat_template_kwargs"] = {"enable_thinking": False}
+        return body
+    body["chat_template_kwargs"] = {"enable_thinking": True,
+                                    "reasoning_effort": want}
+    # the openai field for the same idea, for an endpoint that reads that one
+    body["reasoning_effort"] = want
+    return body
+
+
+def budget_for(answer_tokens, wants):
+    """`max_tokens` that leaves room to think and still answer."""
+    want = effort()
+    if not wants or want == NO_EFFORT:
+        return answer_tokens
+    return answer_tokens + REASONING_TOKENS.get(want, REASONING_TOKENS[DEFAULT_EFFORT])
+
+
 def prompt_key(*parts):
     """A stable id for a prompt, so a captured answer can be found again."""
     h = hashlib.sha256("\x00".join(str(p) for p in parts).encode())
@@ -109,25 +166,29 @@ def chat(messages, temperature=0.0, max_tokens=1200, schema=None, thinking=False
     model that is not running is the normal case on a machine that is not the
     one serving the roster, and it must not take a sweep down.
 
-    Thinking is turned OFF by default and that is not a cost decision. A model
-    reasoning into `reasoning_content` leaves `content` empty until it is done,
-    so a budget that would be generous for the answer truncates mid-thought and
-    the reply arrives as an empty string -- the first eight triage calls here
-    failed exactly that way, `finish_reason: length` with nothing in `content`.
-    The answers also got no better for it: asked to name a base model, the
-    thinking run invented `Large Language Model (LLM) / AI Model Repository`
-    where the non-thinking one gave the repo id.
+    Thinking is OFF unless the CALLER asks, and that is not a cost decision.
+    A model reasoning into `reasoning_content` leaves `content` empty until it
+    is done, so a budget that would be generous for the answer truncates
+    mid-thought and the reply arrives as an empty string -- the first eight
+    triage calls here failed exactly that way, `finish_reason: length` with
+    nothing in `content`. The answers also got no better for it: asked to name a
+    base model, the thinking run invented `Large Language Model (LLM) / AI Model
+    Repository` where the non-thinking one gave the repo id.
+
+    That finding is about EXTRACTION, where there is one right answer and
+    reasoning only finds ways to miss it. Composing prose from a fact sheet is
+    the other shape, so the prose callers pass `thinking=True` and raise their
+    budget to match; `AIMBOT_LLM_EFFORT` says how hard, and `off` settles it for
+    a machine that does not want it at all.
     """
     cfg = configured()
     if not cfg:
         return None
     base, model, key = cfg
-    body = {"model": model, "messages": messages, "temperature": temperature,
-            "max_tokens": max_tokens}
-    if not thinking:
-        # llama-server passes these into the chat template; a server that does
-        # not take them ignores the field rather than failing the request
-        body["chat_template_kwargs"] = {"enable_thinking": False}
+    body = thinking_body({"model": model, "messages": messages,
+                          "temperature": temperature,
+                          "max_tokens": budget_for(max_tokens, thinking)},
+                         thinking)
     if schema:
         # llama-server and the openai api both take this; a server that does not
         # understand it still returns prose, which the caller has to parse anyway

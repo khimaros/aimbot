@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+
+"""Verdicts whose evidence moved, with everything needed to judge them.
+
+`analyze-usecase --check-verdicts` says WHICH figures moved. That is not enough
+to act on: `aa.speed p77 -> p28` says something changed, not whether the
+sentence resting on it is now wrong. So this carries the prose that vouched for
+the figure, the movement in the bands prose actually speaks in, and the comments
+behind any forum number -- the last because muse glimmer's verdict argued from
+86% approval over quotes that were sceptical questions, and no percentage would
+ever have shown that.
+
+    ./review-verdicts                      # the queue, asking nothing
+    ./review-verdicts --sheet              # with the full fact sheet per model
+    ./review-verdicts --review             # walk it, one at a time
+    ./review-verdicts --decide REPO --action keep --note "why"
+
+A decision is recorded against the FIGURES it was made about, not just the repo.
+`keep` means "this argument still reads right at these numbers" -- so when they
+move again the verdict comes back, which is the difference between settling a
+question and silencing it.
+
+Nothing here writes usecase-assessed.json. The judgement is a human's and the
+tool's job is to put the evidence in front of them.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import prose  # noqa: E402
+import verdicts  # noqa: E402
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ASSESSED = os.path.join(HERE, "usecase-assessed.json")
+USECASE = os.path.join(HERE, "data", "usecase.json")
+DECIDED = os.path.join(HERE, "verdicts-decided.json")
+ACTIONS = ("keep", "rewrite", "drop")
+
+# how much ANSWER to allow. what a reasoning run spends BEFORE the answer is
+# added by llm.budget_for from the configured effort, because the caller knows
+# how long a note is and only the effort knows how long the thinking is.
+ANSWER_TOKENS = 900
+
+
+def load(path, key=None):
+    try:
+        with open(path) as f:
+            d = json.load(f)
+        return (d.get(key) or {}) if key else d
+    except (IOError, ValueError):
+        return {}
+
+
+def queue(assessed, models, decided, ledger_path=None):
+    """[(repo, block, moved)] for every verdict whose figures no longer stand.
+
+    A repo decided at THESE figures is settled and skipped; one decided at
+    different figures has moved again since and is back, because the answer was
+    about the numbers rather than about the row.
+    """
+    led = prose.ledger(ledger_path or prose.LEDGER)
+    out = []
+    for repo, blk in sorted(assessed.items()):
+        snap = prose.snapshot_for(repo, led)
+        if not snap:
+            continue
+        facets = (models.get(repo) or {}).get("facets") or {}
+        moved = verdicts.moved(snap, facets)
+        if not moved:
+            continue
+        was = (decided.get(repo) or {}).get("figures")
+        if was is not None and was == verdicts.snapshot(sorted(snap), facets):
+            continue
+        out.append((repo, blk, moved))
+    return out
+
+
+def show(repo, blk, moved, models, sheet=False):
+    print("=" * 72)
+    print(repo)
+    for key, why in moved:
+        print("  MOVED  %-30s %s" % (key, why))
+    if blk.get("one_liner"):
+        print("  says   %s" % blk["one_liner"])
+    if blk.get("notes"):
+        print("  notes  %s" % blk["notes"][:400])
+    facets = (models.get(repo) or {}).get("facets") or {}
+    # every forum this model carries, not only the figures that moved: an
+    # approval rate is the one number here that can be flatly wrong about its
+    # own text, so the comments are context for judging any of it
+    for key in sorted(k for k, f in facets.items() if f.get("group") == "community"):
+        for ref in ((facets.get(key) or {}).get("refs") or [])[:3]:
+            print("  [%s] %s" % (ref.get("polarity") or "0",
+                                 (ref.get("quote") or "").strip()[:200]))
+            if ref.get("url"):
+                print("        %s" % ref["url"])
+    if sheet:
+        print("  ---")
+        for line in verdicts.fact_sheet(repo, models.get(repo) or {}).split("\n"):
+            print("  " + line)
+
+
+TASK = """Write the registry entry for one model, from the evidence below.
+
+The reader runs models on their own machine. Tell them what this one is for and
+what it is bad at.
+
+CITE AS YOU WRITE. Put the citation next to the claim it supports, in braces:
+a facet key like {swerebench.resolved}, or a quote id like {q:1a2b3c4d}. Each
+becomes a numbered marker and the figure or the comment is printed beneath, read
+from the data every time, so nothing you cite can go stale.
+
+NO FIGURES IN THE PROSE. Not one -- no percentiles, no percentages. Say what is
+true in words and let the citation carry the number. Sizes in gib are not
+figures and are written plainly.
+
+QUOTE PEOPLE RATHER THAN SUMMARISING THEM. When the evidence is something
+somebody said, put their words in quotation marks with the id beside them. The
+words must be theirs exactly: a paraphrase inside quotation marks is the one
+thing here that can read as sourced and not be.
+
+    good:  users mention "high quality output" {q:1234} but "extreme
+           overthinking" {q:4567}
+    good:  resolves real merged pull requests {swerebench.resolved} well above
+           what its indices predict, and decodes fast {aa.speed} doing it
+    bad:   resolves at swerebench.resolved p78        <- a figure in the prose
+    bad:   users report it runs on an asus gx10       <- quote them, cite it
+    bad:   "runs great on any laptop" {q:1234}        <- not what they wrote
+
+STYLE, matched to the rest of the registry:
+- all lowercase, including the first word and model names.
+- prefer the specific to the summary: "fails tool calls at q4" beats "mixed
+  reception", "the 0.42gib smaller quant" beats "solid performance".
+- two or three sentences each. no preamble, no headings, no bullet points.
+
+READING THE EVIDENCE. The comments are what people actually said. The approval
+percentage comes from a crude word lexicon and is sometimes flatly wrong about
+the text beneath it -- sceptical questions get scored positive, and praise
+negative. Where the percentage and the comments disagree, believe the comments.
+
+Reply with JSON: {"one_liner": "...", "notes": "..."}"""
+
+
+def judge(got, facets):
+    """(draft, why) -- the refusal reason is phrased to be handed back."""
+    if not isinstance(got, dict) or not got.get("one_liner"):
+        return None, "the reply was not the JSON object asked for"
+    cited = []
+    for field in ("one_liner", "notes"):
+        text = got.get(field) or ""
+        bad = verdicts.TYPED_PCT.findall(verdicts.CITE_REF.sub("", text))
+        if bad:
+            return None, ("the %s writes %s -- cite the facet instead and let the "
+                          "number be printed" % (field, ", ".join(sorted(set(bad)))))
+        ok, why = verdicts.check_quoted(text, facets)
+        if not ok:
+            return None, "the %s %s" % (field, why)
+        ids = verdicts.CITE_REF.findall(text)
+        unknown = [i for i in ids if verdicts.evidence_line(i, facets) is None]
+        if unknown:
+            return None, ("the %s cites %s, which this model does not carry"
+                          % (field, ", ".join(sorted(set(unknown)))))
+        cited += ids
+    if not cited:
+        return None, "the entry cites nothing, so none of it is checkable"
+    return got, ""
+
+
+def propose(repo, blk, moved, models, llm, tries=2):
+    """Ask for a revision, and hand a refusal back rather than giving up on it.
+
+    A refusal is a fixable mistake, not a verdict on the model: the first two
+    real ones were a reference to a facet that had stopped existing and a pair
+    of percentiles copied out of the entry it was shown. Both are exactly the
+    kind of thing a model corrects when told, and a local endpoint makes the
+    second ask nearly free.
+    """
+    facets = (models.get(repo) or {}).get("facets") or {}
+    sheet = verdicts.fact_sheet(repo, models.get(repo) or {})
+    allowed = ", ".join(sorted(facets) + sorted(verdicts.quotes_of(facets)))
+    user = "%s\n\nYOU MAY CITE ONLY THESE:\n  %s\n" % (sheet, allowed)
+
+    messages = [{"role": "system", "content": TASK},
+                {"role": "user", "content": user}]
+    why = "no reply from the endpoint"
+    for attempt in range(tries):
+        reply = llm.chat(messages, max_tokens=ANSWER_TOKENS, thinking=True)
+        if not reply:
+            return None, why
+        draft, why = judge(llm.as_json(reply), facets)
+        if draft:
+            return draft, ""
+        if attempt + 1 < tries:
+            messages += [{"role": "assistant", "content": reply},
+                         {"role": "user", "content":
+                          "That was refused: %s. Fix exactly that and reply "
+                          "again with the same JSON shape." % why}]
+    return None, why
+
+
+def decide(decided, path, repo, action, note, models, assessed, ledger_path=None):
+    blk = assessed.get(repo)
+    if not blk:
+        sys.exit("!!! no verdict for %s" % repo)
+    facets = (models.get(repo) or {}).get("facets") or {}
+    decided[repo] = {"action": action, "note": note or "",
+                     # what it was decided AGAINST, so a later move re-opens it
+                     "figures": verdicts.snapshot(
+                         sorted(prose.snapshot_for(repo, prose.ledger(
+                             ledger_path or prose.LEDGER)) or {}), facets)}
+    with open(path, "w") as f:
+        json.dump(dict(sorted(decided.items())), f, indent=1, sort_keys=True)
+        f.write("\n")
+    print("recorded %s for %s" % (action, repo))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--assessed", default=ASSESSED)
+    ap.add_argument("--usecase", default=USECASE)
+    ap.add_argument("--decided", default=DECIDED)
+    ap.add_argument("--ledger", default=prose.LEDGER,
+                    help="who wrote each block, and against which figures")
+    ap.add_argument("--sheet", action="store_true",
+                    help="the whole fact sheet per model, not just what moved")
+    ap.add_argument("--propose", action="store_true",
+                    help="ask the configured model to draft a revision for each")
+    ap.add_argument("--limit", type=int, help="only the first N of the queue")
+    ap.add_argument("--review", action="store_true", help="walk it and ask")
+    ap.add_argument("--decide", metavar="REPO", help="record one answer and exit")
+    ap.add_argument("--action", choices=ACTIONS, default="keep")
+    ap.add_argument("--note", default="")
+    args = ap.parse_args()
+
+    assessed = load(args.assessed, "assessed")
+    models = load(args.usecase, "models")
+    decided = load(args.decided)
+
+    if args.decide:
+        return decide(decided, args.decided, args.decide, args.action, args.note,
+                      models, assessed, args.ledger)
+
+    rows = queue(assessed, models, decided, args.ledger)
+    if not rows:
+        print("no verdict is standing on a figure that has moved. %d decided."
+              % len(decided))
+        return 0
+
+    if args.limit:
+        rows = rows[:args.limit]
+
+    llm = None
+    if args.propose:
+        import llm as llm_mod
+        llm = llm_mod
+        if not llm.configured():
+            sys.exit("!!! no model configured; see .env.example")
+
+    for repo, blk, moved in rows:
+        show(repo, blk, moved, models, args.sheet)
+        if llm:
+            draft, why = propose(repo, blk, moved, models, llm)
+            if draft:
+                # PROPOSED, not written. usecase-assessed.json is source and a
+                # model does not edit it -- see CONTRIBUTING.md
+                print("  --- proposed")
+                facets = (models.get(repo) or {}).get("facets") or {}
+                whole = "%s\n%s" % (draft.get("one_liner") or "", draft.get("notes") or "")
+                rendered, cites = verdicts.cite(whole, facets)
+                for line in rendered.split("\n"):
+                    print("  %s" % line)
+                for i, line in enumerate(cites, 1):
+                    print("    [%d] %s" % (i, line))
+            else:
+                print("  --- no usable proposal: %s" % why)
+        if not args.review:
+            continue
+        answer = input("    keep / rewrite / drop / skip [k/r/d/s/q] ").strip().lower()
+        if answer.startswith("q"):
+            break
+        if answer.startswith("s") or not answer:
+            continue
+        action = {"k": "keep", "r": "rewrite", "d": "drop"}.get(answer[0])
+        if action:
+            decide(decided, args.decided, repo, action,
+                   input("    why (one line, optional): ").strip(), models,
+                   assessed, args.ledger)
+
+    print("\n%d verdict(s) standing on a figure that moved, %d already decided"
+          % (len(rows), len(decided)))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main() or 0)

@@ -92,6 +92,12 @@ COLLECT = [
     ("hub catalog (trending)", ["./fetch-hf-catalog"]),
     ("hub catalog (newest)", ["./fetch-hf-catalog", "--sort", "createdAt",
                               "--out", "data/hf-catalog-new.json"]),
+    # the axis the other two cannot see. trending is what is rising and
+    # createdAt is what is new, so a repo that is neither was undiscoverable
+    # however many people ran it -- ISTA-DASLab's qwen3.8 27b quant at 884,926
+    # downloads was in neither capture, against a model already on the roster
+    ("hub catalog (most downloaded)", ["./fetch-hf-catalog", "--sort", "downloads",
+                                       "--out", "data/hf-catalog-top.json"]),
     # registry-driven: these read registry/models.yaml, so a model added since
     # the last sweep gets its facts here
     ("gguf sizes", ["./fetch-gguf-sizes"]),
@@ -185,6 +191,17 @@ REPORT = [
      ["./fetch-open-asr", "--report"], RESEARCH),
     ("models with no written judgement",
      ["./analyze-usecase", "--missing"], RESEARCH),
+    # the figures a verdict VOUCHED for and that have since moved. here rather
+    # than in lint because a stale argument is a thing to re-read, not a thing
+    # that is definitionally wrong -- and a red lint until 25 of them are
+    # rewritten stops every other kind of work
+    ("verdicts whose evidence has moved under them",
+     ["./analyze-usecase", "--check-verdicts"], RESEARCH),
+    # the same question over every OTHER surface that holds written sentences:
+    # a registry note quoting a size it no longer has, a block nobody has
+    # recorded an author for, a paragraph MODELS.md still holds by hand
+    ("prose that names no source, quotes a figure, or has no recorded author",
+     ["./write-prose", "--check"], RESEARCH),
     # proposals, not findings: written by a model, kept out of the registry, and
     # printed here because this section is where a human is already reading
     ("what the triage pass proposes carrying",

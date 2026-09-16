@@ -68,14 +68,20 @@ def rewrite(lines):
             old, i = lines[i:closed], closed
             new = run(m.group(1), table_only=False)
         else:
-            # keep the blank line the marker is followed by, then swallow the table
-            while i < len(lines) and not lines[i].startswith("|"):
-                out.append(lines[i])
-                i += 1
+            # keep the blank line the marker is followed by, then swallow the
+            # table. only blanks: scanning to the next pipe ANYWHERE meant a
+            # generator that returned no rows ate every line down to some later
+            # table, markers and all, and those blocks never regenerated again
+            j = i
+            while j < len(lines) and not lines[j].strip():
+                j += 1
             old = []
-            while i < len(lines) and lines[i].startswith("|"):
-                old.append(lines[i])
-                i += 1
+            if j < len(lines) and lines[j].startswith("|"):
+                out.extend(lines[i:j])
+                i = j
+                while i < len(lines) and lines[i].startswith("|"):
+                    old.append(lines[i])
+                    i += 1
             new = run(m.group(1))
         if old != new:
             changed.append(m.group(1))

@@ -12,6 +12,9 @@ by opening it, and print what the table says.
 
     ./dashboard-table --table ranking     # the default view, ranked
     ./dashboard-table --table components  # the same rows, per-source columns on
+    ./dashboard-table --table weights     # the same rows under each named preset
+    ./dashboard-table --table arena       # lmarena elo beside that rank
+    ./dashboard-table --table effective   # the index discounted by the fitted quant
     ./dashboard-table --json              # the rows themselves
 
 `--table ranking` is the page's default: text models, a quant that fits a 128gb
@@ -34,6 +37,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 PROBE = os.path.join(HERE, ".dashboard.js")
+# the board the composite weighs: style-controlled, so preference is not
+# rewarding length. the same one build-viewer reads the rating out of
+TEXT_BOARD = "text-overall-style_control"
 
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import pageboot  # noqa: E402
@@ -57,6 +63,12 @@ setTimeout(() => {
     retention: modelRetention(m),
     score: scored(m).value, have: scored(m).have, want: scored(m).want,
     ctx: fitContext(m),
+    ids: m.ids || {},
+    total_b: m.facts.params_total_b ?? null, active_b: activeB(m) ?? null,
+    // the raw intelligence index, unscaled by the quant discount, because the
+    // effective-II table prints both halves and the arithmetic between them
+    ii: m.facts && m.facets['aa.intelligence']
+      ? m.facets['aa.intelligence'].value : null,
     facets: Object.fromEntries(Object.keys(SCALED_COLUMNS).map(k =>
       [k, m.facets[SCALED_COLUMNS[k]]
           ? {value: facetValue(m, SCALED_COLUMNS[k]),
@@ -69,13 +81,39 @@ setTimeout(() => {
       ? ks.reduce((a, k) => a + facetPctRaw(m, k), 0) / ks.length : null)(
       Object.keys(m.facets).filter(k => k.startsWith('card.'))),
   }));
+  // the same ranking under each of the page's named weightings. this table was
+  // a SECOND composite in python for a long time, and it answered differently:
+  // it put glm-5.3-flash first where the page puts qwen3.8 flash next, in a
+  // document every other block of which is generated from the page. the
+  // weightings are the page's own presets rather than a set invented here, so
+  // "what if you weight coding" means on screen what it means in the document.
+  const presets = {};
+  Object.keys(PRESETS).forEach(name => {
+    if (name === 'clear') return;
+    W = PRESETS[name].w();
+    // the score is memoized per model and the memo is only valid for the
+    // weights it was computed under, so every preset has to drop it -- without
+    // this the five rows came out identical, which is what a second composite
+    // in python was invented to avoid saying
+    clearScores();
+    drawTable();
+    presets[name] = {
+      title: PRESETS[name].t,
+      top: sorted(visible()).slice(0, 4).map(m => ({short: m.short,
+                                                    score: scored(m).value})),
+    };
+  });
+  W = {...D.weights};
+  clearScores();
+  drawTable();
+
   // exit only once the payload has actually left: node's stdout to a PIPE is
   // async, so `console.log` followed by `process.exit` truncates at the pipe
   // buffer. this payload passed 8192 bytes when a quant note grew, and the
   // reader got `Unterminated string ... column 8191` rather than a short read
   process.stdout.write(JSON.stringify({
     weights: D.weights, hardware: {budget, reserve, minCtx, cap, floor},
-    effective, rows,
+    effective, rows, presets,
   }), () => process.exit(0));
 }, 0);
 """
@@ -118,10 +156,81 @@ def table_components(d):
             r["have"], r["want"]))
 
 
+def table_weights(d):
+    """How far the ranking moves when the reader picks a different question.
+
+    The page's own presets, run through the page. Each is a whole answer to
+    "what is quality" rather than a nudge, which is why the rows can disagree
+    about first place and that is the point of printing them.
+    """
+    print("| weighting | top four |")
+    print("|---|---|")
+    for name, got in d["presets"].items():
+        top = ["%s %s" % (m["short"], num(m["score"], 1)) for m in got["top"]]
+        lead = "**%s**" % top[0] if top else "-"
+        print("| %s | %s |" % (got["title"], " > ".join([lead] + top[1:])))
+
+
+def table_arena(d):
+    """Human preference, beside the rank the rest of the document uses.
+
+    The rank column was a second composite's answer for a while, which is the
+    worst version of a stale table: the elo and the votes beside it were the
+    page's and the rank was not.
+    """
+    lm = json.load(open(os.path.join(HERE, "data", "lmarena.json")))["boards"]
+    text, web = lm.get(TEXT_BOARD) or {}, lm.get("webdev-overall-raw") or {}
+
+    def find(board, mid):
+        return next((e for e in board.get("entries") or []
+                     if e.get("modelDisplayName") == mid), {})
+
+    print("| model | composite rank | text elo | votes | webdev elo |")
+    print("|---|--:|--:|--:|--:|")
+    for r in d["rows"]:
+        mid = (r["ids"] or {}).get("lmarena")
+        t, w = (find(text, mid), find(web, mid)) if mid else ({}, {})
+        print("| %s | %d | %s | %s | %s |" % (
+            r["short"], r["rank"], num(t.get("rating"), 0),
+            "{:,}".format(t["votes"]) if t.get("votes") else "-",
+            num(w.get("rating"), 0)))
+
+
+def table_effective(d):
+    """What each model is worth at the quant that fits, from the page's fit.
+
+    Sorting by raw intelligence index instead would imply quantization is free,
+    which is the thing this document exists to disprove. The quant, the bits per
+    weight and the retention are the page's, so the rung named here is the rung
+    it names everywhere else -- this table used to answer with a second one,
+    fitted against a flat budget rather than each model's own kv cache.
+    """
+    print("| model | total / active | quant | size (gib) | bpw | AA II | retention "
+          "| effective II |")
+    print("|---|---|---|--:|--:|--:|--:|--:|")
+    rows = sorted(d["rows"], key=lambda r: (r["ii"] is not None,
+                                            (r["ii"] or 0) * (r["retention"] or 1)),
+                  reverse=True)
+    for r in rows:
+        shape = "%gb / %s" % (r["total_b"] or 0,
+                              "%gb" % r["active_b"] if r["active_b"] else "?")
+        eff = None if r["ii"] is None else r["ii"] * (r["retention"] or 1)
+        print("| %s | %s | %s | %s | %s | %s | %.3f | **%s** |" % (
+            r["short"], shape, r["quant"] or "-", num(r["gib"]), num(r["bpw"], 2),
+            num(r["ii"]), r["retention"] or 1.0, num(eff)))
+
+
+TABLES = {"ranking": table_ranking, "components": table_components,
+          "weights": table_weights, "arena": table_arena,
+          "effective": table_effective}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--table", choices=["ranking", "components"], default="ranking")
+    ap.add_argument("--table", default="ranking",
+                    choices=["ranking", "components", "weights",
+                             "arena", "effective"])
     ap.add_argument("--json", action="store_true", help="the rows, unformatted")
     ap.add_argument("--keep", action="store_true", help="leave the probe on disk")
     args = ap.parse_args()
@@ -133,7 +242,7 @@ def main():
     if args.json:
         print(json.dumps(d, indent=1))
         return
-    {"ranking": table_ranking, "components": table_components}[args.table](d)
+    TABLES[args.table](d)
 
 
 if __name__ == "__main__":

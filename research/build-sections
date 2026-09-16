@@ -21,6 +21,7 @@ ranking, not two that agree most of the time.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -39,13 +40,60 @@ def registry():
     return yaml.safe_load(open(os.path.join(ROOT, "registry", "models.yaml")))["models"]
 
 
-def ranking():
-    """The dashboard's own rows, in the dashboard's own order."""
+def facets_for(repo):
+    """The facets a verdict's references render out of."""
+    try:
+        with open(USECASE) as f:
+            return ((json.load(f).get("models") or {}).get(repo) or {}).get("facets") or {}
+    except (IOError, ValueError):
+        return {}
+
+
+def verdict(v, repo):
+    """One assessed block with its figures rendered.
+
+    The judgements name their figures rather than stating them -- see
+    research/verdicts.py -- so the number this document prints is read from the
+    capture on the build that prints it. Without this the markdown carries the
+    brace.
+    """
+    import verdicts as refs
+    facets = facets_for(repo)
+    out = {}
+    for name, value in (v or {}).items():
+        if isinstance(value, str):
+            out[name] = refs.render(value, facets, facets_for)[0]
+        elif isinstance(value, list):
+            out[name] = [refs.render(x, facets, facets_for)[0] if isinstance(x, str)
+                         else x for x in value]
+        else:
+            out[name] = value
+    return out
+
+
+def note_text(text, repo, quant=None):
+    """A registry note with its references rendered, for printing.
+
+    The figures are read out of the captures on the build that prints them, so
+    a note cannot be carrying a size the repo stopped having. See
+    research/notes.py for why that is not paranoia.
+    """
+    import notes
+    return notes.render(text, repo, quant, notes.load(), model=repo)[0]
+
+
+def dashboard():
+    """The page's own output: the rows, the weights and the box it assumed."""
     r = subprocess.run([os.path.join(HERE, "dashboard-table"), "--json"],
                        cwd=HERE, stdout=subprocess.PIPE, text=True)
     if r.returncode:
         sys.exit("!!! dashboard-table failed")
-    return json.loads(r.stdout)["rows"]
+    return json.loads(r.stdout)
+
+
+def ranking():
+    """The dashboard's own rows, in the dashboard's own order."""
+    return dashboard()["rows"]
 
 
 def assessed():
@@ -70,6 +118,24 @@ def wrap(text, width=78, indent=""):
     return "\n".join(out)
 
 
+LIST_ITEM = re.compile(r"^(\s*(?:[-*]|\d+\.)\s+)")
+
+
+def wrap_line(text):
+    """One layout line at the document's column.
+
+    A list item hangs under its marker, a block quote carries its marker down
+    every line, and a table or a fenced block is left exactly as written.
+    """
+    if text.startswith("> "):
+        return "\n".join("> " + l for l in wrap(text[2:], width=76).split("\n"))
+    found = LIST_ITEM.match(text)
+    if not found:
+        return text
+    indent = " " * len(found.group(1))
+    return wrap(text, indent=indent)[len(indent):]
+
+
 def section_verdicts(rows, a, s2r, reg):
     """One entry per ranked model: what it is for, and on what evidence."""
     for r in rows:
@@ -77,6 +143,7 @@ def section_verdicts(rows, a, s2r, reg):
         v = a.get(repo)
         if not v:
             continue
+        v = verdict(v, repo)
         print("#### %d. %s" % (r["rank"], r["short"]))
         print()
         print(wrap(v["one_liner"]))
@@ -99,7 +166,7 @@ def section_picks(rows, a, s2r, reg):
     """The top of the ranking, in the order the dashboard puts it."""
     for r in rows[:PICKS]:
         repo = s2r.get(r["short"])
-        v = a.get(repo) or {}
+        v = verdict(a.get(repo) or {}, repo)
         m = reg.get(repo) or {}
         q = next((x for x in (m.get("quants") or []) if x.get("quant") == r["quant"]),
                  (m.get("quants") or [{}])[0])
@@ -113,7 +180,9 @@ def section_picks(rows, a, s2r, reg):
         if v.get("avoid_for"):
             body.append("avoid it for %s." % ", ".join(v["avoid_for"]))
         if q.get("note"):
-            body.append("on the quant: %s." % q["note"].rstrip("."))
+            body.append("on the quant: %s."
+                        % note_text(q["note"], q.get("repo") or repo,
+                                    q.get("file") or q.get("quant")).rstrip("."))
         if body:
             print()
             print(wrap(" ".join(body), indent="   "))
@@ -159,16 +228,180 @@ def section_missing(rows, a, s2r, reg):
         print("| %s | %s | %s |" % (short, ", ".join(ids) or "-", why))
 
 
+# what the ranking itself knows about a model, keyed so prose can reference it
+# the way it references a benchmark. the composite, the rung and the coverage
+# are the figures the summary sections argue from, and they are the ones that
+# moved under the summary while it went on quoting the old ones
+# (row key, unit, scale). the quant-adjusted columns are stored as shares and
+# printed as points, the same hundredfold the components table applies, so the
+# prose and the table beside it cannot disagree about which one a figure is
+DASH = {"quality": ("score", None, 1), "rank": ("rank", None, 1),
+        "gib": ("gib", "gib", 1), "bpw": ("bpw", "bpw", 1),
+        "measured": ("have", None, 1), "of": ("want", None, 1),
+        "ctx": ("ctx", None, 1)}
+DASH_FACET = {"scicode": (100, "points"), "tbench": (100, "points"),
+              "gbench": (1, None), "arena": (1, None), "swe": (1, "points")}
+
+
+# the forum columns a sentence argues from. `community.<forum>` already carries
+# mentions and approval; these are the two the "how often each model comes up"
+# table prints and the prose had to type, which is how it came to say a model
+# led on 311 mentions at a median percentile of 53 where the capture reads 198
+# and 33, and named the wrong model first
+FORUMS = {"reddit": "reddit-localllama", "hf": "hf-discussions"}
+FORUM_FIELDS = ("mentions", "top_level", "median_rel", "downvoted", "threads")
+
+
+def forum_facets(short):
+    """`reddit.mentions`, `hf.median_rel` and the rest, for one model."""
+    try:
+        with open(os.path.join(HERE, "data", "sentiment.json")) as f:
+            row = (json.load(f).get(short) or {}).get("by_source") or {}
+    except (IOError, ValueError):
+        return {}
+    out = {}
+    for name, source in FORUMS.items():
+        got = row.get(source) or {}
+        for field in FORUM_FIELDS:
+            if got.get(field) is not None:
+                out["%s.%s" % (name, field)] = {"value": got[field], "pct": None}
+    return out
+
+
+def with_dashboard(reg):
+    """facets_for, plus `dash.*` from the ranking the document is downstream of.
+
+    The dashboard is canonical for the ordering, so a sentence about who leads
+    has to read from it rather than restate it -- and restating it is how the
+    summary came to say the leader scored 87.4 above a table reading 79.1.
+    Nothing here carries a percentile: a rank is not a rank among ranks.
+    """
+    s2r = short_to_repo(reg)
+    page = dashboard()
+    # a section with no subject is about the document rather than about a
+    # model, and what it argues from is the settings the ranking was taken
+    # under. `box.reserve` is the case: the prose said 2 where the page had 12
+    doc = {"box." + k: {"value": v, "pct": None}
+           for k, v in (page.get("hardware") or {}).items()
+           if isinstance(v, (int, float))}
+    # `card.*` weights every card facet alike, and the star is not a character a
+    # reference can carry, so the family name is the key
+    doc.update(("weight." + re.sub(r"\.\*$", "", k).replace(".", "-"),
+                {"value": v, "pct": None})
+               for k, v in (page.get("weights") or {}).items())
+    extra = {}
+    for row in page["rows"]:
+        repo = s2r.get(row.get("short"))
+        if not repo:
+            continue
+        got = {"dash." + name: {"value": row[src] * scale, "pct": None,
+                                "unit": unit}
+               for name, (src, unit, scale) in DASH.items()
+               if row.get(src) is not None}
+        for name, (scale, unit) in DASH_FACET.items():
+            facet = (row.get("facets") or {}).get(name)
+            if facet and facet.get("value") is not None:
+                got["dash." + name] = {"value": facet["value"] * scale,
+                                       "pct": facet.get("pct"), "unit": unit}
+        for name in ("community", "card"):
+            if row.get(name) is not None:
+                got["dash." + name] = {"value": row[name], "pct": None}
+        extra[repo] = got
+
+    r2s = dict((repo, short) for short, repo in s2r.items() if short)
+
+    def resolve(repo):
+        if not repo:
+            return doc
+        return dict(facets_for(repo), **dict(forum_facets(r2s.get(repo) or ""),
+                                             **(extra.get(repo) or {})))
+    return resolve
+
+
+# the text roster's components, in the order the composite lists them, with what
+# each one IS. the weight beside them is read off the page rather than typed:
+# this table said 0.25 coding and 0.15 sentiment for a capture in which the page
+# had been running 0.30 and 0.05, two screens below a section quoting the page
+COMPONENTS = [
+    ("aa.scicode", "effective scicode", "AA scicode x quant retention"),
+    ("aa.terminalbench", "effective terminal-bench",
+     "AA terminal-bench 2.1 x quant retention"),
+    ("gbench.agentic", "GBENCH", "gert labs, agentic coding board where played"),
+    ("lmarena.rating", "lmarena", "style-controlled arena, human preference"),
+    ("swerebench.resolved", "swe-rebench",
+     "resolved rate on post-release task windows"),
+    ("community.*", "sentiment", "forum mention volume x reception"),
+    ("card.*", "model card", "what the vendor claims, bias-corrected"),
+]
+
+
+def section_weights():
+    """What the composite weighs, from the page that does the weighing."""
+    weights = dashboard().get("weights") or {}
+    print("| component | weight | source |")
+    print("|---|--:|---|")
+    for key, name, source in COMPONENTS:
+        if weights.get(key) is None:
+            continue
+        print("| %s | %.2f | %s |" % (name, weights[key], source))
+
+
+def section_prose(slug):
+    """One migrated section of MODELS.md, with its references resolved.
+
+    The words are source, in `models-md.json`, and the figures in them are read
+    from the capture on the build that prints them -- the same arrangement the
+    verdicts have. A number typed into the markdown could not be re-read, which
+    is how the qwen3.8 27b writeup came to quote an intelligence index the
+    capture had moved 18 points away from.
+    """
+    import verdicts as refs
+    with open(os.path.join(HERE, "models-md.json")) as f:
+        section = ((json.load(f).get("sections") or {}).get(slug)) or {}
+    if not section:
+        raise SystemExit("no section %r in models-md.json" % slug)
+    resolve = with_dashboard(registry())
+    facets = resolve(section.get("subject") or "")
+    for nth, para in enumerate(section.get("body") or []):
+        # a list entry is lines to emit verbatim -- a table or a bullet list,
+        # which is layout rather than a sentence and does not reflow
+        layout = isinstance(para, list)
+        if nth:
+            print()
+        for line in (para if layout else [para]):
+            text, missing = refs.render(line, facets, resolve)
+            if missing:
+                raise SystemExit("%s#%d references %s, which %s does not carry"
+                                 % (slug, nth, ", ".join(sorted(set(missing))),
+                                    section.get("subject") or "no subject"))
+            # a reference renders to a different width than the brace it
+            # replaced, so the column is a property of the output rather than
+            # of the source and the source stores one paragraph per line
+            print(wrap_line(text) if layout else wrap(text))
+
+
+SECTIONS = {"verdicts": section_verdicts, "picks": section_picks,
+            "roles": section_roles, "missing": section_missing}
+# takes no ranking rows, so it is dispatched apart from the four above
+TABLES = {"weights": section_weights}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--section", required=True,
-                    choices=["verdicts", "picks", "roles", "missing"])
+                    help="%s, or prose:<slug> for a section of MODELS.md that "
+                         "has moved into source"
+                         % ", ".join(sorted(list(SECTIONS) + list(TABLES))))
     args = ap.parse_args()
+    if args.section.startswith("prose:"):
+        return section_prose(args.section.split(":", 1)[1])
+    if args.section in TABLES:
+        return TABLES[args.section]()
+    if args.section not in SECTIONS:
+        raise SystemExit("no section %r" % args.section)
     reg = registry()
-    fn = {"verdicts": section_verdicts, "picks": section_picks,
-          "roles": section_roles, "missing": section_missing}[args.section]
-    fn(ranking(), assessed(), short_to_repo(reg), reg)
+    SECTIONS[args.section](ranking(), assessed(), short_to_repo(reg), reg)
 
 
 if __name__ == "__main__":

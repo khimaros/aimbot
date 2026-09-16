@@ -307,8 +307,8 @@ lines of one person's `--n-gpu-layers` is not a consensus. one thread can
 supply at most two of them.
 
 the TOP-LEVEL fields stay reddit-only and byte-identical to what they were.
-build-tables weights sentiment at 0.15 on a redundancy analysis measured
-against reddit alone, so widening the aggregate would have silently re-ranked
+the composite weights sentiment on a redundancy analysis measured against
+reddit alone, so widening the aggregate would have silently re-ranked
 MODELS.md; the other three forums are additive.
 
 `usecase.json` is the rollup a consumer reads instead of redoing these joins:
@@ -412,10 +412,11 @@ substitute: UD-* quants mix precisions per tensor, and gpt-oss-120b is within
 ## analysis
 
 ```
-./build-tables                     # the MODELS.md tables, from the committed json
-./build-tables --table score       # the composite ranking
-./build-tables --weights gbench=0.45,sentiment=0   # test its sensitivity
-./build-tables --budget 96         # or the memory budget's
+./build-tables                     # the MODELS.md size tables, from the committed json
+./build-tables --table speed       # decode estimates, bandwidth over active weights
+./build-tables --budget 96         # every table at a different memory budget
+./dashboard-table --table ranking  # the ranking, by RUNNING docs/index.html
+./dashboard-table --table weights  # the same rows under each of the page's presets
 ./analyze-task-mentions            # model/task co-occurrence counts from reddit
 ./analyze-task-mentions --task debugging   # the sentences behind one column
 ./analyze-task-mentions --sentiment        # reception, by thread-and-depth percentile
@@ -451,10 +452,12 @@ substitute: UD-* quants mix precisions per tensor, and gpt-oss-120b is within
 ./match-models --sources           # the same models keyed per data source
 ```
 
-the composite in `--table score` blends quant-adjusted AA coding and agentic
-with GBENCH, lmarena, swe-rebench, reddit sentiment and card claims, min-max
-normalized and weighted by the `WEIGHTS` dict at the top of `build-tables`
-(0.25 / 0.25 / 0.15 / 0.10 / 0.10 / 0.15 / 0.05).
+the composite is not here. it lives in `docs/index.html`, opens on the weights
+in `scripts/build-viewer`, and reaches MODELS.md through `./dashboard-table`,
+which boots the page under node and prints what it shows. this file carried a
+second one for a long time -- its own weights, its own normalization, its own
+flat memory budget -- and it disagreed with the page about first place inside a
+document generated from both.
 
 AA's *intelligence index* is deliberately not a component. regressed over the
 161 AA models carrying all three, `II ~ 0.406*coding + 0.413*agentic` with

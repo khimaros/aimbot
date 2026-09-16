@@ -4,11 +4,11 @@
   "in this repo can compute it, because it takes running the same model at two",
   "or more quants on the same benchmark at the same settings.",
   "",
-  "EMPTY ON PURPOSE. the sweeps that exist today cannot fill it: quantbench has",
-  "1269 scored trials across 15 configs, but only two models were run at more",
-  "than one quant and in both cases one arm has n<=2. a curve fitted to that",
-  "would be noise wearing a decimal point. the schema is here so a real sweep",
-  "drops in without touching the viewer.",
+  "MOSTLY EMPTY, and for a reason. the sweeps that exist here cannot fill it:",
+  "quantbench has 1269 scored trials across 15 configs, but only two models were",
+  "run at more than one quant and in both cases one arm has n<=2. a curve fitted",
+  "to that would be noise wearing a decimal point. what is here is published by",
+  "somebody who ran it.",
   "",
   "a point is [bits per weight, retention], where retention is the score at",
   "that quant over the score at the highest-precision arm of the SAME sweep --",
@@ -16,347 +16,454 @@
   "else is comparing two different measurements and calling the difference",
   "quantization.",
   "",
+  "A SWEEP MEASURES FILES, NOT A MODEL, so `curves[model]` is a LIST and every",
+  "entry names the `quant_repo` it ran. ISTA-DASLab scored their own GSQ-RCO",
+  "rungs of qwen3.8 27b and unsloth's UD rungs on the same three benchmarks and",
+  "the two differ by more than eight points of task average at 2.5 bpw -- so",
+  "there is no such thing as the curve for that model, and the page applies a",
+  "curve only to a rung out of the repo it was run on. one score curve per",
+  "(model, quant_repo): a second measurement of the same files belongs in the",
+  "note, where it can be read against the first rather than silently preferred.",
+  "",
   "what a usable entry looks like:",
   "",
-  "  \"deepseek-ai/DeepSeek-V4-Flash-0731\": {",
+  "  \"deepseek-ai/DeepSeek-V4-Flash-0731\": [{",
+  "    \"kind\": \"score\",",
+  "    \"quant_repo\": \"unsloth/DeepSeek-V4-Flash-0731-GGUF\",",
   "    \"points\": [[2.21, 0.778], [2.92, 0.919], [16.0, 1.0]],",
   "    \"metric\": \"aider polyglot pass rate\",",
   "    \"trials\": 580,",
   "    \"ref\": {\"source\": \"unsloth\", \"url\": \"https://...\", \"captured\": \"2026-08-17\"}",
-  "  }",
+  "  }]",
   "",
   "scripts/build-viewer validates these on the way through: bits per weight",
-  "ascending, retention in (0, 1], and at least two points. where a model has",
-  "no entry the page falls back to the median of the entries that do exist, and",
-  "to build-tables' fitted curve when there are fewer than MIN_CURVES of them.",
-  "the page says which of the three it used, every time."
+  "ascending, retention in (0, 1], at least two points, and a `quant_repo` on",
+  "every score curve. where a model has no entry the page falls back to the",
+  "median of the models that do have one, and to build-tables' fitted curve",
+  "when fewer than MIN_CURVES models do. the page says which of the three it",
+  "used, every time.",
+  "",
+  "bits per weight are FILE SIZE over total parameters, which is what the page",
+  "interpolates against. where a card states a bpw over the transformer weights",
+  "alone -- as ISTA's flash-next card does, holding the n-gram table out of the",
+  "search -- its figure is not that measure and is not what is written here."
  ],
- "version": 1,
+ "version": 2,
  "curves": {
-  "Qwen/Qwen3.8-27B": {
-   "kind": "score",
-   "metric": "terminal-bench 2.1 pass rate, 89 tasks, xhigh effort, 3h timeout",
-   "points": [
-    [
-     3.11,
-     0.904
+  "Qwen/Qwen3.8-27B": [
+   {
+    "kind": "score",
+    "quant_repo": "ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF",
+    "metric": "task average over aime25, gpqa-diamond and livecodebench v6",
+    "points": [
+     [
+      2.43,
+      0.9364
+     ],
+     [
+      2.67,
+      0.9747
+     ],
+     [
+      2.91,
+      0.9922
+     ],
+     [
+      3.39,
+      0.9981
+     ],
+     [
+      16.0,
+      1.0
+     ]
     ],
-    [
-     4.95,
-     1.0
+    "quants": [
+     "IQ2_XS",
+     "IQ2_S",
+     "IQ3_XXS",
+     "IQ3_S",
+     "BF16"
     ],
-    [
-     16.0,
-     1.0
-    ]
-   ],
-   "quants": [
-    "UD-Q2_K_XL",
-    "Q4_K_M",
-    "BF16"
-   ],
-   "ref": {
-    "source": "quesma",
-    "url": "https://quesma.com/blog/qwen38-27b-quantizations-benchmarked/",
-    "captured": "2026-09-08",
-    "note": "READ FROM A CHART. the article publishes its results as graphs and prose and prints no score for any arm, so these retentions are the midpoints of what it states verbally -- bf16 and Q4_K_M both at about 78% pass, UD-Q2_K_XL at about 70-71%. the FILE SIZES it prints are exact (55 / 17 / 10.7 GB against bf16) and the bits per weight are derived from them. treat the shape as measured and the third decimal as decoration. the same sweep ran GPQA diamond across five arms including UD-IQ1_S at 1.80 bpw, where it collapsed to roughly random guessing -- that is the only measurement anybody has published below two bits and it is NOT in these points, because mixing two benchmarks in one curve is the thing this file's schema forbids. it bounds what the curve below 3.11 bpw can claim rather than filling it in."
+    "ref": {
+     "source": "ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF",
+     "url": "https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF",
+     "captured": "2026-09-15",
+     "note": "the publisher benchmarked their own rungs and printed the table: aime25, gpqa-diamond and livecodebench v6 against the bf16 base, whose task average is 91.87. retention here is the mean of those three over that, so IQ3_S at 91.70 is 0.9981 -- task-lossless on two of the three and 0.51 down on the third. THE SAME SWEEP RAN UNSLOTH'S RUNGS, which is the only published comparison of two quant families under one harness, and it is why this file keys on the repo: UD-IQ2_S lands at 0.8524 where GSQ-RCO's 2.43 bpw rung is 0.9364, UD-Q2_K_XL at 0.9766, UD-IQ3_S at 0.9817. those three are NOT points here because they are another repo's files; they are the reason a curve may not be lent to one. bits per weight are the file bytes over 27.78b parameters, so they read a little under the card's own column, which excludes nothing but rounds."
+    }
+   },
+   {
+    "kind": "score",
+    "quant_repo": "unsloth/Qwen3.8-27B-GGUF",
+    "metric": "terminal-bench 2.1 pass rate, 89 tasks, xhigh effort, 3h timeout",
+    "points": [
+     [
+      3.11,
+      0.904
+     ],
+     [
+      4.95,
+      1.0
+     ],
+     [
+      16.0,
+      1.0
+     ]
+    ],
+    "quants": [
+     "UD-Q2_K_XL",
+     "Q4_K_M",
+     "BF16"
+    ],
+    "ref": {
+     "source": "quesma",
+     "url": "https://quesma.com/blog/qwen38-27b-quantizations-benchmarked/",
+     "captured": "2026-09-08",
+     "note": "READ FROM A CHART. the article publishes its results as graphs and prose and prints no score for any arm, so these retentions are the midpoints of what it states verbally -- bf16 and Q4_K_M both at about 78% pass, UD-Q2_K_XL at about 70-71%. the FILE SIZES it prints are exact (55 / 17 / 10.7 GB against bf16) and the bits per weight are derived from them. treat the shape as measured and the third decimal as decoration. the same sweep ran GPQA diamond across five arms including UD-IQ1_S at 1.80 bpw, where it collapsed to roughly random guessing -- that is the only measurement anybody has published below two bits and it is NOT in these points, because mixing two benchmarks in one curve is the thing this file's schema forbids. it bounds what the curve below 3.11 bpw can claim rather than filling it in."
+    }
    }
-  },
-  "Qwen/Qwen3.8-Flash-Next": {
-   "kind": "proxy",
-   "metric": "kl divergence",
-   "better": "lower",
-   "points": [
-    [
-     3.22,
-     0.39607
+  ],
+  "Qwen/Qwen3.8-Flash-Next": [
+   {
+    "kind": "score",
+    "quant_repo": "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF",
+    "metric": "task average over aime25, gpqa-diamond and livecodebench v6",
+    "points": [
+     [
+      2.95,
+      0.9565
+     ],
+     [
+      3.02,
+      0.9575
+     ],
+     [
+      3.37,
+      0.9941
+     ],
+     [
+      16.0,
+      1.0
+     ]
     ],
-    [
-     3.31,
-     0.314739
+    "quants": [
+     "Q2_0",
+     "IQ2_XS",
+     "IQ3_XXS",
+     "BF16"
     ],
-    [
-     3.51,
-     0.224607
+    "ref": {
+     "source": "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF",
+     "url": "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF",
+     "captured": "2026-09-15",
+     "note": "the same three benchmarks against a bf16 base whose task average is 93.12, so IQ3_XXS at 92.57 is 0.9941. the two rungs below it land within a tenth of a point of each other on task average by different routes -- Q2_0 is ahead on gpqa-diamond and behind on livecodebench v6 -- which is why the curve is nearly flat under 3.1 bpw rather than falling. bits per weight are the download bytes over 180b parameters, INCLUDING the n-gram shard, which the card's own bpw column excludes: its 2.40 for Q2_0 is over the transformer weights the search controls, and the 2.95 here is the whole file, which is what the page interpolates against. the unsloth proxy beside this entry is kl divergence on another repo's files and the two cannot be read against each other."
+    }
+   },
+   {
+    "kind": "proxy",
+    "metric": "kl divergence",
+    "better": "lower",
+    "quant_repo": "unsloth/Qwen3.8-Flash-Next-GGUF",
+    "points": [
+     [
+      3.22,
+      0.39607
+     ],
+     [
+      3.31,
+      0.314739
+     ],
+     [
+      3.51,
+      0.224607
+     ],
+     [
+      3.64,
+      0.16512
+     ],
+     [
+      4.0,
+      0.106504
+     ],
+     [
+      4.16,
+      0.08363
+     ],
+     [
+      4.95,
+      0.046893
+     ],
+     [
+      7.04,
+      0.030415
+     ],
+     [
+      7.52,
+      0.027091
+     ],
+     [
+      8.36,
+      0.026574
+     ]
     ],
-    [
-     3.64,
-     0.16512
+    "quants": [
+     "UD-IQ1_S",
+     "UD-IQ1_M",
+     "UD-Q2_K_XL",
+     "UD-IQ3_XXS",
+     "UD-Q3_K_XL",
+     "UD-IQ4_XS",
+     "UD-Q4_K_XL",
+     "UD-Q5_K_XL",
+     "UD-Q6_K_XL",
+     "Q8_0"
     ],
-    [
-     4.0,
-     0.106504
-    ],
-    [
-     4.16,
-     0.08363
-    ],
-    [
-     4.95,
-     0.046893
-    ],
-    [
-     7.04,
-     0.030415
-    ],
-    [
-     7.52,
-     0.027091
-    ],
-    [
-     8.36,
-     0.026574
-    ]
-   ],
-   "quants": [
-    "UD-IQ1_S",
-    "UD-IQ1_M",
-    "UD-Q2_K_XL",
-    "UD-IQ3_XXS",
-    "UD-Q3_K_XL",
-    "UD-IQ4_XS",
-    "UD-Q4_K_XL",
-    "UD-Q5_K_XL",
-    "UD-Q6_K_XL",
-    "Q8_0"
-   ],
-   "ref": {
-    "source": "unsloth",
-    "url": "https://unsloth.ai/docs/models/qwen3.8-next",
-    "note": "ten rungs of mean kl divergence and top-1 agreement against bf16, published on unsloth's docs site rather than on the card. the rows are the page's own search index, so the layout above is declared rather than read off a header"
+    "ref": {
+     "source": "unsloth",
+     "url": "https://unsloth.ai/docs/models/qwen3.8-next",
+     "note": "ten rungs of mean kl divergence and top-1 agreement against bf16, published on unsloth's docs site rather than on the card. the rows are the page's own search index, so the layout above is declared rather than read off a header"
+    }
    }
-  },
-  "inclusionAI/Ling-3.0-flash": {
-   "kind": "proxy",
-   "metric": "kl divergence",
-   "better": "lower",
-   "points": [
-    [
-     2.01,
-     0.2452
+  ],
+  "inclusionAI/Ling-3.0-flash": [
+   {
+    "kind": "proxy",
+    "metric": "kl divergence",
+    "better": "lower",
+    "quant_repo": "AtomicChat/Ling-3.0-flash-GGUF",
+    "points": [
+     [
+      2.01,
+      0.2452
+     ],
+     [
+      3.01,
+      0.0882
+     ],
+     [
+      4.02,
+      0.0481
+     ],
+     [
+      5.02,
+      0.0329
+     ],
+     [
+      6.02,
+      0.0318
+     ],
+     [
+      8.03,
+      0.0242
+     ]
     ],
-    [
-     3.01,
-     0.0882
+    "quants": [
+     "AD-IQ1_S",
+     "AD-IQ2_M",
+     "AD-IQ3_M",
+     "AD-IQ4_XXS",
+     "AD-Q4_K_S",
+     "AD-Q5_K_M"
     ],
-    [
-     4.02,
-     0.0481
-    ],
-    [
-     5.02,
-     0.0329
-    ],
-    [
-     6.02,
-     0.0318
-    ],
-    [
-     8.03,
-     0.0242
-    ]
-   ],
-   "quants": [
-    "AD-IQ1_S",
-    "AD-IQ2_M",
-    "AD-IQ3_M",
-    "AD-IQ4_XXS",
-    "AD-Q4_K_S",
-    "AD-Q5_K_M"
-   ],
-   "ref": {
-    "source": "AtomicChat/Ling-3.0-flash-GGUF",
-    "url": "https://huggingface.co/AtomicChat/Ling-3.0-flash-GGUF",
-    "note": "published kl divergence per quant on the card"
+    "ref": {
+     "source": "AtomicChat/Ling-3.0-flash-GGUF",
+     "url": "https://huggingface.co/AtomicChat/Ling-3.0-flash-GGUF",
+     "note": "published kl divergence per quant on the card"
+    }
    }
-  },
-  "poolside/Laguna-M.1": {
-   "kind": "proxy",
-   "metric": "perplexity",
-   "better": "lower",
-   "points": [
-    [
-     1.66,
-     17.029677
+  ],
+  "poolside/Laguna-M.1": [
+   {
+    "kind": "proxy",
+    "metric": "perplexity",
+    "better": "lower",
+    "quant_repo": "sigargv/Laguna-M.1-GGUF",
+    "points": [
+     [
+      1.66,
+      17.029677
+     ],
+     [
+      1.67,
+      20.45132
+     ],
+     [
+      2.4,
+      12.307893
+     ],
+     [
+      2.4,
+      12.470802
+     ],
+     [
+      2.45,
+      13.397426
+     ],
+     [
+      2.64,
+      12.101664
+     ],
+     [
+      2.95,
+      12.881872
+     ],
+     [
+      3.12,
+      11.36656
+     ],
+     [
+      3.49,
+      10.821543
+     ],
+     [
+      3.49,
+      11.210677
+     ],
+     [
+      3.49,
+      11.531644
+     ],
+     [
+      3.84,
+      11.246193
+     ],
+     [
+      4.29,
+      4.615172
+     ],
+     [
+      4.31,
+      4.598246
+     ],
+     [
+      4.54,
+      4.605535
+     ],
+     [
+      4.54,
+      4.617317
+     ],
+     [
+      4.56,
+      4.59969
+     ],
+     [
+      4.84,
+      4.602518
+     ],
+     [
+      5.29,
+      4.608804
+     ],
+     [
+      5.29,
+      4.608804
+     ],
+     [
+      5.52,
+      4.598543
+     ],
+     [
+      5.52,
+      4.624008
+     ],
+     [
+      5.52,
+      4.624008
+     ],
+     [
+      5.68,
+      4.607405
+     ],
+     [
+      6.58,
+      4.647079
+     ],
+     [
+      6.64,
+      4.633778
+     ],
+     [
+      8.51,
+      4.633481
+     ],
+     [
+      16.0,
+      4.683023
+     ]
     ],
-    [
-     1.67,
-     20.45132
+    "quants": [
+     "IQ1_S_R4",
+     "IQ1_S",
+     "IQ2_XS",
+     "IQ2_S",
+     "IQ2_K_R4",
+     "IQ2_M",
+     "Q2_K",
+     "IQ3_XXS",
+     "IQ3_S",
+     "IQ3_K_R4",
+     "Q3_K_S",
+     "Q3_K_M",
+     "IQ4_XS",
+     "IQ4_KS_R4",
+     "IQ4_NL",
+     "IQ4_K_R4",
+     "Q4_K_S",
+     "Q4_K_M",
+     "IQ5_KS",
+     "IQ5_KS_R4",
+     "Q5_K_S",
+     "IQ5_K",
+     "IQ5_K_R4",
+     "Q5_K_M",
+     "Q6_K",
+     "IQ6_K",
+     "Q8_0",
+     "BF16"
     ],
-    [
-     2.4,
-     12.307893
-    ],
-    [
-     2.4,
-     12.470802
-    ],
-    [
-     2.45,
-     13.397426
-    ],
-    [
-     2.64,
-     12.101664
-    ],
-    [
-     2.95,
-     12.881872
-    ],
-    [
-     3.12,
-     11.36656
-    ],
-    [
-     3.49,
-     10.821543
-    ],
-    [
-     3.49,
-     11.210677
-    ],
-    [
-     3.49,
-     11.531644
-    ],
-    [
-     3.84,
-     11.246193
-    ],
-    [
-     4.29,
-     4.615172
-    ],
-    [
-     4.31,
-     4.598246
-    ],
-    [
-     4.54,
-     4.605535
-    ],
-    [
-     4.54,
-     4.617317
-    ],
-    [
-     4.56,
-     4.59969
-    ],
-    [
-     4.84,
-     4.602518
-    ],
-    [
-     5.29,
-     4.608804
-    ],
-    [
-     5.29,
-     4.608804
-    ],
-    [
-     5.52,
-     4.598543
-    ],
-    [
-     5.52,
-     4.624008
-    ],
-    [
-     5.52,
-     4.624008
-    ],
-    [
-     5.68,
-     4.607405
-    ],
-    [
-     6.58,
-     4.647079
-    ],
-    [
-     6.64,
-     4.633778
-    ],
-    [
-     8.51,
-     4.633481
-    ],
-    [
-     16.0,
-     4.683023
-    ]
-   ],
-   "quants": [
-    "IQ1_S_R4",
-    "IQ1_S",
-    "IQ2_XS",
-    "IQ2_S",
-    "IQ2_K_R4",
-    "IQ2_M",
-    "Q2_K",
-    "IQ3_XXS",
-    "IQ3_S",
-    "IQ3_K_R4",
-    "Q3_K_S",
-    "Q3_K_M",
-    "IQ4_XS",
-    "IQ4_KS_R4",
-    "IQ4_NL",
-    "IQ4_K_R4",
-    "Q4_K_S",
-    "Q4_K_M",
-    "IQ5_KS",
-    "IQ5_KS_R4",
-    "Q5_K_S",
-    "IQ5_K",
-    "IQ5_K_R4",
-    "Q5_K_M",
-    "Q6_K",
-    "IQ6_K",
-    "Q8_0",
-    "BF16"
-   ],
-   "ref": {
-    "source": "sigargv/Laguna-M.1-GGUF",
-    "url": "https://huggingface.co/sigargv/Laguna-M.1-GGUF",
-    "note": "published perplexity per quant on the card"
+    "ref": {
+     "source": "sigargv/Laguna-M.1-GGUF",
+     "url": "https://huggingface.co/sigargv/Laguna-M.1-GGUF",
+     "note": "published perplexity per quant on the card"
+    }
    }
-  },
-  "upstage/Solar-Open2-250B": {
-   "kind": "proxy",
-   "metric": "perplexity",
-   "better": "lower",
-   "points": [
-    [
-     1.93,
-     7.717
+  ],
+  "upstage/Solar-Open2-250B": [
+   {
+    "kind": "proxy",
+    "metric": "perplexity",
+    "better": "lower",
+    "quant_repo": "prometheusAIR/Solar-Open2-250B-GGUF",
+    "points": [
+     [
+      1.93,
+      7.717
+     ],
+     [
+      3.05,
+      4.774
+     ],
+     [
+      4.35,
+      4.159
+     ],
+     [
+      6.57,
+      4.123
+     ]
     ],
-    [
-     3.05,
-     4.774
+    "quants": [
+     "IQ1_M",
+     "Q2_K",
+     "IQ4_XS",
+     "Q6_K"
     ],
-    [
-     4.35,
-     4.159
-    ],
-    [
-     6.57,
-     4.123
-    ]
-   ],
-   "quants": [
-    "IQ1_M",
-    "Q2_K",
-    "IQ4_XS",
-    "Q6_K"
-   ],
-   "ref": {
-    "source": "prometheusAIR/Solar-Open2-250B-GGUF",
-    "url": "https://huggingface.co/prometheusAIR/Solar-Open2-250B-GGUF",
-    "note": "published perplexity per quant on the card"
+    "ref": {
+     "source": "prometheusAIR/Solar-Open2-250B-GGUF",
+     "url": "https://huggingface.co/prometheusAIR/Solar-Open2-250B-GGUF",
+     "note": "published perplexity per quant on the card"
+    }
    }
-  }
+  ]
  }
 }

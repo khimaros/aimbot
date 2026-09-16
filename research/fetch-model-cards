@@ -442,12 +442,39 @@ def main():
     import yaml
     reg = yaml.safe_load(open(args.registry)).get("models") or {}
 
+    cards_dir = os.path.join(os.path.dirname(args.out) or ".", "cards")
+    kept = set()
+
+    def keep(repo, text):
+        """The publisher's own words, committed rather than cached.
+
+        The parsed tables below are what a table consumer wants; they are not
+        what a registry note quoting the card needs, and `research/.cache` is a
+        cache -- clearing it would make every quote in the document
+        uncheckable. So the body lands beside the chat templates, which are
+        committed for the same reason.
+        """
+        if not text:
+            return
+        clean, redacted = capture.scrub(text)
+        if redacted:
+            print("  redacted %d credential(s) in %s's card" % (redacted, repo),
+                  file=sys.stderr)
+        path = os.path.join(cards_dir, "%s.md" % repo.replace("/", "_"))
+        with open(path, "w") as f:
+            f.write(clean)
+        kept.add(repo)
+
+    if not os.path.isdir(cards_dir):
+        os.makedirs(cards_dir)
+
     out = {}
     for repo, m in reg.items():
         if "/" not in repo:
             continue
         text = get(RAW % repo, "card-%s" % repo.replace("/", "_"),
                    args.max_age, args.refresh)
+        keep(repo, text)
         # an entry is written even with no card at all: the hub metadata below
         # answers "what is this and who publishes it" for the image and speech
         # models, which have no benchmark table anywhere
@@ -466,13 +493,19 @@ def main():
                      "hub": hub_meta(repo, args.max_age, args.refresh),
                      "card_url": "https://huggingface.co/%s" % repo}
         # the quant repo is what actually gets run, and it does not always say
-        # the same thing as the base repo
-        qrepo = ((m.get("quants") or [{}])[0]).get("repo")
-        if qrepo:
+        # the same thing as the base repo. EVERY quant repo's body is kept, not
+        # just the first one's: a registry note hangs off a rung and quotes the
+        # card of the repo that rung came out of, and ISTA-DASLab's benchmark
+        # table is on the third entry of a ladder
+        for i, q in enumerate(m.get("quants") or []):
+            qrepo = q.get("repo")
+            if not qrepo or qrepo in kept:
+                continue
             qtext = get(RAW % qrepo, "qcard-%s" % qrepo.replace("/", "_"),
                         args.max_age, args.refresh)
+            keep(qrepo, qtext)
             qsets = sampler_sets(qtext)
-            if qsets:
+            if qsets and not i:
                 out[repo]["quant_repo"] = qrepo
                 out[repo]["quant_samplers"] = qsets
         print("  %-40s %d claimed, %d unmatched, %s summary, %d highlights"
@@ -484,8 +517,9 @@ def main():
                                          "cards")
     if not written:
         sys.exit(capture.refused(args.out, now, before, "cards"))
-    print("wrote %s: %d cards, %d with claims"
-          % (args.out, len(out), sum(1 for v in out.values() if v["claimed"])))
+    print("wrote %s: %d cards, %d with claims, %d bodies in %s"
+          % (args.out, len(out), sum(1 for v in out.values() if v["claimed"]),
+             len(kept), cards_dir))
 
 
 if __name__ == "__main__":

@@ -273,7 +273,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
   </div>
   <div class="controls">
     <span class="lbl">ranking</span>
-    <select id="preset" data-help="a named set of weights. `balanced` is build-tables' composite; the others reweight toward one question. changing any weight yourself moves this to `custom ranking`"></select>
+    <select id="preset" data-help="a named set of weights. `balanced` is the one this page and MODELS.md both open on; the others reweight toward one question. changing any weight yourself moves this to `custom ranking`"></select>
     <button id="factors-btn" aria-pressed="false" data-help="build your own weighting: one slider per measurement, grouped by what measured it. the ranking resorts as you drag, and a model missing a factor is scored as typical on it rather than zero or exempt">custom ranking</button>
     <button id="eff-btn" aria-pressed="true" data-help="off, the scores are what the source published. on, they answer `what would i get from the quant i can actually run`: a benchmark scores the model at the precision the scorer served, so the score is multiplied by the retention that quant's bits per weight predict and the percentiles are recomputed against the discounted cohort. only the coding and software-agent benchmarks are discounted, because the one sweep behind the curve measured a code-editing pass rate and nothing else -- every other number is published as-is and says why on hover. the curve itself is fitted to one model, deepseek v3.1 at 671b, and applied to all of them, which is the weakest step on this page. below its lowest measured rung at 2.21 bpw it stops falling and returns that value forever, so a one-bit quant reads as keeping 77.8%; the quality cell says so on hover where that happens, because the only sweep anybody has run that low found a 27b at chance.">quant adjusted</button>
   </div>
@@ -644,6 +644,12 @@ const fitsBudget = m => !budget || !m.quants.length || !!activeQuant(m);
 // rung, so its `quant:` is absent rather than holding the filename it used to.
 const hfTag = q => (q.quant || q.file);
 
+// who built the gguf, which is the repo's owner and usually NOT the model's
+// publisher: most rungs here are unsloth's or bartowski's work over somebody
+// else's weights, and whose build you are about to download is part of the
+// answer to which quant fits.
+const quantAuthor = q => (q.repo || '').split('/')[0];
+
 // every quant in the pinned repo that clears the budget, the ceiling and the
 // floor, largest first. same filter the fit uses, without the last step that
 // picks one -- so `every quant that fits` and `the one that fits` can never
@@ -724,13 +730,20 @@ function ppTps(m) {
   return flops && a !== undefined ? flops * 1e12 * FLOPS_EFFICIENCY / (2 * a * 1e9) : null;
 }
 
-// the curve for THIS model: its own measurement if somebody has made one, the
-// median of the measured curves once there are enough to have a middle, and
-// build-tables' fitted curve otherwise. which one answered is never hidden.
+// the curve for THIS model: its own measurement if somebody ran one ON THE RUNG
+// BEING SCORED, the median of the measured curves once enough models have one,
+// and build-tables' fitted curve otherwise. which one answered is never hidden.
+//
+// a sweep measures FILES, not a model. ISTA's card scores its own GSQ-RCO rungs
+// of qwen3.8 27b and unsloth's UD rungs over the same three benchmarks and they
+// differ by more than eight points of task average at 2.5 bpw, so lending one
+// family's curve to the other's rung would report a number nobody measured.
 function curveFor(m) {
   const r = D.retention;
-  const own = (r.measured || {})[m.repo];
-  if (own) return {points: own.points, kind: 'measured', src: own};
+  const own = (r.measured || {})[m.repo] || [];
+  const q = activeQuant(m);
+  const mine = own.find(c => q && c.quant_repo === q.repo) || own.find(c => !c.quant_repo);
+  if (mine) return {points: mine.points, kind: 'measured', src: mine};
   if (r.median && r.median.points) return {points: r.median.points, kind: 'median', src: r.median};
   return {points: r.fitted.points, kind: 'fitted', src: r.fitted};
 }
@@ -1052,12 +1065,12 @@ const COLUMNS = [
      return `<td class="n${full ? '' : ' warn'}">${ctxLabel(c)}</td>`;
    }},
   {k: 'quant', t: 'fits quant', num: false, get: m => (activeQuant(m) || {}).quant || '',
-   help: 'the quant being read. with a vram budget set, the largest that fits; otherwise the one the registry pins',
+   help: 'the quant being read, and who built it. with a vram budget set, the largest that fits; otherwise the one the registry pins',
    cell: m => {
      const q = activeQuant(m);
      if (!q) return '<td class="faint" title="nothing this repo publishes fits the budget">does not fit</td>';
-     // the publisher is on the operate tab, where you can act on it
-     return `<td title="${esc(q.repo)}">${esc(q.quant)}</td>`;
+     return `<td title="${esc(q.repo)}">${esc(q.quant)}`
+       + `<span class="sub"> ${esc(quantAuthor(q))}</span></td>`;
    }},
   {k: 'size', t: 'gib', num: true,
    get: m => activeQuant(m) ? activeQuant(m).gib + draftGib(m) : -1,
@@ -1626,11 +1639,16 @@ function drawEngines() {
             summarize(items, filters.engines, 'any runtime', 'runtimes'));
 }
 
+// a publisher capitalizes its own name however it likes -- `Qwen` beside
+// `google` -- and ascii order puts every capital ahead of every lowercase one,
+// which reads as two alphabets in one menu
+const byName = (a, b) => a.toLowerCase().localeCompare(b.toLowerCase());
+
 // every publisher on the roster, with how many models it has there
 function drawPublishers() {
   const counts = {};
   D.models.forEach(m => { counts[m.publisher] = (counts[m.publisher] || 0) + 1; });
-  const items = Object.keys(counts).sort().map(p => ({k: p, t: p, n: counts[p]}));
+  const items = Object.keys(counts).sort(byName).map(p => ({k: p, t: p, n: counts[p]}));
   drawMulti('pub-ms', 'data-pub', items, filters.pubs,
             summarize(items, filters.pubs, 'every publisher', 'publishers'));
 }
@@ -1862,12 +1880,12 @@ function methodology() {
     + ' measurement, and those percentiles are averaged using the weights you set'
     + ' under factors. scores are not comparable across sources -- an elo, a'
     + ' gscore and an index share no units -- and percentiles are.</p>'
-    + '<p>the weights it opens on are build-tables\' composite, set by a'
+    + '<p>the weights it opens on are set by a'
     + ' redundancy analysis rather than by taste: gbench is 96% predictable from'
     + ' artificial analysis, so it carries less than its apparent independence'
     + ' suggests, and lmarena and swe-rebench are in at 0.10 because they miss'
     + ' nine and thirteen of the roster respectively.</p>',
-    'weights and the reasoning: ' + src('research/build-tables', 'research/build-tables'))
+    'weights and the reasoning: ' + src('scripts/build-viewer', 'scripts/build-viewer'))
 
   + sec('the cohort is this registry',
     '<p>p79 on coding means it beat 79% of the registry models that also carry a'
@@ -2589,7 +2607,8 @@ function discountBlock(m) {
       + ' the table ranks</span>'
     : 'nothing fits the budget']);
   rows.push(['curve', c.kind === 'measured'
-    ? `<b>measured on this model</b> &middot; ${esc(c.src.metric)}`
+    ? `<b>measured on these files</b> &middot; ${esc(c.src.metric)}`
+      + ` &middot; ${esc(c.src.quant_repo || '')}`
     : c.kind === 'median'
       ? 'the median of every measured sweep'
       : `fitted &middot; ${esc(c.src.source || '')}`]);
@@ -2621,9 +2640,9 @@ function discountBlock(m) {
 // this is the only place they are shown: they drive the discount and were
 // otherwise visible as a shape in the arithmetic and nowhere as numbers.
 function measuredTable(m) {
-  const c = (D.retention.measured || {})[m.repo];
-  if (!c) return '';
-  return `<h3>measured on this model <span class="faint">${esc(c.metric)}</span></h3>`
+  return ((D.retention.measured || {})[m.repo] || []).map(c =>
+    `<h3>measured on this model <span class="faint">${esc(c.metric)}`
+    + `${c.quant_repo ? ', on ' + esc(c.quant_repo) : ''}</span></h3>`
     + '<table><thead><tr><th>quant</th><th class="n">bpw</th>'
     + '<th class="n">retention</th><th>source</th></tr></thead><tbody>'
     + c.points.map(([bpw, v], i) => `<tr><td>${esc((c.quants || [])[i] || '')}</td>`
@@ -2631,7 +2650,7 @@ function measuredTable(m) {
       + `<td class="n"><span class="bar" style="--w:${Math.round(100 * v)}%">`
       + `<span>${num(v * 100, 1)}%</span></span></td>`
       + (i ? '' : `<td rowspan="${c.points.length}">${refMark(c.ref)}</td>`)
-      + '</tr>').join('') + '</tbody></table>';
+      + '</tr>').join('') + '</tbody></table>').join('');
 }
 
 // NOTHING here reads the operate tab's chips, and that is the whole rule for
@@ -2648,11 +2667,12 @@ function tabQuantization(m) {
 }
 
 function sweepTable(m) {
-  const c = (D.retention.proxies || {})[m.repo];
-  if (!c) return '';
-  const worst = Math.max(...c.points.map(p => p[1]));
-  return `<h3>published quant sweep <span class="faint">${esc(c.metric)},`
-    + ` ${c.better} is better</span></h3>`
+  const all = (D.retention.proxies || {})[m.repo] || [];
+  if (!all.length) return '';
+  return all.map(c => {
+    const worst = Math.max(...c.points.map(p => p[1]));
+    return `<h3>published quant sweep <span class="faint">${esc(c.metric)},`
+    + ` ${c.better} is better${c.quant_repo ? ', on ' + esc(c.quant_repo) : ''}</span></h3>`
     + '<table><thead><tr><th>quant</th><th class="n">bpw</th>'
     + `<th class="n">${esc(c.metric)}</th><th>source</th></tr></thead><tbody>`
     + c.points.map(([bpw, v], i) => `<tr><td>${esc((c.quants || [])[i] || '')}</td>`
@@ -2660,7 +2680,8 @@ function sweepTable(m) {
       + `<td class="n"><span class="bar" style="--w:${Math.round(100 * v / worst)}%">`
       + `<span>${num(v, 4)}</span></span></td>`
       + (i ? '' : `<td rowspan="${c.points.length}">${refMark(c.ref)}</td>`)
-      + '</tr>').join('') + '</tbody></table>'
+      + '</tr>').join('') + '</tbody></table>';
+  }).join('')
     + '<p class="faint">this is not what `quant adjusted` multiplies by. it measures'
     + ' how far the quantized weights moved from full precision, not how much of a'
     + ' benchmark score survived, and there is no published mapping between the'

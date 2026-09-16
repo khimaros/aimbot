@@ -48,6 +48,67 @@ DATA = os.path.join(ROOT, "research", "data")
 TEMPLATE = os.path.join(HERE, "viewer.html")
 OUT_DIR = os.path.join(ROOT, "docs")
 
+sys.path.insert(0, os.path.join(ROOT, "research"))
+import notes  # noqa: E402  the reference vocabulary registry notes are written in
+
+
+import verdicts  # noqa: E402  the reference vocabulary the assessed prose uses
+
+
+@functools.lru_cache(maxsize=1)
+def note_data():
+    """The captures a note's references resolve against, read once."""
+    return notes.load(DATA)
+
+
+def rendered_notes(node, repo, quant=None):
+    """Every `note:` under one block, with its references rendered.
+
+    A note hangs off six different things -- the model, a quant, `runtime`,
+    `sampling.<profile>`, `speculative`, `thinking` -- and rendering only the
+    first two shipped `{card}` to the page verbatim on thirteen sampling notes.
+    The subject follows the structure the same way research/prose.py walks it:
+    a note under a quant means that file, and everything else means the model.
+    """
+    if isinstance(node, dict):
+        out = {}
+        for key, value in node.items():
+            if key in ("note", "notes") and isinstance(value, str):
+                out[key] = notes.render(value, repo, quant, note_data(),
+                                        model=repo)[0]
+            else:
+                out[key] = rendered_notes(value, repo, quant)
+        return out
+    if isinstance(node, list):
+        return [rendered_notes(v, repo, quant) for v in node]
+    return node
+
+
+def rendered_verdict(block, facets, other=None):
+    """One assessed block with its figures rendered out of the facets.
+
+    The verdicts name their figures -- `{aa.speed}` rather than `aa.speed p77`
+    -- so the number a reader sees comes off the capture on the build that
+    prints it. Shipped raw the page would print the brace, which is how this
+    was noticed. An unresolved reference is left in place by `verdicts.render`
+    rather than dropped, so a facet that stops existing is visible rather than
+    silently deleting the clause that rested on it.
+
+    `other(repo)` reaches the model a comparison is against, for the half of
+    "against 52.0" that used to be typed because a reference could only resolve
+    within one model.
+    """
+    out = {}
+    for name, value in (block or {}).items():
+        if isinstance(value, str):
+            out[name] = verdicts.render(value, facets, other)[0]
+        elif isinstance(value, list):
+            out[name] = [verdicts.render(v, facets, other)[0] if isinstance(v, str)
+                         else v for v in value]
+        else:
+            out[name] = value
+    return out
+
 # files in a quant repo that are not a quant of the model. the multimodal
 # projector and the mtp draft head ship beside the weights under their own
 # names, and offering either as something to serve would be an error a size
@@ -233,10 +294,51 @@ BRANCH = "master"
 HF = "https://huggingface.co/"
 GIB = 2 ** 30
 
-# weights the ranking opens with. these are build-tables' composite weights,
-# which were set by a redundancy analysis rather than by taste -- see its
-# WEIGHTS comment. the page lets a reader change every one of them, so this is
-# a starting point rather than a claim.
+# weights the ranking opens with, and the only place they are set. they lived in
+# research/build-tables beside a second composite that scored the same models a
+# second way and disagreed about first place; that one is retired and MODELS.md
+# is generated from this page, so the reasoning moved here with them. the page
+# lets a reader change every one, so this is a starting point rather than a
+# claim.
+#
+# each weight is what its source measures that the others do not.
+# research/analyze-correlations --redundancy is the input, and it is worth
+# re-running after a data refresh, because these are a property of the current
+# roster rather than constants:
+#
+#   source        r2 vs AA scicode+tbench    new info    n
+#   epoch ECI     0.876                      12%         16
+#   gbench        0.732                      27%         18
+#   lmarena       0.472                      53%         16
+#   swe-rebench   0.314                      69%         11
+#   sentiment     0.093                      91%         29
+#
+# GBENCH was on 0.35, the largest single weight, and is the source that agrees
+# with AA most after epoch. it keeps a premium over its 27% because HOW it
+# measures is a real property -- played rather than graded, so there is no public
+# problem set to train against -- but it can no longer outvote everything it
+# agrees with. its r2 was 0.961 against the AA indices that have since been
+# retired and is 0.730 against the two evals that replaced them, so this figure
+# was set against a number that no longer holds and is worth re-deriving.
+#
+# lmarena and swe-rebench miss 9 and 13 of the roster, which is why they enter at
+# 0.10 rather than higher: the composite renormalizes over present components, so
+# a low weight bounds how far an absence can move a rank. they are carried at all
+# because they are the two sources that disagree with AA the most, which is the
+# whole reason to have a second source.
+#
+# sentiment came down from 0.15 to 0.05 and the 0.10 went to AA. that one is
+# judgment against the table rather than from it: sentiment carries the most
+# information nobody else has, and it is also the least trustworthy measurement
+# here -- a blunt polarity lexicon over forum sentences, where "x is better than
+# y" scores positive for both. independence is a reason to carry it, not a reason
+# to let it move a rank by a sixth.
+#
+# the intelligence index is NOT a component. across the 168 AA models carrying
+# all three, II ~ 27.3*scicode + 35.6*terminalbenchV21 - 5.2 at R^2 0.896, so
+# adding it would count the same runs twice for a tenth of the variance. every
+# other AA field is >=0.82 rank-correlated with the index, which is why
+# artificial analysis is one axis of evidence here rather than fourteen.
 # a key ending in `.*` is a wildcard over every facet under it, averaged. card
 # claims and epoch runs are per benchmark, and a reader wants one knob for "how
 # much do i trust what the vendor says", not eleven. the forums are a wildcard
@@ -409,15 +511,15 @@ def retention_curve():
     disagree about what `effective` means.
     """
     mod = load_script("build_tables", os.path.join(ROOT, "research", "build-tables"))
-    all_curves = {k: check_curve(k, v)
+    all_curves = {k: [check_curve(k, c) for c in curves_of(v)]
                   for k, v in (load_json_at(CURVES).get("curves") or {}).items()}
     # only a ratio of benchmark scores can be a retention multiplier. a
     # perplexity or kl sweep says the quant moved the weights, not how much of
     # the score survived, and no published mapping turns one into the other --
     # so those ship for a reader to see and are never multiplied by anything.
-    measured = {k: v for k, v in all_curves.items() if v["kind"] == "score"}
-    proxies = {k: v for k, v in all_curves.items() if v["kind"] == "proxy"}
-    median = median_curve(list(measured.values()))
+    measured = of_kind(all_curves, "score")
+    proxies = of_kind(all_curves, "proxy")
+    median = median_curve(measured)
     return {
         # what a model with no measurement of its own gets, in order
         "fitted": {"points": mod.CURVE,
@@ -438,6 +540,33 @@ def retention_curve():
     }
 
 
+def unshipped_rungs(models, sizes):
+    """[(repo, quant, what the repo does have)] for a pin nobody published.
+
+    A rung whose lookup misses reaches the page with an empty size rather than
+    an error, so the registry can name a tier that does not exist and nothing
+    says so. `unsloth/Qwen3.5-397B-A17B-GGUF` publishes 29 of them and none is
+    `UD-Q2_K_XL`; the pin sat there until a note tried to reference its size.
+
+    This is the mirror of the `unnamed` report beside it -- that one names a
+    published file the ladder cannot offer, this one names an offered rung the
+    publisher never shipped -- and it is the direction that costs a reader.
+    """
+    out = []
+    for model in models.values():
+        for q in (model.get("quants") or []) + (model.get("components") or []):
+            have = sizes.get(q.get("repo")) or {}
+            if not have:
+                # a repo the size collector has never read is a different
+                # problem, and reporting every rung of it as missing would bury
+                # the one that is actually wrong
+                continue
+            if any(have.get(k) is not None for k in (q.get("file"), q.get("quant")) if k):
+                continue
+            out.append((q["repo"], q.get("quant") or q.get("file"), tuple(sorted(have))))
+    return [(repo, tag, list(have)) for repo, tag, have in sorted(set(out))]
+
+
 def load_json_at(path):
     try:
         with open(path) as f:
@@ -446,12 +575,31 @@ def load_json_at(path):
         return {}
 
 
+def curves_of(value):
+    """A model's curves, whether the file gives one or a list of them.
+
+    The file was keyed by model and held one curve each, which held while one
+    sweep per model existed. Two people have measured qwen3.8 27b and three of
+    qwen3.8 flash next's rungs, and a bare object is still accepted so a
+    hand-edit that forgets the brackets reads as the one curve it looks like.
+    """
+    return value if isinstance(value, list) else [value]
+
+
+def of_kind(all_curves, kind):
+    """{model: [curve]} for the models that have one of this kind."""
+    out = {k: [c for c in v if c["kind"] == kind] for k, v in all_curves.items()}
+    return {k: v for k, v in out.items() if v}
+
+
 def check_curve(repo, curve):
     """A curve has to be a curve, and a `score` one has to be a ratio.
 
     `proxy` curves carry perplexity or kl divergence, which are unbounded and
     usually fall as quality rises, so only the shape is checked. `score` curves
-    are the ones the viewer multiplies by, so their range is enforced.
+    are the ones the viewer multiplies by, so their range is enforced -- and so
+    is naming the gguf repo they ran, because that is what stops a measurement
+    of one quant family being charged to another's rung.
     """
     pts = curve.get("points") or []
     kind = curve.get("kind")
@@ -462,21 +610,28 @@ def check_curve(repo, curve):
     if [x for x, _ in pts] != sorted(x for x, _ in pts):
         sys.exit("!!! %s: points must ascend by bits per weight" % repo)
     if kind == "score":
+        if not curve.get("quant_repo"):
+            sys.exit("!!! %s: a score curve must name the `quant_repo` whose "
+                     "files it ran" % repo)
         for (_, y) in pts:
             if not 0 < y <= 1:
                 sys.exit("!!! %s: retention %r is not in (0, 1]" % (repo, y))
     return curve
 
 
-def median_curve(curves):
+def median_curve(measured):
     """The middle of the measured curves, sampled at the bpw they share.
 
     Averaging curves with different sample points would interpolate a shape
     nobody measured, so this reads each curve at a common grid and takes the
-    median there -- and only once there are enough of them to have a middle.
+    median there -- and only once enough MODELS have one. Counting curves would
+    let two sweeps of a single model stand in for a population, and the middle
+    of those two is that model rather than a middle of anything. For the same
+    reason a model contributes one curve however many it carries.
     """
-    if len(curves) < MIN_CURVES:
+    if len(measured) < MIN_CURVES:
         return None
+    curves = [v[0] for v in measured.values()]
     grid = sorted({x for c in curves for x, _ in c["points"]})
     out = []
     for x in grid:
@@ -559,7 +714,7 @@ def file_stem(name):
 
 
 def quant_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
-               tensors=None):
+               tensors=None, repo=None):
     """Each declared quant, with what it weighs and what that is per weight.
 
     A rung also carries whether a stock llama.cpp can load it. The ladder is
@@ -583,6 +738,13 @@ def quant_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
     for q in model.get("quants") or []:
         repo_sizes = sizes.get(q["repo"]) or {}
         row = dict(q)
+        # the note's references become figures HERE rather than being stored
+        # rendered, so what the page prints is read from the capture on the
+        # build that prints it. see research/notes.py
+        if row.get("note"):
+            row["note"], _ = notes.render(row["note"], q["repo"],
+                                          q.get("file") or q["quant"],
+                                          note_data(), model=repo)
         row["url"] = HF + q["repo"]
         # the size table is keyed by whatever the repo publishes: a quant tag
         # where the filenames carry one, the filename itself where they do not,
@@ -728,7 +890,7 @@ def build_model(repo, model, ctx):
     card = ctx["cards"].get(repo) or {}
     quants, _ = quant_rows(model, ctx["sizes"], ctx["known_quants"],
                            ctx["voices"], ctx.setdefault("unnamed", []),
-                           ctx["tensors"])
+                           ctx["tensors"], repo)
     quants = with_bpw(quants, facts.get("params_total_b"))
     name = model.get("name") or {}
     rec = {
@@ -738,18 +900,21 @@ def build_model(repo, model, ctx):
         "url": HF + repo,
         "entry_url": "%s/blob/%s/registry/models.yaml#L%d"
                      % (GITHUB, BRANCH, ctx["lines"].get(repo, 1)),
-        "notes": model.get("notes"),
-        "runtime": model.get("runtime") or {},
+        "notes": notes.render(model.get("notes"), repo, None,
+                              note_data(), model=repo)[0] or None,
+        "runtime": rendered_notes(model.get("runtime") or {}, repo),
         "engines": engines_for(model),
         "crispasr": crispasr_block(model, ctx["backends"]),
         "native_low_bpw": model.get("native_low_bpw"),
         "modalities": model.get("modalities") or {},
         "facts": facts, "quants": quants,
-        "components": model.get("components") or [],
-        "speculative": speculative(model, ctx["sizes"]),
-        "sampling": model.get("sampling") or {},
-        "thinking": model.get("thinking") or {},
-        "turns": model.get("turns") or {},
+        "components": [rendered_notes(c, c.get("repo") or repo,
+                                      c.get("file") or c.get("quant"))
+                       for c in (model.get("components") or [])],
+        "speculative": rendered_notes(speculative(model, ctx["sizes"]), repo),
+        "sampling": rendered_notes(model.get("sampling") or {}, repo),
+        "thinking": rendered_notes(model.get("thinking") or {}, repo),
+        "turns": rendered_notes(model.get("turns") or {}, repo),
         "templates": per_repo_templates(
             [repo] + [q["repo"] for q in (model.get("quants") or [])],
             ctx["probes"], model.get("thinking")),
@@ -760,7 +925,9 @@ def build_model(repo, model, ctx):
         "community": use.get("community") or {},
         "tasks": use.get("tasks") or {},
         "derived": use.get("derived") or {},
-        "assessed": use.get("assessed") or {},
+        "assessed": rendered_verdict(
+            use.get("assessed") or {}, use.get("facets") or {},
+            lambda r: ((ctx["usecase"].get("models") or {}).get(r) or {}).get("facets")),
         # `quant_repo` rides along because the two sampler sets are not
         # interchangeable: unsloth's page routinely documents different numbers
         # from the vendor's, and merging them loses which is which
@@ -822,6 +989,11 @@ def build():
         print("  note: %d published file(s) name no quant and are not offered as "
               "rungs:\n    %s" % (len(unnamed), "\n    ".join(unnamed)),
               file=sys.stderr)
+    # and the same check the other way, which is the direction that costs a
+    # reader: a rung the registry offers that the publisher never shipped
+    for repo, tag, have in unshipped_rungs(registry, ctx["sizes"]):
+        print("  note: %s pins %s, which that repo does not publish. it has: %s"
+              % (repo, tag, ", ".join(have[:8])), file=sys.stderr)
     meta = facet_meta(models)
     check_evidence(meta)
     return {

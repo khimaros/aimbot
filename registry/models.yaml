@@ -135,8 +135,9 @@ models:
       short: qwen-agentworld 35b a3b
       match: agent[\s-]*world
     notes: >-
-      a world model for agent environments rather than an assistant: it predicts the
-      next environment state. no benchmark in this corpus measures that, so it is
+      a world model for agent environments rather than an assistant: the card
+      {card} calls it "a native language world model trained for agentic
+      environment simulation", so what it predicts is the next environment state. no benchmark in this corpus measures that, so it is
       unranked rather than unrated.
     quants:
     - repo: unsloth/Qwen-AgentWorld-35B-A3B-GGUF
@@ -163,7 +164,7 @@ models:
         - tools
       thinking:
         source: tuned-here
-        note: "the card and generation_config both say temp 0.6, which `tool-use` takes. this is the same model at chat temperature, which is the split qwen documents rather than a disagreement with it"
+        note: "the card {card} and generation_config both say temp 0.6, which `tool-use` takes. this is the same model at chat temperature, which is the split qwen documents rather than a disagreement with it"
         temp: 1.0
         top_p: 0.95
         top_k: 20
@@ -618,13 +619,15 @@ models:
       speculative: false
     - repo: unsloth/Qwen3.6-27B-GGUF
       quant: Q8_0
-      note: the plain repo's Q8_0, which quantbench sweeps. 0.42gib smaller
-        than the -MTP- build of the same tag and cannot speculate
+      note: the plain repo's Q8_0, which quantbench sweeps. {gib} against
+        {gib@unsloth/Qwen3.6-27B-MTP-GGUF:Q8_0} for the -MTP- build of the same tag, and it
+        cannot speculate
       speculative: false
     - repo: unsloth/Qwen3.6-27B-MTP-GGUF
       quant: Q8_0
-      note: 'the -MTP- repo, NOT unsloth/Qwen3.6-27B-GGUF. identically-named files 0.42gib
-        apart: the mtp head is in the weights, so the plain repo cannot speculate at all'
+      note: 'the -MTP- repo, NOT unsloth/Qwen3.6-27B-GGUF. identically-named files, {gib}
+        here against {gib@unsloth/Qwen3.6-27B-GGUF:Q8_0} there: the mtp head is in the
+        weights, so the plain repo cannot speculate at all'
     runtime:
       arch: qwen35
       mainline: true
@@ -697,7 +700,7 @@ models:
       speculative: false
     - repo: unsloth/Qwen3.6-35B-A3B-GGUF
       quant: Q8_0
-      note: the plain repo's Q8_0, which quantbench sweeps
+      note: the plain repo's Q8_0 {card}, which quantbench sweeps
       speculative: false
     - repo: unsloth/Qwen3.6-35B-A3B-MTP-GGUF
       quant: Q8_0
@@ -769,8 +772,25 @@ models:
     - repo: unsloth/Qwen3.8-27B-GGUF
       quant: Q8_0
       note: measured +0.02% perplexity against bf16 over 580 chunks (ubergarm), so nothing
-        above it buys anything. non-UD quants shipped a broken chat template on release and
+        above it buys anything -- ubergarm's measurement, not unsloth's card {card}. non-UD quants shipped a broken chat template on release and
         were patched in place -- a copy pulled on 2026-08-14 or earlier needs refetching
+    - repo: ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF
+      quant: IQ3_S
+      file: Qwen3.8-27B-GSQ-RCO-IQ3_S-mtp.gguf
+      note: 'the small end of the same model at {gib} and {bpw}, and the only rung on this
+        roster whose publisher benchmarked it. ist austria assigns a quant type per TENSOR by
+        gradient search under a size budget rather than by recipe, and the card {card} calls
+        the output "standard GGUF and run unmodified in `llama.cpp`". they rate this rung
+        "Recommended; task-lossless" -- level with bf16 on aime25 and livecodebench v6, half a
+        point down on gpqa-diamond -- and the whole curve is in research/quant-curves.json
+        rather than recited here. the same sweep ran unsloth''s UD rungs on the same three
+        benchmarks, which is the only published comparison of two quant families under one
+        harness and the reason a curve there names the repo it measured. the file pinned is
+        the `-mtp` build against a plain {gib@IQ3_S}: the weights are identical and the
+        difference is the multi-token prediction head that the speculative: block below drafts
+        with, so the plain file would silently cost the model its draft. the mmproj is a
+        separate file and is what the image and video inputs need. card sizes are decimal gb
+        and read larger than the gib here'
     runtime:
       arch: qwen35
       mainline: true
@@ -785,7 +805,8 @@ models:
     speculative:
       type: draft-mtp
       n_max: 3
-      note: reported draft acceptance 0.546 at mean accepted run 2.64, so drafting more than
+      note: reported draft acceptance 0.546 at mean accepted run 2.64 -- reported by third
+        parties rather than by the card {card} -- so drafting more than
         3 spends compute on tokens that get discarded
     sampling:
       thinking:
@@ -817,8 +838,9 @@ models:
         - code
         - tools
         thinking: 'off'
-    notes: 'qwen3.6-27b''s architecture retrained, not a new one: same 64 layers, hidden 5120,
-      27.8b dense. the template defaults thinking to xhigh, which costs 15k-52k thinking tokens
+    notes: 'qwen3.6-27b''s architecture retrained, not a new one: same 64 layers, hidden
+      5120, 27.8b dense -- "a compact, deployment-friendly dense model" in the card''s
+      own words {card}. the template defaults thinking to xhigh, which costs 15k-52k thinking tokens
       in reported traces against qwen3.6''s 3k.'
     modalities:
       input:
@@ -849,6 +871,7 @@ models:
     quant_sweep:
       url: https://unsloth.ai/docs/models/qwen3.8-next
       source: unsloth
+      repo: unsloth/Qwen3.8-Flash-Next-GGUF
       columns: [quant, gb, top1, kld, delta]
       note: ten rungs of mean kl divergence and top-1 agreement against bf16, published on
         unsloth's docs site rather than on the card. the rows are the page's own search index,
@@ -856,34 +879,33 @@ models:
     quants:
     - repo: unsloth/Qwen3.8-Flash-Next-GGUF
       quant: UD-IQ4_XS
-      note: 'UD-IQ4_XS at 87.2gib rather than the UD-Q4_K_XL the viewer picks, and both fit --
-        93.2 and 109.7 resident with their 262144 caches, against a 117gib host budget. what
-        separates them is whether the model can SHARE the box: at 93.2 it hosts the ~20gib of
-        companions a host keeps beside it, at 109.7 it does not and goes solo. what the step up
-        buys is measured -- unsloth publishes top-1 agreement against bf16 for all ten rungs,
-        89.554% here against 92.255% at UD-Q4_K_XL, so 16.4gib is worth 2.7 points of token
-        agreement, and giving the box to one model. the tags overstate how
+      note: 'UD-IQ4_XS at {gib} rather than the {gib@UD-Q4_K_XL} UD-Q4_K_XL the viewer
+        picks. what the step up buys is measured -- unsloth publishes top-1 agreement against
+        bf16 for all ten rungs, 89.554% here against 92.255% there -- and what it costs is the
+        difference between the two, which on a box that has room for both decides whether the
+        model can SHARE it with the companions a host keeps resident. the tags overstate how
         far the ladder compresses: 41% of the model is an n-gram table whose 160-column rows take
-        only block-32 types, so nothing goes below ~4.25 bits and UD-IQ1_S is 3.22 bpw at 67.6gib
-        rather than anything like one. every rung is sharded 3-4 ways, and the card states
+        only block-32 types, so nothing goes below ~4.25 bits and UD-IQ1_S is {bpw@UD-IQ1_S} at {gib@UD-IQ1_S}
+        rather than anything like one. every rung is sharded 3-4 ways, and the card {card} states
         sizes in decimal gb, so its figures read ~7% larger than the gib this registry sizes in'
     - repo: agentionai/Qwen3.8-Flash-Next-AP-GGUF
       quant: AP-Q4_K_XL
       note: 'a second ladder, six tiers of one unsharded file each, stated in gib that match the
         bytes measured here -- so unlike the unsloth card these figures need no conversion. the
-        tier names are base ftype names and do NOT describe the experts, which the card says
-        outright and which is the trap: AP-IQ4_XS at 84.24gib runs IQ3_S 3.44-bit experts, a rung
+        tier names are base ftype names and do NOT describe the experts, which the card {card} says
+        outright and which is the trap: AP-IQ4_XS at {gib@AP-IQ4_XS} runs IQ3_S 3.44-bit experts, a rung
         BELOW the pinned unsloth file of the same name. AP-Q4_K_XL is the smallest published tier
-        whose experts (Q4_K 4.5) sit at or above it, and the card''s own default: 94.20gib, 100.2
-        resident with the 262144 cache, which lands inside the 16.4gib step unsloth leaves between
-        UD-IQ4_XS and UD-Q4_K_XL and costs 9.5gib less than the latter -- but at 100.2 it takes
+        whose experts (Q4_K 4.5) sit at or above it, and the card''s own default: {gib}, 100.2
+        resident with the 262144 cache, which lands inside the step unsloth leaves between
+        {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS} and
+        {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-Q4_K_XL}, and under the latter -- but at 100.2 it takes
         the box solo, which is the trade the pinned UD-IQ4_XS exists to avoid. the tier that would
-        match rung for rung, AP-IQ4_M at 88.04gib, is in the card table with no file in the repo.
+        match rung for rung, AP-IQ4_M at {gib@AP-Q4_K_M}, is in the card table with no file in the repo.
         none of its quality figures can be read against unsloth''s: they are kl divergence and
         top-1 against bf16 on a held-out corpus, chosen because the n-gram table has memorised
         wikitext -- the card scores the same file 6.9-8.6 points higher on wikitext than off it
         and says the gap widens as the quant shrinks. read the download column, not the card''s
-        vram column, which subtracts the 26.82gib n-gram table on the strength of -ot
+        vram column, which subtracts the n-gram table on the strength of -ot
         per_layer_token_embd=CPU -- that moves the table to system ram rather than removing it,
         and on a unified-memory host it removes nothing. the --ngram-on-disk, --ngram-io-threads,
         --ngram-cache and -mp/--model-ple the card runs on are not mainline flags; mainline marks
@@ -891,6 +913,24 @@ models:
         already reads that table from disk a row at a time, for these files and unsloth''s alike.
         the gguf header carries unsloth''s patched template byte for byte rather than qwen''s, so
         the turns: block below is derived from the same jinja these files ship'
+    - repo: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF
+      quant: IQ3_XXS
+      note: 'a third ladder, three rungs, and the only one whose publisher ran benchmarks
+        rather than a divergence metric: ist austria assigns a quant type per tensor by
+        gradient search under a size budget. the pinned rung is {gib} at {bpw}, well under the
+        pinned unsloth one, and their card {card} calls it "the strongest operating point",
+        just short of the bf16 task average -- level on aime25, half a point down on
+        gpqa-diamond and a point on livecodebench v6. the curve is in
+        research/quant-curves.json rather than recited here. every rung is two shards and the
+        second is byte-identical across all three: it is the same per_layer_token_embd table
+        at IQ4_NL the note above describes, held out of the search because its 160-column rows
+        take only block-32 types, and read "one row per token" off disk rather than resident.
+        Q2_0 at {gib@Q2_0} is the speed rung -- a mainline ggml type since b9913 that
+        "avoids lookup-table formats" altogether, and the card measures it delivering "3.4x
+        the prompt throughput" of the IQ2_XS rung beside it at {gib@IQ2_XS}, for a tenth of a
+        point of task average. none of these reads against the unsloth sweep above, kl
+        divergence and top-1 agreement rather than a benchmark. the mmproj is separate, and
+        card sizes are decimal gb'
     runtime:
       arch: qwen4exp
       mainline: true
@@ -932,8 +972,9 @@ models:
         - code
         - tools
         thinking: 'off'
-    notes: 'the vendor''s 125b and the hub''s 180b are one model counted two ways: 125b of
-      transformer with 6b active, plus a 51b n-gram embedding and a 4b mtp layer. the mtp layer
+    notes: 'the vendor''s 125b and the hub''s 180b are one model counted two ways, and the
+      card {card} spells out which: "125B with 6B activated, plus 51B n-gram embedding and
+      4B MTP". the mtp layer
       does not survive conversion -- llama.cpp''s converter drops it, and this gguf''s header
       carries no nextn tensor and no nextn key -- so unlike qwen3.8-27b there is nothing in the
       repo to draft with, and llama.cpp PR 27836 is what would change that. vision arrived after
@@ -968,7 +1009,9 @@ models:
       match: \bz[\s-]*image\b
     notes: >-
       stable-diffusion.cpp detects this as `VERSION_Z_IMAGE`, off the tensor
-      `cap_embedder.0.weight` its loader looks for, and the three files it wants
+      `cap_embedder.0.weight` its loader looks for -- the card {card} describes
+      "a powerful and highly efficient image generation model family with **6B**
+      parameters" -- and the three files it wants
       are the three roles below -- which is why the vae and the text encoder are
       carried as components rather than mentioned in prose.
 
@@ -1017,7 +1060,8 @@ models:
     notes: >-
       the cheap rung of the family: a 4b diffusion model against a qwen3 4b text
       encoder, where the 9b sibling wants qwen3 8b and `dev` wants a 24b
-      mistral. sd.cpp's own docs/flux2.md gives the three files and this entry
+      mistral. the card {card} calls it "a 4 billion parameter rectified flow
+      transformer" that "supports multi-reference editing". sd.cpp's own docs/flux2.md gives the three files and this entry
       is those three.
 
       distilled for few-step sampling -- upstream's example runs it at 4 steps
@@ -1054,8 +1098,8 @@ models:
       short: flux-2-klein-9b
       match: flux[\s.-]*2[\s.-]*klein[\s-]*9b|\bklein[\s-]*9b\b
     notes: >-
-      the larger klein, and the best-scoring open weights in this family that a
-      local runtime loads: 1140 on artificial analysis against the 4b's 1058,
+      the larger klein {card}, and the best-scoring open weights in this family
+      that a local runtime loads: 1140 on artificial analysis against the 4b's 1058,
       and the only flux row lmarena's image board marks open that is not `dev`.
 
       it costs a bigger text encoder as well as a bigger diffusion model --
@@ -1103,7 +1147,7 @@ models:
       pointing a business at it should read the licence rather than the flag.
 
       the stack is the other reason: sd.cpp wants a 24b mistral as the TEXT
-      ENCODER, so the three files are a 18gib diffusion model, a 320mib vae and
+      ENCODER, so the three files are a {gib@city96/FLUX.2-dev-gguf:Q4_0} diffusion model, a 320mib vae and
       a 24b llm. the klein entries buy most of the family's quality for a
       quarter of that, which is why they are the ones with a serving story.
     engine:
@@ -1112,7 +1156,7 @@ models:
     - repo: city96/FLUX.2-dev-gguf
       quant: Q4_K_S
       role: diffusion
-      note: 17.97 gib; the BF16 is 60 and nothing here would load it
+      note: '{gib}; the BF16 is {gib@BF16} and nothing here would load it'
     ids:
       aa-t2i: FLUX.2 [dev]
       lmarena-t2i: flux-2-dev
@@ -1139,10 +1183,10 @@ models:
     quants:
     - repo: unsloth/MiMo-V2.5-GGUF
       quant: UD-Q2_K_XL
-      note: 95.9 gib, the largest that fits 105
+      note: '{gib}, the step under {gib@UD-IQ3_S}'
     - repo: unsloth/MiMo-V2.5-GGUF
       quant: UD-IQ3_S
-      note: 107.0 gib, over a 105 gib host budget
+      note: '{gib}, the step above {gib@UD-Q2_K_XL}'
     runtime:
       arch: mimo2
       mainline: true
@@ -1225,13 +1269,15 @@ models:
       match: ornith[\s-]*(?:1\.0[\s-]*)?35b
     notes: >-
       qwen3.5-moe architecture despite the bare 35B in the name, and the vendor
-      publishes no active parameter count, so its speed cannot be estimated.
+      publishes no active parameter count, so its speed cannot be estimated. the
+      card {card} announces "a self-improving family of open-source models for
+      agentic coding" and no numbers this corpus can join to.
     quants:
     - repo: unsloth/Ornith-1.0-35B-GGUF
       quant: Q8_0
     - repo: ornith-ai/Ornith-1.0-35B-GGUF
       quant: Q8_0
-      note: the vendor's own gguf repo
+      note: the vendor's own gguf repo {card}
     runtime:
       arch: qwen35moe
       mainline: true
@@ -1296,8 +1342,10 @@ models:
       short: ornith-1.0-9b
       match: ornith[\s-]*(?:1\.0[\s-]*)?\b9b\b
     notes: >-
-      the dense sibling of the 35b. no third-party suite carries either of them; the
-      hub download count is the only evidence there is.
+      the dense sibling of the 35b, from the same announcement -- "a
+      self-improving family of open-source models for agentic coding" {card}. no
+      third-party suite carries either of them; the hub download count is the only
+      evidence there is.
     quants:
     - repo: unsloth/Ornith-1.0-9B-GGUF
       quant: Q8_0
@@ -1367,14 +1415,15 @@ models:
       short: ornith 1.5 9b
       match: ornith[\s-]*1\.5[\s-]*\b9b\b
     notes: >-
-      dense, and the only ornith 1.5 whose q8_0 leaves room for anything else. the
-      card gives it its own sampler set rather than the family's -- temp 1.0 with
+      dense, and the smallest of the 1.5 line -- same release, "a major step
+      toward building foundation models through end-to-end self-improvement"
+      {card}. the card gives it its own sampler set rather than the family's -- temp 1.0 with
       presence_penalty 1.5 for general use, 0.6 and no penalty for code -- where
       the two larger siblings publish one set.
     quants:
     - repo: ornith-ai/Ornith-1.5-9B-GGUF
       quant: Q8_0
-      note: the vendor's own gguf repo; 9.1 gib
+      note: the vendor's own gguf repo; {gib}
     runtime:
       arch: qwen35
       mainline: true
@@ -1394,7 +1443,7 @@ models:
         - chat
         - code
         - tools
-        note: the card's "precise coding tasks" set
+        note: the card {card} calls this its "precise coding tasks" set
       thinking:
         source: quant-card
         temp: 1.0
@@ -1407,7 +1456,7 @@ models:
         - instruct
         - chat
         - reason
-        note: the card's "general tasks" set
+        note: the card {card} calls this its "general tasks" set
     ids:
       aa: ''
       gbench: ''
@@ -1438,15 +1487,17 @@ models:
       short: ornith 1.5 35b a3b
       match: ornith[\s-]*1\.5[\s-]*35b
     notes: >-
-      the size the 1.0 35b should have been: same 35b total, but the vendor now
-      publishes the active count, so its speed can be estimated where its
+      the size the 1.0 35b should have been, from a release the card {card}
+      frames as "a major step toward building foundation models through
+      end-to-end self-improvement": same 35b total, but the vendor now publishes
+      the active count, so its speed can be estimated where its
       predecessor's could not. hybrid attention -- 30 linear layers to 10 full,
       one full every fourth -- so its cache is far smaller than the layer count
       suggests.
     quants:
     - repo: ornith-ai/Ornith-1.5-35B-A3B-GGUF
       quant: Q8_0
-      note: the vendor's own gguf repo; 35.2 gib
+      note: the vendor's own gguf repo; {gib}
     runtime:
       arch: qwen35moe
       mainline: true
@@ -1511,16 +1562,16 @@ models:
       short: ornith 1.5 397b
       match: ornith[\s-]*1\.5[\s-]*397b
     notes: >-
-      512 experts, 10 active. the smallest rung published is q4_k_m at 227 gib,
-      so nothing here fits a local box -- carried because it is the head of the
-      family the two runnable sizes come from, and the card's claims are what
+      512 experts, 10 active. the smallest rung published is q4_k_m at
+      {gib@ornith-ai/Ornith-1.5-397B-GGUF:Q4_K_M} -- carried because it is the head of the
+      family the two runnable sizes come from, and the card {card} claims are what
       they get compared against. the vendor publishes no active parameter count
       for this one, unlike the 35b a3b beside it, so its speed cannot be
       estimated either.
     quants:
     - repo: ornith-ai/Ornith-1.5-397B-GGUF
       quant: Q4_K_M
-      note: the smallest rung published, and still 227 gib
+      note: the smallest rung published, and still {gib}
     runtime:
       arch: qwen35moe
       mainline: true
@@ -1616,8 +1667,10 @@ models:
         - chat
         - reason
         - tools
-    notes: 'the card splits top_p by scenario: 0.95 for agentic, 1.0 otherwise. this
-      profile claims `tools`, so it takes the agentic number -- generation_config.json
+    notes: 'the card splits top_p by scenario: 0.95 for agentic, 1.0 otherwise. its own
+      benchmark runs used "the `max` reasoning effort level with `temperature =
+      1.0, top_p = 0.95`" {card}, which is the agentic case. this profile claims
+      `tools`, so it takes that number -- generation_config.json
       ships the 1.0, which is the other case rather than a correction of this one.'
     modalities:
       input:
@@ -1640,8 +1693,9 @@ models:
     name:
       short: deepseek v4.1 flash
       match: deepseek[\s-]*v?4\.1|dsv?4\.1
-    notes: 'released 2026-09-10. a 552b causal encoder-decoder -- 8b active in prefill, 16b in
-      decode -- beside a 196b engram lookup table the backbone count leaves out, so the
+    notes: 'released 2026-09-10, and measured by its own card {card} alone -- "All base
+      models are evaluated in our internal framework". a 552b causal encoder-decoder -- 8b
+      active in prefill, 16b in decode -- beside a 196b engram lookup table the backbone count leaves out, so the
       checkpoint is 763b of parameters in total. the release ships NO jinja chat template: the
       vendor''s prompt format is a python reference encoder in `encoding/` on the base repo.
       `turns:` and `thinking:` below are derived anyway, off a template vcruz305 wrote into
@@ -1670,36 +1724,34 @@ models:
           file ships no `output_hc_*` tensors, so a stock build accepts the arch string and
           then fails on the tensor table. the quantizer's own matrix records the same result
           from the other side, and says the file has not been run end to end on ANY runtime
-      note: 'the only complete gguf of this model: 157.33 gib over five shards, sha256 covered
-        and byte-reproducible over two runs. a routed-expert requant rather than a ladder rung
-        -- iq2_xxs on gate/up, q2_k on down, 2.25 bits per weight over the experts and native
+      note: 'the only complete gguf of this model: {gib} over five shards at {bpw}, sha256
+        covered and byte-reproducible over two runs per the card {card}. a routed-expert
+        requant rather than a rung -- iq2_xxs on gate/up and q2_k on down, against native
         precision everywhere else -- so the label carries `-mixed` the way avar6''s does. it is
         uncalibrated (no imatrix, unit importance) and it omits the two engram tables, the
         mtp/dspark blocks and the vision tensors, which is why the vision half of this entry is
         a fact about the checkpoint and not about this file. it is the pin because it is the
-        rung that is all there; the vcruz305 ladder below is the one to watch. the third
-        conversion on the hub is not a rung at all -- AMAImedia mirrors vcruz305''s three
-        shards beside the original safetensors'
+        rung that is all there; the vcruz305 ladder below is complete now and starts at
+        {gib@vcruz305/DeepSeek-V4.1-Flash-GGUF:Q2_K}, so it is a watch rather than an
+        alternative. the third conversion on the hub is not a rung
+        at all -- AMAImedia mirrors vcruz305''s shards beside the original safetensors'
     - repo: vcruz305/DeepSeek-V4.1-Flash-GGUF
       quant: Q2_K
       runtime:
         mainline: false
         tracking: https://github.com/ggml-org/llama.cpp/pull/28696
-        note: two reasons rather than one, and the second outlives the first. the v4.1 runtime
-          gap is the same one the pin above hits. beyond it, llama.cpp reads `split.count` and
-          refuses a split it cannot complete, so this file does not open on ANY build until the
-          remaining four shards land -- including the build the converter PR will eventually
-          produce
+        note: the v4.1 runtime gap, which is the same one the pin above hits. the second reason
+          this rung once carried is gone -- llama.cpp reads `split.count` and refuses a split it
+          cannot complete, and the pack is whole now
       note: 'carried to track the ladder, because this is the only conventional k-quant attempt
-        at the model and the community is waiting on it. it is 3 of 7 shards. that is the file''s
-        own claim rather than a reading of the filenames: shard 1 declares `split.count` 7 and
-        `split.tensors.count` 1046, and the three uploaded shards hold 71, 236 and 76 of those
-        tensors -- 383, or 37% of the model, in 95.75 gib. DISTRUST THE SIZE on this rung. 95.75
-        gib is 37% of a pack rather than a rung that fits a 128gb box, and it is the one number
-        here that reads as good news. the card is behind the uploads and still says "weights are
-        not in this repo yet"; it announces q2_k_m, q3_k_m, q4_k_m and q5_k_m, where what has
-        landed is plain q2_k (`general.file_type` 10). the header agrees with the pin on
-        `deepseek4`, so the derived block below is unaffected by carrying this'
+        at the model. the pack is complete now, at {gib}, and the ladder has grown to four
+        rungs -- Q3_K_M at {gib@Q3_K_M}, Q4_K_M at {gib@Q4_K_M} and Q8_0 at {gib@Q8_0}, an order
+        above the pin beside it, so this entry is a watch rather than an offer. the rung
+        below Q2_K that the card announces does not exist -- the card
+        {card} announces q2_k_m and q5_k_m, neither of which has landed, and what is here is
+        plain q2_k (`general.file_type` 10). a Q1_0 rung was published and withdrawn between
+        sweeps. the header agrees with the pin on `deepseek4`, so the derived block below is
+        unaffected by carrying this'
     ids:
       aa: deepseek-v4-1-flash
       gbench: deepseek/deepseek-v4.1-flash
@@ -1780,8 +1832,8 @@ models:
       short: embeddinggemma-300m
       match: embedding[\s-]*gemma
     notes: >-
-      an embedding model: no chat template, no generative benchmark, and nothing here
-      scores it. carried so a consumer reading this registry for a retrieval slot
+      an embedding model {card}: no chat template, no generative benchmark, and
+      nothing here scores it. carried so a consumer reading this registry for a retrieval slot
       finds the repo and the quant rather than a gap.
     quants:
     - repo: unsloth/embeddinggemma-300m-GGUF
@@ -1794,7 +1846,7 @@ models:
     sampling:
       instruct:
         source: tuned-here
-        note: "an embedding model has no samplers to recommend and its card documents none; these are sampling.yaml's fallbacks, present so the entry validates"
+        note: "an embedding model has no samplers to recommend and its card {card} documents none; these are sampling.yaml's fallbacks, present so the entry validates"
         temp: 0.8
         top_p: 0.9
         top_k: 40
@@ -1820,8 +1872,8 @@ models:
       short: functiongemma-270m-it
       match: function[\s-]*gemma
     notes: >-
-      270m parameters, below the floor of every suite carried here. it emits function
-      calls and nothing else, which is why no coding index applies to it.
+      270m parameters {card}, below the floor of every suite carried here. it emits
+      function calls and nothing else, which is why no coding index applies to it.
     quants:
     - repo: unsloth/functiongemma-270m-it-GGUF
       quant: Q8_0
@@ -1833,7 +1885,7 @@ models:
     sampling:
       instruct:
         source: tuned-here
-        note: "no card documents samplers for it and it ships no generation_config.json"
+        note: "no card {card} documents samplers for it and it ships no generation_config.json"
         temp: 1.0
         top_p: 0.95
         top_k: 64
@@ -2006,8 +2058,8 @@ models:
     speculative:
       type: draft-mtp
       n_max: 6
-    notes: enable_thinking defaults to FALSE in this template, unlike the qwen and laguna
-      families where it defaults true.
+    notes: enable_thinking defaults to FALSE in this template {card}, unlike the qwen
+      and laguna families where it defaults true.
     ids:
       aa: gemma-4-31b
       gbench: google/gemma-4-31b-it
@@ -2186,8 +2238,9 @@ models:
       short: kokoro-v1
       match: kokoro
     notes: >-
-      the gguf is a TTS.cpp conversion by that project's author -- its card says
-      so in a sentence -- and the `role: model-path` on each rung is TTS.cpp's
+      the gguf is a TTS.cpp conversion by that project's author -- the model card
+      {card} is upstream's and documents the python path, `kokoro` over `misaki`,
+      rather than this one -- and the `role: model-path` on each rung is TTS.cpp's
       own flag name. crispasr has a kokoro backend too and would take the
       upstream weights, but not these files, so the runtime that reads what this
       registry pins is the one named here.
@@ -2232,7 +2285,9 @@ models:
       # each, so neither the generation nor the size can be left out
       match: granite[\s-]*4\.2[\s-]*30b
     notes: >-
-      dense, apache 2.0, and the first granite generation with a thinking mode.
+      dense, apache 2.0, and the first granite generation with a thinking mode;
+      the card {card} gives the shape as "a decoder-only dense transformer
+      architecture".
       the jump from 4.1 is not incremental -- AA intelligence 23.7 against 8.7,
       coding 29.9 against 10.4, terminal-bench 0.266 against 0.026 -- so 4.1 is
       superseded rather than a sibling worth carrying. 131k context where most
@@ -2240,7 +2295,7 @@ models:
     quants:
     - repo: ibm-granite/granite-4.2-30b-GGUF
       quant: Q8_0
-      note: ibm's own gguf repo; 29.0 gib, and the ladder runs down to q2_k at 10.1
+      note: ibm's own gguf repo; {gib}, and the ladder runs down to q2_k at 10.1
     runtime:
       arch: granite
       mainline: true
@@ -2289,14 +2344,15 @@ models:
       match: granite[\s-]*4\.2[\s-]*\b8b\b
     notes: >-
       the size that makes the family interesting here: AA intelligence 19.6
-      against the 30b's 23.7, at 145 tok/s against 75, and q8_0 is 8.7 gib. it
+      against the 30b's 23.7, at 145 tok/s against 75, and q8_0 is
+      {gib@ibm-granite/granite-4.2-8b-GGUF:Q8_0}. it
       was invisible to every discovery report this repo had, because the
       candidate filter's 20b floor drops it and no leaderboard cross-check
       existed until `resolve-ids --unclaimed`.
     quants:
     - repo: ibm-granite/granite-4.2-8b-GGUF
       quant: Q8_0
-      note: ibm's own gguf repo; 8.7 gib
+      note: ibm's own gguf repo; {gib}
     runtime:
       arch: granite
       mainline: true
@@ -2376,8 +2432,10 @@ models:
       short: qwen3-tts-0.6b-customvoice
       match: qwen3[\s.-]*tts[\s-]*(?:12hz[\s-]*)?0\.6b[\s-]*custom
     notes: >-
-      two conversions of one checkpoint, and they are not interchangeable. both
-      carry the same 480 talker tensors, but the khimaros conversion namespaces
+      two conversions of one checkpoint, and they are not interchangeable. the
+      card {card} describes "the **0.6B CustomVoice** variant, based on the
+      **12Hz** tokenizer" supporting "9 premium timbres". both conversions carry
+      the same 480 talker tensors, but the khimaros conversion namespaces
       its metadata `qwen3-tts` where crispasr reads `qwen3tts`, and its codec is
       a different model outright -- 448 tensors under `qwen3-tts-tokenizer`
       against 398 under `qwen3tts_codec`. crispasr reads every one of those keys
@@ -2410,7 +2468,7 @@ models:
       short: qwen3-tts-1.7b-base
       match: qwen3[\s.-]*tts[\s-]*(?:12hz[\s-]*)?1\.7b[\s-]*base
     notes: >-
-      see the 0.6b customvoice entry: the khimaros conversion's metadata
+      see the 0.6b customvoice entry {card}: the khimaros conversion's metadata
       namespace is `qwen3-tts` and crispasr reads `qwen3tts`, so only the cstr
       conversion carries a `crispasr:` block.
 
@@ -2453,7 +2511,8 @@ models:
       match: qwen3[\s.-]*tts[\s-]*(?:12hz[\s-]*)?1\.7b[\s-]*custom
     notes: >-
       the nine premium built-in speakers live in the weights, under
-      `qwen3tts.spk_names` in the cstr conversion. see the 0.6b customvoice
+      `qwen3tts.spk_names` in the cstr conversion; the card {card} counts "10
+      major languages" across the family. see the 0.6b customvoice
       entry for why only that conversion names a crispasr backend.
     quants:
     # cstr's first: it is what the host serves, what crispasr can load, and the
@@ -2484,7 +2543,7 @@ models:
       match: qwen3[\s.-]*tts[\s-]*(?:12hz[\s-]*)?(?:1\.7b[\s-]*)?voice[\s-]*design
     notes: >-
       voice design takes the style as prose through `--instruct` rather than
-      selecting a baked speaker. see the 0.6b customvoice entry for why only the
+      selecting a baked speaker {card}. see the 0.6b customvoice entry for why only the
       cstr conversion names a crispasr backend.
     quants:
     - repo: cstr/qwen3-tts-1.7b-voicedesign-GGUF
@@ -2521,8 +2580,8 @@ models:
       short: flux-1-dev
       match: flux[\s.-]*1[\s.-]*dev
     notes: >-
-      the model that made local diffusion worth doing, and the generation before
-      the FLUX.2 entries this roster already carries. leejet publishes the gguf,
+      the model that made local diffusion worth doing {card}, and the generation
+      before the FLUX.2 entries this roster already carries. leejet publishes the gguf,
       which matters here: he wrote stable-diffusion.cpp, so his conversions are
       the ones its loader is tested against.
 
@@ -2560,8 +2619,8 @@ models:
       short: flux-1-schnell
       match: flux[\s.-]*1[\s.-]*schnell|\bschnell\b
     notes: >-
-      the four-step distillation of the entry above, under apache 2.0 where the
-      dev weights are non-commercial -- which makes it the only flux on this
+      the four-step distillation of the entry above {card}, under apache 2.0 where
+      the dev weights are non-commercial -- which makes it the only flux on this
       roster a business can use without reading a licence first. same three-file
       stack and the same t5 encoder.
     engine:
@@ -2593,8 +2652,8 @@ models:
       short: sd3.5-large
       match: (?:stable[\s-]*diffusion|\bsd)[\s-]*3\.5
     notes: >-
-      the last stability model this roster has any path to, and the only MMDiT
-      here that is not a flux derivative. city96's conversion is the diffusion
+      the last stability model this roster has any path to {card}, and the only
+      MMDiT here that is not a flux derivative. city96's conversion is the diffusion
       half; sd3.5 wants three text encoders beside it -- t5-xxl, clip-l and
       clip-g -- where the flux entries want one, which is most of why it is the
       more awkward of the two stacks to serve.
@@ -2625,7 +2684,9 @@ models:
       match: ovis[\s-]*image
     notes: >-
       alibaba's ovis image model, and the newest family sd.cpp gained a
-      dedicated signature for. leejet publishes the only gguf. the base repo
+      dedicated signature for. the card {card} calls it "a 7B text-to-image
+      model specifically optimized for high-quality text rendering", which is
+      the axis it is carried for. leejet publishes the only gguf. the base repo
       moved: `AIDC-AI/Ovis-Image-7B` is what the conversion's card names and it
       307s to this one, which is where the weights are and what the key follows.
     engine:
@@ -2667,7 +2728,8 @@ models:
     notes: >-
       alibaba's wan, and the most-converted video model on the hub -- city96's
       conversions of this family run to six figures of downloads where the other
-      two here are in the thousands. fourteen rungs from BF16 down to Q3_K_S,
+      two here are in the thousands. the card {card} presents "a comprehensive
+      and open suite of video foundation models". fourteen rungs from BF16 down to Q3_K_S,
       which is the fullest quant ladder of any entry in this registry.
     engine:
     - stable-diffusion.cpp
@@ -2690,7 +2752,9 @@ models:
       match: \bltx[\s-]*video\b|\bltx\b(?![\s-]*2)
     notes: >-
       the small one: 2b against wan's 14b and hunyuan's 13b, which is what lets
-      it run where the others do not. the hub tags it image-to-video rather than
+      it run where the others do not. the card {card} claims it is "the first
+      DiT-based video generation model capable of generating high-quality videos
+      in real-time". the hub tags it image-to-video rather than
       text-to-video, so a consumer feeds it a frame and not only a prompt --
       `modalities.input` says text here because that is the interface sd.cpp
       exposes, and the picture is a separate argument rather than a modality
@@ -2716,7 +2780,9 @@ models:
       match: hunyuan[\s-]*video
     notes: >-
       tencent's video model, from the lab whose hy3 text model this roster also
-      carries. the 720p t2v build is the one city96 converted. its base repo has
+      carries -- the card {card} describes a "compressed latent space, which is
+      compressed through a Causal 3D VAE", which is why the vae is a separate
+      component below. the 720p t2v build is the one city96 converted. its base repo has
       799 downloads against wan's 42k, which says more about where the community
       went than about the weights.
     engine:
@@ -2810,8 +2876,8 @@ models:
     speculative:
       type: draft-dflash
       n_max: 15
-      note: dflash denoises a 16-token block in place and yields at most block_size-1, so
-        llama.cpp's default of 3 leaves most of it unused
+      note: dflash denoises a 16-token block in place and yields at most block_size-1
+        {card}, so llama.cpp's default of 3 leaves most of it unused
     sampling:
       thinking:
         source: generation-config
@@ -2827,8 +2893,11 @@ models:
         - reason
         - code
         - tools
-    notes: 'the only model here whose thinking knob is `reasoning_strength` rather than enable_thinking
-      or reasoning_effort. llama.cpp #26941 translates reasoning_effort to it, so a client
+    notes: 'the only model here whose thinking knob is `reasoning_strength` rather than
+      enable_thinking or reasoning_effort -- a local-first model by design, which
+      the card {card} states outright: "Muse Glimmer was optimized for local
+      deployment, and designed to run at practical speeds on consumer hardware
+      without sacrificing quality." llama.cpp #26941 translates reasoning_effort to it, so a client
       that speaks the common knob works against a recent build and silently does nothing against
       an older one.'
     ids:
@@ -2859,7 +2928,9 @@ models:
       match: fara[\s-]*(?:1\.5[\s-]*)?27b
     notes: >-
       a computer-use agent, not an assistant: it reads a browser through
-      screenshots -- no dom, no accessibility tree -- and emits click, type,
+      screenshots -- no dom, no accessibility tree -- and its card {card} carries
+      a warning worth repeating, "Don't run this model with unrestricted browser
+      access on a machine that" holds anything you mind losing -- and emits click, type,
       scroll and search as tool calls. supervised fine-tune of qwen3.5-27b, so
       it is the same shape and cache geometry as the base already carried here,
       and the card asks that it be run only under microsoft's own fara cli or
@@ -2869,8 +2940,8 @@ models:
     quants:
     - repo: bartowski/Fara1.5-27B-GGUF
       quant: Q8_0
-      note: 26.7 gib, plus a 0.9 gib mmproj -- the screenshots are the input, so
-        the vision sidecar is not optional for this one
+      note: '{gib}, plus the mmproj beside it -- the screenshots are the input, so
+        the vision sidecar is not optional for this one'
     runtime:
       arch: qwen35
       mainline: true
@@ -2879,7 +2950,7 @@ models:
     sampling:
       tool-use:
         source: tuned-here
-        note: the card publishes no sampler table, only an inference snippet
+        note: the card {card} publishes no sampler table, only an inference snippet
           that runs greedy, so this is read off example code. greedy is the
           right default for the job regardless -- a misread pixel coordinate
           is a click in the wrong place, and no amount of sampling recovers it
@@ -2948,8 +3019,10 @@ models:
       short: nemotron-3-nano-30b-a3b
       match: nemotron[\s-]*3[\s-]*nano[\s-]*30b
     notes: >-
-      only nvidia's own card measures the nano; no third party in this corpus carries
-      it, which is why it is sized rather than ranked.
+      only nvidia's own card {card} measures the nano; no third party in this
+      corpus carries it, which is why it is sized rather than ranked. that card is
+      also where the coverage claim lives, "English, German, Spanish, French,
+      Italian, and Japanese".
     quants:
     - repo: unsloth/Nemotron-3-Nano-30B-A3B-GGUF
       quant: Q8_0
@@ -3021,7 +3094,7 @@ models:
     sampling:
       tool-use:
         source: tuned-here
-        note: "the card says temp 1.0 across all tasks, tool calling included, and this roster runs it colder for deterministic tool-call rendering. `upstream-tool-use` beside it holds the card's own set"
+        note: "the card {card} says temp 1.0 across all tasks, tool calling included, and this roster runs it colder for deterministic tool-call rendering. `upstream-tool-use` beside it holds the card's own set"
         temp: 0.6
         top_p: 0.95
         top_k: 40
@@ -3118,7 +3191,7 @@ models:
     sampling:
       thinking:
         source: tuned-here
-        note: "openai documents these in its own docs rather than on the model card, so nothing in this corpus can check them"
+        note: "openai documents these in its own docs rather than on the model card {card}, so nothing in this corpus can check them"
         temp: 1.0
         top_p: 1.0
         top_k: 0
@@ -3131,9 +3204,11 @@ models:
         - reason
         - code
         - tools
-    notes: 'its template interpolates reasoning_effort into the prompt verbatim ("Reasoning:
-      <effort>") with no validation and defaults to medium, so an unrecognised level is silently
-      accepted rather than rejected.'
+    notes: 'its template interpolates reasoning_effort into the prompt verbatim -- the card
+      {card} says the level "can be set in the system prompts" -- with no
+      validation, and defaults to medium, so an unrecognised level is silently
+      accepted rather than rejected. the card offers "low, medium, high" and the
+      template will pass anything.'
     modalities:
       input:
       - text
@@ -3172,7 +3247,7 @@ models:
     sampling:
       thinking:
         source: tuned-here
-        note: "openai documents these in its own docs rather than on the model card, so nothing in this corpus can check them"
+        note: "openai documents these in its own docs rather than on the model card {card}, so nothing in this corpus can check them"
         temp: 1.0
         top_p: 1.0
         top_k: 0
@@ -3209,7 +3284,8 @@ models:
       match: whisper[\s-]*(?:large[\s-]*)?v3[\s-]*turbo|large[\s-]*v3[\s-]*turbo
     notes: >-
       the pinned files are whisper.cpp's own ggml conversions, so stock
-      whisper.cpp loads them as well as crispasr does -- the second runtime is
+      whisper.cpp loads them as well as crispasr does -- the card {card} is
+      openai's for the whole family and says nothing about either -- the second runtime is
       not a fork detail, it is where the weights came from. crispasr uses
       upstream's loader for this backend and no other.
     engine:
@@ -3254,7 +3330,7 @@ models:
     sampling:
       tool-use:
         source: tuned-here
-        note: "the weights ship temp 1.0 and top_p 1.0; this is the colder tool-use set, which the card does not speak to"
+        note: "the weights ship temp 1.0 and top_p 1.0; this is the colder tool-use set, which the card {card} does not speak to"
         temp: 0.7
         top_p: 0.95
         top_k: 0
@@ -3309,13 +3385,14 @@ models:
       short: laguna xs 2.1
       match: laguna[\s-]*xs[\s-]*2\.1
     notes: >-
-      the runnable end of the laguna line: 18.9 gib against the s's 105-ish, and
+      the runnable end of the laguna line:
+      {gib@poolside/Laguna-XS-2.1-GGUF:Q4_K_M} against the s's 105-ish, and
       the only size in the family the vendor publishes a gguf for itself. the
       ladder is two rungs, q4_k_m and bf16, with nothing in between.
     quants:
     - repo: poolside/Laguna-XS-2.1-GGUF
       quant: Q4_K_M
-      note: the vendor's own gguf repo; 18.9 gib, and the only rung under bf16
+      note: the vendor's own gguf repo; {gib}, and the only rung under bf16
     runtime:
       arch: laguna
       mainline: true
@@ -3367,12 +3444,13 @@ models:
       70 layers and 16 of 256 experts active, which is twice the s's routing at
       the same expert count. no vendor or first-tier gguf exists, so the only
       ladder is one uploader's, and it is the widest in the registry -- 27 rungs
-      from iq1_s at 43 gib to bf16 at 421.
+      from iq1_s at {gib@sigargv/Laguna-M.1-GGUF:IQ1_S} to bf16 at
+      {gib@sigargv/Laguna-M.1-GGUF:BF16}.
     quants:
     - repo: sigargv/Laguna-M.1-GGUF
       quant: Q3_K_M
-      note: 100.9 gib, the largest rung under a 105 gib budget. a single
-        uploader's repo, which is the only gguf of this model there is
+      note: '{gib}, the step under {gib@IQ4_KS_R4}. a single
+        uploader''s repo, which is the only gguf of this model there is'
     runtime:
       arch: laguna
       mainline: true
@@ -3429,10 +3507,10 @@ models:
     quants:
     - repo: unsloth/Step-3.7-Flash-GGUF
       quant: UD-IQ4_NL
-      note: 90.6 gib, the largest that fits 105
+      note: '{gib}, the step under {gib@UD-Q4_K_S}'
     - repo: unsloth/Step-3.7-Flash-GGUF
       quant: UD-Q4_K_S
-      note: 106.3 gib, over a 105 gib host budget
+      note: '{gib}, the step above {gib@UD-IQ4_NL}'
     runtime:
       arch: step35
       mainline: true
@@ -3447,7 +3525,7 @@ models:
     sampling:
       thinking:
         source: tuned-here
-        note: "no parseable sampler set on the card and no generation_config.json to compare against"
+        note: "no parseable sampler set on the card {card} and no generation_config.json to compare against"
         temp: 1.0
         top_p: 0.9
         top_k: 40
@@ -3480,10 +3558,10 @@ models:
     quants:
     - repo: unsloth/Inkling-Small-GGUF
       quant: UD-IQ3_S
-      note: the rung the dashboard's default fit lands on for a 128gb box
+      note: '{gib}, the step above {gib@UD-IQ3_XXS}'
     - repo: unsloth/Inkling-Small-GGUF
       quant: UD-Q3_K_XL
-      note: 111.3 gib, over a 105 gib host budget
+      note: '{gib}, the step above {gib@UD-IQ3_S}'
     runtime:
       arch: inkling
       mainline: false
@@ -3504,7 +3582,7 @@ models:
     sampling:
       thinking:
         source: tuned-here
-        note: "no parseable sampler set on the card and no generation_config.json to compare against"
+        note: "no parseable sampler set on the card {card} and no generation_config.json to compare against"
         temp: 1.0
         top_p: 1.0
         top_k: 40
@@ -3545,14 +3623,14 @@ models:
       match: inkling(?![\s-]*small)
     notes: >-
       the flagship the small is small relative to: bf16 is 1.76 tib and the
-      smallest published rung is 252 gib, so nothing here runs local. carried
+      smallest published rung is {gib@unsloth/inkling-GGUF:UD-IQ1_S}, so nothing here runs local. carried
       because four sources score it, which makes it the only measured statement
       of what inkling small gives up.
     quants:
     - repo: unsloth/inkling-GGUF
       quant: UD-IQ1_S
-      note: 251.6 gib, the smallest rung published, and still over any local
-        budget. carried for the comparison rather than the slot
+      note: '{gib}, the smallest rung published, an order above the runnable
+        sizes. carried for the comparison rather than the slot'
     runtime:
       arch: inkling
       mainline: false
@@ -3561,7 +3639,7 @@ models:
     sampling:
       thinking:
         source: tuned-here
-        note: no parseable sampler set on the card, the same as the small
+        note: no parseable sampler set on the card {card}, the same as the small
         temp: 1.0
         top_p: 1.0
         top_k: 40
@@ -3610,10 +3688,13 @@ models:
       match: qwen\s*-?3\.5[\s-]*397b|397b-?a17b
     quants:
     - repo: unsloth/Qwen3.5-397B-A17B-GGUF
-      quant: UD-Q2_K_XL
-      note: nothing in this repo fits a 105gib budget at a bpw worth running; carried
-        because four sources measure it, so it sets the ceiling the local models are
-        being compared against
+      quant: UD-IQ1_M
+      note: 'the smallest of 29 rungs, at {gib} and {bpw} over
+        {params_b}, with no tier between it and {gib@UD-IQ2_XXS}. this pin used to name UD-Q2_K_XL, a tier unsloth never published here:
+        the sizes capture had no such key and nothing noticed, because a rung that
+        resolves to no size reaches the page with no size rather than an error. carried
+        because four sources measure the model, so it sets the ceiling the local models
+        are compared against, and the card {card} is the ladder itself'
     runtime:
       arch: qwen35moe
       mainline: true
@@ -3663,7 +3744,7 @@ models:
     quants:
     - repo: AtomicChat/Ling-3.0-flash-GGUF
       quant: AD-Q6_K
-      note: no unsloth repo exists, so the AD-* quants are what there is
+      note: no unsloth repo exists, so the AD-* quants {card} are what there is
     runtime:
       arch: bailingmoe3
       mainline: true
@@ -3719,7 +3800,7 @@ models:
     quants:
     - repo: unsloth/Mistral-Medium-3.5-128B-GGUF
       quant: UD-Q6_K_XL
-      note: dense 128b, so it fits at 101.7gib but generates at dense-model speed
+      note: dense 128b at {gib}, and it generates at dense-model speed
     runtime:
       arch: mistral3
       mainline: true
@@ -3730,7 +3811,7 @@ models:
       # documents no top_k or min_p, so those fall back rather than be invented
       thinking:
         source: tuned-here
-        note: "the card documents no sampler set this collector can parse, and the repo ships no generation_config.json"
+        note: "the card {card} documents no sampler set this collector can parse, and the repo ships no generation_config.json"
         temp: 0.7
         top_p: 0.95
         tuned:
@@ -3765,7 +3846,7 @@ models:
     quants:
     - repo: unsloth/Kimi-K3-GGUF
       quant: UD-IQ1_S
-      note: 2.78t parameters; no quant of it fits this box. carried because all four
+      note: 2.78t parameters, and the smallest rung published is {gib}. carried because all four
         third-party sources score it, which makes it the reference point
     runtime:
       arch: kimi-k3
@@ -3775,7 +3856,7 @@ models:
     sampling:
       thinking:
         source: tuned-here
-        note: "no parseable sampler set on the card and no generation_config.json to compare against"
+        note: "no parseable sampler set on the card {card} and no generation_config.json to compare against"
         temp: 1.0
         top_p: 0.95
         top_k: 40
@@ -3818,7 +3899,7 @@ models:
     quants:
     - repo: bartowski/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF
       quant: Q8_0
-      note: no unsloth repo yet
+      note: no unsloth repo yet; these are nvidia's own {card}
     runtime:
       arch: nemotron_h_moe
       mainline: true
@@ -3869,12 +3950,13 @@ models:
       a qwen3.6-27b derivative, and the unpacked config confirms the shape: 64
       layers, 5120 wide, 4 kv heads at head_dim 256, and the same hybrid stack
       of 48 linear attention layers to 16 full. the gguf repo publishes two
-      rungs and nothing between them: Q1_0 at 1.13 bpw and F16 at 15.94.
+      rungs and nothing between them: Q1_0 at {bpw@prism-ml/Bonsai-27B-gguf:Q1_0} and F16 at
+      {bpw@prism-ml/Bonsai-27B-gguf:F16}.
     quants:
     - repo: prism-ml/Bonsai-27B-gguf
       quant: F16
-      note: the gguf repo is what runs; the entry is keyed on the unpacked
-        weights beside it, which carry the config.json every geometry fact here
+      note: the gguf repo is what runs; the entry is keyed on the unpacked weights
+        beside it {card}, which carry the config.json every geometry fact here
         comes from
     runtime:
       arch: qwen35
@@ -3884,7 +3966,7 @@ models:
     sampling:
       thinking:
         source: generation-config
-        note: "a binary-weight rebuild that publishes no sampler guidance; these are qwen3.6-27b's, which it derives from"
+        note: "a binary-weight rebuild whose card {card} publishes no sampler guidance; these are qwen3.6-27b's, which it derives from"
         temp: 1.0
         top_p: 0.95
         top_k: 20
@@ -3926,13 +4008,13 @@ models:
       short: ternary bonsai 27b
       match: ternary[\s-]*bonsai(?:[\s-]*27b)?\b(?![\s-]*\d)
     notes: >-
-      ternary weights, which the bits-per-weight retention curve does not model, so
-      any quant-adjusted score for it would be an extrapolation rather than a fit.
+      ternary weights {card}, which the bits-per-weight retention curve does not
+      model, so any quant-adjusted score for it would be an extrapolation rather than a fit.
     quants:
     - repo: prism-ml/Ternary-Bonsai-27B-gguf
       quant: F16
-      note: ternary weights, which the bpw retention curve in build-tables does not
-        model; treat its quant-adjusted scores as unreliable
+      note: ternary weights {card}, which the bpw retention curve in build-tables does
+        not model; treat its quant-adjusted scores as unreliable
     runtime:
       arch: qwen35
       mainline: true
@@ -3941,7 +4023,7 @@ models:
     sampling:
       thinking:
         source: generation-config
-        note: "a ternary-weight rebuild that publishes no sampler guidance; these are qwen3.6-27b's, which it derives from"
+        note: "a ternary-weight rebuild whose card {card} publishes no sampler guidance; these are qwen3.6-27b's, which it derives from"
         temp: 1.0
         top_p: 0.95
         top_k: 20
@@ -3992,8 +4074,11 @@ models:
     quants:
     - repo: AngelSlim/Hy3-GGUF
       quant: Q2_K_XL-mtp
-      note: tencent's own quant team. the -mtp files embed the draft head, so the
-        tag carries the suffix rather than naming a sidecar
+      file: Hy3-Q2_K_XL-mtp.gguf
+      note: tencent's own quant team {card}. the -mtp files embed the draft head, so the
+        tag carries the suffix rather than naming a sidecar. `file:` because the
+        size table keys the plain rungs by tag and the mtp builds by FILENAME,
+        and the tag alone resolved to nothing
     runtime:
       arch: hy_v3
       mainline: true
@@ -4049,8 +4134,8 @@ models:
     quants:
     - repo: prometheusAIR/Solar-Open2-250B-GGUF
       quant: Q2_K
-      note: dense 250b, so Q2_K is the only tag under budget and the bpw penalty at
-        that depth is most of why it ranks where it does
+      note: dense 250b, and at {gib} this is the smallest tag the uploader publishes
+        above IQ1_M; the bpw penalty at that depth is most of why it ranks where it does
     runtime:
       arch: solar-open2
       mainline: false
@@ -4064,7 +4149,7 @@ models:
     sampling:
       thinking:
         source: tuned-here
-        note: "the card says top_p 1.0; this roster runs 0.95"
+        note: "the card {card} says top_p 1.0; this roster runs 0.95"
         temp: 1.0
         top_p: 0.95
         top_k: 40
@@ -4100,7 +4185,7 @@ models:
     quants:
     - repo: unsloth/Qwen3.8-2.4T-A95B-GGUF
       quant: UD-Q1_0
-      note: the smallest rung published is 370 gib, so no quant of this fits any local box.
+      note: the smallest rung published is {gib}, an order above the runnable sizes.
         carried because it tops the open-weights board on both AA indices, which makes it the
         ceiling the runnable models are measured against
     runtime:
@@ -4130,8 +4215,10 @@ models:
         - code
         - tools
         thinking: xhigh
-    notes: 'thinking cannot be turned off: the card states every response begins with a `<think>`
-      block and the template ships no gate, so there is no `instruct` profile to declare. `reasoning_effort`
+    notes: 'thinking cannot be turned off. the card {card} is explicit -- "thinking cannot be
+      disabled. Every response will automatically begin with reasoning enclosed in"
+      a think block -- and the template ships no gate, so there is no `instruct`
+      profile to declare. `reasoning_effort`
       grades it low/medium/xhigh.'
     modalities:
       input:
@@ -4156,7 +4243,7 @@ models:
     quants:
     - repo: unsloth/DeepSeek-V4-Pro-0813-GGUF
       quant: UD-Q4_K_XL
-      note: unsloth has published two rungs so far and the smaller is 791 gib. sized to show
+      note: unsloth has published two rungs so far and the smaller is {gib}. sized to show
         the gap between the flagship and the flash release beside it
     runtime:
       arch: deepseek4
@@ -4180,8 +4267,9 @@ models:
         - reason
         - code
         - tools
-    notes: 'same split as the flash release: the card recommends top_p 0.95 for agentic use
-      and 1.0 otherwise, and this profile claims `tools`, so it takes the agentic number. generation_config.json
+    notes: 'same split as the flash release: the card''s own benchmark runs used "the `max`
+      reasoning effort level with `temperature = 1.0, top_p = 0.95`" {card}, which
+      is the agentic case, and this profile claims `tools`, so it takes that number. generation_config.json
       ships the 1.0, which is the other case rather than a correction of this one.'
     modalities:
       input:
@@ -4207,7 +4295,7 @@ models:
     quants:
     - repo: unsloth/MiniMax-M3-GGUF
       quant: UD-IQ1_M
-      note: 428b total; the smallest rung is 120 gib, so it clears a 128gb box only with nothing
+      note: 428b total; the smallest rung is {gib}, so it clears a 128gb box only with nothing
         left for context. the roster carries it for the comparison rather than to run
     runtime:
       arch: minimax-m3
@@ -4253,9 +4341,9 @@ models:
       match: glm[\s-]*5\.3[\s-]*flash
     notes: >-
       on the hub since 2026-08-25. 321b of parameters over 288 experts with 8 active, which
-      the card rounds to 320b/18b, and the first natively multimodal model in the glm-5
+      the card {card} rounds to 320b/18b, and the first natively multimodal model in the glm-5
       series: image and video reach the backbone through a vision tower unsloth ships as a
-      1.1 gib mmproj beside the rungs. the shape is what the architecture gap is about -- 11
+      {gib@unsloth/GLM-5.3-Flash-GGUF:mmproj:F16} mmproj beside the rungs. the shape is what the architecture gap is about -- 11
       of its 45 layers are full attention and the other 34 are linear, which is what makes a
       1m context affordable and is also why no mainline llama.cpp loads it.
 
@@ -4265,10 +4353,10 @@ models:
     quants:
     - repo: unsloth/GLM-5.3-Flash-GGUF
       quant: UD-Q2_K_XL
-      note: 101.3 gib, the largest rung whose weights fit on their own, plus a 1.1 gib mmproj
-        for the vision half. that leaves nothing for a kv cache, so the page's 128k-minimum
-        rule runs the model a rung down at UD-IQ1_M and 90.9 gib. the ladder bottoms out at
-        86.7 gib and the next rung up is 137.4
+      note: '{gib} of weights, plus the mmproj for the vision half, and nothing left over
+        for a kv cache at that size -- which is why the page''s 128k-minimum rule tends to
+        serve UD-IQ1_M at {gib@UD-IQ1_M} instead. the ladder bottoms out at
+        {gib@UD-IQ1_S} and the next rung up is {gib@UD-Q3_K_XL}'
     runtime:
       arch: glm5next
       mainline: false
@@ -4318,7 +4406,7 @@ models:
     quants:
     - repo: unsloth/GLM-5.2-GGUF
       quant: UD-IQ1_S
-      note: 753b total and the smallest rung is 202 gib. the second most discussed model in
+      note: 753b total and the smallest rung is {gib}. the second most discussed model in
         this corpus after the qwen3.x line, and nothing here runs it
     runtime:
       arch: glm-dsa
@@ -4366,8 +4454,8 @@ models:
     quants:
     - repo: unsloth/GLM-4.5-Air-GGUF
       quant: UD-Q6_K_XL
-      note: 106b/12b and a year old, still discussed as the model that fits when the newer ones
-        do not
+      note: 106b/12b and a year old {card}, still discussed as the fallback when the
+        newer ones are too large
     runtime:
       arch: glm4moe
       mainline: true
@@ -4382,7 +4470,7 @@ models:
     sampling:
       thinking:
         source: tuned-here
-        note: neither zai's card nor unsloth's documents a sampler set for this model and its
+        note: neither zai's card {card} nor unsloth's documents a sampler set for this model and its
           generation_config.json carries none, so these are the family numbers GLM-5.2's card
           publishes
         temp: 1.0
@@ -4417,7 +4505,7 @@ models:
     - repo: avar6/Motif-3-gguf
       quant: Q3_K_M-mixed
       note: no unsloth or bartowski repo exists, so the five hand-rolled rungs here are what
-        there is; the mixed Q3 is the only one under 145 gib
+        there is; the mixed Q3 is the only one under the plain {gib@Q3_K_M}
     runtime:
       arch: motif3
       mainline: false
@@ -4464,8 +4552,8 @@ models:
     quants:
     - repo: bartowski/Ling-3.0-tiny-GGUF
       quant: Q8_0
-      note: 7.9b total and 1.3b active, the smallest moe on the roster. q8 is 7.8 gib, so the
-        whole ladder fits and the question is only whether it is worth the slot
+      note: 7.9b total and 1.3b active, the smallest moe on the roster. q8 is {gib}, so nothing
+        in the ladder is large and the question is only whether it is worth the slot
     runtime:
       arch: bailingmoe3
       mainline: true
@@ -4511,15 +4599,16 @@ models:
       match: gemma\s*-?4[\s-]*12b[\s-]*coder
     notes: a gemma-4-12b-it finetune distilled from execution-verified python chain-of-thought
       -- a reasoning trace entered training only if its code passed the task's tests. narrow
-      on purpose, meaning python and algorithmic work, english-centric, and the card says
+      on purpose, meaning python and algorithmic work, english-centric, and the card {card} says
       general knowledge is what was traded for it. no safety alignment, so it refuses less
       than its base does. its template defaults enable_thinking OFF, so the card's instruction
       to keep it on is load-bearing rather than decorative.
     quants:
     - repo: yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1-GGUF
       quant: Q8_0
-      note: five rungs off one 12b dense base, q2_k through q8_0. q8 is 11.8 gib so the whole
-        ladder fits; the card recommends q4_k_m at 6.87 gib for an 8 gib card
+      note: 'five rungs off one 12b dense base, q2_k through q8_0. q8 is {gib}; the card {card}
+        calls q4_k_m at {gib@Q4_K_M} "the sweet spot" and it is q3_k_m at {gib@Q3_K_M}
+        that it labels "great for 8 GB VRAM", which the pin here is well above'
     runtime:
       arch: gemma4
       mainline: true
@@ -4570,7 +4659,7 @@ models:
       short: gemma 4 12b agentic
       match: gemma\s*-?4[\s-]*12b[\s-]*(?:agentic|v2)
     notes: the v1 coder continued into multi-step tool use, in gemma 4's native tool protocol.
-      the card reports tau2-bench telecom at ~55% against the base model's ~15%, but that is
+      the card {card} reports tau2-bench telecom at ~55% against the base model's ~15%, but that is
       the AUTHOR's own harness over 20 tasks with a self-simulated user, so it compares v2 to
       its base under one setup and is not comparable to published tau2 figures. the same card
       reports mmlu-pro slightly BELOW the base, which is the trade being made. like v1 it
@@ -4579,7 +4668,7 @@ models:
     - repo: yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF
       quant: Q8_0
       note: four rungs, q3_k_m through q8_0 -- the author withheld q2_k as failing his own
-        stress test. needs --jinja to parse the native tool format, and rep_pen 1.1 to stop
+        stress test, which is on the card {card} and nowhere else. needs --jinja to parse the native tool format, and rep_pen 1.1 to stop
         the repeated-zeroes failure his pinned discussion attributes to sampler defaults
     runtime:
       arch: gemma4
@@ -4636,8 +4725,8 @@ models:
     name:
       short: ternary bonsai 8b
       match: \bbonsai[\s-]*8b\b
-    notes: the 8b rung of the ternary line, from qwen3-8b rather than the qwen3.6-27b its 27b
-      siblings derive from. unlike them it DOES publish base weights, which is why this is
+    notes: the 8b rung of the ternary line {card}, from qwen3-8b rather than the
+      qwen3.6-27b its 27b siblings derive from. unlike them it DOES publish base weights, which is why this is
       keyed on the unpacked repo where they are keyed on their gguf. ternary weights, so the
       bits-per-weight retention curve does not model it and any quant-adjusted score for it is
       an extrapolation rather than a fit. the template in its gguf header, which is the one
@@ -4647,8 +4736,8 @@ models:
     quants:
     - repo: prism-ml/Ternary-Bonsai-8B-gguf
       quant: F16
-      note: f16 at 15.26 gib is the rung mainline llama.cpp can load. the format the model
-        exists FOR is q2_0 at 2.03 gib, and that is not upstream yet -- it needs prism-ml's
+      note: f16 at {gib} is the rung mainline llama.cpp can load. the format the model
+        exists FOR is q2_0 at {gib@Q2_0}, and that is not upstream yet -- it needs prism-ml's
         own fork, so a consumer on a stock build gets the 8x larger file or nothing
     - repo: prism-ml/Ternary-Bonsai-8B-gguf
       quant: Q2_0
@@ -4662,8 +4751,8 @@ models:
         an 18-byte block over 64 weights, and prism''s is the g128 its card describes, 34 bytes
         over 128. same type NAME, different block layout, so a stock build reads the tensor
         wrong rather than refusing it, which is the worse of the two failures. the `Q2_0_G64`
-        rung beside it is 2.15 gib against this one''s 2.03, a ratio of 1.059 that is exactly
-        2.25 bpw over 2.125 -- group-64 arithmetic, so THAT file is the one a stock build
+        rung beside it is {gib@Q2_0_G64} against this one''s {gib}, a ratio of 1.059 that is
+        exactly the two block layouts above, one against the other -- group-64 arithmetic, so THAT file is the one a stock build
         b9913 or newer is likely to load, and nothing here has run it to find out'
     runtime:
       arch: qwen3
@@ -4725,8 +4814,8 @@ models:
       short: parakeet-tdt-0.6b-v3
       match: parakeet[\s-]*(?:tdt[\s-]*)?0\.6b[\s-]*v3
     notes: >-
-      the fast one: a FastConformer encoder with a token-and-duration transducer
-      head and no language model to decode through, so it transcribes at roughly
+      the fast one {card}: a FastConformer encoder with a token-and-duration
+      transducer head and no language model to decode through, so it transcribes at roughly
       an order of magnitude the realtime factor of a whisper-class model and
       detects its language across 25 european ones without a separate LID pass.
       no text conditioning at all, which is why it takes no prompt.
@@ -4759,7 +4848,7 @@ models:
       match: parakeet[\s-]*(?:tdt[\s-]*)?0\.6b[\s-]*v2
     notes: >-
       the english-only generation before v3, and the one artificial analysis
-      scores. carried because that score is the only third-party number this
+      scores. CC-BY-4.0 per the card {card}. carried because that score is the only third-party number this
       roster has for the parakeet family: v3 is not on the board, so v2 is what
       says where the architecture sits.
     quants:
@@ -4791,7 +4880,9 @@ models:
       match: canary[\s-]*1b[\s-]*v2
     notes: >-
       transcription and translation in one pass over 25 european languages, with
-      the direction given explicitly as -sl/-tl rather than detected. the pair
+      the direction given explicitly as -sl/-tl rather than detected -- the card
+      {card} is where the pairing comes from, "both automatic speech recognition
+      (ASR) and speech translation (AST)". the pair
       of flags is the point: a model that only ever translates INTO english
       cannot subtitle a german talk for a french reader.
     quants:
@@ -4829,8 +4920,8 @@ models:
       match: canary[\s-]*qwen
     notes: >-
       the best-scoring open-weights entry on artificial analysis' batch board
-      that is not a voxtral. a FastConformer encoder feeding a qwen3 1.7b
-      decoder, so unlike the plain canary beside it there is a language model in
+      that is not a voxtral, and CC-BY-4.0 per the card {card}. a FastConformer
+      encoder feeding a qwen3 1.7b decoder, so unlike the plain canary beside it there is a language model in
       the loop and a prompt reaches it.
     quants:
     - repo: cstr/canary-qwen-2.5b-GGUF
@@ -4860,8 +4951,8 @@ models:
       short: cohere-transcribe-03-2026
       match: cohere[\s-]*transcribe
     notes: >-
-      crispasr's own diarization examples all reach for this backend, which is
-      the reason it is here rather than only for its score: a conformer encoder
+      crispasr's own diarization examples all reach for this backend {card},
+      which is the reason it is here rather than only for its score: a conformer encoder
       with a transformer decoder emits segment timestamps every diarization
       method can attach a speaker to, and the apache licence puts no condition
       on doing it.
@@ -4894,7 +4985,8 @@ models:
       match: qwen3[\s.-]*asr[\s-]*1\.7b\b(?![\s-]*ja)
     notes: >-
       a whisper-style audio encoder in front of qwen3 1.7b, so it takes a prompt
-      and biases on it. 30 languages plus 22 chinese dialects is the widest
+      and biases on it. the card {card} covers both rungs at "language
+      identification and ASR for 52 languages and dialects". 30 languages plus 22 chinese dialects is the widest
       coverage on this roster that is not omniasr's 1600.
     quants:
     - repo: cstr/qwen3-asr-1.7b-GGUF
@@ -4925,7 +5017,10 @@ models:
       match: voxtral[\s-]*mini[\s-]*3b
     notes: >-
       the batch sibling of the realtime 4b this roster already carries, and the
-      better-scoring of the two on artificial analysis' non-streaming board --
+      better-scoring of the two on artificial analysis' non-streaming board. note
+      that mistral's own card {card} does not recommend it at this size: "We
+      recommend that you use Voxtral-Small-24B-2507 in a server/client setting."
+      --
       which is the trade the two entries exist to show, since the realtime one
       is measured on a different board against a different question.
     quants:
@@ -4956,8 +5051,10 @@ models:
       short: nemotron-3.5-asr-streaming-0.6b
       match: nemotron[\s-]*3\.5[\s-]*asr
     notes: >-
-      cache-aware FastConformer with a transducer head, where accuracy is a
-      function of how long the model is allowed to wait: one checkpoint, four
+      cache-aware FastConformer with a transducer head, which the card {card}
+      says "was trained on a massive ASR dataset and is engineered to perform
+      across diverse and challenging acoustic conditions". accuracy is a function
+      of how long the model is allowed to wait: one checkpoint, four
       lookahead settings, and the lookahead is a runtime flag rather than a
       build. that is the whole reason to carry a streaming entry beside the
       batch ones -- it is the only model here whose quality is a latency dial.
@@ -4997,7 +5094,9 @@ models:
     notes: >-
       non-autoregressive: a SANM encoder and a CTC head emit the transcript, the
       language id and an audio-event tag in ONE forward pass, with no decode
-      loop to run. that is where the speed comes from and also where the ceiling
+      loop to run. the card {card} offers the same route this roster takes, "a
+      single self-contained binary via **llama.cpp / GGUF** (like whisper.cpp),
+      with built-in VAD". that is where the speed comes from and also where the ceiling
       is -- there is no beam search to fall back on.
 
       crispasr deliberately does not expose upstream's emotion classifier, which
@@ -5030,9 +5129,10 @@ models:
       short: moss-transcribe-diarize
       match: moss[\s-]*transcribe[\s-]*diarize
     notes: >-
-      the only model here that diarizes BY ITSELF: a whisper encoder feeding
-      qwen3 0.6b that emits transcript, timestamps and speaker attribution as
-      one decode, rather than transcribing and then clustering embeddings after
+      the only model here that diarizes BY ITSELF: the card {card} describes "an
+      end-to-end audio understanding model for long-form multi-speaker
+      transcription, diarization, timestamps, and acoustic event awareness", a
+      whisper encoder feeding qwen3 0.6b that emits all of it in one decode, rather than transcribing and then clustering embeddings after
       the fact. that makes it the one entry whose speaker labels do not depend
       on the --diarize post-step, and the one to compare foxnose against.
 
@@ -5112,7 +5212,9 @@ models:
       short: wespeaker-resnet34-lm
       match: we[\s-]*speaker
     notes: >-
-      the foxnose recipe's embedder: 256-d speaker embeddings over sliding
+      the foxnose recipe's embedder, which the card {card} gives as "ResNet34
+      based r-vector (After large margin finetune)" trained on "VoxCeleb2 Dev
+      dataset, containing 5994 speakers": 256-d speaker embeddings over sliding
       windows, counted by GMM/BIC and clustered spectrally, which ESTIMATES the
       number of speakers instead of being told it.
 
@@ -5133,7 +5235,7 @@ models:
       `--diarize-method foxnose` split a synthesized four-turn two-voice
       dialogue into 8 segments and gave every one its own speaker,
       byte-identically whatever `diarize_max_speakers` or `diarize_embedder` the
-      request carried. the card names the cause -- "estimating the number of
+      request carried. the card {card} names the cause -- "estimating the number of
       speakers is the weak link, not the embeddings" -- and says the picture
       improves sharply with `--diarize-num-speakers N`, which a transcription
       client does not know. pyannote plus titanet returns A B A B on the same
@@ -5143,12 +5245,12 @@ models:
       quant: F16
       file: wespeaker-resnet34-lm.gguf
       role: diarize-embedder
-      note: conv kernels F32 and linear F16, which the card marks recommended
+      note: conv kernels F32 and linear F16, which the card {card} marks recommended
     - repo: cstr/wespeaker-resnet34-lm-GGUF
       quant: F32
       file: wespeaker-resnet34-lm-f32.gguf
       role: diarize-embedder
-      note: the card's reference precision
+      note: the reference precision, per the card {card}
     crispasr:
       diarize: embedder
   pyannote/segmentation-3.0:
@@ -5157,8 +5259,8 @@ models:
       short: pyannote-seg-3.0
       match: pyannote
     notes: >-
-      the diarizer actually in use. `--diarize-method pyannote` runs this once
-      over the whole audio for a global speaker-turn timeline, then splits ASR
+      the diarizer actually in use {card}. `--diarize-method pyannote` runs this
+      once over the whole audio for a global speaker-turn timeline, then splits ASR
       segments at its boundaries. it decides WHEN the speaker changes and
       nothing about who, so it is paired with titanet for identities that hold
       across a long file.
@@ -5204,8 +5306,9 @@ models:
       short: titanet-large
       match: titanet
     notes: >-
-      192-d speaker embeddings, and what `--diarize-embedder auto` resolves to
-      on the pyannote path -- pinned rather than left to `auto`, which fetches
+      192-d speaker embeddings -- the card {card} calls it "the backbone for
+      speaker verification and diarization tasks" -- and what
+      `--diarize-embedder auto` resolves to on the pyannote path -- pinned rather than left to `auto`, which fetches
       at request time. carried because pyannote's per-pass track ids are local
       to a pass and drift over a long recording; clustering on these makes them
       stable for one file, and on the four-turn test it also tightened the
@@ -5332,8 +5435,11 @@ models:
       short: bark
       match: \bbark[\s-]*small\b|suno[\s-]*bark
     notes: >-
-      suno's small bark, the model that made prompt-driven TTS popular: it takes
-      bracketed direction like [laughs] and [sighs] inline rather than a style
+      suno's small bark, the model that made prompt-driven TTS popular. the card
+      {card} claims more than speech -- it "can generate highly realistic,
+      multilingual speech as well as other audio - including music," -- and it
+      takes bracketed direction like [laughs] and [sighs] inline rather than a
+      style
       parameter, and it sings. the hub names no `base_model` on cstr's
       conversion and crispasr's README repeats the conversion in both columns,
       so this key is the one fact here a capture did not settle -- it is suno's
@@ -5362,8 +5468,9 @@ models:
       short: chatterbox
       match: chatterbox
     notes: >-
-      the one synthesis model in this roster a third party scores: artificial
-      analysis rates it on the TTS board, which makes it the only entry here
+      the one synthesis model in this roster a third party scores -- everything
+      else here rests on its own card {card}. artificial analysis rates it on the
+      TTS board, which makes it the only entry here
       whose quality is a measurement rather than an absence. 23 languages with
       separate arabic, german and finnish fine-tunes, and it clones from a
       reference clip.
@@ -5400,8 +5507,8 @@ models:
       short: cosyvoice3-tts
       match: cosy[\s-]*voice[\s-]*3
     notes: >-
-      alibaba's cosyvoice line at 0.5b, and the widest dialect coverage here:
-      nine languages plus eighteen chinese dialects, which no other entry in
+      alibaba's cosyvoice line at 0.5b, and the widest dialect coverage here per
+      its card {card}: nine languages plus eighteen chinese dialects, which no other entry in
       this roster claims. clones from a reference clip and takes a source and
       target language separately, so it is the one to reach for when the text
       and the voice are not the same language.
@@ -5455,8 +5562,8 @@ models:
       short: csm
       match: \bcsm[\s-]*1b\b|sesame[\s-]*csm
     notes: >-
-      sesame's conversational speech model, the architecture breeze-tts-2 is a
-      fork of -- so this is the upstream of the entry above that nothing can
+      sesame's conversational speech model {card}, the architecture breeze-tts-2 is
+      a fork of -- so this is the upstream of the entry above that nothing can
       currently serve. english only and no voice cloning knob in crispasr,
       which makes it the plain baseline of this roster rather than a model to
       reach for.
@@ -5483,8 +5590,10 @@ models:
       short: dia
       match: \bdia[\s-]*1\.6b\b|nari[\s-]*labs
     notes: >-
-      a dialogue model rather than a narrator: it is built to voice a script
-      with speaker tags and to place nonverbal sounds between lines, which is a
+      a dialogue model rather than a narrator: it is built to voice a script with
+      speaker tags and to place nonverbal sounds between lines, and the card
+      {card} warns of the cost -- "the model was not fine-tuned on a specific
+      voice. Hence, you will get different voices every time you run the model" -- which is a
       different job from reading a paragraph. english only.
     quants:
     - repo: cstr/dia-1.6b-GGUF
@@ -5515,9 +5624,11 @@ models:
       match: fast[\s-]*pitch
     notes: >-
       the oldest and smallest thing in this roster, and the only one crispasr
-      gives no auto-download, temperature or cloning: a non-autoregressive
+      gives no auto-download, temperature or cloning. the card {card} still
+      points at the framework it shipped for -- it "is available for use in the
+      NeMo toolkit [3]" -- rather than at anything that runs here: a non-autoregressive
       mel-spectrogram model from nvidia's nemo line. it is here as the floor --
-      what a consumer can run when nothing larger fits -- rather than as a
+      what a consumer can run when nothing larger will -- rather than as a
       recommendation. the key is a rename the hub's `base_model` reports and
       `resolve-base` flags, because `tts_en_fastpitch` does not look like
       `fastpitch-en`; the rename is real and the mapping is right.
@@ -5544,8 +5655,8 @@ models:
       short: indextts
       match: index[\s-]*tts
     notes: >-
-      bilibili's index-tts, chinese and english, tuned for cloning a supplied
-      voice. the only rungs cstr published are Q4_K and Q8_0 -- there is no F16
+      bilibili's index-tts {card}, chinese and english, tuned for cloning a
+      supplied voice. the only rungs cstr published are Q4_K and Q8_0 -- there is no F16
       here, unlike most of this roster -- so the pin is the top of a two-rung
       ladder rather than a choice among four.
     quants:
@@ -5577,7 +5688,10 @@ models:
       match: kugel[\s-]*audio
     notes: >-
       a multilingual open release with no cloning knob and no temperature in
-      crispasr, so it synthesises one way and takes no direction. the quant pin
+      crispasr, so it synthesises one way and takes no direction. read the card
+      {card} for what was actually measured: its evaluation "specifically focused
+      on **German language samples**", so `multilingual` is a claim about
+      coverage rather than about quality across it. the quant pin
       is Q6_K because that is the top rung cstr published: this is the only
       entry in the roster where no Q8_0 exists.
     quants:
@@ -5604,7 +5718,8 @@ models:
       match: \bmio[\s-]*tts
     notes: >-
       a japanese-and-english 0.6b, the smallest autoregressive model here. the
-      key is the one `resolve-base` got WRONG and a human corrected: the hub
+      card {card} says it is "built on top of the efficient neural audio codec",
+      which is what makes the key the one `resolve-base` got WRONG and a human corrected: the hub
       names `Aratako/MioCodec-25Hz-44.1kHz-v2` as this conversion's base_model
       and never mentions the model at all, so the field points at the codec it
       decodes through. that is the failure mode the `agrees` flag exists to
@@ -5655,8 +5770,8 @@ models:
       short: moss-tts
       match: moss[\s-]*tts\b(?![\s-]*local)
     notes: >-
-      the openmoss synthesis model, multilingual and cloning from a reference
-      clip. it is the sibling of the moss-transcribe-diarize already in the ASR
+      the openmoss synthesis model, cloning from a reference clip and covering
+      what the card {card} counts as "**31 languages**". it is the sibling of the moss-transcribe-diarize already in the ASR
       roster above, so carrying it means one publisher's stack covers both
       directions on the same binary.
     quants:
@@ -5694,7 +5809,9 @@ models:
       match: moss[\s-]*tts[\s-]*local
     notes: >-
       the same generation as moss-tts with a local-transformer decoder, which
-      crispasr loads through a separate backend rather than a flag. it is a
+      crispasr loads through a separate backend rather than a flag. the card
+      {card} puts this variant at "**31 languages**" too, so the choice between
+      them is the decoder and not the coverage. it is a
       distinct entry for that reason: `--backend moss-tts` will not read this
       file and `--backend moss-tts-local` will not read the other.
     quants:
@@ -5740,8 +5857,8 @@ models:
       short: omnivoice
       match: omni[\s-]*voice
     notes: >-
-      600+ languages, which is an order of magnitude past anything else in this
-      roster and the reason to carry it: every other entry here covers one
+      600+ languages {card}, which is an order of magnitude past anything else in
+      this roster and the reason to carry it: every other entry here covers one
       language or a couple of dozen. from the k2-fsa/sherpa people, so it comes
       out of the kaldi lineage rather than the LLM one.
     quants:
@@ -5779,7 +5896,9 @@ models:
     notes: >-
       english, clones from a clip, and the only NON-COMMERCIAL licence in this
       roster -- CC-BY-NC-SA-4.0, where everything else here is apache, MIT,
-      CC-BY or a llama community licence. that is the fact worth carrying: it
+      CC-BY or a llama community licence. the card {card} is the licence's only
+      statement; it offers "multiple model variants tailored for diverse use
+      cases" under the same terms. that is the fact worth carrying: it
       rules the model out of exactly the deployments the rest of this roster is
       for.
     quants:
@@ -5813,6 +5932,9 @@ models:
     notes: >-
       the voice is described in prose rather than selected or cloned -- "a
       female speaker with a slightly low-pitched voice, very close-sounding" --
+      and the card {card} flags the consequence for anyone porting a prompt:
+      "Unlike previous versions of Parler-TTS, here we use two tokenizers - one
+      for the prompt and one for the description."
       which makes it the english counterpart to qwen3-tts voicedesign already
       in the roster. english only.
     quants:
@@ -5841,8 +5963,8 @@ models:
       short: pocket-tts
       match: pocket[\s-]*tts
     notes: >-
-      kyutai's small multilingual model -- english, german, spanish, italian and
-      portuguese, with french in a 24-language preview. its licence is CC-BY-4.0
+      kyutai's small multilingual model {card} -- english, german, spanish, italian
+      and portuguese, with french in a 24-language preview. its licence is CC-BY-4.0
       with gated-use conditions attached, which is not the same thing as CC-BY
       and is the reason that is written here rather than left to the card.
     quants:
@@ -5869,7 +5991,8 @@ models:
       match: speech[\s-]*t5
     notes: >-
       microsoft's speecht5, english, and the only entry in this roster with a
-      single rung: cstr published F16 and nothing else, so there is no ladder to
+      single rung: cstr published F16 and nothing else, and the card {card}
+      offers nothing beyond "You can use this model for speech synthesis", so there is no ladder to
       trade down and the pin is the whole file. no temperature and no cloning in
       crispasr either -- like fastpitch, it is a floor rather than a pick.
 
@@ -5903,7 +6026,9 @@ models:
       short: voxcpm2-tts
       match: vox[\s-]*cpm
     notes: >-
-      openbmb's synthesis model at 30 languages with cloning. crispasr also
+      openbmb's synthesis model at 30 languages with cloning, driven the way the
+      card {card} describes -- "Put the voice description in parentheses at the
+      start of `text`, followed by the content to synthesize". crispasr also
       carries a `voxcpm2-vae` backend against the same weights, which is the
       speech-to-speech half of the release rather than a second TTS rung -- this
       entry is the synthesis one.
@@ -5940,8 +6065,8 @@ models:
       short: orpheus
       match: orpheus
     notes: >-
-      a llama-3.2-3b finetuned into a speech model, english and german, and one
-      of two entries here that decode through a separate neural codec: the
+      a llama-3.2-3b finetuned into a speech model {card}, english and german, and
+      one of two entries here that decode through a separate neural codec: the
       model emits SNAC tokens and `cstr/snac-24khz-GGUF` turns them into audio,
       so both files have to be present. the codec is a `components:` entry
       rather than a second quant because a consumer does not choose it -- there
@@ -5978,8 +6103,10 @@ models:
       short: zonos-tts
       match: \bzonos\b
     notes: >-
-      the other codec pair: zonos emits descript-audio-codec tokens and
-      `cstr/dac-44khz-GGUF` decodes them at 44.1khz, which is the highest sample
+      the other codec pair, and one the card {card} documents only as python --
+      it ships `Zonos.from_pretrained` and no gguf path at all. zonos emits
+      descript-audio-codec tokens and `cstr/dac-44khz-GGUF` decodes them at
+      44.1khz, which is the highest sample
       rate in this roster. english, clones from a clip. zyphra also publish a
       hybrid-mamba variant of the same release and crispasr names the
       transformer one, which is the repo pinned here.
@@ -6021,9 +6148,11 @@ models:
       short: tada
       match: \btada[\s-]*1b\b|hume[\s-]*ai[\s-]*tada
     notes: >-
-      hume's tada, english, under the llama 3.2 community licence. the
-      conversion ships four files beside the model -- an aligner, a codec and an
-      encoder -- and the top rung of the model itself is Q4_K: cstr published no
+      hume's tada, english, under the llama 3.2 community licence, and the card
+      {card} explains the four files: it is "a unified speech-language model that
+      synchronizes speech and text into a single, cohesive stream via 1:1
+      alignment". the conversion ships them all beside the model -- an aligner, a
+      codec and an encoder -- and the top rung of the model itself is Q4_K: cstr published no
       Q8_0 here, so the pin is lower than everywhere else in this roster and it
       is the ladder rather than a choice.
     quants:
@@ -6050,7 +6179,9 @@ models:
       match: vibe[\s-]*voice[\s-]*(?:realtime|0\.5b)
     notes: >-
       the smaller of the two vibevoice synthesis rungs, english and chinese, and
-      the one to serve when latency matters. separate entries from the 1.5b
+      the one to serve when latency matters. the card {card} gives the stack as a
+      "Transformer-based Large Language Model (LLM) integrated with specialized
+      acoustic tokenizer and a diffusion-based decoding head". separate entries from the 1.5b
       because they are separate weights rather than two quants of one
       checkpoint -- the scaffolder drafted the second as a codec and it is not
       one.
@@ -6084,7 +6215,8 @@ models:
       match: vibe[\s-]*voice[\s-]*1\.5b
     notes: >-
       the 1.5b rung of the same family, three times the weights of the realtime
-      variant. the backend is `vibevoice-1.5b` rather than the `vibevoice-tts`
+      variant, and the card {card} is where the reason to reach for it is: it
+      synthesises "up to **90 minutes** long with up to **4 distinct speakers**". the backend is `vibevoice-1.5b` rather than the `vibevoice-tts`
       crispasr's README labels the row: the feature matrix carries the first and
       not the second, and it is the matrix the binary dispatches through. it is
       also the only vibevoice backend whose capability row claims voice cloning.
@@ -6101,7 +6233,7 @@ models:
     ids:
       aa-stt: ''
       aa-stt-streaming: ''
-      aa-tts: ''
+      aa-tts: vibe-voice-1-5b
       tts-arena: ''
       voicearena: ''
     modalities:
@@ -6128,7 +6260,9 @@ models:
       match: voxtral[\s-]*(?:4b[\s-]*)?tts
     notes: >-
       mistral's own synthesis model across nine languages, under CC-BY-NC-4.0 --
-      the second non-commercial licence in this roster. no gguf exists for it in
+      the second non-commercial licence in this roster, which is the constraint
+      to read first given the card {card} pitches "enterprise-grade
+      text-to-speech for production voice agents". no gguf exists for it in
       any repo crispasr names, so it is tracked rather than servable.
 
       and it is the best-scoring synthesis model here: artificial analysis rates
@@ -6167,7 +6301,10 @@ models:
       short: ark-asr
       match: ark[\s-]*asr[\s-]*3b|\bark[\s-]*asr\b(?![\s-]*0\.6)
     notes: >-
-      19 european languages out of one 3b encoder-decoder. the vendor's repo
+      19 european languages out of one 3b encoder-decoder, which the card
+      {card} describes as "a Whisper-style audio encoder, an MLP adapter, and a
+      Qwen decoder with custom `arkasr` remote code" -- so the transformers path
+      needs that remote code and llama.cpp does not use it. the vendor's repo
       carries the weights and cstr's carries the conversion, which is the
       ordinary shape for this roster.
     quants:
@@ -6201,8 +6338,9 @@ models:
       short: parakeet-ctc-0.6b
       match: parakeet[\s-]*ctc[\s-]*0\.6b
     notes: >-
-      the CTC parakeet, a different head from the transducer parakeet-tdt
-      already carried above: CTC emits per-frame labels with no duration model,
+      the CTC parakeet, which the card {card} sizes as "an XL version of
+      FastConformer CTC [1] (around 600M parameters) model" -- a different head
+      from the transducer parakeet-tdt already carried above: CTC emits per-frame labels with no duration model,
       so it is cheaper and weaker on long silences. crispasr reaches three
       conversions through this one backend -- 0.6b, 1.1b and a japanese 1.1b --
       and they are three models rather than three rungs, so this entry pins the
@@ -6233,7 +6371,9 @@ models:
       match: fun[\s-]*asr[\s-]*mlt
     notes: >-
       alibaba's multilingual nano transcriber, the sibling of the fun-asr entry
-      below and reached by its own backend rather than a flag.
+      below and reached by its own backend rather than a flag. the card {card}
+      puts it at "the 800M-parameter multilingual checkpoint in the Fun-ASR
+      family".
     quants:
     - repo: cstr/funasr-mlt-nano-GGUF
       quant: Q8_0
@@ -6261,7 +6401,9 @@ models:
     notes: >-
       the monolingual nano of the same december release. same publisher as
       sensevoice-small already in the roster, and the paraformer entry below
-      comes out of the same funasr project.
+      comes out of the same funasr project -- the card {card} is explicit that
+      the intended path is the one used here, "a single self-contained binary via
+      **llama.cpp / GGUF** (like whisper.cpp), with built-in VAD".
     quants:
     - repo: cstr/funasr-nano-GGUF
       quant: Q8_0
@@ -6288,7 +6430,10 @@ models:
       match: giga[\s-]*am\b
     notes: >-
       sber's russian transcriber, and the only model in this roster built for
-      russian specifically rather than covering it in a multilingual set.
+      russian specifically rather than covering it in a multilingual set. the
+      card {card} gives the shape: "a Conformer-based foundation model with
+      220-240M parameters, pretrained on diverse Russian speech data using the
+      HuBERT-CTC objective".
     quants:
     - repo: cstr/gigaam-v3-GGUF
       quant: Q8_0
@@ -6314,7 +6459,8 @@ models:
       short: lfm2-audio
       match: lfm[\s-]*2(?:\.5)?[\s-]*audio
     notes: >-
-      liquid's audio model on their LFM2 backbone. crispasr names a japanese
+      liquid's audio model on their LFM2 backbone, which the card {card} calls
+      their "updated end-to-end audio foundation model". crispasr names a japanese
       conversion beside the base one under the same backend; that is a sibling
       rather than a rung, so this entry pins the base and the japanese build is
       left out rather than stacked in.
@@ -6357,7 +6503,8 @@ models:
     notes: >-
       xiaomi's transcriber off the MiMo line whose v2.5 text model this roster
       already carries. cstr published F16 and Q4_K only, so the pin is Q4_K --
-      there is no Q8_0 rung here.
+      there is no Q8_0 rung here. the card {card} publishes no per-benchmark
+      numbers, pointing instead at a blog, so nothing here scores it.
     quants:
     - repo: cstr/mimo-asr-GGUF
       quant: Q4_K
@@ -6393,8 +6540,11 @@ models:
       short: moonshine
       match: \bmoonshine\b(?![\s-]*streaming)
     notes: >-
-      built for short utterances on small hardware: moonshine takes variable
-      length audio without padding to a fixed 30s window the way whisper does,
+      built for short utterances on small hardware, and the card {card} is the
+      only statement of what it is: "the automatic speech recognition (ASR)
+      models (Moonshine models) trained and released by Useful Sensors".
+      moonshine takes variable length audio without padding to a fixed 30s
+      window the way whisper does,
       so the compute scales with what was actually said. that is the argument
       for it over whisper-large-v3-turbo at this size.
     quants:
@@ -6422,8 +6572,10 @@ models:
       short: moonshine-streaming
       match: moonshine[\s-]*streaming
     notes: >-
-      the streaming tiny of the same family, and one of two entries in this
-      roster built for live transcription rather than a file -- the other is
+      the streaming tiny of the same family, which the card {card} builds from "a
+      lightweight 50~Hz audio frontend with a sliding-window Transformer", and
+      one of two entries in this roster built for live transcription rather than
+      a file -- the other is
       nemotron-3.5-asr-streaming already carried. Q4_K is the only rung cstr
       published.
     quants:
@@ -6452,8 +6604,10 @@ models:
       match: moss[\s-]*audio
     notes: >-
       the largest transcriber in this roster at 4b, and an instruct model rather
-      than a plain ASR head -- it takes a prompt about what to do with the
-      audio. cstr published F16 and Q4_K only.
+      than a plain ASR head -- it takes a prompt about what to do with the audio,
+      because the card {card} is about "an audio understanding model" rather than
+      a transcriber, built as "an audio encoder, a modality adapter, and a large
+      language model". cstr published F16 and Q4_K only.
     quants:
     - repo: cstr/MOSS-Audio-4B-Instruct-GGUF
       quant: Q4_K
@@ -6491,7 +6645,9 @@ models:
     notes: >-
       the transcribe-only 2b of the same family, and the sibling of the
       moss-transcribe-diarize already carried: that one labels speakers while
-      decoding and this one does not, which is the whole difference.
+      decoding and this one does not, which is the whole difference. the card
+      {card} gives the stack -- "a Qwen3-1.7B-base language-model backbone with a
+      Qwen3-Omni-MoE audio encoder" -- and calls it english.
     quants:
     - repo: cstr/MOSS-Transcribe-preview-2B-GGUF
       quant: Q8_0
@@ -6528,7 +6684,11 @@ models:
       match: omni[\s-]*asr[\s-]*ctc
     notes: >-
       a CTC transcriber over meta's omnilingual ASR work, the transcription-side
-      counterpart to omnivoice's 600+ language synthesis. cstr's listing carries
+      counterpart to omnivoice's 600+ language synthesis. the card {card} is
+      precise about what it is -- "Wav2Vec2 CTC ASR model (v2) converted from the
+      [OmniLingual](https://github.com/facebookresearch/omnilingual-asr)
+      fairseq2 checkpoint `omniASR_CTC_1B_v2`" -- which is why there is no
+      decoder to prompt. cstr's listing carries
       a `Q4_K_OLD` beside the current rungs, which is a superseded conversion
       rather than a rung and is not pinned.
     quants:
@@ -6557,7 +6717,8 @@ models:
       match: omni[\s-]*asr[\s-]*(?:llm|300m)
     notes: >-
       the LLM-decoder variant of the same omnilingual line at 300m, against the
-      CTC head above. crispasr names an `unlimited` conversion beside it under
+      CTC head above; the card {card} places it in "the **Omnilingual ASR**
+      family released by Meta AI". crispasr names an `unlimited` conversion beside it under
       the same backend -- a longer-context build rather than a rung -- and this
       entry pins the base one.
     quants:
@@ -6585,8 +6746,8 @@ models:
       short: paraformer
       match: paraformer
     notes: >-
-      non-autoregressive chinese transcription, the same single-pass shape as
-      sensevoice-small and from the same funasr project. mandarin only, which is
+      non-autoregressive chinese transcription {card}, the same single-pass shape
+      as sensevoice-small and from the same funasr project. mandarin only, which is
       what lets it be this small.
     quants:
     - repo: cstr/paraformer-zh-GGUF
@@ -6613,8 +6774,8 @@ models:
       short: reazonspeech
       match: reazon[\s-]*speech
     notes: >-
-      japanese transcription trained on reazon's broadcast corpus, on a nemo
-      backbone. the japanese counterpart to gigaam's russian: a model for one
+      japanese transcription trained on reazon's broadcast corpus {card}, on a
+      nemo backbone. the japanese counterpart to gigaam's russian: a model for one
       language rather than a multilingual set that happens to include it.
     quants:
     - repo: cstr/reazonspeech-nemo-v2-GGUF
@@ -6643,6 +6804,9 @@ models:
     notes: >-
       the transcription half of the vibevoice family whose two synthesis rungs
       are in the roster above: same name, opposite direction, separate weights.
+      the card {card} names the feature that distinguishes it -- users "provide
+      customized hotwords (e.g., specific names, technical terms, or background
+      info) to guide the recognition process".
       its capability row claims native punctuation and CTC timestamps.
     quants:
     - repo: cstr/vibevoice-asr-GGUF
@@ -6669,8 +6833,8 @@ models:
       short: vibevoice-bitnet
       match: vibe[\s-]*voice[\s-]*(?:asr[\s-]*)?bitnet
     notes: >-
-      the ternary-weight build of the same transcriber, and the only entry in
-      the speech roster whose rungs are named `Q4`, `Q5`, `Q8` and `TQ2` rather
+      the ternary-weight build of the same transcriber {card}, and the only entry
+      in the speech roster whose rungs are named `Q4`, `Q5`, `Q8` and `TQ2` rather
       than the usual K-quant tags -- bitnet weights are not what the rest of this
       ladder measures. `TQ2` is the format it exists FOR and Q4 is the pin, the
       same trade the ternary bonsai entries record on the text side.
@@ -6705,8 +6869,10 @@ models:
       short: wav2vec2
       match: data2vec[\s-]*audio|\bwav2vec2\b
     notes: >-
-      the wav2vec2 family backend, and the one row in crispasr's README naming
-      three unrelated checkpoints: a wav2vec2 xlsr english finetune, this
+      the wav2vec2 family backend -- the card {card} pins it to "960 hours of
+      Librispeech on 16kHz sampled speech audio", so it is english and nothing
+      else -- and the one row in crispasr's README naming three unrelated
+      checkpoints: a wav2vec2 xlsr english finetune, this
       data2vec model and a hubert one. three architectures sharing a dispatch
       path rather than one model with three conversions, so this entry pins the
       data2vec conversion that is sized and leaves the other two out rather than
@@ -6756,7 +6922,9 @@ models:
     notes: >-
       second on the open ASR leaderboard at 4.33 mean WER over eight datasets,
       behind qwen3-asr-1.7b and ahead of everything this roster carried before
-      it. apache 2.0. no conversion exists and crispasr names no backend, so it
+      it -- that average is the leaderboard's, not the card's. the card {card}
+      describes "the classic Encoder-Adapter-LLM framework" over a qwen3 decoder.
+      apache 2.0. no conversion exists and crispasr names no backend, so it
       is tracked rather than servable -- the number is the reason it is here.
     ids:
       aa-stt: ''
@@ -6779,7 +6947,11 @@ models:
     notes: >-
       the small rung of the ark line whose 3b this roster already runs, and it
       gives up almost nothing for the size: 4.56 mean WER against the 3b's 4.48,
-      at a sixth of the parameters. no cstr conversion for this rung.
+      at a sixth of the parameters -- those two are the open asr leaderboard's
+      averages rather than the card's, which publishes per-dataset tables and no
+      mean. the card {card} is where the recipe is, "teacher-data adaptation and
+      on-policy distillation, using a compact 0.6B-scale decoder LLM". no cstr
+      conversion for this rung.
     ids:
       aa-stt: ''
       aa-stt-streaming: ''
@@ -6806,7 +6978,9 @@ models:
       match: canary[\s-]*1b[\s-]*flash
     notes: >-
       the flash canary, and better than the canary-1b-v2 this roster carries:
-      4.88 mean WER against 5.71. cc-by-4.0. no conversion, so it is the case
+      4.88 mean WER against 5.71, both leaderboard averages rather than the
+      card's. cc-by-4.0, which the card {card} states as "permissive CC-BY-4.0
+      license and is available for commercial use". no conversion, so it is the case
       for watching this line rather than a model to serve today.
     ids:
       aa-stt: ''
@@ -6827,8 +7001,9 @@ models:
       short: voxtral-small-24b
       match: voxtral[\s-]*small
     notes: >-
-      the 24b of the voxtral line whose mini this roster serves. 4.99 mean WER
-      against the mini's 5.54, which is a small gain for eight times the
+      the 24b of the voxtral line whose mini this roster serves, sharing its card
+      {card}. 4.99 mean WER against the mini's 5.54 -- leaderboard averages
+      rather than the card's, which publishes none -- which is a small gain for eight times the
       weights -- the kind of comparison a roster exists to make.
     ids:
       aa-stt: Voxtral Small
@@ -6851,7 +7026,9 @@ models:
     notes: >-
       the 1b granite speech, which crispasr reaches through the same `granite`
       backend as the 3.3-2b already carried. 4.91 mean WER against that model's
-      5.36, so the smaller and older-numbered one is the better transcriber --
+      5.36 -- open asr leaderboard averages, not the card's, which states only
+      that the model is "intended to be used in enterprise applications that
+      involve processing of speech inputs" {card} -- so the smaller and older-numbered one is the better transcriber --
       which is why a sibling sharing a backend is worth carrying once somebody
       has scored it.
     crispasr:
@@ -6882,7 +7059,10 @@ models:
       match: distil[\s-]*(?:whisper|large)[\s-]*v?3\.5
     notes: >-
       the distillation of whisper large v3, and it beats what it was distilled
-      from: 5.40 mean WER against the v3's 5.78. MIT. carried without a
+      from: 5.40 mean WER against the v3's 5.78, which are the open asr
+      leaderboard's averages rather than the card's -- the card {card} reports
+      "both short and long-form transcriptions, using in-distribution (ID) and
+      out-of-distribution (OOD) datasets" without a single mean. MIT. carried without a
       conversion, like the rest of this group.
     ids:
       aa-stt: ''
@@ -6904,7 +7084,9 @@ models:
       match: kyutai[\s-]*stt[\s-]*2\.6b|\bstt[\s-]*2\.6b
     notes: >-
       the english 2.6b kyutai names beside the 1b this roster keys the
-      `kyutai-stt` backend on. 5.57 mean WER. the entry above carries the
+      `kyutai-stt` backend on. 5.57 mean WER, which is the leaderboard's average
+      and not the card's -- the card {card} says only that this is "a model for
+      streaming speech-to-text". the entry above carries the
       backend and this one is its larger sibling, scored.
     crispasr:
       backend: kyutai-stt
@@ -6928,8 +7110,9 @@ models:
       match: whisper[\s-]*large[\s-]*v3\b(?![\s-]*turbo)
     notes: >-
       the model whisper-large-v3-turbo is the pruned decoder of, carried so the
-      pair can be read against each other: 5.78 mean WER here against the
-      turbo's 6.36, so the turbo trades about half a point of accuracy for its
+      pair can be read against each other -- the card {card} is shared and calls
+      both "a state-of-the-art model for automatic speech recognition (ASR) and
+      speech translation". 5.78 mean WER here against the turbo's 6.36, so the turbo trades about half a point of accuracy for its
       speed. apache 2.0.
     ids:
       aa-stt: Whisper Large v3
@@ -6950,9 +7133,10 @@ models:
       short: parakeet-ctc-1.1b
       match: parakeet[\s-]*ctc[\s-]*1\.1b
     notes: >-
-      the 1.1b rung of the CTC parakeet, reached by the same
-      `fastconformer-ctc` backend as the 0.6b and with a cstr conversion of its
-      own. 5.92 mean WER against the 0.6b's 6.16 -- twice the weights for a
+      the 1.1b rung of the CTC parakeet, "an XXL version of FastConformer CTC
+      [1] (around 1.1B parameters) model" per the card {card}, reached by the
+      same `fastconformer-ctc` backend as the 0.6b and with a cstr conversion of
+      its own. 5.92 mean WER against the 0.6b's 6.16 -- twice the weights for a
       quarter point, which is the trade this entry exists to show.
     quants:
     - repo: cstr/parakeet-ctc-1.1b-GGUF
@@ -6979,7 +7163,8 @@ models:
       short: step-audio-editx
       match: step[\s-]*audio[\s-]*edit
     notes: >-
-      the best-scoring open-weights synthesis model artificial analysis rates:
+      the best-scoring open-weights synthesis model artificial analysis rates, and
+      one whose card {card} is a WeChat invitation rather than an evaluation:
       1104 elo, above chatterbox at 1021 and voxtral-tts at 1078, which were the
       only two numbers this roster had for TTS. stepfun publish AWQ and bnb
       quants and nobody has converted it to gguf, so the top of the synthesis
@@ -7011,8 +7196,8 @@ models:
       short: magpie-tts-357m
       match: magpie[\s-]*tts
     notes: >-
-      nvidia's small multilingual synthesiser, and the only model in this group
-      that arrives scored AND runnable: artificial analysis rates the february
+      nvidia's small multilingual synthesiser {card}, and the only model in this
+      group that arrives scored AND runnable: artificial analysis rates the february
       build at 1065 elo and m1el published a gguf. 357m, which makes it the
       cheapest thing on the synthesis board by an order of magnitude.
 
@@ -7044,8 +7229,10 @@ models:
       short: firered-asr
       match: fire[\s-]*red[\s-]*asr
     notes: >-
-      xiaohongshu's attention-encoder-decoder transcriber, second generation.
-      no conversion exists in any repo crispasr names.
+      xiaohongshu's attention-encoder-decoder transcriber, second generation,
+      and one module of what its card {card} presents as "an all-in-one ASR
+      system with ASR, VAD, LID, and Punc modules". no conversion exists in any
+      repo crispasr names.
     crispasr:
       backend: firered-asr
     ids:
@@ -7068,7 +7255,9 @@ models:
       match: glm[\s-]*asr
     notes: >-
       zhipu's nano transcriber, from the lab whose GLM text models this roster
-      already carries. no conversion exists.
+      already carries. the card {card} claims it "outperforms OpenAI Whisper V3 on
+      multiple benchmarks while maintaining a compact size", which no third party
+      here has checked. no conversion exists.
     crispasr:
       backend: glm-asr
     ids:
@@ -7096,8 +7285,10 @@ models:
       short: granite-speech-3.3
       match: granite[\s-]*speech[\s-]*3\.3
     notes: >-
-      the 3.3 generation of ibm's speech line, and the oldest of the four
-      granite transcribers crispasr carries. the 4.1 entries below supersede it;
+      the 3.3 generation of ibm's speech line, and the oldest of the four granite
+      transcribers crispasr carries. the card {card} documents only the
+      transformers path, "supported natively in `transformers` from the `main`
+      branch". the 4.1 entries below supersede it;
       it is here because the backend is distinct and a roster that lists what
       runs should say so.
     crispasr:
@@ -7131,8 +7322,10 @@ models:
       short: granite-speech-4.1
       match: granite[\s-]*speech[\s-]*4\.1(?![\s-]*2b[\s-]*(?:nar|plus))(?![\s-]*(?:nar|plus))
     notes: >-
-      the current granite speech 2b. ibm ships three 4.1 variants and crispasr
-      gives each its own backend -- this base one, a non-autoregressive `-nar`
+      the current granite speech 2b, trained per the card {card} on "174,000
+      hours of audio from public corpora for ASR and AST as well as synthetic
+      datasets". ibm ships three 4.1 variants and crispasr gives each its own
+      backend -- this base one, a non-autoregressive `-nar`
       and a `-plus` -- so they are three entries rather than one with rungs.
     crispasr:
       backend: granite-4.1
@@ -7161,8 +7354,10 @@ models:
       short: granite-speech-4.1-nar
       match: granite[\s-]*speech[\s-]*4\.1[\s-]*(?:2b[\s-]*)?nar
     notes: >-
-      the non-autoregressive 4.1: one forward pass with no decode loop, the same
-      trade sensevoice-small and paraformer make. faster, and with no beam
+      the non-autoregressive 4.1, which the card {card} frames as "a
+      non-autoregressive (NAR) speech recognition model that formulates ASR as
+      conditional transcript editing": one forward pass with no decode loop, the
+      same trade sensevoice-small and paraformer make. faster, and with no beam
       search to fall back on.
     crispasr:
       backend: granite-4.1-nar
@@ -7190,7 +7385,10 @@ models:
     name:
       short: granite-speech-4.1-plus
       match: granite[\s-]*speech[\s-]*4\.1[\s-]*(?:2b[\s-]*)?plus
-    notes: the `-plus` 4.1 variant, carried because crispasr dispatches it separately.
+    notes: 'the `-plus` 4.1 variant, carried because crispasr dispatches it separately.
+      the card {card} is shared across the family and puts this one among "Two
+      additional model variants explore different capabilities and inference
+      optimization", so what distinguishes it is not stated per variant.'
     crispasr:
       backend: granite-4.1-plus
     ids:
@@ -7218,8 +7416,10 @@ models:
       short: higgs-stt
       match: higgs[\s-]*audio[\s-]*(?:v3[\s-]*)?stt|higgs[\s-]*stt
     notes: >-
-      the transcription half of boson's higgs-audio v3. no conversion exists in
-      any repo crispasr names.
+      the transcription half of boson's higgs-audio v3, which the card {card}
+      gives as "A speech-to-text model combining a Whisper-Large-v3 encoder with
+      a Qwen3 decoder (2.68B total parameters)". no conversion exists in any repo
+      crispasr names.
     crispasr:
       backend: higgs-stt
     ids:
@@ -7252,7 +7452,9 @@ models:
       match: kyutai[\s-]*stt[\s-]*1b|\bstt[\s-]*1b[\s-]*en
     notes: >-
       kyutai's streaming transcriber, english and french, from the same lab as
-      the pocket-tts in the synthesis roster above. crispasr names a 2.6b
+      the pocket-tts in the synthesis roster above -- the card {card} is explicit
+      that it is "for streaming speech-to-text", which is the axis it is carried
+      on rather than accuracy. crispasr names a 2.6b
       english-only sibling under the same backend, which is a separate model
       rather than a rung and is not pinned here.
     crispasr:
@@ -7275,7 +7477,9 @@ models:
     name:
       short: mega-asr
       match: mega[\s-]*asr
-    notes: no conversion exists; carried because crispasr compiles in the backend.
+    notes: 'no conversion exists; carried because crispasr compiles in the backend.
+      the card {card} is a directory listing rather than a description, and names
+      the backbone it wraps -- "Qwen3-ASR-1.7B/".'
     crispasr:
       backend: mega-asr
     ids:
@@ -7298,7 +7502,8 @@ models:
       match: mini[\s-]*omni[\s-]*2
     notes: >-
       an early end-to-end speech-in speech-out model that crispasr reaches for
-      transcription. it predates most of this roster and is carried for
+      transcription, though the card {card} is pitched at the whole loop --
+      "the ability to understand images, speech and text, just like GPT-4o". it predates most of this roster and is carried for
       coverage rather than as a pick.
     crispasr:
       backend: mini-omni2
@@ -7328,7 +7533,8 @@ models:
       match: qwen3[\s.-]*asr[\s-]*0\.6b
     notes: >-
       the 0.6b rung of the qwen3-asr line whose 1.7b this roster already
-      carries. crispasr reaches this one through `--backend qwen3` and the 1.7b
+      carries -- the card {card} is shared, and puts both at "language
+      identification and ASR for 52 languages and dialects". crispasr reaches this one through `--backend qwen3` and the 1.7b
       through `qwen3-1.7b`, so they are separate entries rather than two rungs
       of one -- which is also why the 1.7b's `crispasr` block is written
       `qwen3-1.7b` where its gguf detects as the base `qwen3`.
@@ -7360,6 +7566,9 @@ models:
     notes: >-
       a japanese finetune of qwen3-asr-1.7b on anime and visual-novel speech,
       which is a domain the broadcast-trained reazonspeech above does not cover.
+      the card {card} is mostly about plumbing -- "The source repository is
+      intended for the `qwen-asr` wrapper / original Qwen3-ASR" -- and publishes
+      no evaluation.
       no conversion exists and no backend can be asserted.
     ids:
       aa-stt: ''
@@ -7404,8 +7613,9 @@ models:
       match: \bm2m[\s-]*100\b(?![\s-]*wmt)
     notes: >-
       100 languages any-to-any, which is what "any" means here: it translates
-      between pairs without routing through english, unlike the wmt21 pair
-      below.
+      between pairs without routing through english, unlike the wmt21 pair below.
+      the card {card} states the shape, "a multilingual encoder-decoder
+      (seq-to-seq) model trained for Many-to-Many multilingual translation".
     quants:
     - repo: cstr/m2m100-418m-GGUF
       quant: Q8_0
@@ -7418,8 +7628,10 @@ models:
       short: m2m100-wmt21
       match: wmt[\s-]*21
     notes: >-
-      english to seven languages, and the direction is baked into the weights --
-      meta ship a separate `x-en` checkpoint for the way back, which crispasr
+      english to seven languages, and the direction is baked into the weights:
+      the card {card} calls it "a 4.7B multilingual encoder-decoder (seq-to-seq)
+      model trained for one-to-many multilingual translation", and meta ship a
+      separate `x-en` checkpoint for the way back, which crispasr
       names under the same backend. this entry pins the `en-x` half and carries
       the other as a component, because they are two files of one job rather
       than two rungs of one model.
@@ -7441,7 +7653,8 @@ models:
     notes: >-
       419 languages, the widest coverage of anything in this registry in any
       modality -- omnivoice's 600+ is synthesis and omniasr's is recognition;
-      this is translation. the repo also ships a `-ref` diff-harness file, which
+      this is translation. the card {card} gives the architecture as "a
+      multilingual machine translation model based on the T5 architecture". the repo also ships a `-ref` diff-harness file, which
       is not a rung and is named nowhere here.
     quants:
     - repo: cstr/madlad400-3b-mt-GGUF
@@ -7456,7 +7669,9 @@ models:
       match: \bsidon\b
     notes: >-
       not recognition and not synthesis: it takes 16 kHz mono in and emits
-      restored 48 kHz mono, so it is the one entry in the speech roster whose
+      restored 48 kHz mono -- a research artefact rather than a product, which
+      the card {card} is candid about, crediting "project gamma of the National
+      Institute of Advanced Industrial Science and Technology" -- so it is the one entry in the speech roster whose
       job is to repair audio rather than to read or write it. crispasr carries
       one other backend of that shape, `voxcpm2-vae`, against the VoxCPM2
       weights this roster already holds for synthesis.
@@ -7484,7 +7699,8 @@ models:
       match: glotlid
     notes: >-
       language identification over a transcript, and the broadest of the three
-      here. crispasr applies it as a step rather than a backend, which is why
+      here. apache 2.0, which the card {card} states as "the Apache License,
+      Version 2.0 plus notices". crispasr applies it as a step rather than a backend, which is why
       this carries `crispasr.post` and no `--backend` name exists for it.
     quants:
     - repo: cstr/glotlid-GGUF
@@ -7510,8 +7726,10 @@ models:
       short: fullstop-punc
       match: fullstop[\s-]*punc
     notes: >-
-      punctuation restoration across several languages. the key is a rename the
-      hub reports and `resolve-base` flags -- `fullstop-punctuation-multilang-
+      punctuation restoration, and the card {card} is narrower than "several
+      languages" suggests -- it "predicts the punctuation of English, Italian,
+      French and German texts". the key is a rename the hub reports and
+      `resolve-base` flags -- `fullstop-punctuation-multilang-
       large` does not look like `fullstop-punc-multilang` -- and the rename is
       real, which is why that flag reports rather than filters.
     quants:
@@ -7525,7 +7743,8 @@ models:
     name:
       short: punctuate-all
       match: punctuate[\s-]*all
-    notes: punctuation restoration; the smaller alternative to fullstop-punc above.
+    notes: punctuation restoration {card}; the smaller alternative to fullstop-punc
+      above.
     quants:
     - repo: cstr/punctuate-all-GGUF
       quant: Q4_K
@@ -7539,9 +7758,11 @@ models:
       match: fire[\s-]*red[\s-]*punc
     notes: >-
       xiaohongshu's punctuation model, from the team behind the firered-asr
-      entry above. its conversion is the only one in the post set with an
+      entry above -- its card {card} is the shared one for "an all-in-one ASR
+      system with ASR, VAD, LID, and Punc modules", of which this is the last. its conversion is the only one in the post set with an
       imatrix rung, and it ships an untagged `fireredpunc.gguf` beside the
-      tagged ones, so the pin names its file.
+      tagged ones -- which the pin does NOT name: it is `quant: Q8_0`, and the
+      untagged file is a second copy the size table keys separately.
     quants:
     - repo: cstr/fireredpunc-GGUF
       quant: Q8_0

@@ -46,6 +46,9 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import verdicts  # noqa: E402  reference rendering and the staleness bands
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = "data/usecase.json"
 # written judgement lives beside the collectors as SOURCE, not in data/,
@@ -706,12 +709,76 @@ def check_citations(authored, sentiment, names):
     return 1 if seen else 0
 
 
+def check_verdicts(authored, built, ledger_path=None, decided_path=None):
+    """Verdicts whose evidence has moved since somebody wrote them.
+
+    References keep a verdict's FIGURES live -- see research/verdicts.py -- and
+    that is not the same as keeping its argument true. Muse glimmer's note
+    reasoned from reddit "being unanimous the other way" when reddit read 100%;
+    at 86% every rendered number is still right and the sentence is not.
+
+    So `authored_against` records the values the author reasoned from -- in
+    research/prose.json, the one ledger that covers every written surface --
+    and this reports what has moved out from under them. A block with no
+    snapshot is listed rather than failed: stamping one from today's values would assert
+    that somebody re-read prose they have not, which is the only way this check
+    can lie.
+
+    A row a human has DECIDED at these figures is settled and skipped, the same
+    rule review-verdicts uses. The two disagreed for a while -- that one honours
+    the answer and this one, which is what the sweep punch list runs, did not --
+    so eighteen verdicts somebody had re-read came back every sweep.
+    """
+    import prose
+    led = prose.ledger(ledger_path or prose.LEDGER)
+    here = os.path.dirname(os.path.abspath(__file__))
+    try:
+        with open(decided_path or os.path.join(here, "verdicts-decided.json")) as f:
+            decided = json.load(f)
+    except (IOError, ValueError):
+        decided = {}
+    models = (built or {}).get("models") or {}
+    stale, unstamped, settled = [], [], 0
+    for repo, blk in sorted((authored or {}).items()):
+        facets = (models.get(repo) or {}).get("facets") or {}
+        snap = prose.snapshot_for(repo, led)
+        if not snap:
+            unstamped.append(repo)
+            continue
+        was = (decided.get(repo) or {}).get("figures")
+        if was is not None and was == verdicts.snapshot(sorted(snap), facets):
+            settled += 1
+            continue
+        for key, why in verdicts.moved(snap, facets):
+            stale.append((repo, key, why))
+
+    for repo, key, why in stale:
+        print("!!! %s: %s %s -- the verdict was written against the old figure"
+              % (repo, key, why))
+    print("verdicts: %d figure(s) moved under a verdict that vouched for them, "
+          "%d decided" % (len(stale), settled))
+    if unstamped:
+        print("verdicts: %d block(s) carry no authored_against and are not "
+              "checked; each gets one the next time it is edited" % len(unstamped))
+        for repo in unstamped[:10]:
+            print("    %s" % repo)
+        if len(unstamped) > 10:
+            print("    ... and %d more" % (len(unstamped) - 10))
+    return 1 if stale else 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--assessed", default=ASSESSED,
                     help="the written judgements, which this file only carries")
+    ap.add_argument("--decided", default=None,
+                    help="answers review-verdicts recorded; a row settled at "
+                         "these figures is not reported again")
+    ap.add_argument("--ledger", default=None,
+                    help="who wrote each block and against which figures; "
+                         "research/prose.json unless overridden")
     ap.add_argument("--check", action="store_true",
                     help="exit 1 if the file on disk is not what this would write")
     ap.add_argument("--missing", action="store_true",
@@ -719,9 +786,20 @@ def main():
     ap.add_argument("--check-citations", action="store_true",
                     help="exit 1 if a verdict quotes a mention count the "
                          "capture disagrees with")
+    ap.add_argument("--check-verdicts", action="store_true",
+                    help="exit 1 if a figure a verdict vouched for has moved "
+                         "out from under its argument")
     ap.add_argument("--sentiment", help="override data/sentiment.json")
     ap.add_argument("--names", help="a {repo: short} map, for the fixtures")
     args = ap.parse_args()
+
+    if args.check_verdicts:
+        built = {}
+        if os.path.exists(args.out):
+            with open(args.out) as f:
+                built = json.load(f)
+        return check_verdicts(load_authored(args.assessed), built, args.ledger,
+                              args.decided)
 
     if args.check_citations:
         sentiment = (json.load(open(args.sentiment)) if args.sentiment
