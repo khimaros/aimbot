@@ -1705,6 +1705,41 @@ def every_written_surface_in_the_repo_is_reachable_by_one_driver():
 
 
 @test
+def a_draft_is_put_into_the_vocabulary_before_it_is_judged():
+    """A draft comes back grounded in substance and wrong in form. Fix the form.
+
+    Across 75 registry-note drafts the endpoint quoted the publisher's card 72
+    times and named its url 73 times -- and used a REFERENCE once. It pastes
+    `https://huggingface.co/owner/Repo` where the vocabulary says `{card}`, types
+    `29.30 gib` where it says `{gib}`, and answers in typographic quotes. Judged
+    as-is, 73 of the 75 were refused, almost all for pointing at nothing.
+
+    None of that is a disagreement about the sentence. The converters already
+    turn a typed figure into a reference -- that is what makes a drifting
+    literal correct rather than a repair of it -- so a draft is put into the
+    vocabulary on the way back and then judged by the same validator as
+    everything else.
+    """
+    notes = load_notes()
+    data = notes.load()
+    repo = "unsloth/Qwen3.8-27B-GGUF"
+    sizes = ((data.get("sizes") or {}).get(repo) or {})
+    tag = next((k for k in sizes if k.upper().startswith("Q8")), None)
+    if not tag:
+        return
+    gib = sizes[tag] / (1024 ** 3)
+
+    drafted = ('the card https://huggingface.co/%s calls it “the sweet '
+               'spot” — %.2f gib of weights.' % (repo, gib))
+    got, why = notes.normalize(drafted, repo, tag, data)
+    eq("{card}" in got, True, "the pasted url becomes the source reference: %r" % got)
+    eq("https://" in got, False, "and the literal url is gone: %r" % got)
+    eq("{gib}" in got, True, "the typed size becomes a reference: %r" % got)
+    eq(max(got, default="a") < "\x80", True, "and the text is ascii: %r" % got)
+    eq(bool(why), True, "what changed is reported rather than silent: %r" % (why,))
+
+
+@test
 def the_document_ranks_models_exactly_once():
     """MODELS.md's ranking and its sensitivity table agree about who leads.
 

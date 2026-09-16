@@ -5,6 +5,30 @@ built and is marked done when it ships.
 
 ## in progress
 
+- **a figure in the prose says where it came from, on hover.** DONE. the
+  verdicts and the registry notes reference
+  their figures, so what a reader sees is printed from the capture at build
+  time -- but once printed it was flat text. `aa.lcr p95` in a sentence is the
+  same measurement as the `aa.lcr` cell in the table, and the cell had its
+  source one hover away while the sentence had nothing.
+  the prose ships as PARTS now -- words, and the reference between them carrying
+  the key it resolved -- because the renderer is the only thing that knows which
+  reference produced which figure. recognising the rendered text again in the
+  page was tried first and is a second implementation of the substitution; it
+  also cannot attribute a cross-model reference at all, since `{aa.lcr@other}`
+  prints bare on purpose. `verdicts.render_parts` and `notes.render_parts` emit
+  them and `render()` joins them, so markdown still gets a string and there is
+  one substitution. the assessment, the model note and the notes in table cells
+  -- a quant's, a runtime's, a sampling profile's -- all carry it, so a `{gib}`
+  says which rung it read and a `{card}` says whose card. costs 2.2% of
+  docs/data.json.
+  it is drawn as a DOUBLE UNDERLINE on the phrase rather than as a `[src]`
+  marker beside it: the figure is part of the reader's sentence and keeps the
+  size and colour of the words around it, where a marker would interrupt the
+  line it belongs to. the hover binds on `[data-ref]` rather than on either
+  class, because a marker beside a cell and an underlined figure in a sentence
+  are the same claim about where a number came from.
+
 - **every written sentence in the repository goes through one door.** prose was
   written in five places and regenerable in one: `review-verdicts` drafted
   `usecase-assessed.json` and checked what came back, while the registry's 211

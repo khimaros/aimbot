@@ -221,6 +221,36 @@ def resolve(field, locator, repo, quant, data, model=None):
     return None if value is None else show(value)
 
 
+def render_parts(text, repo, quant, data, model=None):
+    """[str | {field, locator, shown, url, missing}] -- what was substituted.
+
+    Same reason verdicts.render_parts exists: the page can hang a source panel
+    off a figure it printed, but only if the renderer says which reference each
+    figure was. A `{card}` already knows the url it resolves to, and a `{gib}`
+    knows which rung it read, so both travel with the words instead of being
+    guessed at from them afterwards.
+    """
+    out, at, text = [], 0, text or ""
+    for m in REF.finditer(text):
+        field, locator = m.group(1), m.group(2)
+        got = resolve(field, locator, repo, quant, data, model)
+        if m.start() > at:
+            out.append(text[at:m.start()])
+        at = m.end()
+        part = {"field": field, "locator": locator,
+                "shown": m.group(0) if got is None else got}
+        if got is None:
+            part["missing"] = True
+        else:
+            source = source_of(field, locator, repo, quant, data, model)
+            if source:
+                part["url"] = source[0]
+        out.append(part)
+    if at < len(text):
+        out.append(text[at:])
+    return out
+
+
 def render(text, repo, quant, data, model=None):
     """(text, unresolved) with every reference replaced by its figure.
 
@@ -228,17 +258,10 @@ def render(text, repo, quant, data, model=None):
     verdicts.render gives: a note that silently loses a clause reads as a
     complete sentence that happens to be missing its evidence.
     """
-    missing = []
-
-    def one(m):
-        field, locator = m.group(1), m.group(2)
-        got = resolve(field, locator, repo, quant, data, model)
-        if got is None:
-            missing.append(m.group(1) + ("@" + locator if locator else ""))
-            return m.group(0)
-        return got
-
-    return REF.sub(one, text or ""), missing
+    parts = render_parts(text, repo, quant, data, model)
+    missing = [p["field"] + ("@" + p["locator"] if p["locator"] else "")
+               for p in parts if isinstance(p, dict) and p.get("missing")]
+    return "".join(p if isinstance(p, str) else p["shown"] for p in parts), missing
 
 
 # `"the words" {card@owner/Repo}` -- a fragment quoted and attributed. this is
@@ -530,6 +553,51 @@ def convert(text, repo, quant, data, model=None, entry=None):
 NAMES_FILE = re.compile(r"the pin names (?:its|the) file|pin names its file", re.I)
 NO_RUNG = re.compile(r"there is no ([A-Z][\w_]*)\b(?: rung)? here|"
                      r"\bno ([A-Z][\w_]*) rung here", re.I)
+# what a drafting endpoint answers in, against what the vocabulary is written
+# in. none of these is a disagreement about the sentence, so none is worth
+# refusing a draft over -- they are folded before it is judged
+ASCII_FOLD = {"‘": "'", "’": "'", "“": '"', "”": '"',
+              "–": "-", "—": " -- ", "…": "...", " ": " ",
+              "−": "-", "×": "x", "→": "->", "≥": ">=",
+              "≤": "<=", "·": "-"}
+PASTED_CARD = re.compile(r"(?:the card |see )?https?://huggingface\.co/"
+                         r"([\w.\-]+/[\w.\-]+)/?(?![\w/])", re.I)
+
+
+def normalize(text, repo, quant, data, model=None, entry=None):
+    """(text, [what changed]) -- a draft put into the vocabulary it is judged in.
+
+    A draft comes back grounded in substance and wrong in form: across 75 of
+    them the endpoint quoted the card 72 times, named its url 73 times and wrote
+    a reference once. It pastes the url where the vocabulary says `{card}`,
+    types a size where it says `{gib}`, and answers in typographic quotes.
+
+    Every fold here is mechanical and reversible in meaning. Turning a typed
+    figure into a reference is not a repair of a drifting number -- `convert`
+    leaves a literal alone wherever no capture agrees with it, which is exactly
+    how a stale claim stays visible.
+    """
+    why = []
+    folded = "".join(ASCII_FOLD.get(c, c) for c in text or "")
+    if folded != (text or ""):
+        why.append("folded to ascii")
+
+    def card(m):
+        # only the repo this note is ABOUT: a url pointing somewhere else is a
+        # citation of another model and `{card}` would silently re-aim it
+        if m.group(1).lower() not in (repo or "").lower():
+            return m.group()
+        why.append("%s -> {card}" % m.group(1))
+        return "the card {card}" if m.group().lower().startswith("the card") \
+            else "{card}"
+
+    folded = PASTED_CARD.sub(card, folded)
+    folded, converted, stale = convert(folded, repo, quant, data, model, entry)
+    why += ["%s -> %s" % (was, now) for was, now in converted]
+    why += ["%s matches no capture and was left alone" % s for s in stale]
+    return re.sub(r"[ \t]{2,}", " ", folded).strip(), why
+
+
 def check_structure(text, repo, quant, data, pin=None, model=None, entry=None):
     """[why] -- claims about the pin, against the pin.
 

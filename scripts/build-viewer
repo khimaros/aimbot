@@ -74,14 +74,23 @@ def rendered_notes(node, repo, quant=None):
         out = {}
         for key, value in node.items():
             if key in ("note", "notes") and isinstance(value, str):
-                out[key] = notes.render(value, repo, quant, note_data(),
-                                        model=repo)[0]
+                # parts, so a `{gib}` in a quant's note can say which rung it
+                # read and a `{card}` can say whose card, the same way the
+                # assessment's figures do
+                out[key] = notes.render_parts(value, repo, quant, note_data(),
+                                              model=repo)
             else:
                 out[key] = rendered_notes(value, repo, quant)
         return out
     if isinstance(node, list):
         return [rendered_notes(v, repo, quant) for v in node]
     return node
+
+
+def prose_fields():
+    """The assessed fields that are sentences, from the one enumeration of them."""
+    import prose
+    return prose.VERDICT_FIELDS
 
 
 def rendered_verdict(block, facets, other=None):
@@ -97,14 +106,26 @@ def rendered_verdict(block, facets, other=None):
     `other(repo)` reaches the model a comparison is against, for the half of
     "against 52.0" that used to be typed because a reference could only resolve
     within one model.
+
+    The prose ships as PARTS rather than as a finished string -- words, and the
+    references between them with the key each one resolved. A figure the page
+    printed out of a capture should be able to say which capture, the way the
+    table cell it came from does, and the renderer is the only thing that knows
+    which reference produced which figure. Matching the rendered text afterwards
+    would be a second implementation of the substitution, and it could not
+    attribute a cross-model reference at all: those render bare on purpose.
     """
     out = {}
     for name, value in (block or {}).items():
-        if isinstance(value, str):
-            out[name] = verdicts.render(value, facets, other)[0]
+        # `confidence` and `assessed_on` are values rather than sentences, and
+        # a value split into parts is a value with a wrapper around it
+        if name not in prose_fields():
+            out[name] = value
+        elif isinstance(value, str):
+            out[name] = verdicts.render_parts(value, facets, other)
         elif isinstance(value, list):
-            out[name] = [verdicts.render(v, facets, other)[0] if isinstance(v, str)
-                         else v for v in value]
+            out[name] = [verdicts.render_parts(v, facets, other)
+                         if isinstance(v, str) else v for v in value]
         else:
             out[name] = value
     return out
@@ -900,8 +921,12 @@ def build_model(repo, model, ctx):
         "url": HF + repo,
         "entry_url": "%s/blob/%s/registry/models.yaml#L%d"
                      % (GITHUB, BRANCH, ctx["lines"].get(repo, 1)),
-        "notes": notes.render(model.get("notes"), repo, None,
-                              note_data(), model=repo)[0] or None,
+        # parts, for the same reason the assessment ships them: this one is
+        # rendered as a paragraph beside the verdict and its `{card}` knows the
+        # url it resolved to. the notes in table CELLS stay flat strings
+        "notes": (notes.render_parts(model.get("notes"), repo, None,
+                                     note_data(), model=repo)
+                  if model.get("notes") else None),
         "runtime": rendered_notes(model.get("runtime") or {}, repo),
         "engines": engines_for(model),
         "crispasr": crispasr_block(model, ctx["backends"]),

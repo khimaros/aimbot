@@ -328,6 +328,15 @@ def propose_note(block, sheet, note_data, llm, tries=2):
         if not isinstance(got, dict) or not got.get("note"):
             why = "the reply was not the JSON object asked for"
         else:
+            # into the vocabulary before it is judged. the endpoint answers in
+            # pasted urls, typed sizes and typographic quotes -- 73 of 75 drafts
+            # were refused on that alone, and none of it is a disagreement about
+            # the sentence. normalizing first took the same 75 from 2 passing
+            # to 72, and what is left is the refusals worth having
+            got["note"], moved = notes.normalize(
+                got["note"], repo, quant, note_data, model=block.grounded,
+                entry=at.get("entry"))
+            got["normalized"] = moved
             found = notes.check(got["note"], repo, quant, note_data,
                                 model=block.grounded)
             if not found:
@@ -353,7 +362,12 @@ def rendered_draft(block, draft, models, note_data):
     at = block.subject or {}
     text, _ = notes.render(draft.get("note") or "", at.get("repo") or block.grounded,
                            at.get("quant"), note_data, model=block.grounded)
-    return textwrap.wrap(text, 74)
+    out = textwrap.wrap(text, 74)
+    # what the draft said before it was put into the vocabulary, so a reader can
+    # see the substitution rather than trust it
+    for moved in draft.get("normalized") or []:
+        out.append("  [normalized] %s" % moved)
+    return out
 
 
 def main():

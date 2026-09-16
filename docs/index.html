@@ -177,6 +177,14 @@ b { font-weight: 600; color: var(--fg); }
 /* a reference: hover for the quote we hold, click for the source. */
 .ref { color: var(--faint); cursor: help; font-size: 11px; }
 .ref:hover { color: var(--link); }
+/* a figure standing IN a sentence, as against the `[src]` marker beside a cell.
+   it is the reader's sentence, so it keeps the size and colour of the words
+   around it and says "there is something behind this" the way a glossary term
+   does -- a marker here would interrupt the line it is part of */
+.cited { color: inherit; cursor: help; text-decoration: underline double;
+         text-decoration-color: var(--faint); text-decoration-thickness: 1px;
+         text-underline-offset: 3px; }
+.cited:hover { text-decoration-color: var(--link); }
 /* the panel opens BELOW whatever explained itself, which is on top of the next
    control down. `pointer-events: none` is what keeps that from mattering: the
    pointer passes through, so moving down the toolbar hovers the button under
@@ -1346,7 +1354,7 @@ const knownFlags = ks => ks.filter(k => FLAGS.some(f => f.k === k));
 
 function haystack(m) {
   return m._hay || (m._hay = [m.repo, m.short, m.match, m.facts.arch, m.facts.model_type,
-    m.notes, m.card.summary, (m.derived.best_for || []).join(' '),
+    proseText(m.notes), m.card.summary, (m.derived.best_for || []).join(' '),
     ((m.card.hub || {}).tags || []).join(' '), Object.keys(m.tasks).join(' '),
     m.quants.map(q => q.repo + ' ' + q.quant).join(' ')].join(' ').toLowerCase());
 }
@@ -1839,7 +1847,10 @@ function onHover(e) {
   // the one under a stationary pointer -- which is how the panel came back the
   // instant the click dismissed it, and why clicking looked like it did nothing
   if (openMenu) { hideTip(); return; }
-  const ref = e.target.closest('.ref');
+  // on the attribute rather than on either class: the `[src]` marker beside a
+  // cell and a figure underlined inside a sentence are the same claim about
+  // where a number came from, and they carry the same payload
+  const ref = e.target.closest('[data-ref]');
   const th = e.target.closest('[data-help]');
   if (ref) { showTip(ref); tipFor = ref; }
   else if (th) { showHelp(th); tipFor = th; }
@@ -2157,14 +2168,17 @@ function tabOverview(m) {
   // the first thing read about a model, which gave the marketing copy the
   // position the measurements had earned
   const a = m.assessed || {};
-  const said = a.one_liner || a.notes || m.notes;
+  // prose is a list of parts now, and an empty list is truthy
+  const has = v => Array.isArray(v) ? v.length : !!v;
+  const said = has(a.one_liner) || has(a.notes) || has(m.notes);
   return (said ? '<h3>assessment</h3>' : '')
-    + (a.one_liner ? `<p class="lead">${esc(a.one_liner)}</p>` : '')
-    + (m.notes ? `<p>${esc(m.notes)}</p>` : '')
-    + (a.notes ? `<p>${esc(a.notes)}</p>` : '')
-    + (a.one_liner || a.notes
-      ? kv([['use for', esc((a.use_for || []).join(', '))],
-            ['avoid for', esc((a.avoid_for || []).join(', ')) || '<span class="faint">-</span>'],
+    + (has(a.one_liner) ? `<p class="lead">${proseHtml(a.one_liner, m)}</p>` : '')
+    + (has(m.notes) ? `<p>${proseHtml(m.notes, m)}</p>` : '')
+    + (has(a.notes) ? `<p>${proseHtml(a.notes, m)}</p>` : '')
+    + (has(a.one_liner) || has(a.notes)
+      ? kv([['use for', (a.use_for || []).map(v => proseHtml(v, m)).join(', ')],
+            ['avoid for', (a.avoid_for || []).map(v => proseHtml(v, m)).join(', ')
+              || '<span class="faint">-</span>'],
             ['evidence', esc(a.confidence || '')],
             ['assessed', esc(a.assessed_on || '')]])
         + evidenceTable(m, a.evidence || []) : '')
@@ -2340,18 +2354,69 @@ function idsSection(m) {
 // rather than the older one quietly standing in for both
 const FACET_CITED = /^([a-z]+\.[a-z0-9_-]+)/;
 
+// prose arrives as PARTS: words, and the references between them carrying the
+// key each one resolved. research/verdicts.py and research/notes.py emit them,
+// because the renderer is the only thing that knows which reference produced
+// which figure -- recognising the rendered text again here would be a second
+// implementation of the substitution, and could not attribute a cross-model
+// reference at all, since those print bare on purpose.
+const proseText = parts => !parts ? ''
+  : (Array.isArray(parts) ? parts : [parts])
+      .map(p => typeof p === 'string' ? p : p.shown).join('');
+
+// what the panel says about a figure standing in a sentence: the source the
+// table cell cites, plus what the percentile is OF, which is the part a reader
+// cannot get from the number itself
+function proseRef(part, m) {
+  if (part.url) return {url: part.url, source: part.field, id: part.locator || ''};
+  // a cross-model reference names the REPO, which is the registry's key for a
+  // model and not what `model()` resolves. a comparison against something the
+  // roster has stopped carrying falls back to the words as written
+  const owner = part.repo
+    ? D.models.find(x => x.repo === part.repo) : m;
+  if (!owner) return null;
+  const f = owner && owner.facets[part.key];
+  if (!f) return null;
+  const meta = D.facet_meta[part.key] || {};
+  const pct = facetPctRaw(owner, part.key);
+  const said = [];
+  if (part.repo) said.push(owner.short);
+  if (meta.label) said.push(meta.label);
+  if (pct !== null && f.cohort) {
+    said.push('p' + pct + ' of ' + f.cohort + ' models carrying it');
+  }
+  return {...(f.ref || {}), note: said.join(' · ') || undefined};
+}
+
+// one paragraph of prose, with every figure in it hoverable
+function proseHtml(parts, m) {
+  if (!parts) return '';
+  return (Array.isArray(parts) ? parts : [parts]).map(p => {
+    if (typeof p === 'string') return esc(p);
+    const ref = proseRef(p, m);
+    if (!ref) return esc(p.shown);
+    const payload = esc(JSON.stringify(ref));
+    const href = ref.url ? ` href="${esc(ref.url)}" target="_blank" rel="noopener"` : '';
+    return `<a class="cited" data-ref="${payload}"${href}>${esc(p.shown)}</a>`;
+  }).join('');
+}
+
+
 function evidenceTable(m, evidence) {
   if (!evidence.length) return '';
   return '<h3>evidence cited</h3>'
     + '<table><thead><tr><th>claim</th><th class="n">value now</th>'
     + '<th class="n">percentile</th><th>source</th></tr></thead><tbody>'
     + evidence.map(e => {
-      const key = (FACET_CITED.exec(e) || [])[1];
+      // the key is the first part rather than something to find in the words:
+      // an evidence line IS a reference and a clause about it
+      const lead = (Array.isArray(e) ? e : []).find(p => typeof p !== 'string');
+      const key = lead ? lead.key : (FACET_CITED.exec(e) || [])[1];
       const f = key && m.facets[key];
-      if (!f) return `<tr><td colspan="4">${esc(e)}</td></tr>`;
+      if (!f) return `<tr><td colspan="4">${proseHtml(e, m) || esc(e)}</td></tr>`;
       const meta = D.facet_meta[key] || {};
       const pct = facetPctRaw(m, key);
-      return `<tr><td>${esc(e)}</td>`
+      return `<tr><td>${proseHtml(e, m)}</td>`
         + `<td class="n">${num(facetValue(m, key), DIGITS[meta.unit] ?? 2)}</td>`
         + `<td class="n">${pct === null ? '-' : pct}</td>`
         + `<td>${refMark(f.ref)}</td></tr>`;
@@ -2486,7 +2551,7 @@ function runtimeBlock(m) {
     if (r.tracking) rows.push(['tracking',
                                out_link(r.tracking, r.tracking.split('/').slice(-2).join(' '))]);
   }
-  if (r.note) rows.push(['', `<span class="dim">${esc(r.note)}</span>`]);
+  if (r.note) rows.push(['', `<span class="dim">${proseHtml(r.note, m)}</span>`]);
   return '<h3>what loads it</h3><table><tbody>'
     + rows.map(([k, v]) => `<tr><th class="nw">${k}</th><td>${v}</td></tr>`).join('')
     + '</tbody></table>';
@@ -2704,7 +2769,7 @@ function samplerTable(m, name) {
       ? '<span class="faint">-</span>' : esc(p[f])}</td>`).join('')
     + `<td class="dim">${esc((p.tuned || []).join(' '))}</td>`
     + `<td class="dim">${esc(p.source || '')}</td></tr></tbody></table>`
-    + (p.note ? `<p class="faint">${esc(p.note)}</p>` : '');
+    + (p.note ? `<p class="faint">${proseHtml(p.note, m)}</p>` : '');
 }
 
 // the template facts for the repo SELECTED, not the one the registry records.
@@ -2807,7 +2872,7 @@ function tabOperate(m) {
       + `<td>${esc(hfTag(q))}</td><td class="n">${gib(q.gib) || '-'}</td>`
       + `<td class="n dim">${num(q.bpw, 2) || '-'}</td>`
       + `<td class="dim">${esc(q.role || '')}</td>`
-      + `<td class="dim">${esc(q.note || '')}</td></tr>`).join('')
+      + `<td class="dim">${proseHtml(q.note, m)}</td></tr>`).join('')
     + '</tbody></table>';
 
   return out;
@@ -2874,7 +2939,7 @@ function quantChoices(m) {
                      types: a.types, realBpw: a.real_bpw,
                      pinned: a.quant === q.quant, speculative: q.speculative,
                      forkType: a.fork_type, crispasr: q.crispasr,
-                     note: a.quant === q.quant ? q.note : undefined});
+                     note: a.quant === q.quant ? proseText(q.note) : undefined});
     });
   });
   return [...seen.values()];

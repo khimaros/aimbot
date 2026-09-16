@@ -95,6 +95,38 @@ def render_ref(key, facet, form=None, named=True):
     return "%s%s" % (head, tail.strip() or "p?")
 
 
+def render_parts(text, facets, other=None):
+    """[str | {key, repo, shown, missing}] -- the substitution, kept not flattened.
+
+    `render` joins these into a string, which is all markdown can hold. A page
+    can do better: a figure it printed out of a capture should be able to say
+    WHICH capture, the way the table cell that figure came from already does.
+    That is only possible if the renderer hands over what it substituted.
+
+    Recovering the key afterwards by matching the rendered text is a second
+    implementation of the substitution, and it cannot attribute a cross-model
+    reference at all -- those render bare on purpose, so there is nothing in the
+    words to match. The renderer is the only thing that knows, so it says.
+    """
+    out, at, text = [], 0, text or ""
+    for m in REF.finditer(text):
+        key, repo, form = m.group(1), m.group(2), m.group(3)
+        facet = ((facets if not repo else (other(repo) if other else None))
+                 or {}).get(key)
+        if m.start() > at:
+            out.append(text[at:m.start()])
+        at = m.end()
+        part = {"key": key, "repo": repo,
+                "shown": m.group(0) if not facet
+                else render_ref(key, facet, form, named=not repo)}
+        if not facet:
+            part["missing"] = True
+        out.append(part)
+    if at < len(text):
+        out.append(text[at:])
+    return out
+
+
 def render(text, facets, other=None):
     """(text, unresolved) with every reference replaced by its figure.
 
@@ -106,18 +138,10 @@ def render(text, facets, other=None):
     the model it is against. Without it half of "II 55.8 against 52.0" was typed,
     and the typed half went stale inside a sentence that was otherwise generated.
     """
-    missing = []
-
-    def one(m):
-        key, repo, form = m.group(1), m.group(2), m.group(3)
-        where = facets if not repo else (other(repo) if other else None)
-        facet = (where or {}).get(key)
-        if not facet:
-            missing.append(key if not repo else "%s@%s" % (key, repo))
-            return m.group(0)
-        return render_ref(key, facet, form, named=not repo)
-
-    return REF.sub(one, text or ""), missing
+    parts = render_parts(text, facets, other)
+    missing = [p["key"] if not p["repo"] else "%s@%s" % (p["key"], p["repo"])
+               for p in parts if isinstance(p, dict) and p.get("missing")]
+    return "".join(p if isinstance(p, str) else p["shown"] for p in parts), missing
 
 
 # a percentile typed into prose rather than referenced. `p95` is the shape the

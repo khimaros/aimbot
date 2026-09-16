@@ -1183,6 +1183,70 @@ test('a measured curve is only applied to the files it measured', () => {
   });
 });
 
+// a rendered reference is still a measurement, and the reader should be able to
+// ask it the same question they can ask the cell: where did this come from. the
+// rendered form is `key pNN` rather than a bare number precisely so it can be
+// recognised again, which is what makes this possible without shipping anything
+// extra -- the page refuses to print a brace and that has not changed.
+// prose ships as parts, so every place that used to `esc()` a note now has to
+// render a list. one that was missed does not throw -- it prints the words
+// `[object Object]` into the page, which is the only way this change can fail
+// quietly.
+test('no tab prints a part list as an object', () => {
+  RESET();
+  const tabs = {overview: tabOverview, quality: tabQuality, community: tabCommunity,
+                vendor: tabVendor, quantization: tabQuantization, operate: tabOperate};
+  let drawn = 0;
+  D.models.forEach(m => {
+    Object.entries(tabs).forEach(([name, fn]) => {
+      if (typeof fn !== 'function') return;
+      let html_;
+      try { html_ = fn(m); } catch (e) { ok(false, m.short + ' ' + name + ': ' + e); return; }
+      drawn++;
+      ok(!/\[object Object\]/.test(html_),
+         m.short + ' ' + name + ' printed a part list as an object');
+    });
+  });
+  ok(drawn > 300, 'and there were tabs to draw, got ' + drawn);
+});
+
+test('a figure in the assessment carries its source, the way the cell does', () => {
+  RESET();
+  // prose ships as parts: words, and the reference between them with the key it
+  // resolved. the renderer is the only thing that knows which reference made
+  // which figure, so it says, rather than the page matching the words back.
+  const m = D.models.find(x => ((x.assessed || {}).notes || [])
+    .some(p => typeof p === 'object' && x.facets[p.key]));
+  ok(m, 'some verdict quotes a facet its model carries');
+
+  const part = m.assessed.notes.find(p => typeof p === 'object' && m.facets[p.key]);
+  ok(part.shown && !/[{}]/.test(part.shown),
+     'the figure is rendered, not a brace: ' + part.shown);
+
+  const html_ = tabOverview(m);
+  const at = html_.indexOf(esc(part.shown));
+  ok(at > -1, part.key + ' is printed in the panel as ' + part.shown);
+  // the tag it sits in, whole -- the reference payload is longer than any
+  // fixed window back from the figure
+  const open = html_.slice(0, at).lastIndexOf('<a ');
+  const tag = open === -1 ? '' : html_.slice(open, at);
+  ok(tag.endsWith('>') && tag.includes('data-ref='),
+     part.key + ' is hoverable where it stands in the sentence: ' + tag.slice(0, 60));
+  ok(html_.slice(at).startsWith(esc(part.shown) + '</a>'),
+     'and the anchor wraps the figure itself, nothing more');
+
+  // a comparison against ANOTHER model renders bare -- `33.9 p82`, with the
+  // facet named once by the half before it -- so there is nothing in the words
+  // to recognise. it is attributable only because the part carries the repo.
+  const cross = D.models.flatMap(x => ((x.assessed || {}).notes || []))
+    .find(p => typeof p === 'object' && p.repo);
+  if (cross) {
+    ok(cross.key && !/[a-z]/.test(cross.shown.replace(/p\d+|[\d.\s-]/g, '')),
+       'a cross-model figure prints bare and still names its facet: '
+       + cross.key + ' -> ' + cross.shown);
+  }
+});
+
 // the verdicts name their figures now -- `{aa.speed}` rather than `aa.speed
 // p77` -- so that the number a reader sees is read from the capture at build
 // time and cannot be the one somebody typed last year. that only holds if
@@ -1192,13 +1256,20 @@ test('a verdict ships its figures rendered, never as a raw reference', () => {
   const raw = /\{[a-z][a-z0-9_.-]*\}/i;
   const fields = ['one_liner', 'notes', 'use_for', 'avoid_for', 'evidence'];
   let checked = 0;
+  // prose is a list of parts, and a part that resolved carries the figure in
+  // `shown`. one that did NOT is left holding its brace on purpose, so this
+  // still reads every word a reader will see
+  const words = v => typeof v === 'string' ? v
+    : (v || []).map(p => typeof p === 'string' ? p : p.shown).join('');
   D.models.forEach(m => {
     const a = m.assessed || {};
     fields.forEach(f => {
       const v = a[f];
-      if (!v) return;
-      (Array.isArray(v) ? v : [v]).forEach(text => {
+      if (!v || !v.length) return;
+      const many = Array.isArray(v) && v.some(x => Array.isArray(x));
+      (many ? v : [v]).forEach(one => {
         checked++;
+        const text = words(one);
         ok(!raw.test(text), m.short + ' ' + f + ' still carries a reference: ' + text);
       });
     });
@@ -1210,9 +1281,14 @@ test('a verdict ships its figures rendered, never as a raw reference', () => {
   // two of them, so `sampling.thinking.note` shipped the brace to the page.
   let notes = 0;
   const walk = (o, where) => {
-    if (typeof o === 'string') {
+    // the model-level note ships as PARTS now, the way the assessment does;
+    // the ones in table cells are still flat strings
+    const asParts = Array.isArray(o) && o.some(x => x && x.shown !== undefined);
+    if (typeof o === 'string' || asParts) {
       notes++;
-      ok(!raw.test(o), where + ' ships a raw reference: ' + o.slice(0, 90));
+      const text = typeof o === 'string' ? o
+        : o.map(x => typeof x === 'string' ? x : x.shown).join('');
+      ok(!raw.test(text), where + ' ships a raw reference: ' + text.slice(0, 90));
     } else if (o && typeof o === 'object') {
       Object.entries(o).forEach(([k, v]) => {
         if (k === 'note' || k === 'notes' || (v && typeof v === 'object')) {

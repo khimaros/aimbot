@@ -744,7 +744,17 @@ measured on every factor asked of it has no uncovered weight and does not move.
 
 every number carries a reference: hover a `[src]` for the source, the file it
 came from, and -- for a community claim -- the sentence somebody actually wrote
-and a link to the thread. a model's detail opens as a modal deep-linked in the
+and a link to the thread. that holds inside the PROSE too. a verdict names its
+figures rather than typing them, so `aa.lcr p95` in a sentence is the same
+measurement as the `aa.lcr` cell in the table: it is double-underlined where it
+stands, and hovering it gives the same panel plus what the percentile is of. a
+marker beside the sentence would interrupt the line it is part of, so the
+phrase carries the affordance itself. the prose ships as parts -- words, and
+the reference between them carrying the key it resolved -- because the renderer
+is the only thing that knows which reference produced which figure; matching
+the rendered words afterwards would be a second implementation of the
+substitution, and could not attribute `{aa.lcr@other/Repo}` at all, since a
+comparison against another model prints bare on purpose. a model's detail opens as a modal deep-linked in the
 url (`#model=Qwen/Qwen3.6-27B&tab=operate`) with six tabs, one per kind of
 claim: `overview` what it is, `quality` what third parties measured, `community`
 what each forum said, `vendor` what the people selling it say, `quantization`
