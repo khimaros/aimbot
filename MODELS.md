@@ -742,14 +742,14 @@ two copies of a claim is what this repo exists to remove.
 
    use it for coding, agentic / tool use, science / reasoning, scientific
    code, long context. avoid it for factual recall. on the quant: UD-IQ4_XS
-   at 87.25 gib rather than the 103.69 gib UD-Q4_K_XL the viewer picks. what
+   at 87.25 gib rather than UD-Q4_K_XL, the next rung up, at 103.69 gib. what
    the step up buys is measured -- unsloth publishes top-1 agreement against
    bf16 for all ten rungs, 89.554% here against 92.255% there -- and what it
    costs is the difference between the two, which is memory a host can keep
    for the companion models it runs beside this one instead. the tags
-   overstate how far the ladder compresses: 41% of the model is an n-gram
-   table whose 160-column rows take only block-32 types, so nothing goes
-   below ~4.25 bits and UD-IQ1_S is 3.28 bpw at 67.56 gib rather than
+   overstate how far the ladder compresses: 29% of the weights are an n-gram
+   table whose 160-column rows take only block-32 types, so the table never
+   goes below ~4.25 bits and UD-IQ1_S is 3.28 bpw at 67.56 gib rather than
    anything like one. every rung is sharded 3-4 ways, and the card
    https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF states sizes in
    decimal gb, so its figures read ~7% larger than the gib this registry

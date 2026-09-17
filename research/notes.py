@@ -614,7 +614,7 @@ def normalize(text, repo, quant, data, model=None, entry=None):
     folded = PASTED_CARD.sub(card, folded)
     folded, converted, stale = convert(folded, repo, quant, data, model, entry)
     why += ["%s -> %s" % (was, now) for was, now in converted]
-    why += ["%s matches no capture and was left alone" % s for s in stale]
+    why += ["%s matches no capture and was left alone: %s" % s for s in stale]
     # after the conversions, because the citation a quotation is anchored on is
     # sometimes the `{card}` the pasted url just became
     folded, marks = verdicts.quote_marks(folded)

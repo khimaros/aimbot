@@ -881,40 +881,47 @@ models:
     quants:
     - repo: unsloth/Qwen3.8-Flash-Next-GGUF
       quant: UD-IQ4_XS
-      note: 'UD-IQ4_XS at {gib} rather than the {gib@UD-Q4_K_XL} UD-Q4_K_XL the viewer
-        picks. what the step up buys is measured -- unsloth publishes top-1 agreement against
+      note: 'UD-IQ4_XS at {gib} rather than UD-Q4_K_XL, the next rung up, at
+        {gib@UD-Q4_K_XL}. what the step up buys is measured -- unsloth publishes top-1 agreement against
         bf16 for all ten rungs, 89.554% here against 92.255% there -- and what it costs is the
         difference between the two, which is memory a host can keep for the companion models it
         runs beside this one instead. the tags overstate how
-        far the ladder compresses: 41% of the model is an n-gram table whose 160-column rows take
-        only block-32 types, so nothing goes below ~4.25 bits and UD-IQ1_S is {bpw@UD-IQ1_S} at {gib@UD-IQ1_S}
+        far the ladder compresses: 29% of the weights are an n-gram table whose 160-column rows take
+        only block-32 types, so the table never goes below ~4.25 bits and UD-IQ1_S is {bpw@UD-IQ1_S} at {gib@UD-IQ1_S}
         rather than anything like one. every rung is sharded 3-4 ways, and the card {card} states
         sizes in decimal gb, so its figures read ~7% larger than the gib this registry sizes in'
     - repo: agentionai/Qwen3.8-Flash-Next-AP-GGUF
       quant: AP-Q4_K_XL
-      note: 'a second ladder, six tiers of one unsharded file each, stated in gib that match the
-        bytes measured here -- so unlike the unsloth card these figures need no conversion. the
-        tier names are base ftype names and do NOT describe the experts, which the card {card} says
-        outright and which is the trap: AP-IQ4_XS at {gib@AP-IQ4_XS} runs IQ3_S 3.44-bit experts, a rung
-        BELOW the pinned unsloth file of the same name. AP-Q4_K_XL is the smallest published tier
-        whose experts (Q4_K 4.5) sit at or above it, and the card''s own default: {gib}, 100.2
-        resident with the 262144 cache, which lands inside the step unsloth leaves between
-        {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS} and
-        {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-Q4_K_XL}, and under the latter -- but 100.2 resident
-        is more than the pinned UD-IQ4_XS asks, and asking less is the trade that rung exists for. the tier that would
-        match rung for rung, AP-IQ4_M at {gib@AP-Q4_K_M}, is in the card table with no file in the repo.
-        none of its quality figures can be read against unsloth''s: they are kl divergence and
-        top-1 against bf16 on a held-out corpus, chosen because the n-gram table has memorised
-        wikitext -- the card scores the same file 6.9-8.6 points higher on wikitext than off it
-        and says the gap widens as the quant shrinks. read the download column, not the card''s
-        vram column, which subtracts the n-gram table on the strength of -ot
-        per_layer_token_embd=CPU -- that moves the table to system ram rather than removing it,
-        and on a unified-memory host it removes nothing. the --ngram-on-disk, --ngram-io-threads,
-        --ngram-cache and -mp/--model-ple the card runs on are not mainline flags; mainline marks
-        per_layer_token_embd TENSOR_READ_LAZY and --lazy-mode defaults to auto, so a stock build
-        already reads that table from disk a row at a time, for these files and unsloth''s alike.
-        the gguf header carries unsloth''s patched template byte for byte rather than qwen''s, so
-        the turns: block below is derived from the same jinja these files ship'
+      note: 'a second ladder: seven tiers, one unsharded file each, sized in gib that match the
+        bytes measured here, so unlike the unsloth card''s decimal gb they need no conversion. the
+        tier names "do not describe the experts" {card}. from AP-IQ2_S up, the experts'' gate and
+        up projections are IQ2_S, IQ3_XXS, IQ3_S, half IQ4_XS and half IQ3_S, Q4_K, Q5_K and Q5_K,
+        so AP-IQ4_XS at {gib@AP-IQ4_XS} is IQ3_S and AP-Q4_K_M at {gib@AP-Q4_K_M} is only half
+        IQ4_XS. every tier keeps the down projections and the 160-column n-gram table at IQ4_NL
+        and puts Q6_K on the attention, ssm and embedding tensors; the one exception is
+        AP-Q5_K_XL, whose Q5_1 table is all that separates it from AP-Q5_K_M. this tier, the
+        card''s default, is Q4_K on gate and up like unsloth''s UD-Q4_K_XL, and the step from {gib}
+        to that file''s {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-Q4_K_XL} is unsloth''s down
+        projections, Q5_1 with five of the 48 layers at Q8_0, its Q8_0 attention, ssm and
+        embedding tensors, and Q5_K on one layer of gate and up. AP-IQ4_XS is the recipe of the
+        pinned unsloth UD-IQ4_XS, and the step from {gib@AP-IQ4_XS} to
+        {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS} is again unsloth''s Q8_0 on attention,
+        ssm and embedding tensors and on five layers of down projections, plus IQ4_XS on one layer
+        of gate and up. no tier carries an mtp head: every file has the 1224 tensors unsloth''s main
+        files do. the quality figures are kl divergence and top-1 agreement against one reference
+        on a held-out corpus at -c 2048 -- 85.71% top-1 here, 84.22% at AP-Q4_K_M, 82.89% at
+        AP-IQ4_XS -- and none reads against unsloth''s page, which puts its near-identical
+        UD-IQ4_XS at 89.554% top-1 and 0.0836 kl divergence against 82.89% and 0.1584 here. the
+        card chose held-out text because the n-gram table has memorised wikitext, and measures the
+        same file 6.9 to 8.6 points higher top-1 on wikitext than off it, the gap widening as the
+        quant shrinks. its vram column is the download less that table, which it moves to system
+        ram with `-ot per_layer_token_embd=CPU`. on mainline that flag restates the default -- the
+        table is an input tensor and sits on the cpu anyway -- and qwen4exp has marked it
+        TENSOR_READ_LAZY since b10660, so with mmap on and `--tensor-read-lazy` at its default
+        `auto` a stock build reads its rows from the file as tokens need them instead of keeping
+        it resident, for these files and unsloth''s alike. the vision projector is the repo''s own
+        mmproj-F16.gguf at the root, and the gguf headers carry unsloth''s chat template byte for
+        byte rather than qwen''s'
     - repo: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF
       quant: IQ3_XXS
       note: 'a third ladder, three rungs, and the only one whose publisher ran benchmarks

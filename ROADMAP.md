@@ -5,6 +5,14 @@ built and is marked done when it ships.
 
 ## in progress
 
+- **qwen3.8 flash next's AP note, re-read against the headers.** DONE. the note
+  said AP-IQ4_XS sits a rung below unsloth's UD-IQ4_XS; reading every tensor's
+  type by name shows the same IQ3_S gate/up and IQ4_NL down recipe, with
+  unsloth's extra 3 gib in Q8_0. it also counted six tiers where there are
+  seven, placed an AP-IQ4_M the card does not list, cited n-gram flags the card
+  does not use and a `--lazy-mode` mainline calls `--tensor-read-lazy`. the
+  unsloth note beside it put the n-gram table at 41% of the model, which is 51b
+  over the vendor's 125b; it is 29% of the weights in the files.
 - **the evidence table agrees with the sentence above it.** DONE. a claim prints
   the published percentile at build time, and the table beside it ranked the
   quant-discounted cohort under `value now` and `percentile`: qwen3.8 flash next
@@ -25,7 +33,9 @@ built and is marked done when it ships.
   back with nothing in the last sweep -- seven of 366 -- logged `llm: timed
   out`, and none a spent budget: a flat 180s
   clock on an endpoint decoding at 26.8 tok/s runs out near 4800 tokens, a third
-  of the medium budget. the clock is sized from the budget now.
+  of the medium budget. the clock is sized from the budget now. the first draft
+  it let through -- 251 seconds -- then crashed the drafter: a typed size that
+  matched no capture was reported in a format the report no longer had.
 - **a verdict quotes people, and the quote links to what they said.** DONE. the
   drafting vocabulary had `"the words" {q:1a2b3c4d}` and the page had no way to
   print it: `render_parts` read facet references only, so a quote id on disk

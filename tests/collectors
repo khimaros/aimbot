@@ -1741,6 +1741,26 @@ def a_draft_is_put_into_the_vocabulary_before_it_is_judged():
 
 
 @test
+def a_draft_with_a_stale_size_is_reported_rather_than_lost():
+    """A typed size nothing weighs took the whole drafter down.
+
+    `convert` reports a stale literal as a pair -- the figure, and what the
+    capture says this rung weighs now -- and `normalize` formatted it as one
+    string. The qwen3.8 flash next AP note came back after 251 seconds, typed a
+    size no file has, and the run died in a TypeError with the draft unread.
+    """
+    notes = load_notes()
+    data = {"sizes": {"pub/W-GGUF": {"IQ3_S": int(10.96 * 2 ** 30)}},
+            "tensors": {}, "facts": {}, "cards_dir": None}
+    got, why = notes.normalize("the pack is 95.75 gib over three shards",
+                               "pub/W-GGUF", "IQ3_S", data)
+    eq("95.75 gib" in got, True, "the stale figure is left for a human: %r" % got)
+    said = [w for w in why if "95.75 gib" in w]
+    eq(len(said), 1, "and reported once: %r" % (why,))
+    eq("10.96" in said[0], True, "with what the capture says now: %r" % (said,))
+
+
+@test
 def both_drafting_paths_fold_and_refuse_by_the_same_rules():
     """The fold was wired into one of the two surfaces that drafts.
 
