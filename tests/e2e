@@ -1043,6 +1043,10 @@ test('every forum a model carries enters the composite, not just one', () => {
 test('a model is read from the weights, not from a conversion of them', () => {
   RESET();
   D.models.forEach(m => {
+    // unless there is nowhere else to key it: prism published bonsai 2 27b as
+    // gguf and mlx and no unpacked weights at all, so the alternative to this
+    // key is not a better one, it is dropping the model
+    if (m.gguf_only) return;
     const conversions = new Set(m.quants.map(q => q.repo));
     ok(!conversions.has(m.repo), m.short + ' is keyed on ' + m.repo
       + ', which is one of its own quants');
@@ -1575,10 +1579,19 @@ test('the yield reproduces the one measured drafting run', () => {
 
 test('a sidecar drafter is resident, so it counts against vram', () => {
   RESET();
-  // no hand-written pairings survive: every drafter is discovered as a file in
-  // the model's own repo
-  D.models.forEach(m => eq((m.speculative || {}).draft_repo, undefined,
-    m.short + ' pins no hand-made drafter'));
+  // a drafter is DISCOVERED wherever discovering it is possible: a file in one
+  // of the model's own repos, named after the method. naming a repo by hand is
+  // for the case that rules out -- a drafter somebody else published -- so a
+  // hand-written one may never name a repo the model already pins, or it is a
+  // pairing standing in for a lookup that would have worked
+  D.models.forEach(m => {
+    const s = m.speculative || {};
+    [s, ...(s.alternatives || [])].forEach(b => {
+      if (!b.repo) return;
+      ok(!(m.quants || []).some(q => q.repo === b.repo),
+        m.short + ' hand-pairs ' + b.repo + ', which it already pins');
+    });
+  });
   // qwen folds the head into the -MTP- build, so the quant already paid
   eq(draftGib(model('qwen3.6 27b')), 0, 'an mtp build is not counted twice');
   ok(activeQuant(model('qwen3.6 27b')).repo.includes('MTP'), 'because it IS the build');
@@ -1590,6 +1603,76 @@ test('a sidecar drafter is resident, so it counts against vram', () => {
     eq(col('size').get(m), activeQuant(m).gib + d, s + ': the gib column includes it');
     ok(col('size').cell(m).includes('+d'), s + ': and the cell marks that it did');
   });
+});
+
+test('a bits-per-weight nobody could compute is not shown as one', () => {
+  RESET();
+  // the tensor table sizes a rung by looking every ggml type up in a table of
+  // block geometries, and a type the table has no entry for contributes ZERO
+  // bytes. so a file whose weights are all a fork's own type reads as almost
+  // massless: prism's PQ2_0 came back at 0.017 bpw against the 2.13 its card
+  // states, ik_llama's `_R4` rungs at 0.113, and unsloth's Q1_0 kimi k3 at
+  // 0.179. the count is a fact worth keeping and the average over it is not a
+  // number at all
+  const bad = [];
+  D.models.forEach(m => (m.quants || []).forEach(q => (q.available || []).forEach(a => {
+    if (a.real_bpw === undefined || a.real_bpw === null) return;
+    const unknown = Object.entries(a.types || {})
+      .filter(([t]) => /^type\d+$/.test(t))
+      .reduce((s, [, share]) => s + share, 0);
+    if (unknown > 0.5) bad.push(m.short + ' ' + a.quant + ' = ' + a.real_bpw
+      + ' bpw over ' + (unknown * 100).toFixed(0) + '% unsized');
+  })));
+  eq(bad.length, 0, 'a rung mostly made of types nothing can size reports no bpw: '
+     + JSON.stringify(bad.slice(0, 6)));
+});
+
+test('a ladder is one model at several sizes, however the files are named', () => {
+  RESET();
+  // byteshape names every file `<model>-<TYPE>-<N.NN>bpw.gguf`, so the size
+  // table keys them by filename -- it has to, because three of its repos ship
+  // two files of one nominal type at different bit widths and the annotation is
+  // the only thing telling them apart. what makes them ONE ladder is the stem,
+  // and the stem is what the bpw broke: five rungs of the same model reached
+  // the page as five one-rung models with nothing to switch to
+  const m = model('qwen3.8 27b');
+  const bs = m.quants.find(q => q.repo.startsWith('byteshape/'));
+  ok(bs, 'the byteshape rung is carried');
+  ok(bs.gib > 0, 'and it is sized, at ' + bs.gib + ' gib');
+  eq(bs.available.length, 5, 'the whole ladder is offered beside it, not just itself: '
+     + JSON.stringify(bs.available.map(a => a.quant)));
+  // and each rung is labelled by its TYPE rather than by a filename, which is
+  // what a reader picks from
+  bs.available.forEach(a => ok(!/\.gguf$/.test(a.quant),
+    'a rung is named by type, got ' + a.quant));
+});
+
+test('a drafter somebody else published is priced and asked for by name', () => {
+  RESET();
+  // inco drafts for qwen3.8 27b out of a repo neither the vendor nor a
+  // quantizer of it owns. nothing in the model's own repos finds that file, so
+  // before this it was unsized, charged at zero, and absent from the command
+  const m = model('qwen3.8 27b');
+  const alt = (m.speculative.alternatives || [])[0];
+  ok(alt, 'the second method is carried');
+  eq(alt.type, 'draft-dflash', 'and it is the one inco publishes');
+  ok(alt.draft && alt.draft.repo !== activeQuant(m).repo,
+     'out of a repo the model does not serve from: ' + JSON.stringify(alt.draft));
+  ok(alt.draft.gib > 0.9 && alt.draft.gib < 1.3,
+     'sized like any other file, at ' + alt.draft.gib + ' gib');
+
+  // the fit charges for the method the ENTRY serves, and only that one: both
+  // resident at once is a configuration nobody runs
+  eq(draftGib(m), (m.speculative.draft || {}).gib || 0,
+     'the fit charges the entry own method');
+  eq(col('size').get(m), activeQuant(m).gib + draftGib(m),
+     'and the alternative adds nothing on top of it');
+
+  // and the command asks for it only where it is a second download. the head
+  // folded into the served build needs no flag and must not be offered one
+  const cmd = snippets(m).map(s => s.text).join('\n');
+  ok(!cmd.includes('--hf-repo-draft'),
+     'the served rung drafts with what it already holds: ' + cmd);
 });
 
 test('the drafter comes out of the budget before a quant is chosen', () => {

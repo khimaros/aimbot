@@ -217,6 +217,80 @@ def check_runtime(rt, where, f):
         f.add(where, "runtime.branch names a branch of nothing without a fork:")
 
 
+# what a `speculative:` block may say, and what a drafter in it may be.
+#
+# WHERE THE DRAFTER LIVES IS NOT A PROPERTY OF THE METHOD. the page discovers
+# one by looking through the model's own quant repos for a file named after the
+# drafting method, which is right for all four conventions already carried --
+# qwen folds the head into the build, gemma ships an `mtp-*.gguf` beside it,
+# deepseek a `dspark:` rung, glimmer a `dflash-kquant.gguf`. It is wrong for a
+# drafter somebody ELSE published: inco's DFlash2 for qwen3.8 27b is a repo of
+# its own, so `repo:` names it and `quant:` says which of its three rungs, which
+# is exactly what `-hfd <user>/<model>:<quant>` takes.
+#
+# `alternatives:` is for a model with two methods rather than one. qwen3.8 27b
+# has both and they are not interchangeable: MTP is in the file and survives an
+# image, DFlash2 is a separate download that is faster and fails a vision
+# request outright. Neither is "the" drafter, and the fit charges for the one
+# the entry serves.
+SPEC_FIELDS = {"type", "n_max", "note", "repo", "quant", "since", "alternatives"}
+# llama.cpp's own names, from `common_speculative_type_from_name_map`. a type
+# this list does not have is a `--spec-type` the binary exits on
+SPEC_TYPES = ("none", "draft-simple", "draft-eagle3", "draft-mtp", "draft-dflash",
+              "draft-dspark", "ngram-simple", "ngram-map-k", "ngram-map-k4v",
+              "ngram-mod", "ngram-cache")
+
+
+def check_speculative(sp, where, f, nested=False):
+    """A drafter has to name a method llama.cpp has and a file to go and get.
+
+    This block had no vocabulary at all while four consumers read it, which is
+    how it differed from every other hand-written block here. A misspelt
+    `n_max` drafted llama.cpp's default of 3 and said nothing.
+    """
+    if sp is None:
+        return
+    if not isinstance(sp, dict):
+        f.add(where, "speculative must be a mapping, got %r" % (sp,))
+        return
+    unknown = sorted(set(sp) - SPEC_FIELDS)
+    if unknown:
+        f.add(where, "unknown speculative field(s) %s (known: %s)"
+              % (", ".join(unknown), ", ".join(sorted(SPEC_FIELDS))))
+    if sp.get("type") and sp["type"] not in SPEC_TYPES:
+        f.add(where, "speculative.type %r is not a llama.cpp method (known: %s)"
+              % (sp["type"], ", ".join(SPEC_TYPES)))
+    if sp.get("since") and not RELEASE.match(str(sp["since"])):
+        f.add(where, "speculative.since %r must be a llama.cpp release tag, like b10658"
+              % (sp["since"],))
+    # a repo with several rungs in it is an ambiguous download, and the flag
+    # takes the tag: `-hfd incoai/Qwen3.8-27B-DFlash2-GGUF:Q4_K_M`
+    if sp.get("repo") and not sp.get("quant"):
+        f.add(where, "speculative.repo %r names no rung: `-hfd` takes "
+                     "<user>/<model>:<quant>, so `quant:` says which one"
+              % sp["repo"])
+    if sp.get("quant") and not is_quant_name(sp["quant"]):
+        f.add(where, "speculative.quant %r does not name a quantization type"
+              % sp["quant"])
+    if sp.get("quant") and not sp.get("repo"):
+        f.add(where, "speculative.quant names a rung of nothing without a `repo:`")
+    alts = sp.get("alternatives")
+    if alts is None:
+        return
+    if nested:
+        f.add(where, "speculative alternatives do not nest")
+        return
+    if not isinstance(alts, list):
+        f.add(where, "speculative.alternatives must be a list, got %r" % (alts,))
+        return
+    for alt in alts:
+        # an alternative that names no method is the entry's own method again,
+        # which is not an alternative to anything
+        if isinstance(alt, dict) and not alt.get("type"):
+            f.add(where, "every speculative alternative needs a type: %r" % (alt,))
+        check_speculative(alt, where, f, nested=True)
+
+
 # what a `crispasr:` block may say. `runtime:` answers "which llama.cpp release
 # loads this"; this answers the same question for the other engine on the
 # roster, which is not a llama.cpp release at all but a backend name.
@@ -425,13 +499,23 @@ def check_registry(models, sampling, f):
         # case, safetensors and no separate conversion. what separates them is
         # that a conversion says so in its name, which is the same kind of
         # evidence `TOTAL_IN_NAME` reads a parameter count off in fetch-model-facts
-        if repo in {q.get("repo") for q in quants} and CONVERSION_NAME.search(repo):
+        #
+        # and "key it on the weights" has to be advice a reader can take. where
+        # nobody published weights it is not: prism shipped bonsai 2 27b as a
+        # gguf repo, a dev gguf repo and an mlx one, and there is no unpacked
+        # anything to point at. `gguf_only:` is that assertion, made per entry
+        # because whether weights exist somewhere is something a person checked
+        # rather than something the name says.
+        if repo in {q.get("repo") for q in quants} and CONVERSION_NAME.search(repo) \
+                and not m.get("gguf_only"):
             f.add(repo, "key is a conversion of itself: it is listed in this "
                         "entry's own quants. key the entry on the weights and "
-                        "keep the conversion as a quant")
+                        "keep the conversion as a quant -- or, where the release "
+                        "never had any, say `gguf_only: true`")
 
         check_runtime(m.get("runtime"), repo, f)
         check_crispasr(m.get("crispasr"), repo, f)
+        check_speculative(m.get("speculative"), repo, f)
         check_engine(m, repo, f)
         check_diarize_kind(m, repo, f)
 
@@ -619,9 +703,17 @@ def report_cards(models, cards):
 # `Fara1.5-27B-bf16`, which is a model name with a type glued on the end and no
 # extension at all. the ways of not being a quant name are not enumerable, so
 # the test is positive.
+#
+# A FORK IS FREE TO DEFINE A FAMILY, and prism's two are the case that made the
+# point: `PTQ1_0` packs ternary trits densely and `PQ2_0` gives each one a 2-bit
+# slot, which is a real difference in the file and 0.38 bits per weight. They
+# are named here rather than admitted by shape, because the shape that would
+# admit them -- letters, a digit, `_`-joined parts -- also admits most model
+# names, and every family in this list is a format somebody actually ships.
 QUANT_NAME = re.compile(
     r"^(?:[A-Z]{2}-)?"                                     # publisher ladder
-    r"(?:I?Q\d+|TQ\d+|BF16|F16|F32|FP8|MXFP\d+|NVFP\d+)"   # the type family
+    r"(?:I?Q\d+|P?TQ\d+|PQ\d+"                             # the type family
+    r"|BF16|F16|F32|FP8|MXFP\d+|NVFP\d+)"
     r"(?:_[A-Z0-9]+)*"                                     # block, then recipe
     r"(?:-[A-Z]+)?$",                                      # a build variant
     re.I)

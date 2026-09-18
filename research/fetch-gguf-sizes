@@ -44,6 +44,17 @@ TREE = "https://huggingface.co/api/models/%s/tree/main?recursive=true"
 # first letter of `Fixture_espeak_Q8.gguf` and the lazy tail swallows the whole
 # stem. Every quant tag in this corpus is a type followed by a number --
 # IQ4_XS, Q8_0, BF16, MXFP4, TQ1_0 -- so requiring one is what keeps `^` safe.
+#
+# A `-N.NNbpw` behind the type is NOT stripped, and trying it was a bug worth
+# recording. byteshape names its files `Qwen3.8-27B-IQ4_XS-3.84bpw.gguf`, which
+# reads like a tag wearing an annotation -- but three of its repos publish two
+# files of one nominal type at different bit widths, `IQ3_S-3.00bpw` beside
+# `IQ3_S-3.48bpw`, because the type name is a size class and the bit width is
+# what the file actually is. Stripping it summed them: qwen3.6 35b a3b reported
+# an IQ3_S of 26.16 gib, three files of a 35b model added together. So these
+# fall to the filename fallback below, which keeps them apart, and the registry
+# pins `file:` beside `quant:` the way it does for every other repo that names
+# its rungs after objects rather than types.
 QUANT = re.compile(r"(?:^|-)((?:UD-|AD-)?(?:IQ|Q|BF|F|MXFP|NVFP|TQ)\d[A-Za-z0-9_]*?)"
                    r"(?:(?:\.gguf)?-\d{5}-of-\d{5})?\.gguf$", re.I)
 # the same suffix, for a name the tag regex could not read at all. stripping it
@@ -164,12 +175,27 @@ def roster(repos_path, registry=REGISTRY):
     try:
         import yaml
         for m in ((yaml.safe_load(open(registry)) or {}).get("models") or {}).values():
-            for q in (m.get("quants") or []) + (m.get("components") or []):
+            for q in (m.get("quants") or []) + (m.get("components") or []) \
+                    + drafters(m):
                 if q.get("repo"):
                     repos[q["repo"].lower()] = q["repo"]
     except (IOError, ImportError):
         pass
     return sorted(repos.values())
+
+
+def drafters(m):
+    """The drafter repos an entry names, which are rungs of nothing.
+
+    A drafter is resident beside the weights, so the page charges for it and
+    therefore has to know what it weighs. Where the publisher folds the head
+    into the build or ships it beside the rungs this is empty and the size is
+    already here; where somebody else published it -- inco's DFlash2 for
+    qwen3.8 27b -- the repo appears nowhere else in the registry and went
+    unsized, which is a charge of zero for a file that is really there.
+    """
+    sp = m.get("speculative") or {}
+    return [b for b in [sp] + list(sp.get("alternatives") or []) if b.get("repo")]
 
 
 def main():

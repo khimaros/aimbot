@@ -70,8 +70,21 @@ TYPED = re.compile(r"(?<![\w.])\d+(?:\.\d+)?\s*(?:gib|bpw|bits per weight)\b", r
 # has nothing to do with anybody's machine.
 # `a fit` and `the fit` are the retention CURVE, which two ternary notes talk
 # about for a good reason, so the article rules them out
+#
+# A MEMORY SIZE IS A BUDGET WHATEVER WORD CARRIES IT, which the first version
+# of this missed by matching the vocabulary of the 24 notes it was written for
+# rather than the rule they broke. "which is what puts this model on a 12gb
+# card" asserts the reader's box without saying fit or budget, and passed.
+# So a typed capacity is refused on its own: `12gb`, `16 GB`, `128gb box`.
+#
+# `gib` is deliberately NOT here. It is the unit this repository measures files
+# in, every note carries it as a `{gib}` reference, and TYPED above already
+# refuses a typed one -- adding it would report the same sentence twice with
+# the wrong reason. What names a machine rather than a file is the decimal
+# unit, which is how vendors spell vram and how nobody here spells a rung.
+CAPACITY = r"\b\d+(?:\.\d+)?\s*(?:gb|tb|mb)\b"
 FITS = re.compile(r"(?<!a )(?<!the )\bfits?\b|\bhost budget\b|"
-                  r"(?<!size )\bbudget\b", re.I)
+                  r"(?<!size )\bbudget\b|" + CAPACITY, re.I)
 
 
 def load(data=DATA):

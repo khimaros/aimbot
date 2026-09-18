@@ -431,10 +431,28 @@ def num(v, n=1):
 MEASURED = {"gpt-oss-120b": "55", "qwen3.6 27b": "7.4"}
 
 
-def hub_popularity():
-    """repo -> its hub listing row, for downloads and likes."""
-    cat = optional("data/hf-catalog.json")
-    pop = {r["id"]: r for r in (cat.get("trending") or [])}
+def hub_popularity(cat=None, cards=None):
+    """repo -> its hub row, for downloads and likes.
+
+    Two captures answer this and they do not agree. `hf-catalog.json` is a
+    LISTING, built to find repos the roster does not carry, and its count for a
+    new repo lags behind: it had prism's bonsai 2 27b at 0 downloads with the
+    likes right, two days after a release that had 405,609. `model-cards.json`
+    holds a row fetched per repo for every key the registry names, and that one
+    was current.
+
+    So the per-repo row wins where there is one, and the listing stays the
+    fallback -- it is the only capture with anything to say about a repo the
+    registry has never heard of, which is the whole point of collecting it.
+    """
+    cat = optional("data/hf-catalog.json") if cat is None else cat
+    cards = optional("data/model-cards.json") if cards is None else cards
+    pop = {}
+    for repo, card in (cards or {}).items():
+        if isinstance(card, dict) and card.get("hub"):
+            pop[repo] = card["hub"]
+    for r in (cat.get("trending") or []):
+        pop.setdefault(r["id"], r)
     for rows_ in (cat.get("authors") or {}).values():
         for r in rows_:
             pop.setdefault(r["id"], r)

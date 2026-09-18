@@ -194,13 +194,13 @@ the roster's own endpoint, and `llm: timed out` is a different failure from
 ## the prose
 
 Five files hold written sentences rather than data, and `research/prose.py`
-enumerates all 616 blocks of them:
+enumerates all 632 blocks of them:
 
 | surface | what it is | blocks |
 |---|---|--:|
-| `usecase` | `research/usecase-assessed.json` | 155 |
-| `registry-note` | every `note:`/`notes:` in `registry/models.yaml` | 212 |
-| `models-md` | MODELS.md's prose, all of it in `research/models-md.json` | 226 |
+| `usecase` | `research/usecase-assessed.json` | 156 |
+| `registry-note` | every `note:`/`notes:` in `registry/models.yaml` | 226 |
+| `models-md` | MODELS.md's prose, all of it in `research/models-md.json` | 227 |
 | `viewer-help` | `scripts/viewer.html` `data-help`, by element | 18 |
 | `about` | `_about` in the hand-written json | 5 |
 

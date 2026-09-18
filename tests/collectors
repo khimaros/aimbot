@@ -267,6 +267,13 @@ SIZE_TREE = [
     {"type": "file", "path": "Fixture-mixedq2-00001-of-00003.gguf", "size": 1000},
     {"type": "file", "path": "Fixture-mixedq2-00002-of-00003.gguf", "size": 2000},
     {"type": "file", "path": "Fixture-mixedq2-00003-of-00003.gguf", "size": 3000},
+    # byteshape writes the measured average bit length behind the type, and it
+    # is the DISCRIMINATOR rather than decoration: three of its repos publish
+    # two files of one nominal type at different bit widths, so `IQ4_XS` names
+    # two different rungs and the annotation is what tells them apart
+    {"type": "file", "path": "Fixture-IQ2_XXS-2.56bpw.gguf", "size": 300},
+    {"type": "file", "path": "Fixture-IQ4_XS-3.84bpw.gguf", "size": 400},
+    {"type": "file", "path": "Fixture-IQ4_XS-4.20bpw.gguf", "size": 500},
     {"type": "file", "path": "README.md", "size": 1},
 ]
 
@@ -358,6 +365,16 @@ def every_publisher_naming_convention_yields_a_quant_tag():
        "untagged shards aggregate under the name the whole file would have had")
     eq(got.get("Fixture-mixedq2-00001-of-00003.gguf"), None,
        "and no shard is left standing as a rung of its own")
+    # A BIT WIDTH BEHIND THE TYPE IS PART OF WHAT THE RUNG IS. reading it as
+    # decoration and keying on the type alone summed two real files into one
+    # rung that is neither: byteshape's qwen3.6 35b a3b repo reported IQ3_S at
+    # 26.16 gib, which is three files of a 35b model added together, and its
+    # 9b repo an IQ4_XS of 17.97 gib over four. the kokoro collision again,
+    # from the other end
+    eq(got.get("Fixture-IQ4_XS-3.84bpw.gguf"), 400, "each bit width is its own rung")
+    eq(got.get("Fixture-IQ4_XS-4.20bpw.gguf"), 500, "including the one beside it")
+    eq(got.get("IQ4_XS"), None, "and the two are never added together")
+    eq(got.get("Fixture-IQ2_XXS-2.56bpw.gguf"), 300, "a lone one keys the same way")
 
 # the shape that reached the vendor tab as literal markup. a card is markdown
 # WITH html in it, and qwen3.8-flash-next's benchmark footnote opens with a
@@ -491,11 +508,101 @@ models:
 GOOD_QUANTS = ["Q8_0", "Q4_K", "F16", "F32", "BF16", "Q4", "Q8", "Q5", "TQ2",
                "Q2_0", "Q2_K", "Q2_0_G64", "Q4_K_M", "Q3_K_M-mixed",
                "Q2_K_XL-mtp", "IQ4_NL", "UD-Q4_K_XL", "UD-IQ3_XXS", "UD-Q1_0",
-               "AD-Q6_K", "AP-Q4_K_XL", "AD-NVFP4_AI2", "MXFP4"]
+               "AD-Q6_K", "AP-Q4_K_XL", "AD-NVFP4_AI2", "MXFP4",
+               # prism's ternary packings. a fork is free to define a type, and
+               # these are two of them rather than two labels over mainline
+               # ones: PTQ1_0 packs trits densely and PQ2_0 gives each a 2-bit
+               # slot, which is a real difference in the file and 0.38 bpw
+               "PQ2_0", "PTQ1_0"]
 BAD_QUANTS = ["indextts-gpt.gguf", "indextts-bigvgan.gguf", "ae.safetensors",
               "flux2-vae.safetensors", "en_female.emb.gguf", "snac-24khz.gguf",
               "diff-harness-ref", "Fara1.5-27B-bf16",
               "NVIDIA-Nemotron-3.5-Lightning-30B-A3B-bf16", "", "model"]
+
+
+# a drafter that is NOT in the model's own quant repos. incoai publishes
+# DFlash2 for qwen3.8 27b and nothing in the registry could say so: the block
+# had no vocabulary at all, so a typo in it was as silent as a correct field
+SPEC_REGISTRY = """version: 1
+models:
+  Fixture/Drafted:
+    kind: text
+    name: {short: fixture drafted}
+    quants:
+    - {repo: Fixture/Drafted-GGUF, quant: Q8_0}
+    speculative:
+      type: draft-mtp
+      n_max: 3
+      alternatives:
+      - type: draft-dflash
+        repo: outside/Drafter-GGUF
+        quant: Q4_K_M
+        n_max: 7
+        since: b10658
+    sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
+    modalities: {input: [text], output: [text]}
+"""
+
+
+@test
+def a_drafter_may_live_in_a_repo_the_model_does_not_pin():
+    """`speculative:` had no field vocabulary, so nothing in it was checked.
+
+    Every other hand-written block has one -- RUNTIME_FIELDS, CRISPASR_FIELDS,
+    ENGINES -- and this one was read by four consumers and validated by none.
+    A misspelt `n_max` silently drafted the llama.cpp default and a `type:`
+    naming a method llama.cpp does not have reached the page as a command that
+    exits on the flag.
+
+    The vocabulary is llama.cpp's own: the eleven names in
+    `common_speculative_type_from_name_map`, not a list invented here.
+    """
+    code, findings, _ = validate(SPEC_REGISTRY)
+    eq(code, 0, "the shape a cross-repo drafter needs is legal: %r" % (findings,))
+
+    bad = SPEC_REGISTRY.replace("type: draft-dflash", "type: draft-bogus")
+    code, findings, _ = validate(bad)
+    eq(code, 1, "a method llama.cpp has no name for fails lint")
+    eq(any("draft-bogus" in f["error"] for f in findings),
+       True, "and it is named: %r" % (findings,))
+
+    typo = SPEC_REGISTRY.replace("n_max: 3", "n_maks: 3")
+    code, findings, _ = validate(typo)
+    eq(code, 1, "a misspelt field fails rather than drafting the default")
+    eq(any("n_maks" in f["error"] for f in findings),
+       True, "and it is named: %r" % (findings,))
+
+    # a drafter names a repo AND which rung of it: `-hfd repo:QUANT` takes both,
+    # and a repo with three rungs in it is otherwise an ambiguous download
+    noquant = SPEC_REGISTRY.replace("        quant: Q4_K_M\n", "")
+    code, findings, _ = validate(noquant)
+    eq(code, 1, "a drafter repo with no rung named fails: %r" % (findings,))
+
+
+@test
+def a_cross_repo_drafter_is_sized_like_any_other_file():
+    """A drafter nothing pins is a download nobody measured.
+
+    The sizer's roster is the registry's `quants:` and `components:` unioned
+    with repos.txt, and a drafter is in none of those -- so the one file the
+    page charges for beside the weights was the one file with no byte count.
+    It has to be sized for the same reason a rung does: it is resident.
+    """
+    mod = load_script_with_research("fetch_gguf_sizes", "fetch-gguf-sizes")
+    tmp = tempfile.mkdtemp()
+    try:
+        reg = os.path.join(tmp, "models.yaml")
+        with open(reg, "w") as f:
+            f.write(SPEC_REGISTRY)
+        repos = os.path.join(tmp, "repos.txt")
+        with open(repos, "w") as f:
+            f.write("")
+        got = mod.roster(repos, reg)
+    finally:
+        shutil.rmtree(tmp)
+    eq("Fixture/Drafted-GGUF" in got, True, "the weights are sized, as before")
+    eq("outside/Drafter-GGUF" in got, True,
+       "and so is the drafter the model does not pin: %r" % (got,))
 
 
 TENSOR_REPO = "test-tensors/Fixture-GGUF"
@@ -889,6 +996,38 @@ def a_rung_pinned_by_filename_is_still_sized():
        "a named file that is not there is not the tag")
     eq(bt.pinned_size(sizes, {"quant": "IQ3_XXS"}), None,
        "and an unpublished tag is still nothing")
+
+
+@test
+def a_download_count_comes_from_the_repo_rather_than_the_listing():
+    """The discovery listing reports 0 for a repo days old, and it is not 0.
+
+    `downloads` and `likes` reach MODELS.md out of `hf-catalog.json`, which is a
+    LISTING built to find repos nobody is carrying yet. Its count for a new one
+    lags: prism's bonsai 2 27b published on 2026-09-16 and the listing carried
+    it at 0 downloads with the likes right, while the per-repo row
+    `fetch-model-cards` reads for every registry key said 405,609. So the
+    document printed a flat 0 for a model with four hundred thousand pulls.
+
+    The cards capture is the better source for a repo the registry NAMES --
+    it is fetched per repo rather than off a paged listing -- and the listing
+    stays the fallback, because it is the only one that has a row for a repo the
+    registry has never heard of.
+    """
+    bt = load_script("build_tables", os.path.join(RESEARCH, "build-tables"))
+    catalog = {"trending": [{"id": "new/Repo-GGUF", "downloads": 0, "likes": 347},
+                            {"id": "untracked/Other-GGUF", "downloads": 12, "likes": 1}],
+               "authors": {}}
+    cards = {"new/Repo-GGUF": {"hub": {"downloads": 405609, "likes": 743}},
+             "no/Hub-Row": {"summary": "a card with no hub block"}}
+    pop = bt.hub_popularity(catalog, cards)
+    eq((pop.get("new/Repo-GGUF") or {}).get("downloads"), 405609,
+       "the repo's own row wins over the listing: %r" % (pop.get("new/Repo-GGUF"),))
+    eq((pop.get("new/Repo-GGUF") or {}).get("likes"), 743, "for both columns")
+    eq((pop.get("untracked/Other-GGUF") or {}).get("downloads"), 12,
+       "a repo only the listing knows is still carried")
+    eq(pop.get("no/Hub-Row"), None,
+       "and a card with no hub block adds no row at all")
 
 
 @test
@@ -2067,6 +2206,22 @@ def a_registry_note_names_a_figure_rather_than_typing_it():
     eq(notes.check("the pack is {gib}", repo, quant, data), [],
        "and a referenced one is not: %r"
        % notes.check("the pack is {gib}", repo, quant, data))
+
+    # A MEMORY SIZE IS THE READER'S BOX WHATEVER WORD CARRIES IT. FITS matched
+    # `fits`, `budget` and `host budget`, which is the vocabulary of the 24
+    # notes it was written for and not the rule those notes broke. "which is
+    # what puts this model on a 12gb card" names a budget without using any of
+    # the three, and went green through the whole of `make precommit`.
+    for said in ("which is what puts this model on a 12gb card {card}",
+                 "comfortable on 16 GB of vram {card}",
+                 "a 128gb box holds it with room for context {card}"):
+        eq(bool(notes.check(said, repo, quant, data)), True,
+           "a typed memory size is the reader's box: %r" % said)
+    # what the rule is NOT about: the rig a PUBLISHER measured on is provenance,
+    # and a note may name it. this is the sentence the widening must not eat
+    ok = 'the fastest rung on the card\'s {card} own rtx 5090 table, at {gib}'
+    eq(notes.check(ok, repo, quant, data), [],
+       "the publisher's own test rig survives: %r" % notes.check(ok, repo, quant, data))
 
 
 @test
@@ -3762,6 +3917,13 @@ models:
     quants:
     - {repo: Vendor/Voxtral-4B-TTS-2603, quant: Q8_0}
     modalities: {input: [text], output: [audio]}
+  vendor/Only-As-Gguf-gguf:
+    kind: speech
+    name: {short: only-as-gguf}
+    gguf_only: true
+    quants:
+    - {repo: vendor/Only-As-Gguf-gguf, quant: Q8_0}
+    modalities: {input: [text], output: [audio]}
 """
 
 
@@ -3797,6 +3959,25 @@ def a_model_is_keyed_on_weights_not_on_a_conversion_of_itself():
     # the repo says in its name
     eq("Vendor/Voxtral-4B-TTS-2603" in where, False,
        "a vendor shipping gguf in its own weights repo is not a conversion")
+
+    # AND THE RULE HAS TO OFFER SOMEWHERE ELSE TO GO. "key the entry on the
+    # weights" assumes weights were published, and a gguf-only release is the
+    # case where they were not: prism shipped bonsai 2 27b as two gguf repos and
+    # an mlx one, with no unpacked weights anywhere. refusing that entry does
+    # not key it better, it drops a model. the exception is asserted per model
+    # rather than inferred, because "nobody published the weights" is a fact
+    # somebody checked and not one a name can carry
+    eq("vendor/Only-As-Gguf-gguf" in where, False,
+       "a release that exists only as gguf may say so: %r"
+       % where.get("vendor/Only-As-Gguf-gguf"))
+    # and the flag is an assertion about THIS entry, not a way to turn the check
+    # off: an entry that has somewhere else to be keyed still fails
+    lying = CONVERSION_KEYED_REGISTRY.replace(
+        "  converter/Also-Real-GGUF:\n    kind: speech",
+        "  converter/Also-Real-GGUF:\n    kind: speech\n    gguf_only: false")
+    code, findings, _ = validate(lying)
+    eq(any("conversion of itself" in x["error"] for x in findings), True,
+       "saying false changes nothing: %r" % (findings,))
 
 
 @test

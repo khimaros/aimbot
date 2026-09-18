@@ -44,9 +44,16 @@ Voxtral Mini is Mistral's **3B-parameter speech-LLM** — an enhancement of [Min
 | File | Size | Notes |
 | --- | ---: | --- |
 | `voxtral-mini-3b-2507-q4_k.gguf` | 2.5 GB | **Q4_K — recommended default** |
-| `voxtral-mini-3b-2507-q8_0.gguf` | 5.0 GB | Q8_0, near-lossless |
+| `voxtral-mini-3b-2507-q8_0.gguf` | 4.6 GB | Q8_0, near-lossless |
+| `voxtral-mini-3b-2507-f16.gguf` | 8.7 GB | F16 — the unquantised conversion every quant above is cut from |
 
-Both quantisations produce the correct transcript on `samples/jfk.wav`:
+The F16 is the reference artifact: `crispasr-quantize` takes it as input, and it
+is what you want for a numerical comparison against the PyTorch model or as the
+source for a quant this repo does not publish. It is **not** the one to
+transcribe with — see the timings below, where Q4_K is 2.2x faster for the same
+transcript.
+
+All three produce the correct transcript on `samples/jfk.wav`:
 > And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country.
 
 The mel filterbank from `WhisperFeatureExtractor` and the Tekken tokenizer vocab are **baked into the GGUF**, so the C++ runtime computes everything natively — no Python/torch/librosa at inference time.
@@ -60,7 +67,7 @@ cd CrispASR
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc) --target voxtral-main
 
-# 2. Download a quantisation
+# 2. Download a quantisation (or `voxtral-mini-3b-2507-f16.gguf` for the reference)
 huggingface-cli download cstr/voxtral-mini-3b-2507-GGUF \
     voxtral-mini-3b-2507-q4_k.gguf --local-dir .
 
@@ -96,7 +103,7 @@ Measured on `samples/jfk.wav` (11 seconds), 4-core CPU:
 
 | Variant | Mel | Encoder | Prefill | Decode/tok | **Total** |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| F16 (8.8 GB) | 264 ms | 48.7 s | 78.4 s | 1134 ms | 157 s |
+| F16 (8.7 GB) | 264 ms | 48.7 s | 78.4 s | 1134 ms | 157 s |
 | **Q4_K (2.5 GB)** | 246 ms | 32.7 s | **30.8 s** | **242 ms** | **70 s** |
 
 Q4_K gives a **2.2× speedup** over F16 while producing identical transcripts. The 3B model is larger than the Qwen3-ASR 0.6B — for fastest CPU inference on short clips, Qwen3-ASR Q4_K (6.6s for 11s audio) is faster; Voxtral's advantage is the richer capabilities (audio understanding, function calling, text Q&A) and superior multilingual WER.
@@ -150,7 +157,7 @@ The 0.87 min cosine sim on the encoder is from the bf16 reference precision (7-b
 ## How this was made
 
 1. HF safetensors converted to GGUF F16 by [`models/convert-voxtral-to-gguf.py`](https://github.com/CrispStrobe/CrispASR/blob/main/models/convert-voxtral-to-gguf.py). All 765 tensors (762 model + mel_filters + mel_window + Tekken vocab blob) map cleanly.
-2. Quantised variants produced by [`cohere-quantize`](https://github.com/CrispStrobe/CrispASR/blob/main/examples/cohere-main/cohere-quantize.cpp) with the Q4_0 fallback for 1280-wide audio encoder tensors (1280 % 256 ≠ 0 for Q4_K, same situation as Qwen3-ASR).
+2. Quantised variants produced by [`crispasr-quantize`](https://github.com/CrispStrobe/CrispASR/blob/main/examples/cohere-main/crispasr-quantize.cpp) with the Q4_0 fallback for 1280-wide audio encoder tensors (1280 % 256 ≠ 0 for Q4_K, same situation as Qwen3-ASR).
 3. Inference implemented in [`src/voxtral.{h,cpp}`](https://github.com/CrispStrobe/CrispASR/blob/main/src/voxtral.cpp) (~1300 LOC): encoder and LLM each run as one ggml graph, with a persistent F16 KV cache `(head_dim, max_ctx, n_kv_heads, n_layers)` shared between prefill and per-token decode steps. Flash attention (`ggml_flash_attn_ext`) used on both prefill (F16 causal mask) and decode (no mask) paths.
 
 ## Related

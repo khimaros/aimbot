@@ -118,7 +118,189 @@
      "source": "quesma",
      "url": "https://quesma.com/blog/qwen38-27b-quantizations-benchmarked/",
      "captured": "2026-09-08",
-     "note": "READ FROM A CHART. the article publishes its results as graphs and prose and prints no score for any arm, so these retentions are the midpoints of what it states verbally -- bf16 and Q4_K_M both at about 78% pass, UD-Q2_K_XL at about 70-71%. the FILE SIZES it prints are exact (55 / 17 / 10.7 GB against bf16) and the bits per weight are derived from them. treat the shape as measured and the third decimal as decoration. the same sweep ran GPQA diamond across five arms including UD-IQ1_S at 1.80 bpw, where it collapsed to roughly random guessing -- that is the only measurement anybody has published below two bits and it is NOT in these points, because mixing two benchmarks in one curve is the thing this file's schema forbids. it bounds what the curve below 3.11 bpw can claim rather than filling it in."
+     "note": "READ FROM A CHART. the article publishes its results as graphs and prose and prints no score for any arm, so these retentions are the midpoints of what it states verbally -- bf16 and Q4_K_M both at about 78% pass, UD-Q2_K_XL at about 70-71%. the FILE SIZES it prints are exact (55 / 17 / 10.7 GB against bf16) and the bits per weight are derived from them. treat the shape as measured and the third decimal as decoration. the same sweep ran GPQA diamond across five arms including UD-IQ1_S at 1.80 bpw, where it collapsed to roughly random guessing -- the only BENCHMARK anybody has published below two bits, and it is NOT in these points, because mixing two benchmarks in one curve is the thing this file's schema forbids. it bounds what the curve below 3.11 bpw can claim rather than filling it in. byteshape has since published kl divergence over the same repo's ladder down to 1.78 bpw, which is the proxy entry below: a different measure, agreeing on the direction."
+    }
+   },
+   {
+    "kind": "score",
+    "quant_repo": "byteshape/Qwen3.8-27B-GGUF",
+    "metric": "quality relative to bf16, averaged over six suites in thinking and instruct modes",
+    "points": [
+     [
+      2.55,
+      0.9304
+     ],
+     [
+      2.86,
+      0.9656
+     ],
+     [
+      2.98,
+      0.9726
+     ],
+     [
+      3.18,
+      0.9872
+     ],
+     [
+      3.77,
+      0.9963
+     ],
+     [
+      16.0,
+      1.0
+     ]
+    ],
+    "quants": [
+     "IQ2_XXS",
+     "IQ3_XXS",
+     "IQ3_XS",
+     "IQ3_S",
+     "IQ4_XS",
+     "BF16"
+    ],
+    "ref": {
+     "source": "byteshape",
+     "url": "https://byteshape.com/blogs/Qwen3.8-27B/",
+     "captured": "2026-09-18",
+     "note": "FIVE QUANT FAMILIES UNDER ONE HARNESS, which is the widest published comparison this file holds -- byteshape's own ladder plus unsloth's twelve rungs, ISTA-DASLab's four, bartowski's six and AtomicChat's five, every one of them scored against the same bf16 reference and reported per gpu. only byteshape's own rungs are points here, because the other four are other repos' files and the two this roster already curves are already keyed: the sweep is a SECOND measurement of them and belongs where it can be read against the first. where it overlaps ISTA's own card it corroborates the part that matters -- ISTA's harness put unsloth's UD-IQ2_S at 0.8524 and this one puts it at 0.8633, two independent runs agreeing that unsloth's 2.4 bpw rung gives up about fifteen points where both publishers' own rungs at the same size give up six. it disagrees about the middle of ISTA's ladder, 0.9438 here against 0.9922 on ISTA's card for IQ3_XXS, which is what two different benchmark suites look like and why neither is allowed to overwrite the other. the scores are the card's 'Acc' column and are identical across all six gpu tables; only throughput moves. bits per weight are the file bytes over 27.78b parameters rather than the blog's own column, which is over the language weights alone and reads about 0.06 higher."
+    }
+   },
+   {
+    "kind": "proxy",
+    "metric": "kl divergence",
+    "better": "lower",
+    "hand_written": true,
+    "quant_repo": "unsloth/Qwen3.8-27B-GGUF",
+    "points": [
+     [
+      1.78,
+      0.38955
+     ],
+     [
+      1.94,
+      0.261876
+     ],
+     [
+      2.09,
+      0.181493
+     ],
+     [
+      2.41,
+      0.108374
+     ],
+     [
+      2.83,
+      0.0652
+     ],
+     [
+      3.15,
+      0.040407
+     ],
+     [
+      3.47,
+      0.028759
+     ],
+     [
+      3.79,
+      0.019844
+     ],
+     [
+      4.1,
+      0.011992
+     ],
+     [
+      4.42,
+      0.008827
+     ],
+     [
+      4.62,
+      0.019264
+     ],
+     [
+      4.74,
+      0.007054
+     ],
+     [
+      5.05,
+      0.009603
+     ],
+     [
+      5.06,
+      0.00521
+     ],
+     [
+      5.38,
+      0.003619
+     ],
+     [
+      5.69,
+      0.002839
+     ],
+     [
+      6.01,
+      0.002432
+     ],
+     [
+      6.33,
+      0.001771
+     ],
+     [
+      6.65,
+      0.001426
+     ],
+     [
+      6.97,
+      0.00115
+     ],
+     [
+      7.29,
+      0.000985
+     ],
+     [
+      8.08,
+      0.000726
+     ],
+     [
+      8.36,
+      0.000648
+     ],
+     [
+      9.06,
+      0.000503
+     ]
+    ],
+    "quants": [
+     "UD-IQ1_S",
+     "UD-IQ1_M",
+     "UD-IQ2_XXS",
+     "UD-IQ2_S",
+     "UD-Q2_K_XL",
+     "UD-IQ3_XXS",
+     "UD-IQ3_S",
+     "UD-Q3_K_XL",
+     "UD-IQ4_XS",
+     "UD-Q4_K_S",
+     "Q4_0",
+     "UD-Q4_K_M",
+     "Q4_1",
+     "UD-Q4_K_XL",
+     "UD-Q5_K_S",
+     "UD-Q5_K_M",
+     "UD-Q5_K_XL",
+     "UD-Q6_K",
+     "UD-Q6_K_M",
+     "UD-Q6_K_L",
+     "UD-Q6_K_XL",
+     "UD-Q8_K_L",
+     "Q8_0",
+     "UD-Q8_K_XL"
+    ],
+    "ref": {
+     "source": "byteshape",
+     "url": "https://byteshape.com/blogs/Qwen3.8-27B/",
+     "captured": "2026-09-18",
+     "note": "MEASURED BY A COMPETITOR RATHER THAN THE PUBLISHER, which is unusual here and is why the repo it measures is named rather than assumed: every other proxy in this file is a card reporting its own work. twenty-four rungs of unsloth's ladder, and the only evidence anybody has published below two bits for this model other than quesma's GPQA arm -- UD-IQ1_S at 1.78 bpw diverges 0.39, which is 600x the Q8_0 rung and 77x its own UD-Q4_K_XL. the two rungs that are not UD are where the ladder stops being monotonic: Q4_0 at 4.62 bpw diverges more than UD-Q4_K_S below it and more than twice UD-Q4_K_M above it, and Q4_1 the same, which is the dynamic allocation doing its job and is visible only because this sweep ran the plain rungs too. a kl divergence is not comparable to another card's and is shown rather than applied, so this discounts nothing."
     }
    }
   ],

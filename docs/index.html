@@ -2902,6 +2902,24 @@ function draftBlock(m, pick) {
                + 'without the head']);
   }
   if (note.length) rows.push(['', `<span class="dim">${proseHtml(note, m)}</span>`]);
+  // a second method, where the model has one. it is NOT priced into the fit and
+  // must not read as though it were: only one drafter is resident, and the
+  // entry's own is the one the numbers above were computed with. qwen3.8 27b is
+  // the case -- the head in its own file, or a faster one from inco that is a
+  // separate download and cannot see an image
+  (s.alternatives || []).forEach(a => {
+    const bits = [`<code>${esc(a.type)}</code>`];
+    if (a.draft && a.draft.repo) {
+      bits.push('from ' + out_link('https://huggingface.co/' + a.draft.repo, a.draft.repo)
+        + (a.draft.file ? ` <code>${esc(a.draft.file)}</code>` : ''));
+    }
+    if (a.draft && a.draft.gib) bits.push(`${gib(a.draft.gib)} gib to download`);
+    if (a.n_max) bits.push(`drafts ${a.n_max}`);
+    if (a.since) bits.push(`needs ${esc(a.since)}`);
+    const why = Array.isArray(a.note) ? proseHtml(a.note, m) : '';
+    rows.push(['or', bits.join(', ')
+      + (why ? `<br><span class="dim">${why}</span>` : '')]);
+  });
   return '<h3>what drafts for it</h3><table><tbody>'
     + rows.map(([k, v]) => `<tr><th class="nw">${k}</th><td>${v}</td></tr>`).join('')
     + '</tbody></table>';
@@ -3085,7 +3103,13 @@ function llamaServer(m, pick, profileName) {
   // speculative decoding is a property of the GGUF, not of the model: a quant
   // saying `speculative: false` cannot draft whatever the model declares
   const spec = (pick && pick.speculative === false) ? {} : (m.speculative || {});
-  if (spec.draft_repo) cmd.push('--hf-repo-draft ' + spec.draft_repo);
+  // a drafter in the served repo needs no flag -- llama.cpp resolves a sidecar
+  // beside the weights on its own, and the head folded into the build is simply
+  // there. one somebody ELSE published is a second download and has to be asked
+  // for by name, which is what `-hfd <user>/<model>:<quant>` takes
+  if (spec.draft && pick && spec.draft.repo !== pick.repo) {
+    cmd.push(`--hf-repo-draft ${spec.draft.repo}:${spec.draft.file}`);
+  }
   if (spec.type) {
     cmd.push('--spec-type ' + spec.type);
     if (spec.n_max) cmd.push('--spec-draft-n-max ' + spec.n_max);

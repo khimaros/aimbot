@@ -473,12 +473,12 @@ def per_repo_templates(repos, probes, registry_thinking):
     return out
 
 
-def speculative(model, sizes):
-    """The declared drafter, and the file it ships in where that is separate.
+def draft_of(block, model, sizes):
+    """What one drafting method loads, or None where nothing was found.
 
     Whether the drafter costs extra memory is NOT a property of the drafting
     method, which is what this assumed at first and got wrong. It is a property
-    of how the publisher shipped it, and the two conventions sit side by side:
+    of how the publisher shipped it, and the conventions sit side by side:
 
       qwen     the -MTP- build IS the plain weights plus the head, 0.42gib
                larger, and the fit reads from that build -- already paid for
@@ -486,30 +486,66 @@ def speculative(model, sizes):
                sidecar, 0.09 to 0.48gib, that has to be loaded alongside
       deepseek `dspark:Q8_0`, 10.15gib, beside the quants in the same repo
       glimmer  `dflash-kquant.gguf`, 1.52gib
+      dflash2  a repo of its own, published by neither the vendor nor the
+               quantizer: inco drafts for qwen3.8 27b out of three rungs of
+               `incoai/Qwen3.8-27B-DFlash2-GGUF`
 
-    So it is discovered rather than inferred: look in the model's own quant
-    repos for a file named after the drafting method. NOT_A_QUANT already keeps
-    these out of the quant list, which is why they are invisible until asked
-    for by name. No hand-written pairing is involved -- it is the vendor's own
-    file in the vendor's own repo.
+    The first four are discovered -- look in the model's own quant repos for a
+    file named after the method, which NOT_A_QUANT already keeps out of the
+    quant list. The fifth cannot be, because no amount of looking through this
+    model's repos finds a file somebody else published, so the registry names
+    the repo and which of its rungs.
     """
-    spec = dict(model.get("speculative") or {})
-    kind = (spec.get("type") or "").replace("draft-", "")
+    kind = (block.get("type") or "").replace("draft-", "")
     if not kind:
-        return spec
+        return None
+    if block.get("repo"):
+        have = sizes.get(block["repo"]) or {}
+        # the sizer prefixes a rung whose filename carries the method BEFORE the
+        # quant token, so unsloth's `dflash-kquant.gguf` keys as `dflash:...`
+        # while inco's `Qwen3.8-27B-DFlash2-Q4_K_M.gguf` keys plain -- the `2`
+        # ends the word and the marker does not match. Both spellings are real
+        # and which one a repo uses is not something the registry should know.
+        for key in ("%s:%s" % (kind, block.get("quant")), block.get("quant")):
+            if have.get(key):
+                return {"repo": block["repo"], "file": key, "bytes": have[key],
+                        "gib": round(have[key] / GIB, 2)}
+        return {"repo": block["repo"], "file": block.get("quant")}
     found = []
     for q in model.get("quants") or []:
         for key, size in (sizes.get(q["repo"]) or {}).items():
             if key.lower().startswith(kind):
                 found.append((size, q["repo"], key))
     if not found:
-        return spec
+        return None
     # a bare tag is the aggregate over every variant of the head; the concrete
     # file beside it is the one that gets loaded
     concrete = [f for f in found if ".gguf" in f[2] or ":" in f[2]]
     size, repo, key = min(concrete or found)
-    spec["draft"] = {"repo": repo, "file": key, "bytes": size,
-                     "gib": round(size / GIB, 2)}
+    return {"repo": repo, "file": key, "bytes": size, "gib": round(size / GIB, 2)}
+
+
+def speculative(model, sizes):
+    """The declared drafter, and any second method the model also has.
+
+    The fit charges for the method the ENTRY serves and not for the
+    alternatives, because only one of them is resident: qwen3.8 27b drafts with
+    the head inside its own file and could instead load DFlash2 beside it, and
+    charging both would price a configuration nobody runs.
+    """
+    spec = dict(model.get("speculative") or {})
+    draft = draft_of(spec, model, sizes)
+    if draft:
+        spec["draft"] = draft
+    alts = []
+    for alt in spec.get("alternatives") or []:
+        row = dict(alt)
+        found = draft_of(alt, model, sizes)
+        if found:
+            row["draft"] = found
+        alts.append(row)
+    if alts:
+        spec["alternatives"] = alts
     return spec
 
 
@@ -724,6 +760,31 @@ def is_quant_name(tag):
 # `ggml-large-v3-turbo.bin` share a stem; `ggml-medium.bin` does not.
 QUANT_TOKEN = re.compile(r"[-_](?:UD-|AD-)?(?:IQ|Q|BF|F|MXFP|NVFP|TQ)\d[A-Za-z0-9_]*",
                          re.I)
+# and the measured bit width, where a publisher writes it behind the type.
+# byteshape does, on every file, and it is what tells two rungs of one nominal
+# type apart -- so the size table keeps it and the STEM must not, or the five
+# files of one model differ in the one field that decides they are one ladder
+# and each rung reaches the page with nothing to switch to
+BPW_ANNOT = re.compile(r"[-_]\d+(?:\.\d+)?bpw\b", re.I)
+
+
+# a type the tensor reader's block-geometry table has no entry for, which it
+# records under its raw id and counts at NO SIZE. that is the right thing to
+# record and the wrong thing to average: a rung whose weights are all a fork's
+# own type comes back at 0.017 bpw where its card says 2.13, and ik_llama's
+# interleaved `_R4` rungs at 0.113. the element count stays -- it is measured --
+# and the bits over it do not, because most of the bits were never counted.
+UNSIZED_TYPE = re.compile(r"^type\d+$")
+# how much of a rung may be unsized before its average stops meaning anything.
+# not zero: laguna m.1's IQ1_S carries 0.13% of one fork type beside 97% IQ1_S
+# and its 1.664 bpw is sound, where the rungs this drops are 97% or more
+UNSIZED_MAX = 0.5
+
+
+def sized(types):
+    """Whether enough of a rung was counted for its bits per weight to mean one."""
+    return sum(share for t, share in (types or {}).items()
+               if UNSIZED_TYPE.match(t)) <= UNSIZED_MAX
 
 
 def is_filename(name):
@@ -731,7 +792,8 @@ def is_filename(name):
 
 
 def file_stem(name):
-    return QUANT_TOKEN.sub("", re.sub(r"\.(gguf|bin)$", "", name, flags=re.I)).lower()
+    bare = BPW_ANNOT.sub("", re.sub(r"\.(gguf|bin)$", "", name, flags=re.I))
+    return QUANT_TOKEN.sub("", bare).lower()
 
 
 def quant_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
@@ -839,7 +901,9 @@ def quant_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
             # sizes collector used, which is the same grouping this ladder is
             t = (tensors or {}).get("%s:%s" % (q["repo"], a.get("file") or a["quant"]))
             if t:
-                a["types"], a["real_bpw"] = t["types"], t["bpw"]
+                a["types"] = t["types"]
+                if sized(t["types"]):
+                    a["real_bpw"] = t["bpw"]
             named.append(a)
         row["available"] = named
         # the speakers this FILE ships, read out of its own header. per quant
@@ -935,6 +999,10 @@ def build_model(repo, model, ctx):
         "engines": engines_for(model),
         "crispasr": crispasr_block(model, ctx["backends"]),
         "native_low_bpw": model.get("native_low_bpw"),
+        # why this entry is keyed on a gguf repo: nobody published weights for
+        # it in any other form. carried so the page and the checks read the
+        # same assertion the registry makes
+        "gguf_only": model.get("gguf_only"),
         "modalities": model.get("modalities") or {},
         "facts": facts, "quants": quants,
         "components": [rendered_notes(c, c.get("repo") or repo,

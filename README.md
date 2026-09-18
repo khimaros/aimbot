@@ -658,6 +658,7 @@ discovered in the model's own repo rather than inferred from `type`:
 | gemma 4 (all five) | `draft-mtp` | `mtp-*.gguf` sidecar | 0.09-0.48 gib |
 | muse glimmer | `draft-dflash` | `dflash-kquant.gguf` | 1.52 gib |
 | deepseek v4 flash | `draft-dspark` | `dspark:Q8_0` | 10.15 gib |
+| qwen3.8 27b, second method | `draft-dflash` | `incoai/Qwen3.8-27B-DFlash2-GGUF` | 1.06 gib |
 
 a sidecar is added to the `gib` column with a `+d` marker and comes out of the
 vram budget before a quant is chosen, which for deepseek is the difference
@@ -668,12 +669,25 @@ what is NOT charged is the read cost of the draft pass itself. for a half-gib
 head beside thirty of weights that is noise; for deepseek's 10gib dspark it is
 not, so the yield is an upper bound, tightest where the drafter is smallest.
 
-the registry no longer carries `draft_repo` at all. the two it had -- pairing
-qwen3.5-27b with a 0.8b gguf, and deepseek with its own repo -- came out of
-llama-tools as hand-assembled setups rather than as anything a vendor ships,
-and one of them named a repo this corpus has never captured. `type` and `n_max`
-stay, because those are properties of the model, and the drafter file is now
-found without either.
+**the last row is the case discovery cannot reach, and it is why a drafter may
+name a repo again.** an earlier registry paired models with drafters by hand and
+those pairings were removed for good reasons: qwen3.5-27b with a 0.8b gguf and
+deepseek with its own repo were hand-assembled setups out of llama-tools rather
+than anything a vendor shipped, and one named a repo this corpus has never
+captured. neither reason covers DFlash 2. inco publishes it FOR qwen3.8 27b --
+its `base_model` says so -- it is sized and its tensors are read like any other
+file here, and no amount of looking through qwen's repos finds it, because the
+publisher is a third party. so `speculative` may carry a `repo:` and the rung of
+it to fetch, and lint refuses one naming a repo the model already pins: that
+would be a hand-written pairing standing in for a lookup that works.
+
+`alternatives:` is the other half. a model can have two methods and they need
+not be comparable -- MTP is inside qwen3.8 27b's file and survives an image,
+DFlash 2 is a separate download that is faster and fails a vision request
+outright -- so the entry serves one and records the other. the fit charges only
+the one it serves, because only one of them is ever resident, and the command
+the page prints asks for a drafter by name only where it is a second download:
+llama.cpp resolves a sidecar beside the weights on its own.
 
 p is one number for every model, which is the weak part. it is 0.55, the value
 that reproduces the only end-to-end measurement here: qwen3.8 27b on a strix

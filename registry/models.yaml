@@ -208,6 +208,15 @@ models:
       quant: Q8_0
     - repo: unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF
       quant: UD-Q4_K_XL
+    - repo: byteshape/Qwen3-Coder-30B-A3B-Instruct-GGUF
+      quant: IQ4_XS
+      file: Qwen3-Coder-30B-A3B-Instruct-IQ4_XS-4.20bpw.gguf
+      note: the only rung above four bits in a ladder that is otherwise twelve files packed
+        between {bpw@Qwen3-Coder-30B-A3B-Instruct-Q3_K_S-2.65bpw.gguf} and
+        {bpw@Qwen3-Coder-30B-A3B-Instruct-IQ3_S-3.48bpw.gguf}, so this is {gib} against
+        {gib@unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL} for unsloth's. eight of
+        those twelve are called Q3_K_S or IQ3_S, which is what a size-class label does when a
+        publisher ships this many rungs into one band {card}
     runtime:
       arch: qwen3moe
       mainline: true
@@ -487,6 +496,14 @@ models:
     quants:
     - repo: unsloth/Qwen3.5-35B-A3B-GGUF
       quant: Q8_0
+    - repo: byteshape/Qwen3.5-35B-A3B-GGUF
+      quant: IQ4_XS
+      file: Qwen3.5-35B-A3B-IQ4_XS-4.12bpw.gguf
+      note: the top of byteshape's ladder for this model at {gib}, against
+        {gib@unsloth/Qwen3.5-35B-A3B-GGUF:Q8_0} for the rung pinned above it. the ten files
+        in that repo are ten rungs rather than ten names -- four of them are called IQ4_XS or
+        Q3_K_S twice over at different bit widths -- so the pin names the file and the ladder
+        is read off the sizes rather than off the labels {card}
     runtime:
       arch: qwen35moe
       mainline: true
@@ -550,6 +567,15 @@ models:
     quants:
     - repo: unsloth/Qwen3.5-9B-MTP-GGUF
       quant: Q8_0
+    - repo: byteshape/Qwen3.5-9B-GGUF
+      quant: Q5_K_S
+      file: Qwen3.5-9B-Q5_K_S-5.10bpw.gguf
+      note: 'the top of the twelve-rung ladder byteshape publishes for the smallest qwen3.5
+        here, {gib}. this is the one repo of theirs that splits the ladder in two: the same
+        files are listed once as GPU-1..7 and again as CPU-1..10, seven of them in both, so
+        the two tables are a reading order rather than two builds. the card {card} also warns
+        that "Ollama does not support Qwen3.5-9B based on Llama.cpp GGUFs", which is a fact
+        about the runtime and not about the file'
     runtime:
       arch: qwen35
       mainline: true
@@ -706,6 +732,16 @@ models:
       speculative: false
     - repo: unsloth/Qwen3.6-35B-A3B-MTP-GGUF
       quant: Q8_0
+    - repo: byteshape/Qwen3.6-35B-A3B-MTP-GGUF
+      quant: IQ4_XS
+      file: Qwen3.6-35B-A3B-IQ4_XS-4.19bpw.gguf
+      note: 'byteshape''s top rung at {gib}, a per-tensor allocation against the recipe one
+        beside it, and the MTP repo rather than the plain one for the same reason unsloth''s
+        is: the head has to be in the file for the speculative: block to mean anything. the
+        type name is a size class here and not a recipe -- the card {card} publishes five
+        rungs whose names repeat, so the bit width in the filename is what tells them apart
+        and the pin names the file. this is the model a forum post measured byteshape against
+        unsloth on, at 4.4 t/s to 1.1 on an iGPU at roughly matched size'
     runtime:
       arch: qwen35moe
       mainline: true
@@ -780,7 +816,8 @@ models:
       quant: IQ3_S
       file: Qwen3.8-27B-GSQ-RCO-IQ3_S-mtp.gguf
       note: 'the small end of the same model at {gib} and {bpw}, and the only rung on this
-        roster whose publisher benchmarked it. ist austria assigns a quant type per TENSOR by
+        roster whose publisher printed its own benchmark table on the card -- byteshape scores
+        its ladder below too, and puts the numbers on a blog instead. ist austria assigns a quant type per TENSOR by
         gradient search under a size budget rather than by recipe, and the card {card} calls
         the output "standard GGUF and run unmodified in `llama.cpp`". they rate this rung
         "Recommended; task-lossless" -- level with bf16 on aime25 and livecodebench v6, half a
@@ -793,6 +830,29 @@ models:
         with, so the plain file would silently cost the model its draft. the mmproj is a
         separate file and is what the image and video inputs need. card sizes are decimal gb
         and read larger than the gib here'
+    - repo: byteshape/Qwen3.8-27B-GGUF
+      quant: IQ4_XS
+      file: Qwen3.8-27B-IQ4_XS-3.84bpw.gguf
+      note: 'the top of byteshape''s ladder at {gib} and {bpw}, where unsloth''s rung of the
+        same name is {gib@unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS} at {bpw@unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS}.
+        the tag is not a recipe here: the card {card} says its labels "are only there to make
+        Hugging Face show our models in the GGUF table" and "indicate the closest size class
+        and average bit length", so the tensor table is what says what this file is. shapelearn
+        assigns a datatype per tensor, which makes it the third allocation strategy this model
+        is carried under and the second whose publisher measured its own rungs. every rung was scored
+        against bf16 on math, coding, knowledge, instruction following and agentic tool use in
+        both thinking and instruct modes. the mtp head is in the file -- "bundled inside the
+        GGUF, so no separate draft model is required" -- so the speculative: block below drafts
+        with it and nothing else is downloaded'
+    - repo: byteshape/Qwen3.8-27B-GGUF
+      quant: IQ2_XXS
+      file: Qwen3.8-27B-IQ2_XXS-2.56bpw.gguf
+      note: the small end of the same ladder at {gib} and {bpw}. what the other two quantizers
+        put at that size is unsloth's UD-IQ2_S at {gib@unsloth/Qwen3.8-27B-GGUF:UD-IQ2_S} and
+        {bpw@unsloth/Qwen3.8-27B-GGUF:UD-IQ2_S}, and
+        ist austria's IQ2_XS at {gib@ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF:IQ2_XS} and
+        {bpw@ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF:IQ2_XS}. it is also the fastest rung on the
+        card's {card} own rtx 5090 table, plain and with the mtp head drafting
     runtime:
       arch: qwen35
       mainline: true
@@ -810,6 +870,25 @@ models:
       note: reported draft acceptance 0.546 at mean accepted run 2.64 -- reported by third
         parties rather than by the card {card} -- so drafting more than
         3 spends compute on tokens that get discarded
+      alternatives:
+      - type: draft-dflash
+        repo: incoai/Qwen3.8-27B-DFlash2-GGUF
+        quant: Q4_K_M
+        n_max: 7
+        since: b10658
+        note: 'a drafter for this model published by neither the vendor nor a quantizer of
+          it: inco''s card {card} calls it "not a standalone language model" but a thing that
+          "runs inside a speculative decoding server and drafts tokens for the target model
+          to verify", block-diffused eight at a time rather than one. it is the faster half
+          of the only measurement that ran both -- byteshape got 1.34-2.10x out of it against
+          1.28-1.66x from the head in the file, over six gpus
+          {card@byteshape/Qwen3.8-27B-GGUF} -- and the reason it is the alternative rather
+          than the pin is the sentence beside those numbers: "DFlash 2 is text-only", so
+          "requests carrying an image fail with an HTTP 500 while `draft-dflash` is active"
+          on a model this roster carries for image and video. inco rates the three rungs by
+          acceptance length and the smallest wins, 5.39 against 5.13 for Q8_0 and 5.28 for
+          bf16, so the cheapest download is also the one to take. the quantization is the
+          drafter''s own and does not touch the weights being served'
     sampling:
       thinking:
         source: quant-card
@@ -2877,6 +2956,18 @@ models:
     - repo: vantagewithai/Krea-2-Turbo-GGUF
       quant: Q8_0
       role: diffusion
+    - repo: byteshape/Krea-2-Turbo-GGUF
+      quant: Q4_K_M
+      file: Krea-2-Turbo-Q4_K_M-4.93bpw.gguf
+      role: diffusion
+      note: 'a second quantizer for the diffusion transformer, at {gib} against
+        {gib@vantagewithai/Krea-2-Turbo-GGUF:Q8_0} for the rung above. the card {card} is
+        the only one on this roster that says what quantizing an image model does NOT buy:
+        "diffusion inference is **not** heavily constrained by memory bandwidth", so
+        "Quantization here buys you **VRAM headroom**, not throughput" -- the ladder is a
+        ladder of what will load rather than of what will run faster, which is the opposite
+        of the trade every text rung here makes. this is the rung its own speed table
+        measures, at about 5.9 seconds end to end for a 1024px image on an rtx 5090'
     ids:
       aa-t2i: ''
       lmarena-t2i: krea-2-turbo
@@ -4136,6 +4227,120 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+  prism-ml/Ternary-Bonsai-2-27B-gguf:
+    kind: text
+    # ternary weights are what it was trained to, not what it was reduced to
+    native_low_bpw: true
+    # prism published this release as gguf and mlx and nothing else: there is no
+    # unpacked repo to key it on the way the 1.0 entries are, so the geometry
+    # below comes off the card rather than off a config.json
+    gguf_only: true
+    name:
+      short: bonsai 2 27b
+      match: (?:ternary[\s-]*)?bonsai[\s-]*2(?![\d.])(?:[\s-]*27b)?\b
+    notes: 'the 2 generation, and a different base model from the 1.0 entries beside it:
+      those derive from qwen3.6-27b and this one from qwen3.8-27b, which the card {card}
+      states -- "Derived from Qwen3.8-27B, a 27B hybrid-attention causal language model
+      (architecture unchanged)". what is new in the format is a rotation: each matrix is
+      transformed blockwise by a hadamard before the ternary assignment and the runtime
+      applies the matching transform to activations, which the card says is declared in the
+      file so "a runtime either applies the matching transform or refuses to load the file".
+      prism reports 84.78 against the bf16 base''s 86.32 over fourteen benchmarks in thinking
+      mode, which is their own measurement and the only one anybody has published. the same
+      table is the sharpest published statement of what low-bit failure looks like: their
+      IQ2_XXS comparison arm holds 88.93 on mmlu-redux while falling to 57.5 on aime26 and
+      56.4 on livecodebench, so a casual test of it reads fine and a reasoning chain does not.
+      what an entry costs when nobody publishes weights is visible here: the parameter count
+      is read off the repo NAME rather than a config, so the card''s own 27.36b reads as the
+      27b the name spells and every derived bits-per-weight runs about a percent high, and
+      the attention geometry is missing altogether, which is why this row can say what it
+      weighs and not how much context fits beside it. the window itself is not guessed -- it
+      comes out of the gguf header and agrees with the 262k the card claims.'
+    quants:
+    - repo: prism-ml/Ternary-Bonsai-2-27B-gguf
+      quant: PTQ1_0
+      file: Ternary-Bonsai-2-27B-PTQ1_0.gguf
+      note: 'the dense packing at {gib}, which is the one to take where memory is tight: the
+        card {card} calls it "1.75" bits per weight against PQ2_0''s "2.13" for the same
+        weights, the difference being that PQ2_0 "stores each trit in a 2-bit slot" for
+        cheaper unpacking. neither is uniformly faster and the card measures both on nine
+        platforms -- PTQ1_0 wins decode on the ada-generation cards and the L4, PQ2_0 on
+        hopper, ampere and blackwell, and PQ2_0 wins prompt processing everywhere. NEITHER
+        LOADS ON A STOCK BUILD: see the runtime block'
+      runtime:
+        mainline: false
+        fork: https://github.com/PrismML-Eng/llama.cpp
+        note: 'the ternary hybrid-attention kernels are the fork''s, and the card {card} is
+          unusually precise about the failure mode: stock llama.cpp "rejects `PQ2_0` and
+          `PTQ1_0` as unknown types, and it loads `Q2_0` without any warning and produces
+          garbage, because it has no Hadamard activation runtime". so the two rungs here fail
+          loudly and the Q2_0 build in the `-gguf-dev` repo beside them fails silently, which
+          is why this entry pins neither of those and why prism names that file
+          `Ternary-Bonsai-2-27B-Q2_0-prism-fork-required.gguf`'
+    - repo: prism-ml/Ternary-Bonsai-2-27B-gguf
+      quant: PQ2_0
+      file: Ternary-Bonsai-2-27B-PQ2_0.gguf
+      note: the same weights in the packing that unpacks cheaper, {gib} against
+        {gib@Ternary-Bonsai-2-27B-PTQ1_0.gguf}, and the one prism measured on apple
+        silicon
+      runtime:
+        mainline: false
+        fork: https://github.com/PrismML-Eng/llama.cpp
+        note: 'the same fork and the same reason as the rung above: a stock build rejects
+          this type by name'
+    - repo: prism-ml/Ternary-Bonsai-2-27B-gguf
+      quant: F16
+      note: the reference build at {gib}, which is what the ternary rungs are measured
+        against rather than something to serve
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        note: 'the card {card} publishes these and says where they came from: "These match
+          the base model''s own `generation_config.json` and are the values carried in the
+          GGUF metadata (`general.sampling.*`), so a client that reads model defaults will
+          use them without being told." they are also the settings its benchmark table was
+          run at'
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    turns:
+      source: prism-ml/Ternary-Bonsai-2-27B-gguf
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, xhigh]
+      default: xhigh
   tencent/Hy3:
     kind: text
     # the card: reasoning_effort "no_think" (default, direct response), "low",

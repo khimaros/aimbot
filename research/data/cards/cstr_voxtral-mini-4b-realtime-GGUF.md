@@ -34,9 +34,13 @@ Converted and tested with [CrispASR](https://github.com/CrispStrobe/CrispASR), a
 
 | File | Quant | Size | Description |
 |------|-------|------|-------------|
-| `voxtral-mini-4b-realtime.gguf` | F16 | 8.3 GB | Full precision (reference) |
-| `voxtral-mini-4b-realtime-q8_0.gguf` | Q8_0 | 4.5 GB | 8-bit quantized |
+| `voxtral-mini-4b-realtime-f16.gguf` | F16 | 8.3 GB | Full precision (reference) — what the quants below are cut from |
+| `voxtral-mini-4b-realtime-q8_0.gguf` | Q8_0 | 4.4 GB | 8-bit quantized |
 | `voxtral-mini-4b-realtime-q4_k.gguf` | Q4_K | 2.4 GB | 4-bit K-quant (recommended) |
+
+⚠ This table used to name the F16 `voxtral-mini-4b-realtime.gguf`, and no such
+file was ever uploaded. The published name is `…-f16.gguf`, matching the quant
+suffix CrispASR's `-m auto:f16` resolver expects.
 
 ## Performance (CPU, 4 threads, AVX2, jfk.wav 11s)
 
@@ -109,10 +113,10 @@ huggingface-cli download cstr/canary-ctc-aligner-GGUF \
 ```bash
 python models/convert-voxtral4b-to-gguf.py \
     --input /path/to/Voxtral-Mini-4B-Realtime-2602 \
-    --output voxtral-mini-4b-realtime.gguf
+    --output voxtral-mini-4b-realtime-f16.gguf
 
 # Then quantize
-./build/bin/cohere-quantize voxtral-mini-4b-realtime.gguf \
+./build/bin/crispasr-quantize voxtral-mini-4b-realtime-f16.gguf \
     voxtral-mini-4b-realtime-q4_k.gguf q4_k
 ```
 
