@@ -499,8 +499,9 @@ ranking it on the wrong one put inkling TWELFTH on an audio-to-text board on the
 strength of its reasoning scores -- 34th on what it is measured to transcribe.
 no transcriber moved: they were never asked a text question, so restricting the
 view to transcription cannot touch them. what moved is the eight, and MODELS.md
-with them, where the evidence column reads 4/7 rather than 4/10 now that an LLM
-is not charged for speech coverage it is not judged on.
+with them, where the evidence column reads a share of the text weight rather
+than of every weight, now that an LLM is not charged for speech coverage it is
+not judged on.
 
 the presets go the same way. `writing code` weights scicode and
 swe-rebench, which the transcription view is not asking about, so it is one of
@@ -747,9 +748,13 @@ question a local roster asks is "best of what i can run", and ranking a 27b
 against gpt-5.6 answers a different one.
 
 **an absence is never a zero, and never a free pass.** a model gbench has not
-played simply has no gbench facet, and the `evidence` column says how many of
-the weighted factors it was actually measured on. 3/7 in that column is a
-warning about the evidence, not a verdict on the model. 26 of the 48 text models
+played simply has no gbench facet, and the `evidence` column says how much of
+the weight the view asks for was actually measured. 29% in that column is a
+warning about the evidence, not a verdict on the model. it reads WEIGHT rather
+than a count of factors because the composite spends weight: qwen3.5-27b
+carries four of the 0.05 factors and g9v3 3b one of the 0.3 ones, which is 29%
+either way, and a column reading 4/7 against 1/7 said one was four times the
+evidence of the other. 26 of the 48 text models
 are not on the gbench board at all -- that is upstream, the api publishes 98
 models and no more.
 
@@ -763,6 +768,17 @@ weight is scored as the MIDDLE instead. these are percentiles, whose median is
 50 by construction, and half the uncovered weight enters at 50 -- unmeasured
 reads as typical rather than as whatever the one remaining factor says. a model
 measured on every factor asked of it has no uncovered weight and does not move.
+
+that fixed the ranking and left a number behind. the prior cuts both ways: it
+stops one good factor carrying a model up, and by the same arithmetic stops one
+bad factor pulling it down, so at 5% coverage 91% of the composite is the prior
+and the figure is about the roster's median rather than about the model.
+minicpm5 1b read 47 off a single 13th-percentile forum score -- ahead of the
+minicpm5 2b that beat it on that factor and on three more, at 67% coverage and
+25. so below 20% of the asked weight no composite is printed at all, the same
+dash a model with no evidence gets, and `evidence` shows the share so the
+reason is visible in the row. this hides a quality figure for 22 of the 69
+models in the default view and does not reorder the top 11.
 
 every number carries a reference: hover a `[src]` for the source, the file it
 came from, and -- for a community claim -- the sentence somebody actually wrote

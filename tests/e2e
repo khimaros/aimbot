@@ -989,16 +989,20 @@ test('a missing factor is shrunk toward the middle, never scored zero', () => {
 // percentile, ahead of the qwen3.6 27b it is a 1-bit rebuild of at 6/7.
 // research/build-tables rejected the same arithmetic in its composite()
 // docstring; these cases are the page agreeing with it.
+//
+// shrinking fixed the ranking and left a number behind, and at this coverage
+// the number was the prior wearing a model's name -- 50 for a model nobody had
+// measured. so under COVER_FLOOR the composite is withheld rather than shrunk.
 test('one thin factor cannot carry a whole composite', () => {
   RESET();
   const m = model('bonsai 27b');
   const s = scored(m);
   ok(s.have < s.want / 2, 'nothing but the forums has scored bonsai 27b ('
     + s.have + '/' + s.want + ')');
-  ok(coveredWeight(m) < 0.2 * askedWeight(m), 'on a sliver of the weight');
-  ok(Math.abs(s.value - SHRINK_PRIOR) < Math.abs(rawScore(m) - SHRINK_PRIOR),
-     'so the composite is pulled toward the middle rather than carried to the'
-       + ' raw ' + rawScore(m).toFixed(1) + ' (got ' + s.value.toFixed(1) + ')');
+  ok(coveredWeight(m) < COVER_FLOOR * askedWeight(m), 'on a sliver of the weight');
+  eq(s.value, null, 'so it is given no composite at all, rather than one the'
+     + ' prior decides (renormalized it would have read '
+     + rawScore(m).toFixed(1) + ')');
 });
 
 test('a fully measured model is shrunk by nothing', () => {
@@ -1014,9 +1018,10 @@ test('evidence outranks a single forum percentile', () => {
   RESET();
   const thin = model('bonsai 27b'), thick = model('qwen3.6 27b');
   ok(scored(thick).have > scored(thin).have, 'the parent model is measured more');
-  ok(scored(thick).value > scored(thin).value,
-     'and outranks the 1-bit rebuild that only a forum has scored ('
-       + num(scored(thick).value, 1) + ' vs ' + num(scored(thin).value, 1) + ')');
+  ok(scored(thick).value !== null, 'and carries a composite');
+  eq(scored(thin).value, null,
+     'where the 1-bit rebuild only a forum has scored carries none, so it'
+       + ' cannot be read as ranking anywhere against it');
 });
 
 // the forums are one component, the way research/build-tables carries one
@@ -1037,6 +1042,76 @@ test('every forum a model carries enters the composite, not just one', () => {
   ok(facetPct(m, 'community.*') < best,
      'which is below the one forum that used to be the whole of it (' + best + ')');
 });
+
+// shrinking toward the middle stops a single GOOD factor carrying a model up,
+// and by the same arithmetic it stops a single BAD one pulling it down: at 5%
+// coverage 91% of the composite is the prior, so the number reported is not
+// about the model. minicpm5 1b is measured once, at the 13th percentile, and
+// read 47 -- ahead of the 2b that beat it on that very factor and three more.
+// below COVER_FLOOR of the asked weight there is no number worth printing.
+test('a score the prior would decide is not printed at all', () => {
+  RESET();
+  const m = model('minicpm5 1b');
+  const s = scored(m);
+  ok(coveredWeight(m) < COVER_FLOOR * askedWeight(m),
+     'minicpm5 1b is measured on a sliver of the weight ('
+       + (coveredWeight(m) / askedWeight(m)).toFixed(3) + ')');
+  eq(s.value, null, 'so it reports no quality rather than the prior wearing'
+     + ' a model name');
+  eq(col('score').cell(m).includes('>-<'), true,
+     'and the cell prints the same dash an unmeasured model gets');
+  // the dash is shared with zero coverage and the reason is not: saying
+  // "unmeasured" of a model somebody did measure is the error this avoids
+  const detail = tabOverview(m);
+  ok(!detail.includes('unmeasured'), 'the detail does not call it unmeasured');
+  ok(detail.includes('5% of the weight'),
+     'it says how much was measured and that it was not enough');
+});
+
+test('a thin score cannot outrank the model that beat it on every shared factor',
+  () => {
+    RESET();
+    const thin = model('minicpm5 1b'), thick = model('minicpm5 2b');
+    const shared = Object.keys(W).filter(k => W[k] && facetPct(thin, k) !== null
+      && facetPct(thick, k) !== null);
+    ok(shared.length > 0, 'the two are measured on at least one common factor');
+    shared.forEach(k => ok(facetPct(thin, k) <= facetPct(thick, k),
+      'the 1b loses to the 2b on ' + k + ' (' + facetPct(thin, k) + ' vs '
+        + facetPct(thick, k) + ')'));
+    ok(scored(thick).value !== null, 'the 2b is measured enough to be scored');
+    ok(!(scored(thin).value > scored(thick).value),
+       'so the 1b must not rank above it on evidence it does not have');
+  });
+
+// `have/want` counts factors and the composite spends WEIGHT, and the two
+// disagree in both directions: qwen3.5-27b carries four of the cheap factors
+// and g9v3 3b one of the dear ones, for the same 28.6% of the asked weight.
+// reporting 4/7 against 1/7 says one is four times better evidenced, and a
+// coverage floor reading the weight would unscore the 4/7 while keeping the
+// 1/7 -- so the column has to report what the floor and the shrinkage read.
+test('evidence reports the weight that was measured, not the count of factors',
+  () => {
+    RESET();
+    const cheap = model('qwen3.5-27b'), dear = model('g9v3 3b');
+    ok(scored(cheap).have > scored(dear).have,
+       'one is measured on more factors than the other');
+    near(coveredWeight(cheap) / askedWeight(cheap),
+         coveredWeight(dear) / askedWeight(dear), 0.01,
+         'on the same share of the weight');
+    near(col('evidence').get(cheap), col('evidence').get(dear), 0.01,
+         'so the column sorts them together rather than four places apart');
+    // the same two questions score() asks: `relevant` is whether the VIEW
+    // wants this factor, `asked` whether the model could answer it. a speech
+    // model in the text view is asked nothing, which is a coverage of 0
+    const coverOf = m => {
+      const ks = Object.keys(W).filter(k => W[k] && relevant(k) && asked(m, k));
+      const all = ks.reduce((a, k) => a + W[k], 0);
+      return all ? ks.filter(k => facetPct(m, k) !== null)
+        .reduce((a, k) => a + W[k], 0) / all : 0;
+    };
+    D.models.forEach(m => near(col('evidence').get(m), coverOf(m), 1e-9,
+      m.short + ': evidence is the measured share of the asked weight'));
+  });
 
 // the four qwen3-tts entries were keyed on a gguf conversion, so `repo` and
 // `publisher` -- which every join in this registry runs on -- named the person

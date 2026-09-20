@@ -1179,8 +1179,16 @@ function tabOverview(m) {
           // directory rather than what is baked in, so this is the only place
           // the built-in names are readable
           ['built-in voices', voiceList(m, activeQuant(m))],
-          ['quality', s.value === null ? '<span class="faint">unmeasured</span>'
-            : `${num(s.value, 0)} <span class="sub">on ${s.have} of ${s.want} weighted factors</span>`]])
+          // "unmeasured" is only true at zero coverage. a model held back by
+          // the floor WAS measured, and saying so is the whole point of
+          // withholding the number rather than printing the prior
+          ['quality', s.value === null
+            ? (s.have
+              ? `<span class="faint">measured on ${pctOf(s.cover)} of the weight`
+                + ` asked for, under the ${pctOf(COVER_FLOOR)} a composite needs</span>`
+              : '<span class="faint">unmeasured</span>')
+            : `${num(s.value, 0)} <span class="sub">on ${s.have} of ${s.want}`
+              + ` weighted factors, ${pctOf(s.cover)} of the weight</span>`]])
     + idsSection(m);
 }
 

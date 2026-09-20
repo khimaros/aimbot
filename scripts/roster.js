@@ -46,6 +46,7 @@ const fmt = new Intl.NumberFormat();
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c =>
   ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 const num = (v, d = 1) => v === null || v === undefined ? '' : (+v).toFixed(d);
+const pctOf = v => Math.round((v || 0) * 100) + '%';
 // the thinking vocabulary, with the level a client gets by sending nothing in
 // bold. that level is not always the cheap one: kimi k3 defaults to `max`, and
 // the gemma 4 templates do not think at all until asked.
@@ -607,6 +608,20 @@ function asked(m, key) {
 const SHRINK_PRIOR = 50;            // the percentile an unmeasured factor is worth
 const SHRINK_LAMBDA = 0.5;          // how much of the uncovered weight speaks
 
+// the prior cuts both ways, and only one of them is argued for above. it stops
+// one good factor carrying a model up, and by the same arithmetic it stops one
+// bad factor pulling it down: at 5% coverage the prior is 91% of the
+// denominator, so the number is about the roster's median and not about the
+// model. minicpm5 1b read 47 off a single 13th-percentile forum score, ahead of
+// the 2b that beat it on that factor and on three more.
+//
+// so below this share of the asked weight there is no number worth printing,
+// the same way there is none at zero coverage. this is a share of WEIGHT rather
+// than a count of factors because the composite spends weight: four of the 0.05
+// factors and one of the 0.3 ones are the same evidence, and `evidence` reports
+// this share for that reason.
+const COVER_FLOOR = 0.20;
+
 function score(m) {
   let num = 0, den = 0, denMax = 0, have = 0, want = 0;
   for (const [key, w] of Object.entries(W)) {
@@ -620,9 +635,10 @@ function score(m) {
     if (p === null) continue;
     have++; num += w * p; den += w;
   }
-  if (!den) return {value: null, have, want};
+  const cover = denMax ? den / denMax : 0;
+  if (!den || cover < COVER_FLOOR) return {value: null, have, want, cover};
   const k = SHRINK_LAMBDA * (denMax - den);
-  return {value: (num + k * SHRINK_PRIOR) / (den + k), have, want};
+  return {value: (num + k * SHRINK_PRIOR) / (den + k), have, want, cover};
 }
 
 const scored = m => (m._s || (m._s = score(m)));
@@ -673,10 +689,16 @@ const COLUMNS = [
    cell: m => `<td>${esc(m.short)}<span class="sub"> ${esc(m._q ? m._q.quant
      : m.publisher)}</span></td>`},
   {k: 'score', t: 'quality', num: true, get: m => scored(m).value ?? -1,
-   help: "the weighted mean of its percentiles, over the factors it was actually measured on, pulled toward 50 by the weight that measured nothing. set the weights under factors",
+   help: "the weighted mean of its percentiles, over the factors it was actually measured on, pulled toward 50 by the weight that measured nothing. under 20% coverage that pull decides the answer, so no number is shown at all -- see the evidence column. set the weights under factors",
    cell: m => {
      const s = scored(m);
-     if (s.value === null) return '<td class="n faint" title="none of the weighted factors measured this model">-</td>';
+     if (s.value === null) {
+       return `<td class="n faint" title="${s.have
+         ? `measured on ${pctOf(s.cover)} of the weight this view asks for, `
+           + `under the ${pctOf(COVER_FLOOR)} a composite needs before it says `
+           + `more about this model than about the middle of the roster`
+         : 'none of the weighted factors measured this model'}">-</td>`;
+     }
      // a percentile is a rank, so it steps rather than slides: the ladder can
      // hold one number over several rungs while the discount behind it moves
      // the whole way. say what the discount was, so a flat column reads as
@@ -696,12 +718,14 @@ const COLUMNS = [
      return `<td class="n"${title}><span class="bar" style="--w:${s.value}%">`
        + `<span>${num(s.value, 0)}</span></span></td>`;
    }},
-  {k: 'evidence', t: 'evidence', num: true, get: m => scored(m).have,
-   help: 'how many of the weighted factors actually measured this model. 3/7 means four of them never scored it',
+  {k: 'evidence', t: 'evidence', num: true, get: m => scored(m).cover,
+   help: 'how much of the weight this view asks for was actually measured, as a share. it reads WEIGHT rather than a count of factors because that is what the composite spends -- four of the cheap factors and one of the dear ones are the same evidence. under 20% no quality is reported at all',
    cell: m => {
      const s = scored(m);
-     const cls = s.have === s.want ? 'dim' : s.have ? 'warn' : 'faint';
-     return `<td class="n ${cls}" title="weighted factors this model was actually measured on">${s.have}/${s.want}</td>`;
+     const cls = s.cover >= 0.999 ? 'dim' : s.cover >= COVER_FLOOR ? 'warn' : 'faint';
+     return `<td class="n ${cls}" title="${s.have} of ${s.want} weighted factors`
+       + ` measured this model, ${pctOf(s.cover)} of the weight asked for">`
+       + `${pctOf(s.cover)}</td>`;
    }},
   {k: 'kind', t: 'kind', num: false, get: m => m.kind,
    help: 'text, image or speech',

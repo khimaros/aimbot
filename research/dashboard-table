@@ -62,6 +62,7 @@ setTimeout(() => {
     bpw: (activeQuant(m) || {}).bpw || null,
     retention: modelRetention(m),
     score: scored(m).value, have: scored(m).have, want: scored(m).want,
+    cover: scored(m).cover,
     ctx: fitContext(m),
     ids: m.ids || {},
     total_b: m.facts.params_total_b ?? null, active_b: activeB(m) ?? null,
@@ -123,15 +124,26 @@ def num(v, digits=1):
     return "-" if v is None else ("%.*f" % (digits, v))
 
 
+def cover(r):
+    """The share of the asked weight that was measured, as the page prints it.
+
+    A count of factors and a share of weight disagree in both directions -- four
+    of the 0.05 factors and one of the 0.3 ones are the same 29% -- and the
+    weight is what the composite spends and what the floor below `quality`
+    reads. The document said `4/7` while the page said `29%` for one visit.
+    """
+    return "%d%%" % round((r.get("cover") or 0) * 100)
+
+
 def table_ranking(d):
     """What the page shows on open: what it is, whether it fits, how good it is."""
     print("| # | model | quant | size (gib) | fits ctx | evidence | quality |")
     print("|--:|---|---|--:|--:|--:|--:|")
     for r in d["rows"]:
-        print("| %d | %s | %s | %s | %s | %d/%d | **%s** |" % (
+        print("| %d | %s | %s | %s | %s | %s | **%s** |" % (
             r["rank"], r["short"], r["quant"] or "-", num(r["gib"]),
             "%dk" % (r["ctx"] / 1024) if r["ctx"] else "-",
-            r["have"], r["want"], num(r["score"], 1)))
+            cover(r), num(r["score"], 1)))
 
 
 def table_components(d):
@@ -148,12 +160,11 @@ def table_components(d):
         def share(k):
             v = (f.get(k) or {}).get("value")
             return "-" if v is None else "%.1f" % (v * 100)
-        print("| %s | **%s** | %s | %s | %s | %s | %s | %s | %s | %d/%d |" % (
+        print("| %s | **%s** | %s | %s | %s | %s | %s | %s | %s | %s |" % (
             r["short"], num(r["score"], 1), share("scicode"), share("tbench"),
             cell("gbench", 3), num((f.get("arena") or {}).get("value"), 0),
             cell("swe"), num(r["community"], 1),
-            num(r["card"], 0),
-            r["have"], r["want"]))
+            num(r["card"], 0), cover(r)))
 
 
 def table_weights(d):
