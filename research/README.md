@@ -19,7 +19,7 @@ date is in each file's provenance below.
 | `data/voicearena.json` | 2026-09-04 | voicearena.com speech-to-text, WER sliced by language and noise |
 | `data/gguf-voices.json` | 2026-09-04 | the speaker names each TTS gguf ships, read from its own header |
 | `data/sdcpp-support.json` | 2026-09-04 | stable-diffusion.cpp's tensor-name detector, and which registry image models it fires on |
-| `data/crispasr.json` | 2026-09-04 | crispasr's own catalog: 83 backends with the repos each was published against, plus the capability bits it generates from `--list-backends-json` |
+| `data/crispasr.json` | 2026-09-04 | crispasr's own catalog: 85 backends with the repos each was published against, plus the capability bits it generates from `--list-backends-json` |
 | `data/gbench.json` | 2026-08-17 | gertlabs.com/rankings |
 | `data/gguf-sizes.json` | 2026-08-17 | huggingface hub tree api |
 | `data/gguf-tensors.json` | 2026-09-09 | the ggml type of every tensor in each published rung, read from its own tensor table: 1805 rungs over 177 repos |

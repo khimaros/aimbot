@@ -6840,27 +6840,37 @@ models:
       role: diarize-embedder
     crispasr:
       diarize: embedder
-  # TRACKED, NOT SERVED. the highest-scoring open-weights TTS artificial
-  # analysis has -- 1214.89 elo, above fish-s2-pro's 1127.78, which is the best
-  # thing this roster can actually run -- and nothing here loads it.
+  # SERVED, and it was the entry written to watch for this. the highest-scoring
+  # open-weights TTS artificial analysis has -- 1214.89 elo, above
+  # fish-s2-pro's 1127.78 -- and until crispasr shipped `bt2-tts` nothing here
+  # loaded it. the port it was tracking (issue #412) landed.
   #
-  # a gguf exists and does not help: `HoppouAI/Breeze-TTS-2.cpp` says on its own
-  # card that the files "will not load in llama.cpp. They need the
+  # two conversions of one checkpoint and only one is servable, which is the
+  # qwen3-tts situation again. cstr's is the one crispasr's registry names and
+  # is what carries the `crispasr:` block; `HoppouAI/Breeze-TTS-2.cpp` says on
+  # its own card that its files "will not load in llama.cpp. They need the
   # Breeze-TTS-2.cpp runtime", a separate C++ reimplementation at
-  # github.com/HoppouAI/Breeze-TTS-2.cpp. it is recorded as a quant anyway so
-  # the sweep sizes it and a reader can see what would be involved, but it names
-  # no `crispasr:` backend because there is none.
+  # github.com/HoppouAI/Breeze-TTS-2.cpp. it stays as a plain quant so the sweep
+  # sizes it and a reader can see the other path.
   #
-  # crispasr is porting it -- issue #412, with models/convert-breeze-tts-2-to-gguf.py,
-  # docs/breeze-tts-2-feasibility.md and tools/reference_backends/breeze_tts_2.py
-  # in tree -- but ships no backend for it and does not mention it in any of its
-  # docs. this entry is the thing to watch: when a crispasr backend lands, or
-  # when somebody publishes a conversion crispasr reads, this becomes servable
-  # and the roster gains its best synthesis model.
+  # the codec is NOT in cstr's files. breeze bundles an audio tokenizer that is
+  # bit-identical to `Qwen/Qwen3-TTS-Tokenizer-12Hz`, so crispasr downloads
+  # `cstr/qwen3-tts-tokenizer-12hz-GGUF` alongside the model. that is a
+  # `components:` entry for the reason orpheus' snac is one -- there is one, it
+  # is not a rung, and picking it is not a decision. it is pinned at f16 on the
+  # codec repo's own advice: quantising the codec drifts earlier than
+  # quantising the talker, so if precision has to go somewhere it goes here.
   #
-  # the port notes are worth reading before trusting any conversion. it is a CSM
-  # (sesame) fork with a qwen3 backbone and the qwen3-tts codec, and the
-  # feasibility doc flags that `config.json`'s
+  # two talker rungs rather than the one every other cstr conversion here pins,
+  # because this repo publishes a ladder and the card says which end of it is
+  # which: q4_k is what crispasr's own registry defaults to and q8_0 is the
+  # step above. both are crispasr conversions and both load, so both carry the
+  # backend. the f16 is reference precision for a diff harness rather than a
+  # rung somebody serves, and is not pinned.
+  #
+  # the port notes are still worth reading before trusting any OTHER
+  # conversion. it is a CSM (sesame) fork with a qwen3 backbone and the
+  # qwen3-tts codec, and the feasibility doc flags that `config.json`'s
   # `"use_bidirectional_attention": false` is a DECOY -- the text encoder is
   # bidirectional. a converter that believes the config produces a model that
   # loads and sounds wrong, which is the failure mode this roster has already
@@ -6873,8 +6883,22 @@ models:
     engine:
     - Breeze-TTS-2.cpp
     quants:
+    - repo: cstr/breeze-tts-2-GGUF
+      quant: Q4_K
+      role: model
+      crispasr:
+        backend: bt2-tts
+    - repo: cstr/breeze-tts-2-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: bt2-tts
     - repo: HoppouAI/Breeze-TTS-2.cpp
       quant: Q8_0
+    components:
+    - repo: cstr/qwen3-tts-tokenizer-12hz-GGUF
+      file: qwen3-tts-tokenizer-12hz.gguf
+      role: codec
     ids:
       aa-stt: ''
       aa-stt-streaming: ''

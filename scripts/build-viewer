@@ -411,12 +411,19 @@ CONFIG_BLOCKS = ("weights", "presets", "hardware", "caps", "floors", "filters",
                  "columns", "speed", "runtimes")
 
 
-def dashboard_config(path=CONFIG):
+def dashboard_config(path=CONFIG, tiers=()):
     """The dashboard's own defaults, checked hard enough to fail loudly."""
     cfg = load_yaml(path)
     missing = [b for b in CONFIG_BLOCKS if not cfg.get(b)]
     if missing:
         sys.exit("!!! %s: no %s" % (path, ", ".join(missing)))
+    # a tier this file names and licenses.yaml does not is a page that opens
+    # selecting nothing, which reads as an empty roster rather than as a typo
+    known = {t["k"] for t in tiers}
+    unknown_tiers = sorted(set(cfg["filters"].get("licenses") or []) - known)
+    if known and unknown_tiers:
+        sys.exit("!!! %s: filters.licenses names %s, which registry/licenses.yaml "
+                 "does not declare" % (path, ", ".join(unknown_tiers)))
     order = set((cfg["columns"].get("order") or []))
     unknown = sorted(set(cfg["columns"].get("hidden") or []) - order)
     if unknown:
@@ -1182,7 +1189,7 @@ def build():
            "lines": registry_lines(reg_path)}
     registry = load_yaml(reg_path).get("models") or {}
     sampling = load_yaml(os.path.join(ROOT, "registry", "sampling.yaml"))
-    cfg = dashboard_config()
+    cfg = dashboard_config(tiers=ctx["licenses"]["tiers"])
     models = [build_model(repo, m, ctx) for repo, m in sorted(registry.items())]
     # a ladder that got shorter says so. these are files a repo publishes that
     # name no type, so the page has no label to offer them under -- a reference
@@ -1233,10 +1240,11 @@ def build():
 def report_unclassified(models):
     """Every model whose licence the table has no answer for, named at build time.
 
-    The filter that reads this defaults ON, so an unclassified licence is the
-    one way a model could quietly leave the default view. It does not -- the
-    filter keeps `unknown` -- and this is the list that gets it classified,
-    printed on the build rather than waiting for somebody to go looking.
+    The page opens on the permissive tier alone, so these are OUT of the default
+    view -- which is exactly why the list belongs on the build rather than
+    waiting for somebody to go looking. Each row here is a model a reader does
+    not see until either somebody classifies the licence or they tick `unknown`,
+    and the menu shows the count so the tier is visibly there.
     """
     rows = [(m["repo"], (m.get("license") or {}).get("id"))
             for m in models
@@ -1244,8 +1252,8 @@ def report_unclassified(models):
     if not rows:
         return
     print("  note: %d model(s) carry a licence registry/licenses.yaml does not "
-          "classify.\n    they are SHOWN rather than filtered, and the permissive "
-          "filter counts them apart:" % len(rows), file=sys.stderr)
+          "classify,\n    which the default view does not show. the licence menu "
+          "counts them apart:" % len(rows), file=sys.stderr)
     for repo, lic in sorted(rows):
         print("    %-52s %s" % (repo, lic or "no licence in the capture"),
               file=sys.stderr)

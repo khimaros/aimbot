@@ -290,6 +290,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <input type="search" id="q" placeholder="full text search" data-help="matches the text: name, repo, architecture, registry notes, card summary, best-for, hub tags, discussed tasks and quant names. not the numeric columns">
     <select id="modality" data-help="what the model turns into what. the shapes are the ones llama-swap-groups derives its group membership from, so this page and a host name them alike. one at a time: they overlap rather than partition, so two of them together say less than the one that describes what you are after"></select>
     <span class="ms" id="engines-ms" data-help="which runtimes you have. a model is shown when one of the selected ones loads its weights: llama.cpp comes from the architecture it merged, crispasr from the backend the registry names, the rest are written on the model because a gguf does not say what wrote it. picking none is no filter at all, which is also how the entries nothing here runs become visible"></span>
+    <span class="ms" id="license-ms" data-help="which licence tiers to show, as registry/licenses.yaml classifies the licence each repo declares. permissive is commercial use, redistribution and derivatives with at most attribution asked back; restricted adds a condition you would have to hold your own product against; unknown is nobody here having read those terms, which is the absence of a claim rather than a bad one. it opens on permissive alone, so the other two are a tick away with their counts beside them. picking none is every licence"></span>
     <span class="ms" id="pub-ms" data-help="narrow to the publishers you care about, taken from the repo owner. picking none is every publisher"></span>
     <span id="kinds" class="chips"></span>
     <button id="ladder-btn" aria-pressed="true" data-help="on, one row per model, reading the largest quant that fits. off, one row per quant that fits, so the whole size ladder is on screen -- and with quant adjusted each row scores at its own bits per weight, which merges every model and every quant into one ranked list of what you could actually run. it stays inside the repo the registry pins, since crossing to another build changes more than the size">best quant</button>
@@ -612,6 +613,23 @@ function drawEngines() {
             summarize(items, filters.engines, 'any runtime', 'runtimes'));
 }
 
+// one entry per licence tier, in the order registry/licenses.yaml declares them
+// rather than alphabetically -- that file writes them permissive, restricted,
+// unknown, which is the order a reader weighs them in. the count matters more
+// here than on the other menus: it is what makes a tier this view is hiding
+// visibly there rather than silently absent.
+function drawLicenses() {
+  const counts = {};
+  D.models.forEach(m => {
+    const t = licenseOf(m).tier;
+    counts[t] = (counts[t] || 0) + 1;
+  });
+  const items = (D.licenses || []).map(t => ({
+    k: t.k, t: t.label || t.k, n: counts[t.k] || 0, help: t.help || ''}));
+  drawMulti('license-ms', 'data-license', items, filters.licenses,
+            summarize(items, filters.licenses, 'every licence', 'tiers'));
+}
+
 // a publisher capitalizes its own name however it likes -- `Qwen` beside
 // `google` -- and ascii order puts every capital ahead of every lowercase one,
 // which reads as two alphabets in one menu
@@ -626,7 +644,9 @@ function drawPublishers() {
             summarize(items, filters.pubs, 'every publisher', 'publishers'));
 }
 
-const drawFilterMenus = () => { drawModalities(); drawEngines(); drawPublishers(); };
+const drawFilterMenus = () => {
+  drawModalities(); drawEngines(); drawLicenses(); drawPublishers();
+};
 
 // a menu that stays open while you pick has to close on a click that is not a
 // pick. the button that opened it and every option inside it are within the
@@ -2333,10 +2353,12 @@ function shareState() {
     f: changed({q: filters.q, pubs: [...filters.pubs].sort(),
                 mods: [...filters.mods].sort(),
                 flags: [...filters.flags].sort(),
-                engines: [...filters.engines].sort()},
+                engines: [...filters.engines].sort(),
+                licenses: [...filters.licenses].sort()},
                {q: '', pubs: [], mods: [...DEFAULT_MODALITIES].sort(),
                 flags: [...DEFAULT_FLAGS].sort(),
-                engines: [...DEFAULT_ENGINES].sort()}),
+                engines: [...DEFAULT_ENGINES].sort(),
+                licenses: [...DEFAULT_LICENSES].sort()}),
   };
   if (sort.k !== 'score' || sort.dir !== -1) st.sort = sort;
   if (JSON.stringify([...hidden].sort()) !== JSON.stringify([...DEFAULT_HIDDEN].sort()))
@@ -2376,8 +2398,12 @@ function applyState(st) {
     // `mod` was one shape before it was several; a link from then still reads
     if (st.f.mod !== undefined) filters.mods = new Set([st.f.mod]);
     if (st.f.mods) filters.mods = new Set(st.f.mods);
+    // a link written while the licence filter was a `permissive` FLAG carries
+    // that key; `knownFlags` drops it, which lands the reader on this page's
+    // licence default rather than on a filter with nothing left to test it
     if (st.f.flags) filters.flags = new Set(knownFlags(st.f.flags));
     if (st.f.engines) filters.engines = new Set(st.f.engines);
+    if (st.f.licenses) filters.licenses = new Set(knownLicenses(st.f.licenses));
     saveFilters();
     // a shared link can land on a different shape than the one booted, and the
     // score is computed under a shape
@@ -2491,7 +2517,12 @@ function boot(payload) {
              mods: new Set(f && f.mods ? f.mods
                            : f && f.mod ? [f.mod] : DEFAULT_MODALITIES),
              flags: new Set(knownFlags(f ? f.flags || [] : DEFAULT_FLAGS)),
-             engines: new Set(f && f.engines ? f.engines : DEFAULT_ENGINES)};
+             engines: new Set(f && f.engines ? f.engines : DEFAULT_ENGINES),
+             // a reader who stored filters before the licence menu existed has
+             // no `licenses` key, and lands on this page's default rather than
+             // on no licence filter at all
+             licenses: new Set(knownLicenses(
+               f && f.licenses ? f.licenses : DEFAULT_LICENSES))};
   Object.entries(DEFAULT_HARDWARE).forEach(([k, v]) => HW_SET[k](store.get(k, v)));
 
   // a shared link beats what this browser happened to have stored: somebody
@@ -2569,7 +2600,8 @@ function saveFilters() {
   store.set('filters', {q: filters.q, pubs: [...filters.pubs],
                         mods: [...filters.mods],
                         flags: [...filters.flags],
-                        engines: [...filters.engines]});
+                        engines: [...filters.engines],
+                        licenses: [...filters.licenses]});
 }
 
 document.querySelector('#q').oninput = e => {
@@ -2613,6 +2645,7 @@ document.querySelector('#reset').onclick = () => {
              q: '', kind: new Set(), pubs: new Set(),
              mods: new Set(DEFAULT_MODALITIES), flags: new Set(DEFAULT_FLAGS),
              engines: new Set(DEFAULT_ENGINES),
+             licenses: new Set(DEFAULT_LICENSES),
              minParams: null, maxParams: null};
   hidden = new Set(DEFAULT_HIDDEN);
   folded = new Set(allGroups());

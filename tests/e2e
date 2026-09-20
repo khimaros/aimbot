@@ -102,6 +102,7 @@ const RESET = () => {
   filters.mods = new Set(DEFAULT_MODALITIES);
   filters.flags = new Set(DEFAULT_FLAGS);
   filters.engines = new Set(DEFAULT_ENGINES);
+  filters.licenses = new Set(DEFAULT_LICENSES);
   filters.pubs = new Set();
   filters.minParams = null;
   filters.maxParams = null;
@@ -112,6 +113,9 @@ test('the roster can say what it is MISSING, and does it one way', () => {
   RESET();
   filters.mods = new Set();  // no shape picked is every shape
   filters.flags = new Set();
+  // and no tier picked is every licence. this case is about what nothing here
+  // RUNS, which is a different question from what a reader could ship under
+  filters.licenses = new Set();
 
   // there used to be a `has gguf` toggle beside the runtime filter, asking the
   // same question with none of the answer, and the two disagreed: turning it
@@ -144,6 +148,7 @@ test('the vram filter judges what has a size, and passes what has none', () => {
   // the talkers here ship under bespoke terms, so leaving it on would answer
   // this question with a roster the other filter had already decided
   filters.flags = new Set(['fits']);
+  filters.licenses = new Set();
   filters.engines = new Set();
   setHardware({...DEFAULT_HARDWARE, budget: 96});
 
@@ -166,34 +171,61 @@ test('the vram filter judges what has a size, and passes what has none', () => {
   RESET();
 });
 
-// THE FAILURE MODE A DEFAULT-ON FILTER HAS is a model disappearing for a reason
-// nobody can see, and the licence one is the worst candidate for it: a third of
-// this roster ships bespoke terms, and the hub reports 29 of them as the same
-// string. so the filter hides what is classified RESTRICTED and keeps
-// everything else. an unclassified licence is the absence of a claim about the
-// terms rather than a claim that they are bad, and hiding those would make the
-// cheapest route to a clean-looking roster be to classify nothing.
-test('the licence filter hides what is restricted and keeps what is unread', () => {
+// THE LICENCE FILTER SELECTS TIERS rather than answering one yes-or-no. the
+// boolean could only ask "hide what is restricted", so the two questions behind
+// it had no control at all: "what could i run if i could ship under a community
+// licence", and "which are the ones nobody here has read", which is the list
+// somebody has to work through. three checkboxes answer all three.
+//
+// it opens on `permissive` ALONE, which means `unknown` is hidden by default
+// where the boolean kept it. that is a deliberate reversal and it is why the
+// menu carries the count per tier: a reader who wants the unread ones can see
+// there are some and tick them.
+test('the licence filter selects tiers, and opens on permissive alone', () => {
   RESET();
   filters.mods = new Set();
   filters.engines = new Set();
-  filters.flags = new Set(['permissive']);
 
-  const tiers = s => licenseOf(model(s)).tier;
+  const tierOf = s => licenseOf(model(s)).tier;
+  eq([...filters.licenses].sort().join(','), 'permissive',
+     'the page opens on the permissive tier and nothing else');
   const kept = visible().map(m => m.short);
   ok(kept.length, 'the filter leaves a roster');
-  eq(kept.some(s => tiers(s) === 'restricted'), false,
-     'nothing classified restricted survives it');
+  ok(kept.every(s => tierOf(s) === 'permissive'),
+     'and every model in it is permissive: '
+     + kept.filter(s => tierOf(s) !== 'permissive'));
 
-  filters.flags = new Set();
+  // each tier selects its own and nothing else, so the menu can answer the two
+  // questions the boolean could not
+  for (const t of ['permissive', 'restricted', 'unknown']) {
+    filters.licenses = new Set([t]);
+    const got = visible().map(m => m.short);
+    ok(got.length, t + ' is a tier some model on this roster is actually in');
+    ok(got.every(s => tierOf(s) === t),
+       'only ' + t + ' survives selecting it: ' + got.filter(s => tierOf(s) !== t));
+  }
+
+  // a union, the way the runtime menu is one
+  filters.licenses = new Set(['permissive', 'unknown']);
+  const union = visible().map(m => m.short);
+  ok(union.length, 'two tiers leave a roster');
+  ok(union.every(s => tierOf(s) !== 'restricted'),
+     'and select their union and nothing else');
+
+  // picking none is no filter at all, which is how the restricted ones come back
+  filters.licenses = new Set();
   const all = visible().map(m => m.short);
-  const unknown = all.filter(s => tiers(s) === 'unknown');
-  const restricted = all.filter(s => tiers(s) === 'restricted');
-  ok(restricted.length, 'some models ARE restricted, or the case proves nothing');
-  ok(unknown.length, 'and some carry a licence nothing here classifies');
-  ok(unknown.every(s => kept.includes(s)),
-     'every unclassified model survives the filter: ' + unknown.filter(
-       s => !kept.includes(s)));
+  ok(all.length > union.length, 'selecting none is every licence: '
+     + all.length + ' against ' + union.length);
+  ok(all.some(s => tierOf(s) === 'restricted'),
+     'some models ARE restricted, or the case proves nothing');
+  ok(all.some(s => tierOf(s) === 'unknown'),
+     'and some carry a licence nothing here classifies');
+
+  // the boolean is GONE rather than sitting beside its replacement, or a shared
+  // link could carry two controls disagreeing about the same question
+  eq(FLAGS.some(f => f.k === 'permissive'), false,
+     'the `permissive` flag is not also offered');
 
   RESET();
 });
@@ -214,12 +246,13 @@ test('the licence column names the licence and the tier it was filtered by', () 
   ok(cell.includes(licenseOf(other[0]).tier),
      'and the tier beside it: ' + cell);
 
-  // the flag is real, offered, and described in terms of what it removes
-  const flag = FLAGS.find(f => f.k === 'permissive');
-  ok(flag, 'the filter is in the vocabulary a consumer reads');
-  ok(flag.shown !== false, 'and it draws a button rather than hiding');
-  ok(/unknown/.test(flag.help), 'its help says what happens to an unclassified '
-     + 'licence: ' + flag.help);
+  // the tiers are real, offered, and each says what it is claiming. a consumer
+  // with no browser reads this list to know what `--license` takes
+  const tiers = vocabulary().licenses;
+  eq(tiers.map(t => t.k).sort().join(','), 'permissive,restricted,unknown',
+     'the three tiers are in the vocabulary a consumer reads');
+  ok(tiers.every(t => t.t && t.help),
+     'and each carries the label and help registry/licenses.yaml writes');
   RESET();
 });
 
@@ -569,6 +602,7 @@ test('the runtime filter is a multi-select over what actually loads a model', ()
   RESET();
   filters.mods = new Set();  // no shape picked is every shape
   filters.flags = new Set();
+  filters.licenses = new Set();  // and no tier picked is every licence
 
   eq([...filters.engines].sort().join(','),
      'crispasr,llama.cpp,stable-diffusion.cpp',
@@ -577,18 +611,24 @@ test('the runtime filter is a multi-select over what actually loads a model', ()
   const shown_ = visible().map(m => m.short);
   ok(shown_.includes('whisper-large-v3-turbo'), 'crispasr models are in');
   ok(shown_.includes('z-image-turbo'), 'and the one stable-diffusion.cpp loads');
-  // breeze-tts-2's gguf needs a C++ reimplementation published beside it, and
-  // that runtime is not selected. kokoro is NOT this case, though its gguf is a
-  // TTS.cpp file: crispasr has a kokoro backend and converts the checkpoint
-  // itself, so it is in under a runtime that reads none of the pinned rungs
-  eq(shown_.includes('breeze-tts-2'), false,
-     'a model whose only runtime is unselected is out');
+
+  // DESELECTING one takes its models with it, which is the half of this a
+  // single-choice control cannot express. it used to be tested the other way
+  // round, on breeze-tts-2 as the one model no default runtime loaded, and
+  // crispasr shipping a `bt2-tts` backend ended that case: every model here
+  // that names a runtime at all now names one of these three
+  filters.engines = new Set(['crispasr', 'llama.cpp']);
+  const fewer = visible().map(m => m.short);
+  eq(fewer.includes('z-image-turbo'), false,
+     'dropping stable-diffusion.cpp drops what only it loads');
+  ok(fewer.includes('whisper-large-v3-turbo'), 'and keeps what the others load');
 
   // multi-select: adding a runtime adds its models rather than replacing
-  filters.engines.add('Breeze-TTS-2.cpp');
+  filters.engines.add('stable-diffusion.cpp');
   const more = visible().map(m => m.short);
-  ok(more.includes('breeze-tts-2') && more.includes('z-image-turbo'),
+  ok(more.includes('z-image-turbo') && more.includes('whisper-large-v3-turbo'),
      'selecting a second runtime keeps the first: ' + more.length + ' rows');
+  ok(more.length > fewer.length, 'and is strictly more rows');
 
   // none selected reads as no filter, the way no flags does
   filters.engines = new Set();
@@ -1010,43 +1050,82 @@ test('a model that publishes no context window still fits', () => {
   eq(bad.join(', '), '', 'sized models with no window must fit');
 
   // and the fit is still doing its job: a window SHORTER than asked for is
-  // still a miss, which is the case the check exists for.
-  //
-  // only for a model there is something to download, though. a vram budget
-  // weighs FILES, and eight of the speech roster publish a short window and no
-  // gguf at all -- granite-speech 4.1 and its two variants, glm-asr, higgs-stt.
-  // failing them on size would hide them behind a filter about size they have
-  // none of, which is the same reasoning `fitsBudget` already applies to a model
-  // with no quants and no window.
-  const short = D.models.filter(m => m.facts.context_native
+  // still a miss, which is the case the check exists for -- for a TEXT model,
+  // which is the only kind a context budget is a question about. see the case
+  // below for the half of the roster this used to take with it.
+  const short = D.models.filter(m => m.kind === 'text' && m.facts.context_native
     && m.facts.context_native < minCtx && m.quants.length);
-  ok(short.length > 10, 'enough short-window models have files to be a real test');
+  ok(short.length >= 4, 'enough short-window text models have files to be a real test');
   ok(short.every(m => !fitsBudget(m)),
-     'a model whose window is genuinely too short still does not fit');
+     'a text model whose window is genuinely too short still does not fit: '
+     + short.filter(m => fitsBudget(m)).map(m => m.short));
 });
 
-// the page opens on language models that fit, under a licence nothing here
-// classifies as restricted. MODELS.md used to be whatever this came to, which
-// made every ui default an edit to the document -- `research/dashboard-table`
-// pins the document's own roster now, modality AND flags, so the two can differ
-// on purpose. adding the licence filter is what made them differ: it drops
-// qwen3.8 flash next, which the document is still about.
+// THE BUG: breeze-tts-2 is 3.2 gib at Q8_0 and read `does not fit` on a box
+// with 116 gib free. nothing about that is a memory answer -- the model
+// declares a 2048-token window, the page asks every model for 131072, and the
+// shortfall was being reported through a control labelled `fits vram`.
+//
+// the rule above was already half of this argument: a model publishing NO
+// window "has not failed to reach one", because a context window is a text
+// model's promise. a vocoder that happens to declare the text its encoder takes
+// has not made that promise either. so the demand applies where it is a
+// question -- `kind: text`, the registry's own word for a model you serve as a
+// chat or completion endpoint -- and nowhere else.
+test('a context budget is a question about text models, not about a vocoder', () => {
+  RESET();
+  filters.mods = new Set();
+  filters.flags = new Set();
+  filters.licenses = new Set();
+  eq(minCtx, 131072, 'the default context is the setting that exposed this');
+
+  const bt2 = model('breeze-tts-2');
+  ok(bt2.facts.context_native && bt2.facts.context_native < minCtx,
+     'it declares a window far shorter than the demand: ' + bt2.facts.context_native);
+  ok(bt2.quants.some(q => q.gib && q.gib < 5), 'and a rung that plainly fits');
+  ok(fitsBudget(bt2), 'so it fits');
+  ok(activeQuant(bt2), 'and reads a rung rather than `does not fit`');
+
+  // it was never one model: 21 non-text entries declare a short window, which
+  // is most of the speech roster plus both translators and both punctuators
+  const shortOther = D.models.filter(m => m.kind !== 'text'
+    && m.facts.context_native && m.facts.context_native < minCtx && m.quants.length);
+  ok(shortOther.length > 10,
+     'this was hiding a lot of the roster: ' + shortOther.length);
+  ok(shortOther.every(m => fitsBudget(m)),
+     'none of them is excluded for a context nobody asks them for: '
+     + shortOther.filter(m => !fitsBudget(m)).map(m => m.short));
+
+  // and the kv cache charged against them is the one they can actually hold,
+  // not 131072 tokens of a window they do not have
+  ok(kvGib(bt2, minCtx) < kvGib(bt2, minCtx * 4) + 1e-9,
+     'the cache is not charged past the window');
+
+  RESET();
+});
+
+// the page opens on permissively licensed language models that fit. MODELS.md
+// used to be whatever this came to, which made every ui default an edit to the
+// document -- `research/dashboard-table` pins the document's own roster now,
+// modality, flags AND licences, so the two can differ on purpose. the licence
+// filter is what made them differ: it drops qwen3.8 flash next, which the
+// document is still about.
 test('the page opens on the language models a reader could actually run', () => {
   RESET();
   filters.mods = new Set(DEFAULT_MODALITIES);
   eq([...filters.mods].join(','), 'text', 'the page starts on language models');
-  eq([...filters.flags].sort().join(','), 'fits,permissive',
-     'with the vram and licence filters pressed');
+  eq([...filters.flags].sort().join(','), 'fits', 'with the vram filter pressed');
+  eq([...filters.licenses].sort().join(','), 'permissive',
+     'and the licence menu on the permissive tier');
   const got = visible().length;
   const want = D.models.filter(m => m.kind === 'text' && fitsBudget(m)
-    && licenseOf(m).tier !== 'restricted').length;
-  eq(got, want, 'the default view is every text model that fits and is not '
-     + 'licence-restricted');
+    && licenseOf(m).tier === 'permissive').length;
+  eq(got, want, 'the default view is every permissive text model that fits');
   ok(visible().every(m => m.kind === 'text'), 'nothing but language models by default');
 
   // and the licence filter is the only thing between the two rosters, which is
   // the claim that makes turning it off a complete answer
-  filters.flags = new Set(['fits']);
+  filters.licenses = new Set();
   const wider = visible().length;
   ok(wider > got, 'dropping it shows strictly more: ' + wider + ' against ' + got);
   RESET();

@@ -55,14 +55,19 @@ setTimeout(() => {
   // one answer between them.
   //
   // the FLAGS are pinned for the same reason and were not, which is half a fix:
-  // adding `permissive` to the page's defaults took the document's roster from
-  // 69 models to 62, qwen3.8 flash next among the seven, and it surfaced as a
-  // prose block referencing a subject the ranking no longer had. a licence is a
-  // reason a READER might not want a model; it is not a reason this document is
-  // not about it, and the comparison is worth less if the models it declines to
+  // filtering the page on the licence took the document's roster from 69 models
+  // to 62, qwen3.8 flash next among the seven, and it surfaced as a prose block
+  // referencing a subject the ranking no longer had. a licence is a reason a
+  // READER might not want a model; it is not a reason this document is not
+  // about it, and the comparison is worth less if the models it declines to
   // compare are the ones somebody could not ship.
+  //
+  // an EMPTY licence set is every tier, and it has to be said rather than left
+  // out: the page opens on `permissive` alone, so inheriting that default is
+  // the same seven models going missing by a different route.
   filters.mods = new Set(['text']);
   filters.flags = new Set(['fits']);
+  filters.licenses = new Set();
   drawTable();
   const rows = sorted(visible()).map(m => ({
     rank: m._rank, short: m.short, publisher: m.publisher,

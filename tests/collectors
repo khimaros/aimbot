@@ -1281,18 +1281,22 @@ def the_query_cli_answers_what_the_dashboard_answers():
     ever starts computing instead of asking.
 
     The view has to be stated on both sides rather than left to the defaults.
-    `dashboard-table` pins the roster this document ranks -- `text`, and the
-    vram filter -- precisely so a ui default cannot rewrite MODELS.md, and the
-    page's defaults now carry the licence filter as well. Comparing the two
-    DEFAULTS would therefore be asking whether the document and the dashboard
-    open on the same roster, which is a question they deliberately answer no to.
+    `dashboard-table` pins the roster this document ranks -- `text`, the vram
+    filter, and every licence tier -- precisely so a ui default cannot rewrite
+    MODELS.md, and the page's defaults open on the permissive tier alone.
+    Comparing the two DEFAULTS would therefore be asking whether the document
+    and the dashboard open on the same roster, which is a question they
+    deliberately answer no to. Naming all three tiers is how a caller says `no
+    licence filter`, the same way naming every runtime would.
     """
     r = subprocess.run([os.path.join(RESEARCH, "dashboard-table"), "--json"],
                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     eq(r.returncode, 0, "dashboard-table runs: %s" % r.stderr[-300:])
     want = json.loads(r.stdout)["rows"]
 
-    code, out, err = aimbot_cli("--modality", "text", "--flag", "fits", "--json")
+    code, out, err = aimbot_cli("--modality", "text", "--flag", "fits",
+                                "--license", "permissive,restricted,unknown",
+                                "--json")
     eq(code, 0, "the cli runs: %s" % err[-300:])
     got = json.loads(out)["rows"]
     eq(len(got), len(want), "the same roster: %d against %d" % (len(got), len(want)))

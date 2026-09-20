@@ -442,13 +442,14 @@ extension: two of the entries are derived -- llama.cpp from the architecture
 llama.cpp merged, crispasr from the backend the registry names -- and the rest
 are written down, because a gguf does not say what wrote it. kokoro's is a
 TTS.cpp conversion, whisper's files are whisper.cpp's own, and breeze-tts-2
-needs a C++ reimplementation published beside it. selecting none is no filter at
-all, which is also how the entries nothing here runs become visible.
+carries the separate C++ reimplementation published beside it as well as the
+crispasr backend that has since landed. selecting none is no filter at all,
+which is also how the entries nothing here runs become visible.
 
 **support is derived from the ARCHITECTURE, not asserted per model.** a gguf
 says what it is in its own header, and each engine publishes the architectures
 it dispatches on: llama.cpp's `LLM_ARCH_NAMES`, read out of its git history by
-`fetch-llama-support`, and crispasr's `src/core/arch_backend_map.h`, 209
+`fetch-llama-support`, and crispasr's `src/core/arch_backend_map.h`, 217
 architecture strings mapped to backends, read by `fetch-crispasr`. the
 intersection answers the question for every model at once rather than for the
 ones somebody looked up -- which is how kokoro sat here with no engine while
@@ -1047,10 +1048,10 @@ and a second implementation of that fit is the drift this repo keeps deleting.
 
 the defaults are the page's, not none: a 128gb box with 12 reserved at 128k,
 language models only, that fit, on a runtime you are likely to have built, and
-under a licence nothing here classifies as restricted. naming a `--modality`,
-`--flag` or `--engine` replaces that default and `--all` drops all of them.
-`--ram 0` asks what the roster looks like with no budget at all, which is the
-registry's pinned rung rather than a fit.
+under a permissive licence. naming a `--modality`, `--flag`, `--engine` or
+`--license` replaces that default and `--all` drops all of them. `--ram 0` asks
+what the roster looks like with no budget at all, which is the registry's pinned
+rung rather than a fit.
 
 **and it says which filter took the rest.** a model missing from the output was
 usually filtered rather than absent, and that used to be something a reader had
@@ -1058,15 +1059,20 @@ to already know; the footer now names every active filter and how many models it
 hides, each measured alone against the whole registry. `--all` is printed beside
 them.
 
-the licence filter is the one that is on by default and fails open. it hides
-what `registry/licenses.yaml` classifies as RESTRICTED -- non-commercial,
-research-only, a revenue or user ceiling, an acceptable-use policy that travels
-with the weights, or copyleft -- and keeps everything else, an unclassified
-licence included. a third of this roster ships bespoke terms and the hub reports
-29 of them as the same string `other`, so "nobody here has read these terms" is
-a real state and it is not the same claim as "you may not use this". the
-`license` column names the licence under its own name and the tier it landed in,
-which is how a reader finds out why a row went.
+the licence filter is the one that is on by default. `--license` takes the tiers
+`registry/licenses.yaml` declares -- `permissive`, `restricted`, `unknown` --
+and opens on `permissive`, so `--license permissive,restricted,unknown` is how a
+caller says no licence filter without dropping the others.
+
+it is a multi-select rather than a toggle because the yes-or-no it replaced
+could only ask one of the three questions. `--license restricted` is "what could
+i run if i could ship under a community licence"; `--license unknown` is the
+list somebody has to work through. a third of this roster ships bespoke terms
+and the hub reports 29 of them as the same string `other`, so "nobody here has
+read these terms" is a real state and not the same claim as "you may not use
+this" -- it is now a tier you ask for rather than one carried along by default.
+the `license` column names the licence under its own name and the tier it landed
+in, which is how a reader finds out why a row went.
 
 output is the page's own rendering, so a quality of 79.1 prints as `79` the way
 the dashboard shows it, and a size carries the `+d` that says a drafter is

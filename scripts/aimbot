@@ -119,9 +119,11 @@ def parse_args(argv=None):
     ap.add_argument("--modality", default="", help="comma-separated, e.g. text,a2t")
     ap.add_argument("--flag", default="", help="comma-separated, e.g. draft,fits")
     ap.add_argument("--engine", default="", help="comma-separated runtimes")
+    ap.add_argument("--license", default="",
+                    help="comma-separated licence tiers, e.g. permissive,unknown")
     ap.add_argument("--all", action="store_true",
-                    help="drop the modality, flag and runtime filters the page "
-                         "opens with, and show the whole roster")
+                    help="drop the modality, flag, runtime and licence filters "
+                         "the page opens with, and show the whole roster")
     ap.add_argument("--publisher", default="", help="comma-separated publishers")
     ap.add_argument("--min-params", help="only models at least this big, e.g. 1b")
     ap.add_argument("--max-params", help="only models at most this big, e.g. 4b")
@@ -156,7 +158,8 @@ def options(args):
     return {"list": args.list, "columns": split(args.columns),
             "sort": args.sort, "asc": args.asc, "grep": args.grep,
             "modalities": split(args.modality), "flags": split(args.flag),
-            "engines": split(args.engine), "all": args.all,
+            "engines": split(args.engine), "licenses": split(args.license),
+            "all": args.all,
             "publishers": split(args.publisher), "weights": args.weights,
             "minParams": billions(args.min_params, "--min-params"),
             "maxParams": billions(args.max_params, "--max-params"),
@@ -171,10 +174,12 @@ def check(opt, vocab):
              "modalities": [m["k"] for m in vocab["modalities"]],
              "flags": [f["k"] for f in vocab["flags"]],
              "engines": vocab["engines"], "publishers": vocab["publishers"],
+             "licenses": [t["k"] for t in (vocab.get("licenses") or [])],
              "caps": vocab["caps"], "floors": vocab["floors"]}
     bad = []
     for field, names in (("columns", opt["columns"]), ("modalities", opt["modalities"]),
                          ("flags", opt["flags"]), ("engines", opt["engines"]),
+                         ("licenses", opt["licenses"]),
                          ("publishers", opt["publishers"])):
         for n in names:
             if n not in known[field]:

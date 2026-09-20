@@ -290,6 +290,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <input type="search" id="q" placeholder="full text search" data-help="matches the text: name, repo, architecture, registry notes, card summary, best-for, hub tags, discussed tasks and quant names. not the numeric columns">
     <select id="modality" data-help="what the model turns into what. the shapes are the ones llama-swap-groups derives its group membership from, so this page and a host name them alike. one at a time: they overlap rather than partition, so two of them together say less than the one that describes what you are after"></select>
     <span class="ms" id="engines-ms" data-help="which runtimes you have. a model is shown when one of the selected ones loads its weights: llama.cpp comes from the architecture it merged, crispasr from the backend the registry names, the rest are written on the model because a gguf does not say what wrote it. picking none is no filter at all, which is also how the entries nothing here runs become visible"></span>
+    <span class="ms" id="license-ms" data-help="which licence tiers to show, as registry/licenses.yaml classifies the licence each repo declares. permissive is commercial use, redistribution and derivatives with at most attribution asked back; restricted adds a condition you would have to hold your own product against; unknown is nobody here having read those terms, which is the absence of a claim rather than a bad one. it opens on permissive alone, so the other two are a tick away with their counts beside them. picking none is every licence"></span>
     <span class="ms" id="pub-ms" data-help="narrow to the publishers you care about, taken from the repo owner. picking none is every publisher"></span>
     <span id="kinds" class="chips"></span>
     <button id="ladder-btn" aria-pressed="true" data-help="on, one row per model, reading the largest quant that fits. off, one row per quant that fits, so the whole size ladder is on screen -- and with quant adjusted each row scores at its own bits per weight, which merges every model and every quant into one ranked list of what you could actually run. it stays inside the repo the registry pins, since crossing to another build changes more than the size">best quant</button>
@@ -397,12 +398,16 @@ let sort = {k: 'score', dir: -1};
 // and in stock whisper.cpp -- and because narrowing to one runtime is a
 // question about a box rather than about the models.
 let DEFAULT_ENGINES = [];
+// the licence tiers selected by default. `permissive` alone: a reader here is
+// deciding what to run, and a licence they cannot ship under is not a
+// candidate. the other two tiers are a tick away rather than unreachable.
+let DEFAULT_LICENSES = [];
 // `params` is a band in BILLIONS and is not the same question as whether a
 // model fits: a 27b at Q1_0 is 3.5 gib and is not a small model. off by
 // default at both ends, the way every other filter here is.
 let filters = {q: '', kind: new Set(), pub: '', flags: new Set(),
                engines: new Set(), mods: new Set(), pubs: new Set(),
-               minParams: null, maxParams: null};
+               licenses: new Set(), minParams: null, maxParams: null};
 let folded = new Set();             // collapsed factor groups
 let hidden = new Set();
 let order = [];
@@ -599,15 +604,31 @@ const trainCtx = m => m.facts.context_trained || m.facts.context_native;
 // a flag; whether the extrapolated part is worth having is the reader's call,
 // and the two columns put both numbers in front of them.
 //
-// a model that publishes NO window has not failed to reach one, and `|| 0` said
-// it had: 22 of 87 models carry no `context_native` -- every speech, image and
-// diarize entry, none of them text -- so at the default 131072 the whole
-// non-text roster read as `does not fit` on a box with 128gib free. a context
-// window is a text model's promise; kokoro emits audio and has no context at
-// all. same rule the quant search below already applies to missing sizes: an
-// absent measurement is not a failing one.
-const reaches = m => !minCtx || !m.facts.context_native
+// a context window is a TEXT model's promise, so the demand is asked of text
+// models and of nothing else. two rounds of the same bug got it here.
+//
+// first: a model publishing NO window has not failed to reach one, and `|| 0`
+// said it had, so the whole non-text roster read as `does not fit` on a box
+// with 128gib free. that was fixed by passing an absent window.
+//
+// which left the half the absence was standing in for. breeze-tts-2 is 3.2gib
+// at Q8_0 and declares 2048 -- the text its encoder takes, not a chat context
+// anybody is going to fill -- and failed a 131072 demand on a 128gib box. so
+// did 20 other entries: most of the speech roster, both translators, both
+// punctuators. `fits vram` is a control about MEMORY, and answering it with a
+// context mismatch is the same category error as reading "no quant fits" off
+// zero quants. what makes the rule right for text and wrong here is not
+// whether a number was published, it is whether a reader chooses the context:
+// that is `kind: text`, a model served as a chat or completion endpoint.
+const reaches = m => !minCtx || m.kind !== 'text' || !m.facts.context_native
   || m.facts.context_native >= minCtx;
+
+// and the cache charged against a model is the one it can hold. asking for
+// 131072 tokens against a 2048-token window bills for a cache that cannot
+// exist, which is the same demand arriving through the arithmetic instead of
+// through the filter.
+const wantCtx = m => m.facts.context_native
+  ? Math.min(minCtx, m.facts.context_native) : minCtx;
 
 // the longest context whose cache fits beside the weights. windowed layers cap
 // at their window, so past that only the full-attention layers keep growing.
@@ -678,7 +699,7 @@ function bestInRepo(m, repo) {
   // measurement this repo does not have
   if (!budget || !all.some(c => c.gib)) return pinned;
   if (!reaches(m)) return null;
-  const room = usable() - kvGib(m, minCtx) - draftGib(m);
+  const room = usable() - kvGib(m, wantCtx(m)) - draftGib(m);
   const fits = affordable(m, all, room).sort((a, b) => a.gib - b.gib);
   return fits.length ? fits[fits.length - 1] : null;
 }
@@ -760,7 +781,7 @@ function fittingQuants(m) {
   if (!q) return [];
   const all = quantChoices(m).filter(c => c.repo === q.repo);
   if (!budget || !all.some(c => c.gib)) return [q];
-  const room = usable() - kvGib(m, minCtx);
+  const room = usable() - kvGib(m, wantCtx(m));
   return affordable(m, all, room).sort((a, b) => b.gib - a.gib);
 }
 
@@ -813,7 +834,7 @@ function tgTps(m) {
   const weights = a * 1e9 * q.bpw / 8;
   const y = draftYield(m);
   return {empty: y * eff / weights,
-          full: y * eff / (weights + kvGib(m, minCtx) * (1024 ** 3)),
+          full: y * eff / (weights + kvGib(m, wantCtx(m)) * (1024 ** 3)),
           draft: y};
 }
 
@@ -1201,10 +1222,10 @@ const COLUMNS = [
        + `${gib(q.gib + d)}`
        + (d ? '<span class="sub"> +d</span>' : '') + '</td>';
    }},
-  {k: 'kv', t: 'kv gib', num: true, get: m => kvGib(m, minCtx),
+  {k: 'kv', t: 'kv gib', num: true, get: m => kvGib(m, wantCtx(m)),
    help: 'what the kv cache costs at the context you set, at f16 keys and values -- llama.cpp\'s default, and what this page assumes throughout. --cache-type-k/v q8_0 roughly halves it. resident memory is this plus gib plus the reserve',
    cell: m => {
-     const v = kvGib(m, minCtx);
+     const v = kvGib(m, wantCtx(m));
      if (!minCtx) return '<td class="n faint" title="set a context under hardware">-</td>';
      if (!m.facts.attn) return '<td class="n faint" title="its config publishes no attention geometry">?</td>';
      return `<td class="n dim">${gib(v)}</td>`;
@@ -1302,16 +1323,16 @@ const COLUMNS = [
    cell: m => `<td class="dim">${esc(m.repo)}</td>`},
 ];
 
-// the tier a licence nobody has classified lands in, and the one the filter
-// acts against. both are spelled in registry/licenses.yaml; named here so the
-// column, the filter and that file cannot disagree about the spelling.
+// the tier a licence nobody has classified lands in. spelled in
+// registry/licenses.yaml; named here so the column, the filter and that file
+// cannot disagree about it. the filter names no tier of its own -- it selects
+// over whatever that file declares, so a fourth tier would need no code here.
 //
 // `license` is JOINED in build-viewer out of the captured string and the
 // classification table, so this is a read rather than a derivation: the licence
 // is a fact and the tier is a judgement, and neither moves when a reader moves
 // a slider.
 const UNKNOWN_TIER = 'unknown';
-const RESTRICTED_TIER = 'restricted';
 const licenseOf = m => m.license || {tier: UNKNOWN_TIER};
 const tierHelp = k => ((D.licenses || []).find(t => t.k === k) || {}).help || '';
 
@@ -1468,23 +1489,16 @@ const FLAGS = [
    help: 'its chat template reads a thinking control'},
   {k: 'fits', t: 'fits vram', test: m => fitsBudget(m),
    help: 'some quant of it fits your vram, after the reserve and the context kv cache'},
-  // IT HIDES WHAT IS KNOWN TO BE RESTRICTED AND NOT WHAT IS UNVERIFIED, which
-  // is the whole design of it. this filter is on by default, and the failure
-  // mode a default-on filter has is a model disappearing for a reason nobody
-  // can see -- so `unknown` passes. an unclassified licence is the absence of a
-  // claim about the terms rather than a claim that they are bad, and treating
-  // the two the same would make the cheapest way to a clean-looking roster be
-  // to classify nothing. the licence column names the tier, so the unknowns in
-  // here are identifiable by the same column that explains the filter.
-  {k: 'permissive', t: 'permissive licence',
-   test: m => licenseOf(m).tier !== RESTRICTED_TIER,
-   help: 'hides models whose licence registry/licenses.yaml classifies as restricted -- non-commercial, research-only, a revenue or user ceiling, an acceptable-use policy that travels with the weights, or copyleft. a licence nobody here has classified is KEPT and shown as `unknown` in the license column, because that is an absence of a claim rather than a bad one'},
 ];
 
 // a stored or shared filter set can name a flag this page no longer offers, the
 // way a stored column order can name a column since dropped -- carrying the key
-// would put it in every share link with nothing left to test it
+// would put it in every share link with nothing left to test it. the licence
+// tiers get the same treatment against registry/licenses.yaml, which is what
+// drops a stored `permissive` boolean rather than reading it as a tier
 const knownFlags = ks => ks.filter(k => FLAGS.some(f => f.k === k));
+const licenseTiers = () => (D.licenses || []).map(t => t.k);
+const knownLicenses = ks => ks.filter(k => licenseTiers().includes(k));
 
 function haystack(m) {
   return m._hay || (m._hay = [m.repo, m.short, m.match, m.facts.arch, m.facts.model_type,
@@ -1521,6 +1535,12 @@ function visible() {
     // appears once the filter is off entirely
     if (filters.engines.size
         && !(m.engines || []).some(e => filters.engines.has(e))) return false;
+    // the same rule for the licence, over the tiers registry/licenses.yaml
+    // declares. every model is in exactly one, so this is a pick rather than
+    // the engines' any-of -- and selecting none is no licence filter, which is
+    // how the restricted and the unclassified come back
+    if (filters.licenses.size
+        && !filters.licenses.has(licenseOf(m).tier)) return false;
     for (const f of filters.flags) {
       const flag = FLAGS.find(x => x.k === f);
       if (flag && !flag.test(m)) return false;
@@ -1577,6 +1597,7 @@ function applyConfig(cfg) {
   DEFAULT_MODALITIES = cfg.filters.modalities;
   DEFAULT_MODALITY = cfg.filters.modalities[0];
   DEFAULT_ENGINES = cfg.filters.engines;
+  DEFAULT_LICENSES = cfg.filters.licenses;
   RUNTIMES = cfg.runtimes;
   // a list in the config so the order it was written in survives a payload
   // written with sorted keys, and an object here because every caller looks a
@@ -1612,6 +1633,7 @@ function loadRoster(payload) {
   filters = {q: '', kind: new Set(), pub: '', pubs: new Set(),
              mods: new Set(DEFAULT_MODALITIES), flags: new Set(DEFAULT_FLAGS),
              engines: new Set(DEFAULT_ENGINES),
+             licenses: new Set(DEFAULT_LICENSES),
              minParams: null, maxParams: null};
   budget = DEFAULT_HARDWARE.budget;
   reserve = DEFAULT_HARDWARE.reserve;
@@ -1640,13 +1662,15 @@ function applySettings(o) {
   if (o.raw) effective = false;
   if (o.ladder) allQuants = true;
   // the page opens with filters already on, so naming one REPLACES that
-  // default and `all` drops the three of them
+  // default and `all` drops the four of them
   if (o.all) {
     filters.mods = new Set(); filters.flags = new Set(); filters.engines = new Set();
+    filters.licenses = new Set();
   }
   if (o.modalities && o.modalities.length) filters.mods = new Set(o.modalities);
   if (o.flags && o.flags.length) filters.flags = new Set(o.flags);
   if (o.engines && o.engines.length) filters.engines = new Set(o.engines);
+  if (o.licenses && o.licenses.length) filters.licenses = new Set(o.licenses);
   if (o.publishers && o.publishers.length) filters.pubs = new Set(o.publishers);
   if (o.minParams !== undefined && o.minParams !== null) filters.minParams = o.minParams;
   if (o.maxParams !== undefined && o.maxParams !== null) filters.maxParams = o.maxParams;
@@ -1695,6 +1719,11 @@ const filterCounts = () => {
     out.push({k: 'engine', t: [...filters.engines].join(','),
               dropped: total - D.models.filter(
                 m => (m.engines || []).some(e => filters.engines.has(e))).length});
+  }
+  if (filters.licenses.size) {
+    out.push({k: 'license', t: [...filters.licenses].join(','),
+              dropped: total - D.models.filter(
+                m => filters.licenses.has(licenseOf(m).tier)).length});
   }
   filters.flags.forEach(k => {
     const flag = FLAGS.find(x => x.k === k);
@@ -1959,6 +1988,23 @@ function drawEngines() {
             summarize(items, filters.engines, 'any runtime', 'runtimes'));
 }
 
+// one entry per licence tier, in the order registry/licenses.yaml declares them
+// rather than alphabetically -- that file writes them permissive, restricted,
+// unknown, which is the order a reader weighs them in. the count matters more
+// here than on the other menus: it is what makes a tier this view is hiding
+// visibly there rather than silently absent.
+function drawLicenses() {
+  const counts = {};
+  D.models.forEach(m => {
+    const t = licenseOf(m).tier;
+    counts[t] = (counts[t] || 0) + 1;
+  });
+  const items = (D.licenses || []).map(t => ({
+    k: t.k, t: t.label || t.k, n: counts[t.k] || 0, help: t.help || ''}));
+  drawMulti('license-ms', 'data-license', items, filters.licenses,
+            summarize(items, filters.licenses, 'every licence', 'tiers'));
+}
+
 // a publisher capitalizes its own name however it likes -- `Qwen` beside
 // `google` -- and ascii order puts every capital ahead of every lowercase one,
 // which reads as two alphabets in one menu
@@ -1973,7 +2019,9 @@ function drawPublishers() {
             summarize(items, filters.pubs, 'every publisher', 'publishers'));
 }
 
-const drawFilterMenus = () => { drawModalities(); drawEngines(); drawPublishers(); };
+const drawFilterMenus = () => {
+  drawModalities(); drawEngines(); drawLicenses(); drawPublishers();
+};
 
 // a menu that stays open while you pick has to close on a click that is not a
 // pick. the button that opened it and every option inside it are within the
@@ -3680,10 +3728,12 @@ function shareState() {
     f: changed({q: filters.q, pubs: [...filters.pubs].sort(),
                 mods: [...filters.mods].sort(),
                 flags: [...filters.flags].sort(),
-                engines: [...filters.engines].sort()},
+                engines: [...filters.engines].sort(),
+                licenses: [...filters.licenses].sort()},
                {q: '', pubs: [], mods: [...DEFAULT_MODALITIES].sort(),
                 flags: [...DEFAULT_FLAGS].sort(),
-                engines: [...DEFAULT_ENGINES].sort()}),
+                engines: [...DEFAULT_ENGINES].sort(),
+                licenses: [...DEFAULT_LICENSES].sort()}),
   };
   if (sort.k !== 'score' || sort.dir !== -1) st.sort = sort;
   if (JSON.stringify([...hidden].sort()) !== JSON.stringify([...DEFAULT_HIDDEN].sort()))
@@ -3723,8 +3773,12 @@ function applyState(st) {
     // `mod` was one shape before it was several; a link from then still reads
     if (st.f.mod !== undefined) filters.mods = new Set([st.f.mod]);
     if (st.f.mods) filters.mods = new Set(st.f.mods);
+    // a link written while the licence filter was a `permissive` FLAG carries
+    // that key; `knownFlags` drops it, which lands the reader on this page's
+    // licence default rather than on a filter with nothing left to test it
     if (st.f.flags) filters.flags = new Set(knownFlags(st.f.flags));
     if (st.f.engines) filters.engines = new Set(st.f.engines);
+    if (st.f.licenses) filters.licenses = new Set(knownLicenses(st.f.licenses));
     saveFilters();
     // a shared link can land on a different shape than the one booted, and the
     // score is computed under a shape
@@ -3838,7 +3892,12 @@ function boot(payload) {
              mods: new Set(f && f.mods ? f.mods
                            : f && f.mod ? [f.mod] : DEFAULT_MODALITIES),
              flags: new Set(knownFlags(f ? f.flags || [] : DEFAULT_FLAGS)),
-             engines: new Set(f && f.engines ? f.engines : DEFAULT_ENGINES)};
+             engines: new Set(f && f.engines ? f.engines : DEFAULT_ENGINES),
+             // a reader who stored filters before the licence menu existed has
+             // no `licenses` key, and lands on this page's default rather than
+             // on no licence filter at all
+             licenses: new Set(knownLicenses(
+               f && f.licenses ? f.licenses : DEFAULT_LICENSES))};
   Object.entries(DEFAULT_HARDWARE).forEach(([k, v]) => HW_SET[k](store.get(k, v)));
 
   // a shared link beats what this browser happened to have stored: somebody
@@ -3916,7 +3975,8 @@ function saveFilters() {
   store.set('filters', {q: filters.q, pubs: [...filters.pubs],
                         mods: [...filters.mods],
                         flags: [...filters.flags],
-                        engines: [...filters.engines]});
+                        engines: [...filters.engines],
+                        licenses: [...filters.licenses]});
 }
 
 document.querySelector('#q').oninput = e => {
@@ -3960,6 +4020,7 @@ document.querySelector('#reset').onclick = () => {
              q: '', kind: new Set(), pubs: new Set(),
              mods: new Set(DEFAULT_MODALITIES), flags: new Set(DEFAULT_FLAGS),
              engines: new Set(DEFAULT_ENGINES),
+             licenses: new Set(DEFAULT_LICENSES),
              minParams: null, maxParams: null};
   hidden = new Set(DEFAULT_HIDDEN);
   folded = new Set(allGroups());
