@@ -40,6 +40,9 @@ registry/models.yaml      per-model facts, keyed by huggingface base repo. the
                           key is what every capture joins on, so `make lint`
                           rejects an entry keyed on a conversion of itself
 registry/sampling.yaml    the named sampling profiles, and what each one means
+registry/dashboard.yaml   what the dashboard opens with: the composite weights,
+                          the named weightings, the assumed box, the quant
+                          ladder's ceiling and floor, the column order
 scripts/sweep             the whole research sweep in one command
 scripts/models-validate   check that the registry is internally consistent
 scripts/resolve-ids       match registry models to each source's own ids
@@ -47,10 +50,15 @@ scripts/resolve-turns     fill turns/thinking from the executed chat template
 scripts/resolve-runtime   fill runtime: from llama.cpp's own git history
 scripts/registry_patch.py splice generated blocks into models.yaml, shared by
                           the derivers that write it
+scripts/roster.js         the roster's arithmetic with no page around it: the
+                          fit, the kv cache, the retention curves, the
+                          composite, the columns. inlined into the page and
+                          required by the cli, so there is one of it
 scripts/build-viewer      build docs/ from the registry and the captures
-scripts/viewer.html       the page it fills in
-scripts/pageboot.py       boot that page under node; shared by the test and the
-                          generator, so both read the same page
+scripts/viewer.html       the half of the page that needs a dom
+scripts/pageboot.py       boot the built page under node; the e2e test and
+                          dashboard-table read the same boot
+scripts/aimbot            query the roster from a terminal, through roster.js
 docs/                     the github pages site: index.html and data.json
 research/                 the collectors and analysis (see research/README.md)
 research/data/            committed point-in-time captures
@@ -905,6 +913,31 @@ the polarity lexicon credits a sentence to every model it mentions, so
 deepseek v4 flash. over the 40 comparative sentences in the committed corpus the
 two readings agree 48% of the time, and the disagreements are the ones above.
 
+## the arithmetic is a module, not a page
+
+the ranking existed twice once before and the two answers disagreed, which is
+why the dashboard became canonical. that left a subtler version of the same
+problem: the fit, the kv cache, the retention curves and the composite lived
+inside `docs/index.html`, so anything else that wanted them had to boot a page
+under a dom stub to ask.
+
+`scripts/roster.js` is that arithmetic with the page taken off -- 2476 of the
+script's lines never touched the dom, against 639 that did. `build-viewer`
+inlines it above the viewer's own script when it writes `docs/index.html`, so
+the site is still one file with no build step for the reader; `scripts/aimbot`
+requires it under node with no stub at all, which is also four times faster
+than parsing the page was.
+
+the boundary is enforced rather than hoped for. `build-viewer` refuses to
+inline a module that calls `document.querySelector`, `localStorage.getItem` or
+their neighbours, a test requires the module in a bare subprocess to prove it
+loads without a browser, and another asserts the shipped page contains the
+module verbatim so the two cannot become copies.
+
+the eventual shape is smaller still: these are pure functions over a payload,
+so the same boundary would take a wasm module built from rust, shared by the
+cli and the page, without either caller changing.
+
 ## MODELS.md is generated from the dashboard
 
 the ranking existed twice: once in `research/build-tables` over the captures,
@@ -945,6 +978,54 @@ references its figures -- including `{aa.lcr@owner/Repo}` for the model a
 comparison is against, `dash.quality`/`dash.gib` for the ranking itself,
 `box.reserve` and `weight.*` for the settings it was taken under, and
 `reddit.mentions` for the forum columns.
+
+## the same questions from a terminal
+
+`scripts/aimbot` is the dashboard with no browser. it boots the shipped page
+the way `dashboard-table` and `tests/e2e` do, sets whatever the flags asked
+for, and prints the rows the page would have drawn.
+
+```
+./scripts/aimbot                                  # the default view, ranked
+./scripts/aimbot --list                           # what you can ask for
+./scripts/aimbot --grep qwen --columns short,quant,size,score
+./scripts/aimbot --ram 24 --reserve 2 --ctx 32768 --sort size --asc
+./scripts/aimbot --modality a2t --columns short,kind,langs
+./scripts/aimbot --weights coding --limit 10
+./scripts/aimbot --min-params 1b --max-params 4b --sort params --asc
+./scripts/aimbot --all --sort downloads --json
+```
+
+`--min-params` and `--max-params` are a size CLASS, which is not the question
+`--ram` asks: a 27b at Q1_0 fits 3.5 gib and is not a small model. a model
+publishing no parameter count is excluded when either bound is set, which is
+the opposite of what the fit does with a missing context window -- a band is a
+question about the attribute itself, and answering it with the entries whose
+size nobody knows is not an answer.
+
+**there is no list of columns in it.** `--list` reads `COLUMNS`, `MODALITIES`,
+`FLAGS` and the weightings off `scripts/roster.js` at run time, so a column
+added to the dashboard is askable here the same day and a column renamed
+cannot leave a stale name behind. a test asserts the two agree: every key the
+module defines is offered, none is hardcoded in the script, and the rows match
+`dashboard-table --json` model for model and rung for rung.
+
+that is the whole reason it goes through the module rather than reading
+`docs/data.json` itself. the columns worth asking a roster about are the ones
+that are not in the payload -- `fits quant`, `gib`, `fits ctx`, `kv gib` and
+`quality` are all computed from a budget, a reserve, a context and a ceiling,
+and a second implementation of that fit is the drift this repo keeps deleting.
+
+the defaults are the page's, not none: a 128gb box with 12 reserved at 128k,
+language models only, that fit, on a runtime you are likely to have built.
+naming a `--modality`, `--flag` or `--engine` replaces that default and
+`--all` drops the three of them. `--ram 0` asks what the roster looks like
+with no budget at all, which is the registry's pinned rung rather than a fit.
+
+output is the page's own rendering, so a quality of 79.1 prints as `79` the way
+the dashboard shows it, and a size carries the `+d` that says a drafter is
+inside the figure. `--tsv` is the same text without padding and `--json`
+carries the sort value beside it at full precision.
 
 ## status
 

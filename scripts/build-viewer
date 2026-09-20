@@ -46,6 +46,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..")
 DATA = os.path.join(ROOT, "research", "data")
 TEMPLATE = os.path.join(HERE, "viewer.html")
+# the roster's arithmetic, shared with scripts/aimbot and dashboard-table
+ROSTER = os.path.join(HERE, "roster.js")
+# where the module stops and its node-only export tail begins
+MODULE_TAIL = re.compile(r"^if \(typeof module ", re.M)
+# a browser api the module must not reach for, named by the CALL rather than by
+# the object: the first version of this matched `document` followed by a dot and
+# fired on a comment ending a sentence with the word.
+BROWSER_API = re.compile(
+    r"\b(?:document|localStorage)\s*\.\s*"
+    r"(?:querySelector|querySelectorAll|getElementById|createElement|"
+    r"addEventListener|body|title|getItem|setItem|removeItem)\b")
 OUT_DIR = os.path.join(ROOT, "docs")
 
 sys.path.insert(0, os.path.join(ROOT, "research"))
@@ -381,26 +392,54 @@ GIB = 2 ** 30
 # livecodebench scores 5 of the 46 models artificial analysis rates here and
 # terminal-bench 4.0 scores 29 with 14 of them at exactly zero, so both are
 # carried at no weight until the boards fill in.
-DEFAULT_WEIGHTS = {
-    "aa.scicode": 0.30, "aa.terminalbench": 0.30, "gbench.agentic": 0.15,
-    "lmarena.rating": 0.10, "swerebench.resolved": 0.10,
-    "community.*": 0.05, "card.*": 0.05,
-    # the open asr leaderboard carries the transcription half at more depth than
-    # anything else here -- 19 of the roster's models against artificial
-    # analysis' 5, over eight datasets rather than one index -- so it takes the
-    # larger share of the transcription weight
-    "open-asr.accuracy": 0.40, "aa-stt.accuracy": 0.30,
-    "aa-tts.elo": 0.30, "tts-arena.elo": 0.20,
-    # the wildcard, not us english: weighting one language would rank a model on
-    # the slice it happens to be tuned for
-    "voicearena.*": 0.20,
-    # generation is what the image roster is ranked ON, so the two boards that
-    # rate it keep the weight. editing is carried at zero: it is a real number
-    # about a real capability and it is a DIFFERENT question, so it shows on the
-    # model and a reader who wants it ranked that way moves the slider. giving
-    # it weight by default would quietly redefine what the image score means
-    "aa-t2i.elo": 0.5, "lmarena-t2i.rating": 0.5, "lmarena-edit.rating": 0.0,
-}
+# ...and the weights that decide it are `registry/dashboard.yaml`, beside the
+# models they rank rather than in this file. what the composite MEANS is a
+# judgement, and a judgement in code is one nobody reviews: the reader who
+# wants to argue with the ranking should find it where the registry is.
+#
+# every block that file holds -- the hardware a reader is assumed to have, the
+# quant ladder's ceiling and floor, which filters the page opens with, the
+# column order -- travels through here into `docs/data.json` unchanged, and the
+# page and `scripts/aimbot` both read it from there. see CONFIG_BLOCKS.
+CONFIG = os.path.join(ROOT, "registry", "dashboard.yaml")
+# what a config file has to carry for the page to boot. a missing block is a
+# page that renders with an empty column order and no explanation, so it is an
+# error here rather than a puzzle there
+CONFIG_BLOCKS = ("weights", "presets", "hardware", "caps", "floors", "filters",
+                 "columns", "speed", "runtimes")
+
+
+def dashboard_config(path=CONFIG):
+    """The dashboard's own defaults, checked hard enough to fail loudly."""
+    cfg = load_yaml(path)
+    missing = [b for b in CONFIG_BLOCKS if not cfg.get(b)]
+    if missing:
+        sys.exit("!!! %s: no %s" % (path, ", ".join(missing)))
+    order = set((cfg["columns"].get("order") or []))
+    unknown = sorted(set(cfg["columns"].get("hidden") or []) - order)
+    if unknown:
+        sys.exit("!!! %s: columns.hidden names %s, which columns.order does not"
+                 % (path, ", ".join(unknown)))
+    caps = {c["k"] for c in cfg["caps"]}
+    floors = {f["k"] for f in cfg["floors"]}
+    for field, have in (("cap", caps), ("floor", floors)):
+        if cfg["hardware"].get(field) not in have:
+            sys.exit("!!! %s: hardware.%s is %r, which is not one of %s"
+                     % (path, field, cfg["hardware"].get(field),
+                        ", ".join(sorted(have))))
+    # a preset either starts from the weights above or names its own; one that
+    # does neither weighs nothing and silently ranks every model the same.
+    # a LIST rather than a mapping, because the order it is written in is the
+    # order the page offers and the payload is written with sorted keys
+    if not isinstance(cfg["presets"], list):
+        sys.exit("!!! %s: presets must be a list, so their order survives" % path)
+    for p in cfg["presets"]:
+        if not p.get("k") or not p.get("title"):
+            sys.exit("!!! %s: every preset needs a `k` and a `title`: %r" % (path, p))
+        if not p.get("base") and p.get("weights") is None:
+            sys.exit("!!! %s: preset %r sets no weights and does not say `base: true`"
+                     % (path, p["k"]))
+    return cfg
 
 # facet groups in the order the weighting panel lists them, with what each one
 # actually measures. a reader deciding what to trust needs this more than the
@@ -1058,7 +1097,8 @@ def provenance():
         path = os.path.join(DATA, name)
         with open(path, "rb") as f:
             out["research/data/" + name] = hashlib.sha256(f.read()).hexdigest()[:12]
-    for rel in ("registry/models.yaml", "registry/sampling.yaml"):
+    for rel in ("registry/models.yaml", "registry/sampling.yaml",
+                "registry/dashboard.yaml"):
         with open(os.path.join(ROOT, rel), "rb") as f:
             out[rel] = hashlib.sha256(f.read()).hexdigest()[:12]
     return out
@@ -1077,6 +1117,7 @@ def build():
            "lines": registry_lines(reg_path)}
     registry = load_yaml(reg_path).get("models") or {}
     sampling = load_yaml(os.path.join(ROOT, "registry", "sampling.yaml"))
+    cfg = dashboard_config()
     models = [build_model(repo, m, ctx) for repo, m in sorted(registry.items())]
     # a ladder that got shorter says so. these are files a repo publishes that
     # name no type, so the page has no label to offer them under -- a reference
@@ -1098,7 +1139,11 @@ def build():
         "sampling": {"profiles": sampling.get("profiles") or {},
                      "default": sampling.get("default"),
                      "fields": sampling.get("fields") or {}},
-        "weights": DEFAULT_WEIGHTS,
+        "weights": cfg["weights"],
+        # the rest of the dashboard's defaults, shipped whole. the page used to
+        # hold these as `const DEFAULT_*` and there was no way for anything
+        # else to read them
+        "config": {k: cfg[k] for k in CONFIG_BLOCKS if k != "weights"},
         "groups": [{"name": n, "about": a} for n, a in GROUPS],
         "facet_meta": meta,
         # what each source MEASURES, shipped rather than restated in javascript:
@@ -1131,11 +1176,34 @@ def milestones():
 
 
 def render(payload):
+    """The page: roster.js inlined, then the half of the viewer that has a dom.
+
+    The arithmetic is a MODULE rather than part of the page, because three
+    things need it and only one is a browser -- the page, `scripts/aimbot` and
+    `research/dashboard-table`. It is inlined rather than loaded with a
+    `<script src>` so the site stays one file a reader can open off disk, which
+    is the property that made the page runnable under node in the first place.
+
+    Order matters and is asserted: every name the viewer half reads is a plain
+    global out of the module, so the module has to come first.
+    """
     with open(TEMPLATE) as f:
         html = f.read()
-    if "__DATA_URL__" not in html:
-        sys.exit("!!! %s has no __DATA_URL__ placeholder" % TEMPLATE)
-    return html.replace("__DATA_URL__", "data.json")
+    with open(ROSTER) as f:
+        roster = f.read()
+    for want, where in (("__DATA_URL__", TEMPLATE), ("__ROSTER_JS__", TEMPLATE)):
+        if want not in html:
+            sys.exit("!!! %s has no %s placeholder" % (where, want))
+    # the export tail is what makes it a module under node and is meaningless
+    # in a browser, where `module` is undefined. it is cut rather than guarded
+    # twice: a reader viewing source should not have to wonder
+    roster = MODULE_TAIL.split(roster)[0].rstrip() + "\n"
+    found = BROWSER_API.search(roster)
+    if found:
+        sys.exit("!!! %s reaches for %r; it has to run under node too"
+                 % (ROSTER, found.group()))
+    return (html.replace("__ROSTER_JS__", roster)
+                .replace("__DATA_URL__", "data.json"))
 
 
 def write(path, text, check):

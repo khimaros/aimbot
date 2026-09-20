@@ -2088,7 +2088,7 @@
     "agentic / tool use",
     "science / reasoning"
    ],
-   "notes": "the two numbers are the whole model. it is bottom-quartile on {aa.gpqa} and terminal-bench {aa.terminalbench}, below the middle on {aa.intelligence}, and near the top on refusing to invent -- which nets out to {aa.omniscience_index}, well above its raw capability. that is a calibration profile, not a reasoning one, and it is the shape ibm builds for. 4.2 is the first granite generation with a thinking mode and the jump from 4.1 is large enough that 4.1 is not worth carrying beside it. artificial analysis is the only source that scores it, so one source is all this rests on.",
+   "notes": "the two numbers are the whole model. it sits in the bottom third on {aa.gpqa}, below the middle on terminal-bench {aa.terminalbench}, square in the middle on {aa.intelligence}, and near the top on refusing to invent -- which nets out to {aa.omniscience_index}, well above its raw capability. that is a calibration profile rather than a reasoning one, and it is the shape ibm builds for. 4.2 is the first granite generation with a thinking mode; this roster carries no 4.1 at this size, and shows the generation step at 3b instead, where the pair is scored on both sides. artificial analysis is the only source that scores it, so one source is all this rests on.",
    "confidence": "medium",
    "evidence": [
     "{aa.non_hallucination}",
@@ -2812,6 +2812,398 @@
    ],
    "assessed_on": "2026-08-30"
   
+  },
+  "Qwen/Qwen3-4B-Thinking-2507": {
+   "one_liner": "the generation the roster is measuring qwen3.5-4b against, and it loses by more than the version number suggests.",
+   "use_for": [
+    "comparing against qwen3.5-4b",
+    "coding at 4b, where it holds up best"
+   ],
+   "avoid_for": [
+    "tool calling",
+    "anything qwen3.5-4b does instead"
+   ],
+   "notes": "{aa.intelligence} against its successor's thirteen at the same parameter count from the same vendor, and {aa.tau2} on tau2 against that model's 0.92 -- a three-and-a-half-fold gap on tool use in roughly a year, from a vendor iterating faster than anyone else here. {aa.livecodebench} is where it still holds up -- the best of the eight models under 4.5b scored on it -- and {aa.gpqa} is second of nineteen behind only nanbeige4.1; {aa.lcr} on long-context reasoning is third of them, which is high for something this small. the card and the shipped generation_config agree exactly on samplers, which is rarer than it should be, and the template names no thinking knob, so this checkpoint always thinks.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.intelligence}",
+    "{aa.tau2}",
+    "{aa.livecodebench}",
+    "no forum mentions in this corpus"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "Qwen/Qwen3-VL-4B-Instruct": {
+   "one_liner": "vision at 4b with a vendor gguf, and the least honest model in its size class.",
+   "use_for": [
+    "vision on a small box where the vendor conversion matters"
+   ],
+   "avoid_for": [
+    "anything trusting it not to confabulate",
+    "reasoning"
+   ],
+   "notes": "{aa.non_hallucination} is the number that decides this entry: it is the lowest of any model under 4.5b on this roster, so it will answer rather than decline and it will be wrong. against that it carries {aa.mmmu_pro} on vision, 256k of context and, unusually for a vision model at this size, qwen's own gguf with the projector at two precisions rather than one. {aa.intelligence} is ordinary and {aa.lcr} on long-context reasoning does not justify the window. artificial analysis also scores a Thinking sibling of these weights three points higher; this entry is the instruct half. the card splits its sampler guidance by input rather than by mode, and the set generation_config ships is the VISION one, so running it for text without overriding gets the wrong profile.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.non_hallucination}",
+    "{aa.mmmu_pro}",
+    "{aa.intelligence}",
+    "no forum mentions in this corpus"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "ibm-granite/granite-4.0-h-1b": {
+   "one_liner": "the third point on the granite line, and the one that shows the line is not straight.",
+   "use_for": [
+    "comparing across granite 4.0, 4.1 and 4.2"
+   ],
+   "avoid_for": [
+    "anything the 4.2 does instead"
+   ],
+   "notes": "carrying all three generations was supposed to show a clean climb and does not. {aa.non_hallucination} from this 1.5b is nearly FOUR TIMES what granite 4.1 3b scores -- newer, from the same vendor, at twice the size -- before 4.2 recovers to 0.74. whatever ibm changed between 4.0 and 4.1 cost calibration badly and was put back afterwards, which is only visible because all three are here. the rest is unremarkable for the size: {aa.intelligence}, {aa.tau2} on tau2, {aa.lcr} on long-context reasoning. the `h` is the hybrid mamba variant, so its cache does not grow with context the way the dense granites beside it do. no sampler guidance on the 4.0 card and none in its generation_config, so the numbers here are 4.2's, borrowed within the line.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.non_hallucination}",
+    "{aa.intelligence}",
+    "{aa.tau2}",
+    "no forum mentions in this corpus"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "google/gemma-3-270m-it": {
+   "one_liner": "270 million parameters, and it knows that it does not know.",
+   "use_for": [
+    "on-device work at a size nothing else here reaches",
+    "classification and short transforms"
+   ],
+   "avoid_for": [
+    "anything open-ended",
+    "coding",
+    "long prompts"
+   ],
+   "notes": "{aa.non_hallucination} from a 0.27b is the surprise -- roughly four times what anything else added beside it scores, and better than models ten times its size. a model this small declining to answer is the only sane behaviour and google appears to have trained for it rather than around it, which is what makes this useful rather than merely tiny. everything else is what 270m buys: {aa.livecodebench} is effectively zero, {aa.lcr} is exactly zero, {aa.ifbench} is the lowest of the nineteen models under 4.5b this roster carries, and the window is 32k against the 128k and 256k of everything near it. google's repo is gated and returns 401, so the card this roster reads is the quantizer's. one thing to know before picking a rung: the quant ladder is nearly flat here, 6.88 bits per weight at Q2_K against 8.51 at Q8_0, because a 262k vocabulary on 640 hidden dimensions makes the embedding table 63 percent of the model and the quantizer leaves it at Q8_0 -- so a low rung costs accuracy and saves almost nothing. the UD-IQ files are the only ones that genuinely shrink it.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.non_hallucination}",
+    "{aa.lcr}",
+    "{aa.ifbench}",
+    "no forum mentions in this corpus"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "CohereLabs/tiny-aya-global": {
+   "one_liner": "sixty-five languages, an 8k window, and a licence that rules out the obvious use.",
+   "use_for": [
+    "multilingual work at 3b, non-commercially"
+   ],
+   "avoid_for": [
+    "tool calling",
+    "long prompts",
+    "anything commercial"
+   ],
+   "notes": "the case for this entry is the language list and nothing measured. {aa.tau2} on tau2 and {aa.lcr} on long-context reasoning are both exactly zero, {aa.non_hallucination} is near the bottom of the roster, and {aa.intelligence} is the lowest of the nineteen models under 4.5b this roster carries. the window is unresolved from the outside: the gguf header declares 500k and artificial analysis tested it at 8k, and with the base repo gated there is no config to arbitrate between them -- treat the header as the optimistic number. against that it declares sixty-five languages, which is the axis this roster is thinnest on and no benchmark here scores. cc-by-nc-4.0 and gated behind a click-through, so it is also the rare entry a reader cannot simply pull -- cohere returns 401 for the card and the generation_config alike, which is why the sampler profile here is llama.cpp's defaults rather than anybody's recommendation.",
+   "confidence": "low",
+   "evidence": [
+    "{aa.intelligence}",
+    "{aa.tau2}",
+    "{aa.lcr}",
+    "gated card, and no forum mentions"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "LGAI-EXAONE/EXAONE-4.0-1.2B": {
+   "one_liner": "the best science score under a billion and a half, from the only lg model here.",
+   "use_for": [
+    "knowledge questions at 1b",
+    "coding at a size where little else tries"
+   ],
+   "avoid_for": [
+    "tool calling",
+    "long prompts",
+    "anything commercial"
+   ],
+   "notes": "{aa.gpqa} on gpqa-diamond from a 1.28b is the highest of any model under 1.5b this roster carries, ahead of both minicpm entries at the same size, and {aa.livecodebench} is second of the eight models in that group scored on it, behind a model three times its size. the rest is thin: {aa.tau2} on tau2, {aa.non_hallucination}, and {aa.lcr} on long-context reasoning at exactly zero. the 64k window is rope, not training -- the config puts the trained length at 8k and scales up from there -- so the zero is what that kind of window usually buys. the licence is lg's own and non-commercial. artificial analysis scores it twice, reasoning and not, off one set of weights -- the template carries an `enable_thinking` toggle, so the two rows are one checkpoint with a knob and the card publishes a sampler set for each.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.gpqa}",
+    "{aa.livecodebench}",
+    "{aa.lcr}",
+    "no forum mentions in this corpus"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "Nanbeige/Nanbeige4.1-3B": {
+   "one_liner": "a 3b that answers graduate physics and cannot drive a tool or hold a document.",
+   "use_for": [
+    "knowledge questions at a size that fits anywhere"
+   ],
+   "avoid_for": [
+    "agents and tool calling",
+    "anything longer than a short prompt"
+   ],
+   "notes": "{aa.gpqa} on gpqa-diamond is the number to look at twice -- that is graduate-level science, from a 3b, and it beats models on this roster twenty times its size. everything else says do not deploy it as an assistant: {aa.terminalbench} on terminal-bench is barely off zero, {aa.tau2} on tau2 is weak, and {aa.lcr} on long-context reasoning is exactly zero -- not low, zero, meaning it did nothing at all with what it was given. the shape is a model trained hard on question answering and not on being useful in a loop. no vendor gguf, and the two most-downloaded conversions publish one rung each.",
+   "confidence": "low",
+   "evidence": [
+    "{aa.gpqa}",
+    "{aa.lcr}",
+    "{aa.terminalbench}",
+    "no forum mentions, and no vendor gguf"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "Qwen/Qwen3.5-2B": {
+   "one_liner": "the 2b that does the most things adequately, including seeing.",
+   "use_for": [
+    "tool use at 2b",
+    "vision on a small box",
+    "long context"
+   ],
+   "avoid_for": [
+    "questions of fact"
+   ],
+   "notes": "{aa.tau2} on tau2 at 2b is third among the nineteen models under 4.5b this roster carries, behind minicpm-v 4.6 and minicpm5 1b -- both of which do less besides -- and it brings {aa.mmmu_pro} on vision and a 256k window with it. that breadth is the argument for it over the 0.8b below and the specialists beside it. {aa.gpqa} and {aa.non_hallucination} are the price: it knows less than nanbeige4.1 and is readier to answer anyway. the card publishes four sampler sets rather than two -- split by task as well as by thinking mode -- and this entry carries three of them, because the fourth is a vision non-thinking profile the registry has no name for.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.tau2}",
+    "{aa.mmmu_pro}",
+    "{aa.non_hallucination}",
+    "no forum mentions in this corpus"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "microsoft/Phi-4-mini-instruct": {
+   "one_liner": "two years old and still mid-field, which says more about the field than about the model.",
+   "use_for": [
+    "single-shot transforms",
+    "a baseline to measure newer small models against"
+   ],
+   "avoid_for": [
+    "tool calling",
+    "agentic work"
+   ],
+   "notes": "released 2024-02-26, older than everything else on this roster by more than a year, and it still scores {aa.intelligence}, ninth of the nineteen models under 4.5b this roster carries, nearly all of them at least a year newer. that is the useful thing about carrying it: it is the control. where it has fallen behind is exactly where the last two years went, {aa.tau2} on tau2 and {aa.terminalbench} on terminal-bench, both near zero. microsoft publishes gguf for the phi-3 line and not this one, so the conversion is unsloth's. every sampler on the card is greedy, so this is the only entry here whose documented profile is deterministic.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.intelligence}",
+    "{aa.tau2}",
+    "{aa.terminalbench}",
+    "no forum mentions in this corpus"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "ibm-granite/granite-4.1-3b": {
+   "one_liner": "the previous generation, carried because the step to 4.2 is the clearest one this roster can show.",
+   "use_for": [
+    "comparing against granite 4.2 3b"
+   ],
+   "avoid_for": [
+    "anything the 4.2 does instead",
+    "work where a confident wrong answer is costly"
+   ],
+   "notes": "{aa.non_hallucination} is the finding, and it is bad: this model confabulates where its successor at the same size and from the same vendor scores fifteen times better. one generation, one vendor, one parameter count, and the difference is the whole of it -- which is why both are carried rather than just the newer one. the rest tracks: {aa.intelligence} against the 4.2's nine, {aa.lcr} on long-context reasoning against its successor's. ibm's card for 4.1 publishes no sampler guidance at all, so the numbers here are the ones ibm documents for 4.2, borrowed within the line and marked as chosen rather than published.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.non_hallucination}",
+    "{aa.intelligence}",
+    "{aa.lcr}",
+    "no forum mentions in this corpus"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "ai21labs/AI21-Jamba-Reasoning-3B": {
+   "one_liner": "the best instruction-follower of the small models, on an architecture whose cache does not grow.",
+   "use_for": [
+    "instruction following at 3b",
+    "long prompts on little memory"
+   ],
+   "avoid_for": [
+    "tool calling",
+    "questions of fact"
+   ],
+   "notes": "{aa.ifbench} on ifbench is the highest of the nineteen models under 4.5b this roster carries and competitive with things far larger -- doing as it is told is what this model is for. the architecture is the other half: a hybrid mamba-transformer, so its kv cache does not grow with context the way the dense 3b models beside it do, and it declares a 262k window. against that, {aa.tau2} on tau2 is near the floor and {aa.gpqa} on gpqa is ordinary for the size. bartowski's conversion is downloaded three times more than ai21's own. ai21 ships its recommended temperature in generation_config.json under a misspelt key, so the file does not actually deliver it.",
+   "confidence": "low",
+   "evidence": [
+    "{aa.ifbench}",
+    "{aa.tau2}",
+    "{aa.intelligence}",
+    "no forum mentions in this corpus"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "mistralai/Ministral-3-3B-Instruct-2512": {
+   "one_liner": "fast, sees images, and measured on more axes than anything else its size.",
+   "use_for": [
+    "high-throughput work",
+    "vision on a small box"
+   ],
+   "avoid_for": [
+    "reasoning",
+    "agentic work"
+   ],
+   "notes": "nineteen artificial analysis facets, the deepest evidence of any model under 4.5b on this roster, and the picture they paint is of a fast generalist rather than a strong one: {aa.speed} tokens per second, {aa.mmmu_pro} on vision, and {aa.intelligence} overall, which is last among the models added with it. {aa.terminalbench} on terminal-bench is zero. mistral asks for a temperature below 0.1 in production, the coldest recommendation here after liquid's, which reads as a vendor that knows the model wanders. the most downloaded gguf of this name is a third party's build of the REASONING variant, which is a different checkpoint.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.speed}",
+    "{aa.mmmu_pro}",
+    "{aa.intelligence}",
+    "nineteen facets, and no forum mentions"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "openbmb/MiniCPM-V-4.6": {
+   "one_liner": "1.3b, takes images and video, and calls tools better than anything else this small.",
+   "use_for": [
+    "tool calling at the smallest size that works",
+    "vision on a phone"
+   ],
+   "avoid_for": [
+    "anything trusting it not to confabulate",
+    "long context"
+   ],
+   "notes": "{aa.tau2} on tau2 from a 1.3b is the result worth carrying this entry for -- higher than every other model under 4.5b on this roster, including ones three times its size, and it takes images as well. the other side is as extreme: {aa.non_hallucination} is third-lowest of that same group, behind qwen3-vl 4b and tiny aya, so it will answer confidently rather than decline, and {aa.lcr} says it reasons over almost nothing in a long prompt. a tool-caller to wire into a harness that checks its work, not an assistant to ask questions of. the vendor publishes the gguf and ggml-org publishes a second, which usually means the vision stack landed upstream.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.tau2}",
+    "{aa.non_hallucination}",
+    "{aa.lcr}",
+    "no forum mentions in this corpus"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "IFM/K2-Horizon-3.7B": {
+   "one_liner": "the highest-scoring model of its size anybody has measured, and nothing can load it.",
+   "use_for": [
+    "knowing what a 3.7b is capable of"
+   ],
+   "avoid_for": [
+    "serving, on any build that exists today"
+   ],
+   "notes": "it tops the sub-5b field on artificial analysis at {aa.intelligence}, ahead of the next one by three points, with {aa.gpqa} on gpqa-diamond and {aa.lcr} on long-context reasoning -- numbers a 3.7b has no business posting. and its gguf declares an architecture llama.cpp has never had: `unknown model architecture: 'k2-horizon'`, filed as ggml-org/llama.cpp#28361 and still open three weeks after release. both conversions on the hub were made by a converter that cannot read them back. so this entry is a measurement rather than an option, and the runtime block says so. worth rechecking whenever the issue moves.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.intelligence}",
+    "{aa.gpqa}",
+    "{aa.terminalbench}",
+    "no forum mentions, and no runtime loads it"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "openbmb/MiniCPM5-2B": {
+   "one_liner": "the small model with the most evidence behind it, and a drafter of its own.",
+   "use_for": [
+    "on-device chat",
+    "tool use at 2b"
+   ],
+   "avoid_for": [
+    "long-context retrieval"
+   ],
+   "notes": "{aa.intelligence} on the intelligence index, second of the sub-5b field and level with qwen3.5-4b, on the deepest evidence of any model this size here: thirteen artificial analysis facets, thirteen card claims and a reddit presence. {aa.non_hallucination} on non-hallucination is the number worth reading -- it abstains rather than inventing, which is the failure mode that makes a small model unusable as an assistant. openbmb also ships a DSpark drafter as its own repo, which the entry names, so the speedup is available without hunting for it. the card is unusually careful about llama.cpp's `min_p` default, and following it matters: the stock 0.05 makes this model loop.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.intelligence}",
+    "{aa.non_hallucination}",
+    "{aa.scicode}",
+    "{community.reddit-localllama}"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "Qwen/Qwen3.5-4B": {
+   "one_liner": "the small model to reach for when the job is tools, and the only one here with agentic evidence.",
+   "use_for": [
+    "tool use and agents at 4b",
+    "long-context work on a small box",
+    "vision in"
+   ],
+   "avoid_for": [
+    "anything trusting it not to confabulate"
+   ],
+   "notes": "{aa.tau2} on tau2 is the standout and it is not close -- the best of anything under 5b on this roster, with minicpm-v 4.6 at a third the size the nearest -- and {aa.ifbench} on ifbench and {aa.mmmu_pro} on vision sit beside it. it ties minicpm5 2b at {aa.intelligence} overall and wins the tie on the axes people actually deploy small models for, plus twice the context. the cost is on the other side of the ledger: {aa.non_hallucination} is in the bottom quartile of everything artificial analysis scores, so it answers confidently when it should decline. three forums discuss it, which at this size is unusual.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.tau2}",
+    "{aa.ifbench}",
+    "{aa.non_hallucination}",
+    "{community.reddit-localllama}"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "ibm-granite/granite-4.2-3b": {
+   "one_liner": "the fast one: an order of magnitude more output per second than anything near it, at a real cost in reasoning.",
+   "use_for": [
+    "high-throughput classification and extraction",
+    "on-device work where latency is the constraint"
+   ],
+   "avoid_for": [
+    "reasoning",
+    "long-context retrieval"
+   ],
+   "notes": "{aa.speed} tokens per second on artificial analysis' own harness, against 32 for qwen3.5-4b -- a different order of magnitude, and the reason to pick it. the index is {aa.intelligence}, mid-field for its size, and {aa.lcr} on long-context reasoning is bottom-quintile against the whole roster -- better than most models its own size, and still low enough that it forgets what it read. ibm's own gguf, fifteen rungs, and the most downloaded conversion of any model this size on the roster. the card asks for one sampler set across every task and mode, which is rarer than it sounds and means there is no second profile to get wrong.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.speed}",
+    "{aa.intelligence}",
+    "{aa.lcr}",
+    "no forum mentions in this corpus"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "openbmb/MiniCPM5-1B": {
+   "one_liner": "a 1b that follows instructions and calls tools, and knows almost nothing.",
+   "use_for": [
+    "tool calling at the smallest size that works",
+    "instruction following on a phone"
+   ],
+   "avoid_for": [
+    "anything needing world knowledge"
+   ],
+   "notes": "the split here is the sharpest of any model on the roster: {aa.tau2} on tau2 and {aa.ifbench} on ifbench are respectable at any size, and {aa.gpqa} on gpqa-diamond is near the floor. it has learned to use a tool and to do as it is told without learning facts, which is the right trade for a 1b in a pipeline and the wrong one for a 1b asked a question. {aa.non_hallucination} says it mostly declines rather than inventing, which makes the knowledge gap safe instead of dangerous.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.tau2}",
+    "{aa.gpqa}",
+    "{aa.non_hallucination}",
+    "{community.reddit-localllama}"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "LiquidAI/LFM2.5-2.6B": {
+   "one_liner": "the most-downloaded gguf on this roster, and the one that most reliably says it does not know.",
+   "use_for": [
+    "on-device assistants",
+    "work where a wrong answer costs more than no answer"
+   ],
+   "avoid_for": [
+    "long-context retrieval",
+    "agentic work"
+   ],
+   "notes": "{aa.non_hallucination} is near the very top of everything artificial analysis scores, second among the nineteen models under 4.5b this roster carries, and {aa.lcr} on long-context reasoning is in the bottom third of them -- it is honest about what it does not know and cannot hold much at once, which together describe a short-turn on-device assistant and nothing else. {aa.intelligence} puts it seventh in that same group, and it is downloaded more than any other conversion on this roster by a wide margin, which is a fact about distribution rather than quality. liquid's recommended temperature of 0.1 is far colder than anything else here and is theirs, not a house choice. it ships a DSpark drafter in its own repo, which this entry names.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.non_hallucination}",
+    "{aa.lcr}",
+    "{aa.intelligence}",
+    "{community.reddit-localllama}"
+   ],
+   "assessed_on": "2026-09-19"
+  },
+  "ai9stars/G9v3-3B": {
+   "one_liner": "third of the tiny field on the index, and the most reluctant to make things up.",
+   "use_for": [
+    "on-device chat where confabulation is the risk"
+   ],
+   "avoid_for": [
+    "agentic work",
+    "tool calling"
+   ],
+   "notes": "{aa.intelligence} puts it third among models under 5b, behind only k2 horizon and the two at 13. {aa.non_hallucination} is the highest non-hallucination score of any model this size on the roster. against that, {aa.terminalbench} on terminal-bench is close to nothing, so it is a model to talk to rather than one to hand a shell. no vendor conversion exists and no forum here discusses it, so the evidence is artificial analysis and the download count of a third party's ladder.",
+   "confidence": "low",
+   "evidence": [
+    "{aa.intelligence}",
+    "{aa.non_hallucination}",
+    "{aa.terminalbench}",
+    "no forum mentions, and no vendor gguf"
+   ],
+   "assessed_on": "2026-09-19"
   },
   "prism-ml/Bonsai-27B-unpacked": {
    "one_liner": "27b-class reasoning in binary weights: an efficiency experiment the two forums carrying it disagree about.",

@@ -9,6 +9,7 @@ help:
 	@echo "to refresh published quant sweeps, run 'make curves'"
 	@echo "to account for every written sentence, run 'make prose'"
 	@echo "to rebuild the github pages viewer, run 'make site'"
+	@echo "to query the roster from a terminal, run './scripts/aimbot --list'"
 	@echo "to test the viewer end to end, run 'make test-e2e'"
 	@echo "to run the whole research sweep, run 'make sweep'"
 	@echo "to see what a sweep left for a human, run 'make sweep-report'"

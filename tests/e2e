@@ -103,6 +103,8 @@ const RESET = () => {
   filters.flags = new Set(DEFAULT_FLAGS);
   filters.engines = new Set(DEFAULT_ENGINES);
   filters.pubs = new Set();
+  filters.minParams = null;
+  filters.maxParams = null;
   reweigh();
 };
 
@@ -1645,6 +1647,33 @@ test('a ladder is one model at several sizes, however the files are named', () =
   // what a reader picks from
   bs.available.forEach(a => ok(!/\.gguf$/.test(a.quant),
     'a rung is named by type, got ' + a.quant));
+});
+
+test('a size band is off until it is set, and excludes what has no size', () => {
+  RESET();
+  // an UNSET bound has to be off. the first cut tested `!== null` against a
+  // field loadRoster did not initialise, so `undefined !== null` read as a
+  // bound that had been set and every model publishing no parameter count --
+  // 32 of them, every speech and image entry -- vanished from the default view
+  const all = visible().length;
+  ok(all > 0, 'the default view has rows');
+  eq(filters.minParams, null, 'the band starts unset');
+  eq(filters.maxParams, null, 'at both ends');
+
+  // and when it IS set, an unknown size cannot satisfy it -- the opposite of
+  // the fit's rule, because this asks about the attribute rather than the box
+  filters.mods = new Set();
+  filters.flags = new Set();
+  filters.engines = new Set();
+  const unsized = visible().filter(m => m.facts.params_total_b == null).length;
+  ok(unsized > 10, 'the roster has models with no parameter count: ' + unsized);
+  filters.maxParams = 4;
+  const small = visible();
+  eq(small.every(m => m.facts.params_total_b <= 4), true,
+     'everything left is under the bound');
+  eq(small.some(m => m.facts.params_total_b == null), false,
+     'and nothing whose size is unknown came along');
+  filters.maxParams = null;
 });
 
 test('a drafter somebody else published is priced and asked for by name', () => {

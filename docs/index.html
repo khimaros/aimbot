@@ -365,18 +365,44 @@ const store = {
   set(k, v) { localStorage.setItem('aim-' + k, JSON.stringify(v)); },
 };
 
+// the roster's arithmetic, with no page around it.
+//
+// this is everything the dashboard COMPUTES rather than displays: which quant
+// fits a box, what its kv cache costs, how far a context can be stretched, what
+// a quant cost in quality, and the composite that ranks the result. it touches
+// no dom and reads no localStorage, so it runs the same under node as it does
+// in a browser.
+//
+// it exists because three things need those answers and only one of them is a
+// browser. `docs/index.html` inlines this file and puts controls on it,
+// `scripts/aimbot` requires it to answer from a terminal, and
+// `research/dashboard-table` requires it to generate MODELS.md's ranking. one
+// implementation, because two of them drifted once already -- the page scored a
+// mean of percentiles while a second composite in python min-max normalised raw
+// values, and they disagreed about which model was first.
+//
+// the FACTS come from `docs/data.json`, which `scripts/build-viewer` writes out
+// of `registry/models.yaml` and the research captures. the DEFAULTS come from
+// `registry/dashboard.yaml` through the same file. nothing is hardcoded here
+// that a reader of the registry would want to argue with.
+
 let D = null;                       // the payload
 let W = {};                         // facet key -> weight
-let sort = store.get('sort', {k: 'score', dir: -1});
+// the page overwrites this from localStorage once it boots; a module with no
+// browser around it starts where a first-time reader starts
+let sort = {k: 'score', dir: -1};
 // the runtimes selected by default: the three that load most of this roster and
 // that a reader here is likely to have built. it is a multi-select rather than
 // one choice because a model can have two -- whisper's files load in crispasr
 // and in stock whisper.cpp -- and because narrowing to one runtime is a
 // question about a box rather than about the models.
-const DEFAULT_ENGINES = ['llama.cpp', 'crispasr', 'stable-diffusion.cpp'];
+let DEFAULT_ENGINES = [];
+// `params` is a band in BILLIONS and is not the same question as whether a
+// model fits: a 27b at Q1_0 is 3.5 gib and is not a small model. off by
+// default at both ends, the way every other filter here is.
 let filters = {q: '', kind: new Set(), pub: '', flags: new Set(),
-               engines: new Set(DEFAULT_ENGINES), mods: new Set(),
-               pubs: new Set()};
+               engines: new Set(), mods: new Set(), pubs: new Set(),
+               minParams: null, maxParams: null};
 let folded = new Set();             // collapsed factor groups
 let hidden = new Set();
 let order = [];
@@ -404,6 +430,15 @@ const ctxLabel = v => !v ? '' : v >= 1000 ? Math.round(v / 1024) + 'k' : String(
 // wrong, and one decimal is as much as anyone reads -- the exact figure is on
 // hover
 const round1 = v => v === undefined || v === null ? '' : (Math.round(v * 10) / 10);
+
+// a note or a verdict, as plain text. the parts carry rendered references --
+// `{gib}` became a figure at build time -- and the ones that are objects know
+// what they are SHOWN as. lives here rather than with the modal because the
+// search haystack reads it, and a grep that could not see a note would miss
+// the sentence that says what a model is for.
+const proseText = parts => !parts ? ''
+  : (Array.isArray(parts) ? parts : [parts])
+      .map(p => typeof p === 'string' ? p : p.shown).join('');
 
 // active parameters: the vendor's own naming convention first, since it is
 // exact and covers models nobody has scored, then artificial analysis, and for
@@ -448,20 +483,16 @@ let budget = null;                  // gib of memory, or null
 let reserve = 0;
 const usable = () => budget === null ? null : Math.max(0, budget - reserve);
 
-// how far up the quant ladder the fit will climb, as a bits-per-weight
-// ceiling. past q8 the extra bytes buy nothing measurable and cost decode --
-// build-tables pins the dense models at q8 for the same reason -- so a box
-// with room to spare gets the fastest quant that is still lossless-ish rather
-// than bf16 because it happened to fit.
-const CAPS = [['none', Infinity, 'up to bf16'], ['q8', 11, 'max q8'],
-              ['q6', 7.5, 'max q6'], ['q5', 6.2, 'max q5'], ['q4', 5.3, 'max q4']];
-// a floor rather than a ceiling: below it the answer is "not with this much
-// memory" rather than a two-bit version of the model
-const FLOORS = [['none', 0, 'any quant'], ['q2', 2.4, 'min q2'], ['q3', 3.2, 'min q3'],
-                ['q4', 4.2, 'min q4'], ['q5', 5.3, 'min q5'], ['q6', 6.2, 'min q6'],
-                ['q8', 7.5, 'min q8']];
-let cap = 'q8';
-let floor = 'none';
+// the quant ladder's ceiling and floor, and every other default, come from
+// `registry/dashboard.yaml` through `docs/data.json`. they are judgements --
+// how far up the ladder is worth climbing, how much of a box to hold back --
+// and they were consts in the page where nothing but the page could read them
+// and nobody reviewing the registry would find them. applyConfig fills them in
+// before anything reads them.
+let CAPS = [];
+let FLOORS = [];
+let cap = null;
+let floor = null;
 const capBpw = () => (CAPS.find(c => c[0] === cap) || CAPS[0])[1];
 const floorBpw = () => (FLOORS.find(c => c[0] === floor) || FLOORS[0])[1];
 
@@ -516,7 +547,7 @@ function affordable(m, all, room) {
 // context, windowed layers hold at most their window, and a linear-attention
 // layer holds a fixed state that does not scale at all. counting every layer
 // as global would overstate gemma 4 31b several times over.
-const KV_BYTES = 2;                 // f16 keys and values, llama.cpp's default
+let KV_BYTES = 2;                   // f16 keys and values, llama.cpp's default
 let minCtx = 0;
 
 // what one token costs in cache, per layer that holds one. latent attention
@@ -568,6 +599,44 @@ function fitContext(m) {
   // the consumer's decision rather than a number this page can report
   return Math.max(0, Math.min(native, Math.floor(ctx)));
 }
+
+// every (repo, quant) this model can be read as. keyed by the pair because a
+// model may declare two quants OUT OF THE SAME repo -- gemma 4 31b pins Q8_0
+// and UD-Q4_K_XL -- and expanding that repo's listing once per declared quant
+// listed all 25 of them twice.
+function quantChoices(m) {
+  const seen = new Map();
+  m.quants.forEach(q => {
+    const alt = (q.available || []).length ? q.available
+      : [{quant: q.quant, file: q.file, gib: q.gib, bpw: q.bpw}];
+    alt.forEach(a => {
+      const key = q.repo + ':' + a.quant;
+      const was = seen.get(key);
+      if (was) { was.pinned = was.pinned || a.quant === q.quant; return; }
+      // `file` is what to fetch, `quant` is what to call it. they differ where
+      // a repo does not name its files after the tag -- whisper.cpp's
+      // `ggml-large-v3-turbo-q8_0.bin` is the Q8_0 rung
+      seen.set(key, {repo: q.repo, quant: a.quant, file: a.file || a.quant,
+                     gib: a.gib, bpw: a.bpw,
+                     // what the file IS, where its tensor table has been read.
+                     // `realBpw` is over the block geometry of every tensor;
+                     // `bpw` beside it is file size over parameter count
+                     types: a.types, realBpw: a.real_bpw,
+                     pinned: a.quant === q.quant, speculative: q.speculative,
+                     forkType: a.fork_type, crispasr: q.crispasr,
+                     note: a.quant === q.quant ? proseText(q.note) : undefined});
+    });
+  });
+  return [...seen.values()];
+}
+
+// whether serving from this repo can speculate at all. the capability is a
+// property of the GGUF rather than of the model: `draft-mtp` needs the nextn
+// head, which qwen ships only in the `-MTP-GGUF` build, so the plain repo of
+// the same model cannot draft however the registry describes the model.
+const repoSpeculates = (m, repo) =>
+  !!((m.speculative || {}).type || (m.speculative || {}).draft_repo)
+  && quantChoices(m).some(c => c.repo === repo && c.speculative !== false);
 
 // which quant this model is being READ as. with no budget that is the one the
 // registry pins; with one it is the largest that fits, which is the question
@@ -698,16 +767,10 @@ function expand(models) {
 // are worth an order of magnitude and a comparison between models, not a
 // promise. 256 gb/s of strix halo through this arrives at the 160 gb/s
 // build-tables measures.
-const BW_EFFICIENCY = 0.65;
-const FLOPS_EFFICIENCY = 0.35;
-const BANDWIDTHS = [[0, 'no bandwidth'], [90, '90 gb/s dual ddr5'],
-                    [205, '205 gb/s m4 pro'], [256, '256 gb/s strix halo'],
-                    [273, '273 gb/s dgx spark'], [546, '546 gb/s m4 max'],
-                    [819, '819 gb/s m3 ultra'], [1008, '1008 gb/s rtx 4090'],
-                    [1792, '1792 gb/s rtx 5090']];
-const FLOPSES = [[0, 'no compute'], [20, '20 tflops fp16'], [60, '60 tflops strix halo'],
-                 [120, '120 tflops fp16'], [165, '165 tflops rtx 4090'],
-                 [400, '400 tflops fp16'], [990, '990 tflops rtx 5090']];
+let BW_EFFICIENCY = 0;
+let FLOPS_EFFICIENCY = 0;
+let BANDWIDTHS = [];
+let FLOPSES = [];
 let bandwidth = 0;
 let flops = 0;
 let allQuants = false;             // one row per model, or one per fitting quant
@@ -1189,35 +1252,25 @@ const SCALED_COLUMNS = {scicode: 'aa.scicode', tbench: 'aa.terminalbench',
                         gbench: 'gbench.agentic', swe: 'swerebench.resolved',
                         arena: 'lmarena.rating'};
 
-// what the page opens on: what it is and whether it fits, then how good it is.
-// the per-source scores are one click away under the gear rather than eleven
-// columns wide by default.
-const DEFAULT_ORDER = ['rank', 'short', 'kind', 'repo', 'license', 'params', 'active',
-                       'experts', 'spec', 'pp', 'tg', 'ctx', 'extctx', 'fitctx',
-                       'quant', 'bpw', 'think', 'profiles', 'size', 'kv', 'evidence',
-                       'scicode', 'tbench', 'gbench', 'swe', 'arena', 'score',
-                       'langs', 'bestfor', 'community', 'downloads'];
-// `pp` and `tg` are off here AND gated on their hardware figure: switching one
+// what the page opens on, all of it out of `registry/dashboard.yaml`: the
+// column order and which of them start hidden, the box a reader is assumed to
+// have, and the filters that are already pressed.
+//
+// `pp` and `tg` are hidden AND gated on their hardware figure: switching one
 // on under the gear does nothing until there is a bandwidth or a compute
-// number for it to read
-const DEFAULT_HIDDEN = ['kind', 'repo', 'license', 'params', 'active', 'experts',
-                        'spec', 'pp', 'tg', 'ctx', 'extctx', 'bpw', 'think',
-                        'profiles', 'kv', 'scicode', 'tbench', 'gbench', 'swe',
-                        'arena', 'langs', 'bestfor', 'community', 'downloads'];
-// a strix halo box, which is what this registry is sized against, down to what
-// it reads and computes at
-const DEFAULT_HARDWARE = {budget: 128, reserve: 12, minCtx: 131072, cap: 'q8', floor: 'none',
-                          bandwidth: 256, flops: 60};
-const DEFAULT_FLAGS = ['fits'];
-// `text` moved out of the flags and into the modality list, where it is the
-// first entry and the one a page with nothing set starts on
-const DEFAULT_MODALITY = 'text';
-// carried as a set because the filter tests membership and the share link
-// carries a list, but the control is ONE choice: the shapes overlap rather than
-// partition -- `audio to text` and `language models` share gemma 4, `any to text`
-// contains both -- so picking two of them says less than picking the one that
-// describes what you are after.
-const DEFAULT_MODALITIES = [DEFAULT_MODALITY];
+// number for it to read.
+//
+// the modality list is carried as a set because the filter tests membership
+// and the share link carries a list, but the control is ONE choice: the shapes
+// overlap rather than partition -- `audio to text` and `language models` share
+// gemma 4, `any to text` contains both -- so picking two of them says less
+// than picking the one that describes what you are after.
+let DEFAULT_ORDER = [];
+let DEFAULT_HIDDEN = [];
+let DEFAULT_HARDWARE = {};
+let DEFAULT_FLAGS = [];
+let DEFAULT_MODALITIES = [];
+let DEFAULT_MODALITY = '';
 const col = k => COLUMNS.find(c => c.k === k);
 // a column of `-` reads as missing data rather than as a setting you have not
 // made, so the two estimates come and go with the hardware figure behind them
@@ -1364,6 +1417,23 @@ function visible() {
     if (q && !haystack(m).includes(q)) return false;
     if (filters.pubs.size && !filters.pubs.has(m.publisher)) return false;
     if (!inModality(m)) return false;
+    // an unknown size cannot satisfy a size band. this is the opposite of the
+    // rule the fit uses -- there a model with no context window has not FAILED
+    // to reach one, so it passes -- and the difference is what the filter is
+    // about: `fits vram` asks a question about a box and this one asks a
+    // question about the attribute itself. 32 entries publish no count, and
+    // answering "what is in the 1-4b class" with them at the top of the list
+    // is answering with the models whose size nobody knows.
+    // `!= null` rather than `!== null`, so an UNSET bound is off whether it is
+    // null or undefined. the strict test read an absent field as a bound that
+    // had been set, and every model publishing no parameter count -- 32 of
+    // them -- vanished from every view including the default one
+    if (filters.minParams != null || filters.maxParams != null) {
+      const tp = m.facts.params_total_b;
+      if (tp == null) return false;
+      if (filters.minParams != null && tp < filters.minParams) return false;
+      if (filters.maxParams != null && tp > filters.maxParams) return false;
+    }
     // no runtime selected means no runtime filter, the way no flags does. a
     // model with an EMPTY engine list is one nothing here loads, so it only
     // appears once the filter is off entirely
@@ -1390,6 +1460,158 @@ function sorted(rows) {
   return out;
 }
 
+// the rows a table would draw, in order, each carrying the rank it landed at.
+// rank is a position in the CURRENT ranking rather than a property of a model,
+// so it renumbers when the weights move -- which is the point of it. split out
+// of drawTable so that something with no dom can ask for the same list.
+function rankedRows() {
+  const rows = sorted(expand(visible()));
+  rows.forEach((m, i) => { m._rank = i + 1; });
+  return rows;
+}
+
+// --- configuration -----------------------------------------------------------
+
+// every default, out of the payload. the config travels from
+// `registry/dashboard.yaml` through `scripts/build-viewer` into
+// `docs/data.json`, so the page, `scripts/aimbot` and MODELS.md read one copy
+// of it and a judgement about what the ranking means lives beside the models
+// it ranks. must run before anything renders, and before the page restores
+// whatever a reader stored over the top.
+function applyConfig(cfg) {
+  CAPS = cfg.caps.map(c => [c.k, c.bpw === null ? Infinity : c.bpw, c.label]);
+  FLOORS = cfg.floors.map(c => [c.k, c.bpw, c.label]);
+  cap = cfg.hardware.cap;
+  floor = cfg.hardware.floor;
+  BW_EFFICIENCY = cfg.speed.bandwidth_efficiency;
+  FLOPS_EFFICIENCY = cfg.speed.flops_efficiency;
+  KV_BYTES = cfg.speed.kv_bytes;
+  BANDWIDTHS = cfg.speed.bandwidths.map(b => [b.value, b.label]);
+  FLOPSES = cfg.speed.flopses.map(f => [f.value, f.label]);
+  DEFAULT_ORDER = cfg.columns.order;
+  DEFAULT_HIDDEN = cfg.columns.hidden;
+  DEFAULT_HARDWARE = cfg.hardware;
+  DEFAULT_FLAGS = cfg.filters.flags;
+  DEFAULT_MODALITIES = cfg.filters.modalities;
+  DEFAULT_MODALITY = cfg.filters.modalities[0];
+  DEFAULT_ENGINES = cfg.filters.engines;
+  RUNTIMES = cfg.runtimes;
+  // a list in the config so the order it was written in survives a payload
+  // written with sorted keys, and an object here because every caller looks a
+  // preset up by name
+  PRESETS = Object.fromEntries(cfg.presets.map(p => [p.k, {
+    t: p.title,
+    w: () => {
+      if (!p.base) return {...(p.weights || {})};
+      const w = {...D.weights};
+      (p.drop_prefixes || []).forEach(pre => Object.keys(w).forEach(
+        x => { if (x.startsWith(pre)) delete w[x]; }));
+      return w;
+    },
+  }]));
+}
+
+// the named weightings and the runtimes a snippet can be written for. filled
+// by applyConfig; declared here because the page reads both.
+let PRESETS = {};
+let RUNTIMES = [];
+
+// the state a reader gets with nothing stored and nothing shared, which is the
+// view MODELS.md is generated from. the page calls this and then layers its
+// localStorage and any shared link over the top; a consumer with no browser
+// calls it and stops, and the two therefore start from the same place.
+function loadRoster(payload) {
+  D = payload;
+  applyConfig(D.config);
+  W = {...D.weights};
+  order = [...DEFAULT_ORDER];
+  COLUMNS.forEach(c => { if (!order.includes(c.k)) order.push(c.k); });
+  hidden = new Set(DEFAULT_HIDDEN);
+  filters = {q: '', kind: new Set(), pub: '', pubs: new Set(),
+             mods: new Set(DEFAULT_MODALITIES), flags: new Set(DEFAULT_FLAGS),
+             engines: new Set(DEFAULT_ENGINES),
+             minParams: null, maxParams: null};
+  budget = DEFAULT_HARDWARE.budget;
+  reserve = DEFAULT_HARDWARE.reserve;
+  minCtx = DEFAULT_HARDWARE.minCtx;
+  cap = DEFAULT_HARDWARE.cap;
+  floor = DEFAULT_HARDWARE.floor;
+  bandwidth = DEFAULT_HARDWARE.bandwidth;
+  flops = DEFAULT_HARDWARE.flops;
+  return D;
+}
+
+// one place to apply the settings a caller without controls would otherwise
+// have to reach in and set, which is what a cli is. every field is optional and
+// an absent one leaves the default alone.
+function applySettings(o) {
+  o = o || {};
+  // zero is the page's way of saying no budget rather than a budget of none,
+  // which is what its own `#ram` control does with it
+  if (o.ram !== undefined && o.ram !== null) budget = o.ram > 0 ? o.ram : null;
+  if (o.reserve !== undefined && o.reserve !== null) reserve = o.reserve;
+  if (o.ctx !== undefined && o.ctx !== null) minCtx = o.ctx;
+  if (o.cap) cap = o.cap;
+  if (o.floor) floor = o.floor;
+  if (o.bandwidth !== undefined && o.bandwidth !== null) bandwidth = o.bandwidth;
+  if (o.flops !== undefined && o.flops !== null) flops = o.flops;
+  if (o.raw) effective = false;
+  if (o.ladder) allQuants = true;
+  // the page opens with filters already on, so naming one REPLACES that
+  // default and `all` drops the three of them
+  if (o.all) {
+    filters.mods = new Set(); filters.flags = new Set(); filters.engines = new Set();
+  }
+  if (o.modalities && o.modalities.length) filters.mods = new Set(o.modalities);
+  if (o.flags && o.flags.length) filters.flags = new Set(o.flags);
+  if (o.engines && o.engines.length) filters.engines = new Set(o.engines);
+  if (o.publishers && o.publishers.length) filters.pubs = new Set(o.publishers);
+  if (o.minParams !== undefined && o.minParams !== null) filters.minParams = o.minParams;
+  if (o.maxParams !== undefined && o.maxParams !== null) filters.maxParams = o.maxParams;
+  if (o.grep) filters.q = o.grep;
+  if (o.weights && PRESETS[o.weights]) W = PRESETS[o.weights].w();
+  if (o.sort) {
+    const c = col(o.sort);
+    // a number reads largest first and a name reads A first, which is what the
+    // page does when a header is clicked for the first time
+    sort = {k: o.sort, dir: o.asc === undefined || o.asc === null
+            ? (c && c.num ? -1 : 1) : (o.asc ? 1 : -1)};
+  } else if (o.asc !== undefined && o.asc !== null) {
+    sort = {k: sort.k, dir: o.asc ? 1 : -1};
+  }
+  clearScores();
+}
+
+// what the page offers, read off this file rather than restated by a consumer.
+// a column added here is askable from the cli the same day.
+const vocabulary = () => ({
+  columns: COLUMNS.map(c => ({k: c.k, t: c.t, num: !!c.num, help: c.help || ''})),
+  modalities: MODALITIES.map(m => ({k: m.k, t: m.t, help: m.help || ''})),
+  flags: FLAGS.map(f => ({k: f.k, t: f.t, help: f.help || ''})),
+  presets: Object.keys(PRESETS).map(k => ({k: k, t: PRESETS[k].t})),
+  engines: [...new Set(D.models.flatMap(m => m.engines || []))].sort(),
+  publishers: [...new Set(D.models.map(m => m.publisher))].sort(),
+  caps: CAPS.map(c => c[0]), floors: FLOORS.map(c => c[0]),
+});
+
+// the current hardware, for a caller that wants to print what it answered under
+const hardware = () => ({budget, reserve, minCtx, cap, floor, effective,
+                         bandwidth, flops});
+
+// under node this is a module; inlined into the page it is not, and the page
+// reads every one of these as a plain global from the same scope.
+
+// THE ARITHMETIC IS NOT IN THIS FILE. `scripts/roster.js` holds it -- the fit,
+// the kv cache, the retention curves, the composite, the column definitions --
+// and `scripts/build-viewer` inlines it directly above this script when it
+// writes `docs/index.html`, so every name it defines is in scope here.
+//
+// it is a separate file because a browser is not the only thing that needs
+// those answers: `scripts/aimbot` requires it to query the roster from a
+// terminal and `research/dashboard-table` requires it to generate MODELS.md's
+// ranking, neither of which can afford to reimplement a ranking that would
+// then disagree with this page. what is left below is the half that needs a
+// dom: drawing, the modal, the controls and the share link.
 // --- table -------------------------------------------------------------------
 
 function tableHead() {
@@ -1406,10 +1628,9 @@ function tableHead() {
 }
 
 function drawTable() {
-  const rows = sorted(expand(visible()));
-  // rank is the position in the CURRENT ranking, so it re-numbers when the
-  // weights change -- that is the point of it
-  rows.forEach((m, i) => { m._rank = i + 1; });
+  // sorted, expanded and ranked by roster.js, so the cli and this page cannot
+  // disagree about the order or about what rank a row is at
+  const rows = rankedRows();
   document.querySelector('#head').innerHTML = tableHead();
   document.querySelector('#rows').innerHTML = rows.length
     ? rows.map(m => {
@@ -1489,26 +1710,6 @@ function groupOf(key) {
 // is quality", so picking one REPLACES the weights rather than nudging them --
 // which is why the select falls back to `custom ranking` the moment a slider
 // moves off a preset.
-const PRESETS = {
-  default: {t: 'balanced ranking', w: () => ({...D.weights})},
-  coding: {t: 'writing code', w: () => ({'aa.scicode': 0.4, 'gbench.oneshot': 0.2,
-                                         'swerebench.resolved': 0.25, 'card.*': 0.05,
-                                         'community.reddit-localllama': 0.1})},
-  agentic: {t: 'agentic and tool use', w: () => ({'aa.terminalbench': 0.4, 'aa.tau2': 0.15,
-                                                  'gbench.agentic': 0.3,
-                                                  'community.reddit-localllama': 0.15})},
-  measured: {t: 'third-party measurement only', w: () => {
-    const w = {...D.weights};
-    Object.keys(w).forEach(k => { if (k.startsWith('card') || k.startsWith('community')) delete w[k]; });
-    return w;
-  }},
-  community: {t: 'what people report', w: () => ({'community.reddit-localllama': 0.5,
-                                                  'community.hackernews': 0.2,
-                                                  'community.hf-discussions': 0.2,
-                                                  'community.level1techs': 0.1})},
-  clear: {t: 'nothing weighted', w: () => ({})},
-};
-
 const sameWeights = (a, b) => {
   const live = w => Object.keys(w).filter(k => w[k]).sort();
   const ka = live(a), kb = live(b);
@@ -2358,10 +2559,9 @@ const FACET_CITED = /^([a-z]+\.[a-z0-9_-]+)/;
 // because the renderer is the only thing that knows which reference produced
 // which figure -- recognising the rendered text again here would be a second
 // implementation of the substitution, and could not attribute a cross-model
-// reference at all, since those print bare on purpose.
-const proseText = parts => !parts ? ''
-  : (Array.isArray(parts) ? parts : [parts])
-      .map(p => typeof p === 'string' ? p : p.shown).join('');
+// reference at all, since those print bare on purpose. `proseText` flattens
+// them to plain words and lives in roster.js, because the search haystack
+// reads it too.
 
 // what the panel says about a figure standing in a sentence: the source the
 // table cell cites, plus what the percentile is OF, which is the part a reader
@@ -2995,49 +3195,14 @@ let ops = {runtime: null, repo: null, quant: null, profile: null};
 // `engines`, joined at build time from the architecture llama.cpp merged, the
 // crispasr backend the registry names, and the runtimes written down because
 // nothing derives them.
-const RUNTIMES = [
-  {k: 'llama.cpp', gguf: true},
-  {k: 'vllm', gguf: false},
-  {k: 'crispasr', gguf: true},
-  {k: 'whisper.cpp', gguf: true},
-  {k: 'stable-diffusion.cpp', gguf: true},
-  {k: 'TTS.cpp', gguf: true},
-  {k: 'Breeze-TTS-2.cpp', gguf: true},
-];
 const runtimesFor = m => RUNTIMES.filter(r => (m.engines || []).includes(r.k));
 const pickedRuntime = m => {
   const mine = runtimesFor(m);
   return mine.find(r => r.k === ops.runtime) || mine[0] || {k: '', gguf: true};
 };
 
-function quantChoices(m) {
-  // keyed by (repo, quant): a model may declare two quants OUT OF THE SAME
-  // repo -- gemma 4 31b pins Q8_0 and UD-Q4_K_XL -- and expanding that repo's
-  // listing once per declared quant listed all 25 of them twice
-  const seen = new Map();
-  m.quants.forEach(q => {
-    const alt = (q.available || []).length ? q.available
-      : [{quant: q.quant, file: q.file, gib: q.gib, bpw: q.bpw}];
-    alt.forEach(a => {
-      const key = q.repo + ':' + a.quant;
-      const was = seen.get(key);
-      if (was) { was.pinned = was.pinned || a.quant === q.quant; return; }
-      // `file` is what to fetch, `quant` is what to call it. they differ where
-      // a repo does not name its files after the tag -- whisper.cpp's
-      // `ggml-large-v3-turbo-q8_0.bin` is the Q8_0 rung
-      seen.set(key, {repo: q.repo, quant: a.quant, file: a.file || a.quant,
-                     gib: a.gib, bpw: a.bpw,
-                     // what the file IS, where its tensor table has been read.
-                     // `realBpw` is over the block geometry of every tensor;
-                     // `bpw` beside it is file size over parameter count
-                     types: a.types, realBpw: a.real_bpw,
-                     pinned: a.quant === q.quant, speculative: q.speculative,
-                     forkType: a.fork_type, crispasr: q.crispasr,
-                     note: a.quant === q.quant ? proseText(q.note) : undefined});
-    });
-  });
-  return [...seen.values()];
-}
+// `quantChoices` -- every (repo, quant) a model can be read as -- is in
+// roster.js, because the fit is built on it.
 
 // repo first, then quant within it. the two repos of a model are not
 // interchangeable: only the -MTP- build of qwen3.6-27b carries the nextn head,
@@ -3064,14 +3229,6 @@ function repoChoices(m) {
   const known = all.filter(r => reads.includes(r));
   return known.length ? known : all;
 }
-
-// whether serving from this repo can speculate at all. the capability is a
-// property of the GGUF rather than of the model: `draft-mtp` needs the nextn
-// head, which qwen ships only in the `-MTP-GGUF` build, so the plain repo of
-// the same model cannot draft however the registry describes the model.
-const repoSpeculates = (m, repo) =>
-  !!((m.speculative || {}).type || (m.speculative || {}).draft_repo)
-  && quantChoices(m).some(c => c.repo === repo && c.speculative !== false);
 
 function pickedRepo(m) {
   const repos = repoChoices(m);
@@ -3512,8 +3669,17 @@ function rememberWeights() {
   store.set('weights-base', D.weights);
 }
 
+// every default on this page, out of the payload. the config travels from
+// `registry/dashboard.yaml` through `scripts/build-viewer` into
+// `docs/data.json`, so the page, `scripts/aimbot` and MODELS.md read one copy
+// of it and a judgement about what the ranking means lives beside the models
+// it ranks. must run before anything renders, and before boot() restores what
+// a reader stored over the top.
+// roster.js answers with the state a reader gets having stored nothing, which
+// is the view MODELS.md is generated from. everything below layers this
+// browser's localStorage and any shared link over the top of that.
 function boot(payload) {
-  D = payload;
+  loadRoster(payload);
   W = restoreWeights();
   // shut on a first visit: eight headers is a menu, sixty sliders is a wall.
   // a stored [] is a reader who opened them, so only a MISSING key defaults
@@ -3525,8 +3691,13 @@ function boot(payload) {
   // BEFORE drawChrome, which builds the hardware selects and marks `selected`
   // against these: restoring them afterwards left every dropdown showing its
   // default while the value behind it was the stored one
+  // SPREAD over what roster.js already set rather than replacing it: a literal
+  // here has to list every field the module has, and the day it gained a
+  // parameter band this dropped it back to undefined -- harmless only because
+  // the band treats undefined as unset
   const f = store.get('filters', null);
-  filters = {q: (f || {}).q || '', kind: new Set(),
+  filters = {...filters,
+             q: (f || {}).q || '', kind: new Set(),
              pubs: new Set(f && f.pubs ? f.pubs : f && f.pub ? [f.pub] : []),
              mods: new Set(f && f.mods ? f.mods
                            : f && f.mod ? [f.mod] : DEFAULT_MODALITIES),
@@ -3649,9 +3820,11 @@ document.querySelector('#share').onclick = async () => {
 
 document.querySelector('#reset').onclick = () => {
   W = {...D.weights};
-  filters = {q: '', kind: new Set(), pubs: new Set(),
+  filters = {...filters,
+             q: '', kind: new Set(), pubs: new Set(),
              mods: new Set(DEFAULT_MODALITIES), flags: new Set(DEFAULT_FLAGS),
-             engines: new Set(DEFAULT_ENGINES)};
+             engines: new Set(DEFAULT_ENGINES),
+             minParams: null, maxParams: null};
   hidden = new Set(DEFAULT_HIDDEN);
   folded = new Set(allGroups());
   order = [...DEFAULT_ORDER];

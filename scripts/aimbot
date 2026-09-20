@@ -1,0 +1,269 @@
+#!/usr/bin/env python3
+
+"""Query the roster from a terminal, out of the dashboard's own arithmetic.
+
+`scripts/roster.js` is the fit, the kv cache, the retention curves and the
+composite, with no page around it -- the same module `docs/index.html` inlines
+and `research/dashboard-table` reads. This requires it under node and asks it
+the same questions the page asks. Every column, filter, modality and weighting
+offered here is read off that module at run time; there is no list of columns
+in this file, and a number printed here is a number on the page.
+
+That matters most for the columns nobody can compute from the payload alone.
+`quant`, `size`, `fits ctx`, `kv` and `quality` all depend on what the reader
+set: how much memory, how much of it is reserved, what context, how far up the
+ladder the fit may climb. `--ram/--reserve/--ctx/--cap/--floor` are those
+settings, so the fit is the page's fit rather than a second one.
+
+    ./scripts/aimbot                              # the default view, ranked
+    ./scripts/aimbot --list                       # what you can ask for
+    ./scripts/aimbot --sort size --asc --limit 10
+    ./scripts/aimbot --grep qwen --columns short,quant,size,score
+    ./scripts/aimbot --ram 128 --reserve 2 --ctx 131072
+    ./scripts/aimbot --modality a2t --columns short,kind,langs
+    ./scripts/aimbot --flag draft --weights coding
+    ./scripts/aimbot --all --sort downloads --limit 20
+    ./scripts/aimbot --ladder --grep bonsai       # one row per fitting quant
+    ./scripts/aimbot --json | jq '.rows[0]'
+
+Unset, the hardware is the page's own default rather than nothing: a 128 gib
+box, 12 of it reserved, at a 128k context. That is what a reader gets by
+opening the dashboard, so it is what this prints, and `--ram 0` is how you ask
+what the roster looks like with no budget at all.
+
+Text columns are the page's rendering, so a quality of 79.1 prints as `79` the
+way the dashboard shows it and a size carries the `+d` that says a drafter is
+in the figure. `--json` carries the sort value beside the text, at full
+precision.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+
+# realpath rather than abspath: a cli gets onto PATH by being linked to, and
+# abspath keeps the directory the LINK is in. `ln -s .../scripts/aimbot
+# ~/bin/aimbot` then looked for roster.js and docs/data.json beside the link
+# and reported a path the caller had never heard of.
+HERE = os.path.dirname(os.path.realpath(__file__))
+ROOT = os.path.dirname(HERE)
+ROSTER = os.path.join(HERE, "roster.js")
+DATA = os.path.join(ROOT, "docs", "data.json")
+
+# how a cell reaches a terminal. the module's `cell` renders html, and that is
+# where the units, the `~` on an estimate and the `-` on a missing figure live,
+# so the text here is that markup with the tags taken off rather than a second
+# formatting pass that would round differently.
+PROBE = """
+const roster = require(%s);
+const payload = JSON.parse(require('fs').readFileSync(%s, 'utf8'));
+const OPT = %s;
+
+const ENTITIES = [[/&amp;/g, '&'], [/&lt;/g, '<'], [/&gt;/g, '>'],
+                  [/&quot;/g, '"'], [/&#39;/g, "'"]];
+const strip = h => ENTITIES.reduce((s, [re, to]) => s.replace(re, to),
+  String(h).replace(/<[^>]*>/g, ' ')).replace(/\\s+/g, ' ').trim();
+
+roster.loadRoster(payload);
+const vocab = roster.vocabulary();
+if (OPT.list) {
+  process.stdout.write(JSON.stringify({vocab: vocab}));
+} else {
+  roster.applySettings(OPT);
+  const keys = OPT.columns.length ? OPT.columns : roster.shown();
+  const rows = roster.rankedRows().map(m => {
+    const row = {};
+    keys.forEach(k => {
+      const c = roster.col(k);
+      if (!c) return;
+      // `get` is what the page SORTS on and `cell` is what it shows: a score
+      // with no measurement sorts as -1 and shows as `-`, so both travel
+      row[k] = {value: c.get(m) ?? null, text: strip(c.cell(m))};
+    });
+    return row;
+  });
+  process.stdout.write(JSON.stringify({
+    vocab: vocab, keys: keys, rows: rows, hardware: roster.hardware(),
+    total: payload.models.length, matched: roster.visible().length}));
+}
+"""
+
+
+def parse_args(argv=None):
+    ap = argparse.ArgumentParser(
+        prog="aimbot", description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--list", action="store_true",
+                    help="every column, filter, modality and weighting the page offers")
+    ap.add_argument("--columns", default="",
+                    help="comma-separated column keys; the page's own set by default")
+    ap.add_argument("--sort", help="column key to sort by")
+    order = ap.add_mutually_exclusive_group()
+    order.add_argument("--asc", dest="asc", action="store_const", const=True,
+                       help="smallest or A first")
+    order.add_argument("--desc", dest="asc", action="store_const", const=False,
+                       help="largest or Z first")
+    ap.set_defaults(asc=None)
+    ap.add_argument("--limit", type=int, help="print at most this many rows")
+    ap.add_argument("--grep", help="substring over name, repo, arch, notes, tags, quants")
+    ap.add_argument("--modality", default="", help="comma-separated, e.g. text,a2t")
+    ap.add_argument("--flag", default="", help="comma-separated, e.g. draft,fits")
+    ap.add_argument("--engine", default="", help="comma-separated runtimes")
+    ap.add_argument("--all", action="store_true",
+                    help="drop the modality, flag and runtime filters the page "
+                         "opens with, and show the whole roster")
+    ap.add_argument("--publisher", default="", help="comma-separated publishers")
+    ap.add_argument("--min-params", help="only models at least this big, e.g. 1b")
+    ap.add_argument("--max-params", help="only models at most this big, e.g. 4b")
+    ap.add_argument("--weights", help="a named weighting, e.g. coding")
+    ap.add_argument("--ram", type=float, help="gib of memory to fit in")
+    ap.add_argument("--reserve", type=float, help="gib held back from it")
+    ap.add_argument("--ctx", type=int, help="context to hold a kv cache for")
+    ap.add_argument("--cap", help="highest rung the fit may climb to")
+    ap.add_argument("--floor", help="lowest rung worth serving")
+    ap.add_argument("--raw", action="store_true",
+                    help="stop discounting quality by the fitted quant")
+    ap.add_argument("--ladder", action="store_true", help="one row per fitting quant")
+    out = ap.add_mutually_exclusive_group()
+    out.add_argument("--json", action="store_true", help="the rows, with sort values")
+    out.add_argument("--tsv", action="store_true", help="tab separated, no padding")
+    return ap.parse_args(argv)
+
+
+def billions(v, flag):
+    """`4b`, `4B` or `4` as a parameter count in billions."""
+    if v is None:
+        return None
+    try:
+        return float(str(v).strip().lower().rstrip("b"))
+    except ValueError:
+        sys.exit("!!! %s %r is not a parameter count, try 4b" % (flag, v))
+
+
+def options(args):
+    """The argv, as the settings the page understands."""
+    split = lambda s: [x.strip() for x in (s or "").split(",") if x.strip()]
+    return {"list": args.list, "columns": split(args.columns),
+            "sort": args.sort, "asc": args.asc, "grep": args.grep,
+            "modalities": split(args.modality), "flags": split(args.flag),
+            "engines": split(args.engine), "all": args.all,
+            "publishers": split(args.publisher), "weights": args.weights,
+            "minParams": billions(args.min_params, "--min-params"),
+            "maxParams": billions(args.max_params, "--max-params"),
+            "ram": args.ram, "reserve": args.reserve, "ctx": args.ctx,
+            "cap": args.cap, "floor": args.floor, "raw": args.raw,
+            "ladder": args.ladder}
+
+
+def check(opt, vocab):
+    """Every name the caller used, against the page's own vocabulary."""
+    known = {"columns": [c["k"] for c in vocab["columns"]],
+             "modalities": [m["k"] for m in vocab["modalities"]],
+             "flags": [f["k"] for f in vocab["flags"]],
+             "engines": vocab["engines"], "publishers": vocab["publishers"],
+             "caps": vocab["caps"], "floors": vocab["floors"]}
+    bad = []
+    for field, names in (("columns", opt["columns"]), ("modalities", opt["modalities"]),
+                         ("flags", opt["flags"]), ("engines", opt["engines"]),
+                         ("publishers", opt["publishers"])):
+        for n in names:
+            if n not in known[field]:
+                bad.append("%s %r is not one of: %s"
+                           % (field[:-1], n, ", ".join(known[field])))
+    for field, one in (("columns", opt["sort"]), ("caps", opt["cap"]),
+                       ("floors", opt["floor"])):
+        if one and one not in known[field]:
+            bad.append("%s %r is not one of: %s"
+                       % (field[:-1], one, ", ".join(known[field])))
+    if opt["weights"] and opt["weights"] not in [p["k"] for p in vocab["presets"]]:
+        bad.append("weighting %r is not one of: %s"
+                   % (opt["weights"], ", ".join(p["k"] for p in vocab["presets"])))
+    return bad
+
+
+def show_list(vocab):
+    """What the page offers, in the order it offers it."""
+    for name, rows, fmt in (
+            ("columns", vocab["columns"], lambda r: (r["k"], r["t"], r["help"])),
+            ("modalities", vocab["modalities"], lambda r: (r["k"], r["t"], r["help"])),
+            ("flags", vocab["flags"], lambda r: (r["k"], r["t"], r["help"])),
+            ("weightings", vocab["presets"], lambda r: (r["k"], r["t"], ""))):
+        print("%s:" % name)
+        for r in rows:
+            k, t, help_ = fmt(r)
+            print("  %-12s %-22s %s" % (k, t, (help_ or "")[:90]))
+        print()
+    for name in ("engines", "publishers", "caps", "floors"):
+        print("%s: %s" % (name, ", ".join(vocab[name])))
+
+
+def render(d, tsv=False, limit=None):
+    """The rows as text: tab separated, or padded to the widest cell."""
+    heads = {c["k"]: c["t"] for c in d["vocab"]["columns"]}
+    nums = {c["k"] for c in d["vocab"]["columns"] if c["num"]}
+    keys = d["keys"]
+    rows = d["rows"][:limit] if limit else d["rows"]
+    table = [[heads.get(k, k) for k in keys]]
+    table += [[r.get(k, {}).get("text", "") for k in keys] for r in rows]
+    if tsv:
+        for line in table:
+            print("\t".join(line))
+        return
+    wide = [max(len(row[i]) for row in table) for i in range(len(keys))]
+    for n, line in enumerate(table):
+        cells = [c.rjust(wide[i]) if keys[i] in nums else c.ljust(wide[i])
+                 for i, c in enumerate(line)]
+        print("  ".join(cells).rstrip())
+        if not n:
+            print("  ".join("-" * w for w in wide))
+
+
+def ask(opt):
+    """Run the roster module under node and read back what it answered."""
+    for path in (ROSTER, DATA):
+        if not os.path.exists(path):
+            sys.exit("!!! %s is missing, run: make site" % path)
+    script = PROBE % (json.dumps(ROSTER), json.dumps(DATA), json.dumps(opt))
+    try:
+        r = subprocess.run(["node", "-e", script], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, cwd=ROOT)
+    except FileNotFoundError:
+        sys.exit("!!! node is not on PATH")
+    if r.returncode:
+        sys.exit("!!! %s: %s" % (ROSTER, r.stderr.strip()[-400:]))
+    return json.loads(r.stdout.strip().split("\n")[-1])
+
+
+def main():
+    args = parse_args()
+    opt = options(args)
+    d = ask(opt)
+
+    bad = check(opt, d["vocab"])
+    if bad:
+        sys.exit("!!! " + "\n!!! ".join(bad))
+    if args.list:
+        show_list(d["vocab"])
+        return
+    if args.json:
+        print(json.dumps(d, indent=1))
+        return
+    render(d, tsv=args.tsv, limit=args.limit)
+    if args.tsv:
+        return
+    # the count goes to stderr so a pipe gets rows and nothing else, and stdout
+    # is flushed first or the two interleave when both are redirected to one file
+    sys.stdout.flush()
+    hw = d["hardware"]
+    print("\n%d of %d models, %s" % (
+        min(args.limit or len(d["rows"]), len(d["rows"])), d["total"],
+        "no vram budget" if hw["budget"] is None
+        else "%g gib less %g reserved, at %dk" % (hw["budget"], hw["reserve"],
+                                                  hw["minCtx"] / 1024)),
+        file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

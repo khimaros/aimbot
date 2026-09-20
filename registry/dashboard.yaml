@@ -1,0 +1,197 @@
+# what the dashboard opens with, and what its sliders are made of.
+#
+# SOURCE, not output. these are decisions -- what "quality" means, how much of
+# a box to hold back for the runtime, how far up a quant ladder is worth
+# climbing -- and they were spread across two implementations: the weights in
+# `scripts/build-viewer`, the rest as `const DEFAULT_*` inside
+# `scripts/viewer.html`. neither is a place a reader of this registry would
+# look, and a judgement in code is a judgement nobody reviews.
+#
+# `scripts/build-viewer` reads this file into `docs/data.json`, the page reads
+# it from there, and `scripts/aimbot` gets the same values through the same
+# module. there is one copy.
+version: 1
+
+# the composite: what the balanced ranking means, by facet key.
+#
+# a facet nothing weights produces no score, and a roster that ranks 70 models
+# and shows a dash beside the other 19 reads as "unmeasured" when the
+# measurement exists -- so the speech and image keys are weighted here for the
+# same reason the text ones are. they cost the text ranking nothing: no text
+# model carries one, and the composite's denominator is the weight it actually
+# used.
+#
+# the two artificial analysis keys carried the coding and agentic INDICES until
+# the site retired both. the facets are named for evals now, so these name
+# evals -- scicode for writing code and terminal-bench 2.1 for driving a
+# terminal -- chosen over the alternatives on roster coverage: an axis the
+# composite has to impute for most of the roster moves ranks on absence rather
+# than on evidence. livecodebench scores 5 of the 46 models artificial analysis
+# rates here and terminal-bench 4.0 scores 29 with 14 of them at exactly zero,
+# so both are carried at no weight until the boards fill in.
+weights:
+  aa.scicode: 0.30
+  aa.terminalbench: 0.30
+  gbench.agentic: 0.15
+  lmarena.rating: 0.10
+  swerebench.resolved: 0.10
+  community.*: 0.05
+  card.*: 0.05
+  # the open asr leaderboard carries the transcription half at more depth than
+  # anything else here -- 19 of the roster's models against artificial
+  # analysis' 5, over eight datasets rather than one index -- so it takes the
+  # larger share of the transcription weight
+  open-asr.accuracy: 0.40
+  aa-stt.accuracy: 0.30
+  aa-tts.elo: 0.30
+  tts-arena.elo: 0.20
+  # the wildcard, not us english: weighting one language would rank a model on
+  # the slice it happens to be tuned for
+  voicearena.*: 0.20
+  # generation is what the image roster is ranked ON, so the two boards that
+  # rate it keep the weight. editing is carried at zero: it is a real number
+  # about a real capability and it is a DIFFERENT question, so it shows on the
+  # model and a reader who wants it ranked that way moves the slider. giving it
+  # weight by default would quietly redefine what the image score means
+  aa-t2i.elo: 0.5
+  lmarena-t2i.rating: 0.5
+  lmarena-edit.rating: 0.0
+
+# the named weightings the page offers, each a whole answer to "what is
+# quality" rather than a nudge. `base: true` starts from `weights:` above;
+# `drop_prefixes` removes the facet families it names from that copy.
+#
+# A LIST BECAUSE THE ORDER IS THE POINT: `default` first, then the two
+# questions people actually ask, then the two that say where a ranking came
+# from. as a mapping it reached the page alphabetically -- the payload is
+# written with sorted keys -- and MODELS.md's sensitivity table opened on
+# `agentic and tool use` as though that were the house answer.
+presets:
+- k: default
+  title: balanced ranking
+  base: true
+- k: coding
+  title: writing code
+  weights:
+    aa.scicode: 0.4
+    gbench.oneshot: 0.2
+    swerebench.resolved: 0.25
+    card.*: 0.05
+    community.reddit-localllama: 0.1
+- k: agentic
+  title: agentic and tool use
+  weights:
+    aa.terminalbench: 0.4
+    aa.tau2: 0.15
+    gbench.agentic: 0.3
+    community.reddit-localllama: 0.15
+- k: measured
+  title: third-party measurement only
+  base: true
+  drop_prefixes: [card, community]
+- k: community
+  title: what people report
+  weights:
+    community.reddit-localllama: 0.5
+    community.hackernews: 0.2
+    community.hf-discussions: 0.2
+    community.level1techs: 0.1
+- k: clear
+  title: nothing weighted
+  weights: {}
+
+# the box a reader is assumed to have until they say otherwise. the reserve is
+# not decoration: the kv cache grows with the context served and the compute
+# buffers are not free either, which is why 12 of a 128 is held back.
+hardware:
+  budget: 128
+  reserve: 12
+  minCtx: 131072
+  cap: q8
+  floor: none
+  bandwidth: 256
+  flops: 60
+
+# how far up the quant ladder the fit may climb, as a bits-per-weight ceiling.
+# past q8 the extra bytes buy nothing measurable and cost decode speed, so a
+# box with room to spare gets the fastest quant that is still lossless-ish
+# rather than bf16 because it happened to fit.
+# a null ceiling is no ceiling. yaml's `.inf` would reach the page as the
+# literal `Infinity`, which is not json and which JSON.parse refuses.
+caps:
+- {k: none, bpw: null, label: up to bf16}
+- {k: q8, bpw: 11, label: max q8}
+- {k: q6, bpw: 7.5, label: max q6}
+- {k: q5, bpw: 6.2, label: max q5}
+- {k: q4, bpw: 5.3, label: max q4}
+
+# a floor rather than a ceiling: below it the answer is "not with this much
+# memory" rather than a two-bit version of the model.
+floors:
+- {k: none, bpw: 0, label: any quant}
+- {k: q2, bpw: 2.4, label: min q2}
+- {k: q3, bpw: 3.2, label: min q3}
+- {k: q4, bpw: 4.2, label: min q4}
+- {k: q5, bpw: 5.3, label: min q5}
+- {k: q6, bpw: 6.2, label: min q6}
+- {k: q8, bpw: 7.5, label: min q8}
+
+# what the page opens filtered to. the modality is load-bearing beyond the ui:
+# MODELS.md's ranking blocks are generated by booting the page with nothing
+# set, so this IS the document's roster and moving it rewrites the document.
+filters:
+  modalities: [text]
+  flags: [fits]
+  # the runtimes that load most of this roster and that a reader here is likely
+  # to have built. a multi-select because a model can have two -- whisper's
+  # files load in crispasr and in stock whisper.cpp
+  engines: [llama.cpp, crispasr, stable-diffusion.cpp]
+
+# every column in the order the table lists them, and which of them start
+# hidden. a reader wants a stance before sixty decisions, so most of the
+# per-source columns are one click away rather than on screen.
+columns:
+  order: [rank, short, kind, repo, license, params, active, experts, spec, pp,
+          tg, ctx, extctx, fitctx, quant, bpw, think, profiles, size, kv,
+          evidence, scicode, tbench, gbench, swe, arena, score, langs, bestfor,
+          community, downloads]
+  hidden: [kind, repo, license, params, active, experts, spec, pp, tg, ctx,
+           extctx, bpw, think, profiles, kv, scicode, tbench, gbench, swe,
+           arena, langs, bestfor, community, downloads]
+
+# the menus behind the two speed estimates, and how much of the paper figure a
+# real decode actually reaches. both estimates are arithmetic and never a
+# measurement, which is why they are shown with a `~` and no percentile bar.
+speed:
+  bandwidth_efficiency: 0.65
+  flops_efficiency: 0.35
+  # f16 keys and values, llama.cpp's default
+  kv_bytes: 2
+  bandwidths:
+  - {value: 0, label: no bandwidth}
+  - {value: 90, label: 90 gb/s dual ddr5}
+  - {value: 205, label: 205 gb/s m4 pro}
+  - {value: 256, label: 256 gb/s strix halo}
+  - {value: 273, label: 273 gb/s dgx spark}
+  - {value: 546, label: 546 gb/s m4 max}
+  - {value: 819, label: 819 gb/s m3 ultra}
+  - {value: 1008, label: 1008 gb/s rtx 4090}
+  - {value: 1792, label: 1792 gb/s rtx 5090}
+  flopses:
+  - {value: 0, label: no compute}
+  - {value: 20, label: 20 tflops fp16}
+  - {value: 60, label: 60 tflops strix halo}
+  - {value: 120, label: 120 tflops fp16}
+  - {value: 165, label: 165 tflops rtx 4090}
+  - {value: 400, label: 400 tflops fp16}
+  - {value: 990, label: 990 tflops rtx 5090}
+
+# the runtimes a snippet can be written for, and whether each one loads gguf.
+runtimes:
+- {k: llama.cpp, gguf: true}
+- {k: vllm, gguf: false}
+- {k: crispasr, gguf: true}
+- {k: whisper.cpp, gguf: true}
+- {k: stable-diffusion.cpp, gguf: true}
+- {k: TTS.cpp, gguf: true}
+- {k: Breeze-TTS-2.cpp, gguf: true}

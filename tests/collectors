@@ -1093,6 +1093,281 @@ def the_shipped_quant_ladder_names_only_quants():
        % (len(bad), bad[:6]))
 
 
+GOOD_CONFIG = """version: 1
+weights: {aa.scicode: 1.0}
+presets:
+- {k: default, title: balanced ranking, base: true}
+- {k: coding, title: writing code, weights: {aa.scicode: 1.0}}
+hardware: {budget: 128, reserve: 12, minCtx: 131072, cap: q8, floor: none,
+           bandwidth: 256, flops: 60}
+caps:
+- {k: none, bpw: null, label: up to bf16}
+- {k: q8, bpw: 11, label: max q8}
+floors:
+- {k: none, bpw: 0, label: any quant}
+filters: {modalities: [text], flags: [fits], engines: [llama.cpp]}
+columns: {order: [rank, short, score], hidden: [score]}
+speed: {bandwidth_efficiency: 0.65, flops_efficiency: 0.35, kv_bytes: 2,
+        bandwidths: [{value: 0, label: none}], flopses: [{value: 0, label: none}]}
+runtimes: [{k: llama.cpp, gguf: true}]
+"""
+
+
+@test
+def the_dashboard_defaults_are_a_reviewed_file_rather_than_a_constant():
+    """What "quality" means was a python dict nobody reviewing the registry saw.
+
+    The composite weights lived in `scripts/build-viewer` and the rest of the
+    page's defaults -- the box a reader is assumed to have, the quant ladder's
+    ceiling, which filters are pressed on open, the column order -- were
+    `const DEFAULT_*` inside `scripts/viewer.html`. Every one of them is a
+    judgement, and CONTRIBUTING's own rule is that a judgement is source: it
+    belongs beside the models it ranks, where somebody arguing with the ranking
+    would look.
+
+    They are checked on the way through, because a config the page cannot use
+    is a page that renders an empty column order with no explanation.
+    """
+    bv = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    tmp = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmp, "dashboard.yaml")
+
+        def cfg(text):
+            with open(path, "w") as f:
+                f.write(text)
+            r = subprocess.run(
+                [sys.executable, "-c",
+                 "import sys; sys.path.insert(0, %r);"
+                 "import importlib.machinery as m, importlib.util as u;"
+                 "l = m.SourceFileLoader('bv', %r);"
+                 "s = u.spec_from_loader('bv', l); mod = u.module_from_spec(s);"
+                 "l.exec_module(mod); mod.dashboard_config(%r)"
+                 % (os.path.join(ROOT, "scripts"),
+                    os.path.join(ROOT, "scripts", "build-viewer"), path)],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            return r.returncode, r.stderr
+
+        code, err = cfg(GOOD_CONFIG)
+        eq(code, 0, "a complete config loads: %s" % err[-300:])
+        for name, broken, want in (
+                ("a missing block", GOOD_CONFIG.replace("runtimes:", "unused:"),
+                 "runtimes"),
+                ("a hidden column that is not in the order",
+                 GOOD_CONFIG.replace("hidden: [score]", "hidden: [nope]"), "nope"),
+                ("a default cap no ladder defines",
+                 GOOD_CONFIG.replace("cap: q8", "cap: q3"), "q3"),
+                ("a preset weighing nothing",
+                 GOOD_CONFIG.replace("{k: coding, title: writing code, weights: {aa.scicode: 1.0}}",
+                                     "{k: coding, title: writing code}"), "coding"),
+                # the order presets are written in is the order the page offers
+                # them, and a mapping loses it to the payload's sorted keys
+                ("presets as a mapping",
+                 GOOD_CONFIG.replace(
+                     "presets:\n- {k: default, title: balanced ranking, base: true}\n"
+                     "- {k: coding, title: writing code, weights: {aa.scicode: 1.0}}",
+                     "presets:\n  default: {title: balanced ranking, base: true}"),
+                 "presets")):
+            code, err = cfg(broken)
+            eq(code != 0, True, "%s fails" % name)
+            eq(want in err, True, "%s is named: %r" % (name, err[-200:]))
+    finally:
+        shutil.rmtree(tmp)
+
+    # and it actually reaches the page rather than being read and dropped
+    with open(os.path.join(ROOT, "docs", "data.json")) as f:
+        shipped = json.load(f)
+    live = bv.load_yaml(os.path.join(ROOT, "registry", "dashboard.yaml"))
+    eq(shipped["weights"], live["weights"], "the weights shipped are the file's")
+    for block in ("hardware", "caps", "filters", "columns", "presets"):
+        eq(shipped["config"][block], live[block], "%s is shipped verbatim" % block)
+
+
+def aimbot_cli(*argv):
+    """(returncode, stdout, stderr) from the query cli."""
+    r = subprocess.run([os.path.join(ROOT, "scripts", "aimbot")] + list(argv),
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    return r.returncode, r.stdout, r.stderr
+
+
+@test
+def the_arithmetic_is_a_module_that_needs_no_browser():
+    """The page used to BE the implementation, so reading it meant faking a dom.
+
+    `scripts/roster.js` is the fit, the kv cache, the retention curves and the
+    composite with no page around it. Three things need those answers and only
+    one is a browser, so it is a module: `docs/index.html` inlines it,
+    `scripts/aimbot` requires it, and neither can drift from the other because
+    there is nothing to drift from.
+
+    What makes it a module rather than a file that happens to be separate is
+    that it loads under node with no dom stub at all -- which is the thing this
+    asserts, by requiring it in a bare subprocess.
+    """
+    roster = os.path.join(ROOT, "scripts", "roster.js")
+    data = os.path.join(ROOT, "docs", "data.json")
+    probe = ("const r = require(%s);"
+             "const d = JSON.parse(require('fs').readFileSync(%s, 'utf8'));"
+             "r.loadRoster(d);"
+             "const rows = r.rankedRows();"
+             "console.log(JSON.stringify({n: rows.length,"
+             " first: rows[0].short, rank: rows[0]._rank,"
+             " cols: r.vocabulary().columns.length,"
+             " hw: r.hardware()}));" % (json.dumps(roster), json.dumps(data)))
+    r = subprocess.run(["node", "-e", probe], stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE, text=True)
+    eq(r.returncode, 0, "it loads with no dom: %s" % r.stderr.strip()[-400:])
+    got = json.loads(r.stdout)
+    eq(got["n"] > 20, True, "and answers with a roster: %r" % got["n"])
+    eq(got["rank"], 1, "ranked from one")
+    eq(got["cols"] > 20, True, "carrying the column vocabulary")
+    # the defaults it starts from are the config's, not a literal in the module
+    live = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    cfg = live.load_yaml(os.path.join(ROOT, "registry", "dashboard.yaml"))
+    eq(got["hw"]["budget"], cfg["hardware"]["budget"], "on the config's box")
+    eq(got["hw"]["minCtx"], cfg["hardware"]["minCtx"], "at the config's context")
+
+    # and the page is built FROM it rather than beside it: what build-viewer
+    # inlines has to be the file, or the two are copies again
+    with open(roster) as f:
+        module = f.read()
+    with open(os.path.join(ROOT, "docs", "index.html")) as f:
+        page = f.read()
+    body = module.split("if (typeof module ")[0].rstrip()
+    eq(body in page, True, "the shipped page contains the module verbatim")
+    eq("module.exports" in page, False, "without the node-only tail")
+
+
+@test
+def the_query_cli_offers_the_dashboard_columns_and_no_others():
+    """A second list of columns is a list that goes stale silently.
+
+    The cli exists so the roster can be asked from a terminal, and the whole
+    risk in that is answering beside the page rather than out of it: MODELS.md
+    had a second composite in python for a long time and it put a different
+    model first. So the vocabulary is read off `docs/index.html` at run time,
+    and this asserts there is nothing to drift -- every key the cli offers is a
+    key the page defines, and the cli's own source names none of them.
+    """
+    page = open(os.path.join(ROOT, "docs", "index.html")).read()
+    keys = set(re.findall(r"\{k: '([a-z0-9_]+)', t: '[^']*', num:", page))
+    eq(len(keys) > 20, True, "the page defines a column vocabulary, got %d" % len(keys))
+
+    code, out, err = aimbot_cli("--list")
+    eq(code, 0, "--list runs: %s" % err[-300:])
+    offered = set(re.findall(r"^  ([a-z0-9_]+) ", out, re.M))
+    missing = keys - offered
+    eq(missing, set(), "every page column is offered, missing %r" % sorted(missing))
+
+    # and the cli does not carry its own copy. a column key may appear in its
+    # source only as one of its own option names -- `--ctx` sets the context to
+    # fit a cache for and collides with the `ctx` column by coincidence -- so
+    # the test is that every occurrence is explained by a flag rather than by a
+    # list of columns
+    src = open(os.path.join(ROOT, "scripts", "aimbot")).read()
+    options = set(re.findall(r'"--([a-z0-9-]+)"', src))
+    named = sorted(k for k in keys
+                   if ("'%s'" % k in src or '"%s"' % k in src) and k not in options)
+    eq(named, [], "the cli hardcodes column keys: %r" % named)
+
+
+@test
+def the_query_cli_answers_what_the_dashboard_answers():
+    """Same roster, same order, same rung -- or the cli is a second opinion.
+
+    `research/dashboard-table` already boots the page for MODELS.md, so the two
+    consumers can be read against each other: with nothing set they are the same
+    view of the same payload and every row has to line up. This is the check
+    that fails if the cli ever starts computing instead of asking.
+    """
+    r = subprocess.run([os.path.join(RESEARCH, "dashboard-table"), "--json"],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    eq(r.returncode, 0, "dashboard-table runs: %s" % r.stderr[-300:])
+    want = json.loads(r.stdout)["rows"]
+
+    code, out, err = aimbot_cli("--modality", "text", "--json")
+    eq(code, 0, "the cli runs: %s" % err[-300:])
+    got = json.loads(out)["rows"]
+    eq(len(got), len(want), "the same roster: %d against %d" % (len(got), len(want)))
+    for a, b in list(zip(got, want))[:12]:
+        eq(a["short"]["text"].startswith(b["short"]), True,
+           "same row in the same place: %r against %r" % (a["short"]["text"], b["short"]))
+        eq(a["quant"]["text"].startswith(b["quant"] or ""), True,
+           "and the same rung: %r against %r" % (a["quant"]["text"], b["quant"]))
+
+
+@test
+def the_query_cli_fits_to_the_hardware_it_is_given():
+    """The columns worth asking for are the ones that depend on the reader.
+
+    `quant`, `size` and `fits ctx` are not in the payload -- they are computed
+    from a budget, a reserve and a context, which is why a cli reading
+    data.json directly could not answer them. A smaller box has to pick a
+    smaller rung, or the setting is not reaching the page.
+    """
+    one = ["--grep", "qwen3.8 27b", "--reserve", "2", "--ctx", "32768", "--json"]
+    big = json.loads(aimbot_cli("--ram", "128", *one)[1])["rows"]
+    small = json.loads(aimbot_cli("--ram", "24", *one)[1])["rows"]
+    eq(bool(big) and bool(small), True, "the model is found at both budgets")
+    a, b = big[0]["size"]["value"], small[0]["size"]["value"]
+    eq(a > b, True, "a 24 gib box reads a smaller rung: %r against %r" % (a, b))
+    eq(b <= 24, True, "and one that actually fits it: %r" % b)
+
+    # the page opens with a `fits` filter on, so a box too small for anything
+    # this model publishes drops the ROW rather than showing it as unfittable.
+    # that is the page's answer and the cli has to inherit it rather than
+    # quietly widening the roster
+    tight = json.loads(aimbot_cli("--ram", "8", *one)[1])
+    eq(tight["rows"], [], "nothing that does not fit is listed")
+    eq(json.loads(aimbot_cli("--ram", "8", "--all", *one)[1])["matched"], 1,
+       "and --all is how you see it anyway")
+    # no budget at all is the registry's pin rather than a fit, and the page
+    # says so by reading `-` into the context column
+    none = json.loads(aimbot_cli("--ram", "0", "--grep", "qwen3.8 27b",
+                                 "--json")[1])
+    eq(none["hardware"]["budget"], None, "zero is no budget, not a budget of none")
+    eq(none["rows"][0]["fitctx"]["text"], "-", "so nothing is fitted")
+
+
+@test
+def the_query_cli_finds_its_install_through_a_symlink():
+    """A cli is put on PATH by linking to it, and the link is not the install.
+
+    `os.path.abspath` resolves `.` and `..` and stops: it keeps the directory
+    the LINK is in. So `ln -s .../scripts/aimbot ~/bin/aimbot` made the tool
+    look for `roster.js` and `docs/data.json` beside the link, which is the
+    one place they are never going to be, and the error named a path the user
+    had never heard of. `realpath` follows the link to the install.
+
+    Run through a link in a directory with nothing else in it, so a pass
+    cannot come from the real tree happening to be nearby.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        link = os.path.join(tmp, "aimbot")
+        os.symlink(os.path.join(ROOT, "scripts", "aimbot"), link)
+        r = subprocess.run([link, "--limit", "1", "--columns", "short"],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                           text=True, cwd=tmp)
+        eq(r.returncode, 0, "it runs through the link: %s" % r.stderr.strip()[-300:])
+        eq("model" in r.stdout, True, "and answers: %r" % r.stdout[:200])
+    finally:
+        shutil.rmtree(tmp)
+
+
+@test
+def the_query_cli_refuses_a_name_the_page_does_not_define():
+    """A typo that silently returns the default view is worse than an error."""
+    code, out, err = aimbot_cli("--columns", "short,nosuchcolumn")
+    eq(code != 0, True, "an unknown column fails")
+    eq("nosuchcolumn" in err, True, "and is named: %r" % err[-200:])
+    eq("short" in err, True, "beside what it could have been: %r" % err[-200:])
+    for flag, bad in (("--sort", "nope"), ("--modality", "nope"),
+                      ("--flag", "nope"), ("--weights", "nope")):
+        code, _, err = aimbot_cli(flag, bad)
+        eq(code != 0, True, "%s %s fails" % (flag, bad))
+
+
 UNSHAPED_REGISTRY = """version: 1
 models:
   Fixture/Punc:

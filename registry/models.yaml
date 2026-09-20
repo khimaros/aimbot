@@ -39,6 +39,69 @@
 
 version: 1
 models:
+  IFM/K2-Horizon-3.7B:
+    kind: text
+    name:
+      short: k2 horizon 3.7b
+      match: k2[\s-]*horizon(?:[\s-]*3\.7b)?
+    quants:
+    - repo: NANI-Nithin/K2-Horizon-3.7B-GGUF
+      quant: Q8_0
+      note: 'the vendor publishes one gguf and it is bf16 only, named for a 4b the model is
+        not, so the pin is a third party''s full ladder instead: {gib} here against
+        {gib@NANI-Nithin/K2-Horizon-3.7B-GGUF:BF16} for the vendor''s single rung. the
+        {card@IFM/K2-Horizon-3.7B-GGUF} repo is the one to watch if it grows rungs'
+    - repo: IFM/K2-Horizon-3.7B-GGUF
+      quant: BF16
+      note: the vendor's own, and the whole of it. worth carrying because it is the
+        reference the ladder above was converted from, not because anybody should serve
+        {gib} of a 3.7b model
+    runtime:
+      arch: k2-horizon
+      mainline: false
+      tracking: https://github.com/ggml-org/llama.cpp/issues/28361
+      note: 'nothing loads this yet, and the issue says so in the words the loader uses: "unknown
+        model architecture: ''k2-horizon''". mainline has no entry for it at today''s head, three
+        weeks after the model shipped, and the two gguf repos on the hub were converted by a llama.cpp
+        that cannot read them back. the roster carries it because it is the highest-scoring model
+        of its size anybody has measured and that is worth knowing; serving it is a different question
+        and the answer is no'
+    ids:
+      aa: k2-4b-ph1
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        note: the card {card} asks for these "and at least 32,768 output tokens" beside a
+          `reasoning_effort="high"` default, which is the shape of a model that thinks
+          before it answers and gets cut off mid-thought by a short output limit
+        tuned:
+        - instruct
+        - chat
+        - reason
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: NANI-Nithin/K2-Horizon-3.7B-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+      upstream_differs: [mid_developer, mid_system]
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, high]
+      default: high
   MiniMaxAI/MiniMax-M2.5:
     kind: text
     name:
@@ -423,6 +486,92 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+  Qwen/Qwen3.5-2B:
+    kind: text
+    name:
+      short: qwen3.5-2b
+      match: qwen\s*-?3\.5[\s-]*\b2b\b
+    quants:
+    - repo: unsloth/Qwen3.5-2B-MTP-GGUF
+      quant: Q8_0
+      note: the -MTP- build, as the rest of the family pins, at {gib}, with a
+        {gib@unsloth/Qwen3.5-2B-MTP-GGUF:mmproj:F16} projector beside it for the vision
+        half. unsloth also publishes a plain repo and bartowski a third, both downloaded an
+        order of magnitude more -- this one carries the nextn head and they do not
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      aa: qwen3-5-2b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        note: 'the card {card} publishes four sets rather than two, split by task as well as
+          by mode: these are its thinking-mode numbers for TEXT. the vision and
+          precise-coding set is the tool-use profile below, which is colder'
+        tuned:
+        - instruct
+        - chat
+        - reason
+      tool-use:
+        source: quant-card
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      instruct:
+        source: quant-card
+        temp: 1.0
+        top_p: 1.0
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 2.0
+        repeat_penalty: 1.0
+        note: the non-thinking text set, and the only profile on this roster asking for a
+          presence penalty of 2.0 -- the top of the range. the card's {card} vision
+          non-thinking numbers are gentler at 0.7 and 1.5, which is a different profile
+          than this registry has a name for
+        tuned:
+        - instruct
+        - chat
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: unsloth/Qwen3.5-2B-MTP-GGUF
+      developer: as-system
+      leading_system_max: 2
+      mid_system: dropped
+      mid_developer: dropped
+      upstream_differs: [developer, leading_system_max, mid_developer, mid_system]
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
   Qwen/Qwen3.5-27B:
     kind: text
     name:
@@ -555,6 +704,187 @@ models:
       leading_system_max: 1
       mid_system: rejected
       mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  Qwen/Qwen3-4B-Thinking-2507:
+    kind: text
+    name:
+      short: qwen3-4b-thinking
+      match: qwen\s*-?3[\s-]*4b[\s-]*(?:thinking|2507)
+    quants:
+    - repo: unsloth/Qwen3-4B-Thinking-2507-GGUF
+      quant: Q8_0
+      note: unsloth's, as the rest of the qwen line here pins, at {gib}. maziyarpanahi's
+        conversion is downloaded ten times more, which is unusual for a qwen and worth
+        knowing before assuming the house pin is the one a reader already has
+    runtime:
+      arch: qwen3
+      mainline: true
+      since: b5092
+      merged: '2025-04-09'
+    ids:
+      aa: qwen3-4b-2507-instruct-reasoning
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: generation-config
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        note: the card {card} and the shipped generation_config.json agree exactly, which
+          is rarer than it should be. there is no second profile because there is no
+          second mode -- the template names no thinking knob, so this checkpoint always
+          thinks
+        tuned:
+        - instruct
+        - chat
+        - reason
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: unsloth/Qwen3-4B-Thinking-2507-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+  Qwen/Qwen3-VL-4B-Instruct:
+    kind: text
+    name:
+      short: qwen3-vl-4b
+      match: qwen3[\s.-]*vl[\s-]*4b
+    quants:
+    - repo: Qwen/Qwen3-VL-4B-Instruct-GGUF
+      quant: Q8_0
+      note: qwen's own at {gib}, which the qwen3.5 line does not get -- vendor gguf for a
+        vision model usually means the projector was released with the weights rather than
+        reconstructed afterwards. the projector ships at two precisions,
+        {gib@Qwen/Qwen3-VL-4B-Instruct-GGUF:mmproj:F16} and
+        {gib@Qwen/Qwen3-VL-4B-Instruct-GGUF:mmproj:Q8_0}, which is rarer than shipping one
+        and lets the vision half be quantised independently of the weights
+    runtime:
+      arch: qwen3vl
+      mainline: true
+      since: b6887
+      merged: '2025-10-30'
+    ids:
+      aa: qwen3-vl-4b-instruct
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      instruct:
+        source: quant-card
+        temp: 1.0
+        top_p: 1.0
+        top_k: 40
+        presence_penalty: 2.0
+        repeat_penalty: 1.0
+        note: 'the card {card} splits its guidance by input rather than by mode, and these
+          are its TEXT numbers. the vision set is colder and narrower -- 0.7 and 0.8 with a
+          presence penalty of 1.5 -- and is what generation_config.json actually ships, so
+          a reader who runs this for text and does not override gets the vision profile
+          instead of this one'
+        tuned:
+        - instruct
+        - chat
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: Qwen/Qwen3-VL-4B-Instruct-GGUF
+      developer: dropped
+      leading_system_max: 1
+      mid_system: dropped
+      mid_developer: dropped
+  Qwen/Qwen3.5-4B:
+    kind: text
+    name:
+      short: qwen3.5-4b
+      match: qwen\s*-?3\.5[\s-]*\b4b\b
+    quants:
+    - repo: unsloth/Qwen3.5-4B-MTP-GGUF
+      quant: Q8_0
+      note: the -MTP- build for the same reason the 0.8b and 9b pin one, {gib} against
+        {gib@unsloth/Qwen3.5-4B-MTP-GGUF:UD-Q8_K_XL} at the top of its UD ladder. the head
+        is in the weights, so the speculative block costs nothing extra to load
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      aa: qwen3-5-4b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+      tool-use:
+        source: quant-card
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+      instruct:
+        source: quant-card
+        temp: 0.7
+        top_p: 0.8
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - code
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: unsloth/Qwen3.5-4B-MTP-GGUF
+      developer: as-system
+      leading_system_max: 2
+      mid_system: dropped
+      mid_developer: dropped
+      upstream_differs: [developer, leading_system_max, mid_developer, mid_system]
     thinking:
       knob: enable_thinking
       kind: boolean
@@ -2191,6 +2521,59 @@ models:
       knob: enable_thinking
       kind: boolean
       default: false
+  google/gemma-3-270m-it:
+    kind: text
+    name:
+      short: gemma 3 270m
+      match: gemma\s*-?3[\s-]*270m
+    quants:
+    - repo: unsloth/gemma-3-270m-it-GGUF
+      quant: Q8_0
+      note: '{gib}, the smallest language model on this roster by an order of magnitude and
+        the smallest thing artificial analysis scores at all. THE LADDER BELOW THIS RUNG
+        BARELY MOVES: Q2_K measures {bpw@unsloth/gemma-3-270m-it-GGUF:Q2_K} against this
+        rung''s {bpw}, so the whole span the names promise as fourfold is under a fifth of
+        the bytes, and Q2_K and Q2_K_L are identical. the reason is in the mix -- 63 percent of every K-quant rung
+        here is Q8_0, because a 262k-token vocabulary against 640 hidden dimensions makes
+        the embedding table 63 percent of the model, and unsloth does not quantise it. only
+        the UD-IQ rungs drop it, to Q5_1, and they are the only files that actually shrink
+        this model. google publishes no gguf; ggml-org publishes a qat conversion, which is
+        the more interesting build at a size where rounding hurts proportionally more'
+    runtime:
+      arch: gemma3
+      mainline: true
+      since: b4875
+      merged: '2025-03-12'
+    ids:
+      aa: gemma-3-270m
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      instruct:
+        source: quant-card
+        temp: 1.0
+        top_k: 64
+        top_p: 0.95
+        min_p: 0.0
+        note: google's repo is gated and returns 401 unauthenticated, so the card this
+          roster can read is the quantizer's {card} -- these are the numbers it prints,
+          and they are the gemma 3 house set rather than anything specific to the 270m
+        tuned:
+        - instruct
+        - chat
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: unsloth/gemma-3-270m-it-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
   google/gemma-4-E2B-it:
     kind: text
     name:
@@ -2385,6 +2768,54 @@ models:
       - text
       output:
       - audio
+  ibm-granite/granite-4.0-h-1b:
+    kind: text
+    name:
+      short: granite 4.0 h 1b
+      match: granite[\s-]*4\.0[\s-]*h[\s-]*1b
+    quants:
+    - repo: ibm-granite/granite-4.0-h-1b-GGUF
+      quant: Q8_0
+      note: ibm's own at {gib}, and the oldest generation of the line this roster carries.
+        the `h` is the hybrid mamba variant, so the 4.0 pair is an architecture fork as well
+        as a generation -- ibm shipped a dense 1b beside it
+    runtime:
+      arch: granitehybrid
+      mainline: true
+      since: b5868
+      merged: '2025-07-11'
+    ids:
+      aa: granite-4-0-h-nano-1b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      instruct:
+        source: tuned-here
+        temp: 1.0
+        top_p: 0.95
+        note: 'the 4.0 card {card} publishes no sampler guidance and its
+          generation_config.json carries only token ids, so these are the numbers ibm
+          documents for 4.2 and asks be used "across all tasks and serving backends".
+          borrowed within one vendor line and marked chosen rather than published, the
+          same way the 4.1 entry is. no thinking profile: 4.2 is the first granite
+          generation with a thinking mode'
+        tuned:
+        - instruct
+        - chat
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: ibm-granite/granite-4.0-h-1b-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
   ibm-granite/granite-4.2-30b:
     kind: text
     name:
@@ -2437,6 +2868,109 @@ models:
       - text
     turns:
       source: ibm-granite/granite-4.2-30b-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low]
+  ibm-granite/granite-4.1-3b:
+    kind: text
+    name:
+      short: granite 4.1 3b
+      match: granite[\s-]*4\.1[\s-]*\b3b\b
+    quants:
+    - repo: ibm-granite/granite-4.1-3b-GGUF
+      quant: Q8_0
+      note: ibm's own, at {gib}, and the generation before the 4.2 3b beside it -- carried
+        because artificial analysis scores both and the pair is the only same-vendor,
+        same-size generation step this roster can show at this scale
+    runtime:
+      arch: granite
+      mainline: true
+      since: b3774
+      merged: '2024-09-17'
+    ids:
+      aa: granite-4-1-3b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: tuned-here
+        temp: 1.0
+        top_p: 0.95
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        note: 'the 4.1 card {card} publishes no sampler guidance at all, unlike its
+          successor: these are the numbers ibm documents for granite 4.2 and this roster
+          already carries on the 4.2 entries. a considered borrow within one vendor line
+          rather than a published recommendation, which is why the source reads tuned-here'
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: ibm-granite/granite-4.1-3b-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+  ibm-granite/granite-4.2-3b:
+    kind: text
+    name:
+      short: granite 4.2 3b
+      match: granite[\s-]*4\.2[\s-]*\b3b\b
+    quants:
+    - repo: ibm-granite/granite-4.2-3b-GGUF
+      quant: Q8_0
+      note: ibm's own conversion, fifteen rungs of it, and the most downloaded gguf of any
+        model this size on the roster. {gib} at the top against
+        {gib@ibm-granite/granite-4.2-3b-GGUF:Q4_K_M} in the middle
+    runtime:
+      arch: granite
+      mainline: true
+      since: b3774
+      merged: '2024-09-17'
+    ids:
+      aa: granite-4-2-3b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        note: 'one set for everything, which the card {card} is unusually firm about: "Use
+          `temperature=1.0` and `top_p=0.95` across **all tasks and serving backends**,
+          including general chat, reasoning, and tool calling." so there is no second
+          profile here rather than one nobody published'
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: ibm-granite/granite-4.2-3b-GGUF
       developer: own
       leading_system_max: unlimited
       mid_system: ok
@@ -2506,6 +3040,469 @@ models:
       gate: enable_thinking
       gate_default: true
       accepts: [low]
+  Nanbeige/Nanbeige4.1-3B:
+    kind: text
+    name:
+      short: nanbeige4.1 3b
+      match: nanbeige[\s-]*4\.1(?:[\s-]*3b)?
+    quants:
+    - repo: mradermacher/Nanbeige4.1-3B-GGUF
+      quant: Q8_0
+      file: Nanbeige4.1-3B.Q8_0.gguf
+      note: 'no vendor conversion exists and the two most downloaded are single-rung repos
+        -- Edge-Quant publishes Q8_0 and Q4_K_M as separate repositories -- so the pin is
+        mradermacher''s ladder instead, {gib} at the top. the highest artificial analysis
+        index of any model under 4b this roster carries besides k2 horizon, which does not
+        load'
+    runtime:
+      arch: llama
+      mainline: true
+      since: b1046
+      merged: '2023-08-21'
+    ids:
+      aa: nanbeige4-1-3b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: tuned-here
+        temp: 0.6
+        top_p: 0.95
+        repeat_penalty: 1.0
+        note: 'the card {card} gives one set and it is the inference one. a second
+          temperature of 1.0 appears further down and is NOT this model: it configures the
+          summary model in an agent tool the card describes'
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: mradermacher/Nanbeige4.1-3B-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+  microsoft/Phi-4-mini-instruct:
+    kind: text
+    name:
+      short: phi-4 mini
+      match: phi[\s-]*4[\s-]*mini(?![\s-]*(?:flash|reasoning))
+    quants:
+    - repo: unsloth/Phi-4-mini-instruct-GGUF
+      quant: Q8_0
+      file: Phi-4-mini-instruct.Q8_0.gguf
+      note: unsloth's, at {gib}. microsoft publishes gguf for the phi-3 line and not for
+        this one, so the conversion is a quantizer's
+    runtime:
+      arch: phi3
+      mainline: true
+      since: b2717
+      merged: '2024-04-24'
+    ids:
+      aa: phi-4-mini
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      deterministic:
+        source: tuned-here
+        temp: 0.0
+        note: 'every sampler the card {card} shows is in a code example and every one of
+          them is `temperature=0.0`, so greedy is what microsoft documents rather than a
+          set this registry chose. no thinking profile: this is the instruct model of the
+          line, and the reasoning variants are separate repos'
+        tuned:
+        - instruct
+        - chat
+        - code
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: unsloth/Phi-4-mini-instruct-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+  ai21labs/AI21-Jamba-Reasoning-3B:
+    kind: text
+    name:
+      short: jamba reasoning 3b
+      match: jamba[\s-]*reasoning(?:[\s-]*3b)?
+    quants:
+    - repo: bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF
+      quant: Q8_0
+      note: bartowski's ladder at {gib}, three times the downloads of ai21's own
+        conversion. a hybrid mamba-transformer at 3b, which is why its kv cache does not
+        grow the way the dense models beside it do
+    runtime:
+      arch: jamba
+      mainline: true
+      since: b5856
+      merged: '2025-07-09'
+    ids:
+      aa: jamba-reasoning-3b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: tuned-here
+        temp: 0.6
+        note: 'ai21 shows 0.6 in every example on the card {card} and ships it in
+          generation_config.json under the key `temparature` -- misspelt, so transformers
+          ignores it and the shipped default is whatever the library falls back to. the
+          value is theirs; the file does not deliver it'
+        tuned:
+        - instruct
+        - chat
+        - reason
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+  mistralai/Ministral-3-3B-Instruct-2512:
+    kind: text
+    name:
+      short: ministral 3 3b
+      match: ministral[\s-]*3[\s-]*3b|ministral[\s-]*3b
+    quants:
+    - repo: mistralai/Ministral-3-3B-Instruct-2512-GGUF
+      quant: Q8_0
+      note: mistral's own conversion at {gib}, plus a
+        {gib@mistralai/Ministral-3-3B-Instruct-2512-GGUF:mmproj:Ministral-3-3B-Instruct-2512-BF16-mmproj.gguf}
+        projector for images. the most downloaded gguf of this model is a third party's
+        build of the REASONING variant, which is a different checkpoint and not this entry
+    runtime:
+      arch: mistral3
+      mainline: true
+      since: b7216
+      merged: '2025-12-01'
+    ids:
+      aa: ministral-3-3b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      instruct:
+        source: tuned-here
+        temp: 0.1
+        note: 'mistral asks for "a **temperature below 0.1** for daily-driver and production
+          environments" {card} and suggests starting at 0.1, which is the coldest
+          recommendation on this roster apart from liquid''s. it is a claim about
+          deployment rather than about capability: the card invites higher temperatures for
+          creative work and names no number for them'
+        tuned:
+        - instruct
+        - chat
+        - tools
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    turns:
+      source: mistralai/Ministral-3-3B-Instruct-2512-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+      upstream_differs: [leading_system_max]
+  openbmb/MiniCPM-V-4.6:
+    kind: text
+    name:
+      short: minicpm-v 4.6
+      match: minicpm[\s-]*v[\s-]*4\.6(?![\s-]*thinking)
+    quants:
+    - repo: openbmb/MiniCPM-V-4.6-gguf
+      quant: Q8_0
+      note: the vendor's own, {gib}, and a fuller ladder than the minicpm5 text repos get.
+        the projector is {gib@openbmb/MiniCPM-V-4.6-gguf:mmproj:F16} beside it, LARGER than
+        the rung -- the text half of this model is under a billion parameters and the vision
+        encoder is most of the rest, so sizing it by the weights alone is off by more than
+        double. ggml-org publishes a third conversion, which is usually the sign that a
+        vision stack landed upstream rather than being carried by the vendor alone
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      aa: minicpm-v4-6-1-3b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      instruct:
+        source: generation-config
+        temp: 0.7
+        top_k: 0
+        top_p: 1.0
+        repeat_penalty: 1.0
+        note: no sampler guidance on the card {card} at all, so these are the weights' own
+          `generation_config.json` -- the model's shipped defaults rather than a
+          recommendation anybody wrote down
+        tuned:
+        - instruct
+        - chat
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: openbmb/MiniCPM-V-4.6-gguf
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
+  openbmb/MiniCPM5-2B:
+    kind: text
+    name:
+      short: minicpm5 2b
+      match: minicpm[\s-]*5[\s-]*\b2\.?6?b\b
+    quants:
+    - repo: openbmb/MiniCPM5-2B-GGUF
+      quant: Q8_0
+      note: the vendor's own conversion at {gib}, three rungs and no ladder between them --
+        {gib@openbmb/MiniCPM5-2B-GGUF:Q4_K_M} below it and F16 above. bartowski publishes a
+        full ladder of the same weights for a reader who wants one
+    runtime:
+      arch: llama
+      mainline: true
+      since: b1046
+      merged: '2023-08-21'
+    ids:
+      aa: minicpm5-2b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    speculative:
+      type: draft-dspark
+      repo: openbmb/MiniCPM5-2B-DSpark-GGUF
+      quant: F16
+      n_max: 3
+      note: openbmb ships the drafter as a repo of its own rather than beside the weights
+        {card}, which is why this entry names it. one file, and the name says 2.6b where the
+        model says 2b -- the counted total is the larger figure and the repo title is the
+        round one
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        min_p: 0.0
+        note: 'the card {card} recommends these and then explains the one that matters on
+          this runtime: "In llama.cpp, the default `min_p=0.05` can lead to repetitive
+          output", so the zero is a correction to a default rather than a preference. it
+          offers `repetition_penalty=1.05` as the fallback if loops persist'
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: openbmb/MiniCPM5-2B-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+  openbmb/MiniCPM5-1B:
+    kind: text
+    name:
+      short: minicpm5 1b
+      match: minicpm[\s-]*5[\s-]*\b1b\b
+    quants:
+    - repo: openbmb/MiniCPM5-1B-GGUF
+      quant: Q8_0
+      note: the 1b rung of the same line at {gib}, and the smallest text model this roster
+        carries that any board has scored
+    runtime:
+      arch: llama
+      mainline: true
+      since: b1046
+      merged: '2023-08-21'
+    ids:
+      aa: minicpm5-1b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 0.9
+        top_p: 0.95
+        tuned:
+        - instruct
+        - chat
+        - reason
+      instruct:
+        source: quant-card
+        temp: 0.7
+        top_p: 0.95
+        note: the card {card} prints one row per thinking state rather than one set, so the
+          two profiles here are its two rows -- `enable_thinking` decides which applies
+        tuned:
+        - instruct
+        - chat
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: openbmb/MiniCPM5-1B-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+  LiquidAI/LFM2.5-2.6B:
+    kind: text
+    name:
+      short: lfm2.5 2.6b
+      match: lfm[\s-]*2\.5[\s-]*2\.6b
+    quants:
+    - repo: LiquidAI/LFM2.5-2.6B-GGUF
+      quant: Q8_0
+      note: the vendor's own, and by downloads the most pulled gguf on this roster at any
+        size. {gib} here against {gib@LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M}; the repo also ships
+        a QAD-Q4_0 rung, quantization-aware rather than converted after the fact
+    runtime:
+      arch: lfm2
+      mainline: true
+      since: b5873
+      merged: '2025-07-11'
+    ids:
+      aa: lfm2-5-2-6b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    speculative:
+      type: draft-dspark
+      repo: LiquidAI/LFM2.5-2.6B-DSpark-GGUF
+      quant: Q4_K_M
+      n_max: 3
+      note: liquid publishes the drafter as its own repo {card}, three rungs of it, so the
+        registry names which one rather than looking for a sidecar that is not there
+    sampling:
+      instruct:
+        source: vendor-card
+        temp: 0.1
+        top_k: 50
+        repeat_penalty: 1.1
+        note: much colder than anything else here, and the card's {card} own recommendation
+          rather than a house choice. a 2.6b model run at 1.0 wanders, and liquid tunes for
+          on-device assistants where it should not
+        tuned:
+        - instruct
+        - chat
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: LiquidAI/LFM2.5-2.6B-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+  ai9stars/G9v3-3B:
+    kind: text
+    name:
+      short: g9v3 3b
+      match: \bg9v3\b(?:[\s-]*3b)?
+    quants:
+    - repo: bartowski/ai9stars_G9v3-3B-GGUF
+      quant: Q8_0
+      note: no vendor conversion exists, so this is bartowski's, twenty-five rungs deep.
+        {gib} at the top and {gib@bartowski/ai9stars_G9v3-3B-GGUF:Q4_K_M} at the rung most
+        people take
+    runtime:
+      arch: llama
+      mainline: true
+      since: b1046
+      merged: '2023-08-21'
+    ids:
+      aa: g9v3-3b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 0.9
+        top_p: 0.95
+        tuned:
+        - instruct
+        - chat
+        - reason
+      instruct:
+        source: vendor-card
+        temp: 0.7
+        top_p: 0.95
+        note: two rows on the card {card}, one per thinking state, the same shape minicpm5
+          publishes -- `enable_thinking` picks which
+        tuned:
+        - instruct
+        - chat
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: bartowski/ai9stars_G9v3-3B-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
   ideogram-ai/ideogram-4-fp8:
     kind: image
     name:
@@ -4254,7 +5251,7 @@ models:
       is read off the repo NAME rather than a config, so the card''s own 27.36b reads as the
       27b the name spells and every derived bits-per-weight runs about a percent high, and
       the attention geometry is missing altogether, which is why this row can say what it
-      weighs and not how much context fits beside it. the window itself is not guessed -- it
+      weighs and not what a cache beside it would cost. the window itself is not guessed -- it
       comes out of the gguf header and agrees with the 262k the card claims.'
     quants:
     - repo: prism-ml/Ternary-Bonsai-2-27B-gguf
@@ -5267,6 +6264,113 @@ models:
       - audio
       output:
       - text
+  CohereLabs/tiny-aya-global:
+    kind: text
+    name:
+      short: tiny aya global
+      match: tiny[\s-]*aya
+    quants:
+    - repo: CohereLabs/tiny-aya-global-GGUF
+      quant: Q8_0
+      note: cohere's own at {gib}. the aya line is built for language coverage rather than
+        for benchmark position, which is the axis this roster is thinnest on and the reason
+        to carry it at a size where nothing else claims breadth. cc-by-nc-4.0 and gated
+        behind a click-through, so this is the rare entry a reader cannot simply pull
+    runtime:
+      arch: cohere2
+      mainline: true
+      since: b4415
+      merged: '2025-01-04'
+    ids:
+      aa: tiny-aya-global
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      instruct:
+        source: tuned-here
+        temp: 0.8
+        top_p: 0.95
+        top_k: 40
+        min_p: 0.05
+        repeat_penalty: 1.1
+        note: NOBODY PUBLISHED THESE. cohere's repo is gated and returns 401 for its card
+          and its generation_config alike, and the quantizer's card {card} is frontmatter
+          with no body, so there is no recommendation to record -- these are llama.cpp's
+          own defaults, written down so the table says what a reader would actually get
+          rather than leaving a blank that looks like agreement
+        tuned:
+        - instruct
+        - chat
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: CohereLabs/tiny-aya-global-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: reordered
+      mid_developer: dropped
+  LGAI-EXAONE/EXAONE-4.0-1.2B:
+    kind: text
+    name:
+      short: exaone 4.0 1.2b
+      match: exaone[\s-]*4\.0[\s-]*1\.2b
+    quants:
+    - repo: LGAI-EXAONE/EXAONE-4.0-1.2B-GGUF
+      quant: Q8_0
+      note: lg's own at {gib}, and the only model from this publisher the roster carries.
+        artificial analysis scores it twice, reasoning and not, off the same weights -- a
+        graded knob rather than two checkpoints
+    runtime:
+      arch: exaone4
+      mainline: true
+      since: b5932
+      merged: '2025-07-18'
+    ids:
+      aa: exaone-4-0-1-2b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      instruct:
+        source: quant-card
+        temp: 0.6
+        top_p: 0.95
+        tuned:
+        - instruct
+        - chat
+      thinking:
+        source: quant-card
+        temp: 0.6
+        top_p: 0.95
+        presence_penalty: 1.5
+        note: the same temperature and top-p as the non-reasoning set, with a presence
+          penalty added {card}. lg ships no generation_config sampler fields at all, so
+          the card is the only place either set exists
+        tuned:
+        - instruct
+        - chat
+        - reason
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: LGAI-EXAONE/EXAONE-4.0-1.2B-GGUF
+      developer: rejected
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
   CohereLabs/cohere-transcribe-03-2026:
     kind: speech
     name:
