@@ -294,7 +294,8 @@ def check_speculative(sp, where, f, nested=False):
 # what a `crispasr:` block may say. `runtime:` answers "which llama.cpp release
 # loads this"; this answers the same question for the other engine on the
 # roster, which is not a llama.cpp release at all but a backend name.
-CRISPASR_FIELDS = {"backend", "diarize", "post", "labels_speakers"}
+CRISPASR_FIELDS = {"backend", "diarize", "post", "labels_speakers",
+                   "accept_license"}
 # what a weight can be to a diarization run. neither transcribes: an embedder
 # turns a span of audio into a speaker vector, a segmenter says only WHEN the
 # speaker changed
@@ -487,6 +488,31 @@ def check_registry(models, sampling, f):
             where = "%s/%s" % (repo, q.get("quant") or q.get("file"))
             check_runtime(q.get("runtime"), where, f)
             check_crispasr(q.get("crispasr"), where, f)
+        # TWO RUNGS OF ONE REPO SHARING A TAG SILENTLY BECOME ONE. the page keys
+        # its ladder on `repo + ':' + quant` and the second write loses to the
+        # first, so a rung added in good faith disappears between here and the
+        # table with nothing printed at any layer -- lint passed it, the build
+        # printed no note, and the ladder was simply short.
+        #
+        # the advice names `file:` rather than the repo because that is what
+        # actually separates them: a tag is a size CLASS and byteshape publishes
+        # several rungs of one, which is why those pins carry both. reading the
+        # bpw annotation off to recover a tidy `IQ3_S` once summed three files of
+        # qwen3.6 35b a3b into a 26.16 gib rung that is none of them -- caught
+        # only because the size was visibly wrong. the same collision reaching a
+        # FETCH gets the wrong file, which is not visibly anything.
+        seen_rungs = {}
+        for q in quants:
+            key = (q.get("repo"), q.get("quant"))
+            if not all(key):
+                continue
+            if key in seen_rungs:
+                f.add(repo, "two rungs of %s are both tagged %s; a tag is a size "
+                            "class rather than a file, so name each one's `file:` "
+                            "beside it -- keyed on the tag alone the second is "
+                            "dropped from the ladder without a word"
+                      % (key[0], key[1]))
+            seen_rungs[key] = True
         # the key is what every capture joins on: model-cards reads that repo's
         # README, model-facts its config.json, hf-catalog its downloads. keyed on
         # a conversion, all three answer about whoever ran the quantizer -- and a
@@ -956,6 +982,28 @@ def check_backend_reachable(models, data, f):
                     archs.update(per_file[r])
                 elif r in repo_arch:
                     archs.add(repo_arch[r])
+            # A HAND-WRITTEN LICENCE GATE MAY ONLY FILL THE CATALOG'S SILENCE.
+            # crispasr refuses to fetch some weights until the caller names the
+            # licence, and it publishes that in two places: its own backend
+            # table, which `fetch-crispasr` captures, and the conversion's model
+            # card, which nothing here reads. the second is why the field is
+            # writable by hand at all -- pocket-tts' gate is only on the card.
+            #
+            # forbidding the overlap is what keeps the two consumers agreeing.
+            # llama-tools let the capture win and STOP where a hand value
+            # disagrees; the page reads the rung first, so it would prefer the
+            # hand value. rather than pick a winner, the shape that would need
+            # one is refused: write the gate only where the catalog has none,
+            # and a refreshed capture can never be silently overridden.
+            catalogued = ((crispasr.get("backends") or {}).get(backend)
+                          or {}).get("accept_license")
+            written = (block or {}).get("accept_license")
+            if written and catalogued:
+                f.add(where, "crispasr.accept_license %r is already published "
+                             "for backend %r as %r; write it by hand only where "
+                             "the catalog is silent, so a refreshed capture "
+                             "cannot be overridden"
+                      % (written, backend, catalogued))
             if not archs:
                 continue  # no gguf header anywhere: whisper ships ggml .bin
             if not any(a in table for a in archs):
@@ -990,6 +1038,51 @@ def check_sdcpp_detected(models, data, f):
                         "rules matched"
                   % (hit.get("repo"), hit.get("tensors") or 0,
                      len((data.get("sdcpp") or {}).get("signatures") or {})))
+
+
+def report_roles(models):
+    """Every `role:` in use, which is the closed list no consumer can read today.
+
+    RAISED BY llama-tools, whose generator maps role -> argv flag and exited
+    through a sort key as a bare ValueError on the first role it had no entry
+    for, naming neither the model nor the role. What they asked for is the set of
+    NAMES, so they can assert coverage at their lint rather than discover a gap
+    at generate time.
+
+    A REPORT rather than a vocabulary, deliberately. They asked that a new role
+    not be rejected here -- the value is the list being readable, and a role
+    should be addable in one place without a consumer release -- and a printed
+    list satisfies that where a `ROLES` tuple beside CRISPASR_FIELDS would not.
+    It also cannot go stale: it is computed from the registry every run rather
+    than being a second copy of what the registry already says.
+
+    What it does NOT do is catch a typo, which is the cost of that choice. A
+    misspelled role reads here as one more row rather than as an error, and the
+    reader is the one who notices `codec-ecnoder`. The contrast with `quant:` on
+    the same entries is the argument for going further: that field is required,
+    checked against a pattern, and llama-tools read it bare on the guarantee.
+    """
+    quant_roles, comp_roles = {}, {}
+    for repo, m in sorted((models.get("models") or {}).items()):
+        for q in (m.get("quants") or []):
+            if q.get("role"):
+                quant_roles.setdefault(q["role"], []).append(repo)
+        for c in (m.get("components") or []):
+            if c.get("role"):
+                comp_roles.setdefault(c["role"], []).append(repo)
+    both = sorted(set(quant_roles) & set(comp_roles))
+    print("\nroles: %d under quants:, %d under components:, %d in both"
+          % (len(quant_roles), len(comp_roles), len(both)))
+    for label, table in (("quants", quant_roles), ("components", comp_roles)):
+        print("  under %s:" % label)
+        for role in sorted(table):
+            print("    %-22s %3d  e.g. %s" % (role, len(table[role]), table[role][0]))
+    # the rung/companion split is currently a function of the role NAME, with no
+    # overlap at all, which is what llama-tools infer positionally. nothing
+    # enforces it, so the day it stops being true is worth printing
+    if both:
+        print("  IN BOTH, so `selectable` can no longer be read off the name: %s"
+              % ", ".join(both))
 
 
 def report_speech(models):
@@ -1056,6 +1149,8 @@ def main():
                     help="report models with no name.match to score them by")
     ap.add_argument("--runtime", action="store_true",
                     help="report what a stock llama.cpp build will not load")
+    ap.add_argument("--roles", action="store_true",
+                    help="every `role:` in use, which nothing else publishes")
     ap.add_argument("--speech", action="store_true",
                     help="report speech models with no engine and no score")
     ap.add_argument("--json", action="store_true")
@@ -1108,6 +1203,8 @@ def main():
         report_runtime(models, capture("llama-support"), capture("gguf-sizes"))
     if args.speech:
         report_speech(models)
+    if args.roles:
+        report_roles(models)
 
     if args.json:
         json.dump(f.rows, sys.stdout, indent=1)

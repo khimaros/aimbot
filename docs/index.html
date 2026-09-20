@@ -3438,9 +3438,16 @@ function llamaServer(m, pick, profileName) {
   const p = m.sampling[profileName] || {};
   const cmd = ['llama-server'];
   if (pick) cmd.push(`--hf-repo ${pick.repo}:${pick.quant}`);
-  (m.components || []).forEach(w => cmd.push(w.role === 'mmproj'
-    ? `--mmproj hf://${w.repo}:${hfTag(w)}`
-    : `# component (${w.role}): hf://${w.repo}:${hfTag(w)}`));
+  // no `--mmproj` case, deliberately, and it is the same rule the drafter below
+  // follows: a sidecar in the SERVED repo is llama.cpp's to resolve. a vision
+  // projector is auto-downloaded beside the weights whenever the model came
+  // from `-hf`, and `common/arg.cpp` makes that conditional on the flag being
+  // unset -- `download_mmproj = use_mmproj && !no_mmproj && mmproj.path.empty()
+  // && mmproj.url.empty()`. so naming it here would SUPPRESS the fetch that
+  // works, and point `mmproj.path` at an `hf://` string read as a local file.
+  // nothing in the registry carries the projector as a component either: 42
+  // entries take images and none of them has a `components:` block at all.
+  const notes = (m.components || []).map(componentNote);
   // speculative decoding is a property of the GGUF, not of the model: a quant
   // saying `speculative: false` cannot draft whatever the model declares
   const spec = (pick && pick.speculative === false) ? {} : (m.speculative || {});
@@ -3462,7 +3469,7 @@ function llamaServer(m, pick, profileName) {
   // the turns and thinking facts in this registry were derived by executing the
   // template, which llama.cpp only does under --jinja
   cmd.push('--jinja');
-  return cmd.join(' \\\n  ');
+  return withNotes(notes, cmd);
 }
 
 // pi's thinking enum, ascending. a template level outside it cannot be asked
@@ -3548,7 +3555,45 @@ function piProvider(m, pick, profileName, gguf) {
 // a component by role, as `hf://repo:file` -- which is how every runtime here
 // takes a weight it did not download itself
 const partOf = (m, role) => (m.components || []).find(c => c.role === role);
-const hfRef = c => c ? `hf://${c.repo}:${c.quant}` : null;
+// `hfTag`, not `c.quant`: a component is as often pinned by FILENAME as by tag
+// -- every vae here is, since `ae.safetensors` is not a quant -- and reading
+// the tag alone put a literal `undefined` into the command for 11 of the 16
+// image models
+const hfRef = c => c ? `hf://${c.repo}:${hfTag(c)}` : null;
+
+// a companion this page has no flag for is NAMED rather than dropped: the
+// reader needs to know the file is required even where this page will not guess
+// what to call it -- see the closing branch of otherRuntime on not inventing a
+// runtime's flags.
+const componentNote = c => `# also needs (${c.role}): ${hfRef(c)}`;
+
+// the notes go ABOVE the command and never inside it. a `#` on a continued line
+// is not a comment on that line: the backslash-newline is removed before
+// comments are read, so it swallows the rest of the command AND the
+// continuation, and every argument after it runs as its own command.
+// cosyvoice3 carries five companions, so this is the difference between a
+// command a reader can paste and `--tts: command not found`.
+const withNotes = (notes, argv) => notes.concat([argv.join(' \\\n  ')]).join('\n');
+
+// which flag a component of each role travels under, out of the runtime's own
+// entry in registry/dashboard.yaml rather than spelled here. the same map is
+// hand-written in llama-tools, which is why it moved: one fact, two repos,
+// nothing keeping them equal.
+const roleFlags = k => ((D.config.runtimes || []).find(r => r.k === k) || {}).roles || {};
+
+// split a model's components into the ones this runtime has a flag for and the
+// ones it does not. the second list is NAMED rather than dropped or guessed at,
+// which is what sd.cpp used to do with ideogram 4's `uncond` -- that branch
+// never looked at components at all, so the file went unmentioned entirely.
+function partition(m, k) {
+  const flags = roleFlags(k);
+  const args = [], notes = [];
+  (m.components || []).forEach(c => {
+    (flags[c.role] ? args : notes).push(
+      flags[c.role] ? `${flags[c.role]} ${hfRef(c)}` : componentNote(c));
+  });
+  return {args, notes};
+}
 
 // the command each runtime wants, built from the same registry facts the
 // llama.cpp one is. the roles are not decoration: `role: diffusion`, `vae` and
@@ -3562,31 +3607,60 @@ function otherRuntime(m, rt, pick) {
   if (rt.k === 'crispasr') {
     // the backend can be pinned on the quant rather than the model: two
     // conversions of one checkpoint, and only one of them loads
-    const backend = ((pick || {}).crispasr || m.crispasr || {}).backend;
+    // PER FIELD, never as a block with a fallback. the rung's block and the
+    // model's carry different things -- the backend follows the conversion and
+    // a licence gate may too -- so `pick.crispasr || m.crispasr` reads whichever
+    // block exists and then finds the other's field missing. dropping
+    // `--backend` is not a missing flag but a wrong load: crispasr sniffs the
+    // gguf instead, and 11 entries here have a written backend the detector
+    // disagrees with
+    const at = f => ((pick || {}).crispasr || {})[f] || (m.crispasr || {})[f];
+    const backend = at('backend');
     const speaks = (m.modalities.output || []).includes('audio');
     // `-m auto` where the pinned file is not one crispasr reads. kokoro is the
     // case: this registry pins a TTS.cpp conversion and crispasr converts the
     // checkpoint itself, so naming our file would be a command that fails
     const reads = (m.crispasr || {}).repos || [];
     const mine = pick && (!reads.length || reads.includes(pick.repo));
+    // the companions, which crispasr does NOT resolve for itself: twelve
+    // entries here load a second file beside the model and the command used to
+    // name none of them, which is a server that starts and emits nothing
+    const part = partition(m, rt.k);
+    const gate = at('accept_license');
     return {label: `crispasr, ${speaks ? 'synthesis' : 'transcription'}`
               + (mine ? '' : ' -- it downloads its own conversion'),
-            text: ['crispasr'].concat(
-              backend ? ['--backend ' + backend] : [],
-              ['-m ' + (mine ? ref : 'auto')],
-              speaks ? ['--tts "hello world"', '--tts-output out.wav']
-                     : ['-f audio.wav']).join(' \\\n  ')};
+            text: withNotes(
+              part.notes,
+              ['crispasr'].concat(
+                backend ? ['--backend ' + backend] : [],
+                ['-m ' + (mine ? ref : 'auto')],
+                part.args,
+                // crispasr will not fetch weights it considers non-commercial
+                // until the caller names the licence. read off its own table,
+                // not from the licence tier: one of the seven non-permissive
+                // crispasr models here is gated
+                gate ? ['--accept-license ' + gate] : [],
+                speaks ? ['--tts "hello world"', '--tts-output out.wav']
+                       : ['-f audio.wav']))};
   }
   if (rt.k === 'whisper.cpp') {
     return {label: 'whisper.cpp, the files this repo pins are its own',
             text: `whisper-cli \\\n  -m ${ref} \\\n  -f audio.wav`};
   }
   if (rt.k === 'stable-diffusion.cpp') {
+    // the flagged components come from the runtime's own map, so a placeholder
+    // is only needed where the registry pins none at all -- sd.cpp will not
+    // start without a vae and a text encoder, and saying `<vae>` is clearer
+    // than a command that silently omits one
+    const part = partition(m, rt.k);
+    const flags = roleFlags(rt.k);
+    const missing = Object.keys(flags)
+      .filter(r => !partOf(m, r))
+      .map(r => `${flags[r]} <${r}>`);
     return {label: 'stable-diffusion.cpp, three files',
-            text: ['sd', '--diffusion-model ' + ref,
-                   '--vae ' + (hfRef(partOf(m, 'vae')) || '<vae>'),
-                   '--llm ' + (hfRef(partOf(m, 'llm')) || '<text encoder>'),
-                   '-p "a photograph of a cat"'].join(' \\\n  ')};
+            text: withNotes(part.notes,
+              ['sd', '--diffusion-model ' + ref].concat(
+                part.args, missing, ['-p "a photograph of a cat"']))};
   }
   if (rt.k === 'TTS.cpp') {
     return {label: 'TTS.cpp',

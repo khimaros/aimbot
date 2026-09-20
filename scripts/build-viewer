@@ -1073,6 +1073,12 @@ def crispasr_block(model, backends):
         for r in (cat.get("gguf") or []) + (cat.get("models") or []):
             if r not in repos:
                 repos.append(r)
+        # the licence crispasr makes the caller name before it will fetch. a
+        # property of the BACKEND rather than of the model's licence -- outetts
+        # carries the same cc-by-nc-sa-4.0 the gated chord weights do and is not
+        # gated -- so it rides along with the backend's other catalog facts
+        if cat.get("accept_license"):
+            block.setdefault("accept_license", cat["accept_license"])
     if repos:
         block["repos"] = repos
     return block

@@ -777,6 +777,166 @@ test('the operations section shows the runtimes that load THIS model', () => {
   ok(sd.includes('--diffusion-model') && sd.includes('--vae')
      && sd.includes('--llm'), 'with the diffusion model, the vae and the text encoder');
 
+  // A VISION MODEL IS SERVED WITHOUT `--mmproj`, and that is the answer rather
+  // than an omission. llama.cpp auto-downloads the projector beside weights
+  // fetched with `-hf`, and `common/arg.cpp` gates that on the flag being
+  // UNSET: `download_mmproj = use_mmproj && !no_mmproj && mmproj.path.empty()
+  // && mmproj.url.empty()`. so emitting it would turn off the fetch that works
+  // and set a path to an `hf://` string llama.cpp reads as a local file.
+  //
+  // this used to be a `role === 'mmproj'` branch in the builder. it never fired
+  // -- no registry entry carries that role, and none of the 42 entries taking
+  // images carries a `components:` block at all -- so the mistake was latent.
+  // matching the FILENAME instead would have made it fire and broken serving.
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  const vis = D.models.filter(m => (m.modalities.input || []).includes('image')
+    && m.runtime.arch && m.quants.length);
+  ok(vis.length > 10, 'enough vision models to be a real test: ' + vis.length);
+  vis.forEach(m => {
+    const c = snippets(m).map(s => s.text).join('\n');
+    ok(!c.includes('--mmproj'),
+       m.short + ' leaves the projector to llama.cpp: ' + c);
+  });
+  eq(D.models.some(m => (m.components || []).some(w => w.role === 'mmproj')),
+     false, 'and no entry carries the projector as a component');
+
+  // THE FLAG A COMPONENT TRAVELS UNDER IS A FACT, NOT A LITERAL IN THIS PAGE.
+  // it was hardcoded here -- `--codec-model`, `--vae`, `--llm` -- and hardcoded
+  // again in llama-tools' own `ROLE_FLAG`, which is the same fact in two repos
+  // with nothing keeping them equal. that is the drift this registry exists to
+  // stop, and the test for which side a thing belongs on says flags are facts:
+  // two consumers cannot reasonably disagree about what crispasr calls its
+  // codec flag. it lives in `registry/dashboard.yaml`'s `runtimes:` entries now
+  // and travels in `config.runtimes`, which llama-tools already receives.
+  const rtFlags = k => ((D.config.runtimes || []).find(r => r.k === k) || {}).roles || {};
+  ok(rtFlags('crispasr').codec, 'crispasr declares a flag for a codec');
+  ok(rtFlags('stable-diffusion.cpp').vae, 'and sd.cpp for a vae');
+
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  const bt2cmd = snippets(model('breeze-tts-2')).map(s => s.text).join('\n');
+  ok(bt2cmd.includes(rtFlags('crispasr').codec + ' hf://'),
+     'the codec travels under the flag config names: ' + bt2cmd);
+
+  // a role the runtime declares NO flag for is still named, as a note. ideogram
+  // 4 carries `role: uncond` and the sd.cpp branch used to drop it on the floor
+  // -- it never looped components at all, so that file went unmentioned in a
+  // command a reader was invited to copy
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  const ideo = model('ideogram-4');
+  const unc = (ideo.components || []).find(c => c.role === 'uncond');
+  ok(unc, 'ideogram 4 carries an uncond component');
+  ok(!rtFlags('stable-diffusion.cpp').uncond,
+     'and sd.cpp declares no flag for that role, so it is not invented');
+  const icmd = snippets(ideo).map(s => s.text).join('\n');
+  ok(icmd.includes(unc.repo), 'it is named anyway: ' + icmd);
+
+  // THE CRISPASR BLOCK IS READ PER FIELD, not as a block with a fallback. the
+  // shape is one the registry does not hold yet and plausibly would: a rung
+  // carrying `crispasr: {accept_license: ...}` with the backend at MODEL level,
+  // because the gate follows the conversion. a whole-block fallback reads the
+  // rung's block, finds no `backend`, and emits no `--backend` at all.
+  //
+  // that is not a missing flag, it is a WRONG LOAD. without it crispasr sniffs
+  // the gguf, which is the guess `--backend` exists to replace: 11 entries here
+  // have a written backend that disagrees with the detected one, so each would
+  // load a different backend, and 23 more detect as nothing at all.
+  //
+  // raised by llama-tools, who proved it by reverting their own lookup to the
+  // block form and watching the guard fail.
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  const moved = JSON.parse(JSON.stringify(model('breeze-tts-2')));
+  // the gate ONLY on the rung and the backend ONLY on the model, so neither
+  // assertion below can pass off the other level
+  moved.crispasr = {repos: (moved.crispasr || {}).repos, backend: 'bt2-tts'};
+  moved.quants.forEach(q => {
+    if (q.crispasr) q.crispasr = {accept_license: 'other'};
+  });
+  const movedCmd = snippets(moved).map(s => s.text).join('\n');
+  ok(movedCmd.includes('--backend bt2-tts'),
+     'a rung-level gate does not cost the model-level backend: ' + movedCmd);
+  ok(movedCmd.includes('--accept-license other'),
+     'and the rung-level gate is still read: ' + movedCmd);
+
+  // A LICENCE GATE IS PART OF THE COMMAND. crispasr refuses to fetch weights it
+  // considers non-commercial until the caller names the licence:
+  // `--accept-license other` for bt2-tts, `--accept-license cc-by-nc-sa-4.0`
+  // for the BTC chord weights. a command without it does not run, which is the
+  // same class of wrong as the missing codec below.
+  //
+  // it is NOT derivable from the licence this roster records, and that is the
+  // reason it is captured from crispasr's own table. outetts is
+  // `cc-by-nc-sa-4.0` -- the same licence crispasr gates BTC behind -- and
+  // crispasr does not gate it. seven crispasr models here are non-permissive
+  // and exactly one is gated, so the gate is a per-backend editorial call.
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  const gated = snippets(model('breeze-tts-2')).map(s => s.text).join('\n');
+  ok(gated.includes('--accept-license other'),
+     'the gated model names its licence: ' + gated);
+
+  // and nothing else acquires the flag by accident. `gated` has to be read the
+  // same way the command reads it -- across BOTH levels -- or this predicate has
+  // the exact blindness the code was fixed for: pocket-tts' gate is on its rung,
+  // so a model-level test called it ungated and then failed on the flag
+  const gateOf = m => (m.crispasr || {}).accept_license
+    || (m.quants || []).map(q => (q.crispasr || {}).accept_license).find(Boolean);
+  const ungated = D.models.filter(m => (m.engines || []).includes('crispasr')
+    && !gateOf(m));
+  ok(gateOf(model('pocket-tts')), 'pocket-tts is gated, on its rung');
+  ok(ungated.length > 40, 'most crispasr models are ungated: ' + ungated.length);
+  ungated.forEach(m => {
+    ops = {runtime: null, repo: null, quant: null, profile: null};
+    ok(!snippets(m).map(s => s.text).join('\n').includes('--accept-license'),
+       m.short + ' is not gated and does not claim to be');
+  });
+
+  // A COMPANION THE RUNTIME CANNOT FIND ITSELF IS NAMED, always. this is the
+  // opposite case to the projector above and the distinction is the whole rule:
+  // llama.cpp resolves a sidecar in the SERVED repo, and nothing resolves a
+  // file in somebody else's repo. breeze-tts-2's codec lives in
+  // `cstr/qwen3-tts-tokenizer-12hz-GGUF` and the talker gguf does not contain
+  // it, so a command without it starts a server that emits nothing.
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  const bt2 = snippets(model('breeze-tts-2')).map(s => s.text).join('\n');
+  ok(bt2.includes('qwen3-tts-tokenizer-12hz'),
+     'the breeze codec is named in its snippet: ' + bt2);
+
+  // and it is not one model: twelve crispasr entries carry a companion, and
+  // dropping any of them silently is the same failure
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  const withComp = D.models.filter(m => (m.engines || []).includes('crispasr')
+    && (m.components || []).length);
+  ok(withComp.length > 8, 'enough of them to be a real test: ' + withComp.length);
+  withComp.forEach(m => {
+    const c = snippets(m).map(s => s.text).join('\n');
+    m.components.forEach(w => ok(c.includes(w.repo),
+      m.short + ' names its ' + w.role + ' (' + w.repo + '): ' + c));
+  });
+
+  // NOTHING generated says `undefined`. `hfRef` read `c.quant` where the rung
+  // helper reads `quant || file`, so every component pinned by filename alone
+  // -- 11 of the 16 image models, every one of their vaes -- put a literal
+  // `undefined` in a command a reader is invited to copy.
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  const everyCmd = D.models.filter(m => (m.engines || []).length)
+    .map(m => {
+      ops = {runtime: null, repo: null, quant: null, profile: null};
+      return [m.short, snippets(m).map(s => s.text).join('\n')];
+    });
+  const undef = everyCmd.filter(([, c]) => /undefined|\[object/.test(c));
+  eq(undef.map(([s]) => s).join(', '), '',
+     'no generated command carries an undefined value');
+
+  // AND EVERY COMMAND SURVIVES BEING PASTED. a `#` on a backslash-continued
+  // line is not a comment on that line: the continuation is removed before
+  // comments are read, so it swallows the rest of the command and every
+  // argument after it runs as its own. naming the companions INSIDE the argv
+  // turned cosyvoice3's five into `--tts: command not found`, which is worse
+  // than the silent omission it was fixing.
+  const broken = everyCmd.filter(([, c]) => c.split('\n').some(
+    line => line.includes('#') && line.trimEnd().endsWith('\\')));
+  eq(broken.map(([s]) => s).join(', '), '',
+     'no command has a comment inside a continued line');
+
   // and a model nothing here loads says so rather than printing a command
   ops = {runtime: null, repo: null, quant: null, profile: null};
   eq(runtimesFor(model('supertonic-3')).length, 0,

@@ -210,11 +210,44 @@ speed:
   - {value: 990, label: 990 tflops rtx 5090}
 
 # the runtimes a snippet can be written for, and whether each one loads gguf.
+# `roles:` is the flag a COMPONENT of that role travels under, per runtime.
+#
+# THIS PAGE IS THE ONLY CONSUMER and is expected to stay that way. it moved out
+# of the page to be shared with llama-tools, who declined it and were right to:
+# a flag spelling is a property of the BINARY a host runs, not of a model, so
+# two consumers CAN reasonably disagree -- the same `codec` role under
+# Breeze-TTS-2.cpp takes a different flag or none. by this registry's own test
+# that makes it policy rather than a fact, and it is here because config beats
+# 24 string literals in a template, not because it is a contract.
+#
+# the bar for ever publishing it as a fact is captured `--help` output per
+# runtime under `research/data/`. hand-written, one copy per consumer is right.
+#
+# a role absent from a runtime's map is NOT an error and not a gap to fill by
+# guessing. the command names the file as a comment instead, which is the honest
+# output for a flag nobody here has evidence for -- `uncond` is sd.cpp's case,
+# and the seven crispasr companions below it are the rest.
+#
+# `--codec-model` is absent from crispasr's README, which reads as a gap in the
+# README rather than a weak flag: it is in 14 cstr cards, three of them as an
+# explicit `| --codec-model PATH |` parameter row, and llama-tools pins it. do
+# not argue anything from its provenance.
+#
+# three of the six codec components ship in the model's OWN repo, where dia's
+# card says the file is "auto-discovered beside the model" and the flag defaults
+# to `auto`. naming it there is redundant rather than wrong -- it pins the same
+# file the discovery would find -- which is the opposite of the `--mmproj` case,
+# where naming it SUPPRESSED a working auto-download. so it is emitted for all
+# six and the distinction costs nothing.
 runtimes:
 - {k: llama.cpp, gguf: true}
 - {k: vllm, gguf: false}
-- {k: crispasr, gguf: true}
+- k: crispasr
+  gguf: true
+  roles: {codec: --codec-model}
 - {k: whisper.cpp, gguf: true}
-- {k: stable-diffusion.cpp, gguf: true}
+- k: stable-diffusion.cpp
+  gguf: true
+  roles: {vae: --vae, llm: --llm}
 - {k: TTS.cpp, gguf: true}
 - {k: Breeze-TTS-2.cpp, gguf: true}

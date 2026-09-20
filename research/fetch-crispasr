@@ -63,6 +63,24 @@ LINK = re.compile(r"\[([^\]]+)\]\((https?://huggingface\.co/[^)\s]+)\)")
 # is prose about the row rather than a second backend name
 BACKEND = re.compile(r"\*\*([a-z0-9][a-z0-9._-]*)\*\*", re.I)
 REPO = re.compile(r"^[A-Za-z0-9][\w.-]*/[\w.-]+$")
+# crispasr refuses to fetch weights it considers non-commercial until the caller
+# names the licence, and the row says so in prose: "**NON-COMMERCIAL weights** --
+# needs `--accept-license other`".
+#
+# THE GATE IS ORTHOGONAL TO THE LICENCE, in both directions, which is why it is
+# read rather than derived. outetts is cc-by-nc-sa-4.0 -- the same licence the
+# BTC chord weights are gated behind -- and is not gated; pocket-tts is
+# cc-by-4.0, permissive, and IS gated. so neither tier nor tag predicts it.
+#
+# the value is passed through verbatim and is not always a licence id:
+# `pocket-tts-terms` names terms rather than a licence, so nothing here may
+# normalise it.
+#
+# WHAT THIS MISSES is documented in WORKING.md. only the backend tables are
+# read: pocket-tts' gate is published in the conversion's own card and not here
+# (crispasr's row says `CC-BY-4.0 + gated-use conditions` and no flag), and the
+# `--chords` gate sits in a bullet against a FEATURE rather than a backend.
+ACCEPT_LICENSE = re.compile(r"--accept-license\s+`?([A-Za-z0-9][\w.-]*)`?")
 
 
 def get(url, key, max_age, refresh):
@@ -141,7 +159,7 @@ def row_models(cells):
 
 
 def parse_readme(text):
-    """{backend: {section, kind, models, gguf, languages, license}}."""
+    """{backend: {section, kind, models, gguf, languages, license, accept_license}}."""
     out, section = {}, None
     for line in text.splitlines():
         head = HEADING.match(line)
@@ -170,6 +188,11 @@ def parse_readme(text):
             if len(cells) >= 5:
                 rec.setdefault("languages", cells[-2])
                 rec.setdefault("license", cells[-1])
+            # the whole row, since the requirement sits in the architecture cell
+            # on the model tables and in a bullet for the music features
+            gate = ACCEPT_LICENSE.search(line)
+            if gate:
+                rec.setdefault("accept_license", gate.group(1))
     return out
 
 
