@@ -540,8 +540,31 @@ function affordable(m, all, room) {
     return under.length ? under : fits;
   }
   const ceiling = capBpw(), bottom = floorBpw();
-  return fits.filter(c => !c.bpw || (c.bpw <= ceiling && c.bpw >= bottom));
+  return fits.filter(c => !c.bpw
+    || (ladderBpw(c) <= ceiling && ladderBpw(c) >= bottom));
 }
+
+// how far `bpw` may sit from the tensor table before it stops being evidence.
+// the two agree within noise on 1671 of 1687 text rungs, so this is about the
+// handful where the denominator is wrong rather than about rounding.
+const BPW_DISAGREE = 0.25;
+
+// the bits a ceiling should compare. `bpw` is file size over `params_total_b`,
+// and that denominator describes the CHECKPOINT rather than the file: minicpm-v
+// 4.6 counts its vision encoder, ships it as a separate mmproj and the language
+// half alone in the gguf, so every rung reads 1.7x too cheap and its F16 sat
+// under a q8 ceiling at a computed 9.32 against a true 16. lfm2.5 2.6b is the
+// same fault inverted -- a bundled drafter inflates the file, its Q4_0 reads
+// 9.45 against a true 4.70, and a q6 ceiling hid a rung that clears it.
+//
+// where the tensor table disagrees it wins, because it counted what is in the
+// file. where they agree the nominal figure stands: the ceilings are calibrated
+// against that scale, and swapping wholesale would throw qwen3.5-0.8b's Q4_K_S
+// out of `max q4` on a 10% difference. reading the TAG instead is no fix
+// either -- gpt-oss ships mxfp4 under an F16 name at a true 4.48 bpw, which
+// belongs under a q8 ceiling and which a tag test would have excluded.
+const ladderBpw = c => c.realBpw
+  && Math.abs(c.realBpw - c.bpw) / c.bpw > BPW_DISAGREE ? c.realBpw : c.bpw;
 
 // context to serve, and what its kv cache costs. the geometry comes from each
 // model's own config: full-attention layers hold a cache that grows with the

@@ -573,6 +573,62 @@ test('the quant ceiling reads the tag where it cannot read the bits', () => {
   RESET();
 });
 
+// `bpw` is file size over `params_total_b`, and that denominator describes the
+// CHECKPOINT rather than the file. minicpm-v 4.6 counts 1.3b with its vision
+// encoder, ships the encoder as a separate mmproj and the language half alone
+// in the gguf, so every rung reads about 1.7x too cheap -- its F16 computes to
+// 9.32 bpw and sat under an 11 ceiling while genuinely being 16. lfm2.5 2.6b
+// has the same fault inverted: its Q4_0 carries a bundled drafter, reads 9.45,
+// and is really 4.70, so a q6 ceiling was hiding a rung that clears it.
+//
+// the tensor table counted what is actually in the file, so where the two
+// disagree by more than a quarter it is the one to believe. they agree within
+// noise on 1671 of 1687 text rungs, and this is not a licence to swap scales
+// wholesale: gpt-oss ships MXFP4 under an F16 tag at a true 4.48 bpw, which
+// belongs under a q8 ceiling and which reading the TAG would have thrown out.
+test('a ceiling reads the bits in the file, not size over a count of weights '
+  + 'the file does not hold', () => {
+  RESET();
+  setHardware({...DEFAULT_HARDWARE, cap: 'q8'});
+  const m = model('minicpm-v 4.6');
+  const all = quantChoices(m);
+  const f16 = all.find(c => c.quant === 'F16');
+  ok(f16, 'it publishes an F16 rung');
+  ok(f16.bpw < 11 && f16.realBpw > 11,
+     'whose nominal bpw clears an 11 ceiling and whose real bits do not ('
+       + f16.bpw + ' vs ' + f16.realBpw + ')');
+  const under = affordable(m, all, 1e6).map(c => c.quant);
+  eq(under.includes('F16'), false, 'so f16 is above a q8 ceiling: ' + under);
+  ok(under.includes('Q8_0'), 'and the q8 rung is what is left');
+  eq((activeQuant(m) || {}).quant, 'Q8_0', 'which is the rung the row reads');
+
+  // the same fault the other way: a nominal bpw inflated by a bundled drafter
+  // was hiding a rung that genuinely clears the ceiling
+  setHardware({...DEFAULT_HARDWARE, cap: 'q6'});
+  const lfm = model('lfm2.5 2.6b');
+  const q4 = quantChoices(lfm).find(c => c.quant === 'Q4_0');
+  if (q4 && q4.realBpw) {
+    ok(q4.bpw > 7.5 && q4.realBpw < 7.5,
+       'its nominal bpw is over a q6 ceiling and its real bits are under ('
+         + q4.bpw + ' vs ' + q4.realBpw + ')');
+    ok(affordable(lfm, quantChoices(lfm), 1e6).some(c => c.quant === 'Q4_0'),
+       'so the rung is offered rather than hidden');
+  }
+
+  // where the two agree the nominal figure stands, ceilings are calibrated to
+  // it, and a tag that overstates does not get a say
+  setHardware({...DEFAULT_HARDWARE, cap: 'q8'});
+  const oss = model('gpt-oss-120b');
+  const ossF16 = quantChoices(oss).find(c => c.quant === 'F16');
+  if (ossF16) {
+    ok(Math.abs(ossF16.realBpw - ossF16.bpw) / ossF16.bpw < 0.25,
+       'gpt-oss f16 is genuinely small and both figures say so');
+    ok(affordable(oss, quantChoices(oss), 1e6).some(c => c.quant === 'F16'),
+       'so an mxfp4 file tagged F16 stays under a q8 ceiling');
+  }
+  RESET();
+});
+
 test('a runtime is offered only the repos it can read', () => {
   RESET();
   const m = model('qwen3-tts-1.7b-customvoice');

@@ -212,7 +212,7 @@ verdict.
 | 39 | nanbeige4.1 3b | Q8_0 | 3.9 | 256k | 38% | **30.2** |
 | 40 | granite 4.1 3b | Q8_0 | 3.4 | 128k | 33% | **30.1** |
 | 41 | granite 4.2 8b | Q8_0 | 8.7 | 128k | 62% | **30.1** |
-| 42 | minicpm-v 4.6 | F16 | 1.4 | 256k | 29% | **29.1** |
+| 42 | minicpm-v 4.6 | Q8_0 | 0.8 | 256k | 29% | **29.1** |
 | 43 | qwen3.5-0.8b | Q8_0 | 0.8 | 256k | 38% | **27.3** |
 | 44 | granite 4.2 3b | Q8_0 | 3.6 | 128k | 57% | **27.1** |
 | 45 | minicpm5 2b | Q8_0 | 2.5 | 128k | 67% | **25.4** |
@@ -1665,7 +1665,7 @@ small.
 
 - **use for** tool calling at the smallest size that works, vision on a phone
 - **avoid for** anything trusting it not to confabulate, long context
-- **runs at** F16, 1.4 gib, 1/7 of the weighted factors measured it
+- **runs at** Q8_0, 0.8 gib, 1/7 of the weighted factors measured it
 - **evidence** aa.tau2 p68; aa.non_hallucination p5; aa.lcr p14; no forum mentions in this corpus
 - **confidence in that evidence** medium
 
@@ -3291,9 +3291,9 @@ values as indicative.
 | phi-4 mini | 3.84b / 3.84b | Q8_0 | 3.8 | 8.50 | 6.3 | 0.990 | **6.3** |
 | qwen3.5-0.8b | 0.87b / 0.87b | Q8_0 | 0.8 | 7.70 | 6.1 | 0.989 | **6.1** |
 | granite 4.1 3b | 3.4b / 3.4b | Q8_0 | 3.4 | 8.51 | 5.9 | 0.990 | **5.8** |
-| minicpm-v 4.6 | 1.3b / 1.3b | F16 | 1.4 | 9.32 | 5.7 | 0.992 | **5.6** |
 | jamba reasoning 3b | 3.2b / ? | Q8_0 | 3.2 | 8.51 | 5.7 | 0.990 | **5.6** |
 | qwen3-vl-4b | 4.44b / 4.44b | Q8_0 | 4.0 | 7.72 | 5.7 | 0.989 | **5.6** |
+| minicpm-v 4.6 | 1.3b / 1.3b | Q8_0 | 0.8 | 5.02 | 5.7 | 0.978 | **5.6** |
 | granite 4.0 h 1b | 1.46b / 1.46b | Q8_0 | 1.4 | 8.53 | 5.2 | 0.991 | **5.1** |
 | tiny aya global | 3.35b / 3.35b | Q8_0 | 3.3 | 8.54 | 4.8 | 0.991 | **4.8** |
 | ministral 3 3b | 3.85b / 3.85b | Q8_0 | 3.4 | 7.59 | 4.8 | 0.989 | **4.8** |
