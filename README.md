@@ -810,6 +810,12 @@ picked, and the rung in bold is the one the ranking is scoring: a tab about what
 a quant IS should not redraw because somebody chose a file to write a command
 for.
 
+the two sweep tables under the ladder -- what somebody measured on this model,
+and the sweep published beside the files -- read BEST first rather than up the
+ladder they were published in, because the row worth finding is the one ladder
+order buries: unsloth's dynamic UD-Q4_K_S diverges less at 4.42 bpw than the
+plain Q4_0 and Q4_1 rungs above it.
+
 the `operate` tab emits a `llama-server` argv, open by default, a pi
 `models.json` provider block, the request body carrying the thinking knob, and a
 vllm line -- built from a quant and a sampling profile you pick, since some repos

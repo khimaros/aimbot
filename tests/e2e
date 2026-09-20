@@ -776,6 +776,67 @@ test('quantization is its own tab, and the discount follows the quant you picked
   RESET();
 });
 
+// a sweep is published in ladder order and that is the LAST order to read it
+// in: the question a reader brings to it is which rung to pull, and the answer
+// is a row the ladder buries. byteshape's qwen3.8 27b sweep interleaves plain
+// rungs with unsloth's dynamic ones -- Q4_0 at 4.62 bpw diverges more than
+// UD-Q4_K_S at 4.42 -- so in ladder order that comparison is the reader's to
+// make. the measured tables read worse still, ascending retention, which puts
+// the rung that keeps the least at the top.
+test('the quant sweep tables are sorted best first', () => {
+  RESET();
+  // <quant, bpw, value> off each drawn row, in the order drawn. the value cell
+  // is the only inner `<span>` of a row, the bar around it carrying a class
+  const ROW = /<tr><td>([^<]*)<\/td><td class="n dim">([^<]*)<\/td>(?:(?!<\/tr>)[\s\S])*?<span>([\d.]+)/g;
+  // the body of each table under that heading, without the header row, whose
+  // own </tr> would come before every cell the rows are checked for
+  const sections = (page, head) => page.split('<h3>').filter(s => s.startsWith(head))
+    .map(s => s.slice(s.indexOf('<tbody>'), s.indexOf('</table>')));
+  let seen = 0, crossed = 0;
+  const check = (m, head, curves) => {
+    const drawn = sections(tabQuantization(m), head);
+    eq(drawn.length, curves.length, m.short + ': one `' + head + '` table per sweep');
+    curves.forEach((c, n) => {
+      const rows = [...drawn[n].matchAll(ROW)].map(r => [r[1], +r[2], +r[3]]);
+      eq(rows.length, c.points.length, m.short + ' ' + c.metric + ': every rung drawn');
+      seen++;
+      // read top to bottom, the value column runs best to worst. retention
+      // declares no direction because a share of bf16 only runs one way
+      const sign = c.better === 'lower' ? 1 : -1;
+      rows.forEach((r, i) => i && ok(sign * (r[2] - rows[i - 1][2]) >= 0,
+        m.short + ' ' + c.metric + ': ' + r[0] + ' at ' + r[2] + ' is drawn under '
+        + rows[i - 1][0] + ' at ' + rows[i - 1][2] + ', which is worse'));
+      // the rung NAME travels with its own number: quants and points are two
+      // parallel arrays, and sorting one of them is how they come apart
+      if (c.quants) rows.forEach(([quant, bpw]) => {
+        const at = c.quants.indexOf(quant);
+        ok(at !== -1, m.short + ': ' + quant + ' is not a rung of this sweep');
+        if (at !== -1) near(c.points[at][0], bpw, 0.005,
+          m.short + ' ' + quant + ': drawn against another rung\'s bpw');
+      });
+      // the source cell spans the table off whichever row sorted first
+      eq((drawn[n].match(/rowspan=/g) || []).length, 1,
+         m.short + ' ' + c.metric + ': one source cell');
+      ok(drawn[n].indexOf('rowspan=') < drawn[n].indexOf('</tr>'),
+         m.short + ' ' + c.metric + ': the source cell is not on the first row');
+      // where the sweep is not monotonic in bpw, best-first is a REORDER rather
+      // than a reversal of the ladder, which is the whole reason to do it
+      const bpws = rows.map(r => r[1]);
+      const runs = dir => bpws.every((b, i) => !i || dir * (b - bpws[i - 1]) >= 0);
+      if (!runs(1) && !runs(-1)) crossed++;
+    });
+  };
+  D.models.forEach(m => {
+    const measured = (D.retention.measured || {})[m.repo] || [];
+    const proxies = (D.retention.proxies || {})[m.repo] || [];
+    if (measured.length) check(m, 'measured on this model', measured);
+    if (proxies.length) check(m, 'published quant sweep', proxies);
+  });
+  ok(seen > 5, 'there were sweeps to read, got ' + seen);
+  ok(crossed > 0, 'and best-first crosses the ladder somewhere rather than'
+     + ' just reversing it');
+});
+
 test('a model with baked speakers lists them on its detail page', () => {
   RESET();
   const withVoices = D.models.filter(m => (m.quants || []).some(q => q.voices));

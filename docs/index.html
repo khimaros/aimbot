@@ -2981,21 +2981,40 @@ function discountBlock(m, q) {
     + ' code and says nothing about the rest.</p>';
 }
 
+// a sweep is published up the quant ladder, and that is the last order to read
+// it in: what a reader brings to one is "which rung do i pull", and in ladder
+// order the answer is theirs to work out. byteshape's qwen3.8 27b sweep is the
+// case -- its two plain rungs diverge more than unsloth's dynamic ones a fifth
+// of a bit UNDER them, which reads as jitter up the ladder and as two rows out
+// of place near the bottom here. `better` says which way the metric runs;
+// retention declares none, because a share of bf16 only runs one way. ties keep
+// ladder order, which a stable sort gives.
+const bestFirst = c => c.points
+  .map(([bpw, v], i) => [(c.quants || [])[i] || '', bpw, v])
+  .sort((a, b) => (c.better === 'lower' ? 1 : -1) * (a[2] - b[2]));
+
+// one row shape for both sweep tables. they differ only in what the bar is a
+// share of -- retention is already a share of bf16, a proxy metric is scaled
+// against the worst rung of its own sweep -- and the source cell spans the
+// table off the first row DRAWN, so it is emitted inside the sorted map.
+const sweepRows = (c, width, text) => bestFirst(c).map(([quant, bpw, v], i) =>
+  `<tr><td>${esc(quant)}</td><td class="n dim">${num(bpw, 2)}</td>`
+  + `<td class="n"><span class="bar" style="--w:${Math.round(width(v))}%">`
+  + `<span>${text(v)}</span></span></td>`
+  + (i ? '' : `<td rowspan="${c.points.length}">${refMark(c.ref)}</td>`)
+  + '</tr>').join('');
+
 // the arms somebody actually ran, which is where a measured curve comes from.
 // this is the only place they are shown: they drive the discount and were
 // otherwise visible as a shape in the arithmetic and nowhere as numbers.
 function measuredTable(m) {
   return ((D.retention.measured || {})[m.repo] || []).map(c =>
     `<h3>measured on this model <span class="faint">${esc(c.metric)}`
-    + `${c.quant_repo ? ', on ' + esc(c.quant_repo) : ''}</span></h3>`
+    + `${c.quant_repo ? ', on ' + esc(c.quant_repo) : ''}, best first</span></h3>`
     + '<table><thead><tr><th>quant</th><th class="n">bpw</th>'
     + '<th class="n">retention</th><th>source</th></tr></thead><tbody>'
-    + c.points.map(([bpw, v], i) => `<tr><td>${esc((c.quants || [])[i] || '')}</td>`
-      + `<td class="n dim">${num(bpw, 2)}</td>`
-      + `<td class="n"><span class="bar" style="--w:${Math.round(100 * v)}%">`
-      + `<span>${num(v * 100, 1)}%</span></span></td>`
-      + (i ? '' : `<td rowspan="${c.points.length}">${refMark(c.ref)}</td>`)
-      + '</tr>').join('') + '</tbody></table>').join('');
+    + sweepRows(c, v => 100 * v, v => num(v * 100, 1) + '%')
+    + '</tbody></table>').join('');
 }
 
 // NOTHING here reads the operate tab's chips, and that is the whole rule for
@@ -3036,15 +3055,12 @@ function sweepTable(m) {
   return all.map(c => {
     const worst = Math.max(...c.points.map(p => p[1]));
     return `<h3>published quant sweep <span class="faint">${esc(c.metric)},`
-    + ` ${c.better} is better${c.quant_repo ? ', on ' + esc(c.quant_repo) : ''}</span></h3>`
+    + ` ${c.better} is better${c.quant_repo ? ', on ' + esc(c.quant_repo) : ''},`
+    + ' best first</span></h3>'
     + '<table><thead><tr><th>quant</th><th class="n">bpw</th>'
     + `<th class="n">${esc(c.metric)}</th><th>source</th></tr></thead><tbody>`
-    + c.points.map(([bpw, v], i) => `<tr><td>${esc((c.quants || [])[i] || '')}</td>`
-      + `<td class="n dim">${num(bpw, 2)}</td>`
-      + `<td class="n"><span class="bar" style="--w:${Math.round(100 * v / worst)}%">`
-      + `<span>${num(v, 4)}</span></span></td>`
-      + (i ? '' : `<td rowspan="${c.points.length}">${refMark(c.ref)}</td>`)
-      + '</tr>').join('') + '</tbody></table>';
+    + sweepRows(c, v => 100 * v / worst, v => num(v, 4))
+    + '</tbody></table>';
   }).join('')
     + '<p class="faint">this is not what `quant adjusted` multiplies by. it measures'
     + ' how far the quantized weights moved from full precision, not how much of a'
