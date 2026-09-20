@@ -150,6 +150,12 @@ SOURCES = {
                     "url": "https://arena.ai/leaderboard/text-to-image"},
     "lmarena-edit": {"label": "lmarena image editing", "file": "data/lmarena.json",
                      "url": "https://arena.ai/leaderboard/image-edit"},
+    "showdown-t2i": {"label": "genai image showdown",
+                     "file": "data/genai-showdown.json",
+                     "url": "https://genai-showdown.specr.net/"},
+    "showdown-edit": {"label": "genai image showdown (editing)",
+                      "file": "data/genai-showdown.json",
+                      "url": "https://genai-showdown.specr.net/image-editing"},
 }
 
 # what a strong facet implies the model is FOR. only the axes where a high
@@ -462,19 +468,33 @@ def speech_facets(speech, arena, voicearena, ids, open_asr=None):
     return out
 
 
-def image_facets(board, lm, ids, lm_edit=None):
-    """Three arena elos over two questions: two sites rating generated pictures,
-    and one rating EDITED ones.
+# the showdown's two competitions, as (facet key, capture board, what it asks).
+# one shape, two questions, so they are generated from a table rather than
+# written twice
+SHOWDOWN_BOARDS = [
+    ("showdown-t2i", "text-to-image", "prompt adherence"),
+    ("showdown-edit", "image-editing", "edit adherence"),
+]
 
-    The two generation boards are human preference rather than measurement, and
-    they are kept apart for the reason the two transcription boards are: they
-    disagree. Artificial analysis has z-image above krea 2 and lmarena has it
-    below, over six million votes. An average of the two would hide that and
-    answer neither question.
+
+def image_facets(board, lm, ids, lm_edit=None, showdown=None):
+    """Five numbers over two questions: three sites rating generated pictures,
+    and two rating EDITED ones.
+
+    The generation boards are kept apart for the reason the two transcription
+    boards are: they disagree. Artificial analysis has z-image above krea 2 and
+    lmarena has it below, over six million votes. An average of the two would
+    hide that and answer neither question.
+
+    The showdown disagrees with both by construction, because it is not asking
+    what anybody preferred. It is fifteen prompts with the passing criteria
+    written down and a pass-or-fail against each, which makes a low number mean
+    something the elos cannot say: flux.2 dev sits mid-table on both arenas and
+    passes 5 of 15 here.
 
     Editing is a third thing again and not a third opinion on the same one. It
-    is here because the collector was already capturing the board and nothing
-    read it.
+    is here because two collectors were already capturing it and nothing read
+    them.
     """
     lm_edit = lm_edit or {}
     out = {}
@@ -513,6 +533,23 @@ def image_facets(board, lm, ids, lm_edit=None):
             "ref": ref("lmarena-t2i", ids.get("lmarena-t2i"),
                        "rank %s of the board, %s votes"
                        % (entry.get("rank"), entry.get("votes")))}
+
+    # a share rather than the raw count, because the two competitions run
+    # different numbers of prompts and three generators were retired part way
+    # through the generation series -- imagen 3 has thirteen of the fifteen. the
+    # ref note carries both halves of the fraction so a reader never has to
+    # trust the division
+    boards = (showdown or {}).get("boards") or {}
+    for source, name, label in SHOWDOWN_BOARDS:
+        got = ((boards.get(name) or {}).get("models") or {}).get(ids.get(source)) or {}
+        if got.get("passRate") is None:
+            continue
+        out["%s.adherence" % source] = {
+            "value": got["passRate"], "label": label, "unit": "share",
+            "group": "genai showdown", "prompts": got.get("scored"),
+            "ref": ref(source, ids.get(source),
+                       "%s of %s prompts passed over %s generations"
+                       % (got.get("passed"), got.get("scored"), got.get("attempts")))}
     return out
 
 
@@ -524,7 +561,7 @@ def build(bt, registry):
     speech = load("artificial-analysis-speech")
     open_asr = (load("open-asr") or {}).get("models") or {}
     arena, voicearena = load("tts-arena"), load("voicearena")
-    pictures = load("artificial-analysis-image")
+    pictures, showdown = load("artificial-analysis-image"), load("genai-showdown")
 
     def lm_board(name):
         """One lmarena board's entries, keyed by the name its ids use."""
@@ -546,7 +583,7 @@ def build(bt, registry):
         facets.update(card_facets(cards.get(repo), repo, bt.CARD_BIAS))
         facets.update(community_facet(sent.get(short) or {}))
         facets.update(speech_facets(speech, arena, voicearena, ids, open_asr))
-        facets.update(image_facets(pictures, lm_images, ids, lm_edits))
+        facets.update(image_facets(pictures, lm_images, ids, lm_edits, showdown))
         rating = bt.lmarena_score(ids)
         if rating is not None:
             facets["lmarena.rating"] = {

@@ -1276,16 +1276,23 @@ def the_query_cli_answers_what_the_dashboard_answers():
     """Same roster, same order, same rung -- or the cli is a second opinion.
 
     `research/dashboard-table` already boots the page for MODELS.md, so the two
-    consumers can be read against each other: with nothing set they are the same
-    view of the same payload and every row has to line up. This is the check
-    that fails if the cli ever starts computing instead of asking.
+    consumers can be read against each other: given the SAME view of the same
+    payload every row has to line up. This is the check that fails if the cli
+    ever starts computing instead of asking.
+
+    The view has to be stated on both sides rather than left to the defaults.
+    `dashboard-table` pins the roster this document ranks -- `text`, and the
+    vram filter -- precisely so a ui default cannot rewrite MODELS.md, and the
+    page's defaults now carry the licence filter as well. Comparing the two
+    DEFAULTS would therefore be asking whether the document and the dashboard
+    open on the same roster, which is a question they deliberately answer no to.
     """
     r = subprocess.run([os.path.join(RESEARCH, "dashboard-table"), "--json"],
                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     eq(r.returncode, 0, "dashboard-table runs: %s" % r.stderr[-300:])
     want = json.loads(r.stdout)["rows"]
 
-    code, out, err = aimbot_cli("--modality", "text", "--json")
+    code, out, err = aimbot_cli("--modality", "text", "--flag", "fits", "--json")
     eq(code, 0, "the cli runs: %s" % err[-300:])
     got = json.loads(out)["rows"]
     eq(len(got), len(want), "the same roster: %d against %d" % (len(got), len(want)))
@@ -3796,6 +3803,217 @@ def an_image_model_is_kept_at_its_overall_elo_not_a_category_slice():
        "the repo path resolve-ids matches on survives")
 
 
+# the showdown as the site ships it: a comparisons file naming its own
+# generators file, one record per model per prompt. `Retired` is run on the
+# first prompt only, which is the case the pass rate has to divide by.
+#
+# `generatorsPath` is a name the fixture chooses, because the collector follows
+# it rather than hardcoding one -- it is the site's own statement of where its
+# roster lives, and this is what proves it is read.
+SHOWDOWN_COMPARISONS = {
+    "title": "Fixture Showdown",
+    "generatorsPath": "fixture-models.json",
+    "imageComparisons": [
+        {"title": "One", "images": [
+            {"generator": "LOCAL_ONE", "passedTest": True, "numAttempts": 2},
+            {"generator": "HOSTED_ONE", "passedTest": True, "numAttempts": 1},
+            {"generator": "RETIRED", "passedTest": True, "numAttempts": 3}]},
+        {"title": "Two", "images": [
+            {"generator": "LOCAL_ONE", "passedTest": False, "numAttempts": 9},
+            {"generator": "HOSTED_ONE", "passedTest": True, "numAttempts": 4}]},
+    ],
+}
+SHOWDOWN_MODELS = [
+    {"id": "LOCAL_ONE", "name": "Fixture Local 1", "publisher": "Fixture Labs",
+     "url": "https://huggingface.co/fixture/Local-1", "status": "normal",
+     "locallyHostable": True, "releaseDate": "March 2026"},
+    {"id": "HOSTED_ONE", "name": "Fixture Hosted 1", "publisher": "Someone Else",
+     "url": "https://example.invalid", "status": "normal"},
+    {"id": "RETIRED", "name": "Fixture Retired", "publisher": "Fixture Labs",
+     "url": "https://example.invalid", "status": "deprecated",
+     "locallyHostable": True},
+]
+
+
+@test
+def a_showdown_pass_rate_divides_by_the_prompts_that_model_was_run_on():
+    """Not by the board's total, which is a different number for three of them.
+
+    The site retires a generator part way through the series and leaves its
+    earlier results standing: imagen 3 has thirteen of the fifteen generation
+    prompts and gemini 2.0 flash twelve. Dividing by the board total would score
+    a model on prompts nobody ever gave it and would do it silently, since a
+    plausible-looking percentage comes out either way.
+
+    `locallyHostable` is asserted as a bool rather than inherited from the
+    field's absence, so a reader of the capture can tell "not hostable" from
+    "the flag went away".
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        # the site's real paths, so the case exercises the routing the sweep
+        # uses rather than one invented for the fixture
+        edits = os.path.join(tmp, "assets", "image-editing")
+        os.makedirs(edits)
+        files = {
+            os.path.join(tmp, "assets", "genai-comparisons.json"): SHOWDOWN_COMPARISONS,
+            os.path.join(tmp, "assets", "fixture-models.json"): SHOWDOWN_MODELS,
+            os.path.join(edits, "editing-comparisons.json"): SHOWDOWN_COMPARISONS,
+            os.path.join(edits, "fixture-models.json"): SHOWDOWN_MODELS,
+        }
+        for path, doc in files.items():
+            with open(path, "w") as f:
+                json.dump(doc, f)
+        out = os.path.join(tmp, "showdown.json")
+        base, stop = serve(tmp)
+        keys = ["test-showdown-%s%s" % (b, s)
+                for b in ("text-to-image", "image-editing") for s in ("", "-models")]
+        for k in keys:
+            purge(k)
+        try:
+            r = subprocess.run(
+                [os.path.join(RESEARCH, "fetch-genai-showdown"), "--out", out,
+                 "--base", base, "--cache-key", "test-showdown", "--max-age", "0"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        finally:
+            stop()
+            for k in keys:
+                purge(k)
+        eq(r.returncode, 0, "the collector runs: %s" % r.stdout.strip()[:300])
+        got = json.load(open(out))
+    finally:
+        shutil.rmtree(tmp)
+
+    eq(sorted(got["boards"]), ["image-editing", "text-to-image"],
+       "both competitions are captured, keyed apart: generation and editing are "
+       "different questions with different rosters")
+    models = got["boards"]["text-to-image"]["models"]
+    eq(got["boards"]["text-to-image"]["prompts"], 2, "the board's own prompt count")
+    eq(models["LOCAL_ONE"]["scored"], 2, "run on both prompts")
+    eq(models["LOCAL_ONE"]["passRate"], 50.0, "1 of 2")
+    eq(models["RETIRED"]["scored"], 1, "run on one, not on the board's two")
+    eq(models["RETIRED"]["passRate"], 100.0,
+       "1 of 1, not 1 of 2: a retired generator is not scored on prompts it "
+       "never saw, got %r" % models["RETIRED"]["passRate"])
+    eq(models["LOCAL_ONE"]["attempts"], 11, "generations sum across prompts")
+    eq(models["LOCAL_ONE"]["locallyHostable"], True, "the open-weights flag rides along")
+    eq(models["HOSTED_ONE"]["locallyHostable"], False,
+       "and an absent flag is stored as false rather than left out")
+    eq(models["LOCAL_ONE"]["name"], "Fixture Local 1",
+       "the display name joins off the generators file the comparisons named")
+
+
+@test
+def a_showdown_board_with_no_generator_file_is_unread_rather_than_closed():
+    """The half that says which models are open weights is not optional.
+
+    The comparisons file alone tallies every pass, so a run that reads it and
+    not the metadata beside it produces a full board with `locallyHostable`
+    false on every row. The row count does not shrink, so `capture.write` sees
+    nothing wrong; what reaches `resolve-ids` is an empty key space, which reads
+    as the site having stopped publishing open-weights models rather than as a
+    fetch that failed.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        # the prompts, and deliberately no `fixture-models.json` beside them
+        os.makedirs(os.path.join(tmp, "assets"))
+        with open(os.path.join(tmp, "assets", "genai-comparisons.json"), "w") as f:
+            json.dump(SHOWDOWN_COMPARISONS, f)
+        out = os.path.join(tmp, "showdown.json")
+        base, stop = serve(tmp)
+        keys = ["test-halfshowdown-%s%s" % (b, s)
+                for b in ("text-to-image", "image-editing") for s in ("", "-models")]
+        for k in keys:
+            purge(k)
+        try:
+            r = subprocess.run(
+                [os.path.join(RESEARCH, "fetch-genai-showdown"), "--out", out,
+                 "--base", base, "--cache-key", "test-halfshowdown",
+                 "--max-age", "0"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        finally:
+            stop()
+            for k in keys:
+                purge(k)
+        got = json.load(open(out))
+    finally:
+        shutil.rmtree(tmp)
+
+    eq(r.returncode != 0, True, "the run reports the board unread")
+    eq(got.get("boards") or {}, {},
+       "and writes no board rather than one where nothing is open weights, got %r"
+       % (got.get("boards"),))
+    eq("open weights" in r.stdout, True,
+       "saying which half is missing, got %r" % r.stdout.strip()[:300])
+
+
+SHOWDOWN_REGISTRY = """version: 1
+models:
+  vendor/Fixture-Klein-4B:
+    kind: image
+    name: {short: fixture-klein-4b}
+    quants:
+    - {repo: vendor/Fixture-Klein-4B-GGUF, quant: Q8_0}
+    modalities: {input: [text], output: [image]}
+  vendor/Fixture-Klein-9B:
+    kind: image
+    name: {short: fixture-klein-9b}
+    quants:
+    - {repo: vendor/Fixture-Klein-9B-GGUF, quant: Q8_0}
+    modalities: {input: [text], output: [image]}
+  vendor/Fixture-Local-1:
+    kind: image
+    name: {short: fixture-local-1}
+    quants:
+    - {repo: vendor/Fixture-Local-1-GGUF, quant: Q8_0}
+    modalities: {input: [text], output: [image]}
+"""
+
+
+@test
+def the_showdown_key_space_never_gives_two_models_one_row():
+    """It names a model without its size class, so only an exact hit is taken.
+
+    "Fixture Klein" is one row for a family this registry carries as a 4B and a
+    9B. `candidates` strips the parameter count and retries -- which is right
+    for a text board that drops the suffix -- and here it matched the SAME row
+    for both, giving two models one score with nothing to report it. Only
+    `candidates` sees a model at a time, so the guard has to be the key space's:
+    `EXACT_ONLY`.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        data = os.path.join(tmp, "data")
+        os.makedirs(data)
+        with open(os.path.join(data, "genai-showdown.json"), "w") as f:
+            json.dump({"boards": {"text-to-image": {"models": {
+                "FIXTURE_KLEIN": {"name": "Fixture Klein", "locallyHostable": True},
+                "LOCAL_ONE": {"name": "Fixture Local 1", "locallyHostable": True},
+            }}}}, f)
+        for name in ("artificial-analysis-speech", "tts-arena", "voicearena",
+                     "artificial-analysis", "lmarena", "gbench", "epoch",
+                     "swe-rebench", "artificial-analysis-image", "open-asr"):
+            with open(os.path.join(data, name + ".json"), "w") as f:
+                json.dump({}, f)
+        reg = os.path.join(tmp, "models.yaml")
+        with open(reg, "w") as f:
+            f.write(SHOWDOWN_REGISTRY)
+        r = subprocess.run([os.path.join(ROOT, "scripts", "resolve-ids"),
+                            "--registry", reg, "--data", data],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        eq(r.returncode, 0, "resolve-ids runs: %s" % r.stdout.strip()[:200])
+        out = r.stdout
+    finally:
+        shutil.rmtree(tmp)
+
+    eq(out.count("showdown-t2i=sized"), 0,
+       "a size-stripped match on this board is two models taking one row, got %r"
+       % out.strip()[:400])
+    eq("showdown-t2i=exact" in out, True,
+       "and an exact hit on the display name still lands, got %r" % out.strip()[:400])
+
+
 def detail_fixture_html():
     """One model as a MODEL page ships it, which is a different shape entirely.
 
@@ -5190,6 +5408,87 @@ def the_sdcpp_report_says_what_the_roster_does_not_carry():
            "and a version the roster DOES carry is not listed as missing")
     finally:
         shutil.rmtree(tmp)
+
+
+# the detector's two spellings of the same test, as upstream writes them. an
+# `==` arm is not a rarer form of a `.find(...)` arm -- it is what sd.cpp uses
+# when the tensor name must match WHOLE rather than as a prefix, and qwen image
+# 2.1's signature is one.
+SDCPP_LOADER = """
+SDVersion ModelLoader::get_sd_version() {
+    for (auto& tensor_storage : tensor_storages) {
+        if (tensor_storage.name.find("embed_image_indicator.weight") != std::string::npos) {
+            return VERSION_IDEOGRAM4;
+        }
+        if (tensor_storage.name == "model.diffusion_model.txt_in.text_norm.weight") {
+            return VERSION_QWEN_IMAGE_2_1;
+        }
+        if (tensor_storage.name.find("model.diffusion_model.transformer_blocks.0.img_mod.1.weight") != std::string::npos) {
+            auto img_in = tensor_storage_map.find("model.diffusion_model.img_in.weight");
+            if (img_in != tensor_storage_map.end() && img_in->second.ne[0] == 128) {
+                return VERSION_MAGE_FLOW;
+            }
+            return VERSION_QWEN_IMAGE;
+        }
+        if (tensor_storage.name == "model.diffusion_model.input_blocks.0.0.weight" ||
+            tensor_storage.name == "unet.conv_in.weight") {
+            input_block_weight = tensor_storage;
+        }
+    }
+    if (is_wan) {
+        return VERSION_WAN2_2_S2V;
+    }
+    return VERSION_COUNT;
+}
+"""
+
+
+@test
+def the_sdcpp_detector_table_reads_an_equality_test_as_well_as_a_find():
+    """A signature written `name == "..."` was invisible, and it is 11 of them.
+
+    The parser took `.find("literal")` alone, which is most of the detector and
+    not all of it: sd.cpp writes `==` where the tensor name has to match WHOLE
+    rather than as a prefix. Qwen-Image-2.1 is exactly that --
+    `model.diffusion_model.txt_in.text_norm.weight` -- and the model reached
+    `fetch-sdcpp-support --report` as `no signature`, which reads as "upstream
+    does not support this" when upstream has a docs page for it.
+
+    The failure is the dangerous direction: a model the runtime DOES load
+    reported as one it does not, with nothing in the output saying the table was
+    read incompletely.
+
+    The guard against flattening an AND into an OR still holds over both
+    spellings: mage flow's dimension test is unmodellable here, so neither arm
+    of that block is recorded.
+    """
+    # the collector imports `capture` as a sibling, the way the sweep runs it
+    sys.path.insert(0, RESEARCH)
+    try:
+        mod = load_script("sdcpp", os.path.join(RESEARCH, "fetch-sdcpp-support"))
+    finally:
+        sys.path.remove(RESEARCH)
+    sigs = mod.parse_signatures(SDCPP_LOADER)
+
+    eq(sigs.get("model.diffusion_model.txt_in.text_norm.weight"),
+       "VERSION_QWEN_IMAGE_2_1",
+       "an `==` signature is in the table, got %r" % sigs)
+    eq(sigs.get("embed_image_indicator.weight"), "VERSION_IDEOGRAM4",
+       "and the `.find` spelling still is")
+    eq("model.diffusion_model.transformer_blocks.0.img_mod.1.weight" in sigs, False,
+       "a block whose real test is a dimension is still dropped rather than "
+       "approximated, got %r" % sigs)
+
+    # and the trap the `==` arms opened. three blocks spell their condition that
+    # way and then CAPTURE the tensor for a post-loop dimension test rather than
+    # returning, so their literals outlived the loop and attached to the first
+    # `return` after it. `unet.conv_in.weight` on VERSION_WAN2_2_S2V is a
+    # signature every unet model carries: reading a capture as a rule claims
+    # models the runtime would never report.
+    eq("unet.conv_in.weight" in sigs, False,
+       "a block that captures a tensor for later is not a signature, got %r" % sigs)
+    eq("VERSION_WAN2_2_S2V" in sigs.values(), False,
+       "and no post-loop outcome collects the loop's leftovers, got %r" % sigs)
 
 
 @test

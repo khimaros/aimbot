@@ -140,7 +140,10 @@ test('the roster can say what it is MISSING, and does it one way', () => {
 test('the vram filter judges what has a size, and passes what has none', () => {
   RESET();
   filters.mods = new Set(['t2a']);
-  filters.flags = new Set(DEFAULT_FLAGS);
+  // the vram filter ALONE: the defaults also carry the licence one, and half
+  // the talkers here ship under bespoke terms, so leaving it on would answer
+  // this question with a roster the other filter had already decided
+  filters.flags = new Set(['fits']);
   filters.engines = new Set();
   setHardware({...DEFAULT_HARDWARE, budget: 96});
 
@@ -160,6 +163,63 @@ test('the vram filter judges what has a size, and passes what has none', () => {
   ok(tiny.every(s => !model(s).quants.length || fitsBudget(model(s))),
      'everything left either has no size or fits');
 
+  RESET();
+});
+
+// THE FAILURE MODE A DEFAULT-ON FILTER HAS is a model disappearing for a reason
+// nobody can see, and the licence one is the worst candidate for it: a third of
+// this roster ships bespoke terms, and the hub reports 29 of them as the same
+// string. so the filter hides what is classified RESTRICTED and keeps
+// everything else. an unclassified licence is the absence of a claim about the
+// terms rather than a claim that they are bad, and hiding those would make the
+// cheapest route to a clean-looking roster be to classify nothing.
+test('the licence filter hides what is restricted and keeps what is unread', () => {
+  RESET();
+  filters.mods = new Set();
+  filters.engines = new Set();
+  filters.flags = new Set(['permissive']);
+
+  const tiers = s => licenseOf(model(s)).tier;
+  const kept = visible().map(m => m.short);
+  ok(kept.length, 'the filter leaves a roster');
+  eq(kept.some(s => tiers(s) === 'restricted'), false,
+     'nothing classified restricted survives it');
+
+  filters.flags = new Set();
+  const all = visible().map(m => m.short);
+  const unknown = all.filter(s => tiers(s) === 'unknown');
+  const restricted = all.filter(s => tiers(s) === 'restricted');
+  ok(restricted.length, 'some models ARE restricted, or the case proves nothing');
+  ok(unknown.length, 'and some carry a licence nothing here classifies');
+  ok(unknown.every(s => kept.includes(s)),
+     'every unclassified model survives the filter: ' + unknown.filter(
+       s => !kept.includes(s)));
+
+  RESET();
+});
+
+// the licence column is how a reader finds out WHY a row went. it carries the
+// licence's own name rather than the hub's catch-all `other` -- under which 29
+// models sort together and say nothing -- and the tier the filter acts on.
+test('the licence column names the licence and the tier it was filtered by', () => {
+  RESET();
+  const other = D.models.filter(m => ((m.card.hub || {}).license || '') === 'other');
+  ok(other.length > 5, 'several models declare the hub catch-all: ' + other.length);
+  ok(other.some(m => licenseOf(m).id && licenseOf(m).id !== 'other'),
+     'and at least one resolves to the licence it actually is');
+
+  const cell = col('license').cell(other[0]);
+  ok(!/>other</.test(cell) || licenseOf(other[0]).id === 'other',
+     'the cell shows the resolved name rather than the tag: ' + cell);
+  ok(cell.includes(licenseOf(other[0]).tier),
+     'and the tier beside it: ' + cell);
+
+  // the flag is real, offered, and described in terms of what it removes
+  const flag = FLAGS.find(f => f.k === 'permissive');
+  ok(flag, 'the filter is in the vocabulary a consumer reads');
+  ok(flag.shown !== false, 'and it draws a button rather than hiding');
+  ok(/unknown/.test(flag.help), 'its help says what happens to an unclassified '
+     + 'licence: ' + flag.help);
   RESET();
 });
 
@@ -223,18 +283,18 @@ test('a speech model is scored on the boards that rank speech', () => {
   ok(scored(rated[0]).want <= 4, rated[0].short + ' likewise, got want='
      + scored(rated[0]).want);
 
-  // image generation is one board and one factor, so the same question again:
-  // an arena elo the models that have it are ranked on
+  // image generation is the same question again, over the boards that rate it
   const pics = D.models.filter(m => m.kind === 'image');
   const scoredPics = pics.filter(m => scored(m).value !== null);
   ok(scoredPics.length >= 3, 'image models carry a rating: ' + scoredPics.length
      + ' of ' + pics.length);
-  // two boards rate pictures -- artificial analysis and lmarena -- and they
-  // disagree, which is why both are weighted rather than averaged. the third is
-  // reception: every non-text model carries a `name.match` now, so what forums
-  // say reaches an image model the same way it reaches a language one
-  eq(scored(scoredPics[0]).want, 3,
-     'and are judged on the two image boards plus what forums said');
+  // three boards rate generated pictures -- artificial analysis, lmarena and
+  // the genai showdown -- and they disagree, which is why all three are
+  // weighted rather than averaged. the fourth is reception: every non-text
+  // model carries a `name.match` now, so what forums say reaches an image model
+  // the same way it reaches a language one
+  eq(scored(scoredPics[0]).want, 4,
+     'and are judged on the three generation boards plus what forums said');
 
   RESET();
 });
@@ -965,17 +1025,31 @@ test('a model that publishes no context window still fits', () => {
      'a model whose window is genuinely too short still does not fit');
 });
 
-test('the default modality is the roster MODELS.md ranks', () => {
+// the page opens on language models that fit, under a licence nothing here
+// classifies as restricted. MODELS.md used to be whatever this came to, which
+// made every ui default an edit to the document -- `research/dashboard-table`
+// pins the document's own roster now, modality AND flags, so the two can differ
+// on purpose. adding the licence filter is what made them differ: it drops
+// qwen3.8 flash next, which the document is still about.
+test('the page opens on the language models a reader could actually run', () => {
   RESET();
   filters.mods = new Set(DEFAULT_MODALITIES);
   eq([...filters.mods].join(','), 'text', 'the page starts on language models');
+  eq([...filters.flags].sort().join(','), 'fits,permissive',
+     'with the vram and licence filters pressed');
   const got = visible().length;
-  const want = D.models.filter(m => m.kind === 'text' && fitsBudget(m)).length;
-  eq(got, want, 'the default view is every text model that fits');
-  // the ranking blocks in MODELS.md are generated by booting this page with
-  // nothing set, so a default that selects a different roster rewrites the
-  // document without anybody asking for it
+  const want = D.models.filter(m => m.kind === 'text' && fitsBudget(m)
+    && licenseOf(m).tier !== 'restricted').length;
+  eq(got, want, 'the default view is every text model that fits and is not '
+     + 'licence-restricted');
   ok(visible().every(m => m.kind === 'text'), 'nothing but language models by default');
+
+  // and the licence filter is the only thing between the two rosters, which is
+  // the claim that makes turning it off a complete answer
+  filters.flags = new Set(['fits']);
+  const wider = visible().length;
+  ok(wider > got, 'dropping it shows strictly more: ' + wider + ' against ' + got);
+  RESET();
 });
 
 test('each modality selects the shape it names, and only that', () => {

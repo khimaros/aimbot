@@ -51,7 +51,19 @@ FUNCTION = "SDVersion ModelLoader::get_sd_version()"
 # carry: it is added by the loader's own name conversion, so a signature is
 # matched against the tail
 PREFIX = "model.diffusion_model."
-FIND = re.compile(r'\.find\("([^"]+)"\)')
+# the detector's TWO spellings of one test, and taking only the first was
+# silently losing eleven arms of it. `.find(...)` asks whether the name contains
+# the literal; `name == "..."` asks whether it IS the literal, which is what
+# sd.cpp writes where a prefix match would claim a sibling. qwen image 2.1's
+# signature is the second kind, and the model reached the report as `no
+# signature` -- a model the runtime documents, read as one it cannot load,
+# which is the dangerous direction for this table to be wrong in.
+#
+# both are collected into the same key space because the join downstream is a
+# SUBSTRING test over the gguf's tensor names either way: `==` is narrower in
+# sd.cpp than the join is here, so a signature recorded off one can only
+# over-match, and every literal in this table is a full tensor name anyway.
+FIND = re.compile(r'\.find\("([^"]+)"\)|\.name\s*==\s*"([^"]+)"')
 OUTCOME = re.compile(r"return\s+(VERSION_\w+)|^\s*(\w+)\s*=\s*true;")
 # how much of the file to read for the tensor table. the metadata comes first
 # and a diffusion gguf's is small, so the first window is almost always enough
@@ -80,9 +92,10 @@ def get(url, key, max_age, refresh):
 def parse_signatures(source):
     """{signature: outcome} out of the detector, one entry per spelling.
 
-    Accumulate the `find` literals as they are read and attach them to the
-    outcome that follows, which is what makes a two-arm `if` one rule with two
-    spellings rather than one rule with the second spelling.
+    Accumulate the literals as they are read and attach them to the outcome
+    that follows, which is what makes a two-arm `if` one rule with two spellings
+    rather than one rule with the second spelling. Both of sd.cpp's ways of
+    writing an arm count -- see FIND.
     """
     start = source.find(FUNCTION)
     if start < 0:
@@ -93,16 +106,27 @@ def parse_signatures(source):
 
     out, pending, dirty = {}, [], False
     for line in body.splitlines():
-        found = FIND.findall(line)
+        # one group per spelling, and exactly one of them is set per match
+        found = [a or b for a, b in FIND.findall(line)]
         # a rule this cannot model EXACTLY is dropped rather than approximated.
-        # two shapes qualify: a nested lookup (`tensor_storage_map.find(...)`
-        # then `->second.ne[0] == 128`) and any dimension test. mage flow is
-        # both -- its outer condition is qwen image's own signature and the
-        # inner test is what separates them -- so flattening it into two
-        # alternatives made every flux model match mage flow, since they carry
-        # `img_in.weight` too. an AND read as an OR is how a detector table
-        # starts claiming models it would never return.
-        if "->second" in line or ".ne[" in line or "tensor_storage_map.find" in line:
+        # three shapes qualify: a nested lookup (`tensor_storage_map.find(...)`
+        # then `->second.ne[0] == 128`), any dimension test, and a block that
+        # CAPTURES the tensor for a later one. mage flow is the first two --
+        # its outer condition is qwen image's own signature and the inner test
+        # is what separates them -- so flattening it into two alternatives made
+        # every flux model match mage flow, since they carry `img_in.weight`
+        # too. an AND read as an OR is how a detector table starts claiming
+        # models it would never return.
+        #
+        # the third shape is what reading the `==` arms turned up. three blocks
+        # spell their condition that way and then do `input_block_weight =
+        # tensor_storage;` rather than returning: they are not rules, they are
+        # the tensors the post-loop branches measure. their eleven literals were
+        # outliving the loop and attaching to the first `return` after it, which
+        # put `img_in.weight` and `unet.conv_in.weight` on VERSION_WAN2_2_S2V --
+        # a signature every flux and every unet model carries.
+        if ("->second" in line or ".ne[" in line
+                or "tensor_storage_map.find" in line or "= tensor_storage;" in line):
             dirty = True
         pending += found
         hit = OUTCOME.search(line)

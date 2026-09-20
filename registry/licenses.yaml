@@ -1,0 +1,144 @@
+# which licences let a reader actually use the weights, by licence rather than
+# by model.
+#
+# SOURCE, not output. the licence a repo declares is a FACT and is captured --
+# `hub.license` in research/data/model-cards.json, with `hub.license_name`
+# behind it wherever the hub's answer is the catch-all `other`. what that
+# licence MEANS for somebody who wants to ship something is a judgement, it is
+# the same judgement for every model carrying the licence, and this is the one
+# place it is written down.
+#
+# keyed by licence and not by model on purpose: 194 models carry 30-odd distinct
+# licences, and a per-model field would be 194 hand-written copies of something
+# already captured, going stale one at a time. `scripts/build-viewer` joins this
+# onto each model at build time and the page filters on the result.
+version: 1
+
+# the three answers, and what each one is claiming. `unknown` is a tier rather
+# than an absence because the filter defaults ON: a model whose terms nobody
+# here has read must be visibly unclassified rather than quietly missing, and
+# the page and the cli both say how many are in it.
+tiers:
+- k: permissive
+  label: permissive
+  help: >-
+    commercial use, redistribution and derivatives, with at most attribution
+    asked in return. no field-of-use restriction, no acceptable-use policy to
+    pass on, no revenue ceiling and no copyleft
+- k: restricted
+  label: restricted
+  help: >-
+    usable, and with a condition a reader has to check against what they are
+    building: non-commercial, research-only, a revenue or user ceiling, an
+    acceptable-use policy that travels with the weights, or share-alike
+- k: unknown
+  label: unknown
+  help: >-
+    no licence reached the capture, or one did and nobody here has classified
+    it. this is not a claim that the terms are bad -- it is the absence of a
+    claim, which is why it is shown rather than filtered away
+
+# the classification the filter defaults to. a licence absent from this table
+# reads as `unknown`, which is deliberate: the failure mode to design against is
+# a model disappearing because a licence nobody had seen before defaulted to
+# restricted.
+#
+# THE RULE, applied the same way to all of them: permissive means a reader may
+# use it commercially, redistribute it and build on it, with attribution the
+# heaviest thing asked in return. anything that adds a condition they would have
+# to read their own product against -- a use policy, a revenue ceiling, "research
+# only", "non-commercial", share-alike -- is restricted. this is about what the
+# licence PERMITS and is not a view of the publisher.
+#
+# where a bespoke licence is genuinely one of the standard ones plus wording,
+# it is classified on what the wording does rather than on being bespoke:
+# `apache-2.0-plus-notices` is apache with a notice file and is permissive;
+# `nvidia-open-model-license` allows commercial use and derivatives but carries
+# conditions on guardrails and on what a derivative may be trained on, so it is
+# restricted.
+#
+# the standard licences are classified whether or not the roster carries one
+# today, because the table exists to answer the question BEFORE a model arrives
+# carrying one. the bespoke ones can only be added as they turn up.
+licenses:
+  # ---- the standard permissive ones
+  apache-2.0: {tier: permissive}
+  mit: {tier: permissive}
+  bsd-3-clause: {tier: permissive}
+  bsd-2-clause: {tier: permissive}
+  cc0-1.0: {tier: permissive}
+  cc-by-4.0:
+    tier: permissive
+    why: attribution and nothing else. the only condition is a credit
+  apache-2.0-plus-notices:
+    tier: permissive
+    why: apache-2.0 with a notices file, which apache-2.0 already provides for
+  openmdw-1.1:
+    tier: permissive
+    why: >-
+      the linux foundation's open model weights licence. permissive over the
+      weights, the data and the code together, with no use restriction
+
+  # ---- copyleft and share-alike. usable, and the reciprocity is a condition
+  gpl-3.0: {tier: restricted, why: copyleft}
+  agpl-3.0: {tier: restricted, why: 'copyleft, over a network too'}
+  lgpl-3.0: {tier: restricted, why: weak copyleft}
+  cc-by-sa-4.0: {tier: restricted, why: share-alike}
+
+  # ---- non-commercial. the condition is the use, not the redistribution
+  cc-by-nc-4.0: {tier: restricted, why: non-commercial}
+  cc-by-nc-sa-4.0: {tier: restricted, why: non-commercial and share-alike}
+  breezeblue-research-and-non-commercial-license:
+    tier: restricted
+    why: research and non-commercial, as the name says
+  fish-audio-research-license: {tier: restricted, why: research only}
+  qwen-research: {tier: restricted, why: research only}
+  exaone: {tier: restricted, why: research and non-commercial use only}
+  flux-1-dev-non-commercial-license: {tier: restricted, why: non-commercial}
+  flux-non-commercial-license: {tier: restricted, why: non-commercial}
+  ideogram-4-non-commercial: {tier: restricted, why: non-commercial}
+
+  # ---- use policies that travel with the weights. commercial use is allowed
+  # and an acceptable-use policy is not, which is a condition a reader has to
+  # hold their own product against
+  openrail: {tier: restricted, why: use restrictions annexed to the licence}
+  gemma:
+    tier: restricted
+    why: >-
+      the gemma terms of use, whose prohibited use policy a licensee must pass
+      on to anyone they distribute to
+  llama3.1: {tier: restricted, why: community licence with an acceptable use policy}
+  llama3.2: {tier: restricted, why: community licence with an acceptable use policy}
+  llama3.3: {tier: restricted, why: community licence with an acceptable use policy}
+
+  # ---- community and open-model licences: commercial use permitted with a
+  # ceiling, a branding requirement or a use policy behind it
+  qwen-community-1.0:
+    tier: restricted
+    why: community licence with a scale threshold above which separate terms apply
+  minimax-community: {tier: restricted, why: community licence with conditions beyond attribution}
+  krea-2-community-license: {tier: restricted, why: community licence}
+  stabilityai-ai-community: {tier: restricted, why: community licence with a revenue ceiling}
+  tencent-hunyuan-community: {tier: restricted, why: community licence with territorial exclusions}
+  nvidia-open-model-license:
+    tier: restricted
+    why: >-
+      commercial use and derivatives are permitted, with conditions on
+      circumventing guardrails and on what a derivative may be trained on
+  nvidia-nemotron-open-model-license:
+    tier: restricted
+    why: the same nvidia terms under the nemotron name
+  lfm1.0:
+    tier: restricted
+    why: commercial use permitted below an annual revenue ceiling, licensed above it
+  upstage-solar-license:
+    tier: restricted
+    why: bespoke publisher terms rather than one of the standard licences
+  modified-mit:
+    tier: restricted
+    why: >-
+      mit with a condition the publisher wrote in -- `modified` is their own
+      word for it -- so it is not the mit a reader already knows the shape of
+  kimi-k3:
+    tier: restricted
+    why: the same shape, mit with an added publisher condition

@@ -1457,6 +1457,8 @@ models:
       aa-t2i: Z-Image Turbo
       lmarena-t2i: z-image-turbo
       lmarena-edit: ''
+      showdown-t2i: Z_IMAGE_TURBO
+      showdown-edit: ''
     modalities:
       input:
       - text
@@ -1507,6 +1509,8 @@ models:
       aa-t2i: FLUX.2 [klein] 4B
       lmarena-t2i: flux-2-klein-4b
       lmarena-edit: flux-2-klein-4b
+      showdown-t2i: ''
+      showdown-edit: ''
     modalities:
       input:
       - text
@@ -1545,6 +1549,8 @@ models:
       aa-t2i: FLUX.2 [klein] 9B
       lmarena-t2i: flux-2-klein-9b
       lmarena-edit: flux-2-klein-9b
+      showdown-t2i: ''
+      showdown-edit: ''
     modalities:
       input:
       - text
@@ -1593,6 +1599,8 @@ models:
       aa-t2i: FLUX.2 [dev]
       lmarena-t2i: flux-2-dev
       lmarena-edit: flux-2-dev
+      showdown-t2i: FLUX2_DEV
+      showdown-edit: FLUX2_DEV
     modalities:
       input:
       - text
@@ -1685,6 +1693,8 @@ models:
       aa-t2i: ERNIE Image Turbo
       lmarena-t2i: ''
       lmarena-edit: ''
+      showdown-t2i: ''
+      showdown-edit: ''
     modalities:
       input:
       - text
@@ -3519,6 +3529,8 @@ models:
       aa-t2i: Ideogram 4.0
       lmarena-t2i: ''
       lmarena-edit: ''
+      showdown-t2i: IDEOGRAM_4
+      showdown-edit: ''
     modalities:
       input:
       - text
@@ -3709,6 +3721,8 @@ models:
       aa-t2i: FLUX.1 [dev]
       lmarena-t2i: ''
       lmarena-edit: ''
+      showdown-t2i: FLUX_1D
+      showdown-edit: ''
     modalities:
       input:
       - text
@@ -3742,6 +3756,8 @@ models:
       aa-t2i: FLUX.1 [schnell]
       lmarena-t2i: ''
       lmarena-edit: ''
+      showdown-t2i: ''
+      showdown-edit: ''
     modalities:
       input:
       - text
@@ -3776,6 +3792,8 @@ models:
       aa-t2i: Stable Diffusion 3.5 Large
       lmarena-t2i: ''
       lmarena-edit: ''
+      showdown-t2i: ''
+      showdown-edit: ''
     modalities:
       input:
       - text
@@ -3808,6 +3826,8 @@ models:
       aa-t2i: ''
       lmarena-t2i: ''
       lmarena-edit: ''
+      showdown-t2i: ''
+      showdown-edit: ''
     modalities:
       input:
       - text
@@ -3930,6 +3950,8 @@ models:
       aa-t2i: ''
       lmarena-t2i: ''
       lmarena-edit: ''
+      showdown-t2i: ''
+      showdown-edit: ''
     modalities:
       input:
       - text
@@ -3969,6 +3991,8 @@ models:
       aa-t2i: ''
       lmarena-t2i: krea-2-turbo
       lmarena-edit: ''
+      showdown-t2i: ''
+      showdown-edit: ''
     modalities:
       input:
       - text
@@ -3979,6 +4003,59 @@ models:
       file: wan_2.1_vae.safetensors
       role: vae
     - repo: unsloth/Qwen3-VL-4B-Instruct-GGUF
+      quant: Q8_0
+      role: llm
+  Qwen/Qwen-Image-2.1:
+    kind: image
+    name:
+      short: qwen-image-2.1
+      match: qwen[\s-]*image[\s-]*2\.1
+    notes: >-
+      the card {card} calls it "a unified text-to-image generation and image
+      editing model in the Qwen family" with "32 Single-Stream DiT layers",
+      which is the small half of the release: the diffusion transformer is 7b
+      and the text encoder it wants is qwen3-vl 8b, so the three files below are
+      roughly the klein 9b stack rather than the 20b qwen-image it follows.
+
+      the gguf rungs are leejet's own, which is the same signal that settled
+      ideogram 4 and the flux 2 klein pair -- the author of the runtime
+      converting the weights he then documents. sd.cpp's docs/qwen_image_2.1.md
+      gives the three files and this entry is those three.
+
+      the editing half is real and is not claimed here. upstream runs it by
+      passing a reference image, which needs qwen3-vl's vision projector loaded
+      beside the text encoder as a fourth file, and no board this repo collects
+      has scored it doing that -- the showdown rates the previous qwen-image and
+      qwen-image-edit, neither of which is this checkpoint.
+
+      the licence is qwen-research rather than apache-2.0, which is a departure
+      from the rest of the qwen roster here and the reason it reads as
+      restricted.
+    engine:
+    - stable-diffusion.cpp
+    quants:
+    - repo: leejet/Qwen-Image-2.1-GGUF
+      quant: Q8_0
+      role: diffusion
+    - repo: leejet/Qwen-Image-2.1-GGUF
+      quant: Q4_K
+      role: diffusion
+    ids:
+      aa-t2i: ''
+      lmarena-t2i: ''
+      lmarena-edit: ''
+      showdown-t2i: ''
+      showdown-edit: ''
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: Comfy-Org/Qwen-Image-2.1
+      file: qwen_image_2.1_vae_bf16.safetensors
+      role: vae
+    - repo: Qwen/Qwen3-VL-8B-Instruct-GGUF
       quant: Q8_0
       role: llm
   meta-models/Muse-Glimmer-30B:

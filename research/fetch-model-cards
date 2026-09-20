@@ -420,8 +420,16 @@ def hub_meta(repo, max_age, refresh):
     out = {k: d[k] for k in HUB_FIELDS if d.get(k) is not None}
     # the licence lives in cardData on some repos and only in the tags on
     # others, so take whichever answered
-    out["license"] = (d.get("cardData") or {}).get("license") or next(
+    card_data = d.get("cardData") or {}
+    out["license"] = card_data.get("license") or next(
         (t.split(":", 1)[1] for t in (d.get("tags") or []) if t.startswith("license:")), None)
+    # `other` is the hub's answer for every licence that is not on its list,
+    # which on this roster is 29 models and every bespoke one there is -- the
+    # flux non-commercial terms, the nvidia open model licence and the qwen
+    # research agreement all reach the capture as the same string. `license_name`
+    # is where the repo says WHICH, and without it nothing downstream can tell a
+    # community licence from a research-only one
+    out["license_name"] = card_data.get("license_name")
     out["tags"] = [t for t in (d.get("tags") or [])
                    if ":" not in t and t not in ("region", "endpoints_compatible")]
     return {k: v for k, v in out.items() if v not in (None, [], "")}

@@ -14,6 +14,10 @@ registry/models.yaml            per-model facts. the quant to prefer and why,
                                 the fork or PR a non-mainline rung needs, and
                                 which crispasr backend loads a speech model
 registry/sampling.yaml          the profile names and what each one means
+registry/licenses.yaml          what each licence lets a reader do, by licence
+                                rather than by model. the string a repo declares
+                                is captured; what it MEANS is the judgement here,
+                                and it is what the permissive filter reads
 registry/dashboard.yaml         what the dashboard opens with: the composite
                                 weights, the named weightings, the box a reader
                                 is assumed to have, the quant ladder's ceiling
@@ -404,6 +408,22 @@ answer from a terminal. `research/dashboard-table` boots the built page to
 generate MODELS.md's ranking, which is the same arithmetic one layer out.
 
 so: change a FACT in `registry/models.yaml`, a DEFAULT in
-`registry/dashboard.yaml`, and a CALCULATION in `scripts/roster.js`. build-viewer
+`registry/dashboard.yaml`, a JUDGEMENT ABOUT A LICENCE in
+`registry/licenses.yaml`, and a CALCULATION in `scripts/roster.js`. build-viewer
 refuses to inline a module that reaches for a browser api, and a test requires
 it in a bare subprocess to prove it still loads without one.
+
+`registry/licenses.yaml` is keyed by LICENCE and not by model on purpose. the
+string a repo declares is already captured -- `hub.license`, with
+`hub.license_name` behind it wherever the hub answers the catch-all `other` --
+so a per-model field would be 194 hand-written copies of something a collector
+already knows, going stale one at a time. build-viewer joins the table onto each
+model and the page filters on the tier.
+
+**the permissive filter fails open.** it is on by default, and a default-on
+filter's failure mode is a model disappearing for a reason nobody can see, so it
+hides what is classified RESTRICTED and keeps everything else -- an unclassified
+licence is an absence of a claim about the terms rather than a claim that they
+are bad. every build prints the models in that state, `--all` and the dashboard
+toggle both drop the filter, and `scripts/aimbot` now names each active filter
+and how many models it hides.

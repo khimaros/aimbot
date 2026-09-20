@@ -14,6 +14,7 @@ date is in each file's provenance below.
 | `data/artificial-analysis.json` | 2026-08-17 | artificialanalysis.ai leaderboard |
 | `data/artificial-analysis-speech.json` | 2026-09-04 | artificialanalysis.ai speech-to-text (non-streaming and streaming) and text-to-speech |
 | `data/artificial-analysis-image.json` | 2026-09-04 | artificialanalysis.ai text-to-image arena, one elo per model |
+| `data/genai-showdown.json` | 2026-09-20 | genai-showdown.specr.net: fifteen generation prompts and twelve editing ones, judged pass or fail against published criteria |
 | `data/tts-arena.json` | 2026-09-04 | tts-agi TTS Arena v2, crowd-sourced blind-vote elo |
 | `data/voicearena.json` | 2026-09-04 | voicearena.com speech-to-text, WER sliced by language and noise |
 | `data/gguf-voices.json` | 2026-09-04 | the speaker names each TTS gguf ships, read from its own header |
@@ -155,6 +156,38 @@ downloadable" and "is this a free licence" come apart: krea 2 ships under a
 community licence and ideogram 4 under one called `Ideogram Open Model`,
 neither of which is free and both of which have public ggufs this registry
 pins. reading them as closed hid two models the board scores.
+
+**the third image source is not an arena at all.** `genai-showdown.json` is one
+person running fifteen prompts with the passing criteria written down in front
+of the result -- "the pair of tongs must clearly be gripping the halo" -- and
+recording pass or fail, plus twelve editing prompts as a second competition. so
+it disagrees with both elos by construction rather than by sampling: flux.2 dev
+sits mid-table on both arenas and passes 5 of the 15 here, and the roster's best
+is ideogram 4 at 8. all three carry a third of the generation weight each,
+because there is no honest basis for calling a preference vote or a judged pass
+rate the better evidence about the same models.
+
+the site is a vite spa and its data is four plain json files, so the collector
+reads those rather than a rendered table, and `generatorsPath` inside the
+comparisons file names the metadata beside it -- followed rather than hardcoded,
+because it is the site's own statement of where its roster lives.
+`locallyHostable` is its open-weights flag, and it agrees with this registry
+where lmarena's licence string does not: ideogram 4 and krea 2 are both hostable
+by its reckoning.
+
+**a pass rate is over the prompts that model was run on.** three generators were
+retired part way through the generation series and their earlier results stand
+-- imagen 3 has thirteen of the fifteen, gemini 2.0 flash twelve -- so dividing
+by the board total would score a model on prompts nobody gave it, and would do
+it silently, since a plausible percentage comes out either way.
+
+**and it names a model without its size class**, which is why its key spaces are
+exact-match only. "FLUX.2 Klein" is one row for a family this registry carries
+as a 4B and a 9B, and the pass in `resolve-ids` that strips a parameter count
+and retries matched it for BOTH -- two models, one score, nothing to report it,
+because `candidates` only ever sees one model at a time. the site's own
+description says the row is the 9B, which is prose rather than a handle, so the
+honest answer is to leave it unmatched.
 
 `gguf-voices.json` is one of two captures read out of gguf BYTES rather than off
 an api. a synthesis model that ships speakers names them in its own header --
@@ -673,6 +706,7 @@ rather than uniformly:
 | `fetch-llama-support` | 48h | reads the same gguf headers as chat templates, under the same keys, so it transfers nothing after that one. the git history it joins them against is local |
 | `fetch-tbench` | 6h listings, 30d contents | a listing gains submissions and re-runs; the files inside a published job never change, and there are five of them per listing |
 | `fetch-tts-arena`, `fetch-voicearena` | 24h | an arena moves only as fast as people vote, and a rating built on 600 votes does not turn over in an afternoon |
+| `fetch-genai-showdown` | 24h | four static json files that change when one person adds a model or a prompt, which is weeks apart |
 
 48h rather than 24 because the point is a sweep run the next day, and anything
 shorter than the gap between two of them never saves a request. a model added

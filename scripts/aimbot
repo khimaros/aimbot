@@ -22,6 +22,7 @@ settings, so the fit is the page's fit rather than a second one.
     ./scripts/aimbot --ram 128 --reserve 2 --ctx 131072
     ./scripts/aimbot --modality a2t --columns short,kind,langs
     ./scripts/aimbot --flag draft --weights coding
+    ./scripts/aimbot --all --columns short,license   # every licence and its tier
     ./scripts/aimbot --all --sort downloads --limit 20
     ./scripts/aimbot --ladder --grep bonsai       # one row per fitting quant
     ./scripts/aimbot --json | jq '.rows[0]'
@@ -35,6 +36,12 @@ Text columns are the page's rendering, so a quality of 79.1 prints as `79` the
 way the dashboard shows it and a size carries the `+d` that says a drafter is
 in the figure. `--json` carries the sort value beside the text, at full
 precision.
+
+The footer names every filter that is on and how many models it hides, because
+a model missing from the output is usually filtered rather than absent and that
+was previously something the reader had to already know. Each count is that
+filter measured ALONE against the whole registry, so they overlap and do not sum
+-- which is the number a reader is asking for.
 """
 
 import argparse
@@ -86,6 +93,7 @@ if (OPT.list) {
   });
   process.stdout.write(JSON.stringify({
     vocab: vocab, keys: keys, rows: rows, hardware: roster.hardware(),
+    filters: roster.filterCounts(),
     total: payload.models.length, matched: roster.visible().length}));
 }
 """
@@ -189,7 +197,9 @@ def show_list(vocab):
             ("columns", vocab["columns"], lambda r: (r["k"], r["t"], r["help"])),
             ("modalities", vocab["modalities"], lambda r: (r["k"], r["t"], r["help"])),
             ("flags", vocab["flags"], lambda r: (r["k"], r["t"], r["help"])),
-            ("weightings", vocab["presets"], lambda r: (r["k"], r["t"], ""))):
+            ("weightings", vocab["presets"], lambda r: (r["k"], r["t"], "")),
+            ("licence tiers", vocab.get("licenses") or [],
+             lambda r: (r["k"], r["t"], r["help"]))):
         print("%s:" % name)
         for r in rows:
             k, t, help_ = fmt(r)
@@ -263,6 +273,18 @@ def main():
         else "%g gib less %g reserved, at %dk" % (hw["budget"], hw["reserve"],
                                                   hw["minCtx"] / 1024)),
         file=sys.stderr)
+    # WHICH filters took the rest, because "a model missing from the output is
+    # usually filtered, not absent" was previously something a reader had to
+    # already know. each count is that filter measured alone against the whole
+    # registry, so they overlap and do not sum to the difference -- which is the
+    # honest shape of it, and what a reader is actually asking
+    biting = [f for f in (d.get("filters") or []) if f["dropped"]]
+    wide = max([len(f["t"]) for f in biting] or [0])
+    for f in biting:
+        print("  %-*s hides %3d of %d" % (wide, f["t"], f["dropped"], d["total"]),
+              file=sys.stderr)
+    if biting:
+        print("  --all drops all of them", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,250 @@
+#!/usr/bin/env python3
+
+"""The GenAI Image Showdown, which is the first image source here that MEASURES.
+
+    fetch-genai-showdown            # write data/genai-showdown.json
+    fetch-genai-showdown --report   # what it rates that the roster does and does not carry
+
+The other two image boards are arenas: a crowd is shown two pictures and the
+elo is whatever it preferred. This is a person running fifteen prompts with the
+passing criteria written down in front of the result -- "the pair of tongs must
+clearly be gripping the halo" -- and recording pass or fail. That is a different
+kind of evidence about the same models, which is why it is carried beside them
+rather than averaged into them, for the reason the two arenas already are not
+averaged into each other.
+
+Two boards, because generation and editing are two questions and the site runs
+them as two competitions with different rosters: twelve editing prompts against
+fifteen generation ones, and Qwen-Image-Edit is on one and neither arena.
+
+THE SITE IS A VITE SPA AND ITS DATA IS FOUR PLAIN JSON FILES. Nothing here
+parses a rendered table: `genai-comparisons.json` holds the prompts with one
+record per model per prompt, and `generatorsPath` inside it names the file with
+the model metadata. That path is followed rather than hardcoded, because it is
+the site's own statement of where the roster lives.
+
+`locallyHostable` is this board's open-weights flag and the key space is
+filtered on it, the way every other image and speech board here is. It agrees
+with the registry on the awkward ones: ideogram 4 and krea 2 are both marked
+hostable here and both have public ggufs this roster pins, where lmarena's
+licence string reads them as closed.
+
+A PASS RATE IS OVER THE PROMPTS THAT MODEL WAS RUN ON, not over the board's
+total. Three generators were retired part way through the series -- imagen 3 has
+thirteen of the fifteen and gemini 2.0 flash twelve -- so dividing by fifteen
+would score a model on prompts nobody ever gave it and would do it silently,
+since a plausible-looking percentage comes out either way.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+
+import capture
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = "data/genai-showdown.json"
+BASE = "https://genai-showdown.specr.net"
+MAX_AGE = 24 * 3600
+
+# the two competitions, as (path to the comparisons file) under BASE. the
+# metadata file beside each is named by the comparisons file itself, so only
+# these two paths are written here
+BOARDS = {
+    "text-to-image": "assets/genai-comparisons.json",
+    "image-editing": "assets/image-editing/editing-comparisons.json",
+}
+
+# the fields kept off a generator record. the rest is a paragraph of prose about
+# the model and a short code the site uses in its own urls
+META_FIELDS = ("name", "publisher", "url", "status", "releaseDate")
+
+
+def fetch(url, key, max_age, refresh):
+    """One json document through the shared cache, or None if it did not parse."""
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    if proc.returncode:
+        print("!!! %s: httpcache exited %d" % (url, proc.returncode), file=sys.stderr)
+        return None
+    try:
+        return json.loads(proc.stdout)
+    except ValueError:
+        print("!!! %s: not json -- the site structure probably changed" % url,
+              file=sys.stderr)
+        return None
+
+
+def join(base, path):
+    return "%s/%s" % (base.rstrip("/"), path.lstrip("/"))
+
+
+def tally(comparisons):
+    """{generator id: counts} over the prompts each generator was actually run on."""
+    rows = {}
+    for prompt in comparisons or []:
+        for image in prompt.get("images") or []:
+            gid = image.get("generator")
+            if not gid:
+                continue
+            row = rows.setdefault(gid, {"passed": 0, "scored": 0, "attempts": 0})
+            row["scored"] += 1
+            row["passed"] += 1 if image.get("passedTest") else 0
+            row["attempts"] += image.get("numAttempts") or 0
+    return rows
+
+
+def board(doc, generators):
+    """One competition's models, keyed by the stable id rather than the display name.
+
+    The site renames a model after it ships: `GEMINI_3_1_PRO_IMAGE` renders as
+    "Gemini 3.1 Flash Image". The id is what its own records join on, so it is
+    what this capture joins on, and the display name rides along as the second
+    spelling for anything matching by name.
+    """
+    meta = {g["id"]: g for g in generators or [] if g.get("id")}
+    out = {}
+    for gid, counts in tally(doc.get("imageComparisons")).items():
+        row = {k: v for k, v in (meta.get(gid) or {}).items() if k in META_FIELDS}
+        row.update(counts)
+        # asserted rather than inherited from the source's absence, so a reader
+        # of the capture can tell "not hostable" from "the field went away"
+        row["locallyHostable"] = bool((meta.get(gid) or {}).get("locallyHostable"))
+        row["passRate"] = round(100.0 * counts["passed"] / counts["scored"], 2) \
+            if counts["scored"] else None
+        out[gid] = dict(sorted(row.items()))
+    return dict(sorted(out.items()))
+
+
+def collect(base, cache_prefix, max_age, refresh):
+    """{board name: section}, or None for a board whose two files did not read."""
+    boards = {}
+    for name, path in sorted(BOARDS.items()):
+        url = join(base, path)
+        doc = fetch(url, "%s-%s" % (cache_prefix, name), max_age, refresh)
+        if not doc:
+            boards[name] = None
+            continue
+        # the metadata file is named by the comparisons file and sits beside it
+        meta_url = join(os.path.dirname(url), doc.get("generatorsPath") or "")
+        generators = fetch(meta_url, "%s-%s-models" % (cache_prefix, name),
+                           max_age, refresh)
+        # WITHOUT IT THE BOARD IS UNREAD, not read with nothing known. the
+        # comparisons file alone still tallies every pass, so the rows would be
+        # there and the count would not shrink -- and every one of them would
+        # carry `locallyHostable: false`, which empties the key space and reads
+        # as "the site stopped publishing open-weights models"
+        if not generators:
+            print("!!! %s: the prompts read and %s did not, so nothing about "
+                  "which models are open weights is known" % (name, meta_url),
+                  file=sys.stderr)
+            boards[name] = None
+            continue
+        models = board(doc, generators)
+        if not models:
+            print("!!! %s: no generators -- the payload shape probably changed" % name,
+                  file=sys.stderr)
+            boards[name] = None
+            continue
+        boards[name] = {
+            "title": doc.get("title"),
+            "url": url,
+            "prompts": len(doc.get("imageComparisons") or []),
+            "models": models,
+        }
+    return boards
+
+
+def count(payload):
+    return sum(len((b or {}).get("models") or {})
+               for b in ((payload or {}).get("boards") or {}).values())
+
+
+def report(payload, registry_path):
+    """Which of the roster it rates, and which open-weights models it rates that
+    the roster has nothing for. The second list is where the image roster grows."""
+    import yaml
+    models = (yaml.safe_load(open(registry_path)) or {}).get("models") or {}
+    claimed = set()
+    for repo, m in models.items():
+        for src in ("showdown-t2i", "showdown-edit"):
+            got = (m.get("ids") or {}).get(src)
+            if got:
+                claimed.add(got)
+    for name, b in sorted(((payload or {}).get("boards") or {}).items()):
+        rows = (b or {}).get("models") or {}
+        hit = {k: v for k, v in rows.items() if k in claimed}
+        miss = {k: v for k, v in rows.items()
+                if k not in claimed and v.get("locallyHostable")}
+        print("%s: %d prompts, %d models, %d rating a model this roster carries"
+              % (name, (b or {}).get("prompts") or 0, len(rows), len(hit)))
+        for gid, v in sorted(hit.items(), key=lambda kv: -(kv[1]["passed"])):
+            print("   %2d/%-2d  %s" % (v["passed"], v["scored"], v.get("name") or gid))
+        print("   %d locally hostable model(s) it rates that the roster does not carry:"
+              % len(miss))
+        for gid, v in sorted(miss.items(), key=lambda kv: -(kv[1]["passed"])):
+            print("     %2d/%-2d  %-24s %s"
+                  % (v["passed"], v["scored"], v.get("name") or gid, v.get("url") or ""))
+        print()
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--base", default=BASE,
+                    help="site root, so a run against a fixture reaches no network")
+    ap.add_argument("--cache-key", default="genai-showdown",
+                    help="httpcache name prefix; one key per file fetched")
+    ap.add_argument("--max-age", type=int, default=MAX_AGE)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--report", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even though the site rates fewer models than last sweep")
+    ap.add_argument("--registry",
+                    default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    args = ap.parse_args()
+
+    if args.report and os.path.exists(args.out):
+        report(json.load(open(args.out)), args.registry)
+        return 0
+
+    boards = collect(args.base, args.cache_key, args.max_age, args.refresh)
+    failed = sorted(k for k, v in boards.items() if not v)
+    # a board that did not read keeps whatever the capture already holds, for
+    # the reason every collector here degrades rather than truncating: the
+    # committed file is what the rest of the sweep reads
+    try:
+        payload = json.load(open(args.out))
+    except (IOError, ValueError):
+        payload = {"version": 1, "boards": {}}
+    for name, b in boards.items():
+        if b:
+            # `source` is where the rows in the file came from, so it moves with
+            # them: a run where nothing read must not relabel the capture it left
+            payload["source"] = args.base
+            payload.setdefault("boards", {})[name] = b
+    payload["boards"] = dict(sorted((payload.get("boards") or {}).items()))
+
+    written, now, before = capture.write(args.out, payload, count,
+                                         allow_shrink=args.allow_shrink,
+                                         label="models")
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "models"))
+    print("wrote %s: %s" % (args.out, ", ".join(
+        "%s %d models (%d locally hostable) over %d prompts"
+        % (name, len(b["models"]),
+           sum(1 for v in b["models"].values() if v["locallyHostable"]), b["prompts"])
+        for name, b in sorted((payload.get("boards") or {}).items()) if b)))
+    if failed:
+        sys.exit("!!! %d board(s) unread: %s" % (len(failed), ", ".join(failed)))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -287,10 +287,12 @@ QUANT_EVIDENCE = [
       "voicearena.us-english", "voicearena.vietnamese"]),
 
     ("image", False,
-     "image generation, rated by people choosing between two pictures. an elo, "
-     "and of a diffusion stack the text-model retention curve was never fitted "
-     "to",
-     ["aa-t2i.elo", "lmarena-t2i.rating", "lmarena-edit.rating"]),
+     "image generation and editing, of a diffusion stack the text-model "
+     "retention curve was never fitted to. three of these are an elo people "
+     "voted and two are a pass rate against written criteria, and no sweep here "
+     "has measured what a quant costs either",
+     ["aa-t2i.elo", "lmarena-t2i.rating", "lmarena-edit.rating",
+      "showdown-t2i.adherence", "showdown-edit.adherence"]),
 ]
 
 SCALED_FACETS = {k for _, yes, _, keys in QUANT_EVIDENCE if yes for k in keys}
@@ -440,6 +442,63 @@ def dashboard_config(path=CONFIG):
             sys.exit("!!! %s: preset %r sets no weights and does not say `base: true`"
                      % (path, p["k"]))
     return cfg
+
+
+LICENSES = os.path.join(ROOT, "registry", "licenses.yaml")
+# the tier a licence nobody has classified lands in. it has to exist in the
+# table, because the filter defaults ON and the page says how many are in it --
+# an absent tier would be a bare string with no label and no help text
+UNKNOWN_TIER = "unknown"
+# what an entry may say. `why` is the one sentence a reader gets for a licence
+# whose name does not explain itself, and it is optional
+LICENSE_FIELDS = ("tier", "why")
+
+
+def license_table(path=LICENSES):
+    """The licence classification, checked the way the dashboard config is."""
+    cfg = load_yaml(path)
+    tiers = cfg.get("tiers") or []
+    if not isinstance(tiers, list) or not tiers:
+        sys.exit("!!! %s: tiers must be a non-empty list, so their order survives" % path)
+    known = {t.get("k") for t in tiers}
+    if UNKNOWN_TIER not in known:
+        sys.exit("!!! %s: no %r tier. an unclassified licence has to land "
+                 "somewhere a reader can see" % (path, UNKNOWN_TIER))
+    table = cfg.get("licenses") or {}
+    for lic, rec in sorted(table.items()):
+        tier = (rec or {}).get("tier")
+        if tier not in known:
+            sys.exit("!!! %s: licence %r has tier %r, which is not one of %s"
+                     % (path, lic, tier, ", ".join(sorted(known))))
+        # a flow mapping swallows an unquoted comma: `{tier: x, why: a, b}` is
+        # `why: a` plus a key `b` with no value, and the half of the sentence
+        # after the comma then never reaches a reader and never errors
+        stray = sorted(set(rec) - set(LICENSE_FIELDS))
+        if stray:
+            sys.exit("!!! %s: licence %r has unknown field(s) %s (known: %s). an "
+                     "unquoted comma in a flow mapping reads as a second key"
+                     % (path, lic, ", ".join(repr(s) for s in stray),
+                        ", ".join(LICENSE_FIELDS)))
+    return {"tiers": tiers, "licenses": table}
+
+
+def license_of(repo, cards, table):
+    """{id, tag, tier, why} for one model, joined rather than typed.
+
+    The identity is the hub's licence tag, EXCEPT where that tag is the
+    catch-all `other` -- 29 models on this roster -- in which case the repo's
+    own `license_name` is the only thing that says which licence it actually is.
+    A model whose licence did not reach the capture, and one carrying a licence
+    this table has never seen, are the same answer and it is `unknown`: an
+    absence of a claim rather than a claim that the terms are bad.
+    """
+    hub = (cards.get(repo) or {}).get("hub") or {}
+    tag, named = hub.get("license"), hub.get("license_name")
+    key = named if (tag or "").lower() == "other" and named else tag
+    rec = (table["licenses"].get(key) or {}) if key else {}
+    return {k: v for k, v in
+            {"id": key, "tag": tag, "tier": rec.get("tier") or UNKNOWN_TIER,
+             "why": rec.get("why")}.items() if v}
 
 # facet groups in the order the weighting panel lists them, with what each one
 # actually measures. a reader deciding what to trust needs this more than the
@@ -1070,6 +1129,11 @@ def build_model(repo, model, ctx):
         "card": {k: card.get(k) for k in
                  ("summary", "highlights", "claimed", "others", "samplers",
                   "quant_samplers", "quant_repo", "hub", "card_url") if card.get(k)},
+        # the licence tier, joined here rather than in the page: the string is a
+        # captured fact and the tier is a judgement in registry/licenses.yaml,
+        # and neither is a function of anything a reader sets. what the page
+        # owns is the arithmetic that moves when they move a slider
+        "license": license_of(repo, ctx["cards"], ctx["licenses"]),
     }
     return rec
 
@@ -1098,7 +1162,7 @@ def provenance():
         with open(path, "rb") as f:
             out["research/data/" + name] = hashlib.sha256(f.read()).hexdigest()[:12]
     for rel in ("registry/models.yaml", "registry/sampling.yaml",
-                "registry/dashboard.yaml"):
+                "registry/dashboard.yaml", "registry/licenses.yaml"):
         with open(os.path.join(ROOT, rel), "rb") as f:
             out[rel] = hashlib.sha256(f.read()).hexdigest()[:12]
     return out
@@ -1114,6 +1178,7 @@ def build():
            "probes": load_json("template-probes"),
            "usecase": load_json("usecase"), "cards": load_json("model-cards"),
            "known_quants": set(support.get("quants") or []),
+           "licenses": license_table(),
            "lines": registry_lines(reg_path)}
     registry = load_yaml(reg_path).get("models") or {}
     sampling = load_yaml(os.path.join(ROOT, "registry", "sampling.yaml"))
@@ -1134,6 +1199,7 @@ def build():
               % (repo, tag, ", ".join(have[:8])), file=sys.stderr)
     meta = facet_meta(models)
     check_evidence(meta)
+    report_unclassified(models)
     return {
         "repo_url": GITHUB, "branch": BRANCH,
         "sampling": {"profiles": sampling.get("profiles") or {},
@@ -1154,9 +1220,35 @@ def build():
             "resolve_ids", os.path.join(HERE, "resolve-ids")).BOARD_NEEDS,
         "retention": retention_curve(),
         "milestones": milestones(),
+        # the tiers, for the filter's help text and the column's label. the
+        # per-licence table does not travel: every model already carries the
+        # tier it resolved to, and shipping the map as well would be a second
+        # copy the page could disagree with
+        "licenses": ctx["licenses"]["tiers"],
         "provenance": provenance(),
         "models": models,
     }
+
+
+def report_unclassified(models):
+    """Every model whose licence the table has no answer for, named at build time.
+
+    The filter that reads this defaults ON, so an unclassified licence is the
+    one way a model could quietly leave the default view. It does not -- the
+    filter keeps `unknown` -- and this is the list that gets it classified,
+    printed on the build rather than waiting for somebody to go looking.
+    """
+    rows = [(m["repo"], (m.get("license") or {}).get("id"))
+            for m in models
+            if (m.get("license") or {}).get("tier") == UNKNOWN_TIER]
+    if not rows:
+        return
+    print("  note: %d model(s) carry a licence registry/licenses.yaml does not "
+          "classify.\n    they are SHOWN rather than filtered, and the permissive "
+          "filter counts them apart:" % len(rows), file=sys.stderr)
+    for repo, lic in sorted(rows):
+        print("    %-52s %s" % (repo, lic or "no licence in the capture"),
+              file=sys.stderr)
 
 
 def milestones():

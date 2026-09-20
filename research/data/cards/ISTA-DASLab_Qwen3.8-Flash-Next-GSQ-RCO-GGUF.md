@@ -114,6 +114,8 @@ The prefill advantage is uneven, and largest where prompts are long: 9.6x on RAG
 
 All models are evaluated against the **BF16** base model. We report the average over five zero-shot tasks (arc_easy, arc_challenge, hellaswag, winogrande, piqa), recovery (zero-shot average relative to BF16), and three reasoning and generation benchmarks: **AIME25**, **GPQA-Diamond**, and **LiveCodeBench v6**. Task average is the mean of the three. Sizes are the full download, including the n-gram shard; the bit-width column is the average over the transformer weights, which is what the search controls.
 
+> **Reasoning effort.** These quantized models are primarily optimized for **xhigh reasoning effort**, and we recommend using them in that mode for best quality. The reported reasoning results should therefore be interpreted in that setting. At lower reasoning-effort levels, quantization-induced degradation can be larger than what is observed at xhigh, so the quality gap relative to the BF16 base model may increase.
+
 | Variant | bpw | GB | ZS avg↑ | recovery | AIME25↑ | GPQA-D↑ | LCB v6↑ | Task avg↑ |
 |---|---|---|---|---|---|---|---|---|
 | BF16 | 16.00 | 354 | 76.94 | 100.0% | 100.00 | 91.92 | 87.43 | 93.12 |

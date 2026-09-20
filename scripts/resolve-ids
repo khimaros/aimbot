@@ -205,6 +205,18 @@ def key_spaces(data=None):
     # that rewrites a picture well has not thereby been shown to draw one. the
     # collector has been capturing this board all along too
     pictured["lmarena-edit"] = lm_open("image_edit-overall-raw")
+    # the showdown, which is the one image source here that is a measurement
+    # rather than a poll. keyed by the site's own generator id, so `FLUX2_DEV`
+    # and "FLUX.2 [dev]" are two spellings of one row rather than two rows --
+    # the site renames a model after it ships and the id is what its records
+    # join on. `locallyHostable` is its open-weights flag and it agrees with
+    # this registry where lmarena's licence string does not: ideogram 4 and
+    # krea 2 are hostable here and both have ggufs the roster pins
+    showdown = ((load("genai-showdown", data) or {}).get("boards") or {})
+    for source, name in (("showdown-t2i", "text-to-image"),
+                         ("showdown-edit", "image-editing")):
+        pictured[source] = open_keys((showdown.get(name) or {}).get("models") or {},
+                                     "locallyHostable")
     # nothing scores a diarizer: there is no third-party DER board for the
     # embedders and segmenters, which is why crispasr's own figure is the only
     # number this repo has for them and it is quoted in the model's notes
@@ -235,6 +247,7 @@ BOARD_NEEDS = {
     "voicearena": "transcribes", "open-asr": "transcribes",
     "aa-tts": "synthesizes", "tts-arena": "synthesizes",
     "aa-t2i": "draws", "lmarena-t2i": "draws", "lmarena-edit": "draws",
+    "showdown-t2i": "draws", "showdown-edit": "draws",
 }
 
 
@@ -285,12 +298,23 @@ def tiered(want, key):
     return key[len(want):] in TIER
 
 
-# boards whose key space is huggingface repo ids rather than display names. a
-# near miss there is a different MODEL and not a different spelling: the substring
+# boards where a near miss is a different MODEL rather than a different
+# spelling, so nothing but an exact normalized hit is accepted.
+#
+# `open-asr` is keyed on huggingface repo ids rather than display names, and
+# resemblance between two of those is not evidence of anything: the substring
 # pass put `moonshine-base` on `moonshine-tiny`'s row and `omniASR-LLM-300M` on
-# the 7B's, which is the failure the docstring below is about, arriving through
-# the one door it did not cover
-REPO_KEYED = {"open-asr"}
+# the 7B's, which is the failure the docstring below is about arriving through
+# the one door it did not cover.
+#
+# the showdown gets in for the other reason: it names a model without its size
+# class. "FLUX.2 Klein" is one row for a family this registry carries as a 4B
+# and a 9B, and the `sized` pass -- which strips the parameter count and
+# compares what is left -- matched it for BOTH, giving two models one score.
+# `candidates` only sees one model at a time, so nothing there can catch that.
+# the site's own description says the row is the 9B, which is prose rather than
+# a handle, so the honest answer is to leave it unmatched.
+EXACT_ONLY = {"open-asr", "showdown-t2i", "showdown-edit"}
 
 
 def candidates(space, wants, sized=(), exact_only=False):
@@ -510,7 +534,7 @@ def main():
                 marks.append("%s=kept" % source)
                 continue
             found, how = candidates(space, wants, sized,
-                                    exact_only=source in REPO_KEYED)
+                                    exact_only=source in EXACT_ONLY)
             if found:
                 ids[source] = found
                 filled += 1

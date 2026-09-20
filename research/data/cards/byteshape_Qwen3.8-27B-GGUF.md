@@ -11,6 +11,7 @@ tags:
 - shapelearn
 - mtp
 - dflash
+- agentic
 ---
 
 # Qwen3.8-27B GGUF (ShapeLearn Quantized)
