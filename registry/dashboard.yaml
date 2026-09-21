@@ -153,18 +153,26 @@ floors:
 filters:
   modalities: [text]
   flags: [fits]
-  # which of registry/licenses.yaml's tiers the page opens showing. permissive
-  # alone, because a reader opening this page is deciding what to run and a
-  # licence they cannot ship under is not a candidate. a multi-select rather
-  # than a toggle so the other two questions have a control: what could i run
-  # under a community licence, and which are the ones nobody has classified.
+  # which of registry/licenses.yaml's tiers the page opens showing: ALL of them,
+  # so nothing is hidden on licence grounds until a reader asks. the control is
+  # for narrowing -- "what could i ship under", "which are unclassified" -- and
+  # those are questions a reader asks, not answers to give them unprompted.
   #
-  # it means `unknown` is HIDDEN by default, which is a reversal -- the boolean
-  # this replaced kept it, on the grounds that an unread licence is the absence
-  # of a claim rather than a bad one. the menu names each tier with its count,
-  # so the unread ones are one tick away and visibly there rather than silently
-  # gone. selecting none is no licence filter at all
-  licenses: [permissive]
+  # it defaulted to `permissive` alone for one afternoon and the cost was
+  # concrete: 16 text models gone, including most of the frontier open-weights
+  # tier -- qwen3.8 flash next, kimi k3, minimax m3 and m2.5, nemotron super,
+  # mistral medium, solar open2 -- and four of those on `unknown`, which is
+  # nobody here having read the terms rather than a finding against them. a
+  # roster that silently omits the best models it knows about is answering a
+  # question nobody asked.
+  #
+  # LISTED rather than left empty, even though an empty set is also no filter:
+  # the menu then shows three ticked boxes a reader can untick, instead of
+  # nothing ticked and a button claiming everything. the cost of listing is that
+  # a FOURTH tier added to licenses.yaml would be hidden until it is named here
+  # too -- build-viewer rejects a tier named here that the table does not
+  # declare, but it cannot reject the reverse without forbidding a narrow default
+  licenses: [permissive, restricted, unknown]
   # the runtimes that load most of this roster and that a reader here is likely
   # to have built. a multi-select because a model can have two -- whisper's
   # files load in crispasr and in stock whisper.cpp

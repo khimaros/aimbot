@@ -420,16 +420,16 @@ so a per-model field would be 194 hand-written copies of something a collector
 already knows, going stale one at a time. build-viewer joins the table onto each
 model and the page filters on the tier.
 
-**the licence filter selects tiers, and opens on `permissive` alone.** it is a
+**the licence filter selects tiers and opens on all of them.** it is a
 multi-select over what that file declares rather than one yes-or-no, because the
 boolean it replaced could only ask "hide what is restricted" and left two
 questions with no control at all: what could i run under a community licence,
 and which are the ones nobody here has read.
 
-that default hides the unclassified as well as the restricted, which is a
-reversal -- the boolean kept them, on the grounds that an unread licence is an
-absence of a claim rather than a bad one. what carries that argument now is the
-menu: each tier is listed with its count, so a hidden tier is visibly there and
-one tick away. every build still prints the models in the `unknown` state,
-`--all` and selecting no tier both drop the filter, and `scripts/aimbot` names
-each active filter and how many models it hides.
+the default hides nothing. it spent an afternoon on `permissive` alone, which
+cost 16 text models -- most of the frontier open-weights tier, and four of them
+on `unknown`, which is an absence of a claim about the terms rather than a claim
+against them. a filter is for a reader to narrow with, not an answer to give
+them before they ask. every build still prints the models in the `unknown`
+state, and `scripts/aimbot` names each active filter and how many models it
+hides, which is how a narrowed view explains itself.

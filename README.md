@@ -1047,11 +1047,11 @@ that are not in the payload -- `fits quant`, `gib`, `fits ctx`, `kv gib` and
 and a second implementation of that fit is the drift this repo keeps deleting.
 
 the defaults are the page's, not none: a 128gb box with 12 reserved at 128k,
-language models only, that fit, on a runtime you are likely to have built, and
-under a permissive licence. naming a `--modality`, `--flag`, `--engine` or
-`--license` replaces that default and `--all` drops all of them. `--ram 0` asks
-what the roster looks like with no budget at all, which is the registry's pinned
-rung rather than a fit.
+language models only, that fit, on a runtime you are likely to have built, under
+any licence. naming a `--modality`, `--flag`, `--engine` or `--license` replaces
+that default and `--all` drops all of them. `--ram 0` asks what the roster looks
+like with no budget at all, which is the registry's pinned rung rather than a
+fit.
 
 **and it says which filter took the rest.** a model missing from the output was
 usually filtered rather than absent, and that used to be something a reader had
@@ -1059,20 +1059,21 @@ to already know; the footer now names every active filter and how many models it
 hides, each measured alone against the whole registry. `--all` is printed beside
 them.
 
-the licence filter is the one that is on by default. `--license` takes the tiers
-`registry/licenses.yaml` declares -- `permissive`, `restricted`, `unknown` --
-and opens on `permissive`, so `--license permissive,restricted,unknown` is how a
-caller says no licence filter without dropping the others.
+`--license` takes the tiers `registry/licenses.yaml` declares -- `permissive`,
+`restricted`, `unknown` -- and every one of them is on by default, so the
+licence hides nothing until you ask it to. it is a multi-select rather than a
+toggle because there are three questions rather than one: `--license permissive`
+is "what could i ship under", `--license restricted` is "what could i run if i
+could live with a community licence", `--license unknown` is the list somebody
+has to work through.
 
-it is a multi-select rather than a toggle because the yes-or-no it replaced
-could only ask one of the three questions. `--license restricted` is "what could
-i run if i could ship under a community licence"; `--license unknown` is the
-list somebody has to work through. a third of this roster ships bespoke terms
-and the hub reports 29 of them as the same string `other`, so "nobody here has
-read these terms" is a real state and not the same claim as "you may not use
-this" -- it is now a tier you ask for rather than one carried along by default.
-the `license` column names the licence under its own name and the tier it landed
-in, which is how a reader finds out why a row went.
+a third of this roster ships bespoke terms and the hub reports 29 of them as the
+same string `other`, so "nobody here has read these terms" is a real state and
+not the same claim as "you may not use this". that is why the default carries it
+rather than filtering it: `--license permissive` drops 16 text models including
+most of the frontier open-weights tier, four of them on `unknown` alone. the
+`license` column names the licence under its own name and the tier it landed in,
+which is how a reader finds out why a row went.
 
 output is the page's own rendering, so a quality of 79.1 prints as `79` the way
 the dashboard shows it, and a size carries the `+d` that says a drafter is

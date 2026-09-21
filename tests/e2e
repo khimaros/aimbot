@@ -177,23 +177,25 @@ test('the vram filter judges what has a size, and passes what has none', () => {
 // licence", and "which are the ones nobody here has read", which is the list
 // somebody has to work through. three checkboxes answer all three.
 //
-// it opens on `permissive` ALONE, which means `unknown` is hidden by default
-// where the boolean kept it. that is a deliberate reversal and it is why the
-// menu carries the count per tier: a reader who wants the unread ones can see
-// there are some and tick them.
-test('the licence filter selects tiers, and opens on permissive alone', () => {
+// it opens on ALL THREE tiers, so the default view hides nothing on licence
+// grounds and the control is there to narrow with. it briefly defaulted to
+// `permissive` alone, which hid 16 text models including most of the frontier
+// open-weights tier -- qwen3.8 flash next, kimi k3, both minimax flagships,
+// nemotron super -- and four of them on `unknown`, which is an absence of a
+// claim about the terms rather than a claim against them.
+test('the licence filter selects tiers, and opens on all of them', () => {
   RESET();
   filters.mods = new Set();
   filters.engines = new Set();
 
   const tierOf = s => licenseOf(model(s)).tier;
-  eq([...filters.licenses].sort().join(','), 'permissive',
-     'the page opens on the permissive tier and nothing else');
+  eq([...filters.licenses].sort().join(','), 'permissive,restricted,unknown',
+     'the page opens with every tier selected');
   const kept = visible().map(m => m.short);
   ok(kept.length, 'the filter leaves a roster');
-  ok(kept.every(s => tierOf(s) === 'permissive'),
-     'and every model in it is permissive: '
-     + kept.filter(s => tierOf(s) !== 'permissive'));
+  // every tier is represented, which is the point of the default
+  ['permissive', 'restricted', 'unknown'].forEach(t => ok(
+    kept.some(s => tierOf(s) === t), t + ' models are visible by default'));
 
   // each tier selects its own and nothing else, so the menu can answer the two
   // questions the boolean could not
@@ -1264,30 +1266,31 @@ test('a context budget is a question about text models, not about a vocoder', ()
   RESET();
 });
 
-// the page opens on permissively licensed language models that fit. MODELS.md
+// the page opens on the language models that fit, under ANY licence. MODELS.md
 // used to be whatever this came to, which made every ui default an edit to the
 // document -- `research/dashboard-table` pins the document's own roster now,
-// modality, flags AND licences, so the two can differ on purpose. the licence
-// filter is what made them differ: it drops qwen3.8 flash next, which the
-// document is still about.
+// modality, flags AND licences, so the two can differ on purpose. they happen to
+// agree on the licence again, and the pin is what makes that a coincidence
+// rather than a dependency.
 test('the page opens on the language models a reader could actually run', () => {
   RESET();
   filters.mods = new Set(DEFAULT_MODALITIES);
   eq([...filters.mods].join(','), 'text', 'the page starts on language models');
   eq([...filters.flags].sort().join(','), 'fits', 'with the vram filter pressed');
-  eq([...filters.licenses].sort().join(','), 'permissive',
-     'and the licence menu on the permissive tier');
   const got = visible().length;
-  const want = D.models.filter(m => m.kind === 'text' && fitsBudget(m)
-    && licenseOf(m).tier === 'permissive').length;
-  eq(got, want, 'the default view is every permissive text model that fits');
+  const want = D.models.filter(m => m.kind === 'text' && fitsBudget(m)).length;
+  eq(got, want, 'the default view is every text model that fits, licence aside');
   ok(visible().every(m => m.kind === 'text'), 'nothing but language models by default');
 
-  // and the licence filter is the only thing between the two rosters, which is
-  // the claim that makes turning it off a complete answer
-  filters.licenses = new Set();
-  const wider = visible().length;
-  ok(wider > got, 'dropping it shows strictly more: ' + wider + ' against ' + got);
+  // the model that kept turning up when this default was narrower
+  ok(visible().some(m => m.short === 'qwen3.8 flash next'),
+     'including the restricted-licence ones: ' + visible().length + ' rows');
+
+  // and narrowing to one tier is strictly fewer, which is the control working
+  filters.licenses = new Set(['permissive']);
+  const fewer = visible().length;
+  ok(fewer < got, 'picking one tier shows strictly fewer: '
+     + fewer + ' against ' + got);
   RESET();
 });
 
