@@ -889,6 +889,62 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+  # CARRIED AS A BASE, not as a candidate. qwen3 8b is two generations behind the
+  # qwen3.5/3.6/3.8 entries beside it and nobody should pick it off this roster
+  # today. it is here because `prism-ml/Ternary-Bonsai-8B` derives from it, and a
+  # derivative whose base is not carried cannot be read against the thing it
+  # claims to improve on -- which is the only question a ternary entry raises.
+  # it already sat in this file as flux 2 klein's text encoder, which is a
+  # component rather than a row.
+  Qwen/Qwen3-8B:
+    kind: text
+    name:
+      short: qwen3 8b
+      # `.` is deliberately NOT a separator here: `qwen3.8b` is how people write
+      # the qwen3.8 family, and `qwen3[\s.-]*8b` would claim every mention of it
+      match: qwen\s*-?3[\s-]*8b\b
+    notes: >-
+      the dense 8b of the original qwen3 release, carried as the base
+      `prism-ml/Ternary-Bonsai-8B` was built from rather than as something to
+      run. the generations above it are the reason: qwen3.5-9b is the same size
+      class two releases later.
+    quants:
+    - repo: unsloth/Qwen3-8B-GGUF
+      quant: UD-Q4_K_XL
+    runtime:
+      arch: qwen3
+      mainline: true
+      since: b5092
+      merged: '2025-04-09'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: Qwen3-8B
+    sampling:
+      thinking:
+        source: generation-config
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        tuned: [instruct, chat, reason]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: unsloth/Qwen3-8B-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   Qwen/Qwen3.5-9B:
     kind: text
     name:
@@ -1429,6 +1485,134 @@ models:
       accepts: [low, medium, xhigh]
       default: xhigh
       aliases: {high: xhigh}
+  # agentionai's own fine-tunes of the two qwen3.8 entries above, and the reason
+  # `publishers.txt` already called them "AP-* ladders of qwen3.8, plus its own
+  # Signal fine-tunes" before either was carried. both are self-distillation on
+  # the base model's OWN answers under an instruction to be direct, so they add
+  # no external data and claim no new knowledge -- what they change is how many
+  # tokens the answer costs, which is a property no benchmark on this roster
+  # measures and the reason both entries lean on the publisher's own numbers.
+  agentionai/Signal-3.8-27B:
+    kind: text
+    name:
+      short: signal 3.8 27b
+      match: signal[\s.-]*3\.8[\s-]*27b|signal[\s-]*27b
+    notes: >-
+      a minimally invasive fine-tune of qwen3.8-27b for token efficiency {card}:
+      57% fewer answer tokens and 52% fewer thinking tokens on the publisher's
+      held-out prompt set, at matched or better quality -- 98.3% against 98.3% on
+      gsm8k with thinking off and 95.0% against 92.5% with it on. the mechanism
+      is stated plainly and is checkable: preambles go from 13% of answers to 0%,
+      markdown headers from 47% to 18%.
+
+      THE NUMBERS ARE THE PUBLISHER'S AND THEY SAY SO. the card notes the
+      percentages were measured on the FIRST release and that the 2026-09-13
+      weights "trade a little of that reduction for stability", with the
+      re-measurement still in progress. so the direction is well evidenced and
+      the magnitude is provisional by the publisher's own account.
+
+      the second claim is the more interesting one for a host: qwen3.8-27b ships
+      an MTP draft head, and a terser model is a more predictable one, so draft
+      acceptance rises from 72% to 94% on structured output at draft 3. that is a
+      speedup on top of the shorter answers and it compounds -- which is also why
+      the sampling block matters here more than usual. the card is unusually
+      direct about it: without min-p "long answers can run away into repetition
+      on some draws", on signal and on the base model alike.
+    quants:
+    - repo: agentionai/Signal-3.8-27B-GGUF
+      quant: AP-Q4_K_XL
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    sampling:
+      thinking:
+        source: generation-config
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.05
+        tuned: [instruct, chat, reason]
+  # KEYED ON THE CONVERSION, because the base repo is not publicly readable:
+  # `agentionai/Signal-3.8-Flash-Next` answers 401 to the card, the config and
+  # the hub metadata alike, so keying on it gave an entry with no facts at all.
+  # that is what `gguf_only` is for. expect the facts to degrade with it: the
+  # parameter count comes off the repo NAME and the attention geometry off the
+  # gguf header rather than off a config.json.
+  agentionai/Signal-3.8-Flash-Next-GGUF:
+    kind: text
+    gguf_only: true
+    name:
+      short: signal 3.8 flash next
+      match: signal[\s.-]*3\.8[\s-]*flash[\s-]*next|signal[\s-]*flash[\s-]*next
+    notes: >-
+      the same self-distillation over qwen3.8-flash-next {card}, and the better
+      evidenced of the two: 26% fewer reasoning tokens on math-500 with half the
+      hesitation markers AND a higher score, 99.2% against 97.5%. the 177b
+      mixture-of-experts backbone, the vision encoder and the MTP head are
+      untouched, which is what makes it a drop-in.
+
+      the agentic number is the one worth reading carefully. as the coding agent
+      behind their own harness on ten terminal-bench 2.0 tasks it solved 10 of 10
+      against the base model's 8, in 25% less wall time and 15% fewer tokens on
+      the tasks both solved -- and the card says outright that it is one trial
+      per task, so the pass counts are "indicative rather than a rigorous rate".
+      ten tasks at n=1 is a direction, not a rate, and the roster's own
+      terminal-bench column is a different measurement on a different harness.
+
+      MTP acceptance goes 69% to 90% on coding output, the same compounding
+      effect the 27b entry describes.
+    quants:
+    - repo: agentionai/Signal-3.8-Flash-Next-GGUF
+      quant: AP-Q4_K_XL
+    runtime:
+      arch: qwen4exp
+      mainline: true
+      since: b10660
+      merged: '2026-08-27'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    sampling:
+      thinking:
+        source: tuned-here
+        note: >-
+          taken from the SIBLING entry's card rather than this one's. signal 3.8
+          27b states the settings outright -- temperature 0.6, min-p 0.05, top-p
+          0.95, top-k 20 -- and says they apply "on Signal and on the base model
+          alike", which is the same fine-tune over the same publisher's recipe.
+          this repo ships no generation_config to read because the weights repo
+          is gated, so nothing can derive it here. the min-p is the part that
+          matters and is why this is not left empty: without it the card says
+          long answers "can run away into repetition on some draws"
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.05
+        tuned: [instruct, chat, reason, tools]
   Tongyi-MAI/Z-Image-Turbo:
     kind: image
     name:
@@ -5182,6 +5366,12 @@ models:
       default: true
   prism-ml/Bonsai-27B-unpacked:
     kind: text
+    base:
+      repo: Qwen/Qwen3.6-27B
+      relation: quantized
+      note: >-
+        the card states "Derived from Qwen3.6-27B"; the hub declares no base_model
+        on the unpacked repo, so this is read off the card
     # QAT to one bit: the shipped precision IS the trained one, so this model is
     # not paying a quantization penalty for being small and the retention curve
     # does not apply. the note below and this entry's written verdict both said
@@ -5246,6 +5436,12 @@ models:
       default: true
   prism-ml/Ternary-Bonsai-27B-unpacked:
     kind: text
+    base:
+      repo: Qwen/Qwen3.6-27B
+      relation: quantized
+      note: >-
+        same base and same source as the plain bonsai 27b beside it: the card, not
+        the hub
     # ternary weights are what it was trained to, not what it was reduced to
     native_low_bpw: true
     name:
@@ -6114,6 +6310,12 @@ models:
       default: false
   prism-ml/Ternary-Bonsai-8B-unpacked:
     kind: text
+    base:
+      repo: Qwen/Qwen3-8B
+      relation: quantized
+      note: >-
+        the card's base-model row says `Qwen3-8B` flat. carried on this roster only
+        so this pair can be read against each other
     # ternary, like its 27b siblings: trained at the precision it ships
     native_low_bpw: true
     name:

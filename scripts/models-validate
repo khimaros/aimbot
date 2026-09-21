@@ -296,6 +296,38 @@ def check_speculative(sp, where, f, nested=False):
 # roster, which is not a llama.cpp release at all but a backend name.
 CRISPASR_FIELDS = {"backend", "diarize", "post", "labels_speakers",
                    "accept_license"}
+# WHAT A MODEL WAS MADE FROM. a different question from `scripts/resolve-base`,
+# which asks which weights a gguf CONVERTS -- this one is about the model, and it
+# is the only way a derivative can be read against the thing it claims to
+# improve on. mostly DERIVED: the hub publishes `base_model` and the relation,
+# and `build-viewer` joins it, so a block here is for the entries the hub says
+# nothing about -- prism's three unpacked repos declare no base at all.
+BASE_FIELDS = {"repo", "relation", "note"}
+# the hub's own enum, which is what the captured value will be
+BASE_RELATIONS = ("finetune", "quantized", "adapter", "merge")
+
+
+def check_base(b, where, keys, f):
+    """A base block names one model and how this one came from it."""
+    if b is None:
+        return
+    if not isinstance(b, dict):
+        f.add(where, "base must be a mapping, got %r" % (b,))
+        return
+    unknown = sorted(set(b) - BASE_FIELDS)
+    if unknown:
+        f.add(where, "unknown base field(s) %s (known: %s)"
+              % (", ".join(unknown), ", ".join(sorted(BASE_FIELDS))))
+    if not b.get("repo"):
+        f.add(where, "base needs a repo saying which model this came from")
+    if b.get("relation") and b["relation"] not in BASE_RELATIONS:
+        f.add(where, "base.relation %r must be one of %s"
+              % (b["relation"], ", ".join(BASE_RELATIONS)))
+    # an off-roster base is FINE and common -- 39 of the 47 the hub declares point
+    # at a `-Base` pretrain nobody serves. it is only worth saying when the base
+    # IS carried, because then the two rows can be read against each other
+    if b.get("repo") and b["repo"] == where:
+        f.add(where, "base.repo is the entry itself")
 # what a weight can be to a diarization run. neither transcribes: an embedder
 # turns a span of audio into a speaker vector, a segmenter says only WHEN the
 # speaker changed
@@ -541,6 +573,7 @@ def check_registry(models, sampling, f):
 
         check_runtime(m.get("runtime"), repo, f)
         check_crispasr(m.get("crispasr"), repo, f)
+        check_base(m.get("base"), repo, models, f)
         check_speculative(m.get("speculative"), repo, f)
         check_engine(m, repo, f)
         check_diarize_kind(m, repo, f)

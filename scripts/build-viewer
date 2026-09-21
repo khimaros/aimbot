@@ -1084,6 +1084,45 @@ def crispasr_block(model, backends):
     return block
 
 
+def base_block(model, card, keys):
+    """What this model was made from, and whether that thing is on the roster.
+
+    DERIVED from the hub, which publishes it two ways: `base_model` in cardData,
+    and `base_model:<relation>:<repo>` in the tags. The second is where the
+    relation actually lives -- 0 of 47 roster entries set `base_model_relation`
+    by hand and every one of them carries `finetune` or `quantized` in the tags.
+
+    The registry fills the hub's SILENCE and never overrules it, the same rule
+    the licence gate follows: prism's three unpacked repos declare no base at
+    all, so those say it by hand off the card. A hand block where the hub also
+    answers is a lint error rather than a precedence question.
+
+    `on_roster` is the whole point of recording it. 39 of the 47 point at a
+    `-Base` pretrain nobody serves, which is a fact about provenance and not
+    something a reader can act on; the handful pointing at another ENTRY are
+    pairs the page can put side by side.
+    """
+    hub = (card.get("hub") or {})
+    repos = hub.get("base_model") or []
+    written = dict(model.get("base") or {})
+    if repos:
+        out = {"repo": repos[0], "relation": hub.get("base_model_relation"),
+               "source": "hub"}
+        # a merge names several parents; the first is the block's subject and the
+        # rest are recorded rather than dropped
+        if len(repos) > 1:
+            out["also"] = repos[1:]
+    elif written.get("repo"):
+        out = {"repo": written["repo"], "relation": written.get("relation"),
+               "source": "card"}
+    else:
+        return None
+    if written.get("note"):
+        out["note"] = written["note"]
+    out["on_roster"] = out["repo"] in keys
+    return {k: v for k, v in out.items() if v is not None}
+
+
 def build_model(repo, model, ctx):
     facts = ctx["facts"].get(repo) or {}
     use = (ctx["usecase"].get("models") or {}).get(repo) or {}
@@ -1109,6 +1148,7 @@ def build_model(repo, model, ctx):
         "runtime": rendered_notes(model.get("runtime") or {}, repo),
         "engines": engines_for(model),
         "crispasr": crispasr_block(model, ctx["backends"]),
+        "base": base_block(model, card, ctx["registry_keys"]),
         "native_low_bpw": model.get("native_low_bpw"),
         # why this entry is keyed on a gguf repo: nobody published weights for
         # it in any other form. carried so the page and the checks read the
@@ -1194,6 +1234,10 @@ def build():
            "licenses": license_table(),
            "lines": registry_lines(reg_path)}
     registry = load_yaml(reg_path).get("models") or {}
+    # the keys, so `base_block` can say whether a model's base is CARRIED here --
+    # a base on the roster is a pair a reader can compare, one off it is only
+    # provenance
+    ctx["registry_keys"] = set(registry)
     sampling = load_yaml(os.path.join(ROOT, "registry", "sampling.yaml"))
     cfg = dashboard_config(tiers=ctx["licenses"]["tiers"])
     models = [build_model(repo, m, ctx) for repo, m in sorted(registry.items())]

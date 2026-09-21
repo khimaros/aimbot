@@ -53,6 +53,32 @@
   "Qwen/Qwen3.8-27B": [
    {
     "kind": "score",
+    "hand_written": true,
+    "quant_repo": "unsloth/Qwen3.8-27B-GGUF",
+    "metric": "mean of 14 benchmarks in THINKING mode, six skill categories",
+    "points": [
+     [
+      5.2,
+      0.9868
+     ],
+     [
+      16.0,
+      1.0
+     ]
+    ],
+    "quants": [
+     "UD-Q4_K_XL",
+     "FP16"
+    ],
+    "ref": {
+     "source": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+     "url": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf",
+     "captured": "2026-09-20",
+     "note": "prism benchmarked four builds of Qwen3.8-27B against each other to place their own ternary model, which makes it a sweep of SOMEBODY ELSE'S quants -- the only one here not published by the quantizer. EvalScope + vLLM on an H100, identical decoding and scoring, in thinking mode, 14 benchmarks. FP16 averages 86.32 and UD-Q4_K_XL 85.18, so 0.9868. THE THIRD ARM IS NOT RECORDED AS A POINT: an IQ2_XXS build at 2.8 bpw averaged 72.59, which is 0.8409 and by far the most interesting number here, but the card never says whose IQ2_XXS it is. a retention point whose FILE is unknown cannot be joined to a rung, which is what a point is for. it is kept in prose so the figure is not lost. that arm is also the sharpest published statement of how low-bit builds fail: it holds 88.93 on mmlu-redux while falling to 57.5 on aime26 and 56.4 on livecodebench, so a casual test reads fine and a reasoning chain does not. this sweep is the evidence behind the `native_low_bpw` exemption -- at a LOWER 1.72 bpw the natively-ternary bonsai 2 holds 0.982, against 0.841 for a conventional build at 2.8, which is the difference between weights trained to ternary and weights reduced to it"
+    }
+   },
+   {
+    "kind": "score",
     "quant_repo": "ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF",
     "metric": "task average over aime25, gpqa-diamond and livecodebench v6",
     "points": [
@@ -403,6 +429,68 @@
      "source": "unsloth",
      "url": "https://unsloth.ai/docs/models/qwen3.8-next",
      "note": "ten rungs of mean kl divergence and top-1 agreement against bf16, published on unsloth's docs site rather than on the card. the rows are the page's own search index, so the layout above is declared rather than read off a header"
+    }
+   }
+  ],
+  "agentionai/Signal-3.8-27B": [
+   {
+    "kind": "proxy",
+    "metric": "kl divergence",
+    "better": "lower",
+    "quant_repo": "agentionai/Signal-3.8-27B-GGUF",
+    "points": [
+     [
+      3.58,
+      0.1003
+     ],
+     [
+      3.89,
+      0.0661
+     ],
+     [
+      4.17,
+      0.0287
+     ],
+     [
+      4.41,
+      0.0595
+     ],
+     [
+      4.98,
+      0.0184
+     ],
+     [
+      5.14,
+      0.0124
+     ],
+     [
+      5.72,
+      0.0081
+     ],
+     [
+      6.57,
+      0.0055
+     ],
+     [
+      8.26,
+      0.004
+     ]
+    ],
+    "quants": [
+     "AP-IQ3_XXS",
+     "AP-IQ3_S",
+     "AP-IQ4_XS",
+     "AP-Q3_K_XL",
+     "AP-Q4_K_M",
+     "AP-Q4_K_XL",
+     "AP-Q5_K_M",
+     "AP-Q6_K",
+     "Q8_0"
+    ],
+    "ref": {
+     "source": "agentionai/Signal-3.8-27B-GGUF",
+     "url": "https://huggingface.co/agentionai/Signal-3.8-27B-GGUF",
+     "note": "published kl divergence per quant on the card"
     }
    }
   ],

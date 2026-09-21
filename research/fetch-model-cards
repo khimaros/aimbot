@@ -430,6 +430,25 @@ def hub_meta(repo, max_age, refresh):
     # is where the repo says WHICH, and without it nothing downstream can tell a
     # community licence from a research-only one
     out["license_name"] = card_data.get("license_name")
+    # WHAT THIS MODEL WAS MADE FROM, and how. a different question from
+    # `scripts/resolve-base`, which asks which weights a gguf CONVERTS -- this is
+    # about the model, and it is the only way a derivative can be read against
+    # the thing it claims to improve on. `base_model` is a list because a merge
+    # names several parents.
+    #
+    # THE RELATION IS IN THE TAGS, not in cardData. the hub derives
+    # `base_model:<relation>:<repo>` itself, where `base_model_relation` is a
+    # field a publisher sets by hand and hardly anyone does -- 0 of 47 on this
+    # roster, against `finetune` or `quantized` on every one of them in the tags.
+    # reading only cardData reported the whole roster as relation-unknown.
+    base = card_data.get("base_model")
+    out["base_model"] = [base] if isinstance(base, str) else base
+    rel = card_data.get("base_model_relation")
+    if not rel:
+        rels = [t.split(":")[1] for t in (d.get("tags") or [])
+                if t.startswith("base_model:") and len(t.split(":")) == 3]
+        rel = ",".join(sorted(set(rels))) or None
+    out["base_model_relation"] = rel
     out["tags"] = [t for t in (d.get("tags") or [])
                    if ":" not in t and t not in ("region", "endpoints_compatible")]
     return {k: v for k, v in out.items() if v not in (None, [], "")}

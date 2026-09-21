@@ -1144,6 +1144,23 @@ const kv = (pairs, cls = '') => `<div class="kv ${cls}">`
     .map(([k, v]) => `<div><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`)
     .join('') + '</div>';
 
+// the base a model was made from, as one cell. a base on the roster opens that
+// model rather than printing a repo path, since the reason to record the pair is
+// to read one against the other.
+function baseLine(m) {
+  const b = m.base;
+  if (!b) return '';
+  const rel = b.relation ? `<span class="sub"> ${esc(b.relation)}</span>` : '';
+  const via = b.source === 'card'
+    ? '<span class="sub" title="the hub declares no base_model for this repo; read off the card">, off the card</span>' : '';
+  const more = (b.also || []).length
+    ? `<span class="sub"> +${b.also.length} more</span>` : '';
+  if (!b.on_roster) return esc(b.repo) + rel + via + more;
+  const other = D.models.find(x => x.repo === b.repo);
+  return `<a href="#model=${encodeURIComponent(b.repo)}">${esc(other ? other.short : b.repo)}</a>`
+    + rel + via + more;
+}
+
 function tabOverview(m) {
   const f = m.facts, s = scored(m);
   const use = m.derived.best_for || [];
@@ -1189,6 +1206,12 @@ function tabOverview(m) {
           ['gguf context', ctxLabel(f.context_gguf)],
           ['mtp layers', f.mtp_layers],
           ['license', esc(hub.license || '')],
+          // WHAT IT WAS MADE FROM. most bases are a `-Base` pretrain nobody
+          // serves, which is provenance; the ones CARRIED here are a pair a
+          // reader can compare, so those link to the other row and the rest are
+          // plain text. `source` says whether the hub declared it or a human
+          // read it off the card, because 3 of the 53 have no hub answer
+          ['derived from', baseLine(m)],
           ['downloads', hub.downloads ? fmt.format(hub.downloads) : ''],
           ['likes', hub.likes],
           ['first published', (hub.createdAt || '').slice(0, 10)],
