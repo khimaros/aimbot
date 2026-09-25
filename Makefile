@@ -1,4 +1,12 @@
+# the project venv goes in front of PATH for every target, because a shell on
+# mise's SHIM mode gets the tool version from the shim and none of mise.toml's
+# [env], and a shell with somebody else's venv already activated gets that one
+# first. mise.toml does the same for an interactive shell; doing it here too is
+# what makes `make` mean the same thing in a plain `sh -c` and in a terminal.
+export PATH := $(CURDIR)/.venv/bin:$(PATH)
+
 help:
+	@echo "to install the toolchain this repo runs on, run 'make setup'"
 	@echo "to check the registry, run 'make lint'"
 	@echo "to rebuild MODELS.md from research/data, run 'make tables'"
 	@echo "to rebuild the usecase rollup, run 'make usecase'"
@@ -16,7 +24,28 @@ help:
 	@echo "to check everything before committing, run 'make precommit'"
 .PHONY: help
 
-lint:
+# every script here is `#!/usr/bin/env python3`, so which interpreter runs is
+# decided by PATH -- including by whatever venv somebody left activated in the
+# shell they typed `make lint` into, which fails three files later inside
+# `import yaml` with no hint that the fix is one command. check the python that
+# is about to be used and say what to do about it.
+deps:
+	@python3 -c "import yaml, jinja2" 2>/dev/null || { \
+	  echo "python3 at $$(command -v python3) has no pyyaml/jinja2."; \
+	  echo "run 'make setup'."; exit 1; }
+.PHONY: deps
+
+# the toolchain in mise.toml and the two packages in pyproject.toml, into .venv.
+# `mise install` takes the versions; `uv sync --frozen` installs exactly what
+# uv.lock pins, so a setup on a second machine cannot drift from the first.
+setup:
+	mise install
+	uv sync --frozen
+	@echo "done. 'make lint' works from any shell now; mise.toml does the same for"
+	@echo "an interactive one, once the mise hook is loaded."
+.PHONY: setup
+
+lint: deps
 	./scripts/models-validate
 	./scripts/resolve-turns --check
 	./scripts/resolve-samplers --check
@@ -107,7 +136,7 @@ site:
 
 # the page shipped, booted under node against the real data.json. it needs the
 # built docs/, so build them first rather than testing a stale copy.
-test-e2e: site
+test-e2e: deps site
 	./tests/e2e
 	./tests/collectors
 .PHONY: test-e2e
@@ -116,7 +145,7 @@ test: test-e2e
 .PHONY: test
 
 # the whole research sweep: collect, derive, build, check, then the punch list
-sweep:
+sweep: deps
 	./scripts/sweep
 .PHONY: sweep
 

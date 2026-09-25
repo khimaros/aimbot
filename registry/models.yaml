@@ -906,8 +906,9 @@ models:
     notes: >-
       the dense 8b of the original qwen3 release, carried as the base
       `prism-ml/Ternary-Bonsai-8B` was built from rather than as something to
-      run. the generations above it are the reason: qwen3.5-9b is the same size
-      class two releases later.
+      run -- its own card names it {card@prism-ml/Ternary-Bonsai-8B-gguf}. the
+      generations above it are the reason: qwen3.5-9b is the same size class two
+      releases later.
     quants:
     - repo: unsloth/Qwen3-8B-GGUF
       quant: UD-Q4_K_XL
@@ -1547,6 +1548,18 @@ models:
         top_k: 20
         min_p: 0.05
         tuned: [instruct, chat, reason]
+    turns:
+      source: agentionai/Signal-3.8-27B-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, xhigh]
+      default: xhigh
   # KEYED ON THE CONVERSION, because the base repo is not publicly readable:
   # `agentionai/Signal-3.8-Flash-Next` answers 401 to the card, the config and
   # the hub metadata alike, so keying on it gave an entry with no facts at all.
@@ -1579,6 +1592,16 @@ models:
     quants:
     - repo: agentionai/Signal-3.8-Flash-Next-GGUF
       quant: AP-Q4_K_XL
+    - repo: agentionai/Signal-3.8-Flash-Next-GGUF
+      quant: AP-IQ4_XS
+      note: 'the cheaper of the two rungs pinned here, {gib} against the
+        {gib@AP-Q4_K_XL} above it: IQ3_S on the experts'' gate and up where that
+        one puts Q4_K, and otherwise the recipe unsloth ships as UD-IQ4_XS over
+        the base weights -- {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS} is
+        the same file with Q8_0 rather than Q6_K on the attention, ssm and
+        embedding tensors, five layers of down projections, and IQ4_XS on one
+        layer of gate and up. what every tier of this ladder is actually made of
+        is on the base entry, and the tier names describe none of them'
     runtime:
       arch: qwen4exp
       mainline: true
@@ -1603,16 +1626,31 @@ models:
           taken from the SIBLING entry's card rather than this one's. signal 3.8
           27b states the settings outright -- temperature 0.6, min-p 0.05, top-p
           0.95, top-k 20 -- and says they apply "on Signal and on the base model
-          alike", which is the same fine-tune over the same publisher's recipe.
+          alike" {card@agentionai/Signal-3.8-27B}, which is the same fine-tune
+          over the same publisher's recipe.
           this repo ships no generation_config to read because the weights repo
           is gated, so nothing can derive it here. the min-p is the part that
           matters and is why this is not left empty: without it the card says
           long answers "can run away into repetition on some draws"
+          {card@agentionai/Signal-3.8-27B}
         temp: 0.6
         top_p: 0.95
         top_k: 20
         min_p: 0.05
         tuned: [instruct, chat, reason, tools]
+    turns:
+      source: agentionai/Signal-3.8-Flash-Next-GGUF
+      developer: as-system
+      leading_system_max: unlimited
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, high]
+      default: high
+      aliases: {xhigh: high}
   Tongyi-MAI/Z-Image-Turbo:
     kind: image
     name:
@@ -1854,6 +1892,162 @@ models:
       - text
     turns:
       source: unsloth/MiMo-V2.5-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  XiaomiMiMo/MiMo-V2.6-Distill-Qwen-9B:
+    kind: text
+    name:
+      short: mimo v2.6 distill 9b
+      # three checkpoints carry the series name and the qwen3.5 it was tuned
+      # from is on this roster under its own alias, so the pattern asks for the
+      # word the repo puts after the version rather than the version alone
+      match: mimo[\s-]*v?2\.6[\s-]*distill
+    notes: >-
+      qwen3.5-9b fine-tuned by xiaomi on mimo-generated data and shipped as an sft
+      checkpoint: the card {card} calls it "a starting point for open research in
+      agentic reinforcement learning", which is the honest frame -- it is a base for
+      somebody else's rl run rather than a rival release, and every number on it is
+      the vendor's, several of them on internal eval sets.
+
+      the fine-tune left the architecture alone and changed the template, so the
+      loader is qwen35's exactly as the qwen3.5-9b it came from while the reasoning
+      turn and the `enable_thinking` knob are mimo's. bartowski's ladder is the
+      conversion pinned here and unsloth has none.
+    quants:
+    - repo: bartowski/MiMo-V2.6-Distill-Qwen-9B-GGUF
+      quant: Q4_K_M
+      note: '{gib} at {bpw}, the rung its card {card} calls the "default size for most use
+        cases". it is not the stock recipe: bartowski publishes a per-tensor layout map
+        for each file and calibrated the imatrix by rendering the model''s own chat
+        template, so tool-call tokens are in the importance matrix. the vision half is a
+        separate {gib@bartowski/MiMo-V2.6-Distill-Qwen-9B-GGUF:mmproj:F16} mmproj'
+    - repo: bartowski/MiMo-V2.6-Distill-Qwen-9B-GGUF
+      quant: Q8_0
+      note: 'the top of bartowski''s quantized rungs at {gib} and {bpw}, and also the whole of
+        ggml-org''s conversion of these weights, which published this one file and
+        nothing under it'
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      thinking:
+        source: generation-config
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: bartowski/MiMo-V2.6-Distill-Qwen-9B-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  XiaomiMiMo/MiMo-V2.6-Flash-RL:
+    kind: text
+    name:
+      short: mimo v2.6 flash
+      match: mimo[\s-]*v?2\.6[\s-]*flash
+    notes: >-
+      the smaller of the two rl checkpoints of the 2.6 series, "the
+      efficiency-balanced checkpoint" as the card {card} puts it: 309b of parameters
+      with 15b live per token, 1m context, and text, image, video and audio into one
+      backbone. one caveat before the figures: the hub counts this checkpoint's packed
+      expert tensors once each, so the parameter total derived off it is about half the
+      card's and any bits per weight computed from that total is double the file's. the
+      tensor table read out of the two ggufs is right, and the notes on the rungs quote
+      it.
+
+      the scores are the vendor's and they are agentic ones, deepswe and terminal
+      bench and osworld, because nothing on this roster has scored a model that is
+      days old. ggml-org converted it the next day and is the only publisher of a
+      gguf, which is why the two rungs below are its two files.
+    quants:
+    - repo: ggml-org/MiMo-V2.6-Flash-RL-GGUF
+      quant: Q2_K
+      note: '{gib} at {bpw}, the smaller of the two rungs and the smaller of the two files: the
+        card {card} says it keeps the expert down projections at mxfp4 and puts the
+        gate and up projections at Q2_K, and that "the Q2 models do not use an imatrix
+        calibration due to lack of one"'
+    - repo: ggml-org/MiMo-V2.6-Flash-RL-GGUF
+      quant: MXFP4
+      note: '{gib} at {bpw}: the routed experts at "their native MXFP4 precision" {card}
+        with the rest at Q8_0, so what the smaller rung gives up is on the experts. the
+        vision and audio encoders are a separate
+        {gib@ggml-org/MiMo-V2.6-Flash-RL-GGUF:mmproj:Q8_0} mmproj'
+    runtime:
+      arch: mimo2
+      mainline: true
+      since: b7536
+      merged: '2025-12-24'
+    ids:
+      aa: ''
+      gbench: xiaomi/mimo-v2.6-flash
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+    speculative:
+      type: draft-mtp
+      n_max: 7
+      note: 'a sidecar and not a head folded into the weights: the conversion carries
+        q8_0 and mxfp4 copies of the draft beside the rungs for `--mtp`
+        {card@ggml-org/MiMo-V2.6-Flash-RL-GGUF}. the weights card {card} describes a "5-layer
+        SWA MTP drafter (DFlash-style)" that "Predicts 7 subsequent tokens per forward pass",
+        which is where n_max comes from'
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      - audio
+      output:
+      - text
+    turns:
+      source: ggml-org/MiMo-V2.6-Flash-RL-GGUF
       developer: own
       leading_system_max: unlimited
       mid_system: ok
@@ -2349,21 +2543,24 @@ models:
         tracking: https://github.com/ggml-org/llama.cpp/pull/28696
         note: the derived block below reads the header, which says `deepseek4` -- the v4
           architecture mainline has carried since b9840 -- and that is the one case where the
-          header is not the answer. the converter PR is a draft and converter-only, and a v4.1
-          file ships no `output_hc_*` tensors, so a stock build accepts the arch string and
-          then fails on the tensor table. the quantizer's own matrix records the same result
-          from the other side, and says the file has not been run end to end on ANY runtime
-      note: 'the only complete gguf of this model: {gib} over five shards at {bpw}, sha256
-        covered and byte-reproducible over two runs per the card {card}. a routed-expert
-        requant rather than a rung -- iq2_xxs on gate/up and q2_k on down, against native
-        precision everywhere else -- so the label carries `-mixed` the way avar6''s does. it is
-        uncalibrated (no imatrix, unit importance) and it omits the two engram tables, the
-        mtp/dspark blocks and the vision tensors, which is why the vision half of this entry is
-        a fact about the checkpoint and not about this file. it is the pin because it is the
-        rung that is all there; the vcruz305 ladder below is complete now and starts at
-        {gib@vcruz305/DeepSeek-V4.1-Flash-GGUF:Q2_K}, so it is a watch rather than an
-        alternative. the third conversion on the hub is not a rung
-        at all -- AMAImedia mirrors vcruz305''s shards beside the original safetensors'
+          header is not the answer. this file was converted before the architecture got its own
+          name, and a v4.1 file ships no `output_hc_*` tensors, so a stock build accepts the
+          arch string and then fails on the tensor table. the quantizer's own matrix records the
+          same result from the other side, and says the file has not been run end to end on ANY
+          runtime
+      note: 'the smallest pack of this model and the cheapest thing that loads: {gib} over five
+        shards at {bpw}, sha256 covered and byte-reproducible over two runs per the card {card}.
+        a routed-expert requant rather than a rung -- iq2_xxs on gate/up and q2_k on down,
+        against native precision everywhere else -- so the label carries `-mixed` the way
+        avar6''s does. it is uncalibrated (no imatrix, unit importance) and it omits the two
+        engram tables, the mtp/dspark blocks and the vision tensors, which is why the vision
+        half of this entry is a fact about the checkpoint and not about this file -- and it is
+        why every pack below it carries the engram tables and costs half again as much at the
+        least. this was
+        carried as the pin while it was the only complete pack on the hub; it is the smallest
+        now, and {gib@vcruz305/DeepSeek-V4.1-Flash-GGUF:Q2_K} is the smallest that keeps the
+        engram. AMAImedia mirrors vcruz305''s shards beside the original safetensors and is not
+        a second source of anything'
     - repo: vcruz305/DeepSeek-V4.1-Flash-GGUF
       quant: Q2_K
       runtime:
@@ -2374,30 +2571,110 @@ models:
           cannot complete, and the pack is whole now. the card says it outright, "These files do
           not run on upstream llama.cpp yet" {card}, and names where they do: the
           `runtime/deepseek41` branch of vcruz305''s own llama.cpp fork, with sparse attention
-          the piece still unfinished'
-      note: 'carried to track the ladder, because this is the only conventional k-quant attempt
-        at the model. the pack is complete now, at {gib}, and the ladder has grown to four
+          the piece still unfinished. the upstream PR is where the fork came from rather than a
+          separate attempt at it -- the branch and the PR are the same author, and the PR has
+          since grown a runtime graph and a chat template on top of the conversion it opened
+          with, which is what "still unmerged" now means'
+      note: 'carried to track the ladder, because it is the plain k-quant ladder of this model --
+        the other packs are recipes. the pack is complete now, at {gib}, and the ladder has grown
+        to four
         rungs -- Q3_K_M at {gib@Q3_K_M}, Q4_K_M at {gib@Q4_K_M} and Q8_0 at {gib@Q8_0}, an order
         above the pin beside it, so this entry is a watch rather than an offer. the rung
         below Q2_K that the card announces does not exist -- the card
         {card} announces q2_k_m and q5_k_m, neither of which has landed, and what is here is
         plain q2_k (`general.file_type` 10). a Q1_0 rung was published and withdrawn between
-        sweeps. the header agrees with the pin on `deepseek4`, so the derived block below is
-        unaffected by carrying this'
+        sweeps. the header no longer agrees with the pin above: this pack was redone under
+        `deepseek41`, the name the upstream PR gives the architecture, and the apetersson file is
+        the one left declaring `deepseek4`'
+    - repo: smalinin/DeepSeek-V4.1-Flash-GGUF
+      quant: Q2_K-mixed
+      file: Q2_K_Protected-Q8
+      runtime:
+        mainline: false
+        fork: https://github.com/smalinin/llama.cpp
+        branch: my_build_deepseek41
+        note: 'the card {card} claims no upstream: the files "require the linked
+          `my_build_deepseek41` branch", and the branch is CUDA only. it is a fourth fork of
+          llama.cpp rather than one of the others'' branch, and the card pins the conversion to
+          one commit of that checkout rather than to a release, which is the practical
+          difference: the working build here is a checkout and a hash'
+      note: 'the newest of five rungs, on a ladder built by keeping the engram tables UP while
+        the backbone goes down: the smallest rung takes the tables to Q5_K and this one to Q8_0,
+        which is why a file whose largest single type is Q2_K weighs {gib} at {bpw}. the card
+        {card} calls it faster rather than merely smaller than the rung it replaces -- routed
+        `gate` and `up` off IQ2_XXS onto Q2_K and `down` off Q2_K onto Q3_K, "inspired by" but
+        explicitly not a requantization of antirez''s DwarfStar release. three of the five rungs
+        including this one are calibrated with a published 262,144-token imatrix, which is more
+        than the apetersson pack above carries, and `Q2_K_Protected` is the publisher''s own name
+        for the recipe, which is what the file key is. this is also the only pack here with a
+        vision projector sitting beside the rungs, at {gib@mmproj:BF16}, and the same card says it
+        is not wired up: "the checkpoint''s vision tower is not mapped into these GGUF files"'
+    - repo: mxxm-t/DeepSeek-V4.1-Flash-GGUF
+      quant: MXFP4
+      runtime:
+        mainline: false
+        fork: https://github.com/mxxm-t/mx-llama.cpp
+        note: 'built for mx-llama.cpp, which is a fork of llama.cpp and not a branch of one:
+          the card {card} names tensor parallelism (`-sm tensor`) with a custom AllReduce and
+          prebuilt ROCm and CUDA images, and says the model runs there under both `-sm layer`
+          and `-sm tensor`. nothing upstream loads these bytes'
+      note: 'the pack carrying the drafter this entry advertises, and the most literal of the
+        four: the released MXFP4 expert blocks repacked rather than requantized, which the tensor
+        table reads as {bpw} with 99% of the file still MXFP4, over {gib}. the engram tables are
+        one shard apiece and the card {card} is blunt about where they have to live -- they are
+        read at random during prompt processing, and moving them from a SATA pool to NVMe
+        "roughly doubles prompt processing". text only: no vision tower and no projector. the
+        dspark sidecar beside it holds the three mtp draft stages and the dspark heads and is
+        "not a standalone model"'
+    - repo: JigSawPT/DeepSeek-V4.1-Flash-GGUF
+      quant: MXFP4
+      file: DeepSeek-V4.1-Flash-MXFP4-engram.gguf
+      runtime:
+        mainline: false
+        fork: https://github.com/JigSawPT/llama.cpp
+        branch: dsv41-porte
+        note: 'the third fork of this model, and the one that says out loud why the three do
+          not generalize: "it runs only on the `dsv41-porte` branch", and upstream''s PR
+          "stores the engram tables differently, so this file is not interchangeable with
+          files from that converter" {card}. when the PR lands this rung does not land with it'
+      note: 'the rung for a reader who wants no requantization at all rather than a cheaper
+        file: "the routed experts are a lossless repack of the released MXFP4 blocks", the dense
+        weights dequantized from fp8 into Q8_0 and BF16, and the two engram tables carried as
+        their raw fp8 bytes with their scales {card} -- which is why the tensor table calls a
+        quarter of this file I8 rather than any quant, at {bpw} over {gib}: the largest rung this
+        entry pins. text only by its own admission -- the converter on that branch skips the
+        vision tower, and the card says so in those words rather than letting the `image` in the
+        modalities below stand for the file'
     ids:
       aa: deepseek-v4-1-flash
       gbench: deepseek/deepseek-v4.1-flash
       lmarena: ''
       swerebench: ''
-      epoch: ''
+      epoch: deepseek-v4.1-flash
     runtime:
       arch: deepseek4
       mainline: true
       since: b9840
       merged: '2026-06-29'
+      note: 'the derived block is what the headers say rather than what loads, and the headers
+        this entry reads now disagree with each other. four of the five packs declare
+        `deepseek41`, which mainline has no entry for at all -- it is the name the open PR
+        registers -- and the fifth declares `deepseek4`, the string above, which mainline has
+        carried since b9840 and still refuses on the tensor table. so `mainline: true` here
+        answers a different question than the one a reader is asking, which is why every rung
+        carries its own runtime block naming the build it needs. vcruz305 puts the same
+        finding on its card, "These files do not run on upstream llama.cpp yet"
+        {card@vcruz305/DeepSeek-V4.1-Flash-GGUF}'
     speculative:
       type: draft-dspark
       n_max: 3
+      note: 'the head is a separate download beside the rungs rather than a build that already
+        contains it, and only two of the four packs ship one. the measurement this roster has is
+        smalinin''s, and it is a negative one: the sidecar "accepted draft tokens correctly but
+        reduced end-to-end generation speed" {card@smalinin/DeepSeek-V4.1-Flash-GGUF} on the
+        system it was tried on, which is why the
+        card leaves it out of its own recommended command while documenting `--spec-draft-n-max
+        5` for anyone who wants to re-run the question'
     sampling:
       thinking:
         source: vendor-card
@@ -4226,9 +4503,9 @@ models:
       role: diffusion
     ids:
       aa-t2i: ''
-      lmarena-t2i: ''
-      lmarena-edit: ''
-      showdown-t2i: ''
+      lmarena-t2i: qwen-image-2.1
+      lmarena-edit: qwen-image-2.1
+      showdown-t2i: QWEN_IMAGE_21
       showdown-edit: ''
     modalities:
       input:
@@ -5370,8 +5647,9 @@ models:
       repo: Qwen/Qwen3.6-27B
       relation: quantized
       note: >-
-        the card states "Derived from Qwen3.6-27B"; the hub declares no base_model
-        on the unpacked repo, so this is read off the card
+        the card states "Derived from Qwen3.6-27B"
+        {card@prism-ml/Bonsai-27B-gguf}; the hub declares no base_model on the
+        unpacked repo, so this is read off the gguf entry's card
     # QAT to one bit: the shipped precision IS the trained one, so this model is
     # not paying a quantization penalty for being small and the retention curve
     # does not apply. the note below and this entry's written verdict both said
@@ -5440,8 +5718,8 @@ models:
       repo: Qwen/Qwen3.6-27B
       relation: quantized
       note: >-
-        same base and same source as the plain bonsai 27b beside it: the card, not
-        the hub
+        same base and same source as the plain bonsai 27b beside it: its gguf
+        card {card@prism-ml/Ternary-Bonsai-27B-gguf}, not the hub
     # ternary weights are what it was trained to, not what it was reduced to
     native_low_bpw: true
     name:
@@ -5569,7 +5847,7 @@ models:
       merged: '2026-02-10'
     sampling:
       thinking:
-        source: vendor-card
+        source: tuned-here
         temp: 1.0
         top_p: 0.95
         top_k: 20
@@ -6314,8 +6592,9 @@ models:
       repo: Qwen/Qwen3-8B
       relation: quantized
       note: >-
-        the card's base-model row says `Qwen3-8B` flat. carried on this roster only
-        so this pair can be read against each other
+        the gguf card's base-model row says `Qwen3-8B` flat
+        {card@prism-ml/Ternary-Bonsai-8B-gguf}. carried on this roster only so
+        this pair can be read against each other
     # ternary, like its 27b siblings: trained at the precision it ships
     native_low_bpw: true
     name:

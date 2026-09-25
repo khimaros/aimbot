@@ -228,7 +228,12 @@ QUANT_EVIDENCE = [
     ("vision", False,
      "vision. the sweep quantized a text model's weights and never touched a "
      "vision tower, which is often left at full precision anyway",
-     ["aa.mmmu_pro", "card.mmmu", "card.mmmu_pro"]),
+     ["aa.mmmu_pro", "card.mmmu", "card.mmmu_pro",
+      # epoch's spatial reasoning board: a photo of an IKEA build beside its
+      # manual, and the model says whether the build is right and which step is
+      # wrong. the answer comes off an image, so a retention curve fitted to a
+      # text model's code pass rate says nothing about what a quant costs it
+      "epoch.furniture_assembly"]),
 
     ("tools", False,
      "tool use outside software: booking, banking, desktop control. the loop "
@@ -865,6 +870,13 @@ def is_quant_name(tag):
 # `ggml-large-v3-turbo.bin` share a stem; `ggml-medium.bin` does not.
 QUANT_TOKEN = re.compile(r"[-_](?:UD-|AD-)?(?:IQ|Q|BF|F|MXFP|NVFP|TQ)\d[A-Za-z0-9_]*",
                          re.I)
+# the same type, allowed to start the name. a ladder key that BEGINS with one is
+# naming the backbone and putting the exception behind it -- smalinin's
+# `Q2_K-Q5` is a q2_k model with the engram tables at q5_k -- and the token
+# above cannot see a type with no separator in front of it, so it read the tail
+# instead and called that rung `Q5`
+QUANT_HEAD = re.compile(r"^(?:UD-|AD-)?(?:IQ|Q|BF|F|MXFP|NVFP|TQ)\d[A-Za-z0-9_]*",
+                        re.I)
 # and the measured bit width, where a publisher writes it behind the type.
 # byteshape does, on every file, and it is what tells two rungs of one nominal
 # type apart -- so the size table keeps it and the STEM must not, or the five
@@ -990,7 +1002,12 @@ def quant_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
                 # stem. the gate is instead whether the name is ALREADY a type,
                 # because `UD-Q4_K_XL` carries a token too and reading it would
                 # throw the publisher's prefix away
-                token = QUANT_TOKEN.search(a["quant"])
+                # the head first, and only when it really is a type: `F32EMB` starts
+                # like one and is a filename, and a rung labelled with a filename is the
+                # thing the unnamed list exists to keep OUT of the ladder
+                head = QUANT_HEAD.match(a["quant"])
+                token = (head if head and is_quant_name(head.group(0))
+                         else QUANT_TOKEN.search(a["quant"]))
                 if not token:
                     # nothing in the name says what it is. cstr's
                     # `diff-harness-ref` is a reference file rather than a rung;

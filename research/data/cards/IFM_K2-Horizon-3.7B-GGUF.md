@@ -23,7 +23,7 @@ base_model:
 > [!NOTE]
 > This repository contains GGUF versions of the [IFM/K2-Horizon-3.7B](https://huggingface.co/IFM/K2-Horizon-3.7B) for use with `llama.cpp`.
 >
-> The model tensors are stored in their original BF16 precision. The GGUF files include the tokenizer metadata and a `llama.cpp`-compatible chat template.
+> Multiple precision and quantization variants are available, including `BF16`, `Q8_0`, `Q6_K`, `Q5_K_M`, `Q5_0`, and `Q4_K_M`. All GGUF files include tokenizer metadata and a llama.cpp-compatible chat template.
 >
 > **Compatibility:** These models require a version of `llama.cpp` containing K2 Horizon architecture support. PR to llama.cpp is in progress. MBZUAI-IFM fork of llama.cpp is in https://github.com/MBZUAI-IFM/llama.cpp/tree/model/K2Horizon
 
@@ -52,6 +52,112 @@ The chart at the top of this card shows K2-Horizon-3.7B against selected referen
 <!-- TABLE:END -->
 
 Scores in %. Bold marks the best score in each row. Baseline protocols may differ; 
+
+## GGUF BF16 vs. Quantized
+<!-- TABLE:START -->
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0 auto;padding:8px 0 16px;overflow-x:auto">
+<table style="display:table;width:100%;border-collapse:collapse;font-size:12px;margin:0;table-layout:fixed;">
+
+<thead>
+<tr>
+  <th style="width:16%;padding:10px 8px;text-align:left;font-weight:600;border-bottom:2px solid #2450D6;color:#2450D6;font-size:12.5px;">
+    K2-Horizon-3.7B
+  </th>
+  <th style="padding:10px 8px;text-align:center;font-weight:600;border-bottom:2px solid #2450D6;">IFEval (Prompt)</th>
+  <th style="padding:10px 8px;text-align:center;font-weight:600;border-bottom:2px solid #2450D6;">GSM8K</th>
+  <th style="padding:10px 8px;text-align:center;font-weight:600;border-bottom:2px solid #2450D6;">MBPP</th>
+  <th style="padding:10px 8px;text-align:center;font-weight:600;border-bottom:2px solid #2450D6;">MMLU-Pro</th>
+  <th style="padding:10px 8px;text-align:center;font-weight:600;border-bottom:2px solid #2450D6;">GPQA-Diamond</th>
+  <th style="padding:10px 8px;text-align:center;font-weight:600;border-bottom:2px solid #2450D6;">BBH (3-shot)</th>
+  <th style="padding:10px 8px;text-align:center;font-weight:600;border-bottom:2px solid #2450D6;">AIME 26 (avg @ 4)</th>
+  <th style="padding:10px 8px;text-align:center;font-weight:600;border-bottom:2px solid #2450D6;">Average</th>
+</tr>
+</thead>
+
+<tbody>
+
+<!-- BF16 highlighted -->
+<tr style="background:rgba(36,80,214,0.12);">
+  <td style="padding:7px 8px;border-bottom:1px solid rgba(36,80,214,0.25);font-weight:700;color:#2450D6;">
+    GGUF-BF16
+  </td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(36,80,214,0.25);">83.7</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(36,80,214,0.25);">93.2</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(36,80,214,0.25);">84.2</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(36,80,214,0.25);">59.3</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(36,80,214,0.25);">68.6</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(36,80,214,0.25);">31.5</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(36,80,214,0.25);">91.6</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(36,80,214,0.25);">73.2</td>
+</tr>
+
+<tr>
+  <td style="padding:7px 8px;border-bottom:1px solid rgba(128,128,128,0.15);font-weight:600;">GGUF-Q4_K_M</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">80.4</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">93.2</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">77.6</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">57.6</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">58.5</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">22.9</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">74.1</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">66.3</td>
+</tr>
+
+<tr>
+  <td style="padding:7px 8px;border-bottom:1px solid rgba(128,128,128,0.15);font-weight:600;">GGUF-Q5_0</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">81.7</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">93.1</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">78.4</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">63.0</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">65.6</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">33.4</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">85.8</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">71.6</td>
+</tr>
+
+<tr>
+  <td style="padding:7px 8px;border-bottom:1px solid rgba(128,128,128,0.15);font-weight:600;">GGUF-Q5_K_M</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">85.0</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">94.3</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">79.2</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">60.7</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">66.6</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">35.1</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">81.6</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">71.8</td>
+</tr>
+
+<tr>
+  <td style="padding:7px 8px;border-bottom:1px solid rgba(128,128,128,0.15);font-weight:600;">GGUF-Q6_K</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">85.7</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">94.0</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">82.4</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">59.8</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">65.6</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">28.3</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">87.5</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">71.9</td>
+</tr>
+
+<tr>
+  <td style="padding:7px 8px;border-bottom:1px solid rgba(128,128,128,0.15);font-weight:600;">GGUF-Q8_0</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">82.8</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">94.4</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">82.0</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">59.4</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">66.1</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">29.6</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">85.8</td>
+  <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(128,128,128,0.15);">71.4</td>
+</tr>
+
+</tbody>
+</table>
+</div>
+<!-- TABLE:END -->
+The evaluation context length is set to 65,536 tokens. Unless otherwise specified, all tasks are evaluated in a 0-shot setting.
+The GGUF models have currently been evaluated only on non-agent tasks. Results for agent tasks will be released later.
+
 
 ## Quickstart
 

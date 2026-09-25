@@ -37,7 +37,7 @@ Full 27B-class reasoning in ternary transformer weights, for llama.cpp (CUDA, Me
 ## Highlights
 
 - **\~5.9 GB** language model (down from \~54 GB FP16) — full 27B-class reasoning on a standard laptop or a single GPU
-- **98.2% of FP16 intelligence retained**: 84.78 average across 14 thinking-mode benchmarks — far above the conventional IQ2_XXS build (72.59) at less than two-thirds of its footprint, and within 0.4 points of UD-Q4_K_XL at three times the footprint
+- **98.2% of FP16 intelligence retained**: 84.78 average across 14 thinking-mode benchmarks — far above the conventional IQ2_XXS build (72.59) at about 82% of its footprint, and within 0.4 points of UD-Q4_K_XL at three times the footprint
 - **Retains thinking, reasoning, and agentic behavior** deep in the sub-4-bit regime, where conventional low-bit representations collapse: math within half a point of full precision (96.57), coding level with the baseline (89.42), agentic tool calling at 74.92
 - **End-to-end ternary language weights** across embeddings, attention projections, MLP projections, and LM head, at a *true* 1.72 bits per weight — no high-precision escape hatches behind a low-bit label; the vision tower ships as a separate Q8_0 mmproj pack
 - **262K-token context** on-device, kept practical by the Qwen3.8-27B hybrid-attention backbone (\~75% linear attention)
@@ -49,6 +49,7 @@ Full 27B-class reasoning in ternary transformer weights, for llama.cpp (CUDA, Me
 - **[Whitepaper](https://github.com/PrismML-Eng/Bonsai-demo/blob/main/bonsai-2-27b-whitepaper.pdf)** — full methodology, benchmarks, and measurement notes
 - **[Demo & examples](https://github.com/PrismML-Eng/Bonsai-demo)** — **the source of truth for running these models**: tested setup for every backend, pinned binaries, serving, benchmarking and integration, kept current as the runtimes move
 - **Low-bit kernels**: [llama.cpp fork](https://github.com/PrismML-Eng/llama.cpp) (CUDA + Metal) · [MLX fork](https://github.com/PrismML-Eng/mlx) (Apple Silicon) · [mlx-swift fork](https://github.com/PrismML-Eng/mlx-swift) (iOS/macOS)
+- **[Known issues](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/blob/main/KNOWN_ISSUES.md)** — problems we know about, with workarounds and fix status
 - **[Discord](https://discord.gg/prismml)** — join the community for support, discussion, and updates
 
 ## Model Overview
@@ -84,8 +85,6 @@ The weights are stored in a **rotated basis**: each matrix is transformed blockw
 
 Practical deployment needs packing formats that efficient kernels can consume, and this repo ships two: **PTQ1_0** packs trits densely and lands essentially on the information-theoretic target, while **PQ2_0** stores each trit in a 2-bit slot, trading footprint for cheaper unpacking. Neither is uniformly faster — see the throughput table below for where each wins. These sizes describe the language model alone, the only component that must stay resident for text inference; 26.2M parameters (**0.0976%** of the language model — the recurrent state path of the linear-attention layers, plus the normalization weights) remain in higher precision and are counted in the 1.72 figure.
 
-Unlike conventional low-bit builds — whose advertised labels understate their true average bit-width (a widely-used "2-bit" build of Qwen3.8-27B is really 2.8 bits/weight at 9.4 GB) — the Bonsai representation carries a bit-width that matches its name.
-
 ### Shipped Components
 
 The vision tower ships alongside the language model as an optional component (on-disk sizes):
@@ -104,12 +103,15 @@ The Q8_0 file carries the vision tower in an 8-bit container. It is usually offl
 ### Generation Parameters
 
 We recommend using the following sets of sampling parameters for generation:
-> - Thinking Mode: `temperature=1.0`, `top_p=0.95`, `top_k=20`, `min_p=0.0`, `presence_penalty=0.0`, `repetition_penalty=1.0`
+> - Thinking Mode: `temperature=1.0`, `top_p=0.95`, `top_k=20`, `min_p=0.05`, `presence_penalty=0.0`, `repetition_penalty=1.0`
 > - Instruct (or non-thinking) mode: `temperature=0.7`, `top_p=0.80`, `top_k=20`, `min_p=0.0`, `presence_penalty=1.5`, `repetition_penalty=1.0`
 
-These match the base model's own `generation_config.json` and are the values carried in the GGUF
-metadata (`general.sampling.*`), so a client that reads model defaults will use them without being
-told. They are also the settings used for the reported benchmark results (thinking mode).
+`min_p=0.05` drops tokens far less likely than the top choice. In our tests it scored at least as
+well as `min_p=0.0` and followed instructions more reliably, so we recommend it for thinking mode.
+It is also llama.cpp's default: the GGUF files carry `top_k`, `top_p` and `temperature`
+(`general.sampling.*`) but not `min_p`, so llama.cpp applies 0.05 without being told. The other
+values match the base model's own `generation_config.json`. The reported benchmark results were
+measured with the same settings, except `min_p=0.0`.
 
 The model uses `xhigh` reasoning effort by default; use `medium` for shorter responses and a balance of speed and accuracy. `low` reasoning effort is not supported and when selected the model will behave close to `xhigh`.
 
@@ -156,13 +158,16 @@ hf download prism-ml/Ternary-Bonsai-2-27B-gguf Ternary-Bonsai-2-27B-PQ2_0.gguf -
 ```bash
 ./bin/llama-cli -m Ternary-Bonsai-2-27B-PQ2_0.gguf \
     -ngl 99 -fa on -c 32768 \
-    --temp 1.0 --top-p 0.95 --top-k 20 \
-    -p "Explain quantum computing in simple terms." -n 256
+    --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.05 \
+    -p "Explain quantum computing in simple terms." -n 16384
 ```
 
 The binary is `./bin/llama-cli` from an extracted release archive, or `./build/bin/llama-cli` if you
 built the fork yourself. `-ngl 99` offloads every layer, `0` is CPU-only; `-c` sets the context, up
-to 262144.
+to 262144. `-n 16384` leaves room for the thinking trace: the template defaults to `xhigh` reasoning
+effort, so a small cap such as 256 tokens ends generation mid-thought, before any answer.
+`--min-p 0.05` is llama.cpp's default; it is written out so the command states every recommended
+setting.
 
 This is a reasoning model and it thinks by default. For the server, tool calling, reasoning budgets,
 image input with the `mmproj` file, and speculative decoding, follow
@@ -211,10 +216,10 @@ Evaluated with EvalScope + vLLM on NVIDIA H100 under identical infrastructure, d
 | :----------------------------------- | -------: | ---------: | -----------: | ---------: |
 | Qwen3.8-27B FP16                     | 16.0     | 54 GB      | 86.32        | 100%       |
 | Qwen3.8-27B UD-Q4_K_XL ("4-bit")     | 5.2      | 17.6 GB    | 85.18        | 98.7%      |
-| Qwen3.8-27B IQ2_XXS ("2-bit")        | 2.8      | 9.4 GB     | 72.59        | 84.1%      |
-| **Bonsai 2 27B**                     | **1.72** | **5.9 GB** | **84.78**    | **98.2%**  |
+| Qwen3.8-27B IQ2_XXS ("2-bit")        | 2.16     | 7.27 GB    | 72.59        | 84.1%      |
+| **Bonsai 2 27B**                     | **1.72** | **5.95 GB** | **84.78**    | **98.2%**  |
 
-At 5.9 GB, Bonsai 2 27B outscores the sub-4-bit conventional build by more than twelve points at less than two-thirds of its size, and comes within 0.4 points of UD-Q4_K_XL at a third of its footprint.
+At 5.95 GB, Bonsai 2 27B outscores the sub-4-bit conventional build by more than twelve points at about 82% of its size, and comes within 0.4 points of UD-Q4_K_XL at a third of its footprint.
 
 The aggregate gap also understates *how* the conventional builds fail: their degradation is selective, concentrated on the benchmarks that demand sustained chains of reasoning. IQ2_XXS falls to 57.5 on AIME26 and 56.4 on LiveCodeBench while still scoring 88.93 on MMLU-Redux — which is why casual testing misses the collapse. Bonsai 2 holds exactly these benchmarks, scoring 95.83 and 90.07. The previous Bonsai 27B report showed the same pattern on a second model family, Gemma-4-31B, so the collapse is a property of the methods rather than of one base model.
 
@@ -267,13 +272,13 @@ D = -log2(1 - score/100) / size_GB
 
 | Variant                                  | Size (GB) | Benchmark avg | Intelligence Density (1/GB) |
 | :--------------------------------------- | --------: | ------------: | --------------------------: |
-| **Bonsai 2 27B**                         | **5.80**  | **84.78**     | **0.469**                   |
+| **Bonsai 2 27B**                         | **5.95**  | **84.78**     | **0.457**                   |
 | Ternary Bonsai 27B (previous release)    | 5.75      | 80.98         | 0.416                       |
-| Qwen3.8-27B IQ2_XXS                      | 9.4       | 72.59         | 0.199                       |
-| Qwen3.8-27B UD-Q4_K_XL                   | 17.6      | 85.18         | 0.157                       |
-| Qwen3.8-27B FP16                         | 54        | 86.32         | 0.053                       |
+| Qwen3.8-27B IQ2_XXS                      | 7.27      | 72.59         | 0.257                       |
+| Qwen3.8-27B UD-Q4_K_XL                   | 17.56     | 85.18         | 0.157                       |
+| Qwen3.8-27B FP16                         | 54.66     | 86.32         | 0.053                       |
 
-Bonsai 2 27B delivers over **2.3x** the density of the densest conventional build (IQ2_XXS at 0.199) and nearly **9x** FP16 — no conventional build of Qwen3.8-27B exceeds 0.2. Each stored gigabyte is translated into far more usable intelligence. Against the previous Bonsai 27B release, density rises from 0.416 to 0.469, a 12.5% gain; that row is recomputed on these same 14 benchmarks for a like-for-like comparison.
+Bonsai 2 27B delivers about **1.8x** the density of the densest conventional build here (IQ2_XXS at 0.257) and nearly **9x** FP16. Each stored gigabyte is translated into far more usable intelligence. For Bonsai 2 27B and the conventional builds, sizes are the on-disk sizes of the published files. Against the previous Bonsai 27B release, density rises from 0.416 to 0.457, a 9.9% gain; that row is recomputed on these same 14 benchmarks for a like-for-like comparison.
 
 ## Use Cases
 

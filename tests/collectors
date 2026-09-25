@@ -6435,6 +6435,36 @@ def a_non_text_model_with_discussions_and_no_alias_is_reported():
         shutil.rmtree(tmp)
 
 
+@test
+def an_epoch_loss_metric_never_becomes_a_facet():
+    """Every facet on the page ranks HIGHER as better, and epoch does not say so.
+
+    `btf3` arrives as epoch's mirror of FutureSearch's pastcasting board, where
+    the metric is a `Pooled score` built from Binary Brier and Numeric RPS --
+    two proper scoring rules, both of which a good forecaster scores LOW. The
+    ingest read whatever metric column a benchmark carried and stored it, so the
+    best forecaster on the board arrived as the worst facet value and the cohort
+    percentile ranked it last. there is no honest transform either: a Brier of
+    0.13 is not 87% of anything, so inverting it invents a scale.
+
+    the loss metrics are therefore named rather than guessed at, and named OUT
+    LOUD -- a measurement that quietly stops being a facet is the same silence
+    this repo keeps a punch list to avoid.
+    """
+    au = load_script("analyze_usecase", os.path.join(RESEARCH, "analyze-usecase"))
+    epoch = {"benchmarks": {
+        "gpqa_diamond": {"metric": "Best score (across scorers)", "results": [
+            {"Model version": "model-a", "Best score (across scorers)": "0.85"}]},
+        "btf3": {"metric": "Pooled score", "results": [
+            {"Model version": "model-a", "Pooled score": "0.120"}]},
+    }}
+    facets = au.epoch_facets(epoch, "model-a")
+    eq(sorted(facets), ["epoch.gpqa_diamond"],
+       "a score is a facet and a loss is not, got %r" % sorted(facets))
+    eq(au.epoch_losses(epoch), ["btf3"],
+       "and the one that was dropped is reported")
+
+
 def main():
     bad = 0
     for fn in cases:

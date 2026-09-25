@@ -199,3 +199,15 @@ curl -sS http://127.0.0.1:11434/api/generate -d '{
   }
 }' | jq -r .response
 ```
+
+
+<!-- TDS-LINKS:START -->
+## Training content summary
+
+The public training-content summary identifying **Ling-3.0-tiny** is available below. Please refer to the document for its covered model versions, training-content scope, summary version, and update date.
+
+- [Training-content summary (PDF)](https://huggingface.co/inclusionAI/AI-Transparency/resolve/main/Ling-3.0-LLM_TDS-Summary.pdf)
+- [Training-content documentation index](https://huggingface.co/inclusionAI/AI-Transparency)
+
+This summary concerns training-content disclosure; it does not replace the model’s technical documentation, usage terms, or license.
+<!-- TDS-LINKS:END -->

@@ -28,6 +28,8 @@ but "no".
 
 import argparse
 import collections
+import importlib.machinery
+import importlib.util
 import json
 import os
 import re
@@ -39,10 +41,27 @@ import capture
 HERE = os.path.dirname(os.path.abspath(__file__))
 RESOLVE = "https://huggingface.co/%s/resolve/main/%s"
 
-sizes = __import__("importlib").machinery.SourceFileLoader(
-    "fetch_gguf_sizes", os.path.join(HERE, "fetch-gguf-sizes")).load_module()
-voices = __import__("importlib").machinery.SourceFileLoader(
-    "fetch_gguf_voices", os.path.join(HERE, "fetch-gguf-voices")).load_module()
+
+def load_sibling(name, filename):
+    """One of this repo's extension-less scripts, imported as a module.
+
+    The sizer owns the file-to-rung grouping and the voice reader the speaker
+    table, so both are read here rather than restated. They used to come in
+    through `__import__("importlib").machinery`, which only worked while some
+    other import had happened to load that submodule -- on 3.13 nothing has, and
+    the AttributeError arrives at import time, before main() or any argument
+    parsing, so every caller of this file dies rather than the one path that
+    needed the sibling.
+    """
+    spec = importlib.util.spec_from_loader(
+        name, importlib.machinery.SourceFileLoader(name, os.path.join(HERE, filename)))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+sizes = load_sibling("fetch_gguf_sizes", "fetch-gguf-sizes")
+voices = load_sibling("fetch_gguf_voices", "fetch-gguf-voices")
 
 # every ggml type by the number the format writes, with the block geometry that
 # turns an element count into bytes: (name, elements per block, bytes per block).

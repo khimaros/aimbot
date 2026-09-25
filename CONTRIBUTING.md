@@ -27,6 +27,12 @@ research/usecase-assessed.json  the written judgement about each model
 research/repos.txt              gguf repos to size and read discussions from
 .env.example                    the llm endpoint's shape; copy to .env, which is
                                 gitignored and read by research/llm.py
+mise.toml                       the toolchain: python, node and uv pinned to a
+pyproject.toml                  patch, plus the two python packages the scripts
+uv.lock                         import (pyyaml to read the registry, jinja2 for
+                                analyze-chat-templates). `make setup` installs
+                                them into .venv and mise.toml puts that venv in
+                                front of PATH
 research/decided.txt            discovery decisions. a repo here is never
                                 proposed again; `make llm-review` writes it
 research/publishers.txt         publishers whose listings are worth watching, in
@@ -40,6 +46,22 @@ MODELS.md                       the prose between the generated blocks
 the split is deliberate: `make usecase` recomputes every number and never
 touches the judgement, so a diff shows measurement and opinion moving
 separately.
+
+## the toolchain
+
+`make setup` is the whole bootstrap: `mise install` takes the pinned python,
+node and uv, `uv sync --frozen` installs exactly what `uv.lock` pins. Nothing
+else needs installing -- the collectors speak http with urllib, which is why
+there are two dependencies rather than twenty, and `pyproject.toml` says so.
+
+Every script here is `#!/usr/bin/env python3`, so which interpreter runs is a
+PATH question, and a venv somebody left activated in the shell they typed
+`make lint` into answers it before the repo does. Both halves of the fix are
+therefore deliberate: `mise.toml` writes `.venv/bin` in front of an inherited
+PATH for an interactive shell, and the Makefile prepends it again because a
+shell using mise's shims gets the tool version from the shim and none of that
+`[env]`. `make lint` then checks the python it is about to use and says `run
+'make setup'` rather than failing inside `import yaml` three files deep.
 
 ## the sweep
 

@@ -1,0 +1,25 @@
+# the python this repo runs on, and the only two packages it needs. every
+# collector talks to the hub with urllib and reads json with the stdlib, so this
+# list is short on purpose: the registry is 200 models of data and the code over
+# it is arithmetic. `uv lock` pins these into uv.lock, `make setup` installs
+# them into .venv, and mise.toml puts that venv in front of PATH.
+#
+# `package = false` because there is nothing here to install: this is a program
+# with a venv, not a library, and `uv sync` should never go looking for a build
+# backend or put the repo on sys.path.
+[project]
+name = "aimbot"
+version = "0.0.0"
+description = "the facts, the research and the dashboard behind the aimbot roster"
+# == and not >=: mise.toml pins the patch, and a range here is how the venv
+# silently ends up on some other minor than the one `make precommit` ran on
+requires-python = "==3.13.*"
+dependencies = [
+    # reading and rewriting registry/*.yaml, which is the hand-written half
+    "pyyaml>=6.0.3",
+    # analyze-chat-templates renders a model's own jinja template to probe it
+    "jinja2>=3.1.6",
+]
+
+[tool.uv]
+package = false

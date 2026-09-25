@@ -1,0 +1,22 @@
+# the toolchain this repo builds and tests with. `mise install && make setup`
+# is the whole bootstrap; the versions here are what `make precommit` was run
+# against, which is why they are pinned to a patch rather than to a major.
+#
+# node is for `tests/e2e`, which boots the built page under node. python is for
+# everything else, and the two python packages it needs are in pyproject.toml
+# rather than being something a machine happens to have installed.
+[tools]
+python = "3.13.15"
+node = "25.9.0"
+uv = "0.11.25"
+
+# every script here is `#!/usr/bin/env python3`, so what it imports is decided
+# by PATH and by nothing else -- including by whatever unrelated venv somebody
+# has activated in the shell they run `make lint` from. one of those shadowed
+# the interpreter on a real machine and `make lint` died inside `pageboot.py`.
+#
+# mise writes `.venv/bin` in FRONT of an inherited PATH, so the repo wins that
+# argument instead of the shell doing whatever it was already doing.
+[env]
+_.path = [".venv/bin"]
+VIRTUAL_ENV = "{{ cwd }}/.venv"

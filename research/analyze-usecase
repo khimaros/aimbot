@@ -38,6 +38,7 @@ gbench score" is exactly the drift this repo exists to remove.
 
 import argparse
 import hashlib
+import importlib.machinery
 import importlib.util
 import json
 import os
@@ -111,6 +112,16 @@ GBENCH_MODES = [("gbench.overall", "gscore (all games)", None),
 # number of scored submissions in that language, which is the sample that
 # matters rather than the match count.
 LANG_MIN_GAMES = 5
+
+# epoch metrics that are a LOSS and not a score, where the better model posts
+# the SMALLER number. every facet on the page ranks higher as better -- the word
+# error rate is inverted on its way in for exactly this reason -- and a loss has
+# no honest transform here. btf3's `Pooled score` is FutureSearch's Binary Brier
+# and Numeric RPS composite, and 0.13 is not 87% of anything, so inverting it
+# would invent the scale it is then ranked on. epoch's own metadata carries no
+# baseline or ceiling for it either: btf3 is not in benchmark_metadata.csv at
+# all, so there is nothing to normalise against.
+EPOCH_LOSSES = {"Pooled score"}
 
 SOURCES = {
     "aa": {"label": "artificial analysis", "file": "data/artificial-analysis.json",
@@ -286,6 +297,16 @@ def gbench_facets(row, gid, bt):
     return out, langs
 
 
+def epoch_losses(epoch):
+    """Epoch benchmarks dropped rather than faceted, because they score a loss.
+
+    A capture that stops being a facet has to say so: a silently smaller facet
+    set is the failure mode this repo keeps a punch list for.
+    """
+    return sorted(name for name, b in (epoch.get("benchmarks") or {}).items()
+                  if (b.get("metric") or "") in EPOCH_LOSSES)
+
+
 def epoch_facets(epoch, epoch_id):
     """Third-party runs on epoch's own harness, one facet per benchmark."""
     out = {}
@@ -293,6 +314,8 @@ def epoch_facets(epoch, epoch_id):
         return out
     for name, b in (epoch.get("benchmarks") or {}).items():
         metric = b.get("metric") or "Score"
+        if metric in EPOCH_LOSSES:
+            continue
         for row in b.get("results") or []:
             mv = (row.get("Model version") or "").split("/")[-1].rsplit("_", 1)[0]
             if mv != epoch_id or metric not in row:
@@ -860,6 +883,10 @@ def main():
             old = json.load(f)
 
     models = build(bt, registry)
+    losses = epoch_losses(load("epoch"))
+    if losses:
+        print("note: %d epoch benchmark(s) score a loss and carry no facet: %s"
+              % (len(losses), ", ".join(losses)), file=sys.stderr)
     kept = merge_assessed(models, load_authored(args.assessed), old)
     doc = {"version": 1,
            "provenance": provenance(["artificial-analysis", "gbench", "lmarena",

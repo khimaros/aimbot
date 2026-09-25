@@ -2157,6 +2157,47 @@ test('a ladder is one model at several sizes, however the files are named', () =
     'a rung is named by type, got ' + a.quant));
 });
 
+test('a model no stock build loads is carried from more than one converter', () => {
+  RESET();
+  // deepseek v4.1 flash has no mainline runtime and a dozen conversions, each
+  // needing a different build. one publisher's ladder cannot answer "what can i
+  // run" for it, and a rung the size table never saw is a rung the page can put
+  // nowhere -- it reaches the row with no size and nothing errors
+  const m = model('deepseek v4.1 flash');
+  const repos = new Set(m.quants.map(q => q.repo));
+  ok(repos.size >= 4, 'rungs from at least four publishers: ' + [...repos].join(' '));
+  m.quants.forEach(q => {
+    ok(q.gib > 0, q.repo + ' is sized, at ' + q.gib);
+    // and each says where a build comes from, since none of them is mainline
+    const r = q.runtime || m.runtime;
+    ok(r.mainline || r.fork || r.tracking || r.patch, q.repo + ' names where to build');
+  });
+  // the rungs are actually different files: a repo mirroring another's shards is
+  // a second download of one rung rather than a second rung
+  const sizes = m.quants.map(q => q.gib);
+  ok(Math.max(...sizes) - Math.min(...sizes) > 50,
+     'the rungs span real sizes: ' + sizes.join(' '));
+  // and the method the entry advertises has a file behind it: the entry says
+  // dspark, so one of the repos it serves from has to carry the sidecar
+  ok(draftGib(m) > 1, 'the dspark head is priced, at ' + draftGib(m));
+});
+
+test('a rung named after a recipe keeps its name rather than a token out of it', () => {
+  RESET();
+  // smalinin names its rungs after the recipe rather than after a type: the
+  // backbone first and whatever the engram tables were kept at behind it. the
+  // ladder labeler reads a quant token out of the name and landed on the tail,
+  // so a 312gib q2_k backbone reached the page labelled `Q5` -- a type it is
+  // not -- and `IQ3_XS-Q8` became `Q8`
+  const sm = model('deepseek v4.1 flash').quants.find(q => q.repo.startsWith('smalinin/'));
+  ok(sm, 'the pack is carried');
+  const labels = sm.available.map(a => a.quant);
+  ok(!labels.includes('Q5'), 'no rung is named after its engram table: ' + labels);
+  const q25 = sm.available.find(a => a.gib < 320);
+  ok(q25 && /^Q2_K/.test(q25.quant), 'the backbone is what the rung is called: ' +
+     JSON.stringify(q25));
+});
+
 test('a size band is off until it is set, and excludes what has no size', () => {
   RESET();
   // an UNSET bound has to be off. the first cut tested `!== null` against a
