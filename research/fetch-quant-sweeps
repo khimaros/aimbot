@@ -82,7 +82,8 @@ METRICS = {
 # `AP-Q4_K_XL` is a DIRECTORY in that repo, and dropping the prefix to `Q4_K_XL`
 # leaves a rung name that joins to nothing the sizes collector measured. this
 # was hardcoded to UD- and AD- and so silently mis-tagged every agention row
-QUANT_CELL = re.compile(r"((?:[A-Z]{2}-)?(?:I?Q\d+(?:_[A-Z0-9]+)*|BF16|F16|FP8))", re.I)
+QUANT_CELL = re.compile(r"((?:[A-Z]{2}-)?(?:I?Q\d+(?:_[A-Z0-9]+)*|BF16|F16|FP8|"
+                        r"[MN]XFP\d+|NVFP\d+))", re.I)
 NUM = re.compile(r"-?\d+(?:\.\d+)?")
 SIZE = re.compile(r"(\d+(?:\.\d+)?)\s*(gib|gb)", re.I)
 
@@ -117,14 +118,26 @@ def metric_column(header):
 
 
 def quant_column(rows):
-    """The column whose cells look like quant tags in most rows."""
+    """The column whose cells ARE quant tags.
+
+    A quantizer's table carries two of them: `Quant` naming the file a reader
+    downloads and `Mixture` naming what went into it, `Q8_0 / Q3_K / Q3_K /
+    MXFP4`. A recipe cell holds more tags than a rung cell holds anything, so
+    scoring cells that MERELY contain a tag read the recipe as the ladder and
+    every point came away named for a tensor type -- which is how AesSedai's
+    MiMo sweep reached the page as `Q6_K` and `BF16`, two files that repo does
+    not publish. So a column of whole tags wins, and the looser reading is only
+    the fallback for a table whose rung column wears a size or a score beside
+    the name.
+    """
     width = max(len(r) for r in rows)
-    best, score = None, 0
+    scored = []
     for i in range(width):
-        hits = sum(1 for r in rows if len(r) > i and QUANT_CELL.search(r[i]))
-        if hits > score:
-            best, score = i, hits
-    return best if score >= 2 else None
+        cells = [r[i].strip() for r in rows if len(r) > i and r[i].strip()]
+        scored.append((sum(1 for c in cells if QUANT_CELL.fullmatch(c)),
+                       sum(1 for c in cells if QUANT_CELL.search(c)), i))
+    whole, hits, i = max(scored, key=lambda s: (s[0], s[1], -s[2]))
+    return i if (whole >= 2 or hits >= 2) else None
 
 
 def bits_column(header):

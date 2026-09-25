@@ -124,10 +124,6 @@ We evaluate MOSS-Audio on a comprehensive set of audio understanding benchmarks.
 
 ### General Audio Understanding (Accuracy↑)
 
-<p align="center">
-  <img src="./assets/general_audio_bar.svg" width="75%" />
-</p>
-
 <table>
   <thead>
     <tr>
@@ -167,7 +163,7 @@ We evaluate MOSS-Audio on a comprehensive set of audio understanding benchmarks.
       <td><strong>MOSS-Audio-8B-Instruct</strong></td><td><strong>8B</strong></td><td>77.03</td><td>57.48</td><td>64.42</td><td>66.36</td><td>66.32</td>
     </tr>
     <tr>
-      <td><strong>MOSS-Audio-8B-Thinking</strong></td><td><strong>8B</strong></td><td>77.13</td><td><strong>64.29</strong></td><td><strong>65.73</strong></td><td><strong>76.06</strong></td><td><strong>70.80</strong></td>
+      <td><strong>MOSS-Audio-8B-Thinking</strong></td><td><strong>8B</strong></td><td>77.33</td><td><strong>64.92</strong></td><td><strong>66.53</strong></td><td><strong>75.52</strong></td><td><strong>71.08</strong></td>
     </tr>
     <tr><td colspan="7"><em><strong>Open Source (large)</strong></em></td></tr>
     <tr>

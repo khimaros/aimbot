@@ -466,10 +466,13 @@ def main():
                          "than the capture on disk")
     args = ap.parse_args()
 
+    # resolved once so the card bodies and the index they are keyed in cannot
+    # land in two different trees when this runs from outside research/
+    args.out = capture.resolve(args.out)
     import yaml
     reg = yaml.safe_load(open(args.registry)).get("models") or {}
 
-    cards_dir = os.path.join(os.path.dirname(args.out) or ".", "cards")
+    cards_dir = os.path.join(os.path.dirname(args.out), "cards")
     kept = set()
 
     def keep(repo, text):

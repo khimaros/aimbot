@@ -2004,6 +2004,25 @@ models:
         with the rest at Q8_0, so what the smaller rung gives up is on the experts. the
         vision and audio encoders are a separate
         {gib@ggml-org/MiMo-V2.6-Flash-RL-GGUF:mmproj:Q8_0} mmproj'
+    - repo: AesSedai/MiMo-V2.6-Flash-RL-GGUF
+      quant: Q3_K
+      note: '{gib} at {bpw}: the same trick as this block''s Q2_K at one notch up, its
+        tensor table putting Q3_K over 65% of the weights and the routed experts at
+        native MXFP4. the ladder runs down from here through the publisher''s own
+        bits-per-weight mixes to {gib@AesSedai/MiMo-V2.6-Flash-RL-GGUF:BPW2.0}, and the
+        repo carries a {gib@AesSedai/MiMo-V2.6-Flash-RL-GGUF:imatrix.gguf} calibration
+        file, which is what ggml-org''s card says its Q2 rung went without, "due to
+        lack of one" {card@ggml-org/MiMo-V2.6-Flash-RL-GGUF}'
+    - repo: TrevorJS/MiMo-V2.6-Flash-RL-GGUF
+      quant: IQ2_XS
+      file: MiMo-V2.6-Flash-RL-IQ2_XS_M-v2.1.gguf
+      note: '{gib} at {bpw} over ten shards, IQ2_XS on the bulk of the weights and IQ2_S
+        on the rest, which puts it under this block''s Q2_K on bits and under every
+        other rung here on size. what it carries that ggml-org does not is a drafter of
+        the other school: a
+        {gib@TrevorJS/MiMo-V2.6-Flash-RL-GGUF:dflash:Q8_0} DFlash file beside the
+        weights, where ggml-org ships MTP
+        {card@ggml-org/MiMo-V2.6-Flash-RL-GGUF}'
     runtime:
       arch: mimo2
       mainline: true

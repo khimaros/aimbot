@@ -6465,6 +6465,69 @@ def an_epoch_loss_metric_never_becomes_a_facet():
        "and the one that was dropped is reported")
 
 
+@test
+def a_sweep_names_its_rungs_and_not_the_recipe_they_are_built_from():
+    """A quantizer's table names the file and the mixture in the same row.
+
+    AesSedai's MiMo ladder is six files and a card table with a `Quant` column
+    of tags beside a `Mixture` column of what each is made of, `Q8_0 / Q3_K /
+    Q3_K / MXFP4`. The reader picks a FILE, so the sweep is about the tag
+    column -- but a recipe cell carries four tags to a tag column's one, so the
+    column that reads most like quants was the recipe one and every point came
+    away named for a tensor type, `Q6_K` and `BF16` among them, which is not a
+    thing this repo publishes at all. `unpublished` then reported the whole
+    curve as files that do not exist, which is the right answer to the wrong
+    question.
+    """
+    mod = load_script_with_research("fetch_quant_sweeps", "fetch-quant-sweeps")
+    table = [
+        ["Quant", "Size", "Mixture", "PPL", "KLD"],
+        ["MXFP4", "162.89 GiB (4.52 BPW)", "BF16 / MXFP4", "5.149210", "0.0000"],
+        ["Q3_K", "137.75 GiB (3.82 BPW)", "Q8_0 / Q3_K / Q3_K / MXFP4", "5.177623", "0.1236"],
+        ["IQ2_S", "106.31 GiB (2.95 BPW)", "Q6_K / IQ2_S / IQ2_S / Q3_K", "5.404774", "0.1781"],
+    ]
+    eq(mod.quant_column(table[1:]), 0,
+       "the rung column wins over the recipe column: %r"
+       % mod.quant_column(table[1:]))
+    points, metric, _ = mod.sweep_from(table, 310)
+    # and in the order the curve wants them, since `sweep_from` sorts by bits
+    eq([p[2] for p in points], ["IQ2_S", "Q3_K", "MXFP4"],
+       "each point wears the file's own tag: %r" % points)
+    eq(metric, "perplexity", "and the metric is still the ppl column")
+
+
+@test
+def a_relative_capture_path_means_research_and_not_wherever_you_stood():
+    """A collector run from the repo root built a second `research/data`.
+
+    Every `--out` here defaults to `data/<name>.json`, which is right once the
+    Makefile's `cd research` has happened and wrong when a human types
+    `./research/fetch-model-cards` from the root, where it quietly wrote a 7.9mb
+    card corpus into `./data/` beside the registry. Nothing checked, because the
+    file it wrote was well-formed and the capture it was meant to replace was
+    nowhere near it. A capture has one home, so a relative path resolves against
+    the collector.
+    """
+    cap = load_script_with_research("capture_here", "capture.py")
+    tmp = tempfile.mkdtemp()
+    name = "data/not-a-real-capture.json"
+    here = os.getcwd()
+    landed = os.path.join(RESEARCH, name)
+    try:
+        os.chdir(tmp)
+        written, _, _ = cap.write(name, {"a": 1}, len)
+        eq(written, True, "a new capture writes")
+        eq(os.path.exists(os.path.join(tmp, "data")), False,
+           "and nothing appears under the working directory: %r" % os.listdir(tmp))
+        eq(os.path.exists(landed), True, "it appears beside the other captures")
+    finally:
+        os.chdir(here)
+        for p in (landed, landed + ".new"):
+            if os.path.exists(p):
+                os.remove(p)
+        shutil.rmtree(tmp)
+
+
 def main():
     bad = 0
     for fn in cases:

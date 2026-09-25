@@ -23,6 +23,18 @@ import json
 import os
 import re
 
+# where this module lives, which is where the captures live. a collector's
+# `--out` defaults are written relative to THIS and not to the shell's idea of
+# where it is: `./research/fetch-model-cards` from the repo root used to answer
+# by building a second corpus in `./data/`, well-formed, shrink-guarded against
+# nothing, and never read again by anything.
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def resolve(path):
+    """A relative capture path means research/, because that is the one home."""
+    return path if os.path.isabs(path) else os.path.join(HERE, path)
+
 # credentials somebody pasted into a forum. these captures are arbitrary text
 # other people wrote, and one of them titled a huggingface discussion with their
 # own access token -- which this repo then carried until github's push
@@ -71,6 +83,7 @@ def write(path, payload, count, allow_shrink=False, label="records"):
     an error on its own, because a collector that lost its source should still
     let the rest of the sweep run off the capture that is already there.
     """
+    path = resolve(path)
     before = previous_count(path, count)
     now = count(payload)
     if before and now < before and not allow_shrink:

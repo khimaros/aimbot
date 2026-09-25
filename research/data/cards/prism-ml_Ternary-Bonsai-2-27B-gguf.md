@@ -113,7 +113,7 @@ It is also llama.cpp's default: the GGUF files carry `top_k`, `top_p` and `tempe
 values match the base model's own `generation_config.json`. The reported benchmark results were
 measured with the same settings, except `min_p=0.0`.
 
-The model uses `xhigh` reasoning effort by default; use `medium` for shorter responses and a balance of speed and accuracy. `low` reasoning effort is not supported and when selected the model will behave close to `xhigh`.
+**The model uses `xhigh` reasoning effort by default; use `medium` for shorter responses and a balance of speed and accuracy. `low` reasoning effort is not supported and when selected the model will behave close to `xhigh`.**
 
 ### System Prompt
 
