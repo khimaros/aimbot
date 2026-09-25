@@ -106,6 +106,9 @@ const RESET = () => {
   filters.pubs = new Set();
   filters.minParams = null;
   filters.maxParams = null;
+  // the ladder toggle is one-row-per-model versus one-per-rung, and a case that
+  // needed the rows split would otherwise leave every later case counting them
+  setLadder(false);
   reweigh();
 };
 
@@ -169,6 +172,35 @@ test('the vram filter judges what has a size, and passes what has none', () => {
      'everything left either has no size or fits');
 
   RESET();
+});
+
+// `fits vram` off is the reader saying they do not want the page deciding what
+// they may look at, and the ladder was still answering with the fit: the biggest
+// rung on screen stayed the largest one that clears the budget, which is the
+// same number whether or not the box was ever asked about. the filter decides
+// which ROWS survive; the ladder decides which RUNGS one model has, and those
+// are different questions. the row a model reads as stays the fit either way --
+// one row has to name one quant.
+test('turning the vram filter off opens the ladder rather than capping it', () => {
+  RESET();
+  const short_ = 'qwen3.8 flash next';
+  const rows = () => expand(visible().filter(m => m.short === short_))
+    .map(r => (r._q || {}).gib).filter(Boolean);
+  const published = Math.max(...model(short_).quants
+    .flatMap(q => (q.available || []).map(a => a.gib || 0)));
+
+  setLadder(true);
+  const on = rows();
+  filters.flags.delete('fits');
+  const off = rows();
+  RESET();
+
+  ok(published > Math.max(...on),
+     'the budget hides the top of this ladder: ' + published + ' published');
+  ok(off.length > on.length,
+     'switching the filter off adds rungs: ' + on.length + ' -> ' + off.length);
+  eq(Math.max(...off), published,
+     'and what comes back is the whole ladder, largest published rung included');
 });
 
 // THE LICENCE FILTER SELECTS TIERS rather than answering one yes-or-no. the

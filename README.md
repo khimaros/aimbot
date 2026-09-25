@@ -593,6 +593,13 @@ become 753 rows on a 128gb box at q8. clicking any row opens the modal on the
 quant that row was showing, out of that row's repo, rather than on whatever the
 modal would have chosen for itself.
 
+what that ladder lists follows `fits vram` rather than outliving it. with the
+filter on it is the rungs that fit, on the same test the row uses. with it off
+the page is not being asked what fits, so the ladder is every rung the repo
+publishes -- qwen3.8 flash next runs from UD-IQ1_S at 67.56 gib through BF16 at
+329.72 rather than stopping at the UD-Q4_K_XL at 103.69 a 128gb box pays for.
+The row still READS the largest that fits, since one row names one quant.
+
 that last part needed the table and the modal to agree on which repo a model is
 read from, and they did not. where a model ships two builds the registry says
 which one can speculate -- qwen3.6-27b's plain repo is marked

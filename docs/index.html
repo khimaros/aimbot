@@ -293,7 +293,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <span class="ms" id="license-ms" data-help="which licence tiers to show, as registry/licenses.yaml classifies the licence each repo declares. permissive is commercial use, redistribution and derivatives with at most attribution asked back; restricted adds a condition you would have to hold your own product against; unknown is nobody here having read those terms, which is the absence of a claim rather than a bad one. it opens on permissive alone, so the other two are a tick away with their counts beside them. picking none is every licence"></span>
     <span class="ms" id="pub-ms" data-help="narrow to the publishers you care about, taken from the repo owner. picking none is every publisher"></span>
     <span id="kinds" class="chips"></span>
-    <button id="ladder-btn" aria-pressed="true" data-help="on, one row per model, reading the largest quant that fits. off, one row per quant that fits, so the whole size ladder is on screen -- and with quant adjusted each row scores at its own bits per weight, which merges every model and every quant into one ranked list of what you could actually run. it stays inside the repo the registry pins, since crossing to another build changes more than the size">best quant</button>
+    <button id="ladder-btn" aria-pressed="true" data-help="on, one row per model, reading the largest quant that fits. off, one row per quant on offer, so the whole size ladder is on screen -- every rung with `fits vram` off, and the ones that fit with it on -- and with quant adjusted each row scores at its own bits per weight, which merges every model and every quant into one ranked list of what you could actually run. it stays inside the repo the registry pins, since crossing to another build changes more than the size">best quant</button>
   </div>
 
   <div class="layout">
@@ -772,15 +772,25 @@ const hfTag = q => (q.quant || q.file);
 // answer to which quant fits.
 const quantAuthor = q => (q.repo || '').split('/')[0];
 
-// every quant in the pinned repo that clears the budget, the ceiling and the
-// floor, largest first. same filter the fit uses, without the last step that
-// picks one -- so `every quant that fits` and `the one that fits` can never
-// disagree about what fits.
+// every quant of the pinned repo the reader is being offered, largest first.
+// with `fits vram` on that is what clears the budget, the ceiling and the floor:
+// the same test the fit uses, without the last step that picks one, so `every
+// quant that fits` and `the one that fits` can never disagree about what fits.
+// with it OFF the page is not being asked what fits, and a ladder that still
+// stopped at the budget would be answering a question somebody turned off -- it
+// read as a fact about the model the size of the box they stopped caring about.
+// the row keeps READING the largest that fits, because one row names one quant.
 function fittingQuants(m) {
   const q = activeQuant(m);
   if (!q) return [];
   const all = quantChoices(m).filter(c => c.repo === q.repo);
   if (!budget || !all.some(c => c.gib)) return [q];
+  if (!filters.flags.has('fits')) {
+    // a rung nobody weighed is not a rung that failed the weighing, so it stays
+    // on the ladder rather than dropping out with the fit
+    const rung = c => (c.gib === undefined ? -Infinity : c.gib);
+    return [...all].sort((a, b) => rung(b) - rung(a));
+  }
   const room = usable() - kvGib(m, wantCtx(m));
   return affordable(m, all, room).sort((a, b) => b.gib - a.gib);
 }
@@ -818,7 +828,7 @@ let BANDWIDTHS = [];
 let FLOPSES = [];
 let bandwidth = 0;
 let flops = 0;
-let allQuants = false;             // one row per model, or one per fitting quant
+let allQuants = false;             // one row per model, or one per rung offered
 
 // two bounds rather than one number. decode reads the active weights every
 // step, and the whole cache with them -- which starts empty and ends up the

@@ -404,15 +404,25 @@ const hfTag = q => (q.quant || q.file);
 // answer to which quant fits.
 const quantAuthor = q => (q.repo || '').split('/')[0];
 
-// every quant in the pinned repo that clears the budget, the ceiling and the
-// floor, largest first. same filter the fit uses, without the last step that
-// picks one -- so `every quant that fits` and `the one that fits` can never
-// disagree about what fits.
+// every quant of the pinned repo the reader is being offered, largest first.
+// with `fits vram` on that is what clears the budget, the ceiling and the floor:
+// the same test the fit uses, without the last step that picks one, so `every
+// quant that fits` and `the one that fits` can never disagree about what fits.
+// with it OFF the page is not being asked what fits, and a ladder that still
+// stopped at the budget would be answering a question somebody turned off -- it
+// read as a fact about the model the size of the box they stopped caring about.
+// the row keeps READING the largest that fits, because one row names one quant.
 function fittingQuants(m) {
   const q = activeQuant(m);
   if (!q) return [];
   const all = quantChoices(m).filter(c => c.repo === q.repo);
   if (!budget || !all.some(c => c.gib)) return [q];
+  if (!filters.flags.has('fits')) {
+    // a rung nobody weighed is not a rung that failed the weighing, so it stays
+    // on the ladder rather than dropping out with the fit
+    const rung = c => (c.gib === undefined ? -Infinity : c.gib);
+    return [...all].sort((a, b) => rung(b) - rung(a));
+  }
   const room = usable() - kvGib(m, wantCtx(m));
   return affordable(m, all, room).sort((a, b) => b.gib - a.gib);
 }
@@ -450,7 +460,7 @@ let BANDWIDTHS = [];
 let FLOPSES = [];
 let bandwidth = 0;
 let flops = 0;
-let allQuants = false;             // one row per model, or one per fitting quant
+let allQuants = false;             // one row per model, or one per rung offered
 
 // two bounds rather than one number. decode reads the active weights every
 // step, and the whole cache with them -- which starts empty and ends up the
