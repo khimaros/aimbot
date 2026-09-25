@@ -753,6 +753,31 @@ const defaultRepo = m => {
 // which quant a ROW is being read as. an expanded row carries its own; a model
 // row asks for the largest that fits.
 const activeQuant = m => m._q !== undefined ? m._q : bestInRepo(m, defaultRepo(m));
+
+// the rung a row NAMES when the fit has no answer. where no rung clears the
+// budget the smallest one the repo publishes is what the quant, gib and bpw
+// columns read, because a cell saying `does not fit` answers `fits vram` from a
+// column about which file the row is about -- and said it loudest when that
+// filter was switched off, to somebody who had just said they were not asking.
+// the miss is marked rather than hidden: `fits vram` is where no fits lives, and
+// `gib` here is how far over the box the closest rung still is.
+//
+// DISPLAY ONLY. the retention behind a quality score stays on `activeQuant`, and
+// the reason is measurable: scoring the models that fit nothing at their
+// smallest rung moves their facets, and percentiles are a rank over the whole
+// roster, so 80.3 became 85.6 for a model that fits fine -- models filtered out
+// of the view re-ranking the ones in it. a rung nobody can load may be named;
+// it does not get to move a ranking.
+const readQuant = m => activeQuant(m) || smallestRung(m);
+
+function smallestRung(m) {
+  const all = quantChoices(m).filter(c => c.repo === defaultRepo(m));
+  const sized = all.filter(c => c.gib);
+  // a repo that publishes no sizes has not failed to be small, and its pinned
+  // rung is the answer that does not invent a measurement
+  if (!sized.length) return all.find(c => c.pinned) || all[0] || null;
+  return sized.reduce((a, b) => (b.gib < a.gib ? b : a));
+}
 // an entry with no quants at all -- onnx-only weights the roster carries to say
 // what it is MISSING -- has no size to weigh, and answering "does it fit" with
 // `no` states something the data does not. it passes here, and the runtime
@@ -781,7 +806,7 @@ const quantAuthor = q => (q.repo || '').split('/')[0];
 // read as a fact about the model the size of the box they stopped caring about.
 // the row keeps READING the largest that fits, because one row names one quant.
 function fittingQuants(m) {
-  const q = activeQuant(m);
+  const q = readQuant(m);
   if (!q) return [];
   const all = quantChoices(m).filter(c => c.repo === q.repo);
   if (!budget || !all.some(c => c.gib)) return [q];
@@ -791,7 +816,11 @@ function fittingQuants(m) {
     const rung = c => (c.gib === undefined ? -Infinity : c.gib);
     return [...all].sort((a, b) => rung(b) - rung(a));
   }
-  const room = usable() - kvGib(m, wantCtx(m));
+  // the SAME room the fit charges, drafter included: a ladder that bills only
+  // the weights offers rungs the row could never read, and deepseek v4 flash
+  // was handing out UD-IQ3_S at 108.1 of a 116 gib box that the draft file
+  // takes past the end
+  const room = usable() - kvGib(m, wantCtx(m)) - draftGib(m);
   return affordable(m, all, room).sort((a, b) => b.gib - a.gib);
 }
 
@@ -1106,7 +1135,7 @@ const COLUMNS = [
   {k: 'short', t: 'model', num: false, get: m => m.short,
    help: "the registry's name for it, and who publishes it",
    // the quant rides along here too: with one row per quant the name repeats,
-   // and `fits quant` is a column somebody may have hidden
+   // and the `quant` column is one somebody may have hidden
    cell: m => `<td>${esc(m.short)}<span class="sub"> ${esc(m._q ? m._q.quant
      : m.publisher)}</span></td>`},
   {k: 'score', t: 'quality', num: true, get: m => scored(m).value ?? -1,
@@ -1212,22 +1241,26 @@ const COLUMNS = [
      const full = c >= (m.facts.context_native || 0);
      return `<td class="n${full ? '' : ' warn'}">${ctxLabel(c)}</td>`;
    }},
-  {k: 'quant', t: 'fits quant', num: false, get: m => (activeQuant(m) || {}).quant || '',
-   help: 'the quant being read, and who built it. with a vram budget set, the largest that fits; otherwise the one the registry pins',
+  {k: 'quant', t: 'quant', num: false, get: m => (readQuant(m) || {}).quant || '',
+   help: 'the quant the row is read as, and who built it. with a vram budget set, the largest that fits; without one, the one the registry pins. where nothing fits it names the smallest rung the repo publishes and marks it, because the row is still being read from a file',
    cell: m => {
-     const q = activeQuant(m);
-     if (!q) return '<td class="faint" title="nothing this repo publishes fits the budget">does not fit</td>';
-     return `<td title="${esc(q.repo)}">${esc(q.quant)}`
+     const q = readQuant(m);
+     if (!q) return '<td class="faint" title="the roster carries no gguf for this entry">-</td>';
+     const miss = !activeQuant(m);
+     return `<td${miss ? ' class="warn" title="nothing this repo publishes clears the budget and context set on the page: this is its smallest rung"'
+                       : ` title="${esc(q.repo)}"`}>${esc(q.quant)}`
        + `<span class="sub"> ${esc(quantAuthor(q))}</span></td>`;
    }},
   {k: 'size', t: 'gib', num: true,
-   get: m => activeQuant(m) ? activeQuant(m).gib + draftGib(m) : -1,
-   help: 'what has to be resident before any cache: the weights at the fitted quant, plus the drafter where the publisher ships it as a separate file rather than folding it into the build. the kv cache is not included -- add the kv gib column for that',
+   get: m => readQuant(m) ? readQuant(m).gib + draftGib(m) : -1,
+   help: 'what has to be resident before any cache: the weights at the quant the row reads, plus the drafter where the publisher ships it as a separate file rather than folding it into the build. the kv cache is not included -- add the kv gib column for that',
    cell: m => {
-     const q = activeQuant(m);
+     const q = readQuant(m);
      if (!q || q.gib === undefined) return '<td class="n"><span class="faint">-</span></td>';
      const d = draftGib(m);
-     return `<td class="n"${d ? ` title="${gib(q.gib)} weights + ${gib(d)} for `
+     // the weight of a rung nothing fits is the size of the miss, so it wears
+     // the same warning the quant name does
+     return `<td class="n${!activeQuant(m) ? ' warn' : ''}"${d ? ` title="${gib(q.gib)} weights + ${gib(d)} for `
        + `${esc(m.speculative.draft.file)}, the ${esc(draftKind(m))} head"` : ''}>`
        + `${gib(q.gib + d)}`
        + (d ? '<span class="sub"> +d</span>' : '') + '</td>';
@@ -1240,9 +1273,9 @@ const COLUMNS = [
      if (!m.facts.attn) return '<td class="n faint" title="its config publishes no attention geometry">?</td>';
      return `<td class="n dim">${gib(v)}</td>`;
    }},
-  {k: 'bpw', t: 'bpw', num: true, get: m => (activeQuant(m) || {}).bpw ?? -1,
+  {k: 'bpw', t: 'bpw', num: true, get: m => (readQuant(m) || {}).bpw ?? -1,
    help: 'bits per weight. the number that predicts how much the quant cost in quality',
-   cell: m => `<td class="n dim">${num((activeQuant(m) || {}).bpw, 2) || '-'}</td>`},
+   cell: m => `<td class="n dim">${num((readQuant(m) || {}).bpw, 2) || '-'}</td>`},
   {k: 'tg', t: 'tg t/s', num: true, get: m => (tgTps(m) || {}).empty ?? -1,
    help: 'estimated tokens generated per second with the cache empty: the bandwidth you set, discounted, over the active weights at the fitted quant, times what speculative decoding yields where the model ships a drafter. it does not charge for reading the drafter itself, so it runs optimistic for a large one. a second, dimmer figure appears where a full cache at your context costs more than 15% of it. arithmetic, never a measurement',
    cell: m => {
@@ -3088,10 +3121,11 @@ function discountBlock(m, q) {
   if (!q) return '';
   const c = curveFor(m, q);
   const kept = retention(q.bpw || 16, m, q);
-  const scored = activeQuant(m);
+  const scored = readQuant(m);
   const rows = [];
   rows.push(['rung', `${esc(q.quant)}${q.bpw ? ` at ${num(q.bpw, 2)} bits per weight` : ''}`
-    + ' <span class="dim">-- ' + (!scored ? 'nothing fits your budget, so the table ranks no rung'
+    + ' <span class="dim">-- ' + (!activeQuant(m)
+      ? 'nothing here fits your budget, so the table ranks its smallest rung'
       : scored.repo === q.repo && scored.quant === q.quant
         ? 'also the rung the table ranks, the largest that fits your budget'
         : `the table ranks ${esc(scored.quant)}`

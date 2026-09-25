@@ -203,6 +203,80 @@ test('turning the vram filter off opens the ladder rather than capping it', () =
      'and what comes back is the whole ladder, largest published rung included');
 });
 
+// THE QUANT COLUMN NAMES A RUNG. it used to print `does not fit` where nothing
+// clears the budget, which is an answer to `fits vram` sitting in a column about
+// which file the row is read from -- and loudest exactly when that filter was
+// switched off, when the reader has said they are not asking. The row reads the
+// smallest rung the repo publishes instead, so the gib and bpw beside the name
+// describe the file named rather than going blank, and the fit stays where it
+// belongs: in `fits vram`, which still bites.
+test('the quant column names a rung when none of them fits', () => {
+  RESET();
+  eq(col('quant').t, 'quant', 'the column is about the quant, not the fit');
+
+  const m = model('qwen3.8 flash next');
+  setHardware({...DEFAULT_HARDWARE, budget: 8});
+  ok(!activeQuant(m), 'nothing it publishes fits an 8 gib box');
+  ok(!fitsBudget(m), 'and the fit still knows: the filter has an answer to give');
+
+  filters.flags.delete('fits');
+  const cell = col('quant').cell(m);
+  eq(/does not fit/.test(cell), false, 'the cell names a rung: ' + cell);
+  const rungs = quantChoices(m).filter(c => c.repo === defaultRepo(m));
+  const named = (cell.match(/<td[^>]*>([^<]+)/) || [])[1];
+  ok(rungs.some(c => c.quant === named),
+     'a rung of its own, got ' + named);
+  eq(named, rungs.filter(c => c.gib).reduce((a, b) => b.gib < a.gib ? b : a).quant,
+     'the smallest one, which is the rung that comes closest to the box');
+  ok(/warn/.test(cell), 'and the miss is marked: ' + cell);
+  ok(/\d/.test(col('size').cell(m)),
+     'the weight of that rung prints rather than a dash: ' + col('size').cell(m));
+
+  // and the name is a NAME, not a read: the discount stays on the fit, because
+  // a percentile is a rank over the whole roster and scoring the models nobody
+  // can load at their smallest rung re-ranks the models somebody can
+  ok(effective, '`quant adjusted` is on by default, which is where this bites');
+  eq(modelRetention(m), 1,
+     'a row naming a rung nothing fits is discounted at nothing: '
+     + modelRetention(m));
+  setHardware({...DEFAULT_HARDWARE});
+  const one = D.models.find(x => !x.native_low_bpw && activeQuant(x)
+    && activeQuant(x).bpw);
+  ok(!!one, 'some non-exempt row fits a rung');
+  near(modelRetention(one), retention(activeQuant(one).bpw, one, activeQuant(one)),
+       1e-9, 'and it is discounted at the rung it reads, not at a named one');
+  RESET();
+});
+
+// THE OTHER HALF of the same rule, and the one that matters more: naming a rung
+// nobody could load is only honest while the page has stopped claiming to filter
+// on it. with `fits vram` ON nothing on screen may name a rung over the box --
+// not the row, and not one rung of the expanded ladder -- and the ladder has to
+// weigh the drafter the row weighs, since a rung the row could never read has no
+// business being offered as a row of its own.
+test('with fits vram on, nothing on screen names a quant that does not fit', () => {
+  RESET();
+  ok(filters.flags.has('fits'), 'the filter is on by default, which is the case');
+  const over = [];
+  for (const m of visible()) {
+    for (const q of fittingQuants(m)) {
+      const need = q.gib + kvGib(m, wantCtx(m)) + draftGib(m);
+      if (q.gib && need > usable()) over.push(`${m.short} ${q.quant} at ${q.gib}`);
+    }
+    const cell = col('quant').cell(m);
+    if (/class="warn"/.test(cell)) over.push(m.short + ' (row)');
+  }
+  eq(over.join(', '), '', 'rows naming a rung over the usable vram: ' + over.join(', '));
+
+  // and the rungs the ladder hides with the filter on come back when it is off,
+  // which is the difference the two cases are about
+  const with_ = expand(visible()).length;
+  filters.flags.delete('fits');
+  ok(expand(visible()).length > with_,
+     'switching the filter off returns the rungs it was hiding');
+  RESET();
+});
+
 // THE LICENCE FILTER SELECTS TIERS rather than answering one yes-or-no. the
 // boolean could only ask "hide what is restricted", so the two questions behind
 // it had no control at all: "what could i run if i could ship under a community

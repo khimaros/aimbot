@@ -1703,10 +1703,11 @@ function discountBlock(m, q) {
   if (!q) return '';
   const c = curveFor(m, q);
   const kept = retention(q.bpw || 16, m, q);
-  const scored = activeQuant(m);
+  const scored = readQuant(m);
   const rows = [];
   rows.push(['rung', `${esc(q.quant)}${q.bpw ? ` at ${num(q.bpw, 2)} bits per weight` : ''}`
-    + ' <span class="dim">-- ' + (!scored ? 'nothing fits your budget, so the table ranks no rung'
+    + ' <span class="dim">-- ' + (!activeQuant(m)
+      ? 'nothing here fits your budget, so the table ranks its smallest rung'
       : scored.repo === q.repo && scored.quant === q.quant
         ? 'also the rung the table ranks, the largest that fits your budget'
         : `the table ranks ${esc(scored.quant)}`

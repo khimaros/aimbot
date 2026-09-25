@@ -574,6 +574,22 @@ either, which is why build-tables budgets 105 gib of a 128gb box rather than
 128. a repo publishing no file sizes reads as unknown rather than as too big,
 because that is a measurement this corpus does not have.
 
+the column is called `quant` and it always names one. it used to be `fits quant`
+and to read `does not fit` where no rung cleared the budget, which put a verdict
+about memory in the column that says which file the row is scored at -- and said
+it loudest with `fits vram` switched off. a row whose repo fits nothing now names
+that repo's smallest rung, marked, and `gib` beside it is how far over the box the
+closest rung still is. whether anything fits at all stays where it belongs: in
+`fits vram`, which with the filter on drops every model whose rungs all miss.
+
+naming is not reading: the quality discount stays on the rung the fit chose, and
+where the fit chose nothing nothing is discounted. that boundary is measured
+rather than intended -- discounting the models that fit nothing at their smallest
+rung moves their facets, a percentile is a rank over the whole roster, and the
+models filtered out of the view re-ranked the models in it: the top row went from
+80.3 to 85.6 for a model that fits perfectly well. `MODELS.md` regenerates
+byte-identical after that, which is the assertion the change is held to.
+
 the quant column names its AUTHOR beside the rung. a rung is somebody's build
 of somebody else's weights for 138 of the 150 models carrying one, 11 of them
 publish rungs from more than one quantizer, and which build the page picked was
@@ -598,7 +614,7 @@ filter on it is the rungs that fit, on the same test the row uses. with it off
 the page is not being asked what fits, so the ladder is every rung the repo
 publishes -- qwen3.8 flash next runs from UD-IQ1_S at 67.56 gib through BF16 at
 329.72 rather than stopping at the UD-Q4_K_XL at 103.69 a 128gb box pays for.
-The row still READS the largest that fits, since one row names one quant.
+the row still READS the largest that fits, since one row names one quant.
 
 that last part needed the table and the modal to agree on which repo a model is
 read from, and they did not. where a model ships two builds the registry says
