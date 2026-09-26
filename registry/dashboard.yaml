@@ -63,6 +63,19 @@ weights:
   showdown-t2i.adherence: 0.33
   lmarena-edit.rating: 0.0
   showdown-edit.adherence: 0.0
+  # the decision roster, weighted for the same reason the speech and image keys
+  # are: a facet nothing weights produces no score. two axes, because a model
+  # whose entire output is a confidence has to be ranked on both halves of being
+  # right -- picking the right option, and knowing which ones it gets wrong.
+  #
+  # `jev.score` is NOT weighted: two of its four axes are Speed and Cost, and for
+  # an open model those are the evaluator's own GPU with a x2 + 0.15s self-host
+  # adjustment, which is a fact about a pod and not about the weights. `jev.hard`
+  # and `jev.sealed` are carried for a reader to look at and rank on nothing, the
+  # way image editing is: they are slices of the same 842 decisions, and weighting
+  # a slice alongside the whole moves the rank for the shape of the question set
+  jev.intelligence: 0.60
+  jev.calibration: 0.40
 
 # the named weightings the page offers, each a whole answer to "what is
 # quality" rather than a nudge. `base: true` starts from `weights:` above;

@@ -31,6 +31,7 @@ date is in each file's provenance below.
 | `data/swe-rebench.json` | 2026-08-17 | swe-rebench.com |
 | `data/tbench.json` | 2026-08-17 | hf datasets, harborframework/terminal-bench-2-leaderboard |
 | `data/epoch.json` | 2026-08-17 | epoch.ai benchmarking hub (csv bundle) |
+| `data/jevbench.json` | 2026-09-26 | benchmarkheaven.com/jev-models: one frozen revision of the System One board, 93 decision models, rerankers and classifiers, four axes each |
 | `data/model-facts.json` | 2026-08-17 | derived: hf config.json, safetensors index, chat template |
 | `data/chat-templates/` | 2026-08-17 | the chat templates themselves, verbatim, base repo and gguf header |
 | `data/chat-templates.json` | 2026-08-17 | the index over them: source, size, hash, base/gguf pairing |
@@ -442,6 +443,46 @@ these are summed byte totals of the real files, so sharded quants aggregate and
 substitute: UD-* quants mix precisions per tensor, and gpt-oss-120b is within
 2gib of the same size at every tag because it is natively MXFP4.
 
+## the decision source
+
+`jevbench.json` is the board for the models that answer in probabilities. a
+decision model reads a state and one or more typed questions with lettered
+options, and returns a probability per option from one forward pass by projecting
+the hidden state at an answer slot onto the option letters -- nothing is decoded,
+so nothing here else measures it. artificial analysis, lmarena, gbench and
+swe-rebench all ask a model to produce something, and the whole claim of this
+class is that it does not.
+
+it is also the only source here with a **calibration axis**, and for a model whose
+entire output is a confidence that is not a second opinion about the product, it
+is a measurement of it. the board publishes Intelligence, Calibration, Speed and
+Cost and a harmonic-mean composite of the four; `registry/dashboard.yaml` weights
+the first two and leaves the composite alone, because two of its four axes are the
+evaluator's GPU with a x2 + 0.15 s self-host adjustment, which is a fact about a
+pod and not about the weights.
+
+**the sealed tier is this board's contamination signal.** 308 of the 842 decisions
+were frozen after every system on it shipped, so a row's `public_accuracy` against
+its `sealed_accuracy` says how much of its lead the public items cannot have been
+trained on. decider-4b v2 reads 83.5% against 34.7%, and the gap is carried in the
+facet's `ref` note rather than as a facet, because every facet ranks higher as
+better and that one is a loss.
+
+a revision is FROZEN, which is what a frozen revision means: the collector's url
+carries it, `--immutable` is the honest cache claim, and a new one means editing
+the url rather than adding a flag. rows keep the key the board gave them,
+`decider-4b-v2` and not `decider-4b`, so that when the hub repo moves to v2.1 the
+registry reads as two sources disagreeing instead of quietly scoring new weights
+with old numbers.
+
+`open` is free text there -- `yes`, `true`, `weights`, `no`, absent for the
+baselines -- and rows the board itself lists as `partial` or `honorable_mention`
+were not run to the end, so `resolve-ids` offers a model only what is downloadable
+AND ranked. that matters more here than on the text boards because the field's
+vocabulary is a taxonomy of what the system even is: `system-one-open`,
+`jev-rebuild`, `native-logit`, `reranker`, `classifier`, `raw-logit-control`,
+`llm-baseline`, and the hosted `decision-api` it is being compared against.
+
 ## analysis
 
 ```
@@ -707,6 +748,7 @@ rather than uniformly:
 | `fetch-tbench` | 6h listings, 30d contents | a listing gains submissions and re-runs; the files inside a published job never change, and there are five of them per listing |
 | `fetch-tts-arena`, `fetch-voicearena` | 24h | an arena moves only as fast as people vote, and a rating built on 600 votes does not turn over in an afternoon |
 | `fetch-genai-showdown` | 24h | four static json files that change when one person adds a model or a prompt, which is weeks apart |
+| `fetch-jevbench` | immutable | the url names a frozen revision, so only `--refresh` goes back out, and a new revision is a url change rather than a re-read |
 
 48h rather than 24 because the point is a sweep run the next day, and anything
 shorter than the gap between two of them never saves a request. a model added

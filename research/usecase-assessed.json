@@ -354,6 +354,31 @@
    ],
    "assessed_on": "2026-09-08"
   },
+  "Mapika/decider-4b": {
+   "one_liner": "a 4b that answers a typed question with a probability per option instead of a sentence, and it is first of 89 ranked systems on the one board that scores that.",
+   "use_for": [
+    "routing, triage and classification in front of a bigger model, where the answer has to be one of the options supplied and nothing else",
+    "confidence-gated decisions, since the number is the product: per-type temperatures over the option logits and an abstain threshold in the client",
+    "scoring many states at once, which is what the single-pass readout buys -- every question is its own row of the same forward pass",
+    "agent action choice, where the card's live browser numbers (93.2% sampled over 22 MiniWoB++ tasks) beat the 2b of the same family"
+   ],
+   "avoid_for": [
+    "anything needing a sentence out of it -- it generates nothing, and the chat template its gguf carries is inherited machinery the readout skips",
+    "trusting its confidence on hard multi-step items, where its own card puts calibration error at 0.147 against the v2 weights' 0.046",
+    "form filling: the card states that one of the two issue #9 cases is answered wrongly at this revision and sends you back to v1",
+    "quantized rungs below the pinned q8, where nothing here has measured what a rung costs a probability rather than a sample"
+   ],
+   "notes": "two numbers matter more than the score. the first is the public-minus-sealed gap: 83.5% on the frozen public items against {jev.sealed} on 308 sealed after every system on the board shipped, which is this benchmark's contamination signal and this row's is the widest on it. the second is that the row joins on `decider-4b-v2` while the hub now serves v2.1 -- the card's own comparison is +0.7 regression accuracy, worse calibration on hard items and one form-filling case still wrong, so treat {jev.score} as the v2 weights' and not as a measurement of the file this entry points at. everything else about it is unusually well documented: two training stages, the optimizer argued from a controlled quarter-data run, and a release that failed its own pre-registered rules and says which.",
+   "confidence": "medium",
+   "evidence": [
+    "{jev.score} -- first of 89 ranked systems, on the only board here whose rows are decision models rather than chat models",
+    "{jev.intelligence} intelligence / {jev.calibration} calibration / {jev.sealed} sealed -- three of its four axes, the composite left unweighted",
+    "no forum prose at all: four days old, so `name.match` scores nothing and no community facet can exist",
+    "params_total_b 4.21 counted from the safetensors that ship; runtime qwen35, mainline since b7990, 262144 context in the header and in the config",
+    "claim: the card's own tables, published with their regressions and with pre-registered release rules it did not pass"
+   ],
+   "assessed_on": "2026-09-26"
+  },
   "MiniMaxAI/MiniMax-M2.5": {
    "one_liner": "a deprecated tool-use model that still beats its own successor on the tau2 suite and on little else.",
    "use_for": [
@@ -927,6 +952,25 @@
     "{community.reddit-localllama}"
    ],
    "assessed_on": "2026-09-19"
+  },
+  "Qwen/Qwen3.5-4B-Base": {
+   "one_liner": "the qwen3.5 4b pretrain, carried because `Mapika/decider-4b` was fine-tuned from it and nothing here scores it.",
+   "use_for": [
+    "fine-tuning into the qwen3.5 4b architecture: 32 layers, 8 of them full attention and 24 gated delta-net, the same geometry as the post-trained model beside it",
+    "reading a derivative against the weights it started from -- the only question a `-Base` row on this roster ever answers"
+   ],
+   "avoid_for": [
+    "serving: no post-training, and every other 4b here has had it",
+    "ranking -- no source this repo collects scores a pretrain, so its `ids` are empty rather than missing, and `resolve-ids` declines to strip `-base` precisely so it cannot inherit its sibling's numbers"
+   ],
+   "notes": "the hub publishes 47 bases for this roster's models and 39 of them are a `-Base` pretrain, which is why the rule about that suffix matters more than the entry does: stripping it scored this repo on artificial analysis' `qwen3-5-4b`, which is the chat model beside it. carried as a base the way qwen3 8b is, and it already sat in this registry as mradermacher's separate `mmproj` file, which is where the vision tower of it lives.",
+   "confidence": "low",
+   "evidence": [
+    "no benchmark facet carried by any source, and no card claim: the hub card is the architecture's, not a measurement of this checkpoint",
+    "params_total_b 4.66 counted from the safetensors that ship, vision tower included; 262144 context in the header and in the config",
+    "the only derivative this registry carries from it is `Mapika/decider-4b`"
+   ],
+   "assessed_on": "2026-09-26"
   },
   "Qwen/Qwen3.5-9B": {
    "one_liner": "a small tool-caller: it holds up on tau2 and falls away everywhere else.",

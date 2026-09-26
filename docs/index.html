@@ -1019,6 +1019,11 @@ function can(m) {
   if (ins.includes('audio') && outs.includes('text')) out.add('transcribes');
   if (outs.includes('audio')) out.add('synthesizes');
   if (outs.includes('image')) out.add('draws');
+  // a capability and not a shape: what a decision model emits is a probability,
+  // which is no modality. `resolve-ids`' BOARD_NEEDS says the same thing about
+  // what jevbench measures, and the two have to agree or the derive scores a
+  // model the page then leaves out of the factor's denominator
+  if (m.kind === 'decision') out.add('decides');
   return out;
 }
 
@@ -1178,7 +1183,7 @@ const COLUMNS = [
        + `${pctOf(s.cover)}</td>`;
    }},
   {k: 'kind', t: 'kind', num: false, get: m => m.kind,
-   help: 'text, image or speech',
+   help: 'what the registry classifies it as: text, speech, image, video, decision or a crispasr pipeline kind',
    cell: m => `<td class="dim">${esc(m.kind)}</td>`},
   {k: 'params', t: 'params', num: true, get: m => m.facts.params_total_b ?? -1,
    help: 'total parameters, counted from the weights that ship. a * means the vendor advertises a different number; hover for both',
@@ -1463,6 +1468,12 @@ const MODALITIES = [
    help: 'video generation, on the same stable-diffusion.cpp binary as the image models. no board this repo collects rates them, so they carry no score'},
   {k: 't2e', t: 'text to embeddings', test: m => modOut(m, 'embeddings'),
    help: 'embedding models'},
+  // served, unlike the three pipeline kinds below it, and it answers nothing: it
+  // reads a state and typed questions and returns a probability per option. so
+  // it is in no shape at all -- `any to text` is right to leave it out, since it
+  // emits no tokens -- and the kind is the only way to ask for it
+  {k: 'decide', t: 'decisions', test: m => m.kind === 'decision',
+   help: 'typed decisions in one forward pass: a probability per option and nothing generated. jevbench rates them, and its calibration axis is the only one here'},
   {k: 'diar', t: 'diarization', test: m => m.kind === 'diarize',
    help: 'weights --diarize loads beside an ASR model. they transcribe nothing and are scored by nobody'},
   // `post` and `translate` carry no `modalities` block on purpose, the way the
@@ -1499,7 +1510,7 @@ const MODALITY_ABOUT = {
   text: ['text'], t2t: ['text'], v2t: ['text'],
   any2t: ['text', 'transcribes'],
   a2t: ['transcribes'], t2a: ['synthesizes'], t2i: ['draws'],
-  t2v: [], t2e: [], diar: [], post: [], mt: [],
+  t2v: [], t2e: [], decide: ['decides'], diar: [], post: [], mt: [],
 };
 
 // the capabilities the current view is asking about, or null for no restriction

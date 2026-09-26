@@ -94,6 +94,32 @@ def open_keys(rows, open_field, id_fields=()):
     return space
 
 
+def jev_space(rows):
+    """{normalized name: board key} for JevBench, downloadable weights only.
+
+    `open` is a free-text field there -- `yes`, `true`, `weights` (a repo that
+    ships but is not a checkpoint you fetch), `no`, and absent for six rows whose
+    class is a baseline rather than a system -- so truthiness would read `no` as
+    open. rows the board itself does not rank -- `partial`, `honorable_mention`,
+    which were not run to the end -- are left out as well.
+
+    Both spellings go in, because a registry model is named by its repo and the
+    board names a run: `decider-4b-v2` is the key and "decider 4b v2 (Mapika)" is
+    the display. the version stays in the value a caller writes into `ids`, so a
+    hub repo that has moved to v2.1 reads as a disagreement between two sources.
+    """
+    space = {}
+    for key, r in rows.items():
+        if str(r.get("open") or "").lower() not in ("yes", "true", "weights"):
+            continue
+        if r.get("listing") not in (None, "ranked"):
+            continue
+        for n in (key, r.get("display")):
+            if n:
+                space.setdefault(norm(n), key)
+    return space
+
+
 def key_spaces(data=None):
     """{kind: {source: {normalized name: real id}}} for every source that names models.
 
@@ -220,7 +246,11 @@ def key_spaces(data=None):
     # nothing scores a diarizer: there is no third-party DER board for the
     # embedders and segmenters, which is why crispasr's own figure is the only
     # number this repo has for them and it is quoted in the model's notes
-    return {"text": out, "speech": spoken, "image": pictured, "diarize": {}}
+    # the board the decision half is scored on, and the only source here whose
+    # rows are decision models, rerankers and classifiers rather than chat models
+    decision = {"jev": jev_space((load("jevbench", data) or {}).get("systems") or {})}
+    return {"text": out, "speech": spoken, "image": pictured,
+            "decision": decision, "diarize": {}}
 
 
 # what each facet group MEASURES, so a model is offered the ones its own
@@ -248,6 +278,7 @@ BOARD_NEEDS = {
     "aa-tts": "synthesizes", "tts-arena": "synthesizes",
     "aa-t2i": "draws", "lmarena-t2i": "draws", "lmarena-edit": "draws",
     "showdown-t2i": "draws", "showdown-edit": "draws",
+    "jev": "decides",
 }
 
 
@@ -264,6 +295,12 @@ def can(model):
         out.add("synthesizes")
     if "image" in outs:
         out.add("draws")
+    # a capability rather than a shape: what a decision model emits is a
+    # probability per option, which is no modality, so `kind` is the only thing
+    # that says it. the same table in scripts/roster.js has to agree or the page
+    # and the derive disagree about who is being asked
+    if model.get("kind") == "decision":
+        out.add("decides")
     return out
 
 
@@ -515,7 +552,16 @@ def main():
             if not cand:
                 continue
             variants.append(cand)
-            for suffix in ("-it", "-instruct", "-bf16", "-chat", "-base"):
+            # `-base` is deliberately NOT in this list, though the four others
+            # are. `-it`, `-instruct`, `-chat` and `-bf16` are spellings of the
+            # weights they name; a pretrain is the weights BEFORE the
+            # post-training that made the other one, and this registry carries
+            # both -- so stripping it asked for `Qwen3.5-4B` on behalf of
+            # `Qwen/Qwen3.5-4B-Base` and matched artificial analysis' `qwen3-5-4b`
+            # EXACTLY. the hub publishes 47 bases and 39 are a `-Base` pretrain:
+            # the qualifier is load-bearing, and a source that names a pretrain
+            # names it in full, which the unsuffixed variant already covers.
+            for suffix in ("-it", "-instruct", "-bf16", "-chat"):
                 if cand.lower().endswith(suffix):
                     variants.append(cand[: -len(suffix)])
         wants, sized = [], []

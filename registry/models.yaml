@@ -814,7 +814,10 @@ models:
     kind: text
     name:
       short: qwen3.5-4b
-      match: qwen\s*-?3\.5[\s-]*\b4b\b
+      # the lookahead is for `Qwen/Qwen3.5-4B-Base` below, and `make lint` says
+      # so loudly: every matching model counts a sentence, so a pattern that
+      # also claims the base inflates both rows with one mention
+      match: qwen\s*-?3\.5[\s-]*\b4b\b(?!\s*-?\s*base)
     quants:
     - repo: unsloth/Qwen3.5-4B-MTP-GGUF
       quant: Q8_0
@@ -885,6 +888,147 @@ models:
       mid_system: dropped
       mid_developer: dropped
       upstream_differs: [developer, leading_system_max, mid_developer, mid_system]
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  # CARRIED AS A BASE, for the same reason qwen3 8b beside it is. this is the
+  # pretrain `Mapika/decider-4b` was fine-tuned from, and a derivative whose base
+  # is not carried cannot be read against the thing it claims to improve on --
+  # which is the whole question a decision model raises, since the claim is that
+  # one forward pass of a 4b beats a prompted 4b at naming an option.
+  Qwen/Qwen3.5-4B-Base:
+    kind: text
+    name:
+      short: qwen3.5-4b-base
+      match: qwen\s*-?3\.5[\s-]*\b4b[\s-]*base\b
+    notes: >-
+      the qwen3.5 4b pretrain: same 32 layers, same 8-fulls-24-linear attention
+      geometry and the same 262144 context as the qwen3.5-4b above it, with no
+      post-training under it. it is here as a base rather than as a candidate --
+      nobody should serve a raw pretrain off this roster today -- and it is the
+      base `Mapika/decider-4b` names, the way qwen3 8b below is there for ternary
+      bonsai. the hub calls it image-text-to-text and mradermacher's conversion
+      agrees, but the tower ships in a separate `mmproj-Q8_0` file: every rung of
+      the main ladder is text weights alone, which is why its `modalities` are
+      checked against a config that carries a vision block and not against a file
+      a consumer would have to pair up.
+    quants:
+    - repo: mradermacher/Qwen3.5-4B-Base-GGUF
+      quant: Q8_0
+      # keyed by filename for the same reason the decider's rung is
+      file: Qwen3.5-4B-Base.Q8_0.gguf
+      note: the static ladder. there is no unsloth repo and no MTP build of a
+        pretrain, so no UD rungs and no drafter -- and a base model has nothing to
+        draft, since nothing here scores one
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+    sampling:
+      deterministic:
+        source: tuned-here
+        temp: 0.0
+        tuned: [base, fim]
+        note: the card {card} publishes no sampling set -- it is the architecture's
+          card, and there is no generation_config.json beside the weights either --
+          so greedy is what this registry chose rather than a set anybody
+          documented. `base` is the whole of what a pretrain is tuned for, and the
+          reason this row is here at all
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: mradermacher/Qwen3.5-4B-Base-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  # the decision roster. a model that reads a state and one or more typed
+  # questions with lettered options and answers with a PROBABILITY PER OPTION,
+  # from one forward pass, generating nothing: no decode, no parse, no output
+  # outside the options the caller supplied.
+  #
+  # `kind: text` is the wrong word, and not marginally. it is not served as a
+  # chat or completion endpoint, it emits no tokens, and there is no sampling
+  # profile to name -- a model with no sampling to sample. the crispasr pipeline
+  # kinds are wrong in the other direction, because this IS served, on its own
+  # endpoint, and a consumer sends it state rather than a transcript.
+  #
+  # so it gets a kind, a chip of its own and `decides` in the capability
+  # vocabulary, which is what lets JevBench -- the one board that rates this
+  # class, and the only one here with a CALIBRATION axis -- score it without
+  # putting a decision model in the roster MODELS.md ranks.
+  Mapika/decider-4b:
+    kind: decision
+    name:
+      short: decider-4b
+      match: decider[\s-]*4b\b
+    notes: >-
+      the readout is the option-letter logits at each `Answer (` slot, softmaxed
+      over the valid letters: one pass answers every question, and the card
+      {card} is explicit that letters are never generated. 2 to 255 options a
+      question, a state of up to 32k tokens, `abstain_below` for a threshold.
+      stage 1 is one supervised pass over 742m tokens of decision mixtures on the
+      qwen3.5 4b pretrain; stage 2 is a merged rank-64 LoRA. no RL stage, and the
+      card says so.
+      the temperature in `decider_config.json` -- 1.099 overall, 1.110 choice /
+      1.560 yes-no / 1.287 score per answer type -- DIVIDES those logits for
+      calibration. it is not a sampling temperature, which is why this entry has
+      no `sampling:` block and why `thinking:` describes a chat template the
+      readout never goes through. the card publishes its own regressions rather
+      than only its wins: hard multi-step items are overconfident (ECE 0.147
+      against v2's 0.046), one form-filling case is answered wrongly, and JevBench
+      is where both show up.
+    quants:
+    - repo: mradermacher/decider-4b-GGUF
+      quant: Q8_0
+      # the size table keys this pack by FILENAME, because its rungs read
+      # `decider-4b.Q8_0.gguf` and a dot is not a separator the tag reader knows
+      file: decider-4b.Q8_0.gguf
+      role: model
+      note: the only conversion of it, and a static one -- {card@mradermacher/decider-4b-GGUF}
+        publishes no imatrix rung and says the weighted quants may not come. the
+        pin is q8 {gib} rather than the q4 its own table marks "fast, recommended",
+        because the answer here is a distribution over the option letters rather
+        than a sampled continuation, and no sweep here has measured what a lower
+        rung costs a probability
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      jev: decider-4b-v2
+    modalities:
+      input:
+      - text
+      # nothing on the way out. `output` is typed rather than derived, and it is
+      # empty on purpose: a probability per option is not a modality a consumer
+      # receives, and putting `text` here would land the model in `any to text`
+      # beside the language models, which is the claim `kind` exists to avoid
+      output: []
+    turns:
+      source: mradermacher/decider-4b-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
     thinking:
       knob: enable_thinking
       kind: boolean

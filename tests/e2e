@@ -706,6 +706,55 @@ test('modality is one shape at a time, and the shapes overlap', () => {
   RESET();
 });
 
+test('every kind the registry carries is reachable through a modality chip', () => {
+  RESET();
+  filters.flags = new Set();
+  filters.engines = new Set();
+  filters.licenses = new Set();
+
+  // `kind` and the chips are two vocabularies for the same roster, and when a
+  // new kind arrives without a chip it is not merely hidden by the default --
+  // NOTHING selects it, so no filter, no share link and no column header can
+  // reach it. this is the discovery-path rule `every_modality_the_roster_carries
+  // _has_a_discovery_path` applies to the hub catalog, turned on the page.
+  const orphans = [];
+  for (const kind of new Set(D.models.map(m => m.kind))) {
+    const rows = D.models.filter(m => m.kind === kind);
+    if (!MODALITIES.some(c => rows.some(m => c.test(m)))) orphans.push(kind);
+  }
+  eq(orphans.join(','), '', 'every kind has a chip that selects it');
+});
+
+test('a decision model is its own roster, on a board of its own', () => {
+  RESET();
+  filters.flags = new Set();
+  filters.engines = new Set();
+
+  // it reads a state and typed questions and answers with a probability per
+  // option, so it emits no text: `any to text` is right to leave it out, and so
+  // is `language models`, which is the registry kind and the roster MODELS.md
+  // ranks. the only chip that means it is the kind's own.
+  const d = model('decider-4b');
+  eq(d.kind, 'decision', 'a model that generates nothing is not a language model');
+  eq((d.modalities.output || []).length, 0, 'it emits no text: '
+     + JSON.stringify(d.modalities));
+
+  filters.mods = new Set(['text']);
+  eq(visible().some(m => m.short === 'decider-4b'), false,
+     'out of the language models, and out of what the document ranks');
+
+  filters.mods = new Set(['decide']);
+  ok(visible().some(m => m.short === 'decider-4b'), 'in the decisions chip');
+
+  // and the chip is not a cabinet of one: the point of adding the kind is that
+  // a board exists for it, so the row has to carry the board's numbers rather
+  // than the dash every unscored model wears
+  const scored = Object.keys(d.facets).filter(k => k.startsWith('jev.'));
+  ok(scored.length >= 3, 'jevbench scored it: ' + scored.join(','));
+  ok(d.facets['jev.sealed'] !== undefined,
+     'including the sealed tier, which is the contamination signal');
+});
+
 test('the runtime filter is a multi-select over what actually loads a model', () => {
   RESET();
   filters.mods = new Set();  // no shape picked is every shape

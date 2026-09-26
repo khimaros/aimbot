@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+
+"""Fetch the JevBench leaderboard into data/jevbench.json.
+
+This is the board for the decision half of the roster: a system reads a state
+and a list of typed questions and answers with a probability per option, in one
+forward pass, and generates nothing. Nothing else here measures that. artificial
+analysis and lmarena rate models that produce text, and the whole point of a
+system-one model is that it does not -- it is the router, the risk gate and the
+form filler standing in front of them.
+
+It is also the only board here that scores rerankers and structured extractors
+beside the language models they are bolted to, and it reports an axis rather
+than an index: Intelligence, Calibration, Speed and Cost, equal-weighted into a
+composite by harmonic mean and published separately as well. Calibration is the
+one no other source here has any notion of -- a model can be right and still be
+wrong about how right it is, and for a model whose whole output is a confidence
+that is the product.
+
+The site is a rendered page; the revision endpoint underneath it answers plain
+json, which is what this reads through ./httpcache. The url carries the revision,
+so a sweep that does not update the url is re-reading the same frozen run, which
+is what a frozen run MEANS, and `--immutable` is the cache claim that says so out
+loud. `benchmarkheaven.com/jev-models` is the page a reader wants; the revision is
+in its payload and `--url` overrides.
+
+Two things are deliberately not carried. The per-row `presets` and `rank_under`
+are the same composite at six weightings, which is the page's slider rather than
+a fact about the model, and `sealed_aggregate`'s per-family accuracies are 90%
+of the bytes for a breakdown no question here asks. What IS kept is
+`sealed_accuracy` and the public-minus-sealed gap, because that gap is this
+board's swe-rebench move: the sealed items were frozen after every system
+shipped, so a model that scored 49 points better on the public items than on the
+sealed ones (decider-4b v2 does) is telling on itself.
+
+The revision the roster reads is pinned in the URL above. A row's key names the
+VERSION the board measured -- `decider-4b-v2` is the v2 weights -- and it is
+kept verbatim as the `ids.jev` value rather than tidied to the family name,
+because a hub repo that has since moved to v2.1 then reads as two sources
+disagreeing rather than being quietly smoothed over.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+
+import capture
+
+URL = "https://benchmarkheaven.com/api/jevbench/v1.4.2"
+
+# the board's own header, minus the running commentary. `revision_log` is 20
+# prose entries about how the scoring changed and `footnotes` is 93 more; both
+# are readable at the url the `ref` carries.
+META = ("benchmark", "revision", "protocol", "status", "generated_utc",
+        "measured_in", "revision_note", "score_name", "score_one_liner",
+        "main", "tiers", "tier_weights", "axis_weights", "scoring", "cost_unit")
+
+# one row, minus the page's own bookkeeping and the reproduction hashes
+ROW = ("display", "author", "repo", "class", "licence", "open", "underlying",
+       "has_distribution", "probability_source", "endpoint_kind", "api_flag",
+       "ranked", "listing", "not_ranked_because", "partial", "rank",
+       "jevbench_score", "axes", "tiers", "public_accuracy", "sealed_accuracy",
+       "public_minus_sealed_gap_pp", "new_in", "scoring_note", "footnote")
+
+SPEED = ("p50_s_raw", "p95_s_raw", "hardware", "adjustment")
+
+
+def fetch(url, key, refresh):
+    """The decoded payload, or None if the endpoint could not be read."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    cmd = [os.path.join(here, "httpcache"), url, "--key", key, "--immutable"]
+    if refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    if proc.returncode:
+        print("!!! httpcache exited %d" % proc.returncode, file=sys.stderr)
+        return None
+    try:
+        return json.loads(proc.stdout)
+    except ValueError:
+        print("!!! the endpoint did not answer json -- it has probably moved",
+              file=sys.stderr)
+        return None
+
+
+def row(r):
+    """One system, as a record: the scores, and what the measurement was."""
+    out = {k: r[k] for k in ROW if r.get(k) is not None}
+    sp = r.get("speed") or {}
+    got = {k: sp[k] for k in SPEED if sp.get(k) is not None}
+    if got:
+        out["speed"] = got
+    cost = r.get("cost") or {}
+    if cost.get("usd_per_1000") is not None:
+        # `basis` is a paragraph saying whose list price the estimate used, and
+        # the row's `scoring_note` repeats it; the number and its kind are enough
+        out["cost"] = {"usd_per_1000": cost["usd_per_1000"],
+                       "kind": cost.get("kind")}
+    return out
+
+
+def shape(payload):
+    """{meta: ..., systems: {board key: record}}, with the page's own order kept."""
+    return {
+        "meta": {k: payload[k] for k in META if k in payload},
+        "systems": {r["key"]: row(r) for r in payload.get("systems") or []
+                    if r.get("key")},
+    }
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default="data/jevbench.json")
+    ap.add_argument("--url", default=URL)
+    ap.add_argument("--refresh", action="store_true",
+                    help="re-read a revision whose url cannot change but whose "
+                         "bytes somebody says have")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even though the board holds fewer systems than before")
+    args = ap.parse_args()
+
+    got = shape(fetch(args.url, "jevbench", args.refresh) or {})
+    rows = got.get("systems") or {}
+    if not rows:
+        sys.exit("!!! no systems in the board -- the endpoint changed shape")
+
+    written, now, before = capture.write(args.out, got, lambda p: len(p["systems"]),
+                                         allow_shrink=args.allow_shrink)
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "systems"))
+    op = sum(1 for r in rows.values() if str(r.get("open") or "").lower()
+             in ("yes", "true", "weights"))
+    print("wrote %s: %d systems (%d with downloadable weights) at revision %s"
+          % (args.out, now, op, (got.get("meta") or {}).get("revision")))
+
+
+if __name__ == "__main__":
+    main()

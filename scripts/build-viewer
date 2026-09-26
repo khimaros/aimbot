@@ -298,6 +298,20 @@ QUANT_EVIDENCE = [
      "has measured what a quant costs either",
      ["aa-t2i.elo", "lmarena-t2i.rating", "lmarena-edit.rating",
       "showdown-t2i.adherence", "showdown-edit.adherence"]),
+
+    # the decision board, and unscaled for two reasons rather than one. every row
+    # was read off the author's own server in bf16, so not one of them is a gguf at
+    # a quant the curve could describe, and the readout is the logit of an option
+    # letter rather than a generated answer -- which is the part a quantization is
+    # most plausibly bad at and the part nobody has measured. `jev.score` rides in
+    # here rather than under `composite`: it is a harmonic mean over the four beside
+    # it, including two axes about somebody's GPU.
+    ("jevbench", False,
+     "typed decisions, read off option-letter logits in one forward pass. every "
+     "row was measured through the author's own server in bf16, and no quantized "
+     "run of any of them has been measured here",
+     ["jev.score", "jev.intelligence", "jev.calibration", "jev.hard",
+      "jev.sealed"]),
 ]
 
 SCALED_FACETS = {k for _, yes, _, keys in QUANT_EVIDENCE if yes for k in keys}
@@ -554,6 +568,10 @@ GROUPS = [
     ("lmarena images", "the same question at the other arena, over six million "
      "votes. the two disagree -- artificial analysis puts z-image above krea 2 "
      "and this board puts it below -- which is the reason to carry both."),
+    ("jevbench", "the board for a model that answers with a probability per "
+     "option instead of a reply: 842 frozen decisions, an axis for whether the "
+     "model knows when it is wrong, and 308 items sealed after every system "
+     "shipped, which is what a public-minus-sealed gap is measuring."),
 ]
 
 

@@ -1,0 +1,4177 @@
+{
+ "meta": {
+  "benchmark": "JevBench",
+  "revision": "v1.4.2",
+  "protocol": "jevbench::v1.4",
+  "status": "final",
+  "generated_utc": "2026-09-24T23:29:24+00:00",
+  "measured_in": "Frozen v1.2 public/held-out items plus 308 sealed v1.4 items; all item text and answers remain private",
+  "revision_note": "v1.4.2 adds 11 newly measured systems and completes the sealed run of swanOne. The v1.4 scoring formulas and all v1.4.1 measurements are unchanged.",
+  "score_name": "JevBench Score",
+  "score_one_liner": "Intelligence, Calibration, Speed and Cost \u2014 equal-weight harmonic mean, with generalization and Jev-class gates.",
+  "main": "JevBench Score (25:25:25:25)",
+  "tiers": {
+   "easy": 72,
+   "judge": 146,
+   "standard": 96,
+   "hard": 220,
+   "sealed": 308
+  },
+  "tier_weights": {
+   "easy": 0.14,
+   "standard": 0.28,
+   "judge": 0.28,
+   "hard": 0.3
+  },
+  "axis_weights": {
+   "intelligence": 0.25,
+   "calibration": 0.25,
+   "speed": 0.25,
+   "cost": 0.25
+  },
+  "scoring": {
+   "jevbench_score": "Equal-weight harmonic mean of Intelligence, Calibration, Speed and Cost (power mean p=-1). If Intelligence <50 multiply by (I/50)^2. For Speed and Cost separately, if below 50 multiply by (axis/50)^2.",
+   "intelligence": "0.8 \u00d7 v1.3 chance-corrected Intelligence on the frozen v1.2 items + 0.2 \u00d7 100 \u00d7 max(0, (sealed accuracy \u2212 0.293)/(1 \u2212 0.293)); then multiply by 1 \u2212 max(0, public-minus-sealed accuracy gap in percentage points \u2212 25)/100. Original tier weights: easy .14, standard .28, judge .28, hard .30.",
+   "hard_tier": "220 new decisions (111 public, 109 held out): long multi-condition policy documents (2-6k tokens), priority trade-offs, deliberately ambiguous cases with a 'no clear answer' label, traps, multi-hop lookups, date/number reasoning, adversarial distractors, subtle answer-judging, overlapping routing, and probability items with an exact gold distribution. Half written by Claude Opus 5, half by GPT-5.6 Sol; each item reviewed blind and then against its gold by the other model; one discussion round; frozen and hashed before any benchmarked system saw an item. No item was selected on any system's answers.",
+   "calibration": "v1.3 Calibration + (v1.4 candidate Calibration \u2212 v1.3 Calibration) \u00d7 min(1, 0.2/0.35). Label-only systems contribute zero.",
+   "speed": "Mean of score(p50) and score(p95) of the serial 242-decision standard+judge run; score(s) = 100 - 20 log10(s / 0.1 s), clipped to 0..100 (0.1 s = 100, 1 s = 80, 10 s = 60). Latency of self-hosted and demo endpoints is adjusted \u00d72 (+0.15 s on our own servers) to approximate production load \u2014 an assumption, not a measurement; raw measurements are in the table and the repo. Production APIs (Jev, djev, classifier.dev, OpenAI, Google, DeepSeek, Chutes) are not adjusted.",
+   "cost": "US dollars per 1,000 DECISIONS \u2014 not per 1,000 tokens. One decision is one whole question: its state, its rubric and its options, which is hundreds to thousands of input tokens. Pooled over all 534 v1.2 decisions; score = 100 - 30 log10(usd / 0.001), clipped to 0..100 ($0.001 = 100, $0.01 = 70, $0.10 = 40, $1 = 10). Measured = public tariff x measured tokens. est. = hosted-provider list price of the same weights or size class x tokens (for a flat-rate service, its published plan price at full use). announced = the provider's published price, not yet charged (free preview), x measured tokens.",
+   "ranked": "Ranked: a system's own model, with every tier attempted for >= 95 % of its decisions. Partial runs are shown below the ranking, marked, without a rank. A service that runs another entrant's model is listed with all of its scores and axes, but is not ranked against the models. Ranking it would rank the same model twice, once at the model's own price and once at the service's. The row keeps every number, axis, cost basis and per-task outcome; it carries no rank number.",
+   "presets": "Other views reweight the same four axes with a weighted harmonic mean and the same gates. They are not the official JevBench Score.",
+   "sealed": "308 current sealed decisions; only aggregate results are published. API flags identify operator endpoints that received item text without answers."
+  },
+  "cost_unit": {
+   "unit": "$ per 1,000 decisions",
+   "not_unit": "$ per 1,000 tokens",
+   "one_liner": "Dollars per 1,000 decisions, not per 1,000 tokens: one decision is a whole question \u2014 state, rubric and options.",
+   "worked_example": "One decision is a whole question, not a token. Jev 1.13.0 reads 950 input tokens per decision on average over the 534 v1.2 decisions. At its public tariff of $0.042 per MILLION input tokens (output tokens are free, https://docs.typesafe.ai/models), 1,000 decisions therefore cost 950 x 1,000 x $0.042 / 1,000,000 = $0.0399. That is what the Cost column shows: $0.0399 per 1,000 decisions, not per 1,000 tokens.",
+   "short_note": "One decision \u2248 950 input tokens on average; at Jev's $0.042 per million input tokens that is $0.0399 per 1,000 decisions.",
+   "mean_input_tokens_per_decision_jev": 950.3389513108614
+  }
+ },
+ "systems": {
+  "decider-4b-v2": {
+   "display": "decider-4b v2 (Mapika)",
+   "author": "Mapika",
+   "repo": "https://github.com/Mapika/decider",
+   "class": "system-one-open",
+   "licence": "Apache-2.0 (package and weights)",
+   "open": "yes",
+   "has_distribution": true,
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 1,
+   "jevbench_score": 64.12889492043318,
+   "axes": {
+    "intelligence": 49.35289661364111,
+    "calibration": 74.99659054834055,
+    "speed": 92.93237918931897,
+    "cost": 60.92496476683517
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.96875,
+    "judge": 0.8767123287671232,
+    "hard": 0.6727272727272727
+   },
+   "public_accuracy": 0.8354978354978355,
+   "sealed_accuracy": 0.3474025974025974,
+   "public_minus_sealed_gap_pp": 48.80952380952381,
+   "new_in": "v1.4.2",
+   "scoring_note": "Offline self-hosted inference of all 842 decisions (534 frozen v1.2 + 308 sealed v1.4) in a network-disabled, read-only container on an evaluator-owned Lium RTX PRO 6000 pod, through JevBench's unchanged typesafe adapter against the author's own server on loopback; no operator endpoint; no golds were exposed. Latency is the serial request wall time on the standard+judge items with the self-hosted adjustment. Cost is a labelled estimate: DeepInfra Qwen/Qwen3.5-4B list price $0.03/M input (4B dense size class, as decider-2b), read 2026-09-24, over the server's own usage.input_tokens; it is not a GPU bill.",
+   "speed": {
+    "p50_s_raw": 0.01749592460691929,
+    "p95_s_raw": 0.06258766227401794,
+    "hardware": "RTX PRO 6000 (evaluator-owned Lium pod)",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.02006786516853933,
+    "kind": "estimate"
+   }
+  },
+  "jev-1.13.0": {
+   "display": "Jev 1.13.0 (TypeSafe AI)",
+   "author": "TypeSafe AI",
+   "repo": "https://docs.typesafe.ai",
+   "class": "jev",
+   "licence": "proprietary API",
+   "open": "no",
+   "underlying": "closed",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "api",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 2,
+   "jevbench_score": 63.29205745601932,
+   "axes": {
+    "intelligence": 53.05904597275748,
+    "calibration": 76.3389831504074,
+    "speed": 83.26811926100174,
+    "cost": 51.96616538951724
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9895833333333334,
+    "judge": 0.9452054794520548,
+    "hard": 0.740909090909091
+   },
+   "public_accuracy": 0.8658008658008658,
+   "sealed_accuracy": 0.36688311688311687,
+   "public_minus_sealed_gap_pp": 49.891774891774894,
+   "scoring_note": "sealed item text (no golds) was sent to the operator endpoint (TypeSafe API), as for every API measurement",
+   "speed": {
+    "p50_s_raw": 0.6524335257709026,
+    "p95_s_raw": 0.7221905551850795,
+    "adjustment": "none (production API)"
+   },
+   "cost": {
+    "usd_per_1000": 0.03991423595505617,
+    "kind": "measured"
+   }
+  },
+  "jevk5-v02": {
+   "display": "JevK5 v0.2.0",
+   "author": "allebee",
+   "repo": "https://github.com/allebee/jevk5",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (code/adapter); Apache-2.0 (Qwen3.5-4B base)",
+   "has_distribution": true,
+   "endpoint_kind": "unknown",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 3,
+   "jevbench_score": 62.04446598579722,
+   "axes": {
+    "intelligence": 48.8938430961117,
+    "calibration": 74.53428390286419,
+    "speed": 91.09028776527087,
+    "cost": 59.517941238875515
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9583333333333334,
+    "judge": 0.9452054794520548,
+    "hard": 0.7
+   },
+   "public_accuracy": 0.8528138528138528,
+   "sealed_accuracy": 0.33116883116883117,
+   "public_minus_sealed_gap_pp": 52.16450216450217,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "adjustment": "See original v1.3 measurement"
+   },
+   "cost": {
+    "usd_per_1000": 0.022356404494382018,
+    "kind": "estimate"
+   }
+  },
+  "cygnet": {
+   "display": "Cygnet (blockbrain, frozen Gemma-4-12B-it)",
+   "author": "blockbrain",
+   "repo": "https://github.com/blockbrain-ai/cygnet-recipe",
+   "class": "system-one-open",
+   "licence": "shim MIT; weights Apache-2.0 with Google's Gemma Prohibited Use Policy",
+   "open": "yes",
+   "has_distribution": true,
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 4,
+   "jevbench_score": 61.76221691847706,
+   "axes": {
+    "intelligence": 49.51055476185943,
+    "calibration": 74.92580266255106,
+    "speed": 90.67084381968537,
+    "cost": 52.827265000089206
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.96875,
+    "judge": 0.952054794520548,
+    "hard": 0.7545454545454545
+   },
+   "public_accuracy": 0.8787878787878788,
+   "sealed_accuracy": 0.33766233766233766,
+   "public_minus_sealed_gap_pp": 54.112554112554115,
+   "new_in": "v1.4.2",
+   "scoring_note": "Offline self-hosted inference of all 842 decisions (534 frozen v1.2 + 308 sealed v1.4) in a network-disabled, read-only container on an evaluator-owned Lium RTX PRO 6000 Blackwell 96 GB pod, through JevBench's unchanged typesafe adapter against the author's own server on loopback; no operator endpoint; no golds were exposed. Latency is the serial request wall time on the standard+judge items with the self-hosted adjustment. Cost is a labelled estimate: OpenRouter google/gemma-3-12b-it list price $0.05/M input (the nearest hosted 12B Gemma; gemma-4-12b-it is not listed; the Winnow-12B / Jev-Omni precedent), read 2026-09-24, over the server's own usage.input_tokens; it is not a GPU bill.",
+   "speed": {
+    "p50_s_raw": 0.035219401121139526,
+    "p95_s_raw": 0.11935583325102912,
+    "hardware": "RTX PRO 6000 (evaluator-owned Lium pod)",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.03736151685393259,
+    "kind": "estimate"
+   }
+  },
+  "hopper": {
+   "display": "Hopper",
+   "author": "HopitAI",
+   "repo": "https://huggingface.co/HopitAI/hopper",
+   "class": "jev-rebuild",
+   "licence": "Component-specific terms recorded in RESULT.md; submitted adapter release and Qwen base retain their respective terms",
+   "open": "yes",
+   "underlying": "Qwen3.5-4B plus HopitAI/hopper LoRA",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 5,
+   "jevbench_score": 59.433442874809664,
+   "axes": {
+    "intelligence": 48.001323586436904,
+    "calibration": 79.05762339459613,
+    "speed": 86.80781551893452,
+    "cost": 58.728026855585874
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.96875,
+    "judge": 0.8356164383561644,
+    "hard": 0.65
+   },
+   "public_accuracy": 0.8225108225108225,
+   "sealed_accuracy": 0.3409090909090909,
+   "public_minus_sealed_gap_pp": 48.160173160173166,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.12881201645359397,
+    "p95_s_raw": 0.18081656964495776,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.02375376404494382,
+    "kind": "estimate"
+   }
+  },
+  "winnow-12b": {
+   "display": "Winnow-12B Q8",
+   "author": "Eldan Ring",
+   "repo": "https://huggingface.co/EldanRing/Winnow-12B",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0, including the applicable Gemma 4 base/derivative licence terms",
+   "open": "yes",
+   "underlying": "google/gemma-4-12B-it LoRA fine-tune, merged and exported as Q8_0 GGUF",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 6,
+   "jevbench_score": 55.57545047877118,
+   "axes": {
+    "intelligence": 48.303781520788064,
+    "calibration": 64.81178680536223,
+    "speed": 82.32624042236164,
+    "cost": 52.92322256021786
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.96875,
+    "judge": 0.910958904109589,
+    "hard": 0.7090909090909091
+   },
+   "public_accuracy": 0.8571428571428571,
+   "sealed_accuracy": 0.33116883116883117,
+   "public_minus_sealed_gap_pp": 52.5974025974026,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.22503555566072464,
+    "p95_s_raw": 0.4126893173903227,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.037087359550561805,
+    "kind": "estimate"
+   }
+  },
+  "reflex-4b": {
+   "display": "reflex 4B (kshetrajna12)",
+   "author": "kshetrajna12",
+   "repo": "https://github.com/kshetrajna12/reflex",
+   "class": "jev-rebuild",
+   "licence": "MIT (code, adapter); Apache-2.0 (base)",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3.5-4B + kshetrajna12/reflex-qwen3.5-4b-lora",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 7,
+   "jevbench_score": 53.99041264165809,
+   "axes": {
+    "intelligence": 47.457309838375316,
+    "calibration": 70.41256219336218,
+    "speed": 67.96813879081057,
+    "cost": 59.675719111465405
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9479166666666666,
+    "judge": 0.9726027397260274,
+    "hard": 0.6318181818181818
+   },
+   "public_accuracy": 0.7922077922077922,
+   "sealed_accuracy": 0.2824675324675325,
+   "public_minus_sealed_gap_pp": 50.974025974025984,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 1.7996779419481754,
+    "p95_s_raw": 2.0541166696697473,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.022087303370786515,
+    "kind": "estimate"
+   }
+  },
+  "djev": {
+   "display": "djev (Maisa, diffusion-gemma)",
+   "author": "Maisa (David Villal\u00f3n)",
+   "repo": "https://github.com/Davipar/djev-dev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 code; Google DiffusionGemma Apache-2.0 weights; no djev-specific weights",
+   "open": "yes",
+   "underlying": "inference method on google/diffusiongemma-26B-A4B-it (one structured denoising read), not a separately trained model",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "api",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 8,
+   "jevbench_score": 52.228492110723586,
+   "axes": {
+    "intelligence": 46.99529771527977,
+    "calibration": 55.355844103478105,
+    "speed": 91.35677310946093,
+    "cost": 57.57524920597589
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9791666666666666,
+    "judge": 0.9315068493150684,
+    "hard": 0.6954545454545454
+   },
+   "public_accuracy": 0.8398268398268398,
+   "sealed_accuracy": 0.2987012987012987,
+   "public_minus_sealed_gap_pp": 54.112554112554115,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.2370578795671463,
+    "p95_s_raw": 0.30865143015980717,
+    "adjustment": "none (production API)"
+   },
+   "cost": {
+    "usd_per_1000": 0.025951254681647943,
+    "kind": "announced"
+   }
+  },
+  "jev-omni": {
+   "display": "Jev-Omni (akhilaaa3, Gemma-4-12B merged)",
+   "author": "akhilaaa3",
+   "repo": "https://huggingface.co/akhilaaa3/Jev-Omni",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0, following Gemma 4; dataset rights stated separately by the author",
+   "open": "yes",
+   "underlying": "google/gemma-4-12B-it fine-tuned and merged, with a trained 256-way decision head",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 9,
+   "jevbench_score": 51.34132749148857,
+   "axes": {
+    "intelligence": 46.7523835806221,
+    "calibration": 64.08815671004801,
+    "speed": 81.54478729126231,
+    "cost": 53.01727443048121
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.96875,
+    "judge": 0.9246575342465754,
+    "hard": 0.75
+   },
+   "public_accuracy": 0.8874458874458875,
+   "sealed_accuracy": 0.32142857142857145,
+   "public_minus_sealed_gap_pp": 56.60173160173161,
+   "scoring_note": "Offline local open-weight inference on the frozen 308-item v1.4 set in a network-disabled, read-only container; no operator endpoint received sealed text.",
+   "footnote": "Requested by Florian on X on 23 Sep with the words 'let's include it in v1.4', so this row is measured now and belongs to that round. A merged google/gemma-4-12B-it with a trained 256-way decision head; the author's own load_model.py and predict() run unchanged, one forward pass, nothing generated. Two staging differences, forced by our 46 GB GPU and fixed before the run: the model is built on the CPU and moved to CUDA afterwards, and every nn.Linear weight is cast to bfloat16 first - the exact cast his own reference loader applies, and consistent with his 'inference uses BF16 autocast'. JevBench is text-only, so the image, audio and video paths of this model are never exercised. Self-host latency gets the standard x2 + 0.15 s adjustment.",
+   "speed": {
+    "p50_s_raw": 0.21708130463957787,
+    "p95_s_raw": 0.5247324109077453,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.03682059925093633,
+    "kind": "estimate"
+   }
+  },
+  "metask-jev-4b": {
+   "display": "metask-jev-4b",
+   "author": "Wayfind (metask-ai)",
+   "repo": "https://github.com/metask-ai/metask-jev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "Qwen3.5-4B merged r16 LoRA, candidate-logit readout",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 10,
+   "jevbench_score": 47.78280701270882,
+   "axes": {
+    "intelligence": 44.692072447140184,
+    "calibration": 66.89723664642602,
+    "speed": 89.10064969336227,
+    "cost": 54.54015986693759
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9791666666666666,
+    "judge": 0.8972602739726028,
+    "hard": 0.5909090909090909
+   },
+   "public_accuracy": 0.7965367965367965,
+   "sealed_accuracy": 0.275974025974026,
+   "public_minus_sealed_gap_pp": 52.056277056277054,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.06571843556594104,
+    "p95_s_raw": 0.1435365290963091,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.032758801498127314,
+    "kind": "estimate"
+   }
+  },
+  "semif-qwen3.5-4b": {
+   "display": "SemIf, formerly OpenJev (Qwen3.5-4B, TheoLeeCJ)",
+   "author": "Theodore Lee (TheoLeeCJ)",
+   "repo": "https://github.com/TheoLeeCJ/openjev",
+   "class": "jev-rebuild",
+   "licence": "MIT (code); Qwen3.5 weights Apache-2.0",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3.5-4B (frozen, BF16)",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 11,
+   "jevbench_score": 47.69091838825422,
+   "axes": {
+    "intelligence": 44.436255677242116,
+    "calibration": 66.76099782801955,
+    "speed": 83.70422262345133,
+    "cost": 59.46663998783557
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9791666666666666,
+    "judge": 0.952054794520548,
+    "hard": 0.5954545454545455
+   },
+   "public_accuracy": 0.8095238095238095,
+   "sealed_accuracy": 0.262987012987013,
+   "public_minus_sealed_gap_pp": 54.65367965367965,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.19796114787459373,
+    "p95_s_raw": 0.3153164997696876,
+    "hardware": "RunPod RTX PRO 4500 Blackwell 32 GB (EU-RO-1)",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.02244460674157303,
+    "kind": "estimate"
+   }
+  },
+  "jobe-qwen3.5-4b": {
+   "display": "Jobe Qwen3.5-4B (frozen)",
+   "author": "MantisShrimpdev",
+   "repo": "https://github.com/MantisShrimpdev/jobe",
+   "class": "native-logit",
+   "licence": "MIT code; Apache-2.0 weights",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3.5-4B frozen BF16 backbone",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 12,
+   "jevbench_score": 46.93829466139942,
+   "axes": {
+    "intelligence": 44.09907806068809,
+    "calibration": 66.09860630363153,
+    "speed": 85.5887262805767,
+    "cost": 59.517941238875515
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9791666666666666,
+    "judge": 0.9657534246575342,
+    "hard": 0.5863636363636363
+   },
+   "public_accuracy": 0.8095238095238095,
+   "sealed_accuracy": 0.2564935064935065,
+   "public_minus_sealed_gap_pp": 55.3030303030303,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.13457110384479165,
+    "p95_s_raw": 0.25440939371474086,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.022356404494382018,
+    "kind": "estimate"
+   }
+  },
+  "localjev-qwen3.5-4b": {
+   "display": "local-jev Qwen3.5-4B",
+   "author": "Amith Chandrappa (amithgc)",
+   "repo": "https://github.com/amithgc/local-jev",
+   "class": "jev-rebuild",
+   "licence": "MIT code; Apache-2.0 Qwen weights",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3.5-4B text model, zero-shot next-token letter probabilities",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 13,
+   "jevbench_score": 46.79864791106764,
+   "axes": {
+    "intelligence": 44.40785125416772,
+    "calibration": 73.29981818181818,
+    "speed": 74.96494013517304,
+    "cost": 55.797342929598116
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9583333333333334,
+    "judge": 0.958904109589041,
+    "hard": 0.6045454545454545
+   },
+   "public_accuracy": 0.8051948051948052,
+   "sealed_accuracy": 0.2597402597402597,
+   "public_minus_sealed_gap_pp": 54.545454545454554,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.7075801230967045,
+    "p95_s_raw": 0.9433971662074327,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.02974554307116105,
+    "kind": "estimate"
+   }
+  },
+  "system-one-open": {
+   "display": "system-one-open (Gemma 4 E2B LoRA on an L4)",
+   "author": "mithalouni",
+   "repo": "https://github.com/mithalouni/system-one-open",
+   "class": "jev-rebuild",
+   "licence": "MIT (repository LICENSE; Gemma weights keep Google\u2019s terms)",
+   "open": "yes",
+   "underlying": "google/gemma-4-E2B-it + LoRA",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "demo",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 14,
+   "jevbench_score": 45.11471760046746,
+   "axes": {
+    "intelligence": 44.19587425502762,
+    "calibration": 54.867197380012975,
+    "speed": 76.96012500732209,
+    "cost": 64.82109224519658
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9375,
+    "judge": 0.8767123287671232,
+    "hard": 0.4909090909090909
+   },
+   "public_accuracy": 0.7316017316017316,
+   "sealed_accuracy": 0.275974025974026,
+   "public_minus_sealed_gap_pp": 45.56277056277056,
+   "scoring_note": "sealed item text (no golds) was sent to the operator endpoint (author's Modal demo), as for every API measurement",
+   "speed": {
+    "p50_s_raw": 0.6517308317124844,
+    "p95_s_raw": 0.7724301926791667,
+    "adjustment": "x2 (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.014880936329588014,
+    "kind": "estimate"
+   }
+  },
+  "spark-s1-4b-v6": {
+   "display": "spark-s1-4b-v6 (Open Spark Jev, abhishek085)",
+   "author": "Abhishek Rai (abhishek085)",
+   "repo": "https://github.com/abhishek085/open-spark-jev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (code and weights); base Qwen/Qwen3.5-4B Apache-2.0",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3.5-4B with a LoRA, read at the option-letter logits with a fitted temperature (no extra head)",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 15,
+   "jevbench_score": 44.623631936050636,
+   "axes": {
+    "intelligence": 45.069442435695464,
+    "calibration": 47.576491816220006,
+    "speed": 80.96905763279898,
+    "cost": 57.88923950418274
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9791666666666666,
+    "judge": 0.9178082191780822,
+    "hard": 0.6
+   },
+   "public_accuracy": 0.7922077922077922,
+   "sealed_accuracy": 0.2662337662337662,
+   "public_minus_sealed_gap_pp": 52.5974025974026,
+   "scoring_note": "Offline local open-weight inference on the frozen 308-item v1.4 set in a network-disabled, read-only container; no operator endpoint received sealed text.",
+   "footnote": "Requested twice by Florian on X (22 and 23 Sep). A Qwen3.5-4B with a LoRA, read at the option-letter logits and divided by a temperature fitted on the author's own held-out split - no extra head, nothing generated. Run through his own MenuScorer.decide, one state and one question per request; JevBench's noul/choice/score map one-to-one onto his Noul/Choice/Score, with the per-option descriptions in the prompt because his schema carries option strings only. Speed caveat in his own words: HF Transformers in-process serving is slow for this hybrid backbone without causal_conv1d and flash-linear-attention, and vLLM is his recommended path (his figure: 74.9 ms p50 on a DGX Spark). We measured the Transformers path his quickstart documents, with flash-linear-attention 0.5.2 installed and causal_conv1d unavailable (no wheel builds here), so the Speed axis is the slower of his two paths. He also reports JevBench public-tier numbers in his model card and used the public items during development; his 'public-proxy Intelligence 83.1' is his own metric over the 231 public items, not an official score. Self-host latency gets the standard x2 + 0.15 s adjustment.",
+   "speed": {
+    "p50_s_raw": 0.31425347179174423,
+    "p95_s_raw": 0.4388090513646602,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.025333314606741573,
+    "kind": "estimate"
+   }
+  },
+  "malkuth-4b": {
+   "display": "Malkuth-4B (newfull5, Kev post-train)",
+   "author": "newfull5 (dhtocks)",
+   "repo": "https://github.com/newfull5/malkuth",
+   "class": "jev-rebuild",
+   "licence": "CC-BY-NC-4.0, research use only (XNLI and RACE in the training mix)",
+   "open": "yes",
+   "has_distribution": true,
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 16,
+   "jevbench_score": 44.453846652872855,
+   "axes": {
+    "intelligence": 43.149009407368084,
+    "calibration": 61.4864246031746,
+    "speed": 88.33195165837034,
+    "cost": 61.531764586365185
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9583333333333334,
+    "judge": 0.910958904109589,
+    "hard": 0.5272727272727272
+   },
+   "public_accuracy": 0.7489177489177489,
+   "sealed_accuracy": 0.23376623376623376,
+   "public_minus_sealed_gap_pp": 51.515151515151516,
+   "new_in": "v1.4.2",
+   "scoring_note": "Offline self-hosted inference of all 842 decisions (534 frozen v1.2 + 308 sealed v1.4) in a network-disabled, read-only container on an evaluator-owned Lium RTX PRO 6000 pod, through JevBench's unchanged typesafe adapter against the author's own server on loopback; no operator endpoint; no golds were exposed. Latency is the serial request wall time on the standard+judge items with the self-hosted adjustment. Cost is a labelled estimate: DeepInfra Qwen/Qwen3.5-4B list price $0.03/M input (4B one-pass size class, as kev-4b), read 2026-09-24, over the server's own usage.input_tokens; it is not a GPU bill.",
+   "speed": {
+    "p50_s_raw": 0.08862553583458066,
+    "p95_s_raw": 0.14933330831117927,
+    "hardware": "RTX PRO 6000 (evaluator-owned Lium pod)",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.019154662921348316,
+    "kind": "estimate"
+   }
+  },
+  "jqv": {
+   "display": "jqv (Qwen3-32B zero-shot)",
+   "author": "hjmurmur (Octalab)",
+   "repo": "https://github.com/Octalab-Inc/jqv",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (Qwen3-32B weights); serving code public",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3-32B, bf16, read as a direct-logit classifier (no fine-tuning)",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 17,
+   "jevbench_score": 44.35209587211248,
+   "axes": {
+    "intelligence": 46.402753266614425,
+    "calibration": 71.64600373856102,
+    "speed": 74.62291018872223,
+    "cost": 47.458062754792564
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9583333333333334,
+    "judge": 0.9246575342465754,
+    "hard": 0.6454545454545455
+   },
+   "public_accuracy": 0.8008658008658008,
+   "sealed_accuracy": 0.2824675324675325,
+   "public_minus_sealed_gap_pp": 51.83982683982684,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.7473905384540558,
+    "p95_s_raw": 0.9735059145838022,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.05641543071161049,
+    "kind": "estimate"
+   }
+  },
+  "qwen3-reranker-4b": {
+   "display": "Qwen3-Reranker-4B",
+   "author": "Qwen",
+   "repo": "https://huggingface.co/Qwen/Qwen3-Reranker-4B",
+   "class": "reranker",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "4B instruction-aware generative reranker",
+   "has_distribution": true,
+   "probability_source": [
+    "public_calibrated_reranker_softmax"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 18,
+   "jevbench_score": 43.489652534518434,
+   "axes": {
+    "intelligence": 44.621963891405095,
+    "calibration": 65.21858819057935,
+    "speed": 78.72320187600475,
+    "cost": 49.152310354989595
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.7916666666666666,
+    "judge": 0.8767123287671232,
+    "hard": 0.5
+   },
+   "public_accuracy": 0.6796536796536796,
+   "sealed_accuracy": 0.2987012987012987,
+   "public_minus_sealed_gap_pp": 38.095238095238095,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.1302479188889265,
+    "p95_s_raw": 1.5593349148519338,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.04953623422454652,
+    "kind": "measured"
+   }
+  },
+  "decider-35b-a3b": {
+   "display": "decider-35b-a3b (Mapika)",
+   "author": "Mapika",
+   "repo": "https://huggingface.co/Mapika/decider-35b-a3b",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "Qwen3.5-35B-A3B-Base with a trained decision readout, 34.7B parameters / 3B active",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 19,
+   "jevbench_score": 41.18326776449841,
+   "axes": {
+    "intelligence": 47.16904647304943,
+    "calibration": 65.279582972583,
+    "speed": 80.78478445085703,
+    "cost": 45.30548488186928
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.96875,
+    "judge": 0.910958904109589,
+    "hard": 0.6545454545454545
+   },
+   "public_accuracy": 0.8311688311688312,
+   "sealed_accuracy": 0.31493506493506496,
+   "public_minus_sealed_gap_pp": 51.62337662337663,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.29191894084215164,
+    "p95_s_raw": 0.49371074326336223,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.0665503745318352,
+    "kind": "estimate"
+   }
+  },
+  "raw-qwen3-4b-instruct-2507": {
+   "display": "Raw Qwen3 4B Instruct 2507 direct logits",
+   "author": "Alibaba Qwen / neutral reproduction",
+   "repo": "https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507",
+   "class": "raw-logit-control",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "Qwen3-4B-Instruct-2507 BF16",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 20,
+   "jevbench_score": 40.95282149140936,
+   "axes": {
+    "intelligence": 46.39383596928202,
+    "calibration": 29.102680770831846,
+    "speed": 87.55255760839427,
+    "cost": 59.683674963546565
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.8645833333333334,
+    "judge": 0.9383561643835616,
+    "hard": 0.5181818181818182
+   },
+   "public_accuracy": 0.696969696969697,
+   "sealed_accuracy": 0.2727272727272727,
+   "public_minus_sealed_gap_pp": 42.42424242424243,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.08244980592280626,
+    "p95_s_raw": 0.20396011807024478,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.022073820224719102,
+    "kind": "estimate"
+   }
+  },
+  "opensourcejev-qwen35-4b-q4km": {
+   "display": "OpenSourceJev (Qwen3.5-4B Q4_K_M, native llama.cpp)",
+   "author": "sabeel111",
+   "repo": "https://github.com/sabeel111/OpenSourceJev",
+   "class": "jev-rebuild",
+   "licence": "MIT (repository code); Apache-2.0 (Qwen/Qwen3.5-4B base and unsloth/Qwen3.5-4B-GGUF Q4_K_M conversion)",
+   "has_distribution": true,
+   "endpoint_kind": "unknown",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 21,
+   "jevbench_score": 40.86697866022174,
+   "axes": {
+    "intelligence": 41.778425732165964,
+    "calibration": 60.32926888167386,
+    "speed": 82.04136987594218,
+    "cost": 63.955600615838556
+   },
+   "tiers": {
+    "easy": 1.0,
+    "hard": 0.5636363636363636,
+    "judge": 0.8561643835616438,
+    "standard": 0.9270833333333334
+   },
+   "public_accuracy": 0.7835497835497836,
+   "sealed_accuracy": 0.262987012987013,
+   "public_minus_sealed_gap_pp": 52.056277056277054,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "adjustment": "See original v1.3 measurement"
+   },
+   "cost": {
+    "usd_per_1000": 0.015903033707865177,
+    "kind": "estimate"
+   }
+  },
+  "zerank-2": {
+   "display": "ZeroEntropy zerank-2",
+   "author": "ZeroEntropy",
+   "repo": "https://huggingface.co/zeroentropy/zerank-2-reranker",
+   "class": "reranker",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "Qwen3-Reranker-derived 4B cross-encoder",
+   "has_distribution": true,
+   "probability_source": [
+    "public_calibrated_reranker_softmax"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 22,
+   "jevbench_score": 40.20589573277385,
+   "axes": {
+    "intelligence": 42.06697845466217,
+    "calibration": 75.76484738035566,
+    "speed": 78.96019184080492,
+    "cost": 49.75473753033334
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.7916666666666666,
+    "judge": 0.8835616438356164,
+    "hard": 0.4727272727272727
+   },
+   "public_accuracy": 0.7012987012987013,
+   "sealed_accuracy": 0.2857142857142857,
+   "public_minus_sealed_gap_pp": 41.55844155844156,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.12663885252550244,
+    "p95_s_raw": 1.5002395501825958,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.04729792435014604,
+    "kind": "measured"
+   }
+  },
+  "decision-machine-1": {
+   "display": "decision-machine-1 (milliseconds.ai)",
+   "author": "milliseconds.ai (Baptiste Laget)",
+   "repo": "https://www.milliseconds.ai",
+   "class": "decision-api",
+   "licence": "proprietary API, closed weights",
+   "open": "no",
+   "underlying": "decision-machine-1 (weights not published)",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "api",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 23,
+   "jevbench_score": 39.93541656481836,
+   "axes": {
+    "intelligence": 41.275558286402884,
+    "calibration": 68.32820400405224,
+    "speed": 92.92504013916033,
+    "cost": 53.668063581045736
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.7604166666666666,
+    "judge": 0.8972602739726028,
+    "hard": 0.4681818181818182
+   },
+   "public_accuracy": 0.6753246753246753,
+   "sealed_accuracy": 0.2564935064935065,
+   "public_minus_sealed_gap_pp": 41.883116883116884,
+   "scoring_note": "sealed item text (no golds) was sent to the operator endpoint (Milliseconds API), as for every API measurement",
+   "speed": {
+    "p50_s_raw": 0.17223640158772469,
+    "p95_s_raw": 0.29605407454073424,
+    "adjustment": "none (production API)"
+   },
+   "cost": {
+    "usd_per_1000": 0.035026591760299625,
+    "kind": "measured"
+   }
+  },
+  "malkuth-2b": {
+   "display": "Malkuth-2B (newfull5, Kev post-train)",
+   "author": "newfull5 (dhtocks)",
+   "repo": "https://github.com/newfull5/malkuth",
+   "class": "jev-rebuild",
+   "licence": "CC-BY-NC-4.0, research use only (XNLI and RACE in the training mix)",
+   "open": "yes",
+   "has_distribution": true,
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 24,
+   "jevbench_score": 38.930553392688644,
+   "axes": {
+    "intelligence": 41.30149581986909,
+    "calibration": 53.47207215007215,
+    "speed": 91.39418726661523,
+    "cost": 61.531764586365185
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.8854166666666666,
+    "judge": 0.863013698630137,
+    "hard": 0.44545454545454544
+   },
+   "public_accuracy": 0.696969696969697,
+   "sealed_accuracy": 0.2435064935064935,
+   "public_minus_sealed_gap_pp": 45.346320346320354,
+   "new_in": "v1.4.2",
+   "scoring_note": "Offline self-hosted inference of all 842 decisions (534 frozen v1.2 + 308 sealed v1.4) in a network-disabled, read-only container on an evaluator-owned Lium RTX PRO 6000 pod, through JevBench's unchanged typesafe adapter against the author's own server on loopback; no operator endpoint; no golds were exposed. Latency is the serial request wall time on the standard+judge items with the self-hosted adjustment. Cost is a labelled estimate: DeepInfra Qwen/Qwen3.5-4B list price $0.03/M input (no hosted ~2B listed; the 4B price errs high, the decider-2b precedent), read 2026-09-24, over the server's own usage.input_tokens; it is not a GPU bill.",
+   "speed": {
+    "p50_s_raw": 0.04497810127213597,
+    "p95_s_raw": 0.07615387919358908,
+    "hardware": "RTX PRO 6000 (evaluator-owned Lium pod)",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.019154662921348316,
+    "kind": "estimate"
+   }
+  },
+  "raw-phi-4-mini": {
+   "display": "Raw Phi-4 mini direct logits",
+   "author": "Microsoft / neutral reproduction",
+   "repo": "https://huggingface.co/microsoft/Phi-4-mini-instruct",
+   "class": "raw-logit-control",
+   "licence": "MIT",
+   "open": "yes",
+   "underlying": "Phi-4-mini-instruct BF16",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 25,
+   "jevbench_score": 37.95731820837918,
+   "axes": {
+    "intelligence": 41.791137926269585,
+    "calibration": 58.81535803341269,
+    "speed": 88.83321682255763,
+    "cost": 49.570821980679646
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.7395833333333334,
+    "judge": 0.7808219178082192,
+    "hard": 0.5227272727272727
+   },
+   "public_accuracy": 0.658008658008658,
+   "sealed_accuracy": 0.2922077922077922,
+   "public_minus_sealed_gap_pp": 36.580086580086586,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.06377661414444447,
+    "p95_s_raw": 0.16066877208650113,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.047970318352059935,
+    "kind": "estimate"
+   }
+  },
+  "jev-qwen3.5-9b-base-nvfp4": {
+   "display": "JEV Qwen3.5-9B Base NVFP4",
+   "author": "WilfLin",
+   "repo": "https://huggingface.co/WIlfLin/JEV-Qwen3.5-9B-Base-NVFP4",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 entrant and upstream checkpoint",
+   "open": "yes",
+   "underlying": "Qwen3.5-9B Base NVFP4 with compact BF16 decision head",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 26,
+   "jevbench_score": 37.697189917260424,
+   "axes": {
+    "intelligence": 46.83968447419993,
+    "calibration": 67.67253092868599,
+    "speed": 93.29099763267277,
+    "cost": 43.327939808722704
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9166666666666666,
+    "judge": 0.8972602739726028,
+    "hard": 0.5863636363636363
+   },
+   "public_accuracy": 0.7532467532467533,
+   "sealed_accuracy": 0.29545454545454547,
+   "public_minus_sealed_gap_pp": 45.77922077922078,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.019635691001894884,
+    "p95_s_raw": 0.048818428552112894,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.07745842696629213,
+    "kind": "estimate"
+   }
+  },
+  "openjev-razorback16": {
+   "display": "OpenJev (DiffusionGemma 26B-A4B NVFP4, razorback16)",
+   "author": "razorback16 / Codiv",
+   "repo": "https://github.com/razorback16/openjev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (repo and weights)",
+   "open": "yes",
+   "underlying": "nvidia/diffusiongemma-26B-A4B-it-NVFP4",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 27,
+   "jevbench_score": 36.85070900932601,
+   "axes": {
+    "intelligence": 45.43523560052183,
+    "calibration": 54.993853529501855,
+    "speed": 83.1778984786352,
+    "cost": 45.49198106171689
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9583333333333334,
+    "judge": 0.910958904109589,
+    "hard": 0.6545454545454545
+   },
+   "public_accuracy": 0.8181818181818182,
+   "sealed_accuracy": 0.2857142857142857,
+   "public_minus_sealed_gap_pp": 53.24675324675325,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.24127069488167763,
+    "p95_s_raw": 0.3052692499011755,
+    "hardware": "RunPod RTX PRO 4500 Blackwell 32 GB (EU-RO-1)",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.06560455056179774,
+    "kind": "estimate"
+   }
+  },
+  "kev-4b": {
+   "display": "kev 4B (research preview)",
+   "author": "Jared Palmer",
+   "repo": "https://github.com/jaredpalmer/kev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0",
+   "open": true,
+   "underlying": "Qwen3-4B-Base + LoRA + learned pointer head; jaredpalmer/kev-4b",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 28,
+   "jevbench_score": 36.136502368258114,
+   "axes": {
+    "intelligence": 42.07543736300355,
+    "calibration": 39.64120851500514,
+    "speed": 75.73845187472214,
+    "cost": 61.77327904537152
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9166666666666666,
+    "judge": 0.8561643835616438,
+    "hard": 0.42272727272727273
+   },
+   "public_accuracy": 0.6623376623376623,
+   "sealed_accuracy": 0.22402597402597402,
+   "public_minus_sealed_gap_pp": 43.83116883116883,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest; 306/308 sealed items answered validly (failures count as wrong)",
+   "speed": {
+    "p50_s_raw": 0.5502474755048752,
+    "p95_s_raw": 0.9917014226317405,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.018802865168539323,
+    "kind": "estimate"
+   }
+  },
+  "decision-2b": {
+   "display": "Decision 2B (FlyMy.AI, v59)",
+   "author": "FlyMy.AI (@denti)",
+   "repo": "https://huggingface.co/flymy-ai/decision-2b-preview",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 notices on the included code and the pinned base; the weights are an evaluation preview under EVALUATION-PERMISSION.md, not a cleared commercial release",
+   "open": "yes",
+   "underlying": "openbmb/MiniCPM5-2B with a trained LoRA adapter and pointer head (26.2M trainable parameters)",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 29,
+   "jevbench_score": 35.800088231124995,
+   "axes": {
+    "intelligence": 38.76224329634284,
+    "calibration": 74.12548511090162,
+    "speed": 84.28398951642146,
+    "cost": 62.50937716584096
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.875,
+    "judge": 0.6986301369863014,
+    "hard": 0.5818181818181818
+   },
+   "public_accuracy": 0.7532467532467533,
+   "sealed_accuracy": 0.2597402597402597,
+   "public_minus_sealed_gap_pp": 49.350649350649356,
+   "scoring_note": "Offline local open-weight inference on the frozen 308-item v1.4 set in a network-disabled, read-only container; no operator endpoint received sealed text.",
+   "footnote": "A MiniCPM5-2B with a trained LoRA and pointer head (26.2M trainable parameters), run through the submitter's own packaged adapter and his frozen calibration temperature - one forward pass, nothing generated, no permutation or retry. The package verifies its own file hashes and its pinned public base before it loads. His disclosure, carried here unchanged: public JevBench results informed earlier experiment design and candidate selection, so this is not a benchmark-blind result; both training mixtures contain 96 SNI task289/Gigaword-derived records whose upstream entitlement is not established, source attribution for tasks 1186/1283/1284 is incomplete, and the 2B mixture holds 543 synthetic records labelled claude-fable-5-1 whose provider contract is not established. These are evaluation previews under an explicit evaluation permission, not a cleared commercial release. Self-host latency gets the standard x2 + 0.15 s adjustment.",
+   "speed": {
+    "p50_s_raw": 0.18901889398694038,
+    "p95_s_raw": 0.2781067743897438,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.017769999999999998,
+    "kind": "estimate"
+   }
+  },
+  "qwen35-9b-jev-data-mix-v2": {
+   "display": "Qwen3.5-9B Jev-like data-mix v2",
+   "author": "jsaurabh",
+   "repo": "https://huggingface.co/jsaurabh/qwen3.5-9b-jev-data-mix-v2",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (adapter code and weights; Qwen3.5-9B base is Apache-2.0)",
+   "has_distribution": true,
+   "endpoint_kind": "unknown",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 30,
+   "jevbench_score": 35.235946407850655,
+   "axes": {
+    "intelligence": 47.3950810857469,
+    "calibration": 61.34859947411265,
+    "speed": 81.97617376178209,
+    "cost": 42.35875944111046
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9479166666666666,
+    "judge": 0.952054794520548,
+    "hard": 0.6045454545454545
+   },
+   "public_accuracy": 0.7835497835497836,
+   "sealed_accuracy": 0.2922077922077922,
+   "public_minus_sealed_gap_pp": 49.134199134199136,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "adjustment": "See original v1.3 measurement"
+   },
+   "cost": {
+    "usd_per_1000": 0.08344007490636705,
+    "kind": "estimate"
+   }
+  },
+  "gpt-6-luna-low": {
+   "display": "GPT-6 Luna (low reasoning effort)",
+   "author": "OpenAI",
+   "class": "llm-baseline",
+   "licence": "proprietary API",
+   "has_distribution": true,
+   "endpoint_kind": "api",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 31,
+   "jevbench_score": 35.11224166817657,
+   "axes": {
+    "intelligence": 95.78441561268662,
+    "calibration": 91.9779132545049,
+    "speed": 73.65729480447798,
+    "cost": 36.88606127569502
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9895833333333334,
+    "judge": 0.9726027397260274,
+    "hard": 0.9727272727272728
+   },
+   "public_accuracy": 0.9913419913419913,
+   "sealed_accuracy": 0.9285714285714286,
+   "public_minus_sealed_gap_pp": 6.2770562770562695,
+   "scoring_note": "API measurement: sealed item text (no golds) was sent to OpenAI",
+   "speed": {
+    "p50_s_raw": 1.4418320655822754,
+    "p95_s_raw": 2.9878296986222264,
+    "adjustment": "none (production API)"
+   },
+   "cost": {
+    "usd_per_1000": 0.12699831460674169,
+    "kind": "measured"
+   }
+  },
+  "simplejev-qwen3.8-27b": {
+   "display": "SimpleJev Qwen3.8-27B",
+   "author": "Featherless AI",
+   "repo": "https://github.com/featherless-ai/simple-jev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (Qwen weights); repository licence not stated",
+   "open": "yes",
+   "underlying": "Qwen3.8-27B through SimpleJev's direct-logit classifier",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "demo",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 32,
+   "jevbench_score": 34.56619633355993,
+   "axes": {
+    "intelligence": 51.58275939184895,
+    "calibration": 74.49514921690603,
+    "speed": 71.17954293639775,
+    "cost": 39.48943618731995
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.96875,
+    "judge": 0.9315068493150684,
+    "hard": 0.75
+   },
+   "public_accuracy": 0.8658008658008658,
+   "sealed_accuracy": 0.35714285714285715,
+   "public_minus_sealed_gap_pp": 50.86580086580086,
+   "scoring_note": "sealed item text (no golds) was sent to the operator endpoint (Featherless demo), as for every API measurement",
+   "speed": {
+    "p50_s_raw": 1.0138170085847378,
+    "p95_s_raw": 1.8794299442321063,
+    "adjustment": "x2 (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.10399651685393257,
+    "kind": "estimate"
+   }
+  },
+  "ninfer-qwen3.8-flash-next": {
+   "display": "NInfer Qwen3.8-Flash-Next mixed",
+   "author": "Igor L. / NInfer contributors",
+   "repo": "https://github.com/igorls/ninfer",
+   "class": "native-logit",
+   "licence": "Qwen Community License 1.0 (model); Apache-2.0 (engine)",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3.8-Flash-Next, mixed NVFP4/FP8/INT4 NInfer artifact",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 33,
+   "jevbench_score": 33.977533774383616,
+   "axes": {
+    "intelligence": 49.52312902943435,
+    "calibration": 78.5836892196356,
+    "speed": 88.20497686265139,
+    "cost": 38.91358504738628
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9895833333333334,
+    "judge": 0.952054794520548,
+    "hard": 0.7727272727272727
+   },
+   "public_accuracy": 0.8961038961038961,
+   "sealed_accuracy": 0.3409090909090909,
+   "public_minus_sealed_gap_pp": 55.519480519480524,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.07892056694254279,
+    "p95_s_raw": 0.17055323952808976,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.10869606741573033,
+    "kind": "estimate"
+   }
+  },
+  "swanone": {
+   "display": "swanOne (blockbrain, Qwen3.8-Flash-Next NVFP4)",
+   "author": "blockbrain",
+   "repo": "https://github.com/blockbrain-ai/swanone-recipe",
+   "class": "system-one-open",
+   "licence": "patches Apache-2.0, shim MIT; weights under the Qwen licence (LICENSE-NOTICE.md)",
+   "open": "yes",
+   "has_distribution": true,
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 34,
+   "jevbench_score": 33.60524727984119,
+   "axes": {
+    "intelligence": 52.596343642944674,
+    "calibration": 71.02567022903239,
+    "speed": 82.52131199313874,
+    "cost": 38.64083818365132
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9583333333333334,
+    "judge": 0.9315068493150684,
+    "hard": 0.7545454545454545
+   },
+   "public_accuracy": 0.8874458874458875,
+   "sealed_accuracy": 0.38636363636363635,
+   "public_minus_sealed_gap_pp": 50.10822510822511,
+   "new_in": "v1.4.2",
+   "scoring_note": "Offline self-hosted inference of all 842 decisions (534 frozen v1.2 + 308 sealed v1.4) in a network-disabled, read-only container on an evaluator-owned Lium RTX PRO 6000 Blackwell 96 GB pod, through JevBench's unchanged typesafe adapter against the author's own server on loopback; no operator endpoint; no golds were exposed. Latency is the serial request wall time on the standard+judge items with the self-hosted adjustment. Cost is a labelled estimate: OpenRouter qwen/qwen3.8-flash list price $0.15/M input (same underlying Flash-Next weights; the NInfer Flash-Next precedent), read 2026-09-24, over the server's own usage.input_tokens; it is not a GPU bill.",
+   "speed": {
+    "p50_s_raw": 0.2812396320514381,
+    "p95_s_raw": 0.3177051310893148,
+    "hardware": "RTX PRO 6000 (evaluator-owned Lium pod)",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.11099550561797752,
+    "kind": "estimate"
+   }
+  },
+  "gpt-6-luna": {
+   "display": "GPT-6 Luna (default medium reasoning effort)",
+   "author": "OpenAI",
+   "class": "llm-baseline",
+   "licence": "proprietary API",
+   "has_distribution": true,
+   "endpoint_kind": "api",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 35,
+   "jevbench_score": 33.26981698087274,
+   "axes": {
+    "intelligence": 97.35385336870618,
+    "calibration": 93.45967507606923,
+    "speed": 72.58709736103097,
+    "cost": 36.04702601026741
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 1.0,
+    "judge": 0.9726027397260274,
+    "hard": 0.9863636363636363
+   },
+   "public_accuracy": 0.9956709956709957,
+   "sealed_accuracy": 0.9545454545454546,
+   "public_minus_sealed_gap_pp": 4.112554112554112,
+   "scoring_note": "API measurement: sealed item text (no golds) was sent to OpenAI",
+   "speed": {
+    "p50_s_raw": 1.477266326546669,
+    "p95_s_raw": 3.731053405255079,
+    "adjustment": "none (production API)"
+   },
+   "cost": {
+    "usd_per_1000": 0.13544588014981276,
+    "kind": "measured"
+   }
+  },
+  "open-alternative-jev": {
+   "display": "open-alternative-jev (Qwen3.5-4B, IkerMoel)",
+   "author": "IkerMoel",
+   "repo": "https://github.com/ikermoel/open-alternative-jev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (code and weights)",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3.5-4B (frozen, BF16)",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 36,
+   "jevbench_score": 33.24214483148707,
+   "axes": {
+    "intelligence": 38.59574775248901,
+    "calibration": 58.69063349321708,
+    "speed": 83.47780372641819,
+    "cost": 59.62620384142349
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.84375,
+    "judge": 0.7465753424657534,
+    "hard": 0.5681818181818182
+   },
+   "public_accuracy": 0.7402597402597403,
+   "sealed_accuracy": 0.2435064935064935,
+   "public_minus_sealed_gap_pp": 49.67532467532468,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.20686038956046104,
+    "p95_s_raw": 0.32322231084108355,
+    "hardware": "RunPod RTX PRO 4500 Blackwell 32 GB (EU-RO-1)",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.022171404494382024,
+    "kind": "estimate"
+   }
+  },
+  "jev-local": {
+   "display": "jev-local (Qwen3.5-9B)",
+   "author": "us (GitHub)",
+   "repo": "https://github.com/us/jev-local",
+   "class": "jev-rebuild",
+   "licence": "no licence stated in the repository (public code); Apache-2.0 base weights",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3.5-9B, frozen, per-option mean log-probability",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 37,
+   "jevbench_score": 32.542400749826804,
+   "axes": {
+    "intelligence": 45.15000569598809,
+    "calibration": 64.17815548340548,
+    "speed": 69.18842978642493,
+    "cost": 43.327939808722704
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.84375,
+    "judge": 0.8904109589041096,
+    "hard": 0.5909090909090909
+   },
+   "public_accuracy": 0.7489177489177489,
+   "sealed_accuracy": 0.29545454545454547,
+   "public_minus_sealed_gap_pp": 45.34632034632034,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 1.0450106970965862,
+    "p95_s_raw": 2.6157593585550782,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.07745842696629213,
+    "kind": "estimate"
+   }
+  },
+  "decision-fast": {
+   "display": "Decision Fast (FlyMy.AI, v53a)",
+   "author": "FlyMy.AI (@denti)",
+   "repo": "https://huggingface.co/flymy-ai/decision-fast-preview",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 notices on the included code and the pinned base; the weights are an evaluation preview under EVALUATION-PERMISSION.md, not a cleared commercial release",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3-0.6B-Base with a trained LoRA adapter and pointer head (10.6M trainable parameters)",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 38,
+   "jevbench_score": 32.492203456270644,
+   "axes": {
+    "intelligence": 37.074471307080934,
+    "calibration": 65.30757379702415,
+    "speed": 81.59778170772206,
+    "cost": 76.07683824704311
+   },
+   "tiers": {
+    "easy": 0.9861111111111112,
+    "standard": 0.78125,
+    "judge": 0.7465753424657534,
+    "hard": 0.38636363636363635
+   },
+   "public_accuracy": 0.6320346320346321,
+   "sealed_accuracy": 0.2564935064935065,
+   "public_minus_sealed_gap_pp": 37.55411255411256,
+   "scoring_note": "Offline local open-weight inference on the frozen 308-item v1.4 set in a network-disabled, read-only container; no operator endpoint received sealed text.",
+   "footnote": "The 0.6B sibling of Decision 2B: Qwen3-0.6B-Base with a trained LoRA and pointer head (10.6M trainable parameters), same packaged adapter, same frozen-calibration pointer readout, nothing generated. Its historical readout was a 256-way route; this package evaluates every item through the pointer head, which the submitter states changed no argmax on the items he had measured before. The same provenance disclosure as Decision 2B applies, minus the synthetic claude-fable-5-1 records. Self-host latency gets the standard x2 + 0.15 s adjustment.",
+   "speed": {
+    "p50_s_raw": 0.24040156602859497,
+    "p95_s_raw": 0.47365329600870587,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.0062724719101123596,
+    "kind": "estimate"
+   }
+  },
+  "decider-2b": {
+   "display": "decider-2b (Mapika)",
+   "author": "Mapika",
+   "repo": "https://huggingface.co/Mapika/decider-2b",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "Qwen3.5-2B-Base with a trained decision readout, 1.9B",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 39,
+   "jevbench_score": 30.7375448157181,
+   "axes": {
+    "intelligence": 38.54932735543702,
+    "calibration": 43.48691774891777,
+    "speed": 83.17774245885059,
+    "cost": 60.99184724027941
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.8541666666666666,
+    "judge": 0.773972602739726,
+    "hard": 0.4727272727272727
+   },
+   "public_accuracy": 0.70995670995671,
+   "sealed_accuracy": 0.24675324675324675,
+   "public_minus_sealed_gap_pp": 46.32034632034633,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.26079703494906425,
+    "p95_s_raw": 0.2831697516143322,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.01996511235955056,
+    "kind": "estimate"
+   }
+  },
+  "jeff": {
+   "display": "jeff (Logan Markewich, GLiFormer 400M)",
+   "author": "Logan Markewich",
+   "repo": "https://github.com/logan-markewich/jeff",
+   "class": "jev-rebuild",
+   "licence": "MIT (code); GLiFormer weights per their model card",
+   "open": "yes",
+   "underlying": "GLiFormer large (knowledgator/gliformer-large-v1, ~400M) behind a TypeSafe-compatible /v1/systemone server",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 40,
+   "jevbench_score": 30.579484596127113,
+   "axes": {
+    "intelligence": 36.768981386976094,
+    "calibration": 67.87788564213564,
+    "speed": 63.49232389662579,
+    "cost": 76.57596288088385
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.7604166666666666,
+    "judge": 0.6164383561643836,
+    "hard": 0.37727272727272726
+   },
+   "public_accuracy": 0.6277056277056277,
+   "sealed_accuracy": 0.33116883116883117,
+   "public_minus_sealed_gap_pp": 29.65367965367965,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.9379300177097321,
+    "p95_s_raw": 10.969045254960655,
+    "hardware": "AMD Ryzen 5 3600 (Sandy), 4 threads",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.006036722846441948,
+    "kind": "estimate"
+   }
+  },
+  "laya": {
+   "display": "Laya (Convai Innovations, ModernBERT-large 421M)",
+   "author": "Convai Innovations",
+   "repo": "https://huggingface.co/convaiinnovations/laya",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "ModernBERT-large encoder + option-marker decision head, 421M, RLCD-trained",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 41,
+   "jevbench_score": 30.251281619829957,
+   "axes": {
+    "intelligence": 36.132988467190394,
+    "calibration": 63.67551046176046,
+    "speed": 71.05966297458822,
+    "cost": 86.20408526325653
+   },
+   "tiers": {
+    "easy": 0.9444444444444444,
+    "standard": 0.7291666666666666,
+    "judge": 0.6917808219178082,
+    "hard": 0.3409090909090909
+   },
+   "public_accuracy": 0.5844155844155844,
+   "sealed_accuracy": 0.30844155844155846,
+   "public_minus_sealed_gap_pp": 27.597402597402592,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.787067785859108,
+    "p95_s_raw": 2.197125389799475,
+    "hardware": "AMD Ryzen 5 3600 (Sandy), 4 threads",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.0028831273408239703,
+    "kind": "estimate"
+   }
+  },
+  "kushal-gemma4-31b-it-autoloops": {
+   "display": "Kushal Patil \u2014 Gemma 4 31B IT (Autoloops)",
+   "author": "Kushal Patil",
+   "class": "jev",
+   "licence": "Gemma terms of use (Google) for the base weights; hosted Autoloops service",
+   "open": "no",
+   "has_distribution": true,
+   "endpoint_kind": "api",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 42,
+   "jevbench_score": 29.962547814634828,
+   "axes": {
+    "intelligence": 59.83714395843067,
+    "calibration": 79.1909136580842,
+    "speed": 83.98343875671114,
+    "cost": 35.96061414550688
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9895833333333334,
+    "judge": 0.958904109589041,
+    "hard": 0.8272727272727273
+   },
+   "public_accuracy": 0.9283819628647215,
+   "sealed_accuracy": 0.4577922077922078,
+   "public_minus_sealed_gap_pp": 47.05897550725137,
+   "new_in": "v1.4.2",
+   "scoring_note": "API measurement: public and sealed item content reached the operator endpoint; no gold labels or answers were sent.",
+   "speed": {
+    "p50_s_raw": 0.6035970412194729,
+    "p95_s_raw": 0.6620777942240238,
+    "adjustment": "none (production API)"
+   },
+   "cost": {
+    "usd_per_1000": 0.136347191011236,
+    "kind": "measured"
+   }
+  },
+  "standardone-8b": {
+   "display": "Standard One 8B (Standard Thinking)",
+   "author": "Standard Thinking (myeongho12)",
+   "repo": "https://huggingface.co/StandardThinking/StandardOne-8B",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (jev-adapter server, LoRA and merged weights; base Ministral 3 8B Apache-2.0)",
+   "open": "yes",
+   "has_distribution": true,
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 43,
+   "jevbench_score": 29.066687887780347,
+   "axes": {
+    "intelligence": 46.19294302571464,
+    "calibration": 65.85255199514542,
+    "speed": 92.03419606845978,
+    "cost": 39.4336577067554
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9479166666666666,
+    "judge": 0.9657534246575342,
+    "hard": 0.5681818181818182
+   },
+   "public_accuracy": 0.7662337662337663,
+   "sealed_accuracy": 0.2662337662337662,
+   "public_minus_sealed_gap_pp": 50.0,
+   "new_in": "v1.4.2",
+   "scoring_note": "Offline self-hosted inference of all 842 decisions (534 frozen v1.2 + 308 sealed v1.4) in a network-disabled, read-only container on an evaluator-owned Lium RTX PRO 6000 Blackwell 96 GB pod, through JevBench's unchanged typesafe adapter against the author's own server on loopback; no operator endpoint; no golds were exposed. Latency is the serial request wall time on the standard+judge items with the self-hosted adjustment. Cost is a labelled estimate: OpenRouter mistralai/ministral-8b-2512 list price $0.15/M input (= the author's proposed Mistral API price for the exact base), read 2026-09-24, over the server's own usage.input_tokens; it is not a GPU bill.",
+   "speed": {
+    "p50_s_raw": 0.023836581502109766,
+    "p95_s_raw": 0.08334439168684185,
+    "hardware": "RTX PRO 6000 (evaluator-owned Lium pod)",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.10444269662921347,
+    "kind": "estimate"
+   }
+  },
+  "lev-350m": {
+   "display": "lev-350m (Franck Verrot, LFM2.5-350M)",
+   "author": "Franck Verrot (franckverrot)",
+   "repo": "https://github.com/franckverrot/lev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (code); weights under LiquidAI's LFM1.0 licence, following the LFM2.5-350M base",
+   "open": "yes",
+   "underlying": "LiquidAI/LFM2.5-350M with a LoRA and a 6.5M-parameter pointer head (a kev clone)",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 44,
+   "jevbench_score": 28.501129766483672,
+   "axes": {
+    "intelligence": 34.75234376694234,
+    "calibration": 70.61387806637806,
+    "speed": 85.31334412225277,
+    "cost": 76.09548365186328
+   },
+   "tiers": {
+    "easy": 0.9861111111111112,
+    "standard": 0.71875,
+    "judge": 0.6917808219178082,
+    "hard": 0.36818181818181817
+   },
+   "public_accuracy": 0.5844155844155844,
+   "sealed_accuracy": 0.25,
+   "public_minus_sealed_gap_pp": 33.44155844155844,
+   "scoring_note": "Offline local open-weight inference on the frozen 308-item v1.4 set in a network-disabled, read-only container; no operator endpoint received sealed text.",
+   "footnote": "Requested by Florian on X on 22 Sep (2102305995007406540), replying to @franckverrot. A weekend clone of Jared Palmer's kev with the Qwen backbone swapped for LiquidAI's LFM2.5-350M: a LoRA and a 6.5M-parameter pointer head over frozen 350M weights, one prefill pass, nothing generated. Served by the author's own lev.serve on his TypeSafe-compatible /v1/systemone endpoint with the calibration temperature shipped beside the weights, so JevBench's own typesafe adapter is used unchanged - no mapping of ours. Its probabilities arrive rounded to three decimals by his API, which limits how fine a calibration measurement can be. The weights follow LiquidAI's LFM1.0 licence rather than Apache-2.0; the code is Apache-2.0. Self-host latency gets the standard x2 + 0.15 s adjustment.",
+   "speed": {
+    "p50_s_raw": 0.17216148599982262,
+    "p95_s_raw": 0.22259443029761308,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.006263501872659176,
+    "kind": "estimate"
+   }
+  },
+  "openjev-sglang": {
+   "display": "openjev-sglang (Qwen3.6-35B-A3B on SGLang)",
+   "author": "ekzhang",
+   "repo": "https://github.com/ekzhang/openjev-sglang",
+   "class": "jev-rebuild",
+   "licence": "no licence file in the repository as of 2026-09-19; Qwen3.6 weights keep their own terms",
+   "open": "yes",
+   "underlying": "Qwen3.6-35B-A3B",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "demo",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 45,
+   "jevbench_score": 27.653667300053762,
+   "axes": {
+    "intelligence": 49.41096142357457,
+    "calibration": 69.24191796746032,
+    "speed": 77.059799513554,
+    "cost": 36.45449272670061
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9583333333333334,
+    "judge": 0.952054794520548,
+    "hard": 0.7136363636363636
+   },
+   "public_accuracy": 0.8528138528138528,
+   "sealed_accuracy": 0.33116883116883117,
+   "public_minus_sealed_gap_pp": 52.16450216450217,
+   "scoring_note": "sealed item text (no golds) was sent to the operator endpoint (author's Modal demo), as for every API measurement",
+   "speed": {
+    "p50_s_raw": 0.6776718497276306,
+    "p95_s_raw": 0.7260066717863083,
+    "adjustment": "x2 (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.13127546816479402,
+    "kind": "estimate"
+   }
+  },
+  "von-395m": {
+   "display": "Von (wfzyx, Option-Marker 395M)",
+   "author": "wfzyx (Victor Hugo)",
+   "repo": "https://github.com/wfzyx/von",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 code; Apache-2.0 weights (answerdotai/ModernBERT-large base)",
+   "has_distribution": true,
+   "endpoint_kind": "unknown",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 46,
+   "jevbench_score": 27.483645331198645,
+   "axes": {
+    "intelligence": 34.490709713287984,
+    "calibration": 75.70851839826841,
+    "speed": 70.45969264486726,
+    "cost": 77.75792651988814
+   },
+   "tiers": {
+    "easy": 0.9305555555555556,
+    "standard": 0.6875,
+    "judge": 0.684931506849315,
+    "hard": 0.37272727272727274
+   },
+   "public_accuracy": 0.5714285714285714,
+   "sealed_accuracy": 0.2792207792207792,
+   "public_minus_sealed_gap_pp": 29.22077922077922,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "adjustment": "See original v1.3 measurement"
+   },
+   "cost": {
+    "usd_per_1000": 0.005513183520599252,
+    "kind": "estimate"
+   }
+  },
+  "ninfer-qwen3.8-27b-t1.5": {
+   "display": "NInfer Qwen3.8-27B NVFP4 (T=1.5)",
+   "author": "Igor L. / NInfer contributors",
+   "repo": "https://github.com/igorls/ninfer",
+   "class": "native-logit",
+   "licence": "Apache-2.0 (engine and submitted 27B artifact/base)",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3.8-27B, NInfer NVFP4/FP8 artifact",
+   "has_distribution": true,
+   "probability_source": [
+    "native-option-letter-softmax-calibrated-t1.5"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 47,
+   "jevbench_score": 26.916169238404322,
+   "axes": {
+    "intelligence": 51.470093582226795,
+    "calibration": 75.95962347375385,
+    "speed": 80.14121364631829,
+    "cost": 35.16542294913728
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9791666666666666,
+    "judge": 0.9657534246575342,
+    "hard": 0.7045454545454546
+   },
+   "public_accuracy": 0.8311688311688312,
+   "sealed_accuracy": 0.33116883116883117,
+   "public_minus_sealed_gap_pp": 50.0,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.368209820240736,
+    "p95_s_raw": 0.4710209038108587,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.14492808988764044,
+    "kind": "estimate"
+   }
+  },
+  "ninfer-qwen3.8-27b": {
+   "display": "NInfer Qwen3.8-27B NVFP4",
+   "author": "Igor L. / NInfer contributors",
+   "repo": "https://github.com/igorls/ninfer",
+   "class": "native-logit",
+   "licence": "Apache-2.0 (engine and submitted 27B artifact/base)",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3.8-27B, NInfer NVFP4/FP8 artifact",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 48,
+   "jevbench_score": 26.29915101653767,
+   "axes": {
+    "intelligence": 51.470093582226795,
+    "calibration": 67.1613598982882,
+    "speed": 80.14121364631829,
+    "cost": 35.16542294913728
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9791666666666666,
+    "judge": 0.9657534246575342,
+    "hard": 0.7045454545454546
+   },
+   "public_accuracy": 0.8311688311688312,
+   "sealed_accuracy": 0.33116883116883117,
+   "public_minus_sealed_gap_pp": 50.0,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.368209820240736,
+    "p95_s_raw": 0.4710209038108587,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.14492808988764044,
+    "kind": "estimate"
+   }
+  },
+  "kev-8b": {
+   "display": "kev 8B (research preview)",
+   "author": "Jared Palmer",
+   "repo": "https://github.com/jaredpalmer/kev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0",
+   "open": true,
+   "underlying": "Qwen3-8B-Base + LoRA + learned pointer head; jaredpalmer/kev-8b",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 49,
+   "jevbench_score": 25.56370172722739,
+   "axes": {
+    "intelligence": 41.80839400991245,
+    "calibration": 40.165779287885506,
+    "speed": 74.85933162711135,
+    "cost": 44.04134083457654
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9270833333333334,
+    "judge": 0.9041095890410958,
+    "hard": 0.4727272727272727
+   },
+   "public_accuracy": 0.7142857142857143,
+   "sealed_accuracy": 0.21753246753246752,
+   "public_minus_sealed_gap_pp": 49.67532467532468,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.5904169715940952,
+    "p95_s_raw": 1.1521932914853092,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.07333117415730338,
+    "kind": "estimate"
+   }
+  },
+  "jevone": {
+   "display": "JevOne",
+   "author": "Juspay",
+   "repo": "https://huggingface.co/juspay/jev-one",
+   "class": "jev-rebuild",
+   "licence": "Component-specific JevOne/Qwen/SGLang terms recorded in RESULT.md",
+   "open": "yes",
+   "underlying": "Qwen3.6-35B-A3B BF16 with JevOne bidirectional option-logit mapping",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 50,
+   "jevbench_score": 25.512210128129595,
+   "axes": {
+    "intelligence": 47.587794717975754,
+    "calibration": 77.59848665223666,
+    "speed": 88.46835142022954,
+    "cost": 35.86750288568889
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.96875,
+    "judge": 0.9246575342465754,
+    "hard": 0.75
+   },
+   "public_accuracy": 0.8961038961038961,
+   "sealed_accuracy": 0.33766233766233766,
+   "public_minus_sealed_gap_pp": 55.84415584415584,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.08668531733565032,
+    "p95_s_raw": 0.14500587752554567,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.1373250936329588,
+    "kind": "estimate"
+   }
+  },
+  "typecastlm": {
+   "display": "typecastlm (Mikhail Gribov, Qwen3.5-4B computed head)",
+   "author": "Mikhail Gribov",
+   "repo": "https://github.com/mihail-gribov/typecastlm",
+   "class": "system-one-open",
+   "licence": "Apache-2.0 (package and weights)",
+   "open": "yes",
+   "has_distribution": true,
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 51,
+   "jevbench_score": 25.279442237462565,
+   "axes": {
+    "intelligence": 33.95536030388151,
+    "calibration": 62.08651094359049,
+    "speed": 92.61751792384507,
+    "cost": 60.168145385439914
+   },
+   "tiers": {
+    "easy": 0.9861111111111112,
+    "standard": 0.9375,
+    "judge": 0.410958904109589,
+    "hard": 0.5818181818181818
+   },
+   "public_accuracy": 0.7792207792207793,
+   "sealed_accuracy": 0.2987012987012987,
+   "public_minus_sealed_gap_pp": 48.05194805194806,
+   "new_in": "v1.4.2",
+   "scoring_note": "Offline self-hosted inference of all 842 decisions (534 frozen v1.2 + 308 sealed v1.4) in a network-disabled, read-only container on an evaluator-owned Lium RTX PRO 6000 Blackwell 96 GB pod, through JevBench's unchanged typesafe adapter against the author's own server on loopback; no operator endpoint; no golds were exposed. Latency is the serial request wall time on the standard+judge items with the self-hosted adjustment. Cost is a labelled estimate: DeepInfra Qwen/Qwen3.5-4B list price $0.03/M input (the exact base weights; one pass, no output), read 2026-09-24, over the server's own usage.input_tokens; it is not a GPU bill.",
+   "speed": {
+    "p50_s_raw": 0.027890041936188936,
+    "p95_s_raw": 0.05798874022439122,
+    "hardware": "RTX PRO 6000 (evaluator-owned Lium pod)",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.02126808988764045,
+    "kind": "estimate"
+   }
+  },
+  "simplejev-qwen3.6-35b-a3b": {
+   "display": "SimpleJev Qwen3.6-35B-A3B",
+   "author": "Featherless AI",
+   "repo": "https://github.com/featherless-ai/simple-jev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (Qwen weights); repository licence not stated",
+   "open": "yes",
+   "underlying": "Qwen3.6-35B-A3B through SimpleJev's direct-logit classifier",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "demo",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 52,
+   "jevbench_score": 24.86157915547749,
+   "axes": {
+    "intelligence": 45.71661934152712,
+    "calibration": 59.795389546888345,
+    "speed": 74.98811602029707,
+    "cost": 38.11671147049971
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9375,
+    "judge": 0.9315068493150684,
+    "hard": 0.6636363636363637
+   },
+   "public_accuracy": 0.8138528138528138,
+   "sealed_accuracy": 0.2824675324675325,
+   "public_minus_sealed_gap_pp": 53.13852813852813,
+   "scoring_note": "sealed item text (no golds) was sent to the operator endpoint (Featherless demo), as for every API measurement",
+   "speed": {
+    "p50_s_raw": 0.8519573211669922,
+    "p95_s_raw": 0.9304875515401363,
+    "adjustment": "x2 (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.11555168539325843,
+    "kind": "estimate"
+   }
+  },
+  "kev-0.6b": {
+   "display": "kev 0.6B (research preview)",
+   "author": "Jared Palmer",
+   "repo": "https://github.com/jaredpalmer/kev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0",
+   "open": true,
+   "underlying": "Qwen3-0.6B-Base + LoRA + learned pointer head; jaredpalmer/kev-0.6b",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 53,
+   "jevbench_score": 24.750427849352384,
+   "axes": {
+    "intelligence": 34.20432736698408,
+    "calibration": 49.957886527801605,
+    "speed": 75.55649753874303,
+    "cost": 76.08691668696139
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.8125,
+    "judge": 0.6643835616438356,
+    "hard": 0.4
+   },
+   "public_accuracy": 0.6666666666666666,
+   "sealed_accuracy": 0.24025974025974026,
+   "public_minus_sealed_gap_pp": 42.640692640692635,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest; 307/308 sealed items answered validly (failures count as wrong)",
+   "speed": {
+    "p50_s_raw": 0.5904003903269768,
+    "p95_s_raw": 0.9702187780290842,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.0062676217228464426,
+    "kind": "estimate"
+   }
+  },
+  "raw-qwen3-8b": {
+   "display": "Raw Qwen3 8B direct logits",
+   "author": "Alibaba Qwen / neutral reproduction",
+   "repo": "https://huggingface.co/Qwen/Qwen3-8B",
+   "class": "raw-logit-control",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "Qwen3-8B BF16",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 54,
+   "jevbench_score": 23.676144280945373,
+   "axes": {
+    "intelligence": 45.65959354886205,
+    "calibration": 24.10350736927811,
+    "speed": 86.33902733346537,
+    "cost": 41.88109987449869
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.8645833333333334,
+    "judge": 0.9657534246575342,
+    "hard": 0.4636363636363636
+   },
+   "public_accuracy": 0.683982683982684,
+   "sealed_accuracy": 0.262987012987013,
+   "public_minus_sealed_gap_pp": 42.0995670995671,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.08492440730333328,
+    "p95_s_raw": 0.288180502736941,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.0865558988764045,
+    "kind": "estimate"
+   }
+  },
+  "system-one-sg": {
+   "display": "system-one (Qwen3-8B, Sean Goedecke)",
+   "author": "Sean Goedecke",
+   "repo": "https://github.com/sgoedecke/system-one",
+   "class": "jev-rebuild",
+   "licence": "no licence file in the repository as of 19 Sep; Qwen3 weights Apache-2.0",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3-8B (frozen, BF16), the model of the author's demos",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 55,
+   "jevbench_score": 23.369044226391765,
+   "axes": {
+    "intelligence": 43.58090741395149,
+    "calibration": 32.828064074368044,
+    "speed": 84.3621367799104,
+    "cost": 41.45387606228526
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.90625,
+    "judge": 0.9178082191780822,
+    "hard": 0.5
+   },
+   "public_accuracy": 0.7186147186147186,
+   "sealed_accuracy": 0.2435064935064935,
+   "public_minus_sealed_gap_pp": 47.51082251082251,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.1661309413611889,
+    "p95_s_raw": 0.30472867079079147,
+    "hardware": "RunPod RTX PRO 4500 Blackwell 32 GB (EU-RO-1)",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.08944116853932584,
+    "kind": "estimate"
+   }
+  },
+  "opendecision": {
+   "display": "OpenDecision (ModernBERT-large zero-shot)",
+   "author": "Deepan Wadhwa",
+   "repo": "https://github.com/deepanwadhwa/OpenDecision",
+   "class": "classifier",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "MoritzLaurer/ModernBERT-large-zeroshot-v2.0 (~400M) used as a zero-shot NLI decision engine",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 56,
+   "jevbench_score": 21.641705888024706,
+   "axes": {
+    "intelligence": 31.79943294249068,
+    "calibration": 57.06329219214104,
+    "speed": 79.89955851182286,
+    "cost": 75.34414706615897
+   },
+   "tiers": {
+    "easy": 0.875,
+    "standard": 0.625,
+    "judge": 0.7123287671232876,
+    "hard": 0.33181818181818185
+   },
+   "public_accuracy": 0.5324675324675324,
+   "sealed_accuracy": 0.2564935064935065,
+   "public_minus_sealed_gap_pp": 27.597402597402592,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.3378134034574032,
+    "p95_s_raw": 0.5447697393596171,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.006635318352059925,
+    "kind": "estimate"
+   }
+  },
+  "litjev": {
+   "display": "LitJev (Qwen3.8-27B)",
+   "author": "Zhengxu Yu",
+   "repo": "https://github.com/zhengxuyu/litjev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (code); Apache-2.0 base weights",
+   "open": "yes",
+   "underlying": "Qwen/Qwen3.8-27B, frozen, read at the output head",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 57,
+   "jevbench_score": 19.51031342209139,
+   "axes": {
+    "intelligence": 46.25717739910522,
+    "calibration": 76.62350985013104,
+    "speed": 66.72450940291681,
+    "cost": 33.63149944045428
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9791666666666666,
+    "judge": 0.8835616438356164,
+    "hard": 0.7318181818181818
+   },
+   "public_accuracy": 0.8614718614718615,
+   "sealed_accuracy": 0.30844155844155846,
+   "public_minus_sealed_gap_pp": 55.3030303030303,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 2.025244139134884,
+    "p95_s_raw": 2.4555754292756315,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.16303594007490638,
+    "kind": "estimate"
+   }
+  },
+  "openjev-verdict-1.4": {
+   "display": "openJev Verdict 1.4",
+   "author": "Hemant (heman10x)",
+   "repo": "https://huggingface.co/heman10x/rlcd-modernbert-151m",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "GLiClass ModernBERT-base fine-tuned decision model, 151M; v1.4 fixed inference engine",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 58,
+   "jevbench_score": 19.001051642863935,
+   "axes": {
+    "intelligence": 29.409876443502302,
+    "calibration": 72.03302398440775,
+    "speed": 78.08595973190066,
+    "cost": 82.35883967864214
+   },
+   "tiers": {
+    "easy": 0.8611111111111112,
+    "standard": 0.6770833333333334,
+    "judge": 0.5616438356164384,
+    "hard": 0.37727272727272726
+   },
+   "public_accuracy": 0.5757575757575758,
+   "sealed_accuracy": 0.2792207792207792,
+   "public_minus_sealed_gap_pp": 29.65367965367966,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.31351133808493614,
+    "p95_s_raw": 0.9248626325279473,
+    "hardware": "AMD Ryzen 5 3600 (Sandy), 4 threads",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.003872921348314607,
+    "kind": "estimate"
+   }
+  },
+  "kev-0.5b": {
+   "display": "kev 0.5B",
+   "author": "Jared Palmer",
+   "repo": "https://github.com/jaredpalmer/kev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0",
+   "open": true,
+   "underlying": "Qwen2.5-0.5B + LoRA + learned pointer head; jaredpalmer/kev-0.5b",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 59,
+   "jevbench_score": 18.88295792074435,
+   "axes": {
+    "intelligence": 30.536372423403222,
+    "calibration": 49.68828397919909,
+    "speed": 76.95661397000733,
+    "cost": 76.08687775906971
+   },
+   "tiers": {
+    "easy": 0.9583333333333334,
+    "standard": 0.5208333333333334,
+    "judge": 0.7123287671232876,
+    "hard": 0.3090909090909091
+   },
+   "public_accuracy": 0.4935064935064935,
+   "sealed_accuracy": 0.2727272727272727,
+   "public_minus_sealed_gap_pp": 22.07792207792208,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest; 307/308 sealed items answered validly (failures count as wrong)",
+   "speed": {
+    "p50_s_raw": 0.43036095052957535,
+    "p95_s_raw": 0.9219581566751004,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.0062676404494382025,
+    "kind": "estimate"
+   }
+  },
+  "nimble-9b": {
+   "display": "Bespoke Nimble 9B (Bespoke Labs)",
+   "author": "Bespoke Labs",
+   "repo": "https://github.com/bespokelabsai/nimble",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (weights); repository without a licence file as of 19 Sep",
+   "open": "yes",
+   "underlying": "bespokelabs/Bespoke-Nimble-9B (LoRA, adapter unchanged since 93ec5d6), merged into Qwen/Qwen3.5-9B@c202236 with the author's PEFT safe-merge",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 60,
+   "jevbench_score": 18.66373818414425,
+   "axes": {
+    "intelligence": 46.27509427808829,
+    "calibration": 56.44746075341965,
+    "speed": 78.68440871747626,
+    "cost": 33.41009520749539
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9479166666666666,
+    "judge": 0.8904109589041096,
+    "hard": 0.6545454545454545
+   },
+   "public_accuracy": 0.7965367965367965,
+   "sealed_accuracy": 0.288961038961039,
+   "public_minus_sealed_gap_pp": 50.75757575757576,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.3889440931379795,
+    "p95_s_raw": 0.6545137587934732,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.16583014981273408,
+    "kind": "estimate"
+   }
+  },
+  "gpt-5.6-luna": {
+   "display": "GPT-5.6 Luna (low reasoning effort)",
+   "author": "OpenAI",
+   "class": "llm-baseline",
+   "licence": "proprietary API",
+   "open": "no",
+   "underlying": "closed",
+   "has_distribution": true,
+   "probability_source": [
+    "verbalized"
+   ],
+   "endpoint_kind": "api",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 61,
+   "jevbench_score": 18.506333238992966,
+   "axes": {
+    "intelligence": 93.13761299887643,
+    "calibration": 87.37467197114547,
+    "speed": 77.5464346646158,
+    "cost": 28.490318789992514
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9791666666666666,
+    "judge": 0.9657534246575342,
+    "hard": 0.9454545454545454
+   },
+   "public_accuracy": 0.974025974025974,
+   "sealed_accuracy": 0.8896103896103896,
+   "public_minus_sealed_gap_pp": 8.441558441558438,
+   "scoring_note": "sealed item text (no golds) was sent to the operator endpoint (OpenAI API), as for every API measurement",
+   "speed": {
+    "p50_s_raw": 0.9680032916367054,
+    "p95_s_raw": 1.8175220962613816,
+    "adjustment": "none (production API)"
+   },
+   "cost": {
+    "usd_per_1000": 0.24191123595505612,
+    "kind": "measured"
+   }
+  },
+  "openjev-verdict": {
+   "display": "openJev Verdict (heman10x, ModernBERT-base 151M)",
+   "author": "Hemant (heman10x)",
+   "repo": "https://github.com/Heman10x-NGU/openJev-verdict-2.0",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "GLiClass ModernBERT-base (knowledgator/gliclass-modern-base-v2.0) fine-tuned, 151M",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 62,
+   "jevbench_score": 18.094581304233536,
+   "axes": {
+    "intelligence": 30.017651584940374,
+    "calibration": 46.99073252218098,
+    "speed": 76.68207818819491,
+    "cost": 83.05556459946699
+   },
+   "tiers": {
+    "easy": 0.8611111111111112,
+    "standard": 0.65625,
+    "judge": 0.6095890410958904,
+    "hard": 0.38181818181818183
+   },
+   "public_accuracy": 0.5541125541125541,
+   "sealed_accuracy": 0.24675324675324675,
+   "public_minus_sealed_gap_pp": 30.73593073593074,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.27805980294942856,
+    "p95_s_raw": 1.4451411496847864,
+    "hardware": "AMD Ryzen 5 3600 (Sandy), 4 threads",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.00367125468164794,
+    "kind": "estimate"
+   }
+  },
+  "raw-qwen3-1.7b": {
+   "display": "Raw Qwen3 1.7B direct logits",
+   "author": "Alibaba Qwen / neutral reproduction",
+   "repo": "https://huggingface.co/Qwen/Qwen3-1.7B",
+   "class": "raw-logit-control",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "Qwen3-1.7B BF16",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 63,
+   "jevbench_score": 18.055721418631492,
+   "axes": {
+    "intelligence": 33.22626585162718,
+    "calibration": 24.285299854089764,
+    "speed": 89.71855887469545,
+    "cost": 64.8957758569641
+   },
+   "tiers": {
+    "easy": 0.8194444444444444,
+    "standard": 0.5520833333333334,
+    "judge": 0.7534246575342466,
+    "hard": 0.43636363636363634
+   },
+   "public_accuracy": 0.5411255411255411,
+   "sealed_accuracy": 0.2597402597402597,
+   "public_minus_sealed_gap_pp": 28.13852813852814,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.06664170743897557,
+    "p95_s_raw": 0.11331849200651051,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.014795880149812733,
+    "kind": "estimate"
+   }
+  },
+  "reflex-27b": {
+   "display": "reflex-27b (Qwen3.8-27B)",
+   "author": "kshetrajna12",
+   "repo": "https://github.com/kshetrajna12/reflex",
+   "class": "jev-rebuild",
+   "licence": "MIT code; Apache-2.0 Qwen weights",
+   "open": "yes",
+   "underlying": "Qwen3.8-27B, frozen, direct-logit readout averaged across two option orders",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 64,
+   "jevbench_score": 17.844519244120388,
+   "axes": {
+    "intelligence": 46.38779077055885,
+    "calibration": 77.23797885642135,
+    "speed": 67.46599369477367,
+    "cost": 32.26119927292868
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9583333333333334,
+    "judge": 0.958904109589041,
+    "hard": 0.759090909090909
+   },
+   "public_accuracy": 0.8701298701298701,
+   "sealed_accuracy": 0.29545454545454547,
+   "public_minus_sealed_gap_pp": 57.467532467532465,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 1.8879061974585056,
+    "p95_s_raw": 2.2076592873781915,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.18111733707865169,
+    "kind": "estimate"
+   }
+  },
+  "jevact": {
+   "display": "JevAct (einptein, jev1-2b-v2)",
+   "author": "einptein",
+   "repo": "https://github.com/fstandhartinger/jevbench/issues/66",
+   "class": "jev-rebuild",
+   "licence": "not stated (the author published only an endpoint and the evaluation client)",
+   "open": "no",
+   "underlying": "the author's own checkpoint model/jev1-2b-v2/checkpoint-45000-67.53 over a Qwen3.5-2B base, served by the author on his own machine; one request per decision returns a native probability for every offered option",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "demo",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 65,
+   "jevbench_score": 16.92690664787098,
+   "axes": {
+    "intelligence": 29.266280238412953,
+    "calibration": 55.06434224219382,
+    "speed": 76.45909446386409,
+    "cost": 64.29703993880327
+   },
+   "tiers": {
+    "easy": 0.9861111111111112,
+    "standard": 0.6875,
+    "judge": 0.589041095890411,
+    "hard": 0.37272727272727274
+   },
+   "public_accuracy": 0.6190476190476191,
+   "sealed_accuracy": 0.23376623376623376,
+   "public_minus_sealed_gap_pp": 38.528138528138534,
+   "new_in": "v1.4.2",
+   "scoring_note": "API measurement: sealed item text (no golds) was sent to the operator endpoint; all 842 decisions (534 frozen v1.2 + 308 sealed v1.4) through JevBench's adapter.",
+   "speed": {
+    "p50_s_raw": 0.3992511257529259,
+    "p95_s_raw": 1.4150911435484888,
+    "adjustment": "x2 (not a production API; no +0.15 s)"
+   },
+   "cost": {
+    "usd_per_1000": 0.015491685393258427,
+    "kind": "estimate"
+   }
+  },
+  "djev-thinking": {
+   "display": "djev (thinking)",
+   "author": "David Villalon / Maisa",
+   "repo": "https://github.com/Davipar/djev-dev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "google/diffusiongemma-26b-a4b-it, BF16; full generation with thinking enabled",
+   "has_distribution": true,
+   "probability_source": [
+    "verbalized"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 66,
+   "jevbench_score": 15.201198018956955,
+   "axes": {
+    "intelligence": 71.62068248893371,
+    "calibration": 87.77774635807619,
+    "speed": 75.15117536916611,
+    "cost": 26.85351129959409
+   },
+   "tiers": {
+    "easy": 0.9583333333333334,
+    "standard": 0.9895833333333334,
+    "judge": 0.8013698630136986,
+    "hard": 0.7772727272727272
+   },
+   "public_accuracy": 0.8744588744588745,
+   "sealed_accuracy": 0.6006493506493507,
+   "public_minus_sealed_gap_pp": 27.380952380952383,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest; 220/308 sealed items answered validly (failures count as wrong)",
+   "speed": {
+    "p50_s_raw": 0.4260098780505359,
+    "p95_s_raw": 1.448969176481475,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.27429398876404487,
+    "kind": "estimate"
+   }
+  },
+  "gliner2-large": {
+   "display": "GLiNER2 large (Fastino)",
+   "author": "Fastino",
+   "repo": "https://huggingface.co/fastino/gliner2-large-v1",
+   "class": "classifier",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "GLiNER2 large schema-conditioned extractor (DeBERTa-v3-large encoder)",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 67,
+   "jevbench_score": 15.138054851149672,
+   "axes": {
+    "intelligence": 31.109577359763858,
+    "calibration": 24.819443836109603,
+    "speed": 61.65849142544844,
+    "cost": 73.3279398087227
+   },
+   "tiers": {
+    "easy": 0.9861111111111112,
+    "standard": 0.625,
+    "judge": 0.6095890410958904,
+    "hard": 0.36363636363636365
+   },
+   "public_accuracy": 0.5670995670995671,
+   "sealed_accuracy": 0.2857142857142857,
+   "public_minus_sealed_gap_pp": 28.13852813852814,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 1.0967330671846867,
+    "p95_s_raw": 14.48837994225323,
+    "hardware": "AMD Ryzen 5 3600 (Sandy), 4 threads",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.007745842696629214,
+    "kind": "estimate"
+   }
+  },
+  "openjev-thinking": {
+   "display": "OpenJev (thinking, BF16)",
+   "author": "razorback16",
+   "repo": "https://github.com/razorback16/openjev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "google/diffusiongemma-26b-a4b-it, BF16; OpenJev think=512",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 68,
+   "jevbench_score": 14.829064005607973,
+   "axes": {
+    "intelligence": 58.08310902947819,
+    "calibration": 58.097048339645674,
+    "speed": 76.05530411890852,
+    "cost": 27.82225297231227
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 1.0,
+    "judge": 0.9452054794520548,
+    "hard": 0.7818181818181819
+   },
+   "public_accuracy": 0.8874458874458875,
+   "sealed_accuracy": 0.42207792207792205,
+   "public_minus_sealed_gap_pp": 46.536796536796544,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.46296589844860137,
+    "p95_s_raw": 1.0775369299459272,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.25463898876404495,
+    "kind": "estimate"
+   }
+  },
+  "mghafiri-qwen3.5-0.8b-decision-model": {
+   "display": "Qwen3.5-0.8B Decision Model (Mourad Ghafiri)",
+   "author": "Mourad Ghafiri",
+   "repo": "https://huggingface.co/mghafiri/qwen3.5-0.8B-decision-model",
+   "class": "jev-rebuild",
+   "licence": "MIT code and training data; Apache-2.0 model weights",
+   "open": "yes",
+   "underlying": "Qwen3.5-0.8B-Base fine-tuned as a JevLite decision model with per-question calibration",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 69,
+   "jevbench_score": 14.540627482985634,
+   "axes": {
+    "intelligence": 28.073004486611502,
+    "calibration": 68.22744227994228,
+    "speed": 49.16083329619092,
+    "cost": 75.68324604275398
+   },
+   "tiers": {
+    "easy": 0.9861111111111112,
+    "standard": 0.5520833333333334,
+    "judge": 0.3424657534246575,
+    "hard": 0.509090909090909
+   },
+   "public_accuracy": 0.5930735930735931,
+   "sealed_accuracy": 0.3474025974025974,
+   "public_minus_sealed_gap_pp": 24.56709956709957,
+   "scoring_note": "Local CPU measurement on the existing 534-decision v1.3 set plus 308 sealed v1.4 decisions; no operator endpoint received sealed text.",
+   "speed": {
+    "p50_s_raw": 7.150214396417141,
+    "p95_s_raw": 41.90147256627678,
+    "hardware": "Ryzen 5 3600, 4 threads",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.0064648501872659175,
+    "kind": "estimate"
+   }
+  },
+  "gemini-3.1-flash-lite": {
+   "display": "Gemini 3.1 Flash-Lite",
+   "author": "Google",
+   "class": "llm-baseline",
+   "licence": "proprietary API",
+   "open": "no",
+   "underlying": "closed",
+   "has_distribution": true,
+   "probability_source": [
+    "verbalized"
+   ],
+   "endpoint_kind": "api",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 70,
+   "jevbench_score": 14.26151759252857,
+   "axes": {
+    "intelligence": 54.47139585292138,
+    "calibration": 59.293625254911305,
+    "speed": 81.78762581772229,
+    "cost": 27.362399077259013
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9895833333333334,
+    "judge": 0.9315068493150684,
+    "hard": 0.75
+   },
+   "public_accuracy": 0.8701298701298701,
+   "sealed_accuracy": 0.38636363636363635,
+   "public_minus_sealed_gap_pp": 48.37662337662337,
+   "scoring_note": "sealed item text (no golds) was sent to the operator endpoint (Google API), as for every API measurement; 307/308 sealed items answered validly (failures count as wrong)",
+   "speed": {
+    "p50_s_raw": 0.756230715662241,
+    "p95_s_raw": 0.8761593606323003,
+    "adjustment": "none (production API)"
+   },
+   "cost": {
+    "usd_per_1000": 0.26378698501872655,
+    "kind": "measured"
+   }
+  },
+  "open-jev-deberta-v3-large": {
+   "display": "open-jev-deberta-v3-large (local CPU)",
+   "author": "Kotoba Labs",
+   "repo": "https://github.com/kotoba-lang/typed-decisions",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (model card); DeBERTa-v3 keeps its own terms",
+   "open": "yes",
+   "underlying": "microsoft/deberta-v3-large",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 71,
+   "jevbench_score": 12.649316553397922,
+   "axes": {
+    "intelligence": 25.580756971997335,
+    "calibration": 66.6011163245795,
+    "speed": 65.97921316871283,
+    "cost": 74.02828721517697
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.4895833333333333,
+    "judge": 0.5342465753424658,
+    "hard": 0.36363636363636365
+   },
+   "public_accuracy": 0.5238095238095238,
+   "sealed_accuracy": 0.29545454545454547,
+   "public_minus_sealed_gap_pp": 22.835497835497836,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest; 297/308 sealed items answered validly (failures count as wrong)",
+   "speed": {
+    "p50_s_raw": 1.767673410475254,
+    "p95_s_raw": 3.349288306012749,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.007340468164794008,
+    "kind": "estimate"
+   }
+  },
+  "smalljev": {
+   "display": "smalljev semantic-v9",
+   "author": "Aditya (isHeSatoshi)",
+   "repo": "https://github.com/isHeSatoshi/smalljev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "MiniCPM5-2B-Base, 2.5B dense, with LoRA and native semantic decision heads",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 72,
+   "jevbench_score": 12.308142930422852,
+   "axes": {
+    "intelligence": 25.670293240126572,
+    "calibration": 59.17561887769727,
+    "speed": 79.81829102912181,
+    "cost": 57.872598102653555
+   },
+   "tiers": {
+    "easy": 0.9722222222222222,
+    "standard": 0.6875,
+    "judge": 0.4041095890410959,
+    "hard": 0.38181818181818183
+   },
+   "public_accuracy": 0.6060606060606061,
+   "sealed_accuracy": 0.2694805194805195,
+   "public_minus_sealed_gap_pp": 33.65800865800866,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.4138255603611469,
+    "p95_s_raw": 0.45828209072351456,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.025365692883895133,
+    "kind": "estimate"
+   }
+  },
+  "gliner2": {
+   "display": "GLiNER2 (Fastino, gliner2.5-base)",
+   "author": "Fastino",
+   "repo": "https://github.com/fastino-ai/GLiNER2",
+   "class": "classifier",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "DeBERTa-v3-base schema-conditioned extractor (GLiNER2.5 boundary architecture), 194M",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 73,
+   "jevbench_score": 11.777645154812003,
+   "axes": {
+    "intelligence": 27.41771615013038,
+    "calibration": 25.196414331851887,
+    "speed": 71.82859826025441,
+    "cost": 83.05556459946699
+   },
+   "tiers": {
+    "easy": 0.9722222222222222,
+    "standard": 0.6666666666666666,
+    "judge": 0.4589041095890411,
+    "hard": 0.36363636363636365
+   },
+   "public_accuracy": 0.5800865800865801,
+   "sealed_accuracy": 0.2922077922077922,
+   "public_minus_sealed_gap_pp": 28.78787878787879,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.31302378326654434,
+    "p95_s_raw": 4.153845678269863,
+    "hardware": "AMD Ryzen 5 3600 (Sandy), 4 threads",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.00367125468164794,
+    "kind": "estimate"
+   }
+  },
+  "instinct": {
+   "display": "Instinct (ZooWork, Qwen3.8-27B)",
+   "author": "rayrain-srp (ZooWork)",
+   "repo": "https://github.com/fstandhartinger/jevbench/issues/69",
+   "class": "jev-rebuild",
+   "licence": "proprietary service over Apache-2.0 base weights (Qwen3.8-27B)",
+   "open": "no",
+   "underlying": "Qwen3.8-27B (Apache-2.0 base weights) with no additional fine-tuning; their own serving stack reads candidate-token scores in one forward pass per question and normalizes them into a decision probability, with no autoregressive decoding. The serving implementation is not public.",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "demo",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 74,
+   "jevbench_score": 11.449217397802405,
+   "axes": {
+    "intelligence": 51.1455873367657,
+    "calibration": 78.6725030936767,
+    "speed": 83.92002476015575,
+    "cost": 24.630461096785695
+   },
+   "tiers": {
+    "easy": 0.9861111111111112,
+    "standard": 0.9583333333333334,
+    "judge": 0.9452054794520548,
+    "hard": 0.759090909090909
+   },
+   "public_accuracy": 0.8658008658008658,
+   "sealed_accuracy": 0.35064935064935066,
+   "public_minus_sealed_gap_pp": 51.515151515151516,
+   "new_in": "v1.4.2",
+   "scoring_note": "API measurement: sealed item text (no golds) was sent to the operator endpoint; all 842 decisions (534 frozen v1.2 + 308 sealed v1.4) through JevBench's adapter.",
+   "speed": {
+    "p50_s_raw": 0.25864607095718384,
+    "p95_s_raw": 0.3919508829712868,
+    "adjustment": "x2 (free evaluation/demo endpoint: no SLA, no status page, no terms, no bookable price)"
+   },
+   "cost": {
+    "usd_per_1000": 0.3253253932584269,
+    "kind": "estimate"
+   }
+  },
+  "open-jev-zefan-9b": {
+   "display": "Open-Jev 9B (Zefan Cai)",
+   "author": "Zefan Cai (@Zefan_Cai)",
+   "repo": "https://github.com/Zefan-Cai/Open-Jev",
+   "class": "jev-rebuild",
+   "licence": "MIT (loader); Apache-2.0 (adapter and pinned Qwen base); CC0-1.0 public training projection",
+   "open": "yes",
+   "underlying": "Qwen3.5-9B plus rank-8 LoRA and trained scalar decision head",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 75,
+   "jevbench_score": 11.195362486014277,
+   "axes": {
+    "intelligence": 44.18189841302913,
+    "calibration": 61.780502096905636,
+    "speed": 72.03286755510636,
+    "cost": 28.123361021000306
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.90625,
+    "judge": 0.815068493150685,
+    "hard": 0.6090909090909091
+   },
+   "public_accuracy": 0.7748917748917749,
+   "sealed_accuracy": 0.2987012987012987,
+   "public_minus_sealed_gap_pp": 47.61904761904761,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.754859171807766,
+    "p95_s_raw": 1.8114654466509819,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.24882153558052428,
+    "kind": "estimate"
+   }
+  },
+  "open-jev-zefan-2b": {
+   "display": "Open-Jev 2B (Zefan Cai)",
+   "author": "Zefan Cai (@Zefan_Cai)",
+   "repo": "https://github.com/Zefan-Cai/Open-Jev",
+   "class": "jev-rebuild",
+   "licence": "MIT (loader); Apache-2.0 (adapter and pinned Qwen base); CC0-1.0 public training projection",
+   "open": "yes",
+   "underlying": "Qwen3.5-2B plus rank-8 LoRA and trained scalar decision head",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 76,
+   "jevbench_score": 9.980246077108298,
+   "axes": {
+    "intelligence": 42.33143216557079,
+    "calibration": 55.27368440973887,
+    "speed": 73.45427178913715,
+    "cost": 28.123361021000306
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.7916666666666666,
+    "judge": 0.8835616438356164,
+    "hard": 0.42727272727272725
+   },
+   "public_accuracy": 0.645021645021645,
+   "sealed_accuracy": 0.262987012987013,
+   "public_minus_sealed_gap_pp": 38.20346320346321,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.664745207875967,
+    "p95_s_raw": 1.450564834475517,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.24882153558052428,
+    "kind": "estimate"
+   }
+  },
+  "gliner2.5-multi": {
+   "display": "GLiNER2.5 multi (Fastino, 287M)",
+   "author": "Fastino",
+   "repo": "https://huggingface.co/fastino/gliner2.5-multi-v1",
+   "class": "classifier",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "GLiNER2.5 multilingual schema-conditioned extractor, 287M",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 77,
+   "jevbench_score": 9.759108258784872,
+   "axes": {
+    "intelligence": 23.119657731293067,
+    "calibration": 57.17734564391696,
+    "speed": 67.79966551109104,
+    "cost": 82.35883967864214
+   },
+   "tiers": {
+    "easy": 0.9027777777777778,
+    "standard": 0.5104166666666666,
+    "judge": 0.4383561643835616,
+    "hard": 0.37727272727272726
+   },
+   "public_accuracy": 0.48917748917748916,
+   "sealed_accuracy": 0.32792207792207795,
+   "public_minus_sealed_gap_pp": 16.12554112554112,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.42792757973074913,
+    "p95_s_raw": 8.17526703067124,
+    "hardware": "AMD Ryzen 5 3600 (Sandy), 4 threads",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.003872921348314607,
+    "kind": "estimate"
+   }
+  },
+  "clm-8b": {
+   "display": "CLM-8B (Contrastive-LM, clm-latest)",
+   "author": "Contrastive-LM (Kwok, Kang, Suresh, Saad-Falcon, Pavone, R\u00e9, Mirhoseini)",
+   "repo": "https://github.com/Contrastive-LM/CLM",
+   "class": "system-one-open",
+   "licence": "Apache-2.0 (code and CLM-v0.1-8B head); Qwen3-8B encoder Apache-2.0",
+   "open": "yes",
+   "has_distribution": true,
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 78,
+   "jevbench_score": 8.570462299422305,
+   "axes": {
+    "intelligence": 22.354059018750526,
+    "calibration": 39.81252400740181,
+    "speed": 93.5743915280099,
+    "cost": 78.43399091681239
+   },
+   "tiers": {
+    "easy": 0.6666666666666666,
+    "standard": 0.3854166666666667,
+    "judge": 0.7123287671232876,
+    "hard": 0.35909090909090907
+   },
+   "public_accuracy": 0.4069264069264069,
+   "sealed_accuracy": 0.24025974025974026,
+   "public_minus_sealed_gap_pp": 16.666666666666664,
+   "new_in": "v1.4.2",
+   "scoring_note": "Offline local open-weight inference on the frozen 308-item v1.4 set in a network-disabled, read-only container on an evaluator-owned Lium RTX PRO 6000 pod; no operator endpoint; no golds were exposed. Latency is in-process Engine.answer time on the serial standard+judge items with the self-hosted adjustment. Cost is estimated at the Qwen3-Embedding-8B hosted list price ($0.01/M input, same-size 8B pooling encoder) over CLM's measured encoder tokens; it is not a GPU bill.",
+   "speed": {
+    "p50_s_raw": 0.016774784307926893,
+    "p95_s_raw": 0.04461275222711264,
+    "hardware": "RTX PRO 6000 (evaluator-owned Lium pod)",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.005234400749063671,
+    "kind": "estimate"
+   }
+  },
+  "simplejev-qwen3.5-0.8b": {
+   "display": "SimpleJev (Qwen3.5-0.8B, CPU)",
+   "author": "sabeel111 / Featherless AI",
+   "repo": "https://github.com/featherless-ai/simple-jev",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 server; Apache-2.0 Qwen3.5-0.8B checkpoint",
+   "open": "yes",
+   "underlying": "Qwen3.5-0.8B through SimpleJev native assistant-prefill option-logit scorer",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 79,
+   "jevbench_score": 7.459762136724042,
+   "axes": {
+    "intelligence": 21.482479668016303,
+    "calibration": 49.07354475109724,
+    "speed": 57.454265052488324,
+    "cost": 68.25265889330862
+   },
+   "tiers": {
+    "easy": 0.875,
+    "standard": 0.5729166666666666,
+    "judge": 0.1917808219178082,
+    "hard": 0.4
+   },
+   "public_accuracy": 0.5454545454545454,
+   "sealed_accuracy": 0.3474025974025974,
+   "public_minus_sealed_gap_pp": 19.8051948051948,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 3.993786856532097,
+    "p95_s_raw": 10.967020866274833,
+    "hardware": "Sandy shared CPU (4 inference threads)",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.011435224719101125,
+    "kind": "estimate"
+   }
+  },
+  "gliner2.5-small": {
+   "display": "GLiNER2.5 small (Fastino, 74M)",
+   "author": "Fastino",
+   "repo": "https://huggingface.co/fastino/gliner2.5-small-v1",
+   "class": "classifier",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "GLiNER2.5 small schema-conditioned extractor, 74M",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 80,
+   "jevbench_score": 7.187800408767937,
+   "axes": {
+    "intelligence": 20.495135641685263,
+    "calibration": 50.706891113316594,
+    "speed": 77.83454067554766,
+    "cost": 82.35883967864214
+   },
+   "tiers": {
+    "easy": 0.8333333333333334,
+    "standard": 0.4791666666666667,
+    "judge": 0.5,
+    "hard": 0.33181818181818185
+   },
+   "public_accuracy": 0.4588744588744589,
+   "sealed_accuracy": 0.2857142857142857,
+   "public_minus_sealed_gap_pp": 17.31601731601732,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.11413825303316116,
+    "p95_s_raw": 2.1012388937175266,
+    "hardware": "AMD Ryzen 5 3600 (Sandy), 4 threads",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.003872921348314607,
+    "kind": "estimate"
+   }
+  },
+  "raw-qwen3-0.6b": {
+   "display": "Raw Qwen3 0.6B direct logits",
+   "author": "Alibaba Qwen / neutral reproduction",
+   "repo": "https://huggingface.co/Qwen/Qwen3-0.6B",
+   "class": "raw-logit-control",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "Qwen3-0.6B BF16",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 81,
+   "jevbench_score": 7.135291650528435,
+   "axes": {
+    "intelligence": 22.819571275888357,
+    "calibration": 20.703384538799043,
+    "speed": 89.94746620755858,
+    "cost": 73.92667572688353
+   },
+   "tiers": {
+    "easy": 0.8888888888888888,
+    "standard": 0.5416666666666666,
+    "judge": 0.4657534246575342,
+    "hard": 0.35
+   },
+   "public_accuracy": 0.4805194805194805,
+   "sealed_accuracy": 0.2564935064935065,
+   "public_minus_sealed_gap_pp": 22.4025974025974,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.0677520353347063,
+    "p95_s_raw": 0.10226013627834617,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.007397940074906366,
+    "kind": "estimate"
+   }
+  },
+  "verdict-small": {
+   "display": "verdict-small (Manavarya09, multilingual-e5-small 118M)",
+   "author": "Manavarya09 (Manav)",
+   "repo": "https://github.com/Manavarya09/verdict",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 (verdictml code and the Manav2op/verdict-small checkpoint over intfloat/multilingual-e5-small)",
+   "open": "yes",
+   "underlying": "intfloat/multilingual-e5-small (118M multilingual bi-encoder) fine-tuned on a typed-decision mix; each option is scored against the rendered state by cosine similarity, with temperature scaling and a conformal abstain set on top. One encoder pass per option, no tokens generated.",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 82,
+   "jevbench_score": 5.688474707640219,
+   "axes": {
+    "intelligence": 18.11199374812305,
+    "calibration": 66.93933658008659,
+    "speed": 84.95923591278107,
+    "cost": 96.63797503090915
+   },
+   "tiers": {
+    "easy": 0.8888888888888888,
+    "standard": 0.5104166666666666,
+    "judge": 0.2808219178082192,
+    "hard": 0.4
+   },
+   "public_accuracy": 0.5367965367965368,
+   "sealed_accuracy": 0.288961038961039,
+   "public_minus_sealed_gap_pp": 24.783549783549784,
+   "new_in": "v1.4.2",
+   "scoring_note": "Offline measurement of all 842 decisions (534 frozen v1.2 + 308 sealed v1.4) on our own CPU through the author's server; no operator endpoint.",
+   "speed": {
+    "p50_s_raw": 0.0534759983420372,
+    "p95_s_raw": 0.5461470346897828,
+    "hardware": "AMD Ryzen 5 3600 (Sandy), 4 threads",
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.0012943970037453184,
+    "kind": "estimate"
+   }
+  },
+  "deepseek-flash": {
+   "display": "DeepSeek V4.1 Flash (thinking default)",
+   "author": "DeepSeek",
+   "class": "llm-baseline",
+   "licence": "open weights, proprietary API route",
+   "open": "weights",
+   "underlying": "DeepSeek-V4.1-Flash",
+   "has_distribution": true,
+   "probability_source": [
+    "verbalized"
+   ],
+   "endpoint_kind": "api",
+   "api_flag": true,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 83,
+   "jevbench_score": 4.768648223526218,
+   "axes": {
+    "intelligence": 93.99556953048156,
+    "calibration": 95.50293974977504,
+    "speed": 71.59823070734842,
+    "cost": 16.793370728606376
+   },
+   "tiers": {
+    "easy": 0.9861111111111112,
+    "standard": 0.9895833333333334,
+    "judge": 0.9315068493150684,
+    "hard": 0.95
+   },
+   "public_accuracy": 0.9783549783549783,
+   "sealed_accuracy": 0.948051948051948,
+   "public_minus_sealed_gap_pp": 3.0303030303030276,
+   "scoring_note": "sealed item text (no golds) was sent to the operator endpoint (DeepSeek API), as for every API measurement; 298/308 sealed items answered validly (failures count as wrong)",
+   "speed": {
+    "p50_s_raw": 1.4163860343396664,
+    "p95_s_raw": 4.886470635980367,
+    "adjustment": "none (production API)"
+   },
+   "cost": {
+    "usd_per_1000": 0.593682584269663,
+    "kind": "measured"
+   }
+  },
+  "mirror": {
+   "display": "Mirror",
+   "author": "Bluusun",
+   "repo": "https://github.com/Bluusun/Decision-API",
+   "class": "jev-rebuild",
+   "licence": "Apache-2.0 wrapper and Mirror release; upstream DeBERTa/model assets retain their own terms",
+   "open": "yes",
+   "underlying": "Mirror DeBERTa-v3-large 436M classification-span scorer",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "demo",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 84,
+   "jevbench_score": 2.110814199749038,
+   "axes": {
+    "intelligence": 13.583262842535385,
+    "calibration": 25.99761921833361,
+    "speed": 70.75829315240604,
+    "cost": 73.3279398087227
+   },
+   "tiers": {
+    "easy": 0.875,
+    "standard": 0.4583333333333333,
+    "judge": 0.3150684931506849,
+    "hard": 0.17272727272727273
+   },
+   "public_accuracy": 0.41125541125541126,
+   "sealed_accuracy": 0.09090909090909091,
+   "public_minus_sealed_gap_pp": 32.03463203463204,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest; 102/308 sealed items answered validly (failures count as wrong)",
+   "speed": {
+    "p50_s_raw": 0.8995787426829338,
+    "p95_s_raw": 2.333842311054468,
+    "adjustment": "x2 (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.007745842696629214,
+    "kind": "estimate"
+   }
+  },
+  "mxbai-rerank-base-v2": {
+   "display": "Mixedbread mxbai-rerank-base-v2",
+   "author": "Mixedbread",
+   "repo": "https://huggingface.co/mixedbread-ai/mxbai-rerank-base-v2",
+   "class": "reranker",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "494M cross-encoder",
+   "has_distribution": true,
+   "probability_source": [
+    "public_calibrated_reranker_softmax"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 85,
+   "jevbench_score": 0.3999944834827258,
+   "axes": {
+    "intelligence": 6.801766676742608,
+    "calibration": 84.11217431743692,
+    "speed": 87.50360537571527,
+    "cost": 67.92989463663068
+   },
+   "tiers": {
+    "easy": 0.4444444444444444,
+    "standard": 0.3333333333333333,
+    "judge": 0.2671232876712329,
+    "hard": 0.4
+   },
+   "public_accuracy": 0.3722943722943723,
+   "sealed_accuracy": 0.34415584415584416,
+   "public_minus_sealed_gap_pp": 2.813852813852813,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.06881788885220885,
+    "p95_s_raw": 0.23386348099447787,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.011722048450570633,
+    "kind": "measured"
+   }
+  },
+  "bge-reranker-v2-m3": {
+   "display": "BAAI bge-reranker-v2-m3",
+   "author": "BAAI",
+   "repo": "https://huggingface.co/BAAI/bge-reranker-v2-m3",
+   "class": "reranker",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "568M multilingual cross-encoder",
+   "has_distribution": true,
+   "probability_source": [
+    "public_calibrated_reranker_softmax"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 86,
+   "jevbench_score": 0.1700654625666753,
+   "axes": {
+    "intelligence": 5.010951521682325,
+    "calibration": 84.22377218469961,
+    "speed": 89.52513700533652,
+    "cost": 73.3733106383488
+   },
+   "tiers": {
+    "easy": 0.4305555555555556,
+    "standard": 0.3645833333333333,
+    "judge": 0.08904109589041095,
+    "hard": 0.36818181818181817
+   },
+   "public_accuracy": 0.3939393939393939,
+   "sealed_accuracy": 0.2792207792207792,
+   "public_minus_sealed_gap_pp": 11.471861471861471,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.034560746513307095,
+    "p95_s_raw": 0.17954895906150325,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.007718915951068509,
+    "kind": "measured"
+   }
+  },
+  "gte-reranker-modernbert-base": {
+   "display": "Alibaba GTE Reranker ModernBERT-base",
+   "author": "Alibaba-NLP",
+   "repo": "https://huggingface.co/Alibaba-NLP/gte-reranker-modernbert-base",
+   "class": "reranker",
+   "licence": "Apache-2.0",
+   "open": "yes",
+   "underlying": "149M ModernBERT cross-encoder",
+   "has_distribution": true,
+   "probability_source": [
+    "public_calibrated_reranker_softmax"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 87,
+   "jevbench_score": 0.15201475507543563,
+   "axes": {
+    "intelligence": 4.827030765393093,
+    "calibration": 78.88620538670396,
+    "speed": 90.58799397367488,
+    "cost": 69.64001789071294
+   },
+   "tiers": {
+    "easy": 0.3333333333333333,
+    "standard": 0.3958333333333333,
+    "judge": 0.3013698630136986,
+    "hard": 0.33636363636363636
+   },
+   "public_accuracy": 0.33766233766233766,
+   "sealed_accuracy": 0.3344155844155844,
+   "public_minus_sealed_gap_pp": 0.32467532467532756,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.048107756301760674,
+    "p95_s_raw": 0.10235980194993316,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.010280148864935354,
+    "kind": "measured"
+   }
+  },
+  "certo": {
+   "display": "Certo v1 (AltSlate Labs)",
+   "author": "AltSlate Labs",
+   "repo": "https://huggingface.co/altslate/certo-decision-model",
+   "class": "jev-rebuild",
+   "licence": "MIT",
+   "open": "yes",
+   "underlying": "ModernBERT-large with a per-option query/scoring head, ~400M parameters",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 88,
+   "jevbench_score": 5.344170110166062e-07,
+   "axes": {
+    "intelligence": 0.06943551498007035,
+    "calibration": 82.98944985569986,
+    "speed": 93.97471093191521,
+    "cost": 100.0
+   },
+   "tiers": {
+    "easy": 0.2777777777777778,
+    "standard": 0.3020833333333333,
+    "judge": 0.2191780821917808,
+    "hard": 0.3181818181818182
+   },
+   "public_accuracy": 0.31601731601731603,
+   "sealed_accuracy": 0.29545454545454547,
+   "public_minus_sealed_gap_pp": 2.056277056277056,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.019205978140234947,
+    "p95_s_raw": 0.031265050335787234,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.0009654868913857679,
+    "kind": "estimate"
+   }
+  },
+  "open-jev-json-canvas-joshuasp": {
+   "display": "Open Jev JSON Canvas (JoshuaSP)",
+   "author": "JoshuaSP",
+   "repo": "https://github.com/JoshuaSP/open-jev",
+   "class": "jev-rebuild",
+   "licence": "MIT code; Apache-2.0 DiffusionGemma weights",
+   "open": "yes",
+   "underlying": "google/diffusiongemma-26B-A4B-it BF16, one-step JSON canvas",
+   "has_distribution": false,
+   "probability_source": [
+    "label_only_no_calibrated_distribution"
+   ],
+   "endpoint_kind": "gpu",
+   "api_flag": false,
+   "ranked": true,
+   "listing": "ranked",
+   "partial": false,
+   "rank": 89,
+   "jevbench_score": 0.0,
+   "axes": {
+    "intelligence": 48.158292382831725,
+    "calibration": 0.0,
+    "speed": 84.06148554434631,
+    "cost": 45.616507411040736
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9895833333333334,
+    "judge": 0.9246575342465754,
+    "hard": 0.7045454545454546
+   },
+   "public_accuracy": 0.8441558441558441,
+   "sealed_accuracy": 0.3116883116883117,
+   "public_minus_sealed_gap_pp": 53.246753246753244,
+   "scoring_note": "re-run on a throwaway RunPod pod with the original recipe; deviations in its manifest",
+   "speed": {
+    "p50_s_raw": 0.2243216049973853,
+    "p95_s_raw": 0.2528335442475509,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.06498050561797752,
+    "kind": "estimate"
+   }
+  },
+  "classifier-dev-fast": {
+   "display": "classifier.dev (fast tier)",
+   "author": "mrmps (@michael_chomsky)",
+   "repo": "https://classifier.dev",
+   "class": "jev-service",
+   "licence": "MIT (code); hosted service",
+   "open": "no",
+   "underlying": "Jev (TypeSafe) behind classifier.dev's zero-shot classification API",
+   "has_distribution": true,
+   "probability_source": [
+    "native"
+   ],
+   "endpoint_kind": "api",
+   "api_flag": true,
+   "ranked": false,
+   "listing": "honorable_mention",
+   "not_ranked_because": "runs on Jev (TypeSafe) \u2014 listed, not ranked",
+   "partial": false,
+   "jevbench_score": 70.82340862727794,
+   "axes": {
+    "intelligence": 51.562124154634155,
+    "calibration": 72.42569314355679,
+    "speed": 87.59107265834845,
+    "cost": 84.31363764158988
+   },
+   "tiers": {
+    "easy": 1.0,
+    "standard": 0.9895833333333334,
+    "judge": 0.9726027397260274,
+    "hard": 0.7045454545454546
+   },
+   "public_accuracy": 0.8528138528138528,
+   "sealed_accuracy": 0.34415584415584416,
+   "public_minus_sealed_gap_pp": 50.86580086580086,
+   "scoring_note": "sealed item text (no golds) was sent to the operator endpoint (classifier.dev), as for every API measurement",
+   "speed": {
+    "p50_s_raw": 0.38636084645986557,
+    "p95_s_raw": 0.4507125232368707,
+    "adjustment": "none (production API)"
+   },
+   "cost": {
+    "usd_per_1000": 0.003333333333333333,
+    "kind": "estimate"
+   }
+  },
+  "qwen3.8-27b": {
+   "display": "Qwen3.8 27B (Chutes TEE)",
+   "author": "Qwen / Chutes",
+   "class": "llm-baseline",
+   "licence": "open weights",
+   "open": "weights",
+   "underlying": "Qwen3.8-27B",
+   "has_distribution": true,
+   "probability_source": [
+    "verbalized"
+   ],
+   "endpoint_kind": "api",
+   "api_flag": true,
+   "ranked": false,
+   "listing": "partial",
+   "partial": true,
+   "jevbench_score": 0.0,
+   "axes": {
+    "intelligence": 40.40114828032634,
+    "calibration": 93.55866776479952,
+    "speed": 61.270489995780956,
+    "cost": 0.0
+   },
+   "tiers": {
+    "easy": 0.9861111111111112,
+    "standard": 0.9895833333333334,
+    "judge": 0.952755905511811,
+    "hard": 0.21363636363636362
+   },
+   "public_accuracy": 0.7186147186147186,
+   "sealed_accuracy": 0.21753246753246752,
+   "public_minus_sealed_gap_pp": 50.1082251082251,
+   "scoring_note": "sealed item text (no golds) was sent to the operator endpoint (Chutes), as for every API measurement; 69/308 sealed items answered validly (failures count as wrong); partial: Chutes rate limit stopped the run after 81/308 items; unranked as in v1.3",
+   "speed": {
+    "p50_s_raw": 5.753906108438969,
+    "p95_s_raw": 12.97144114784895,
+    "adjustment": "none (production API)"
+   },
+   "cost": {
+    "usd_per_1000": 2.669088141927965,
+    "kind": "estimate"
+   }
+  },
+  "needle-3-tools": {
+   "display": "Needle 3, options as tools (post-hoc adapter mode)",
+   "author": "Cactus Compute",
+   "repo": "https://github.com/cactus-compute/needle",
+   "class": "small-tool-model",
+   "licence": "Apache-2.0 (model and package)",
+   "open": "yes",
+   "underlying": "Needle 3 (121M parameters, 2-bit)",
+   "has_distribution": false,
+   "probability_source": [
+    "label_only_no_calibrated_distribution"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": false,
+   "listing": "partial",
+   "not_ranked_because": "No completed sealed v1.4 run; retained as an unranked historical row",
+   "partial": true,
+   "tiers": {
+    "easy": 0.6666666666666666,
+    "standard": 0.3125,
+    "judge": 0.3424657534246575,
+    "hard": null
+   },
+   "public_accuracy": 0.22077922077922077,
+   "speed": {
+    "p50_s_raw": 3.778900783509016,
+    "p95_s_raw": 33.63718595951795,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.014372006369426754,
+    "kind": "estimate"
+   }
+  },
+  "needle-3": {
+   "display": "Needle 3 (Cactus, 2-bit, local CPU)",
+   "author": "Cactus Compute",
+   "repo": "https://github.com/cactus-compute/needle",
+   "class": "small-tool-model",
+   "licence": "Apache-2.0 (model and package)",
+   "open": "yes",
+   "underlying": "Needle 3 (121M parameters, 2-bit)",
+   "has_distribution": false,
+   "probability_source": [
+    "label_only_no_calibrated_distribution"
+   ],
+   "endpoint_kind": "cpu",
+   "api_flag": false,
+   "ranked": false,
+   "listing": "partial",
+   "not_ranked_because": "No completed sealed v1.4 run; retained as an unranked historical row",
+   "partial": true,
+   "tiers": {
+    "easy": 0.4722222222222222,
+    "standard": 0.16666666666666666,
+    "judge": 0.3150684931506849,
+    "hard": 0.07727272727272727
+   },
+   "public_accuracy": 0.22510822510822512,
+   "speed": {
+    "p50_s_raw": 1.6870602630078793,
+    "p95_s_raw": 14.364453018829225,
+    "adjustment": "x2 + 0.15 s (assumption, not measured)"
+   },
+   "cost": {
+    "usd_per_1000": 0.023839264044943822,
+    "kind": "estimate"
+   }
+  }
+ }
+}

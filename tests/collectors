@@ -3647,6 +3647,125 @@ def a_hosted_endpoint_never_scores_the_open_weights_it_shares_a_name_with():
        "a speech model is never offered the text leaderboard's key space")
 
 
+PRETRAIN_CAPTURE = {"widget-4b": {"name": "Widget 4B"}}
+
+PRETRAIN_REGISTRY = """version: 1
+models:
+  vendor/Widget-4B:
+    kind: text
+    name: {short: widget-4b}
+  vendor/Widget-4B-Base:
+    kind: text
+    name: {short: widget-4b-base}
+"""
+
+
+def ids_fixture(tmp, captures, registry):
+    """Run `resolve-ids --write` over fixture captures and read the ids back."""
+    data = os.path.join(tmp, "data")
+    os.mkdir(data)
+    for name, payload in captures.items():
+        with open(os.path.join(data, name), "w") as f:
+            json.dump(payload, f)
+    reg = os.path.join(tmp, "models.yaml")
+    with open(reg, "w") as f:
+        f.write(registry)
+    r = subprocess.run([os.path.join(ROOT, "scripts", "resolve-ids"),
+                        "--registry", reg, "--data", data, "--write"],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if r.returncode:
+        raise AssertionError("resolve-ids exited %d: %s"
+                             % (r.returncode, r.stderr.strip()[:300]))
+    import yaml
+    return yaml.safe_load(open(reg))["models"]
+
+
+@test
+def a_pretrain_never_takes_the_scores_of_the_post_trained_model_beside_it():
+    """`-base` names a DIFFERENT model, and the suffix list read it as a spelling.
+
+    The list exists because sources drop trailing qualifiers inconsistently --
+    artificial analysis writes `gemma-4-31b` for the repo `gemma-4-31B-it` -- and
+    `-base` rode along. so `Qwen/Qwen3.5-4B-Base` asked for `Qwen3.5-4B`, matched
+    artificial analysis' `qwen3-5-4b` EXACTLY, and was about to be ranked on the
+    chat model's coding scores. the hub publishes 47 bases and 39 of them are a
+    `-Base` pretrain, which is the whole failure in one number.
+
+    `-it`, `-instruct` and `-bf16` are spellings of the weights they name. a
+    pretrain is the weights BEFORE the post-training that made the other one, and
+    this registry carries both, so the qualifier is load-bearing.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        got = ids_fixture(tmp, {"artificial-analysis.json": PRETRAIN_CAPTURE},
+                          PRETRAIN_REGISTRY)
+    finally:
+        shutil.rmtree(tmp)
+
+    eq((got["vendor/Widget-4B"].get("ids") or {}).get("aa"), "widget-4b",
+       "the post-trained model still matches its own row")
+    eq((got["vendor/Widget-4B-Base"].get("ids") or {}).get("aa", ""), "",
+       "and the pretrain is left unmatched rather than taking its sibling's")
+
+
+JEV_CAPTURE = {
+    "meta": {"benchmark": "JevBench", "revision": "v1"},
+    "systems": {
+        "widget-one-4b-v2": {"display": "widget-one 4b v2 (vendor)", "open": "yes",
+                             "listing": "ranked", "ranked": True},
+        "widget-hosted": {"display": "widget hosted", "open": "no",
+                          "listing": "ranked", "ranked": True},
+        "widget-abandoned": {"display": "widget one 4b v1", "open": "yes",
+                             "listing": "honorable_mention", "ranked": False},
+    },
+}
+
+JEV_REGISTRY = """version: 1
+models:
+  vendor/Widget-One-4b:
+    kind: decision
+    name: {short: widget-one-4b}
+  vendor/Widget-Hosted:
+    kind: decision
+    name: {short: widget-hosted}
+  vendor/Widget-One-4b-v1:
+    kind: decision
+    name: {short: widget-one-4b-v1}
+  vendor/Widget-4B:
+    kind: text
+    name: {short: widget-4b}
+"""
+
+
+@test
+def a_decision_model_is_offered_the_one_board_that_rates_one():
+    """`kind: decision` joins `jev` and nothing else, and the join is open-weights only.
+
+    The board's `open` field is free text -- `yes`, `weights`, `no`, and absent
+    for the baselines -- so truthiness reads `no` as downloadable, and a row the
+    board itself does not rank was never run to the end. both are checked here
+    because both failures put a number on a model the source does not score.
+
+    The fourth row is the other half: a text model is never offered this space,
+    the way a speech model is never offered `aa`.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        got = ids_fixture(tmp, {"jevbench.json": JEV_CAPTURE}, JEV_REGISTRY)
+    finally:
+        shutil.rmtree(tmp)
+
+    one = got["vendor/Widget-One-4b"].get("ids") or {}
+    eq(one.get("jev"), "widget-one-4b-v2",
+       "the version the board measured is what the id keeps")
+    eq((got["vendor/Widget-Hosted"].get("ids") or {}).get("jev", ""), "",
+       "`open: no` is not downloadable weights")
+    eq((got["vendor/Widget-One-4b-v1"].get("ids") or {}).get("jev", ""), "",
+       "and an unranked mention of a near name is not a run of this model")
+    eq("jev" in (got["vendor/Widget-4B"].get("ids") or {}), False,
+       "a text model is never offered the decision board")
+
+
 @test
 def one_speech_board_refreshing_does_not_drop_the_others():
     """The three speech boards share a file, so a single-board run must merge.

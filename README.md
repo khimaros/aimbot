@@ -412,7 +412,19 @@ text to text (27)     vision to text (34)      these two partition the above
 audio to text (20)    transcription, whether or not that is all it does
 text to audio (8)     text to image (5)        text to embeddings (1)
 diarization (3)       weights --diarize loads beside an ASR model
+decisions (1)         a probability per option, from one pass, nothing generated
 ```
+
+**`decisions` is a kind and not a shape, because it emits nothing.** a decision
+model reads a state plus one or more typed questions with lettered options and
+returns a probability per option from one forward pass -- no decode, no parse, no
+answer outside the options the caller supplied. so it is in no shape at all:
+`any to text` is right to leave it out, since it emits no tokens, and `language
+models` is right to as well, since nothing answers a chat turn. its numbers come
+from `fetch-jevbench`, the only board here whose rows are decision models,
+rerankers and classifiers, and the only one with a calibration axis -- for a
+model whose entire output is a confidence, that is the product rather than a
+second opinion about it.
 
 **`language models` is a classification, not a shape.** it is the registry's own
 `kind`, meaning an LLM you serve as a chat endpoint, and it is neither a subset

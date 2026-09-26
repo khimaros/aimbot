@@ -40,6 +40,9 @@ import registry_patch  # noqa: E402  the splice, shared with resolve-ids
 # then the two coordinates of when. `near` only appears when it is the reason
 DERIVED = ("arch", "mainline", "since", "merged", "near")
 
+# the kinds llama.cpp loads. see the skip in main().
+RUNTIME_KINDS = {"text", "decision"}
+
 # what llama.cpp's history cannot tell you and a human therefore writes: where
 # to go when mainline does not carry the architecture. these are read back off
 # the existing block and re-emitted, so `--write` refreshes the derived half
@@ -117,7 +120,14 @@ def main():
     reg = (yaml.safe_load(open(args.registry)) or {}).get("models") or {}
     blocks, skipped, stale = {}, [], []
     for repo, m in reg.items():
-        if m.get("kind", "text") != "text":
+        # `runtime:` answers "which llama.cpp release loads this", so the kinds it
+        # has an answer for are the kinds llama.cpp loads. crispasr's weights carry
+        # `crispasr.backend` instead, sd.cpp detects by tensor signature, and the
+        # pipeline kinds are loaded by neither -- which is why `check_engine`
+        # derives a model's engine off whichever of these a model has, and why a
+        # kind left out here reaches the page with no engine and gets filtered out
+        # by a reader who left the runtimes on.
+        if m.get("kind", "text") not in RUNTIME_KINDS:
             continue
         block, why = block_for(m, support)
         if not block:

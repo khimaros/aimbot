@@ -167,6 +167,9 @@ SOURCES = {
     "showdown-edit": {"label": "genai image showdown (editing)",
                       "file": "data/genai-showdown.json",
                       "url": "https://genai-showdown.specr.net/image-editing"},
+    "jev": {"label": "jevbench",
+            "file": "data/jevbench.json",
+            "url": "https://benchmarkheaven.com/jev-models"},
 }
 
 # what a strong facet implies the model is FOR. only the axes where a high
@@ -182,6 +185,9 @@ USE_FOR = {
     "aa.critpt": "physics",
     "aa.ifbench": "instruction following", "aa.lcr": "long context",
     "lmarena.rating": "chat / general use", "gbench.decision": "planning",
+    # not the composite: it is a harmonic mean over speed and cost as well, and
+    # being quick is a property rather than something a model is FOR
+    "jev.intelligence": "typed decisions",
 }
 TOP_PCT = 67          # top third of the models carrying a facet
 BOTTOM_PCT = 33
@@ -492,6 +498,55 @@ def speech_facets(speech, arena, voicearena, ids, open_asr=None):
 
 
 # the showdown's two competitions, as (facet key, capture board, what it asks).
+# the four axes JevBench publishes, as (facet suffix, where to read it, label,
+# unit). the composite is carried alongside its own components rather than
+# instead of them, because it is a harmonic mean over speed and cost as well --
+# and for a model whose whole output is a probability, calibration is not one
+# axis among four, it is the product.
+JEV_AXES = [("score", ("jevbench_score",), "jevbench score (25:25:25:25)", "score"),
+            ("intelligence", ("axes", "intelligence"), "intelligence", "score"),
+            ("calibration", ("axes", "calibration"), "calibration", "score"),
+            ("hard", ("tiers", "hard"), "hard tier accuracy", "share"),
+            ("sealed", ("sealed_accuracy",), "sealed tier accuracy", "share")]
+
+
+def jev_facets(board, ids):
+    """JevBench, for the models that answer in probabilities rather than tokens.
+
+    Five numbers over two questions. The first is how good the answers are
+    (score, intelligence, hard tier) and the second is whether the model knows:
+    `calibration` is a score no other source here has any notion of, and
+    `sealed` is the swe-rebench move on this board -- 308 items frozen after
+    every system shipped, so a model 49 points better on the public items than on
+    the sealed ones is telling on itself. Both halves are carried per row rather
+    than averaged, because the gap between them IS the finding.
+    """
+    row = (board.get(ids.get("jev")) or {})
+    if not row:
+        return {}
+    total = sum(1 for r in board.values() if r.get("ranked"))
+    note = ("rank %s of %d ranked systems, revision %s"
+            % (row.get("rank") or "-", total, row.get("new_in") or "the pinned run"))
+    # the public-minus-sealed gap is a LOSS, and every facet here ranks higher as
+    # better, so it is not a facet of its own. it rides on the sealed one's ref
+    # line, where a reader sees the accuracy and how much of it the frozen items
+    # did not survive
+    gap = row.get("public_minus_sealed_gap_pp")
+    if gap is not None:
+        note += "; the public items read %.1f points higher than the sealed ones" % gap
+    out = {}
+    for suffix, path, label, unit in JEV_AXES:
+        v = row
+        for key in path:
+            v = (v or {}).get(key)
+        if v is None:
+            continue
+        out["jev.%s" % suffix] = {
+            "value": v, "label": label, "unit": unit, "group": "jevbench",
+            "ref": ref("jev", ids.get("jev"), note)}
+    return out
+
+
 # one shape, two questions, so they are generated from a table rather than
 # written twice
 SHOWDOWN_BOARDS = [
@@ -585,6 +640,7 @@ def build(bt, registry):
     open_asr = (load("open-asr") or {}).get("models") or {}
     arena, voicearena = load("tts-arena"), load("voicearena")
     pictures, showdown = load("artificial-analysis-image"), load("genai-showdown")
+    jev = load("jevbench").get("systems") or {}
 
     def lm_board(name):
         """One lmarena board's entries, keyed by the name its ids use."""
@@ -607,6 +663,7 @@ def build(bt, registry):
         facets.update(community_facet(sent.get(short) or {}))
         facets.update(speech_facets(speech, arena, voicearena, ids, open_asr))
         facets.update(image_facets(pictures, lm_images, ids, lm_edits, showdown))
+        facets.update(jev_facets(jev, ids))
         rating = bt.lmarena_score(ids)
         if rating is not None:
             facets["lmarena.rating"] = {
