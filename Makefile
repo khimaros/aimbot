@@ -45,6 +45,10 @@ setup:
 	@echo "an interactive one, once the mise hook is loaded."
 .PHONY: setup
 
+serve:
+	python -m http.server -d ./docs/
+.PHONY: serve
+
 lint: deps
 	./scripts/models-validate
 	./scripts/resolve-turns --check

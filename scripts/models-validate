@@ -328,10 +328,13 @@ def check_base(b, where, keys, f):
     # IS carried, because then the two rows can be read against each other
     if b.get("repo") and b["repo"] == where:
         f.add(where, "base.repo is the entry itself")
-# what a weight can be to a diarization run. neither transcribes: an embedder
-# turns a span of audio into a speaker vector, a segmenter says only WHEN the
-# speaker changed
-DIARIZE_ROLES = ("embedder", "segmentation")
+# what a weight can be to a diarization run. none of them transcribes: an
+# embedder turns a span of audio into a speaker vector, a segmenter says only
+# WHEN the speaker changed, and `end-to-end` is the whole job in one network --
+# a probability per speaker per frame, with no embedder to feed and no clustering
+# to feed. it is also the only one of the three crispasr loads by a different
+# flag: `--diarize-model` for the sortformer rather than `--diarize-embedder`
+DIARIZE_ROLES = ("embedder", "segmentation", "end-to-end")
 DIARIZE_KIND = "diarize"
 # what a weight can be to a transcript AFTER it exists. crispasr's README lists
 # six of these and its feature matrix carries none of them, because punctuation

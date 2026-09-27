@@ -56,6 +56,12 @@ button {
   border: 1px solid var(--line); padding: .25rem .6rem; cursor: pointer;
 }
 button:hover { color: var(--fg); border-color: var(--faint); }
+/* a row reset with nothing to undo is dead rather than merely quiet. it stays
+   hoverable -- the native `disabled` property takes the pointer events with it,
+   and the hover text is the only thing that says why there is nothing to do */
+.rst { padding: .2rem .35rem; line-height: 0; }
+button[data-off="1"] { color: var(--faint); opacity: .45; }
+button[data-off="1"]:hover { color: var(--faint); border-color: var(--line); }
 button[aria-pressed="true"] { color: var(--fg); border-color: var(--faint); background: var(--bg); }
 
 .panel {
@@ -257,6 +263,12 @@ pre {
 .quote { border-left: 2px solid var(--faint); padding: .1rem .7rem; margin: .6rem 0; color: var(--fg); }
 .quote .src { display: block; color: var(--dim); font-size: 11px; margin-top: .15rem; }
 .empty { color: var(--dim); padding: 3rem 0; text-align: center; }
+/* the empty table's account: one line per filter that is on, each one the click
+   that takes it off. centred and stacked, because it is read as a list */
+.empty .relax { display: flex; flex-direction: column; gap: .3rem;
+                align-items: center; margin-top: .8rem; }
+.empty .faint { margin-top: .8rem; max-width: 62ch; margin-left: auto;
+                margin-right: auto; }
 footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 1.7; }
 </style>
 <main>
@@ -278,12 +290,14 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <select id="floor" data-help="how far down is still worth running. below this a model reads as not fitting rather than as a two-bit version of itself"></select>
     <select id="bw" data-help="how fast the box reads memory, from its spec sheet. decode is bandwidth bound, so this drives the `tg t/s` column: effective bandwidth over the bytes one token reads, which is the active weights at the fitted quant plus the kv cache at your context"></select>
     <select id="flops" data-help="what the box computes at, dense fp16, from its spec sheet. prefill is compute bound rather than bandwidth bound, so it drives the `pp t/s` column on its own: two flops per active weight per prompt token"></select>
+    <button class="rst" id="reset-hardware" aria-label="reset hardware"></button>
   </div>
   <div class="controls">
     <span class="lbl">ranking</span>
     <select id="preset" data-help="a named set of weights. `balanced` is the one this page and MODELS.md both open on; the others reweight toward one question. changing any weight yourself moves this to `custom ranking`"></select>
     <button id="factors-btn" aria-pressed="false" data-help="build your own weighting: one slider per measurement, grouped by what measured it. the ranking resorts as you drag, and a model missing a factor is scored as typical on it rather than zero or exempt">custom ranking</button>
     <button id="eff-btn" aria-pressed="true" data-help="off, the scores are what the source published. on, they answer `what would i get from the quant i can actually run`: a benchmark scores the model at the precision the scorer served, so the score is multiplied by the retention that quant's bits per weight predict and the percentiles are recomputed against the discounted cohort. only the coding and software-agent benchmarks are discounted, because the one sweep behind the curve measured a code-editing pass rate and nothing else -- every other number is published as-is and says why on hover. the curve itself is fitted to one model, deepseek v3.1 at 671b, and applied to all of them, which is the weakest step on this page. below its lowest measured rung at 2.21 bpw it stops falling and returns that value forever, so a one-bit quant reads as keeping 77.8%; the quality cell says so on hover where that happens, because the only sweep anybody has run that low found a 27b at chance.">quant adjusted</button>
+    <button class="rst" id="reset-ranking" aria-label="reset ranking"></button>
   </div>
   <div class="controls">
     <span class="lbl">filter</span>
@@ -294,31 +308,36 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <span class="ms" id="pub-ms" data-help="narrow to the publishers you care about, taken from the repo owner. picking none is every publisher"></span>
     <span id="kinds" class="chips"></span>
     <button id="ladder-btn" aria-pressed="true" data-help="on, one row per model, reading the largest quant that fits. off, one row per quant on offer, so the whole size ladder is on screen -- every rung with `fits vram` off, and the ones that fit with it on -- and with quant adjusted each row scores at its own bits per weight, which merges every model and every quant into one ranked list of what you could actually run. it stays inside the repo the registry pins, since crossing to another build changes more than the size">best quant</button>
+    <button class="rst" id="reset-filter" aria-label="reset filter"></button>
   </div>
 
   <div class="layout">
     <aside class="panel side" id="factors"></aside>
     <div class="grid-side">
       <div class="tablebar">
-        <!-- drawn rather than typed, same reason as the gear: an arrow round to
-             where it started, and two linked rings that read as `link` at 14px
-             without asking the font for a glyph -->
-        <button id="reset" aria-label="reset" data-help="clear the weights, filters, hardware settings, columns and sort, and forget them"><svg class="icon" viewBox="0 0 16 16"
-          width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"
-          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path
-          d="M13 8a5 5 0 1 1-1.5-3.6"/><path d="M13 2.2V5h-2.8"/></svg></button>
         <button id="share" aria-label="copy link" data-help="copy a link that reproduces this exact table: the weights, the filters, the hardware, the columns and the sort. only what you changed goes in the link, so it stays short and shows what was actually moved"><svg class="icon" viewBox="0 0 16 16"
           width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"
           stroke-width="1.6" stroke-linecap="round"><path
           d="M6.6 9.4a2.6 2.6 0 0 0 3.9 .3l2.4-2.4a2.7 2.7 0 0 0-3.8-3.8L7.7 4.9"/><path
           d="M9.4 6.6a2.6 2.6 0 0 0-3.9-.3L3.1 8.7a2.7 2.7 0 0 0 3.8 3.8l1.3-1.3"/></svg></button>
-        <!-- drawn rather than typed: a unicode gear is not ascii and leans on
-             the monospace font having the glyph, which several do not -->
-        <button id="cols-btn" aria-pressed="false" aria-label="columns" data-help="show, hide and reorder columns. drag to reorder"><svg class="icon" viewBox="0 0 16 16"
+        <!-- drawn rather than typed: a unicode column glyph is not ascii and
+             leans on the font having it, which several do not. three bars, two
+             of them filled and one still an outline, is the offer the panel
+             makes -- which of these columns are on -- where the gear said only
+             "settings", about nothing in particular -->
+        <button id="cols-btn" aria-pressed="false" aria-label="columns" data-help="show, hide and reorder the table's columns. drag to reorder"><svg class="icon" viewBox="0 0 16 16"
           width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"
-          stroke-linecap="round"><circle cx="8" cy="8" r="4.4" stroke-width="1.5"/><circle
-          cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/><path stroke-width="1.8"
-          d="M13.4 8.0L15.2 8.0M11.8 11.8L13.1 13.1M8.0 13.4L8.0 15.2M4.2 11.8L2.9 13.1M2.6 8.0L0.8 8.0M4.2 4.2L2.9 2.9M8.0 2.6L8.0 0.8M11.8 4.2L13.1 2.9"/></svg></button>
+          stroke-width="1.3" stroke-linejoin="round"><rect x="1.4" y="2.4" width="3.7"
+          height="11.2" rx="0.8" fill="currentColor" stroke="none"/><rect x="6.15" y="2.4"
+          width="3.7" height="11.2" rx="0.8" fill="currentColor" stroke="none"/><rect
+          x="10.9" y="2.4" width="3.7" height="11.2" rx="0.8"/></svg></button>
+        <!-- the table's own reset, for the columns and the sort. every reset on
+             this page is drawn in js off one path, because a row of four of
+             them has to be one glyph rather than four that nearly match, and
+             every one of them sits at the END of the row it undoes: ahead of
+             the label it reads as part of the label, and the label is what says
+             what a row is in the first place -->
+        <button class="rst" id="reset-table" aria-label="reset table"></button>
       </div>
       <div class="panel" id="cols"></div>
       <div class="wrap">
@@ -389,9 +408,12 @@ const store = {
 
 let D = null;                       // the payload
 let W = {};                         // facet key -> weight
-// the page overwrites this from localStorage once it boots; a module with no
-// browser around it starts where a first-time reader starts
-let sort = {k: 'score', dir: -1};
+// where the table starts: the best score first, which is the question the page
+// is built to answer. the page overwrites this from localStorage once it
+// boots, and its own table reset puts it back, so it is a constant here rather
+// than a literal at two sites that can disagree.
+const DEFAULT_SORT = {k: 'score', dir: -1};
+let sort = {...DEFAULT_SORT};
 // the runtimes selected by default: the three that load most of this roster and
 // that a reader here is likely to have built. it is a multi-select rather than
 // one choice because a model can have two -- whisper's files load in crispasr
@@ -1475,7 +1497,8 @@ const MODALITIES = [
   {k: 'decide', t: 'decisions', test: m => m.kind === 'decision',
    help: 'typed decisions in one forward pass: a probability per option and nothing generated. jevbench rates them, and its calibration axis is the only one here'},
   {k: 'diar', t: 'diarization', test: m => m.kind === 'diarize',
-   help: 'weights --diarize loads beside an ASR model. they transcribe nothing and are scored by nobody'},
+   help: 'weights --diarize loads, beside an ASR model or in place of a whole '
+     + 'method. they transcribe nothing and are scored by nobody'},
   // `post` and `translate` carry no `modalities` block on purpose, the way the
   // diarizers do not: they run inside crispasr's pipeline rather than being
   // served, and declaring text in / text out would put a punctuation restorer
@@ -1765,6 +1788,14 @@ const vocabulary = () => ({
 // so rather than imply an accounting.
 const filterCounts = () => {
   const total = D.models.length, out = [];
+  // the search text and the publisher list are filters too, and this list used
+  // to leave both out -- the search being the worse omission, since a query
+  // nothing matches is the one case where the account is the whole answer
+  if (filters.q.trim()) {
+    const q = filters.q.trim().toLowerCase();
+    out.push({k: 'search', t: filters.q.trim(),
+              dropped: total - D.models.filter(m => haystack(m).includes(q)).length});
+  }
   if (filters.mods.size) {
     out.push({k: 'modality', t: [...filters.mods].join(','),
               dropped: total - D.models.filter(inModality).length});
@@ -1773,6 +1804,11 @@ const filterCounts = () => {
     out.push({k: 'engine', t: [...filters.engines].join(','),
               dropped: total - D.models.filter(
                 m => (m.engines || []).some(e => filters.engines.has(e))).length});
+  }
+  if (filters.pubs.size) {
+    out.push({k: 'publisher', t: [...filters.pubs].join(','),
+              dropped: total - D.models.filter(
+                m => filters.pubs.has(m.publisher)).length});
   }
   if (filters.licenses.size) {
     out.push({k: 'license', t: [...filters.licenses].join(','),
@@ -1786,7 +1822,9 @@ const filterCounts = () => {
                 dropped: total - D.models.filter(flag.test).length});
     }
   });
-  return out;
+  // widest first. the reader asking is the one with an empty table, and what
+  // they want is the biggest lever, not the order the controls happen to sit in
+  return out.sort((a, b) => b.dropped - a.dropped);
 };
 
 // the current hardware, for a caller that wants to print what it answered under
@@ -1838,12 +1876,74 @@ function drawTable() {
           + (q ? ` data-qrepo="${esc(q.repo)}" data-quant="${esc(q.quant)}"` : '') + '>'
           + shown().map(k => col(k).cell(m)).join('') + '</tr>';
       }).join('')
-    : `<tr><td class="empty" colspan="${shown().length}">nothing matches</td></tr>`;
+    : emptyTable();
   wireHeaders();
   document.querySelectorAll('#rows tr[data-repo]').forEach(tr => {
     tr.onclick = () => openModel(tr.dataset.repo, null,
       {repo: tr.dataset.qrepo, quant: tr.dataset.quant});
   });
+  document.querySelectorAll('#rows [data-clear]').forEach(b => {
+    b.onclick = () => clearFilter(b.dataset.clear);
+  });
+  syncResets();
+}
+
+// an empty table is a question about the controls rather than about the roster,
+// so it is answered with the account the cli prints: every filter that is on,
+// what it hides measured ALONE against the whole registry, widest first. they
+// overlap -- 190 hidden by the shape and 60 by the licence is not 250 of 202 --
+// which is why the line says "alone" rather than implying an accounting.
+function emptyTable() {
+  const biting = filterCounts().filter(f => f.dropped);
+  const span = `<tr><td class="empty" colspan="${shown().length}">`;
+  if (!biting.length) return span + 'nothing matches</td></tr>';
+  return span + 'nothing matches'
+    + `<div class="relax">${biting.map(f =>
+        `<button data-clear="${f.k}" data-help="takes this one filter off and`
+        + ` leaves every other one exactly where it is">`
+        + `${esc(relaxLabel(f))} hides ${f.dropped} of ${D.models.length}</button>`)
+        .join('')}</div>`
+    // the caveat the numbers need: they are per filter alone, so they are not an
+    // accounting of the difference and never will be
+    + `<div class="faint">each count is that filter alone against all `
+    + `${D.models.length}. they overlap, so they do not add up.</div></td></tr>`;
+}
+
+// a flag names itself (`fits vram`); the rest are a value with no kind
+// attached, and "permissive" alone does not read as the licence menu. the
+// modality's own words come from MODALITIES, because the reader read
+// `text to image` in the dropdown rather than the key it is stored under.
+const RELAX_KIND = {search: 'the search', modality: 'the shape',
+                    engine: 'the runtime', license: 'the licence',
+                    publisher: 'the publisher'};
+const relaxLabel = f => {
+  if (FLAGS.some(x => x.k === f.k)) return f.t;
+  // the multi-selects store a comma-joined list, which is what the payload's
+  // own words arrive as, and the modality keys are keys rather than words
+  const t = (f.k === 'modality'
+    ? [...filters.mods].map(k => (MODALITIES.find(x => x.k === k) || {}).t || k)
+    : f.t.split(',')).join(', ');
+  return `${RELAX_KIND[f.k] || f.k} "${t}"`;
+};
+
+// one filter off, from the empty table itself. each is the empty set rather
+// than the default, because "none picked is no filter at all" is what every one
+// of these controls already means -- and a reader told the licence menu hid
+// everything does not want the default licence back, they want the menu off.
+// `drawChrome` then repaints the whole toolbar, because a control still showing
+// a filter the state no longer holds is worse than a repaint.
+function clearFilter(k) {
+  if (k === 'search') filters.q = '';
+  else if (k === 'modality') filters.mods = new Set();
+  else if (k === 'engine') filters.engines = new Set();
+  else if (k === 'license') filters.licenses = new Set();
+  else if (k === 'publisher') filters.pubs = new Set();
+  else filters.flags.delete(k);
+  saveFilters();
+  clearScores();
+  drawChrome();
+  drawFactors();
+  drawTable();
 }
 
 function wireHeaders() {
@@ -1912,6 +2012,10 @@ const sameWeights = (a, b) => {
     && Math.abs(a[k] - b[k]) < 1e-9);
 };
 const presetName = () => Object.keys(PRESETS).find(p => sameWeights(W, PRESETS[p].w())) || '';
+// a picked set against the set it should be compared to, which is usually a
+// list straight out of the payload. order and size only, never identity: the
+// defaults are never the same object twice.
+const sameSet = (a, b) => a.size === [...b].length && [...b].every(k => a.has(k));
 
 // a preset means nothing for a modality whose models carry none of the facets
 // it weights: `writing code` over transcription models ranks every row on
@@ -2006,15 +2110,24 @@ const summarize = (items, chosen, none, plural) => {
 function drawModalities() {
   const el = document.querySelector('#modality');
   if (!el) return;
-  const picked = [...filters.mods][0] || DEFAULT_MODALITY;
-  el.innerHTML = MODALITIES.map(x => {
+  const picked = [...filters.mods][0] || '';
+  // "no shape picked" is a state the page can reach -- clearing the filter from
+  // an empty table, a share link, the cli's --all -- and it means every shape.
+  // a select that showed `language models` while the table held every shape was
+  // the control lying about the rows under it, so the state gets a row of its
+  // own. only when nothing is picked: the shapes partition the roster between
+  // them and a permanent `every shape` choice would be a choice of nothing.
+  el.innerHTML = (picked ? '' : `<option value="" selected>every shape`
+    + ` (${D.models.length})</option>`)
+    + MODALITIES.map(x => {
     const n = D.models.filter(x.test).length;
     if (!n && x.k !== DEFAULT_MODALITY) return '';
     return `<option value="${x.k}"${x.k === picked ? ' selected' : ''}`
       + ` title="${esc(x.help || '')}">${esc(x.t)} (${n})</option>`;
   }).join('');
   el.onchange = e => {
-    filters.mods = new Set([e.target.value]);
+    // the empty option is the state, not a shape named ""
+    filters.mods = e.target.value ? new Set([e.target.value]) : new Set();
     saveFilters();
     hideTip();
     // the score depends on the shape now -- a model that both transcribes and
@@ -2164,8 +2277,30 @@ function reweigh() {
 
 // --- column picker -----------------------------------------------------------
 
+// a list of column keys against the columns this build knows. a stored list can
+// name one that has gone away, and a build can gain one that every stored list
+// predates: the old one drops and the new one joins the end.
+const knownColumns = ks => ks.filter(k => COLUMNS.some(c => c.k === k));
+const withNewColumns = o => {
+  COLUMNS.forEach(c => { if (!o.includes(c.k)) o.push(c.k); });
+  return o;
+};
+
+// what the reader who never touched a column has: the registry's own order, and
+// the registry's own columns switched off. the reset has to reach the defaults
+// the same way `boot()` does, since a page that restored a stored view would
+// otherwise show a live reset for a table nobody had changed.
+const defaultOrder = () => withNewColumns(knownColumns([...DEFAULT_ORDER]));
+const defaultHidden = () => new Set(knownColumns(DEFAULT_HIDDEN));
+
 function drawColumns() {
   const box = document.querySelector('#cols');
+  // the button is 14px of line and cannot show that most of the table is put
+  // away, so the hover says it instead -- and it is rebuilt here rather than
+  // left as the static line, which goes stale on the first toggle
+  document.querySelector('#cols-btn').dataset.help =
+    `show, hide and reorder the table's columns. ${shown().length} of `
+    + `${order.length} are on screen. drag to reorder`;
   // the same explanation the column header carries, so a reader deciding
   // whether to switch one on does not have to switch it on to find out
   box.innerHTML = order.map(k =>
@@ -2480,7 +2615,7 @@ function closeModel() {
 // say something on a button for a moment and put it back exactly as it was.
 //
 // innerHTML rather than textContent, which is the whole reason this is a
-// function: `#share` and `#reset` are SVG icons, an svg contributes no text, so
+// function: `#share` is an SVG icon, an svg contributes no text, so
 // saving `textContent` saved "" -- and assigning textContent DESTROYS the svg.
 // the icon went blank on the first copy and never came back. the handler was
 // written when that button had a text label and nothing connected the two when
@@ -3827,7 +3962,9 @@ function drawChrome() {
       `<option value="${g}"${g === budget ? ' selected' : ''}>${g} gib vram</option>`).join('');
   document.querySelector('#cap').innerHTML = CAPS.map(([k, , label]) =>
     `<option value="${k}"${k === cap ? ' selected' : ''}>${label}</option>`).join('');
-  document.querySelector('#reserve').innerHTML = [0, 2, 4, 8, 12, 16, 24].map(g =>
+  // 1 gib is the dedicated box: nothing resident but llama.cpp's compute
+  // buffers, a notch below the 2 that a machine with a host on it rounds up to
+  document.querySelector('#reserve').innerHTML = [0, 1, 2, 4, 8, 12, 16, 24].map(g =>
     `<option value="${g}"${g === reserve ? ' selected' : ''}>`
     + (g ? `${g} gib reserve` : 'no reserve') + '</option>').join('');
   document.querySelector('#ctx').innerHTML = [0, 4096, 8192, 16384, 32768, 65536,
@@ -3939,8 +4076,7 @@ function applyState(st) {
   if (st.sort) { sort = st.sort; store.set('sort', sort); }
   if (st.hidden) { hidden = new Set(st.hidden); store.set('hidden', [...hidden]); }
   if (st.order) {
-    order = st.order.filter(k => COLUMNS.some(c => c.k === k));
-    COLUMNS.forEach(c => { if (!order.includes(c.k)) order.push(c.k); });
+    order = withNewColumns(knownColumns(st.order));
     store.set('order', order);
   }
   if (st.ladder !== undefined) store.set('allQuants', !!st.ladder);
@@ -4026,9 +4162,8 @@ function boot(payload) {
   // shut on a first visit: eight headers is a menu, sixty sliders is a wall.
   // a stored [] is a reader who opened them, so only a MISSING key defaults
   folded = new Set(store.get('folded', null) || allGroups());
-  order = store.get('order', DEFAULT_ORDER).filter(k => COLUMNS.some(c => c.k === k));
-  COLUMNS.forEach(c => { if (!order.includes(c.k)) order.push(c.k); });
-  hidden = new Set(store.get('hidden', DEFAULT_HIDDEN).filter(k => COLUMNS.some(c => c.k === k)));
+  order = withNewColumns(knownColumns(store.get('order', DEFAULT_ORDER)));
+  hidden = new Set(knownColumns(store.get('hidden', DEFAULT_HIDDEN)));
 
   // BEFORE drawChrome, which builds the hardware selects and marks `selected`
   // against these: restoring them afterwards left every dropdown showing its
@@ -4063,6 +4198,7 @@ function boot(payload) {
   setEffective(store.get('effective', true));
   drawFactors();
   drawColumns();
+  wireResets();
   drawTable();
   applyHash();
 }
@@ -4166,27 +4302,128 @@ document.querySelector('#share').onclick = async () => {
   flashLabel(btn, ok ? 'copied' : 'in the address bar', 1600);
 };
 
-document.querySelector('#reset').onclick = () => {
-  W = {...D.weights};
-  filters = {...filters,
-             q: '', kind: new Set(), pubs: new Set(),
-             mods: new Set(DEFAULT_MODALITIES), flags: new Set(DEFAULT_FLAGS),
-             engines: new Set(DEFAULT_ENGINES),
-             licenses: new Set(DEFAULT_LICENSES),
-             minParams: null, maxParams: null};
-  hidden = new Set(DEFAULT_HIDDEN);
-  folded = new Set(allGroups());
-  order = [...DEFAULT_ORDER];
-  sort = {k: 'score', dir: -1};
-  Object.entries(DEFAULT_HARDWARE).forEach(([k, v]) => HW_SET[k](v));
-  ['weights', 'weights-base', 'hidden', 'order', 'sort', 'folded', 'effective',
-   'filters', 'allQuants']
-    .concat(Object.keys(DEFAULT_HARDWARE))
-    .forEach(k => localStorage.removeItem('aim-' + k));
+// --- putting one row back --------------------------------------------------
+//
+// one reset per row of controls. the single button this page shipped with
+// cleared the weighting along with the columns and the box, so a reader who
+// wanted the ranking back got their whole table back too -- which is why it
+// went unpressed until something was already lost. each section names the state
+// it owns, so a click cannot reach past its own row, and says whether it is
+// still where the page opened, which is what keeps its button dead until there
+// is something to undo.
+//
+// the mark itself, drawn rather than typed for the same reason as every other
+// icon here: a unicode undo glyph leans on the font having it, and several do
+// not. an arrow back to the dot it started at, because that is what it does --
+// the round arrow it replaces is the reload glyph, and nothing on this page
+// reloads anything.
+const RESET_ICON = '<svg class="icon" viewBox="0 0 16 16" width="14" height="14"'
+  + ' aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.55"'
+  + ' stroke-linecap="round" stroke-linejoin="round">'
+  + '<path d="M2.6 8.2a5.5 5.5 0 1 0 5.4-5.7A6 6 0 0 0 3.6 4.3L2 6"/>'
+  + '<path d="M2 2.4v3.6h3.6"/>'
+  + '<circle cx="8.2" cy="8.2" r="1.05" fill="currentColor" stroke="none"/></svg>';
+
+const SECTIONS = {
+  hardware: {
+    label: 'hardware',
+    about: 'vram, reserve, context, the ceiling and floor of the quant ladder,'
+      + ' bandwidth and compute',
+    at: () => Object.entries(DEFAULT_HARDWARE)
+      .every(([k, v]) => HW_GET[k]() === v),
+    back: () => setHardware({...DEFAULT_HARDWARE}),
+    keys: () => Object.keys(DEFAULT_HARDWARE),
+  },
+  ranking: {
+    label: 'ranking',
+    about: 'every factor weight, `quant adjusted`, and which of the weighting'
+      + ' sidebar\'s groups are shut',
+    at: () => sameWeights(W, D.weights) && effective
+      && sameSet(folded, allGroups()),
+    back: () => {
+      W = {...D.weights};
+      folded = new Set(allGroups());
+      setEffective(true);
+    },
+    keys: () => ['weights', 'weights-base', 'effective', 'folded'],
+  },
+  filter: {
+    label: 'filter',
+    about: 'the search, the shape, the runtimes, the licences, the publishers,'
+      + ' the kind chips and `best quant`',
+    at: () => !filters.q && !filters.pubs.size && !filters.minParams
+      && !filters.maxParams
+      && sameSet(filters.mods, DEFAULT_MODALITIES)
+      && sameSet(filters.flags, DEFAULT_FLAGS)
+      && sameSet(filters.engines, DEFAULT_ENGINES)
+      && sameSet(filters.licenses, DEFAULT_LICENSES) && !allQuants,
+    back: () => {
+      filters = {...filters, q: '', kind: new Set(), pubs: new Set(),
+                 mods: new Set(DEFAULT_MODALITIES), flags: new Set(DEFAULT_FLAGS),
+                 engines: new Set(DEFAULT_ENGINES),
+                 licenses: new Set(DEFAULT_LICENSES),
+                 minParams: null, maxParams: null};
+      setLadder(false);
+    },
+    keys: () => ['filters', 'allQuants'],
+  },
+  table: {
+    label: 'table',
+    about: 'which columns are on, their order, and what the rows are sorted by',
+    at: () => sameSet(hidden, defaultHidden())
+      && order.join(',') === defaultOrder().join(',')
+      && sort.k === DEFAULT_SORT.k && sort.dir === DEFAULT_SORT.dir,
+    back: () => {
+      hidden = defaultHidden();
+      order = defaultOrder();
+      sort = {...DEFAULT_SORT};
+    },
+    keys: () => ['hidden', 'order', 'sort'],
+  },
+};
+
+const rowResetBtn = k => document.querySelector('#reset-' + k);
+
+// each row's button, once: the mark, what it puts back, and the click. the dead
+// state is not the native `disabled` property but data-off, because a disabled
+// button takes no pointer events and the hover text is the only thing that can
+// say why pressing it would do nothing.
+function wireResets() {
+  Object.entries(SECTIONS).forEach(([k, s]) => {
+    const btn = rowResetBtn(k);
+    btn.innerHTML = RESET_ICON;
+    btn.onclick = () => resetSection(k);
+  });
+  syncResets();
+}
+
+// live or dead, every row. drawn with the table because that is the last thing
+// every row touches on its way to the screen, so the buttons cannot disagree
+// with the state the table was just built from.
+function syncResets() {
+  Object.entries(SECTIONS).forEach(([k, s]) => {
+    const btn = rowResetBtn(k), at = s.at();
+    btn.dataset.off = at ? '1' : '0';
+    btn.setAttribute('aria-disabled', at ? 'true' : 'false');
+    btn.dataset.help = `reset the ${s.label} controls and nothing else -- ${s.about}`
+      + ' -- back to what this page opens on'
+      + (at ? '. nothing in this row has moved, so there is nothing to undo' : '');
+  });
+}
+
+function resetSection(k) {
+  const s = SECTIONS[k];
+  // a dead button is dead: redrawing as though something had been put back is
+  // how a control starts lying about what it does
+  if (s.at()) return;
+  s.back();
+  // the stored copy goes with it, or the next load restores what was just put
+  // back. setEffective and setLadder write theirs on the way, so this is last.
+  s.keys().forEach(key => localStorage.removeItem('aim-' + key));
   // drawChrome rebuilds every control from the state just restored, which is
   // also how the default filters come back pressed rather than looking off
-  drawChrome(); setLadder(false); drawFactors(); drawColumns(); drawTable();
-};
+  drawChrome(); drawFactors(); drawColumns(); drawTable();
+}
 document.querySelector('#m-close').onclick = closeModel;
 document.querySelector('#modal').onclick = e => { if (e.target.id === 'modal') closeModel(); };
 addEventListener('keydown', e => {

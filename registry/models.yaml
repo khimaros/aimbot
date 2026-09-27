@@ -7349,10 +7349,12 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
-  # the diarization weights. these transcribe nothing: they are what --diarize
-  # loads BESIDE an ASR model, so they carry `crispasr.diarize` instead of a
-  # backend and are `kind: diarize` rather than speech. a consumer selects an
-  # ASR model and points the diarizer flags at these.
+  # the diarization weights. none of them transcribes and all of them are
+  # `kind: diarize` rather than speech, but they are not one kind of thing: two
+  # are a weight `--diarize` loads BESIDE an ASR model, which is why they carry
+  # `crispasr.diarize` instead of a backend, and one IS the diarization and goes
+  # where a method goes. a consumer selects an ASR model and points the diarizer
+  # flags at these.
   #
   # no `modalities` on any of them. the vocabulary is text/image/video/audio/
   # embeddings and none of it describes a speaker timeline; an embedder could
@@ -7484,6 +7486,66 @@ models:
       role: diarize-embedder
     crispasr:
       diarize: embedder
+  nvidia/Nemotron-3-Diarization:
+    kind: diarize
+    name:
+      short: nemotron-3-diar
+      match: nemotron[\s-]*3[\s-]*diar
+    notes: >-
+      the whole diarization in one network rather than a part of one: a
+      streaming sortformer that emits a speaker-activity probability for up to
+      eight speakers every 10 ms, speakers numbered in order of first
+      appearance, which is how it resolves speaker permutation without a
+      clusterer to argue with {card}. the eight is the ceiling and not an
+      estimate. it is english-trained, and crispasr's own row for the method
+      says there is no speaker count to estimate, which is the other half of
+      the eight: the ceiling is the shape of the network. nothing here has
+      measured what `diarize_max_speakers` does to it -- the pyannote entry has
+      the two observations, and both are about a clusterer this is not.
+
+      this is the entry that is NOT a weight loaded beside a method. crispasr
+      reaches it with `--diarize-method sortformer` and `--diarize-model auto`,
+      which fetches nvidia's own q8_0 gguf: no embedder, no clustering, no
+      speaker count to pin, and nothing else to load alongside it. that is the
+      difference from the two above, where `--diarize-embedder` and
+      `--sherpa-segment-model` name one part each.
+
+      the card's numbers, against `diar_streaming_sortformer_4spk-v2.1` at the
+      same 30.4 s offline buffer and a 0 s collar: DIHARD III full DER 12.73
+      for 19.09, AMI SDM 11.14 for 21.42, NOTSOFAR1 SC 11.00 for 30.49 and
+      CALLHOME 9.10 for 10.32 {card}. big gains on far-field meeting audio and
+      small ones on two telephone channels, which is the shape of it. they are
+      the publisher's numbers on the publisher's harness, and the card is up
+      front that the references for AMI, AliMeeting and NOTSOFAR1 are
+      forced-alignment rather than the datasets' own segment annotations.
+
+      the port is measured rather than assumed: crispasr reports exact parity
+      with transformers on every p > 0.5 decision at F32 and F16, and nvidia's
+      q8_0 agreeing on 99.91 to 99.99 % of them. what it does NOT report is a
+      DER comparable to the card's, and the gap is not a contradiction -- the
+      port quotes 29.5 % frame DER on a 60 s AMI clip at 10 ms with no collar
+      and overlap scored, where the card quotes 11.14 % on a different test set
+      under a different scorer. two measurements, not one number going bad.
+
+      offline it is cheap and live it is not. on a 4-vcpu cpu the q8_0 takes
+      6.6 s for that 60 s clip and 105 s in the `low_latency` streaming preset,
+      because every chunk re-encodes the whole speaker cache plus fifo to score
+      nine new frames. a Tesla T4 does the same clip in 0.27 s offline and 3.8 s
+      live at F32. so the offline path is a batch diarizer on a cpu and a live
+      session wants a GPU, which is what the three latency presets are for: they
+      trade look-ahead for compute and none of them makes a cpu keep up.
+    quants:
+    - repo: nvidia/Nemotron-3-Diarization
+      quant: Q8_0
+      file: Nemotron-3-Diarization.q8_0.gguf
+      role: diarize-model
+      note: the file `--diarize-model auto` downloads, in the gguf layout
+        NeMo-Speech.cpp and crispasr read rather than one llama.cpp knows. the
+        repo carries the safetensors and a `.nemo` for the python path beside
+        it and this is the only gguf in it {card}, which is why the rung is
+        pinned by file as well as by type
+    crispasr:
+      diarize: end-to-end
   # SERVED, and it was the entry written to watch for this. the highest-scoring
   # open-weights TTS artificial analysis has -- 1214.89 elo, above
   # fish-s2-pro's 1127.78 -- and until crispasr shipped `bt2-tts` nothing here

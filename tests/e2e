@@ -70,6 +70,13 @@ const model = short => {
 const presetOptions = () =>
   [...document.querySelector('#preset').innerHTML.matchAll(/value="([^"]*)"/g)]
     .map(m => m[1]).filter(Boolean);
+// the reset button of one section, and whether the page currently reads it as
+// dead. the page marks it in data-off rather than the native `disabled`
+// property, because a disabled button takes no pointer events and would lose
+// the hover text that says why there is nothing to undo.
+const resetBtn = k => document.querySelector('#reset-' + k);
+const resetOff = k => resetBtn(k).dataset.off === '1';
+const clickReset = k => resetBtn(k).onclick();
 """
 
 RUNNER = """
@@ -1345,6 +1352,242 @@ test('the copy button puts its icon back, not its text', () => {
      'what gets restored is the markup, not the empty string its text reads as');
 });
 
+test('every row has its own reset, and none of them start live', () => {
+  RESET();
+  eq(Object.keys(SECTIONS).join(','), 'hardware,ranking,filter,table',
+     'the four rows the page can put back');
+  Object.keys(SECTIONS).forEach(k => ok(resetOff(k), k + ' starts with nothing to undo'));
+
+  // and each one wakes for its own row: the button beside the hardware selects
+  // has no business knowing what the weighting is set to
+  setHardware({budget: 64});
+  ok(!resetOff('hardware'), 'the box wakes its own button');
+  ['ranking', 'filter', 'table'].forEach(k => ok(resetOff(k), k + ' stays dead'));
+
+  const facet = Object.keys(D.weights)[0];
+  W = {...W, [facet]: 0.99};
+  reweigh();
+  ok(!resetOff('ranking'), 'a moved weight wakes the ranking');
+  filters.mods = new Set(['t2a']);
+  drawTable();
+  ok(!resetOff('filter'), 'a picked modality wakes the filter');
+  hidden.add('size');      // one that starts on screen: hiding a column that
+  drawTable();             // the registry already hides is not a change
+  ok(!resetOff('table'), 'a hidden column wakes the table');
+  RESET();
+});
+
+test('a row reset puts back its own row and nothing else', () => {
+  RESET();
+  const facet = Object.keys(D.weights)[0];
+  setHardware({budget: 64, reserve: 2});
+  W = {...D.weights, [facet]: 0.99};
+  reweigh();
+  filters.mods = new Set(['t2a']);
+  hidden.add('size');
+  sort = {k: 'name', dir: 1};
+  drawTable();
+
+  clickReset('hardware');
+  eq(budget, DEFAULT_HARDWARE.budget, 'the box went back');
+  eq(reserve, DEFAULT_HARDWARE.reserve, 'all of it');
+  eq(JSON.parse(localStorage.getItem('aim-budget')), null,
+     'and the stored copy goes with it');
+  ok(localStorage.getItem('aim-weights') !== null,
+     'nothing else storage is touched');
+  ok(hidden.has('size'), 'the columns stayed where they were put');
+  eq(sort.k, 'name', 'and the sort');
+  eq(W[facet], 0.99, 'and the weighting');
+  eq([...filters.mods].join(','), 't2a', 'and the filter');
+
+  clickReset('filter');
+  eq([...filters.mods].join(','), [...DEFAULT_MODALITIES].join(','), 'the filter went back');
+  eq(budget, DEFAULT_HARDWARE.budget, 'the box is still at its defaults');
+  ok(hidden.has('size'), 'the columns are still theirs');
+  eq(W[facet], 0.99, 'the weighting is still custom');
+
+  clickReset('ranking');
+  eq(W[facet], D.weights[facet], 'the weighting went back');
+  eq(hidden.has('size'), true, 'the columns still are');
+
+  clickReset('table');
+  eq(hidden.has('size'), false, 'the column came back');
+  eq(sort.k, 'score', 'and the sort');
+  eq(budget, DEFAULT_HARDWARE.budget, 'and nothing else moved');
+  eq(W[facet], D.weights[facet], 'not even the ranking that was already home');
+
+  RESET();
+});
+
+test('a dead reset does nothing at all', () => {
+  RESET();
+  setHardware({budget: 64});
+  clickReset('hardware');
+  clickReset('filter');     // dead: the filter is at its defaults
+  eq(budget, DEFAULT_HARDWARE.budget, 'the live one landed');
+  eq([...filters.mods].join(','), [...DEFAULT_MODALITIES].join(','), 'and the dead one touched nothing');
+  // a row with nothing to undo stays dead when it is clicked: it is not a
+  // button that happens to be empty, it is a control saying there is nothing here
+  RESET();
+  setHardware({budget: 64});
+  ok(resetOff('table'), 'the table has nothing to undo');
+  clickReset('table');
+  eq(budget, 64, 'and clicking it left the box alone');
+  RESET();
+});
+
+test('every reset says what it puts back, and one is not enough', () => {
+  RESET();
+  // one button per row, in the order the rows come, and no button for the
+  // whole page: clearing the weights along with the columns is why nobody
+  // pressed the old one until they had lost something they wanted
+  const btns = [...PAGE_HTML.matchAll(/id="reset-(\w+)" aria-label="([^"]+)"/g)]
+    .map(m => m[1] + ':' + m[2]);
+  eq(btns.join(','), 'hardware:reset hardware,ranking:reset ranking,'
+     + 'filter:reset filter,table:reset table', 'one named button per row');
+  ok(!/id="reset"/.test(PAGE_HTML), 'the single button for everything is gone');
+
+  // each hover names its own row and then the settings that belong to it, so
+  // the mark is a mark and not a riddle -- and the mark itself is drawn, not a
+  // unicode glyph the font may not have
+  Object.keys(SECTIONS).forEach(k => {
+    const help = resetBtn(k).dataset.help || '';
+    ok(help.includes(SECTIONS[k].label), k + ' says which row: ' + help);
+    ok(help.includes(SECTIONS[k].about), k + ' says what is in it: ' + help);
+    ok(html('#reset-' + k).includes('<svg'), k + ' draws its mark');
+  });
+  RESET();
+});
+
+// a reset in front of its label reads as part of the label, and the label is
+// the thing saying what the row IS. the undo belongs at the END of the row it
+// undoes, where the eye arrives after it has read the controls.
+test('each reset sits at the end of the row it belongs to', () => {
+  const rows = [...PAGE_HTML.matchAll(/<div class="(controls|tablebar)">([\s\S]*?)<\/div>/g)];
+  eq(rows.length, 4, 'three control rows and the table bar');
+  rows.forEach(([, cls, body]) => {
+    const at = body.search(/class="rst"/);
+    ok(at > 0, cls + ' carries its own reset');
+    const after = body.slice(body.indexOf('</button>', at) + 9);
+    const late = after.match(/<(select|input|button)\b/);
+    eq(late, null, cls + ': nothing may be set after its reset'
+      + (late ? ', found <' + late[1] : ''));
+  });
+});
+
+test('an empty table names the filters that emptied it, widest first', () => {
+  RESET();
+  filters.q = 'zzzz not a model name';
+  drawTable();
+  eq(visible().length, 0, 'nothing matches the search');
+  const body = html('#rows');
+  ok(body.includes('nothing matches'), 'the plain words are still there');
+
+  // and under them, the account: every filter that is on, with what it hides on
+  // its own, because "nothing matches" alone tells a reader nothing about which
+  // of the five controls to go back to
+  const named = [...body.matchAll(/data-clear="([\w-]+)"/g)].map(m => m[1]);
+  eq(named[0], 'search', 'the search hides all 202, so it leads: ' + named);
+  // the default licence filter holds every tier, so it hides nothing and gets no
+  // line. the two that DO bite by default are the shape and the fit.
+  ok(named.includes('modality'), 'the shape filter is named: ' + named);
+  ok(named.includes('fits'), 'and the vram fit: ' + named);
+  eq(named.includes('license'), false, 'the licence filter is not: ' + named);
+  ok(/hides \d+ of \d+/.test(body), 'each with its own count: ' + body);
+
+  // one click per line, and it clears exactly that filter
+  clearFilter('search');
+  eq(filters.q, '', 'clearing it from the empty state works');
+  ok(visible().length > 0, 'and the table comes back');
+  RESET();
+  filters.q = '';
+});
+
+test('relaxing one named filter leaves the others where they were set', () => {
+  RESET();
+  filters.engines = new Set(['crispasr']);
+  filters.q = 'zzzz';
+  drawTable();
+  clearFilter('search');
+  eq([...filters.engines].join(','), 'crispasr', 'the runtime filter survives');
+  eq(JSON.parse(localStorage.getItem('aim-filters')).engines.join(','), 'crispasr',
+     'and so does its stored copy');
+  RESET();
+  filters.q = '';
+});
+
+test('clearing the shape filter says so in the select rather than lying', () => {
+  RESET();
+  const before = visible().length;
+  eq(html('#modality').includes('every shape'), false,
+     'the shapes cover the roster, so there is no all-shapes row to pick');
+
+  clearFilter('modality');
+  ok(visible().length > before, 'clearing the shape lets rows back: ' + before);
+  const after = html('#modality');
+  ok(after.includes('every shape'), 'and the select says what is picked: ' + after);
+  ok(/value=""[^>]*selected/.test(after), 'on the row that means it');
+
+  // and it is a state you can leave, which is the other half of a control that
+  // admits it: picking a shape from here filters again like any other time
+  document.querySelector('#modality').onchange({target: {value: 'a2t'}});
+  eq([...filters.mods].join(','), 'a2t', 'a shape can be picked again');
+  RESET();
+});
+
+test('a filter with nothing on it is never offered as the culprit', () => {
+  RESET();
+  filters.q = '';
+  drawTable();
+  ok(visible().length > 0, 'the default view is not empty');
+  eq(html('#rows').includes('data-clear'), false,
+     'so no relaxation is offered over the rows');
+  // a filter that is OFF, or one that is on but hiding nothing, has no line:
+  // the account is only ever about what took models away
+  filters.engines = new Set();
+  filters.q = 'zzzz';
+  drawTable();
+  const named = [...html('#rows').matchAll(/data-clear="([\w-]+)"/g)].map(m => m[1]);
+  ok(named.includes('search'), 'the search is still named: ' + named);
+  eq(named.includes('engine'), false, 'the runtime filter turned off is not: ' + named);
+  RESET();
+  filters.q = '';
+});
+
+test('the columns control reads as columns, and says how many are on', () => {
+  RESET();
+  // the glyph is static markup, so it is read off the shipped page: the dom
+  // stub hands out empty elements, and asserting on one would pass on nothing
+  const btn = /id="cols-btn"[\s\S]*?<\/button>/.exec(PAGE_HTML)[0];
+  // THE GLYPH: it was a gear, which is the generic SETTINGS mark and says
+  // nothing about columns. three bars, two of them on and one still an
+  // outline, is the offer the panel actually makes, and it survives 14px
+  // where a little table grid does not.
+  ok(btn.includes('aria-label="columns"'), 'and a screen reader still gets the name');
+  ok(!btn.includes('<circle'), 'the gear is gone: ' + btn);
+  const bars = (btn.match(/<rect/g) || []).length;
+  ok(bars >= 3, 'one bar per column position, got ' + bars);
+  const on = (btn.match(/fill="currentColor"/g) || []).length;
+  ok(on >= 1 && on < bars, 'some bars on, one still off (' + on + '/' + bars + ')');
+
+  // THE STATE: no glyph can show that 7 of 25 columns are on screen, and the
+  // button read the same whether the table was full or emptied by hand
+  const count = s => {
+    const m = /(?<n>\d+) of (?<all>\d+)/.exec(s || '');
+    return m && [+m.groups.n, +m.groups.all];
+  };
+  const help = document.querySelector('#cols-btn').dataset.help;
+  ok(count(help), 'the hover counts what is on screen: ' + help);
+  eq(count(help).join('/'), [shown().length, order.length].join('/'),
+     'and the pair it gives is the table\'s');
+  hidden.add('repo');
+  drawColumns();
+  eq(count(document.querySelector('#cols-btn').dataset.help).join('/'),
+     [shown().length, order.length].join('/'),
+     'and the count follows the table, not the defaults');
+  RESET();
+});
+
 test('a share link that is garbage does not blank the page', () => {
   // a truncated paste is the common case and must not throw during boot
   eq(hashState(), null, 'no fragment is null, not a crash');
@@ -1494,6 +1737,30 @@ test('a modality with no models is not offered as a dead option', () => {
   }
   eq(html_.includes('all modalities'), false,
      'no `all modalities` row: the shapes cover the roster between them');
+});
+
+// a diarization weight comes in three shapes and the roster now holds all three:
+// an embedder feeding a clusterer, a segmenter saying only WHEN a voice changed,
+// and one network doing the whole job with no embedder and no clustering. the
+// third is distinguishable from the second only in the crispasr block, and a
+// reader deciding what to ask a server for needs exactly that difference.
+test('the diarization roster says which weights are a whole diarizer', () => {
+  RESET();
+  const roles = [...new Set(D.models.filter(m => m.kind === 'diarize')
+                                .map(m => m.crispasr.diarize))].sort();
+  ok(roles.includes('end-to-end'), 'an end-to-end diarizer is carried: ' + roles);
+
+  const n = model('nemotron-3-diar');
+  ok(n, 'nemotron 3 diarization is on the roster');
+  eq(n.publisher, 'nvidia', 'read from the team that trained it');
+  eq(n.crispasr.diarize, 'end-to-end', 'as the whole diarization, not a part');
+  const q = activeQuant(n);
+  ok(q && q.gib > 0, 'its rung resolves to a real file: ' + JSON.stringify(q));
+  eq(q.repo, 'nvidia/Nemotron-3-Diarization',
+     'and it is the file crispasr fetches, published by nvidia itself');
+  eq(n.license.tier, 'permissive', 'openmdw-1.1 permits commercial use');
+  eq(Object.keys(n.modalities || {}).length, 0,
+     'and it claims no shape: a speaker timeline is not text out');
 });
 
 test('boots against the real data.json and draws every row', () => {
@@ -1712,7 +1979,14 @@ test('a model is read from the weights, not from a conversion of them', () => {
     // gguf and mlx and no unpacked weights at all, so the alternative to this
     // key is not a better one, it is dropping the model
     if (m.gguf_only) return;
-    const conversions = new Set(m.quants.map(q => q.repo));
+    // a repo whose NAME says it is a conversion. nvidia publishes its own gguf
+    // inside the weights repo, so nemotron-3-diar's key and its pinned file
+    // share a repo and nothing is lost by it -- publisher, card and facts all
+    // still resolve to the team that trained the thing. what this rule is
+    // against is keying on somebody ELSE'S conversion, and the name is how the
+    // registry tells the two apart, so the test reads it the same way.
+    const conversion = s => /[-_.](gguf|ggml)$/i.test(s);
+    const conversions = new Set(m.quants.map(q => q.repo).filter(conversion));
     ok(!conversions.has(m.repo), m.short + ' is keyed on ' + m.repo
       + ', which is one of its own quants');
   });
@@ -2661,6 +2935,19 @@ test('the hardware row is remembered', () => {
   setHardware({budget: 64, bandwidth: 546});
   eq(JSON.parse(localStorage.getItem('aim-budget')), 64, 'vram');
   eq(JSON.parse(localStorage.getItem('aim-bandwidth')), 546, 'bandwidth');
+  RESET();
+});
+
+test('the reserve menu offers the notch a dedicated box pays for', () => {
+  RESET();
+  const picks = [...html('#reserve').matchAll(/value="(\d+)"/g)].map(m => +m[1]);
+  // 1 gib is the box that runs nothing else: no resident os to speak of and no
+  // igpu aperture, just llama.cpp's compute buffers, which is a notch below the
+  // 2 the strix measurement rounds up to and below what the menu used to offer
+  ok(picks.includes(1), 'a 1 gib reserve is on the menu: ' + picks.join(', '));
+  ok(html('#reserve').includes('>1 gib reserve<'), 'and it says so on the row');
+  setHardware({budget: 24, reserve: 1});
+  near(usable(), 23, 1e-9, 'picking it leaves the box minus 1 gib');
   RESET();
 });
 

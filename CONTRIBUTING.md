@@ -345,6 +345,13 @@ and the role disagree. the kind is what stops a 24mb speaker embedder with no
 chat template and no transcript being counted in the speech roster and offered
 to a consumer as something to serve.
 
+the third role is `end-to-end`, and it is not a weight loaded beside a method:
+Nemotron-3-Diarization IS the diarization, one network emitting a speaker
+probability per 10 ms, which crispasr loads with `--diarize-model` where the
+other two are loaded with `--diarize-embedder` and `--sherpa-segment-model`. a
+role vocabulary of `embedder` and `segmentation` forces that entry to claim it
+is a part of a pipeline it replaces.
+
 **ids are per modality.** `resolve-ids` runs a speech model against the speech
 boards and a text model against the text leaderboards, and never crosses them.
 every speech key space is filtered to rows the source itself calls open weights,

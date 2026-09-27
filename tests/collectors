@@ -3455,6 +3455,12 @@ models:
     quants:
     - {repo: Q/Weird-GGUF, quant: Q8_0}
     crispasr: {diarize: transcription}
+  Fixture/Whole-Diarizer:
+    kind: diarize
+    name: {short: whole diarizer}
+    quants:
+    - {repo: Q/Whole-Diarizer-GGUF, quant: Q8_0}
+    crispasr: {diarize: end-to-end}
   Fixture/Fine:
     kind: speech
     name: {short: fine}
@@ -3498,6 +3504,13 @@ def a_crispasr_block_names_one_use_for_a_weight():
        "an invented role is an error, got %r" % where.get("Fixture/Unknown-Role"))
     eq("Fixture/Fine" in where, False,
        "a backend on a speech model is the ordinary case and must not fire")
+    # the third role is not an invention: foxnose needs an embedder and pyannote
+    # needs a segmenter, and Nemotron-3-Diarization is neither because it is the
+    # whole diarization -- one network emitting a speaker probability per 10 ms,
+    # loaded by `--diarize-model` rather than beside a method
+    eq("Fixture/Whole-Diarizer" in where, False,
+       "a diarizer that IS the pipeline is a role, got %r"
+       % where.get("Fixture/Whole-Diarizer"))
 
 
 POST_REGISTRY = """version: 1

@@ -290,6 +290,14 @@ role disagree. without the separate kind a 24mb speaker embedder with no chat
 template and no transcript sits in the speech roster looking like something to
 serve.
 
+the third role is `end-to-end`, and Nemotron-3-Diarization holds it because it
+is not a part of a pipeline -- it is the pipeline, one network emitting a
+speaker probability per 10 ms for up to eight speakers, which crispasr loads
+with `--diarize-model` where the other two come in through `--diarize-embedder`
+and `--sherpa-segment-model`. nvidia ships the gguf itself, inside the weights
+repo, so this is the one entry whose key and whose pinned file are the same
+repo: there is no conversion to prefer and nobody else's name to key on.
+
 coverage is reported in both directions, because they answer different
 questions. `models-validate --speech` says which of the roster's speech models a
 crispasr backend carries; `fetch-crispasr --report` says which of the ~119
@@ -411,7 +419,7 @@ any to text (72)      everything that emits text: those plus the transcribers
 text to text (27)     vision to text (34)      these two partition the above
 audio to text (20)    transcription, whether or not that is all it does
 text to audio (8)     text to image (5)        text to embeddings (1)
-diarization (3)       weights --diarize loads beside an ASR model
+diarization (4)       weights --diarize loads, beside a model or in place of one
 decisions (1)         a probability per option, from one pass, nothing generated
 ```
 
@@ -586,6 +594,32 @@ either, which is why build-tables budgets 105 gib of a 128gb box rather than
 128. a repo publishing no file sizes reads as unknown rather than as too big,
 because that is a measurement this corpus does not have.
 
+**an empty table names the filters that emptied it.** "nothing matches" is
+true and useless, so the empty cell runs the account the terminal prints: every
+filter that is on, with how many models it hides measured ALONE against the
+whole registry, widest first, and every line is the button that takes that one
+filter off and leaves the others where they are. per-filter-alone means they
+overlap and never add up, and the cell says so; a filter that is off, or on but
+hiding nothing -- the licence menu holding all three tiers -- gets no line. the
+account is `filterCounts()`, one implementation behind both the page and the cli
+footer, which is also how two filters the footer had been leaving out came in:
+the search text and the publisher list, the two likeliest to empty a table
+single-handedly. clearing the shape filter from there lands the reader on
+`every shape`, which the dropdown now admits to showing, because a select that
+reads `language models` over a table holding every shape is a control lying
+about the rows under it.
+
+**every row of controls resets itself, and only itself.** the page shipped with
+one button that cleared the weighting along with the columns and the box, so
+wanting the ranking back meant taking the whole table back with it, and it went
+unpressed until something was already lost. there is a mark at the END of each
+row now -- hardware, ranking, filter, and the table's own after the columns --
+ahead of the label it read as part of the label, and the label is the thing that
+says what a row is. each one stays dead until that row has moved, which is also
+how you see where you changed something. dead means dim and `aria-disabled` rather than the
+browser's own `disabled`, because a disabled button takes no hover and the hover
+is the only thing that can say there is nothing to undo.
+
 the column is called `quant` and it always names one. it used to be `fits quant`
 and to read `does not fit` where no rung cleared the budget, which put a verdict
 about memory in the column that says which file the row is scored at -- and said
@@ -683,7 +717,7 @@ gguf without a flag, and puts both in front of the reader rather than deciding
 for them.
 
 **how fast it will be.** `tg t/s` for generation and `pp t/s` for prefill are
-off by default and live under the gear. bandwidth and compute are two hardware
+off by default and live under the columns control. bandwidth and compute are two hardware
 settings because they are two limits -- generating a token reads every active
 weight, prefilling multiplies through them -- and the spec sheet figures are
 discounted to what a box does rather than what it claims. switching a column on

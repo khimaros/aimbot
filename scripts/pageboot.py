@@ -50,6 +50,10 @@ global.addEventListener = () => {};
 global.innerWidth = 1200;
 global.innerHeight = 800;
 global.CSS = {escape: s => s};
+// the shipped markup, for the few things no code path writes: a static glyph
+// in the toolbar is the same bytes a browser is handed, and the stub above
+// never parses html, so a case that wants to read it reads this
+const PAGE_HTML = require('fs').readFileSync(%s, 'utf8');
 const PAYLOAD = require('fs').readFileSync(%s, 'utf8');
 // the registry's own count, so "the payload is the whole registry" stays the
 // assertion when a model is added rather than becoming a number to bump
@@ -84,7 +88,8 @@ def page_script():
 def run(body, probe, keep=False, capture=False):
     """Write STUB + the page + `body` to `probe` and run it under node."""
     with open(probe, "w") as f:
-        f.write(STUB % (json.dumps(DATA), registry_models()) + page_script() + body)
+        f.write(STUB % (json.dumps(PAGE), json.dumps(DATA), registry_models())
+                + page_script() + body)
     try:
         return subprocess.run(["node", probe], cwd=ROOT,
                               stdout=subprocess.PIPE if capture else None, text=True)

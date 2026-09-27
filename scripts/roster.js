@@ -21,9 +21,12 @@
 
 let D = null;                       // the payload
 let W = {};                         // facet key -> weight
-// the page overwrites this from localStorage once it boots; a module with no
-// browser around it starts where a first-time reader starts
-let sort = {k: 'score', dir: -1};
+// where the table starts: the best score first, which is the question the page
+// is built to answer. the page overwrites this from localStorage once it
+// boots, and its own table reset puts it back, so it is a constant here rather
+// than a literal at two sites that can disagree.
+const DEFAULT_SORT = {k: 'score', dir: -1};
+let sort = {...DEFAULT_SORT};
 // the runtimes selected by default: the three that load most of this roster and
 // that a reader here is likely to have built. it is a multi-select rather than
 // one choice because a model can have two -- whisper's files load in crispasr
@@ -1107,7 +1110,8 @@ const MODALITIES = [
   {k: 'decide', t: 'decisions', test: m => m.kind === 'decision',
    help: 'typed decisions in one forward pass: a probability per option and nothing generated. jevbench rates them, and its calibration axis is the only one here'},
   {k: 'diar', t: 'diarization', test: m => m.kind === 'diarize',
-   help: 'weights --diarize loads beside an ASR model. they transcribe nothing and are scored by nobody'},
+   help: 'weights --diarize loads, beside an ASR model or in place of a whole '
+     + 'method. they transcribe nothing and are scored by nobody'},
   // `post` and `translate` carry no `modalities` block on purpose, the way the
   // diarizers do not: they run inside crispasr's pipeline rather than being
   // served, and declaring text in / text out would put a punctuation restorer
@@ -1397,6 +1401,14 @@ const vocabulary = () => ({
 // so rather than imply an accounting.
 const filterCounts = () => {
   const total = D.models.length, out = [];
+  // the search text and the publisher list are filters too, and this list used
+  // to leave both out -- the search being the worse omission, since a query
+  // nothing matches is the one case where the account is the whole answer
+  if (filters.q.trim()) {
+    const q = filters.q.trim().toLowerCase();
+    out.push({k: 'search', t: filters.q.trim(),
+              dropped: total - D.models.filter(m => haystack(m).includes(q)).length});
+  }
   if (filters.mods.size) {
     out.push({k: 'modality', t: [...filters.mods].join(','),
               dropped: total - D.models.filter(inModality).length});
@@ -1405,6 +1417,11 @@ const filterCounts = () => {
     out.push({k: 'engine', t: [...filters.engines].join(','),
               dropped: total - D.models.filter(
                 m => (m.engines || []).some(e => filters.engines.has(e))).length});
+  }
+  if (filters.pubs.size) {
+    out.push({k: 'publisher', t: [...filters.pubs].join(','),
+              dropped: total - D.models.filter(
+                m => filters.pubs.has(m.publisher)).length});
   }
   if (filters.licenses.size) {
     out.push({k: 'license', t: [...filters.licenses].join(','),
@@ -1418,7 +1435,9 @@ const filterCounts = () => {
                 dropped: total - D.models.filter(flag.test).length});
     }
   });
-  return out;
+  // widest first. the reader asking is the one with an empty table, and what
+  // they want is the biggest lever, not the order the controls happen to sit in
+  return out.sort((a, b) => b.dropped - a.dropped);
 };
 
 // the current hardware, for a caller that wants to print what it answered under
