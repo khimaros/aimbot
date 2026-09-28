@@ -41,15 +41,7 @@ header nav { display: flex; gap: 1rem; font-size: 11px; }
   font: inherit; font-size: 12px; color: var(--fg); background: var(--panel);
   border: 1px solid var(--line); padding: .3rem .55rem; min-width: 15rem;
 }
-.controls input[type=number] {
-  font: inherit; font-size: 12px; color: var(--fg); background: var(--panel);
-  border: 1px solid var(--line); padding: .3rem .4rem; width: 3.9rem;
-  /* no spinners: two of them in a row of 11px controls is noise, and the step
-     they would move -- 0.1b -- is not a step through this roster */
-  appearance: textfield;
-}
-.controls input[type=number]::-webkit-inner-spin-button { appearance: none; }
-.controls .band { display: inline-flex; align-items: center; gap: .25rem; }
+
 .controls input[type=search]:focus { outline: none; border-color: var(--faint); }
 .controls select {
   font: inherit; font-size: 11px; color: var(--dim); background: var(--panel);
@@ -286,7 +278,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
        what quality means and what the table shows, then which models. -->
   <div class="controls">
     <span class="lbl">hardware</span>
-    <select id="ram" data-help="how much memory the box has. the quant column, the sizes and the retention behind `quant adjusted` all switch to the largest quant that fits in what is left after the reserve and the kv cache">
+    <select id="ram" data-help="how much memory the box has. the quant column, the sizes and the retention behind `quant adjusted` all switch to the best quant that fits in what is left after the reserve and the kv cache, searched across every publisher of the model rather than one">
       <option value="">any vram</option>
     </select>
     <select id="reserve" data-help="held back for everything that is not weights or kv cache: compute buffers, the host, whatever else is resident. 12 gib is the default because a nominal 128 gib box does not have 128 to give -- measured on the strix halo this document is scoped to, the firmware and igpu aperture take 2.9, the resident os about 5.9, and llama.cpp's compute buffers about 2, which is 10.9 before a single weight is loaded"></select>
@@ -311,11 +303,8 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <span class="ms" id="engines-ms" data-help="which runtimes you have. a model is shown when one of the selected ones loads its weights: llama.cpp comes from the architecture it merged, crispasr from the backend the registry names, the rest are written on the model because a gguf does not say what wrote it. picking none is no filter at all, which is also how the entries nothing here runs become visible"></span>
     <span class="ms" id="license-ms" data-help="which licence tiers to show, as registry/licenses.yaml classifies the licence each repo declares. permissive is commercial use, redistribution and derivatives with at most attribution asked back; restricted adds a condition you would have to hold your own product against; unknown is nobody here having read those terms, which is the absence of a claim rather than a bad one. it opens on permissive alone, so the other two are a tick away with their counts beside them. picking none is every licence"></span>
     <span class="ms" id="pub-ms" data-help="narrow to the publishers you care about, taken from the repo owner. picking none is every publisher"></span>
-    <span class="band" id="pband" data-help="how big a model is, in billions of parameters, which is a different question from whether it fits: a 27b at q1_0 fits a small box and is not a small model. either end alone is a band and neither end is no band at all. the models that publish no parameter count leave once a bound is set, since an unknown size cannot be said to be inside a band"><input
-      type="number" id="pmin" min="0" step="0.1" placeholder="min b" aria-label="smallest model, in billions"><span
-      class="faint">-</span><input type="number" id="pmax" min="0" step="0.1" placeholder="max b" aria-label="largest model, in billions"></span>
     <span id="kinds" class="chips"></span>
-    <button id="ladder-btn" aria-pressed="true" data-help="on, one row per model, reading the largest quant that fits. off, one row per quant on offer, so the whole size ladder is on screen -- every rung with `fits vram` off, and the ones that fit with it on -- and with quant adjusted each row scores at its own bits per weight, which merges every model and every quant into one ranked list of what you could actually run. it stays inside the repo the registry pins, since crossing to another build changes more than the size">best quant</button>
+    <button id="ladder-btn" aria-pressed="true" data-help="on, one row per model, reading the largest quant that fits. off, one row per quant on offer, so the whole size ladder is on screen -- every rung with `fits vram` off, and the ones that fit with it on -- and with quant adjusted each row scores at its own bits per weight, which merges every model and every quant into one ranked list of what you could actually run. the rungs come from every publisher of the model and are ordered by bits per weight rather than by file size, because a second repo's packing means the bigger file is not automatically the better one">best quant</button>
     <button class="rst" id="reset-filter" aria-label="reset filter"></button>
   </div>
 
@@ -476,7 +465,7 @@ function emptyTable() {
 // `text to image` in the dropdown rather than the key it is stored under.
 const RELAX_KIND = {search: 'the search', modality: 'the shape',
                     engine: 'the runtime', license: 'the licence',
-                    publisher: 'the publisher', params: 'the size band'};
+                    publisher: 'the publisher'};
 const relaxLabel = f => {
   if (FLAGS.some(x => x.k === f.k)) return f.t;
   // the multi-selects store a comma-joined list, which is what the payload's
@@ -495,7 +484,6 @@ const relaxLabel = f => {
 // a filter the state no longer holds is worse than a repaint.
 function clearFilter(k) {
   if (k === 'search') filters.q = '';
-  else if (k === 'params') { filters.minParams = null; filters.maxParams = null; }
   else if (k === 'modality') filters.mods = new Set();
   else if (k === 'engine') filters.engines = new Set();
   else if (k === 'license') filters.licenses = new Set();
@@ -1062,7 +1050,8 @@ function methodology() {
     + src('scripts/build-viewer QUANT_EVIDENCE', 'scripts/build-viewer'))
 
   + sec('memory',
-    '<p>the quant shown is the largest that fits in the vram you set, once the'
+    '<p>the quant shown is the best that fits in the vram you set, out of every'
+    + ' publisher of the model, once the'
     + ' reserve and the context\'s kv cache are paid for. the cache is computed'
     + ' from each model\'s own attention geometry rather than a rule of thumb:'
     + ' full-attention layers hold a cache that grows with context, windowed'
@@ -1831,17 +1820,25 @@ function typeChips(types) {
 function discountBlock(m, q) {
   if (!q) return '';
   const c = curveFor(m, q);
-  const kept = retention(q.bpw || 16, m, q);
+  const kept = retention(rungBpw(q) || 16, m, q);
   const scored = readQuant(m);
   const rows = [];
-  rows.push(['rung', `${esc(q.quant)}${q.bpw ? ` at ${num(q.bpw, 2)} bits per weight` : ''}`
+  // the bits this page judges the rung by, which is the tensor table where that
+  // table and the file size disagree; naming both is the only way the row and
+  // the retention under it stay readable when they differ
+  const bits = rungBpw(q);
+  const shown = !bits ? '' : `at ${num(bits, 2)} bits per weight`
+    + (bits === q.bpw ? '' : ` <span class="faint">by its tensor table, which is`
+      + ` what the ceiling and the retention read; the file over the parameter`
+      + ` count says ${num(q.bpw, 2)}</span>`);
+  rows.push(['rung', `${esc(q.quant)}${shown ? ` ${shown}` : ''}`
     + ' <span class="dim">-- ' + (!activeQuant(m)
       ? 'nothing here fits your budget, so the table ranks its smallest rung'
       : scored.repo === q.repo && scored.quant === q.quant
-        ? 'also the rung the table ranks, the largest that fits your budget'
+        ? 'also the rung the table ranks, the best that fits your budget'
         : `the table ranks ${esc(scored.quant)}`
           + (scored.repo !== q.repo ? ` out of ${esc(scored.repo)}` : '')
-          + ', the largest that fits your budget') + '</span>']);
+          + ', the best that fits your budget') + '</span>']);
   rows.push(['curve', c.kind === 'measured'
     ? `<b>measured on these files</b> &middot; ${esc(c.src.metric)}`
       + ` &middot; ${esc(c.src.quant_repo || '')}`
@@ -2022,7 +2019,8 @@ const repoRow = (m, repo, counts) => pickRow('repo', repoChoices(m).map(r =>
   // about a base repo vllm is going to load whole
   + (counts
     ? ` <span class="faint">${quantChoices(m).filter(c => c.repo === r).length}`
-      + (repoSpeculates(m, r) ? ' ' + esc((m.speculative || {}).type || 'drafts') : '')
+      + (quantChoices(m).some(c => c.repo === r && rungDrafts(c))
+        ? ' ' + esc((m.speculative || {}).type || 'drafts') : '')
       + '</span>' : '')
   + '</button>').join(''));
 
@@ -2030,7 +2028,7 @@ const quantRow = (m, repo, pick) =>
   pickRow('quant', quantChoices(m).filter(c => c.repo === repo).map(c =>
     `<button class="chip${pick && c.quant === pick.quant ? ' on' : ''}"`
     + ` data-pick-repo="${esc(c.repo)}" data-pick-quant="${esc(c.quant)}"`
-    + ` data-help="${c.gib ? `${gib(c.gib)} gib${c.bpw ? `, ${c.bpw} bits per weight` : ''}`
+    + ` data-help="${c.gib ? `${gib(c.gib)} gib${rungBpw(c) ? `, ${rungBpw(c)} bits per weight` : ''}`
       : 'this repo publishes no file sizes'}">`
     + `${esc(c.quant)}</button>`).join(''));
 
@@ -2195,15 +2193,19 @@ function repoChoices(m) {
 function pickedRepo(m) {
   const repos = repoChoices(m);
   if (repos.includes(ops.repo)) return ops.repo;
-  const pref = defaultRepo(m);
+  // the row's own rung, so the modal opens on what was clicked rather than on a
+  // repo the table stopped reading from
+  const pref = (activeQuant(m) || {}).repo;
   return repos.includes(pref) ? pref : repos[0] || null;
 }
 
 function pickedQuant(m) {
   const repo = pickedRepo(m);
   const inRepo = quantChoices(m).filter(c => c.repo === repo);
+  // having been TOLD which repo, the best rung of that one is the answer: the
+  // fit's own test over the set the reader narrowed by hand
   return inRepo.find(c => c.quant === ops.quant)
-    || bestInRepo(m, repo) || inRepo.find(c => c.pinned) || inRepo[0] || null;
+    || bestOf(m, inRepo) || inRepo.find(c => c.pinned) || inRepo[0] || null;
 }
 
 function pickedProfile(m) {
@@ -2546,10 +2548,6 @@ function drawChrome() {
   drawFilterMenus();
 
   document.querySelector('#q').value = filters.q;
-  // the band is drawn from the state like the search is, so a reset of the row
-  // repaints the inputs rather than leaving them showing a filter gone
-  document.querySelector('#pmin').value = filters.minParams ?? '';
-  document.querySelector('#pmax').value = filters.maxParams ?? '';
 
   const n = Object.keys(D.provenance).length;
   document.querySelector('#foot').innerHTML =
@@ -2590,13 +2588,11 @@ function shareState() {
                 mods: [...filters.mods].sort(),
                 flags: [...filters.flags].sort(),
                 engines: [...filters.engines].sort(),
-                licenses: [...filters.licenses].sort(),
-                minParams: filters.minParams, maxParams: filters.maxParams},
+                licenses: [...filters.licenses].sort()},
                {q: '', pubs: [], mods: [...DEFAULT_MODALITIES].sort(),
                 flags: [...DEFAULT_FLAGS].sort(),
                 engines: [...DEFAULT_ENGINES].sort(),
-                licenses: [...DEFAULT_LICENSES].sort(),
-                minParams: null, maxParams: null}),
+                licenses: [...DEFAULT_LICENSES].sort()}),
   };
   if (sort.k !== 'score' || sort.dir !== -1) st.sort = sort;
   if (JSON.stringify([...hidden].sort()) !== JSON.stringify([...DEFAULT_HIDDEN].sort()))
@@ -2672,8 +2668,6 @@ function applyState(st) {
     if (st.f.flags) filters.flags = new Set(knownFlags(st.f.flags));
     if (st.f.engines) filters.engines = new Set(st.f.engines);
     if (st.f.licenses) filters.licenses = new Set(knownLicenses(st.f.licenses));
-    if (st.f.minParams != null) filters.minParams = st.f.minParams;
-    if (st.f.maxParams != null) filters.maxParams = st.f.maxParams;
     saveFilters();
     // a shared link can land on a different shape than the one booted, and the
     // score is computed under a shape
@@ -2781,8 +2775,6 @@ function boot(payload) {
   const f = store.get('filters', null);
   filters = {...filters,
              q: (f || {}).q || '', kind: new Set(),
-             minParams: (f || {}).minParams ?? null,
-             maxParams: (f || {}).maxParams ?? null,
              pubs: new Set(f && f.pubs ? f.pubs : f && f.pub ? [f.pub] : []),
              mods: new Set(f && f.mods ? f.mods
                            : f && f.mod ? [f.mod] : DEFAULT_MODALITIES),
@@ -2873,8 +2865,7 @@ function setHardware(patch) {
 });
 
 function saveFilters() {
-  store.set('filters', {q: filters.q, minParams: filters.minParams,
-                        maxParams: filters.maxParams, pubs: [...filters.pubs],
+  store.set('filters', {q: filters.q, pubs: [...filters.pubs],
                         mods: [...filters.mods],
                         flags: [...filters.flags],
                         engines: [...filters.engines],
@@ -2886,18 +2877,6 @@ document.querySelector('#q').oninput = e => {
   saveFilters();
   drawTable();
 };
-// two bounds rather than a slider, because the two things a reader asks are "at
-// most this small" and "the big end only" and a one-handle control answers
-// neither. an empty end is no bound, which is why a cleared input reads as null
-// rather than as zero -- zero would be a bound, and nothing would survive it.
-[['#pmin', 'minParams'], ['#pmax', 'maxParams']].forEach(([sel, key]) => {
-  document.querySelector(sel).oninput = e => {
-    const v = parseFloat(e.target.value);
-    filters[key] = v >= 0 && Number.isFinite(v) ? v : null;
-    saveFilters();
-    drawTable();
-  };
-});
 document.querySelector('#preset').onchange = e => {
   if (!e.target.value) return;
   W = PRESETS[e.target.value].w();

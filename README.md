@@ -587,24 +587,13 @@ report. picking one replaces the weights outright, and moving any slider off a
 stance turns the dropdown to `custom ranking`.
 
 **how much memory you have.** pick a vram size and a reserve, and the quant
-column, the sizes and the retention behind `effective` all switch to the
-largest quant that fits in what is left. the reserve is not decoration: the kv
+column, the sizes and the retention behind `effective` all switch to the best
+quant that fits in what is left -- searched across every publisher of that
+model, not one. the reserve is not decoration: the kv
 cache grows with the context you serve at and the compute buffers are not free
 either, which is why build-tables budgets 105 gib of a 128gb box rather than
 128. a repo publishing no file sizes reads as unknown rather than as too big,
 because that is a measurement this corpus does not have.
-
-**the size band is about the model, `fits vram` is about the box.** the filter row
-takes a parameter range in billions -- `1` to `4` is the 4b class -- and it is a
-different question from whether a model fits: a 27b at q1_0 fits a 16gib box and is
-not a small model, and 32 entries publish no parameter count at all, so they leave
-once a bound is set rather than heading "the small models" for nobody having
-counted them. either end alone is a band and neither end is one. it is filter-row
-state like the search beside it -- stored, put back by that row's reset, named by
-the empty table when it is what emptied it, and carried in the link. the terminal
-has taken `--min-params` and `--max-params` for it since before the page had any
-control for it, which is how it stayed unreachable: the filter, its reset and its
-account all worked, and nothing set it.
 
 **an empty table names the filters that emptied it.** "nothing matches" is
 true and useless, so the empty cell runs the account the terminal prints: every
@@ -664,24 +653,59 @@ memory" rather than a two-bit version of the model.
 is. releasing it swaps one row per model for one row per rung, using the same
 test the fit uses so the two can never disagree about what fits -- 38 models
 become 753 rows on a 128gb box at q8. clicking any row opens the modal on the
-quant that row was showing, out of that row's repo, rather than on whatever the
-modal would have chosen for itself.
+quant that row was showing, rather than on whatever the modal would have chosen
+for itself. the rungs are ordered best-quality-first, which across publishers
+means by bits per weight rather than by file size: apetersson's 84.2 gib IQ4_XS
+sits above a 94.2 gib Q4_K_XL of the same model, because the bytes that file
+spends on an n-gram table are not weights.
 
 what that ladder lists follows `fits vram` rather than outliving it. with the
 filter on it is the rungs that fit, on the same test the row uses. with it off
-the page is not being asked what fits, so the ladder is every rung the repo
+the page is not being asked what fits, so the ladder is every rung anyone
 publishes -- qwen3.8 flash next runs from UD-IQ1_S at 67.56 gib through BF16 at
-329.72 rather than stopping at the UD-Q4_K_XL at 103.69 a 128gb box pays for.
-the row still READS the largest that fits, since one row names one quant.
+329.72 rather than stopping at the UD-Q4_K_XL at 103.69 a 128gb box pays for,
+and mimo v2.6 flash shows three publishers on one ladder. the row still READS
+one rung, since one row names one quant.
 
-that last part needed the table and the modal to agree on which repo a model is
-read from, and they did not. where a model ships two builds the registry says
-which one can speculate -- qwen3.6-27b's plain repo is marked
-`speculative: false`, and only the `-MTP-` build carries the nextn head the
-declared drafter needs -- but the table was taking whichever repo happened to be
-listed first. both sides now share one rule, so qwen3.6-27b and qwen3.6-35b-a3b
-read from their MTP builds everywhere. a test asserts the two never disagree
-again, for every model. with `quant adjusted` on, each row
+what that search replaced is a decision worth naming, because it used to be made
+first and silently: pick a repo, then pick a quant inside it, where the repo was
+whichever the registry listed first -- except where a second build was the one
+marked as able to speculate. making a fact about who packaged a model decide
+what a box can run turned out to be worth four bugs and a missing model:
+
+- mimo v2.6 flash publishes 117.55 gib at ggml-org and 91.91 at TrevorJS, and a
+  128gb box was being told it does not fit. it is on the page now.
+- qwen3.5-27b's `-MTP-` build carries the nextn head and 0.05 more bits per
+  weight than the plain build, and the plain one was what the row read because
+  it came first in the file.
+- lfm2.5 2.6b folds its drafter into the file, so the file is 9.45 bits per
+  parameter by size and 4.70 by its own tensor table: a q6 ceiling hid a Q4_0
+  that clears it, and the quality curve credited the target with the head's
+  precision. there is one quality number now, taken from the tensor table where
+  that table and the file size disagree by more than a packer's rounding, and it
+  is the same number the ladder is ordered by, that the ceiling and floor test,
+  and that the retention curve discounts by. bytes that are not the target's
+  weights are out of it because it counts elements rather than bytes.
+- a rung's drafter follows the rung, so `draft gib` and the speed-up describe
+  what is on screen: a build shipped without the head bills no drafter and
+  drafts at x1.
+- and a rung is a candidate only if a runtime this page has selected can load
+  it, which is the rule the operate tab already applied when picking a file.
+  crispasr reads the conversion whose backend the registry names and loads the
+  others without complaint into noise, so a 1.23 gib qwen3-tts file no engine
+  here can serve is not on the list however many bits it holds. where the
+  registry says nothing about who would load a rung, silence is not a failure:
+  three speech entries name no engine at all, and an empty pool answers a memory
+  question with `unknown` rather than with `does not fit`.
+
+the registry's `quants:` list still says which publishers a model has at all --
+that is the curation layer, and what llama-tools reads -- but it no longer
+chooses among them. at the default 128gb box three of 74 rows read a different
+file than before: mimo arriving, qwen3.5-27b moving to its MTP build, and
+qwen3.8 flash next taking agentionai's Q5_K_XL at 5.37 bits over unsloth's
+Q4_K_XL at 4.95, which is the shape of what the old rule discarded.
+
+with `quant adjusted` on, each row
 scores at its own bits per weight, which turns the sorted table into one merged
 list of what you could actually run. it is worth reading for where it is FLAT:
 qwen3.8 27b holds the same quality from UD-Q8_K_XL at 29.3 gib down to

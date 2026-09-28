@@ -27,11 +27,7 @@ DATA = os.path.join(ROOT, "docs", "data.json")
 STUB = """
 const nodes = {};
 const el = key => nodes[key] || (nodes[key] = {
-  style: {}, dataset: {}, children: [], _value: '', textContent: '', innerHTML: '',
-  // an input's value is a string because a dom says so: the page assigns a
-  // number to a numeric input and reads back the text a browser would hold
-  get value() { return this._value; },
-  set value(v) { this._value = String(v); },
+  style: {}, dataset: {}, children: [], value: '', textContent: '', innerHTML: '',
   classList: {add(){}, remove(){}, toggle(){}, contains(){return false}},
   setAttribute(){}, getAttribute(){return 'false'}, addEventListener(){},
   querySelector(s){ return el(key + ' ' + s); }, querySelectorAll(){ return []; },

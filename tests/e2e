@@ -232,7 +232,7 @@ test('the quant column names a rung when none of them fits', () => {
   filters.flags.delete('fits');
   const cell = col('quant').cell(m);
   eq(/does not fit/.test(cell), false, 'the cell names a rung: ' + cell);
-  const rungs = quantChoices(m).filter(c => c.repo === defaultRepo(m));
+  const rungs = quantChoices(m);
   const named = (cell.match(/<td[^>]*>([^<]+)/) || [])[1];
   ok(rungs.some(c => c.quant === named),
      'a rung of its own, got ' + named);
@@ -1389,72 +1389,10 @@ test('the address bar keeps up with the view without pressing share', () => {
   drawTable();
   eq(hashState().sort.k, 'name', 'so does the sort');
 
-  // the params band had never been in the link, so a link that looked exact
-  // opened on a wider table than the one the reader was looking at
-  filters.maxParams = 4;
-  drawTable();
-  const band = JSON.parse(JSON.stringify(hashState().f));
-  eq(band.maxParams, 4, 'the params band is in the fragment');
-  RESET();
-  applyState({f: band});
-  eq(filters.maxParams, 4, 'and a link puts the band back');
-
   RESET();
   sort = {...DEFAULT_SORT};
   drawTable();
   eq(location.hash, '', 'putting it all back empties the fragment again');
-});
-
-test('the size band is a control on the page, not only a cli flag', () => {
-  RESET();
-  // the stub hands out elements but binds no events, so the control's own
-  // handler is called the way the browser would call it
-  const setBand = (id, v) => {
-    const el = document.querySelector('#' + id);
-    el.value = v;
-    el.oninput({target: {value: v}});
-  };
-  const whole = rankedRows().length;
-  setBand('pmax', '4');
-  eq(filters.maxParams, 4, 'the control writes the band');
-  const small = rankedRows().length;
-  ok(small > 0 && small < whole,
-     'and the table narrows to the small end (' + small + ' of ' + whole + ')');
-
-  // it is filter-row state, so it wakes that row's reset and no other
-  ok(!resetOff('filter'), 'the filter row wakes for it');
-  ['hardware', 'ranking', 'table'].forEach(k => ok(resetOff(k), k + ' stays dead'));
-
-  // and an empty table says who emptied it. a band nobody is inside -- 400b at
-  // the bottom and 4b at the top -- is the case the account exists for
-  setBand('pmin', '400');
-  eq(rankedRows().length, 0, 'a band nothing is inside empties the table');
-  ok(html('#rows').includes('data-clear="params"'),
-     'the account names the band: ' + html('#rows'));
-  clearFilter('params');
-  eq(filters.minParams, null, 'relaxing puts the band down at the bottom');
-  eq(filters.maxParams, null, 'and at the top');
-  eq(rankedRows().length, whole, 'and the table is the whole roster again');
-
-  // the row's own reset clears the inputs and not only the state behind them,
-  // which is the rule every other control in the row holds to
-  setBand('pmax', '4');
-  clickReset('filter');
-  eq(document.querySelector('#pmax').value, '', 'the reset puts the control back too');
-
-  // and it is a stored filter like the search: a reload lands on the same band,
-  // with the control showing what the state says
-  setBand('pmin', '1');
-  setBand('pmax', '8');
-  booted = false;
-  boot(JSON.parse(PAYLOAD));
-  booted = true;
-  eq(filters.minParams, 1, 'a reload keeps the band');
-  eq(document.querySelector('#pmax').value, '8', 'and the control shows it');
-
-  setBand('pmin', '');
-  setBand('pmax', '');
-  RESET();
 });
 
 test('the copy button puts its icon back, not its text', () => {
@@ -2127,6 +2065,44 @@ test('the quant a tts row is read at is the one that actually loads', () => {
     ok(q.crispasr && q.crispasr.backend, m.short + ' carries its backend on that'
       + ' rung, got ' + JSON.stringify(q.crispasr));
   });
+});
+
+// the flat pool needs a gate, because `best` across publishers means a file
+// nobody can serve can win it. crispasr loads the conversion whose backend the
+// registry names and reads the others without complaint into noise, so a 1.23
+// gib qwen3-tts file holding 11.65 bits per parameter is not a candidate for a
+// crispasr view at all -- it beat the 0.9 gib one this test used to pin by bits.
+// and the gate's opposite: three speech entries name no engine, and the registry
+// saying nothing is not the registry saying `no`.
+test('a rung no selected runtime loads is off the ladder, however many bits it holds', () => {
+  RESET();
+  const m = model('qwen3-tts-0.6b-customvoice');
+  ok(filters.engines.has('crispasr'), 'this view runs crispasr');
+  const other = quantChoices(m).filter(c => !c.repo.startsWith('cstr/'));
+  ok(other.length, 'a second publisher offers the same model');
+  ok(!other.some(c => (c.crispasr || {}).backend),
+     'and no rung of theirs names a crispasr backend');
+  fittingQuants(m).forEach(c => ok(!other.some(o => o.repo === c.repo),
+    'so none of theirs is on the ladder, got ' + c.repo));
+  eq(activeQuant(m).repo, 'cstr/qwen3-tts-0.6b-customvoice-GGUF',
+     'the row reads the conversion crispasr names');
+  // no runtime picked is no runtime filter: which engine loads a file is not a
+  // question the page was asked, so nothing may be excluded for answering it
+  filters.engines = new Set();
+  ok(fittingQuants(m).some(c => other.some(o => o.repo === c.repo)),
+     'with no runtime selected the other publisher is back on the ladder');
+});
+
+test('an entry nothing here is known to load is unknown, not too big', () => {
+  RESET();
+  const m = model('fish-s2-pro');
+  ok(!m.engines.length, 'the registry names no engine for it');
+  ok(quantChoices(m).length > 3, 'and it publishes rungs, so it is not an empty entry');
+  eq(rungPool(m).length, 0, 'nothing in the pool is loadable');
+  ok(fitsBudget(m), 'the memory question is not answered with a no');
+  ok(col('quant').cell(m).includes('no runtime'), 'the cell says which kind of empty');
+  ok(!col('quant').cell(m).includes('does not fit'), 'and never blames the box');
+  ok(!visible().some(v => v.repo === m.repo), 'the runtime filter is what hides it');
 });
 
 // a kind with no chip is unreachable: `post` and `translate` carry no
@@ -2895,7 +2871,7 @@ test('the quant ladder is one row per quant that fits', () => {
   ok(qs.length > 1, 'glimmer publishes a ladder');
   eq(qs[0].quant, activeQuant(m).quant, 'it leads with the one the fit picks');
   for (let i = 1; i < qs.length; i++) {
-    ok(qs[i].gib < qs[i - 1].gib, 'largest first');
+    ok(rungBpw(qs[i]) <= rungBpw(qs[i - 1]), 'best first');
   }
   setLadder(false);
 });
@@ -3038,14 +3014,100 @@ test('a publisher label is not mistaken for a fork type', () => {
      + marked.map(c => c.quant).join(', '));
 });
 
-test('a model whose plain build cannot speculate is read from the one that can', () => {
+test('a build without the head does not draft, and drafting does not buy quality', () => {
   RESET();
   // the registry marks qwen3.6-27b's plain repo `speculative: false`; only the
-  // -MTP- build carries the nextn head the declared drafter needs
+  // -MTP- build carries the nextn head the declared drafter needs. that used to
+  // be a fact about which REPO a model was read from, which is a decision about
+  // a rung rather than about a repo, and it is now read off the rung
   const m = model('qwen3.6 27b');
-  ok(defaultRepo(m).includes('MTP'), 'reads from the speculating build, got '
-    + defaultRepo(m));
-  ok(repoSpeculates(m, defaultRepo(m)), 'and that build can actually draft');
+  const plain = quantChoices(m).find(c => c.speculative === false);
+  ok(plain, 'a rung says it cannot draft');
+  eq(draftYield(m, plain), 1, 'and no yield is claimed for it');
+  ok(activeQuant(m).speculative !== false,
+     'and the row is read from a build that does: ' + activeQuant(m).repo);
+
+  // and drafting is output-preserving -- the target verifies every token it is
+  // offered -- so it costs memory and buys speed and is charged for neither in
+  // the quality discount. the draft's BYTES matter only where they sit inside
+  // the file being scored, which is what `rungBpw` reads off the tensor table
+  eq(modelRetention(m) > 0.9, true, 'the head is not discounted as a loss of bits');
+});
+
+test('the ladder and the fit read every repo the registry lists', () => {
+  RESET();
+  // the pool has always been every repo the registry names -- `quantChoices`
+  // expands each entry's listing -- and what was scoped to one repo was the
+  // CHOICE. mimo v2.6 flash is the case that showed: three publishers, and the
+  // only rung small enough for the default box belongs to the last of them, so
+  // the fit searched the first repo listed, found nothing under 117.55 gib, and
+  // reported the model as too big for a box with room for it
+  const m = model('mimo v2.6 flash');
+  filters.flags.delete('fits');
+  const qs = fittingQuants(m);
+  const repos = new Set(qs.map(q => q.repo));
+  eq(repos.size, new Set(m.quants.map(q => q.repo)).size,
+     'every repo the registry lists is on the ladder: ' + [...repos].join(' '));
+  ok(qs.some(q => /^TrevorJS\//.test(q.repo) && q.quant === 'IQ2_XS'),
+     'TrevorJS iq2_xs is on it');
+  ok(qs.some(q => /^AesSedai\//.test(q.repo)), 'and AesSedai is too');
+
+  // and the expanded table gives a row to each of them, which is what
+  // `aimbot --all --ladder` was failing to print
+  setLadder(true);
+  const rows = expand(visible()).filter(r => r.repo === m.repo);
+  eq(new Set(rows.map(r => activeQuant(r).repo)).size, repos.size,
+     'one expanded row per repo, not one per model');
+  setLadder(false);
+  RESET();
+});
+
+test('a model is judged by the smallest rung anybody publishes', () => {
+  RESET();
+  const m = model('mimo v2.6 flash');
+  const room = usable() - kvGib(m, wantCtx(m)) - draftGib(m);
+  const smallest = quantChoices(m).filter(c => c.gib)
+    .reduce((a, b) => (b.gib < a.gib ? b : a));
+  ok(smallest.gib < room, 'a rung of it fits the box, at ' + smallest.gib
+    + ' of ' + room.toFixed(1) + ' gib of room');
+  ok(visible().some(v => v.repo === m.repo),
+     'so it is on screen, and `fits vram` is not telling a lie about it');
+  eq(activeQuant(m).repo, smallest.repo, 'and the row reads that rung: '
+    + activeQuant(m).repo + ' ' + activeQuant(m).quant);
+  RESET();
+});
+
+test('one number says what a rung is worth, to the fit and to the discount', () => {
+  RESET();
+  filters.flags.delete('fits');
+  // lfm2.5 2.6b publishes a Q4_0 with a drafter folded into the file: 2.97 gib
+  // of 4.70-bit weights, which is a bigger FILE than its Q6_K and a worse
+  // QUANT. size ordered it second from the top of the ladder, and the ceiling
+  // and the discount already read the tensor table, so the three of them
+  // disagreed about what the rung was worth
+  const m = model('lfm2.5 2.6b');
+  const qs = fittingQuants(m);
+  const q4 = qs.find(q => q.quant === 'Q4_0'), q6 = qs.find(q => q.quant === 'Q6_K');
+  ok(q4 && q6, 'both rungs are on the ladder');
+  ok(q4.gib > q6.gib, 'the q4 file is the bigger of the two');
+  ok(qs.indexOf(q4) > qs.indexOf(q6), 'and the ladder ranks it below anyway');
+
+  // THE ONE CALCULATION: what the ordering reads is what the ceiling reads is
+  // what the quality discount reads. minicpm-v 4.6 is where it bites hardest --
+  // its parameter count names a vision encoder the gguf ships as a separate
+  // file, so every rung reads 1.7x too cheap on the derived figure
+  for (let i = 1; i < qs.length; i++) {
+    ok(rungBpw(qs[i]) <= rungBpw(qs[i - 1]),
+       'best first on the one number: ' + qs[i - 1].quant + ' ' + rungBpw(qs[i - 1])
+       + ' then ' + qs[i].quant + ' ' + rungBpw(qs[i]));
+  }
+  const v = model('minicpm-v 4.6'), vq = activeQuant(v);
+  near(modelRetention(v), retention(rungBpw(vq), v, vq), 1e-9,
+       'the discount reads the tensor-table bits');
+  ok(modelRetention(v) > retention(vq.bpw, v, vq) + 1e-6,
+     'which is better news than the derived figure gave: ' + modelRetention(v)
+     + ' against ' + retention(vq.bpw, v, vq));
+  RESET();
 });
 
 test('the hardware row is remembered', () => {

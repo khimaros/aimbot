@@ -181,7 +181,7 @@ function affordable(m, all, room) {
   }
   const ceiling = capBpw(), bottom = floorBpw();
   return fits.filter(c => !c.bpw
-    || (ladderBpw(c) <= ceiling && ladderBpw(c) >= bottom));
+    || (rungBpw(c) <= ceiling && rungBpw(c) >= bottom));
 }
 
 // how far `bpw` may sit from the tensor table before it stops being evidence.
@@ -189,13 +189,23 @@ function affordable(m, all, room) {
 // handful where the denominator is wrong rather than about rounding.
 const BPW_DISAGREE = 0.25;
 
-// the bits a ceiling should compare. `bpw` is file size over `params_total_b`,
-// and that denominator describes the CHECKPOINT rather than the file: minicpm-v
-// 4.6 counts its vision encoder, ships it as a separate mmproj and the language
-// half alone in the gguf, so every rung reads 1.7x too cheap and its F16 sat
-// under a q8 ceiling at a computed 9.32 against a true 16. lfm2.5 2.6b is the
-// same fault inverted -- a bundled drafter inflates the file, its Q4_0 reads
-// 9.45 against a true 4.70, and a q6 ceiling hid a rung that clears it.
+// WHAT A RUNG IS WORTH, in one number, because three questions ask it and were
+// being answered twice: which rung a row reads as, whether a rung clears the
+// ceiling and the floor, and how much of the model's quality survives the
+// quantization. they read the same bits per weight now, so the page cannot rank
+// a rung as its best offering and discount it as a worse one in the next column
+// -- and it cannot rank by file size at all, which is the other reason this had
+// to be one number: the pool spans publishers, and a bigger FILE stopped
+// meaning more bits the moment a second repo's packing entered the list.
+//
+// `bpw` is file size over `params_total_b`, and that denominator describes the
+// CHECKPOINT rather than the file: minicpm-v 4.6 counts its vision encoder,
+// ships it as a separate mmproj and the language half alone in the gguf, so
+// every rung reads 1.7x too cheap and its F16 sat under a q8 ceiling at a
+// computed 9.32 against a true 16. lfm2.5 2.6b is the same fault inverted -- a
+// drafter folded into the file inflates it, its Q4_0 reads 9.45 against a true
+// 4.70, and a q6 ceiling hid a rung that clears it while the quality curve
+// credited the target with the head's bits.
 //
 // where the tensor table disagrees it wins, because it counted what is in the
 // file. where they agree the nominal figure stands: the ceilings are calibrated
@@ -203,8 +213,27 @@ const BPW_DISAGREE = 0.25;
 // out of `max q4` on a 10% difference. reading the TAG instead is no fix
 // either -- gpt-oss ships mxfp4 under an F16 name at a true 4.48 bpw, which
 // belongs under a q8 ceiling and which a tag test would have excluded.
-const ladderBpw = c => c.realBpw
+//
+// bytes that are not the target's weights are excluded from this number by the
+// tensor table rather than by a discount of their own: speculative decoding is
+// output-preserving, so a drafter costs room and buys speed -- which is what
+// `draftGib` and `draftYield` are for -- and taking quality for it as well
+// would charge the same file twice.
+const rungBpw = c => c.realBpw && c.bpw
   && Math.abs(c.realBpw - c.bpw) / c.bpw > BPW_DISAGREE ? c.realBpw : c.bpw;
+
+// best first, on that number. two rungs worth the same bits are separated by
+// whether the build can draft -- equal quality and half the tokens per second
+// is not a tie -- then by the smaller download, then by repo so that the order
+// does not depend on which publisher's listing the size table happened to read
+// first. a rung with no bits figure at all -- a repo with no tensor table and no
+// parameter count -- ranks last rather than inventing a position.
+const byQuality = list => [...list].sort((a, b) =>
+  ((rungBpw(b) ?? -1) - (rungBpw(a) ?? -1))
+  || ((a.speculative === false ? 1 : 0) - (b.speculative === false ? 1 : 0))
+  || ((a.gib ?? Infinity) - (b.gib ?? Infinity))
+  || String(a.repo).localeCompare(String(b.repo))
+  || String(a.quant).localeCompare(String(b.quant)));
 
 // context to serve, and what its kv cache costs. the geometry comes from each
 // model's own config: full-attention layers hold a cache that grows with the
@@ -270,7 +299,7 @@ const wantCtx = m => m.facts.context_native
 function fitContext(m) {
   const q = activeQuant(m), a = m.facts.attn, native = m.facts.context_native;
   if (!budget || !q || !q.gib || !a || !native) return null;
-  const room = (usable() - q.gib - draftGib(m)) * (1024 ** 3);
+  const room = (usable() - q.gib - draftGib(m, q)) * (1024 ** 3);
   if (room <= 0) return 0;
   const perTok = kvPerToken(a);
   const windowed = a.window ? a.other_layers * a.window * perTok : 0;
@@ -310,34 +339,39 @@ function quantChoices(m) {
   return [...seen.values()];
 }
 
-// whether serving from this repo can speculate at all. the capability is a
-// property of the GGUF rather than of the model: `draft-mtp` needs the nextn
-// head, which qwen ships only in the `-MTP-GGUF` build, so the plain repo of
-// the same model cannot draft however the registry describes the model.
-const repoSpeculates = (m, repo) =>
-  !!((m.speculative || {}).type || (m.speculative || {}).draft_repo)
-  && quantChoices(m).some(c => c.repo === repo && c.speculative !== false);
+// whether a rung can draft at all. the capability is a property of the GGUF
+// rather than of the model: `draft-mtp` needs the nextn head, which qwen ships
+// only in the `-MTP-GGUF` build, so the plain build of the same model cannot
+// draft however the model entry describes the method. it used to be answered
+// about a REPO, which made choosing a build a decision about which of several
+// repos to read a model from at all; it is a fact about the file.
+const rungDrafts = c => c.speculative !== false;
 
-// which quant this model is being READ as. with no budget that is the one the
-// registry pins; with one it is the largest that fits, which is the question
-// somebody with 128gb is actually asking. the search stays inside the pinned
-// quant's repo -- crossing to the -MTP- build changes whether it can speculate
-// at all, and that is a choice rather than a size.
-// the biggest quant in one repo that clears the vram budget and the ceiling and
-// floor set on the main page. the modal opens on this rather than on whatever
-// the registry pinned, so what you read there matches the row you clicked.
-function bestInRepo(m, repo) {
-  const all = quantChoices(m).filter(c => c.repo === repo);
-  const pinned = all.find(c => c.pinned) || all[0] || null;
-  // no sizes for this repo is not the same answer as nothing fits. hy3's
-  // publisher lists no file sizes, and reporting it as too big would be a
-  // measurement this repo does not have
-  if (!budget || !all.some(c => c.gib)) return pinned;
+// which rung this model is being READ as: the best-quality one whose footprint
+// fits, out of every rung the registry lists for the model. the pool has always
+// been the whole list -- `quantChoices` expands each entry's published files --
+// and what used to be scoped to one repo was only the CHOICE, which is why a
+// model could be reported as too big for a box with room for it: mimo v2.6 flash
+// publishes 117.55 gib at its first-listed repo and 91.91 at its last, and the
+// search stopped at the first.
+//
+// the registry's own rung still answers the two cases where nothing can be
+// chosen from: no budget, and a repo publishing no file sizes (hy3), where
+// reporting it as too big would be a measurement this repo does not have.
+//
+// over whatever set the caller hands it, which is the whole pool for the fit and
+// one repo's rungs once a reader has narrowed the choice by hand on the operate
+// tab. same test either way, so the two cannot disagree about what fits.
+function bestOf(m, all) {
+  if (!all.length) return null;
+  if (!budget || !all.some(c => c.gib)) return all.find(c => c.pinned) || all[0] || null;
   if (!reaches(m)) return null;
   const room = usable() - kvGib(m, wantCtx(m)) - draftGib(m);
-  const fits = affordable(m, all, room).sort((a, b) => a.gib - b.gib);
-  return fits.length ? fits[fits.length - 1] : null;
+  const fits = affordable(m, all, room);
+  return fits.length ? byQuality(fits)[0] : null;
 }
+
+const bestRung = m => bestOf(m, rungPool(m));
 
 // --- speculative decoding ----------------------------------------------------
 //
@@ -361,36 +395,67 @@ const DRAFT_ACCEPT = 0.55;
 // carries the head, so the quant already paid; gemma, deepseek and glimmer
 // ship a sidecar, so it is added here and comes out of the vram budget.
 const draftKind = m => (m.speculative || {}).type || '';
-const draftGib = m => ((m.speculative || {}).draft || {}).gib || 0;
+// `q` is the rung being charged: a build shipped without the head has no
+// drafter to keep resident, and billing it for one both wastes the room and
+// hides a rung that fits without it. left off, the charge is the declared
+// sidecar -- the answer while the choice of rung is still open, which is the
+// fit and the ladder, and never the row a reader is looking at.
+const draftGib = (m, q) => q && !rungDrafts(q)
+  ? 0 : ((m.speculative || {}).draft || {}).gib || 0;
 
 // what drafting yields, wherever the vendor ships a drafter. the read cost of
 // the draft pass itself is NOT modelled -- for a head of half a gib beside 30
 // of weights that is noise, for deepseek's 10gib dspark it is not -- so this
 // is an upper bound, tightest where the drafter is smallest.
-function draftYield(m) {
+function draftYield(m, q = activeQuant(m)) {
   const n = (m.speculative || {}).n_max;
-  if (!draftKind(m)) return 1;
+  if (!draftKind(m) || (q && !rungDrafts(q))) return 1;
   let out = 1, p = 1;
   for (let k = 0; k < (n || 3); k++) { p *= DRAFT_ACCEPT; out += p; }
   return out;
 }
 
-// which repo a model is READ from, in the table and in the modal alike. where a
-// model ships two builds the registry says which can speculate -- qwen3.6-27b's
-// plain repo is marked `speculative: false` and only the -MTP- one carries the
-// nextn head -- so taking whichever happened to be listed first threw that away
-// and made the row disagree with the modal it opened.
-const defaultRepo = m => {
-  const repos = [...new Set(quantChoices(m).map(c => c.repo))];
-  return repos.find(r => repoSpeculates(m, r)) || repos[0] || null;
-};
+// which RUNTIMES load one rung. the model's engines answer wherever the rung
+// says nothing of its own, and there is one place a rung does speak: crispasr
+// reads the conversion whose backend the registry names and loads the others
+// WITHOUT complaint, into noise -- cstr's qwen3-tts conversion and ours
+// namespace their metadata differently and ship different codec tensor counts.
+// so once any sibling declares a backend, the rungs that do not are not
+// crispasr files, and a view whose runtimes are crispasr has no business
+// ranking one. where nothing distinguishes them, they are all candidates.
+//
+// the rule is the operate tab's repo picker's, lifted to where the fit can use
+// it: a rung no selected runtime loads never failed the fit, and ranking it at
+// all is answering with a file nobody can serve. it is what made a 1.23 gib
+// qwen3-tts file beat the 0.9 gib one crispasr loads -- more bits per parameter
+// by its own tensor table, and no engine on the roster that reads it.
+const crispasrNamed = m => quantChoices(m).some(c => (c.crispasr || {}).backend);
+function rungEngines(m, c, named) {
+  const out = new Set(c.engine || []);
+  if ((c.crispasr || {}).backend) out.add('crispasr');
+  else if (named) (m.engines || []).forEach(e => { if (e !== 'crispasr') out.add(e); });
+  else { if ((m.crispasr || {}).backend) out.add('crispasr');
+         (m.engines || []).forEach(e => out.add(e)); }
+  return out;
+}
 
-// which quant a ROW is being read as. an expanded row carries its own; a model
-// row asks for the largest that fits.
-const activeQuant = m => m._q !== undefined ? m._q : bestInRepo(m, defaultRepo(m));
+// the pool the choice is made from: every rung the registry lists that one of
+// the runtimes this view has selected can actually load. no runtime picked is
+// no runtime filter, which is also how the entries nothing here runs stay.
+function rungPool(m) {
+  const all = quantChoices(m);
+  if (!filters.engines.size) return all;
+  const named = crispasrNamed(m);
+  return all.filter(c => [...rungEngines(m, c, named)]
+    .some(e => filters.engines.has(e)));
+}
+
+// which rung a ROW is being read as. an expanded row carries its own; a model
+// row asks for the best that fits.
+const activeQuant = m => m._q !== undefined ? m._q : bestRung(m);
 
 // the rung a row NAMES when the fit has no answer. where no rung clears the
-// budget the smallest one the repo publishes is what the quant, gib and bpw
+// budget the smallest rung anyone publishes is what the quant, gib and bpw
 // columns read, because a cell saying `does not fit` answers `fits vram` from a
 // column about which file the row is about -- and said it loudest when that
 // filter was switched off, to somebody who had just said they were not asking.
@@ -406,7 +471,7 @@ const activeQuant = m => m._q !== undefined ? m._q : bestInRepo(m, defaultRepo(m
 const readQuant = m => activeQuant(m) || smallestRung(m);
 
 function smallestRung(m) {
-  const all = quantChoices(m).filter(c => c.repo === defaultRepo(m));
+  const all = rungPool(m);
   const sized = all.filter(c => c.gib);
   // a repo that publishes no sizes has not failed to be small, and its pinned
   // rung is the answer that does not invent a measurement
@@ -418,7 +483,12 @@ function smallestRung(m) {
 // `no` states something the data does not. it passes here, and the runtime
 // filter, which is the one that means unservable, is what hides it. `fits vram`
 // is on by default, so getting this wrong makes those entries unreachable.
-const fitsBudget = m => !budget || !m.quants.length || !!activeQuant(m);
+// and the same answer is owed to an entry no selected runtime loads at all:
+// three of the speech roster name no engine anybody has written down, so their
+// pool is empty the moment a runtime is picked, and "does not fit" would be a
+// claim about memory backed by a fact about runtimes.
+const fitsBudget = m => !budget || !m.quants.length || !rungPool(m).length
+  || !!activeQuant(m);
 
 // what goes after the colon in `repo:TAG`, which llama.cpp resolves against a
 // type name or a filename. the type where the rung has one, the filename where
@@ -432,31 +502,32 @@ const hfTag = q => (q.quant || q.file);
 // answer to which quant fits.
 const quantAuthor = q => (q.repo || '').split('/')[0];
 
-// every quant of the pinned repo the reader is being offered, largest first.
+// every rung the reader is being offered, best first.
 // with `fits vram` on that is what clears the budget, the ceiling and the floor:
 // the same test the fit uses, without the last step that picks one, so `every
 // quant that fits` and `the one that fits` can never disagree about what fits.
 // with it OFF the page is not being asked what fits, and a ladder that still
 // stopped at the budget would be answering a question somebody turned off -- it
 // read as a fact about the model the size of the box they stopped caring about.
-// the row keeps READING the largest that fits, because one row names one quant.
+// the row keeps READING one rung, because one row names one quant.
 function fittingQuants(m) {
-  const q = readQuant(m);
-  if (!q) return [];
-  const all = quantChoices(m).filter(c => c.repo === q.repo);
-  if (!budget || !all.some(c => c.gib)) return [q];
+  const all = rungPool(m);
+  if (!all.length) return [];
+  if (!budget || !all.some(c => c.gib)) {
+    const q = readQuant(m);
+    return q ? [q] : [];
+  }
   if (!filters.flags.has('fits')) {
     // a rung nobody weighed is not a rung that failed the weighing, so it stays
     // on the ladder rather than dropping out with the fit
-    const rung = c => (c.gib === undefined ? -Infinity : c.gib);
-    return [...all].sort((a, b) => rung(b) - rung(a));
+    return byQuality(all);
   }
   // the SAME room the fit charges, drafter included: a ladder that bills only
   // the weights offers rungs the row could never read, and deepseek v4 flash
   // was handing out UD-IQ3_S at 108.1 of a 116 gib box that the draft file
   // takes past the end
   const room = usable() - kvGib(m, wantCtx(m)) - draftGib(m);
-  return affordable(m, all, room).sort((a, b) => b.gib - a.gib);
+  return byQuality(affordable(m, all, room));
 }
 
 // one row per model, or one per (model, quant). the expanded row inherits the
@@ -506,7 +577,7 @@ function tgTps(m) {
   if (!bandwidth || !q || !q.bpw || a === undefined) return null;
   const eff = bandwidth * 1e9 * BW_EFFICIENCY;
   const weights = a * 1e9 * q.bpw / 8;
-  const y = draftYield(m);
+  const y = draftYield(m, q);
   return {empty: y * eff / weights,
           full: y * eff / (weights + kvGib(m, wantCtx(m)) * (1024 ** 3)),
           draft: y};
@@ -567,7 +638,10 @@ function retention(bpw, m, q = activeQuant(m)) {
 function modelRetention(m) {
   if (!effective || m.native_low_bpw) return 1;
   const q = activeQuant(m);
-  return q && q.bpw ? retention(q.bpw, m, q) : 1;
+  // the same bits the ladder ranked the rung on: the curve is a curve of bits
+  // per weight, and feeding it a figure the ceiling refused to trust is how a
+  // rung folded around a drafter came to be credited with the head's precision
+  return q && rungBpw(q) ? retention(rungBpw(q), m, q) : 1;
 }
 
 // whether the rung being served sits below everything the curve measured, where
@@ -579,7 +653,7 @@ function modelRetention(m) {
 // evidenced against on the one model anybody has run there.
 function belowCurve(m, q = m && activeQuant(m)) {
   if (!m || m.native_low_bpw) return false;
-  return !!(q && q.bpw && q.bpw < curveFor(m, q).points[0][0]);
+  return !!(q && rungBpw(q) && rungBpw(q) < curveFor(m, q).points[0][0]);
 }
 
 // an ALLOWLIST: a facet is discounted only where the curve is evidence about
@@ -882,9 +956,16 @@ const COLUMNS = [
      return `<td class="n${full ? '' : ' warn'}">${ctxLabel(c)}</td>`;
    }},
   {k: 'quant', t: 'quant', num: false, get: m => (readQuant(m) || {}).quant || '',
-   help: 'the quant the row is read as, and who built it. with a vram budget set, the largest that fits; without one, the one the registry pins. where nothing fits it names the smallest rung the repo publishes and marks it, because the row is still being read from a file',
+   help: 'the quant the row is read as, and who built it. with a vram budget set, the best one that fits, out of every publisher of the model rather than one; without a budget, the one the registry pins. where nothing fits it names the smallest rung published and marks it, because the row is still being read from a file',
    cell: m => {
      const q = readQuant(m);
+     // two different nothings. an entry with no files published is a gap in the
+     // roster, and an entry whose files no runtime on this page is known to
+     // load is a fact about runtimes -- `does not fit` would blame the box for
+     // either, and a dash says the roster is empty when it is not
+     if (!q && m.quants.length && !rungPool(m).length) {
+       return '<td class="faint" title="no runtime this page offers is known to load it">no runtime</td>';
+     }
      if (!q) return '<td class="faint" title="the roster carries no gguf for this entry">-</td>';
      const miss = !activeQuant(m);
      return `<td${miss ? ' class="warn" title="nothing this repo publishes clears the budget and context set on the page: this is its smallest rung"'
@@ -892,12 +973,12 @@ const COLUMNS = [
        + `<span class="sub"> ${esc(quantAuthor(q))}</span></td>`;
    }},
   {k: 'size', t: 'gib', num: true,
-   get: m => readQuant(m) ? readQuant(m).gib + draftGib(m) : -1,
+   get: m => readQuant(m) ? readQuant(m).gib + draftGib(m, readQuant(m)) : -1,
    help: 'what has to be resident before any cache: the weights at the quant the row reads, plus the drafter where the publisher ships it as a separate file rather than folding it into the build. the kv cache is not included -- add the kv gib column for that',
    cell: m => {
      const q = readQuant(m);
      if (!q || q.gib === undefined) return '<td class="n"><span class="faint">-</span></td>';
-     const d = draftGib(m);
+     const d = draftGib(m, readQuant(m));
      // the weight of a rung nothing fits is the size of the miss, so it wears
      // the same warning the quant name does
      return `<td class="n${!activeQuant(m) ? ' warn' : ''}"${d ? ` title="${gib(q.gib)} weights + ${gib(d)} for `
@@ -914,7 +995,7 @@ const COLUMNS = [
      return `<td class="n dim">${gib(v)}</td>`;
    }},
   {k: 'bpw', t: 'bpw', num: true, get: m => (readQuant(m) || {}).bpw ?? -1,
-   help: 'bits per weight. the number that predicts how much the quant cost in quality',
+   help: 'bits per weight: the file over the parameter count. where a rung publishes a tensor table that disagrees with that by more than a packer\'s rounding -- a drafter folded into the file, a component counted in the denominator and shipped beside the gguf -- the page judges the rung by the table instead, so this cell and the quality behind it can name different numbers',
    cell: m => `<td class="n dim">${num((readQuant(m) || {}).bpw, 2) || '-'}</td>`},
   {k: 'tg', t: 'tg t/s', num: true, get: m => (tgTps(m) || {}).empty ?? -1,
    help: 'estimated tokens generated per second with the cache empty: the bandwidth you set, discounted, over the active weights at the fitted quant, times what speculative decoding yields where the model ships a drafter. it does not charge for reading the drafter itself, so it runs optimistic for a large one. a second, dimmer figure appears where a full cache at your context costs more than 15% of it. arithmetic, never a measurement',
@@ -1466,7 +1547,8 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {loadRoster, applySettings, rankedRows, vocabulary, hardware,
                     filterCounts, licenseOf,
                     visible, sorted, expand, col, shown, scored, activeQuant,
-                    fittingQuants, quantChoices, kvGib, fitContext, tgTps, ppTps,
+                    fittingQuants, quantChoices, rungPool, rungEngines, kvGib,
+                    fitContext, tgTps, ppTps,
                     modelRetention, curveFor, belowCurve, facetValue, facetPctRaw,
                     COLUMNS, MODALITIES, FLAGS, proseText, esc, num, gib, ctxLabel};
 }

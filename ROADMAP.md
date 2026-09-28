@@ -1,6 +1,7 @@
 # ROADMAP
 
 ```
+[ ] add more hardware presets: new mac studio, various graphics cards (1080ti, rx5090, etc)
 [x] add quant: https://huggingface.co/TrevorJS/MiMo-V2.6-Flash-RL-GGUF
 [x] allow the user to select 1gb memory reserve in the hardware section
 [x] create a more intuitive visilbe columns configuration icon
