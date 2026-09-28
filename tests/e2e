@@ -113,6 +113,9 @@ const RESET = () => {
   filters.pubs = new Set();
   filters.minParams = null;
   filters.maxParams = null;
+  // the search is a filter like the rest, and one case leaving 'kokoro' in it
+  // empties the next one's table and leaves the filter row reading as changed
+  filters.q = '';
   // the ladder toggle is one-row-per-model versus one-per-rung, and a case that
   // needed the rows split would otherwise leave every later case counting them
   setLadder(false);
@@ -1337,6 +1340,121 @@ test('a share link carries only what was changed, and round-trips', () => {
 
   RESET();
   filters.q = ''; filters.mods = new Set(DEFAULT_MODALITIES); sort = {k: 'score', dir: -1};
+});
+
+test('the address bar keeps up with the view without pressing share', () => {
+  RESET();
+  sort = {...DEFAULT_SORT};
+  drawTable();
+  history.writes.length = 0;
+
+  // an untouched page keeps a clean url: the fragment a default view encodes is
+  // the empty string, and rewriting the address bar to say nothing on every
+  // draw is churn a reader watches happen on every keystroke
+  drawTable();
+  eq(location.hash, '', 'a default view leaves the address bar alone');
+  eq(history.writes.length, 0, 'and a draw that changed nothing writes nothing');
+
+  // the point of the item: the link is the current view whether or not anybody
+  // ever finds the share button
+  filters.q = 'kokoro';
+  drawTable();
+  eq(hashState() && hashState().f.q, 'kokoro', 'a search reaches the fragment');
+
+  // opening a model is part of the view, so it joins the fragment rather than
+  // replacing it: a link copied with a modal open has to reproduce the table
+  // BEHIND that modal as well as the modal
+  const repo = D.models.find(m => m.kind === 'text').repo;
+  openModel(repo, 'operate');
+  ok(/model=/.test(location.hash), 'the model joins the fragment');
+  eq(hashState().f.q, 'kokoro', 'and the table state survives the modal opening');
+  eq(history.writes[history.writes.length - 1], 'push',
+     'opening a model is a history entry, so back closes it');
+
+  // closing it puts the table back and keeps it: the reader is still looking at
+  // that table, and clearing the whole fragment on close threw away the half of
+  // the link nobody had finished copying
+  closeModel();
+  eq(/model=/.test(location.hash), false, 'the model leaves the fragment');
+  eq(hashState().f.q, 'kokoro', 'the table state stays in it');
+
+  // and the rest of the controls, each through the path its own handler takes
+  filters.q = '';
+  setHardware({budget: 64});
+  eq(hashState().hw.budget, 64, 'the box size reaches the fragment');
+  W = {...D.weights, [Object.keys(D.weights)[0]]: 0.99};
+  reweigh();
+  eq(Object.keys(hashState().w).length, 1, 'a moved weight travels on its own');
+  sort = {k: 'name', dir: 1};
+  drawTable();
+  eq(hashState().sort.k, 'name', 'so does the sort');
+
+  // the params band had never been in the link, so a link that looked exact
+  // opened on a wider table than the one the reader was looking at
+  filters.maxParams = 4;
+  drawTable();
+  const band = JSON.parse(JSON.stringify(hashState().f));
+  eq(band.maxParams, 4, 'the params band is in the fragment');
+  RESET();
+  applyState({f: band});
+  eq(filters.maxParams, 4, 'and a link puts the band back');
+
+  RESET();
+  sort = {...DEFAULT_SORT};
+  drawTable();
+  eq(location.hash, '', 'putting it all back empties the fragment again');
+});
+
+test('the size band is a control on the page, not only a cli flag', () => {
+  RESET();
+  // the stub hands out elements but binds no events, so the control's own
+  // handler is called the way the browser would call it
+  const setBand = (id, v) => {
+    const el = document.querySelector('#' + id);
+    el.value = v;
+    el.oninput({target: {value: v}});
+  };
+  const whole = rankedRows().length;
+  setBand('pmax', '4');
+  eq(filters.maxParams, 4, 'the control writes the band');
+  const small = rankedRows().length;
+  ok(small > 0 && small < whole,
+     'and the table narrows to the small end (' + small + ' of ' + whole + ')');
+
+  // it is filter-row state, so it wakes that row's reset and no other
+  ok(!resetOff('filter'), 'the filter row wakes for it');
+  ['hardware', 'ranking', 'table'].forEach(k => ok(resetOff(k), k + ' stays dead'));
+
+  // and an empty table says who emptied it. a band nobody is inside -- 400b at
+  // the bottom and 4b at the top -- is the case the account exists for
+  setBand('pmin', '400');
+  eq(rankedRows().length, 0, 'a band nothing is inside empties the table');
+  ok(html('#rows').includes('data-clear="params"'),
+     'the account names the band: ' + html('#rows'));
+  clearFilter('params');
+  eq(filters.minParams, null, 'relaxing puts the band down at the bottom');
+  eq(filters.maxParams, null, 'and at the top');
+  eq(rankedRows().length, whole, 'and the table is the whole roster again');
+
+  // the row's own reset clears the inputs and not only the state behind them,
+  // which is the rule every other control in the row holds to
+  setBand('pmax', '4');
+  clickReset('filter');
+  eq(document.querySelector('#pmax').value, '', 'the reset puts the control back too');
+
+  // and it is a stored filter like the search: a reload lands on the same band,
+  // with the control showing what the state says
+  setBand('pmin', '1');
+  setBand('pmax', '8');
+  booted = false;
+  boot(JSON.parse(PAYLOAD));
+  booted = true;
+  eq(filters.minParams, 1, 'a reload keeps the band');
+  eq(document.querySelector('#pmax').value, '8', 'and the control shows it');
+
+  setBand('pmin', '');
+  setBand('pmax', '');
+  RESET();
 });
 
 test('the copy button puts its icon back, not its text', () => {
@@ -3067,6 +3185,29 @@ test('the pi config states the level vocabulary the template actually accepts', 
   eq(ke.compat.chatTemplateKwargs.thinking_effort.omitWhenOff, true,
      'nothing in `low, high, max` means off, so the kwarg is dropped instead');
   eq(ke.thinkingLevelMap.minimal, null, 'a level it does not grade is hidden');
+});
+
+// the live address bar is written during boot, and boot is also the moment a
+// pasted link is read. a sync running from the first draw of the table would
+// rewrite the fragment from a state with no model in it, and the link would
+// arrive opening nothing.
+test('a pasted link still opens the model and the tab it names', () => {
+  RESET();
+  const repo = D.models.find(m => m.kind === 'text').repo;
+  // a second boot has to look like the first one, and the first one has read no
+  // fragment yet: that is what keeps the sync out of the way until applyHash
+  location.hash = '#model=' + encodeURIComponent(repo) + '&tab=operate';
+  booted = false;
+  boot(JSON.parse(PAYLOAD));
+  booted = true;
+  eq(openRepo, repo, 'the model in the link is the model on screen');
+  eq(tab, 'operate', 'and so is the tab in the link');
+  // and the load itself rewrote nothing: a link that reads as a model and a tab
+  // still reads that way, and the reader's own stored view is not what they pasted
+  eq(location.hash, '#model=' + encodeURIComponent(repo) + '&tab=operate',
+     'a load writes no fragment of its own');
+  location.hash = '';
+  RESET();
 });
 """
 

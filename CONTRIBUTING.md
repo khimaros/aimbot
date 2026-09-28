@@ -225,15 +225,21 @@ the roster's own endpoint, and `llm: timed out` is a different failure from
 ## the prose
 
 Five files hold written sentences rather than data, and `research/prose.py`
-enumerates all 632 blocks of them:
+enumerates every block of them -- `make prose` prints the counts, which move with
+every model added and so are not restated here:
 
-| surface | what it is | blocks |
-|---|---|--:|
-| `usecase` | `research/usecase-assessed.json` | 156 |
-| `registry-note` | every `note:`/`notes:` in `registry/models.yaml` | 226 |
-| `models-md` | MODELS.md's prose, all of it in `research/models-md.json` | 227 |
-| `viewer-help` | `scripts/viewer.html` `data-help`, by element | 18 |
-| `about` | `_about` in the hand-written json | 5 |
+| surface | what it is |
+|---|---|
+| `usecase` | `research/usecase-assessed.json` |
+| `registry-note` | every `note:`/`notes:` in `registry/models.yaml` |
+| `models-md` | MODELS.md's prose, all of it in `research/models-md.json` |
+| `viewer-help` | `scripts/viewer.html` `data-help`, by element |
+| `about` | `_about` in the hand-written json |
+
+A `data-help` tooltip joins the inventory only where its element also carries an
+`id`, because that is what keys its ledger entry: a new control whose help sits
+on an `id`less wrapper is unchecked and unattributed, silently. `--stamp` records
+who wrote a block, and the three authors are told apart -- see below.
 
 ```
 make prose                # what is on each surface, and what is wrong with it
@@ -441,6 +447,16 @@ so: change a FACT in `registry/models.yaml`, a DEFAULT in
 `registry/licenses.yaml`, and a CALCULATION in `scripts/roster.js`. build-viewer
 refuses to inline a module that reaches for a browser api, and a test requires
 it in a bare subprocess to prove it still loads without one.
+
+the same rule holds for the address bar, which is one writer: `shareFragment`
+encodes the view, `syncHash` puts it in the url from `drawTable` -- the last
+thing every control touches on its way to the screen, which is also what
+`syncResets` rides on -- and the copy button copies what is already there. a
+control that wrote its own fragment would be a second encoding of the same view,
+and the address bar and the link would disagree about what is on screen. a new
+control is therefore a field in `shareState` and nothing else, and the test that
+opens a pasted link is what keeps `syncHash` out of the way until `applyHash`
+has read the fragment it is about to rewrite.
 
 `registry/licenses.yaml` is keyed by LICENCE and not by model on purpose. the
 string a repo declares is already captured -- `hub.license`, with

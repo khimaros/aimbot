@@ -594,6 +594,18 @@ either, which is why build-tables budgets 105 gib of a 128gb box rather than
 128. a repo publishing no file sizes reads as unknown rather than as too big,
 because that is a measurement this corpus does not have.
 
+**the size band is about the model, `fits vram` is about the box.** the filter row
+takes a parameter range in billions -- `1` to `4` is the 4b class -- and it is a
+different question from whether a model fits: a 27b at q1_0 fits a 16gib box and is
+not a small model, and 32 entries publish no parameter count at all, so they leave
+once a bound is set rather than heading "the small models" for nobody having
+counted them. either end alone is a band and neither end is one. it is filter-row
+state like the search beside it -- stored, put back by that row's reset, named by
+the empty table when it is what emptied it, and carried in the link. the terminal
+has taken `--min-params` and `--max-params` for it since before the page had any
+control for it, which is how it stayed unreachable: the filter, its reset and its
+account all worked, and nothing set it.
+
 **an empty table names the filters that emptied it.** "nothing matches" is
 true and useless, so the empty cell runs the account the terminal prints: every
 filter that is on, with how many models it hides measured ALONE against the
@@ -869,7 +881,18 @@ the reference between them carrying the key it resolved -- because the renderer
 is the only thing that knows which reference produced which figure; matching
 the rendered words afterwards would be a second implementation of the
 substitution, and could not attribute `{aa.lcr@other/Repo}` at all, since a
-comparison against another model prints bare on purpose. a model's detail opens as a modal deep-linked in the
+comparison against another model prints bare on purpose.
+
+the table itself is deep-linked too, and without being asked: from the first
+thing the reader changes, the url's fragment carries what is on screen -- the
+weights, the filters, the box, the columns and the sort -- as a diff against the
+defaults, so the address bar is a link to the view at any moment and the copy
+button is only the clipboard half of it. a page nobody narrowed keeps a clean
+url, only what moved goes into one that was, and the open model and tab join the
+same fragment, so a link copied with a modal open reproduces the table behind it
+as well as the modal.
+
+a model's detail opens as a modal deep-linked in the
 url (`#model=Qwen/Qwen3.6-27B&tab=operate`) with six tabs, one per kind of
 claim: `overview` what it is, `quality` what third parties measured, `community`
 what each forum said, `vendor` what the people selling it say, `quantization`

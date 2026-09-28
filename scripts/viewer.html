@@ -43,8 +43,13 @@ header nav { display: flex; gap: 1rem; font-size: 11px; }
 }
 .controls input[type=number] {
   font: inherit; font-size: 12px; color: var(--fg); background: var(--panel);
-  border: 1px solid var(--line); padding: .3rem .55rem; width: 7rem;
+  border: 1px solid var(--line); padding: .3rem .4rem; width: 3.9rem;
+  /* no spinners: two of them in a row of 11px controls is noise, and the step
+     they would move -- 0.1b -- is not a step through this roster */
+  appearance: textfield;
 }
+.controls input[type=number]::-webkit-inner-spin-button { appearance: none; }
+.controls .band { display: inline-flex; align-items: center; gap: .25rem; }
 .controls input[type=search]:focus { outline: none; border-color: var(--faint); }
 .controls select {
   font: inherit; font-size: 11px; color: var(--dim); background: var(--panel);
@@ -306,6 +311,9 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <span class="ms" id="engines-ms" data-help="which runtimes you have. a model is shown when one of the selected ones loads its weights: llama.cpp comes from the architecture it merged, crispasr from the backend the registry names, the rest are written on the model because a gguf does not say what wrote it. picking none is no filter at all, which is also how the entries nothing here runs become visible"></span>
     <span class="ms" id="license-ms" data-help="which licence tiers to show, as registry/licenses.yaml classifies the licence each repo declares. permissive is commercial use, redistribution and derivatives with at most attribution asked back; restricted adds a condition you would have to hold your own product against; unknown is nobody here having read those terms, which is the absence of a claim rather than a bad one. it opens on permissive alone, so the other two are a tick away with their counts beside them. picking none is every licence"></span>
     <span class="ms" id="pub-ms" data-help="narrow to the publishers you care about, taken from the repo owner. picking none is every publisher"></span>
+    <span class="band" id="pband" data-help="how big a model is, in billions of parameters, which is a different question from whether it fits: a 27b at q1_0 fits a small box and is not a small model. either end alone is a band and neither end is no band at all. the models that publish no parameter count leave once a bound is set, since an unknown size cannot be said to be inside a band"><input
+      type="number" id="pmin" min="0" step="0.1" placeholder="min b" aria-label="smallest model, in billions"><span
+      class="faint">-</span><input type="number" id="pmax" min="0" step="0.1" placeholder="max b" aria-label="largest model, in billions"></span>
     <span id="kinds" class="chips"></span>
     <button id="ladder-btn" aria-pressed="true" data-help="on, one row per model, reading the largest quant that fits. off, one row per quant on offer, so the whole size ladder is on screen -- every rung with `fits vram` off, and the ones that fit with it on -- and with quant adjusted each row scores at its own bits per weight, which merges every model and every quant into one ranked list of what you could actually run. it stays inside the repo the registry pins, since crossing to another build changes more than the size">best quant</button>
     <button class="rst" id="reset-filter" aria-label="reset filter"></button>
@@ -315,7 +323,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <aside class="panel side" id="factors"></aside>
     <div class="grid-side">
       <div class="tablebar">
-        <button id="share" aria-label="copy link" data-help="copy a link that reproduces this exact table: the weights, the filters, the hardware, the columns and the sort. only what you changed goes in the link, so it stays short and shows what was actually moved"><svg class="icon" viewBox="0 0 16 16"
+        <button id="share" aria-label="copy link" data-help="copy a link that reproduces this exact table: the weights, the filters, the hardware, the columns and the sort. only what you changed goes in the link, so it stays short and shows what was actually moved. the address bar holds that same link as you work, so copying it from there reads the same table"><svg class="icon" viewBox="0 0 16 16"
           width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"
           stroke-width="1.6" stroke-linecap="round"><path
           d="M6.6 9.4a2.6 2.6 0 0 0 3.9 .3l2.4-2.4a2.7 2.7 0 0 0-3.8-3.8L7.7 4.9"/><path
@@ -438,6 +446,7 @@ function drawTable() {
     b.onclick = () => clearFilter(b.dataset.clear);
   });
   syncResets();
+  syncHash();
 }
 
 // an empty table is a question about the controls rather than about the roster,
@@ -467,7 +476,7 @@ function emptyTable() {
 // `text to image` in the dropdown rather than the key it is stored under.
 const RELAX_KIND = {search: 'the search', modality: 'the shape',
                     engine: 'the runtime', license: 'the licence',
-                    publisher: 'the publisher'};
+                    publisher: 'the publisher', params: 'the size band'};
 const relaxLabel = f => {
   if (FLAGS.some(x => x.k === f.k)) return f.t;
   // the multi-selects store a comma-joined list, which is what the payload's
@@ -486,6 +495,7 @@ const relaxLabel = f => {
 // a filter the state no longer holds is worse than a repaint.
 function clearFilter(k) {
   if (k === 'search') filters.q = '';
+  else if (k === 'params') { filters.minParams = null; filters.maxParams = null; }
   else if (k === 'modality') filters.mods = new Set();
   else if (k === 'engine') filters.engines = new Set();
   else if (k === 'license') filters.licenses = new Set();
@@ -1152,7 +1162,7 @@ function openModel(repo, want, pick) {
   if (pick && pick.quant) { ops.repo = pick.repo || null; ops.quant = pick.quant; }
   openRepo = repo;
   tab = want || tab;
-  location.hash = 'model=' + encodeURIComponent(repo) + '&tab=' + tab;
+  syncHash(true);
   drawModal();
 }
 
@@ -1161,7 +1171,10 @@ function closeModel() {
   openDoc = null;
   document.querySelector('#modal').classList.remove('open');
   document.body.classList.remove('locked');
-  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  // the table behind it is still the reader's table, so the fragment keeps the
+  // settings with it and drops only the model -- clearing the whole hash threw
+  // away the part of the link they had not finished copying
+  syncHash();
 }
 
 // say something on a button for a moment and put it back exactly as it was.
@@ -2533,6 +2546,10 @@ function drawChrome() {
   drawFilterMenus();
 
   document.querySelector('#q').value = filters.q;
+  // the band is drawn from the state like the search is, so a reset of the row
+  // repaints the inputs rather than leaving them showing a filter gone
+  document.querySelector('#pmin').value = filters.minParams ?? '';
+  document.querySelector('#pmax').value = filters.maxParams ?? '';
 
   const n = Object.keys(D.provenance).length;
   document.querySelector('#foot').innerHTML =
@@ -2566,15 +2583,20 @@ function shareState() {
   const st = {
     hw: changed(hw, DEFAULT_HARDWARE),
     w: changed(W, D.weights),
+    // the params band is a filter the row reset puts back, so it travels: a
+    // link that quietly dropped it would open on a wider table than the one the
+    // reader was looking at
     f: changed({q: filters.q, pubs: [...filters.pubs].sort(),
                 mods: [...filters.mods].sort(),
                 flags: [...filters.flags].sort(),
                 engines: [...filters.engines].sort(),
-                licenses: [...filters.licenses].sort()},
+                licenses: [...filters.licenses].sort(),
+                minParams: filters.minParams, maxParams: filters.maxParams},
                {q: '', pubs: [], mods: [...DEFAULT_MODALITIES].sort(),
                 flags: [...DEFAULT_FLAGS].sort(),
                 engines: [...DEFAULT_ENGINES].sort(),
-                licenses: [...DEFAULT_LICENSES].sort()}),
+                licenses: [...DEFAULT_LICENSES].sort(),
+                minParams: null, maxParams: null}),
   };
   if (sort.k !== 'score' || sort.dir !== -1) st.sort = sort;
   if (JSON.stringify([...hidden].sort()) !== JSON.stringify([...DEFAULT_HIDDEN].sort()))
@@ -2590,13 +2612,43 @@ function shareState() {
   return st;
 }
 
-function shareLink() {
+// the fragment of that link, and the one writer of it. the address bar carries
+// the same thing the copy button copies, so a reader who never notices the
+// button still has a link to the table in front of them -- and a modal that is
+// open is part of that table, which is why model and tab are built here too.
+function shareFragment() {
   const st = shareState();
   const parts = [];
   if (Object.keys(st).length) parts.push(SHARE_KEY + '=' + encodeURIComponent(JSON.stringify(st)));
   if (openRepo) parts.push('model=' + encodeURIComponent(openRepo));
   if (openRepo && tab !== TABS[0]) parts.push('tab=' + tab);
-  return location.origin + location.pathname + (parts.length ? '#' + parts.join('&') : '');
+  return parts.length ? '#' + parts.join('&') : '';
+}
+
+function shareLink() {
+  return location.origin + location.pathname + location.search + shareFragment();
+}
+
+// whether boot has read the incoming fragment yet. see boot().
+let booted = false;
+
+// `replaceState` rather than assigning `location.hash`, which would put a
+// history entry behind every keystroke of a search AND fire `hashchange`, so
+// the sync would re-enter applyHash and redraw the table under the reader.
+// replaceState fires nothing, and writes nothing when the view has not moved.
+//
+// `push` is for opening a model, which is a navigation: it is the entry the
+// back button has been closing the modal with, and stays one.
+function syncHash(push) {
+  // boot reads a pasted link AFTER its first draw, so nothing before it may
+  // rewrite the fragment: it would be written from a state the link had not
+  // been applied to, and a link naming a model would arrive opening nothing.
+  if (!booted) return;
+  const f = shareFragment();
+  if (f === location.hash) return;
+  const url = location.pathname + location.search + f;
+  if (push) history.pushState(null, '', url);
+  else history.replaceState(null, '', url);
 }
 
 // state only: boot draws once after this, so touching the dom here would be a
@@ -2620,6 +2672,8 @@ function applyState(st) {
     if (st.f.flags) filters.flags = new Set(knownFlags(st.f.flags));
     if (st.f.engines) filters.engines = new Set(st.f.engines);
     if (st.f.licenses) filters.licenses = new Set(knownLicenses(st.f.licenses));
+    if (st.f.minParams != null) filters.minParams = st.f.minParams;
+    if (st.f.maxParams != null) filters.maxParams = st.f.maxParams;
     saveFilters();
     // a shared link can land on a different shape than the one booted, and the
     // score is computed under a shape
@@ -2727,6 +2781,8 @@ function boot(payload) {
   const f = store.get('filters', null);
   filters = {...filters,
              q: (f || {}).q || '', kind: new Set(),
+             minParams: (f || {}).minParams ?? null,
+             maxParams: (f || {}).maxParams ?? null,
              pubs: new Set(f && f.pubs ? f.pubs : f && f.pub ? [f.pub] : []),
              mods: new Set(f && f.mods ? f.mods
                            : f && f.mod ? [f.mod] : DEFAULT_MODALITIES),
@@ -2753,6 +2809,11 @@ function boot(payload) {
   wireResets();
   drawTable();
   applyHash();
+  // the sync is live from here, and nothing is written on LOAD: a returning
+  // reader's stored view is theirs already, and a url they did not narrow should
+  // not read as though they had. it starts following the view at the first thing
+  // they change.
+  booted = true;
 }
 
 const effBtn = () => document.querySelector('#eff-btn');
@@ -2812,7 +2873,8 @@ function setHardware(patch) {
 });
 
 function saveFilters() {
-  store.set('filters', {q: filters.q, pubs: [...filters.pubs],
+  store.set('filters', {q: filters.q, minParams: filters.minParams,
+                        maxParams: filters.maxParams, pubs: [...filters.pubs],
                         mods: [...filters.mods],
                         flags: [...filters.flags],
                         engines: [...filters.engines],
@@ -2824,6 +2886,18 @@ document.querySelector('#q').oninput = e => {
   saveFilters();
   drawTable();
 };
+// two bounds rather than a slider, because the two things a reader asks are "at
+// most this small" and "the big end only" and a one-handle control answers
+// neither. an empty end is no bound, which is why a cleared input reads as null
+// rather than as zero -- zero would be a bound, and nothing would survive it.
+[['#pmin', 'minParams'], ['#pmax', 'maxParams']].forEach(([sel, key]) => {
+  document.querySelector(sel).oninput = e => {
+    const v = parseFloat(e.target.value);
+    filters[key] = v >= 0 && Number.isFinite(v) ? v : null;
+    saveFilters();
+    drawTable();
+  };
+});
 document.querySelector('#preset').onchange = e => {
   if (!e.target.value) return;
   W = PRESETS[e.target.value].w();
@@ -2841,10 +2915,10 @@ document.querySelector('#preset').onchange = e => {
   set(store.get(id + '-open', false));
 });
 document.querySelector('#share').onclick = async () => {
+  // the clipboard half only: the address bar already holds this url, because
+  // every change rewrites it, so the fallback the label offers -- "in the address
+  // bar" -- is the same link rather than one written on the way past
   const btn = document.querySelector('#share'), url = shareLink();
-  // the address bar too, so the link is there to copy by hand if the clipboard
-  // is refused -- it is, on http origins and in some browsers without a gesture
-  history.replaceState(null, '', url);
   let ok = true;
   try {
     await navigator.clipboard.writeText(url);

@@ -1129,6 +1129,32 @@ const modOut = (m, x) => (m.modalities.output || []).includes(x);
 const modsOn = () => MODALITIES.filter(x => filters.mods.has(x.k));
 const inModality = m => !filters.mods.size || modsOn().some(x => x.test(m));
 
+// the size band, as one predicate so the filter, the account of an empty table
+// and the row's reset all answer for the same test. an unknown size cannot
+// satisfy a band. this is the opposite of the rule the fit uses -- there a model
+// with no context window has not FAILED to reach one, so it passes -- and the
+// difference is what the filter is about: `fits vram` asks a question about a
+// box and this one asks a question about the attribute itself. 32 entries
+// publish no count, and answering "what is in the 1-4b class" with them at the
+// top of the list is answering with the models whose size nobody knows.
+// `!= null` rather than `!== null`, so an UNSET bound is off whether it is null
+// or undefined: the strict test read an absent field as a bound that had been
+// set, and every model publishing no parameter count -- 32 of them -- vanished
+// from every view including the default one.
+const fitsParams = m => {
+  if (filters.minParams == null && filters.maxParams == null) return true;
+  const tp = m.facts.params_total_b;
+  return tp != null && (filters.minParams == null || tp >= filters.minParams)
+    && (filters.maxParams == null || tp <= filters.maxParams);
+};
+
+// the band in the words a reader would use for it, since it reaches the empty
+// table as the name of the thing to put down
+const paramsBand = () => (filters.minParams != null && filters.maxParams != null)
+  ? filters.minParams + '-' + filters.maxParams + 'b'
+  : (filters.minParams != null ? 'at least ' : 'at most ')
+    + (filters.minParams != null ? filters.minParams : filters.maxParams) + 'b';
+
 // what each shape is ABOUT, in the same capability vocabulary `board_needs`
 // uses. this is a claim about the VIEW rather than about whichever model in it
 // happens to qualify, and that distinction is the whole point: eight models are
@@ -1203,23 +1229,7 @@ function visible() {
     if (q && !haystack(m).includes(q)) return false;
     if (filters.pubs.size && !filters.pubs.has(m.publisher)) return false;
     if (!inModality(m)) return false;
-    // an unknown size cannot satisfy a size band. this is the opposite of the
-    // rule the fit uses -- there a model with no context window has not FAILED
-    // to reach one, so it passes -- and the difference is what the filter is
-    // about: `fits vram` asks a question about a box and this one asks a
-    // question about the attribute itself. 32 entries publish no count, and
-    // answering "what is in the 1-4b class" with them at the top of the list
-    // is answering with the models whose size nobody knows.
-    // `!= null` rather than `!== null`, so an UNSET bound is off whether it is
-    // null or undefined. the strict test read an absent field as a bound that
-    // had been set, and every model publishing no parameter count -- 32 of
-    // them -- vanished from every view including the default one
-    if (filters.minParams != null || filters.maxParams != null) {
-      const tp = m.facts.params_total_b;
-      if (tp == null) return false;
-      if (filters.minParams != null && tp < filters.minParams) return false;
-      if (filters.maxParams != null && tp > filters.maxParams) return false;
-    }
+    if (!fitsParams(m)) return false;
     // no runtime selected means no runtime filter, the way no flags does. a
     // model with an EMPTY engine list is one nothing here loads, so it only
     // appears once the filter is off entirely
@@ -1417,6 +1427,12 @@ const filterCounts = () => {
     out.push({k: 'engine', t: [...filters.engines].join(','),
               dropped: total - D.models.filter(
                 m => (m.engines || []).some(e => filters.engines.has(e))).length});
+  }
+  // the band empties a table by itself -- a floor above the biggest model here
+  // is a table with no rows -- and it was the one the account still left out
+  if (filters.minParams != null || filters.maxParams != null) {
+    out.push({k: 'params', t: paramsBand(),
+              dropped: total - D.models.filter(fitsParams).length});
   }
   if (filters.pubs.size) {
     out.push({k: 'publisher', t: [...filters.pubs].join(','),

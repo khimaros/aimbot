@@ -27,7 +27,11 @@ DATA = os.path.join(ROOT, "docs", "data.json")
 STUB = """
 const nodes = {};
 const el = key => nodes[key] || (nodes[key] = {
-  style: {}, dataset: {}, children: [], value: '', textContent: '', innerHTML: '',
+  style: {}, dataset: {}, children: [], _value: '', textContent: '', innerHTML: '',
+  // an input's value is a string because a dom says so: the page assigns a
+  // number to a numeric input and reads back the text a browser would hold
+  get value() { return this._value; },
+  set value(v) { this._value = String(v); },
   classList: {add(){}, remove(){}, toggle(){}, contains(){return false}},
   setAttribute(){}, getAttribute(){return 'false'}, addEventListener(){},
   querySelector(s){ return el(key + ' ' + s); }, querySelectorAll(){ return []; },
@@ -40,7 +44,15 @@ global.document = {
 };
 global.window = global;
 global.location = {hash: '', pathname: '/', search: ''};
-global.history = {replaceState(){}};
+// a history write lands in the address bar the way a browser puts it there, and
+// is recorded: the page keeps the url current, so a case has to be able to read
+// what the last draw wrote -- and whether a draw wrote anything at all
+const fragment = url => { const i = String(url).indexOf('#'); return i < 0 ? '' : url.slice(i); };
+global.history = {
+  writes: [],
+  replaceState(_t, _s, url) { this.writes.push('replace'); location.hash = fragment(url); },
+  pushState(_t, _s, url) { this.writes.push('push'); location.hash = fragment(url); },
+};
 const mem = {};
 global.localStorage = {
   getItem(k){ return k in mem ? mem[k] : null; },
