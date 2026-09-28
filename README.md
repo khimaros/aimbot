@@ -940,13 +940,31 @@ ladder they were published in, because the row worth finding is the one ladder
 order buries: unsloth's dynamic UD-Q4_K_S diverges less at 4.42 bpw than the
 plain Q4_0 and Q4_1 rungs above it.
 
+a sweep is evidence about the **files it ran**, against the publisher's own base,
+and it is therefore allowed to rank a model only when it ran every rung that
+model publishes. qwen3.8 flash next has one sweep, ISTA's of its own GSQ-RCO
+rungs, and it reads 99.4% kept at 3.37 bpw where the general fit reads 95.5%
+there and 98.2% at 5.37. discounting one rung of that model by the sweep and the
+next by the fit put the 3.37 rung at 82 and the 5.37 one at 80 in the same
+column, above the row the `best quant` pick had landed on for having the most
+bits: the table ranked fewer bits better, and disagreed with itself about which
+rung it was recommending. so one model, one scale -- the measurement where it
+speaks for every publisher, the common curve otherwise, and the panel says which
+answered and why the sweeps listed below it did not. qwen3.8 27b carries three
+sweeps from three quantizers and publishes rungs from all three, which is the
+case the rule is for: on today's captures it means no model on the roster is
+discounted off a measurement, and the measurements become what the quantization
+tab shows you rather than what the score is made of. a test holds the invariant
+two ways -- no ladder ranks fewer bits higher, and the rung the fit picks is the
+one its own ladder scores highest.
+
 the `operate` tab emits a `llama-server` argv, open by default, a pi
 `models.json` provider block, the request body carrying the thinking knob, and a
 vllm line -- built from a quant and a sampling profile you pick, since some repos
 publish twenty quants and a snippet for the one the registry pinned is no use to
 somebody who cannot fit it. beside them is what the retention discount does to
 the picked rung and which curve says so, since a measured curve answers only for
-the repo it ran. every flag in them is a pure function of registry facts -- the
+the repo it ran and not always for the model. every flag in them is a pure function of registry facts -- the
 quant repo, the profile's samplers, the native context, the derived knob. what
 context to serve it at, on which host, under which server binary is still
 policy and still absent.

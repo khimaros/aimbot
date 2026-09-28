@@ -1839,12 +1839,21 @@ function discountBlock(m, q) {
         : `the table ranks ${esc(scored.quant)}`
           + (scored.repo !== q.repo ? ` out of ${esc(scored.repo)}` : '')
           + ', the best that fits your budget') + '</span>']);
-  rows.push(['curve', c.kind === 'measured'
+  // a sweep listed below this line that the discount refused to use needs its
+  // reason on the same row: the rungs being ranked come from more publishers
+  // than any one sweep ran files of, so no measured curve on the model can rank
+  // another publisher's rung without inventing the number
+  const unused = unusedSweeps(m, c);
+  rows.push(['curve', (c.kind === 'measured'
     ? `<b>measured on these files</b> &middot; ${esc(c.src.metric)}`
       + ` &middot; ${esc(c.src.quant_repo || '')}`
     : c.kind === 'median'
       ? 'the median of every measured sweep'
-      : `fitted &middot; ${esc(c.src.source || '')}`]);
+      : `fitted &middot; ${esc(c.src.source || '')}`)
+    + (unused.length ? ` <span class="dim">-- and not the ${unused.length} sweep${
+      unused.length > 1 ? 's' : ''} this model carries below, because each ran one
+       publisher's files against its own base and this ladder ranks rungs from
+       more publishers than that</span>` : '')]);
   if (c.kind === 'measured' && c.src.ref) rows.push(['source', refMark(c.src.ref)]);
   rows.push(['keeps', m.native_low_bpw
     ? 'exempt: the weights are natively low-bpw, so this is not quantization loss'

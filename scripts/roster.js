@@ -600,14 +600,37 @@ function ppTps(m) {
 // of qwen3.8 27b and unsloth's UD rungs over the same three benchmarks and they
 // differ by more than eight points of task average at 2.5 bpw, so lending one
 // family's curve to the other's rung would report a number nobody measured.
+//
+// and it answers for a MODEL, not for one rung at a time. a sweep is a curve of
+// the files it ran against the publisher's own base, and two sweeps of one model
+// are not one scale: ISTA's GSQ-RCO sweep of qwen3.8 flash next reads 0.994 kept
+// at 3.37 bpw where the fit reads 0.955 there and 0.982 at 5.37, so a ladder
+// discounting one rung by each answers `fewer bits is better` -- in the quality
+// column, against the pick the fit makes on bits, on the same screen. qwen3.8
+// 27b carries three sweeps from three quantizers and publishes rungs from all
+// three, so nothing measured on any of them can rank the others: the common curve
+// is what they share, and it is the scale the rest of the roster is on anyway.
+// the sweep is not thrown away -- the quantization tab still prints every one of
+// them, with whose files and what metric.
+const speaksFor = (m, c) => quantChoices(m)
+  .every(rung => !c.quant_repo || rung.repo === c.quant_repo);
+
 function curveFor(m, q = activeQuant(m)) {
   const r = D.retention;
   const own = (r.measured || {})[m.repo] || [];
-  const mine = own.find(c => q && c.quant_repo === q.repo) || own.find(c => !c.quant_repo);
+  const mine = own.find(c => q && c.quant_repo === q.repo && speaksFor(m, c))
+    || own.find(c => !c.quant_repo && speaksFor(m, c));
   if (mine) return {points: mine.points, kind: 'measured', src: mine};
   if (r.median && r.median.points) return {points: r.median.points, kind: 'median', src: r.median};
   return {points: r.fitted.points, kind: 'fitted', src: r.fitted};
 }
+
+// the sweeps a model carries that the discount did NOT use, which the reader of
+// the quantization tab is going to ask about -- they are on the page three rows
+// below the line that says which curve answered. nothing to explain when a
+// measurement did answer.
+const unusedSweeps = (m, c) => c.kind === 'measured' ? []
+  : ((D.retention.measured || {})[m.repo] || []);
 
 function interpolate(c, bpw) {
   if (bpw <= c[0][0]) return c[0][1];
@@ -871,13 +894,13 @@ const COLUMNS = [
      // below the curve's lowest measured point the multiplier stops falling, so
      // the number is a floor rather than a prediction and has to say which
      const floored = effective && belowCurve(m)
-       ? `; ${q.bpw} bpw is below the lowest rung the curve measured `
+       ? `; ${rungBpw(q)} bpw is below the lowest rung the curve measured `
          + `(${curveFor(m).points[0][0]}), so this is its floor rather than a `
          + `prediction -- the only sweep run that low found a 27b at chance`
        : '';
      const title = effective && r < 1 && q
        ? ` title="${num(s.value, 1)}, scored at x${r.toFixed(3)} `
-         + `${curveFor(m).kind} retention for ${esc(q.quant)} at ${q.bpw} bpw${floored}"`
+         + `${curveFor(m).kind} retention for ${esc(q.quant)} at ${rungBpw(q)} bpw${floored}"`
        : ` title="${num(s.value, 1)}"`;
      return `<td class="n"${title}><span class="bar" style="--w:${s.value}%">`
        + `<span>${num(s.value, 0)}</span></span></td>`;
@@ -1547,8 +1570,8 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {loadRoster, applySettings, rankedRows, vocabulary, hardware,
                     filterCounts, licenseOf,
                     visible, sorted, expand, col, shown, scored, activeQuant,
-                    fittingQuants, quantChoices, rungPool, rungEngines, kvGib,
-                    fitContext, tgTps, ppTps,
+                    fittingQuants, quantChoices, rungPool, rungEngines,
+                    unusedSweeps, kvGib, fitContext, tgTps, ppTps,
                     modelRetention, curveFor, belowCurve, facetValue, facetPctRaw,
                     COLUMNS, MODALITIES, FLAGS, proseText, esc, num, gib, ctxLabel};
 }

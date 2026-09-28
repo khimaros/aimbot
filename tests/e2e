@@ -1130,14 +1130,23 @@ test('quantization is its own tab, and the discount follows the quant you picked
   // fact about the files, so it is there too.
   ok(TABS.includes('quantization'), 'the tab exists: ' + TABS);
 
-  // qwen3.8 27b is the model somebody ran at three arms on terminal-bench, so
-  // it is the one whose discount comes off a MEASUREMENT rather than off the
-  // deepseek fit every other model borrows
+  // qwen3.8 27b is the model three people ran on their own files, so it is the
+  // one that shows both halves of the rule: whichever curve answered is named,
+  // and every sweep is listed whether or not it answered
   const measured = D.models.find(x => (D.retention.measured[x.repo] || []).length);
   ok(measured, 'the roster carries a measured curve');
   openModel(measured.repo, 'quantization');
   const html_ = html('#body');
-  ok(html_.includes('measured'), 'the tab says the curve was measured for it');
+  const curve = curveFor(measured);
+  // which curve answered lives where the discount is drawn -- the operate tab's
+  // panel -- and the sweeps that did not answer have to say so there, because
+  // they are printed three rows below on THIS tab as if they were the evidence
+  const drawn = tabOperate(measured);
+  ok(drawn.includes(curve.kind), 'the panel names the curve that answered: ' + curve.kind);
+  if (unusedSweeps(measured, curve).length) {
+    ok(drawn.includes('this model carries'),
+       'and says why the sweeps on the next tab did not carry the ranking');
+  }
   // EVERY sweep of this model, not just the one its own rung is scored against:
   // the tab is about what a quant is, and two people measuring the same model
   // on different files is the most interesting thing that can be true of it
@@ -1189,11 +1198,16 @@ test('quantization is its own tab, and the discount follows the quant you picked
     ops = {runtime: 'llama.cpp', repo: r, quant: pick.quant, profile: null};
     const block = discount(tabOperate(measured));
     ok(block.includes(esc(pick.quant)), r + ': the block names the picked rung ' + pick.quant);
-    const kept = num(retention(pick.bpw, measured, pick) * 100, 1) + '%';
+    const kept = num(retention(rungBpw(pick), measured, pick) * 100, 1) + '%';
     ok(block.includes(kept), r + ': and what that rung keeps, ' + kept + ': ' + block);
-    const ran = D.retention.measured[measured.repo].find(c => c.quant_repo === r);
-    eq(block.includes('measured on these files'), !!ran,
-       r + ': the curve is the one measured on this repo, if anybody measured it');
+    // and the curve is the MODEL's rather than each repo's: a sweep of one
+    // publisher's files cannot rank another's, so what answers here is the same
+    // for every rung the model publishes and the panel says which one it was
+    eq(block.includes('measured on these files'),
+       curveFor(measured, pick).kind === 'measured',
+       r + ': the panel claims a measurement only when a sweep ranks this model');
+    eq(curveFor(measured, pick).kind, curveFor(measured).kind,
+       r + ': every rung shares the one curve the model is ranked on');
     seen.add(block);
   });
   ok(seen.size > 1, 'different picks draw different arithmetic');
@@ -2208,29 +2222,74 @@ test('a milestone is not offered as a filter', () => {
 // would read 0.904 where the fitted curve says 0.778 -- a measurement making
 // thin quants look BETTER than the fit, which is backwards. below its own range
 // a measured curve defers to the fitted one instead.
+// the curve is installed rather than read off the roster, because whether a
+// measurement can rank a model at all depends on how many publishers that model
+// has, and that is a fact about today's captures rather than about the rule.
 test('a short measured curve defers to the fitted one below its range', () => {
   RESET();
-  const m = D.models.find(x => (D.retention.measured || {})[x.repo]);
-  ok(m, 'some model carries a measured curve');
-  const own = curveFor(m);
-  eq(own.kind, 'measured', m.short + ' uses its own curve');
+  const m = D.models.find(x => x.kind === 'text' && !x.native_low_bpw
+    && new Set(quantChoices(x).map(c => c.repo)).size === 1
+    && quantChoices(x).some(c => rungBpw(c) > 8));
+  ok(m, 'a model published by one quantizer, which is what a sweep can rank');
+  const sweep = {points: [[5, 0.9], [16, 1]], kind: 'score', metric: 'synthetic',
+                 quant_repo: quantChoices(m)[0].repo};
+  D.retention.measured[m.repo] = [sweep];
+  clearScores();
+  try {
+    const own = curveFor(m);
+    eq(own.kind, 'measured', m.short + ' uses its own curve');
+    const lo = own.points[0][0], fit = D.retention.fitted.points;
+    const below = lo - 1, inside = (lo + own.points[own.points.length - 1][0]) / 2;
+    ok(below > 0, 'there is room under the measured range');
+    // inside its range the measurement wins
+    near(retention(inside, m), interpAt(own.points, inside), 1e-9,
+      'inside the measured range the measurement is used');
+    // below it, the fitted curve -- and NOT the measured curve's floor
+    near(retention(below, m), interpAt(fit, below), 1e-9,
+      'below the measured range the fitted curve is used');
+    ok(Math.abs(retention(below, m) - own.points[0][1]) > 1e-9,
+      'and not the measured curve clamped at its lowest point, which would be '
+      + own.points[0][1] + ' against the fit\'s ' + interpAt(fit, below).toFixed(3));
+  } finally {
+    delete D.retention.measured[m.repo];
+    clearScores();
+  }
+});
 
-  const lo = own.points[0][0];
-  const fit = D.retention.fitted.points;
-  const below = lo - 0.5;
-  ok(below > 0, 'there is room under the measured range');
-
-  // inside its range the measurement wins
-  const inside = (lo + own.points[own.points.length - 1][0]) / 2;
-  near(retention(inside, m), interpAt(own.points, inside), 1e-9,
-    'inside the measured range the measurement is used');
-
-  // below it, the fitted curve -- and NOT the measured curve's floor
-  near(retention(below, m), interpAt(fit, below), 1e-9,
-    'below the measured range the fitted curve is used');
-  ok(Math.abs(retention(below, m) - own.points[0][1]) > 1e-9,
-    'and not the measured curve clamped at its lowest point, which would be '
-    + own.points[0][1] + ' against the fit\'s ' + interpAt(fit, below).toFixed(3));
+// and a second publisher ends the sweep's authority over the ranking: its own
+// rungs are still what it measured, and the other's are not, so no measured
+// number can rank the two against each other.
+test('a second publisher takes the ranking off a sweep that measured one', () => {
+  RESET();
+  const m = D.models.find(x => x.kind === 'text' && !x.native_low_bpw
+    && new Set(quantChoices(x).map(c => c.repo)).size === 1
+    && quantChoices(x).some(c => rungBpw(c) > 8));
+  ok(m, 'a single-publisher model to add one to');
+  const repo = quantChoices(m)[0].repo;
+  D.retention.measured[m.repo] = [{points: [[5, 0.9], [16, 1]], kind: 'score',
+                                   metric: 'synthetic', quant_repo: repo}];
+  clearScores();
+  eq(curveFor(m).kind, 'measured', 'one publisher, and the sweep ranks it');
+  // pretend a second quantizer published a rung of the same model
+  const rung = quantChoices(m)[0];
+  m.quants[0].available = (m.quants[0].available || [Object.assign({}, rung)])
+    .concat([Object.assign({}, rung, {quant: rung.quant + '-OTHER'})]);
+  const before = m.quants.length;
+  m.quants.push({repo: 'someone-else/' + repo.split('/').pop(),
+                 quant: 'Q8_0', available: [{quant: 'Q8_0', gib: 1, bpw: 8}]});
+  clearScores();
+  try {
+    const c = curveFor(m);
+    ok(c.kind !== 'measured', 'a rung nobody swept cannot be ranked by the sweep'
+      + ', so the model shares one scale: got ' + c.kind);
+    eq(unusedSweeps(m, c).length, 1, 'and the sweep is still there to be shown');
+    ok(quantChoices(m).every(x => curveFor(m, x).kind === c.kind),
+      'every rung of the model is discounted on that one curve');
+  } finally {
+    m.quants.length = before;
+    delete D.retention.measured[m.repo];
+    clearScores();
+  }
 });
 
 // ISTA-DASLab's card runs its own GSQ-RCO rungs and unsloth's UD rungs over the
@@ -2246,12 +2305,87 @@ test('a measured curve is only applied to the files it measured', () => {
     (D.retention.measured[m.repo]).forEach(c => ok(c.quant_repo,
       m.short + ': a score curve has to name the gguf repo it ran, got '
       + JSON.stringify(c.ref)));
-    const c = curveFor(m), q = activeQuant(m);
+    const c = curveFor(m);
     if (c.kind !== 'measured') return;
-    ok(q, m.short + ' is scored on some rung if a measured curve answered');
-    eq(c.src.quant_repo, q.repo, m.short + ' is scored on ' + q.quant + ' out of '
-      + q.repo + ', so the curve used must be the one run on that repo');
+    // ranking a model off a sweep is honest only when the sweep ran every rung
+    // the model publishes. a publisher's own curve against its own base says
+    // nothing about another quantizer's file at the same bits per weight, and
+    // the two numbers do not even land on the same level -- which is how a 3.37
+    // bpw rung came to outscore a 5.37 one of the same model
+    const repos = new Set(quantChoices(m).map(x => x.repo));
+    eq(repos.size, 1, m.short + ' is ranked by ' + c.src.quant_repo + ' while its '
+      + 'rungs come from ' + [...repos].join(', '));
+    eq([...repos][0], c.src.quant_repo,
+       m.short + ': the ranking curve has to be the one run on the repo that '
+       + 'publishes them');
   });
+});
+
+// the two measured curves on this roster are not one scale. ISTA's own sweep of
+// its GSQ-RCO rungs of qwen3.8 flash next reads 0.994 kept at 3.37 bpw, where
+// the fit every other model borrows reads 0.955 there and 0.982 at 5.37. so a
+// ladder that discounts one rung of a model by each ranks FEWER BITS HIGHER, in
+// the column whose whole job is saying which file to run -- and the row the fit
+// picks, the one with the most bits, then reads as a worse choice than a rung
+// four rows down. a measurement is a curve of one quantizer's FILES against its
+// own bf16 base, so it carries a model's ranking only when it speaks for every
+// rung that model publishes; otherwise every rung is discounted on the common
+// curve, which is the scale the rest of the roster is on to begin with.
+test('a model is discounted on one scale, not one curve per repo', () => {
+  RESET();
+  const carried = D.models.filter(m => ((D.retention.measured || {})[m.repo] || []).length);
+  ok(carried.length >= 2, 'more than one model carries a measured curve');
+  carried.forEach(m => {
+    const on = new Set(quantChoices(m).map(c => {
+      const c2 = curveFor(m, c);
+      return c2.kind + ' over ' + c2.points.length + ' points';
+    }));
+    eq(on.size, 1, m.short + ' would rank its rungs on ' + [...on].join(' vs '));
+  });
+});
+
+// the same rule as the question a reader is actually asking of a ladder: does
+// the rung with more bits ever score lower than the one with fewer.
+test('more bits per weight never score lower within a model', () => {
+  RESET();
+  setHardware({...DEFAULT_HARDWARE, budget: 128});
+  setLadder(true);
+  const bad = [];
+  D.models.forEach(m => {
+    const rows = expand([m]).filter(r => r._q && scored(r).value !== null);
+    for (let i = 1; i < rows.length; i++) {
+      const more = rows[i - 1], less = rows[i];
+      if (!(rungBpw(less._q) < rungBpw(more._q))) continue;
+      if (scored(less).value > scored(more).value + 0.05) {
+        bad.push(m.short + ': ' + less._q.quant + ' at ' + rungBpw(less._q)
+          + 'bpw scores ' + scored(less).value.toFixed(1) + ' over ' + more._q.quant
+          + ' at ' + rungBpw(more._q) + 'bpw on ' + scored(more).value.toFixed(1));
+      }
+    }
+  });
+  setLadder(false);
+  eq(bad.join(' | '), '', 'a ladder that ranks fewer bits higher');
+});
+
+// and the pick agrees with the column it prints. `best quant` chooses on bits
+// per weight, so if the row it lands on is outscored by a lower rung on the same
+// model the two halves of the page are answering `which one` differently.
+test('the rung the fit picks is the one its own ladder scores highest', () => {
+  RESET();
+  setHardware({...DEFAULT_HARDWARE, budget: 128});
+  const bad = [];
+  visible().forEach(m => {
+    const q = activeQuant(m), mine = scored(m).value;
+    if (!q || mine === null) return;
+    fittingQuants(m).forEach(other => {
+      const v = scored(Object.assign(Object.create(m), {_q: other, _s: null})).value;
+      if (v !== null && v > mine + 0.05) {
+        bad.push(m.short + ' reads ' + q.quant + ' at ' + mine.toFixed(1)
+          + ' while ' + other.quant + ' scores ' + v.toFixed(1));
+      }
+    });
+  });
+  eq(bad.join(' | '), '', 'the row on screen is not the top of its own ladder');
 });
 
 // a rendered reference is still a measurement, and the reader should be able to
