@@ -189,6 +189,12 @@ QUANT_EVIDENCE = [
       "epoch.cursorbench", "epoch.deepswe", "epoch.frontiercode",
       "epoch.frontierswe", "epoch.gso", "epoch.scicode",
       "epoch.swe_bench_verified", "epoch.terminalbench", "epoch.webdev_arena",
+      # livebench's two coding categories: code generation and completion, and
+      # javascript/typescript/python written to a spec. the same kind of task the
+      # curve was fitted on, so the curve is evidence here too -- with the caveat
+      # its own group below carries, that the site scored an endpoint rather than
+      # a checkpoint it ran
+      "livebench.coding", "livebench.agentic",
       "card.deepswe", "card.livecodebench", "card.scicode",
       "card.swebench_pro", "card.swebench_verified", "card.terminalbench"]),
 
@@ -255,7 +261,7 @@ QUANT_EVIDENCE = [
       "epoch.gdp_pdf", "epoch.lech_mazur_writing", "epoch.metr_time_horizons",
       "epoch.forecastbench", "epoch.posttrainbench",
       "epoch.surface_evolver_bench",
-      "epoch.vending_bench_2", "epoch.weirdml", "card.gdpval"]),
+      "epoch.vending_bench_2", "epoch.weirdml", "epoch.weirdml_v3", "card.gdpval"]),
 
     ("composite", False,
      "a composite of the others, so discounting it would apply the curve "
@@ -306,6 +312,23 @@ QUANT_EVIDENCE = [
     # most plausibly bad at and the part nobody has measured. `jev.score` rides in
     # here rather than under `composite`: it is a harmonic mean over the four beside
     # it, including two axes about somebody's GPU.
+    # the sixth text board, and the widest: 23 graded tasks under seven category
+    # banners. five of its facets are here rather than beside the two coding ones
+    # above because the categories they roll up are not code, and the reason the
+    # curve does not reach any of them is one the site states about its own board:
+    # the rows are SERVED ENDPOINTS, scored through a vendor's API, so which
+    # weights answered is a claim about a deployment rather than a checkpoint in a
+    # harness. `score` is the mean of the seven categories the board orders rows
+    # by, and it rides here for the same reason aa.intelligence rides under
+    # `composite`: it is a mean over the facets beside it.
+    ("livebench", False,
+     "graded tasks with published answer keys, scored against hosted endpoints of "
+     "open-weight models. the tasks are maths, proof-reading, navigation, table "
+     "wrangling and instruction adherence rather than code, so the retention curve "
+     "says nothing about what a quant costs them",
+     ["livebench.score", "livebench.reasoning", "livebench.math",
+      "livebench.data", "livebench.language", "livebench.if"]),
+
     ("jevbench", False,
      "typed decisions, read off option-letter logits in one forward pass. every "
      "row was measured through the author's own server in bf16, and no quantized "
@@ -545,6 +568,11 @@ GROUPS = [
     ("swe-rebench", "pull requests merged after the models shipped, so a score "
      "here cannot have been trained against."),
     ("epoch", "epoch's own runs on its own harness, plus leaderboards it mirrors."),
+    ("livebench", "23 tasks with published answer keys under seven category "
+     "banners, and the widest single harness here: nothing else asks about typos, "
+     "floor plans and paraphrasing as separate questions. the rows are endpoints, "
+     "so the site's board is about a deployment and this roster's gguf is a second "
+     "opinion about the weights."),
     ("card claims", "what the model says about itself. corrected by the median "
      "+0.9 overstatement analyze-self-report measured, and still the weakest "
      "evidence here."),
@@ -1079,9 +1107,13 @@ def with_bpw(quants, params_b):
 # checkpoint's BASE repo, never a gguf, and nothing here tracks its support
 # matrix. it is offered for text models because that is where the claim holds,
 # and the page's snippet says which repo it would serve.
-def engines_for(model):
-    """Every runtime that can load this model, derived plus written."""
-    out = set(model.get("engine") or [])
+def engines_for(model, loaded=()):
+    """Every runtime that can load this model, derived plus written.
+
+    `loaded` is what the two catalog joins say, so a runtime never appears here
+    twice from two places.
+    """
+    out = set(model.get("engine") or []) | set(loaded)
     if (model.get("runtime") or {}).get("arch"):
         out.add("llama.cpp")
     if model.get("crispasr") or any(q.get("crispasr")
@@ -1117,6 +1149,106 @@ def crispasr_block(model, backends):
     if repos:
         block["repos"] = repos
     return block
+
+
+# audio.cpp and gufo both publish their own catalog of what they load, naming
+# HUGGING FACE REPOS in it, so which models they load is a join the build can do
+# rather than a fact to type 200 times. crispasr's `crispasr:` block stays
+# hand-written because its README names repos only for some backends and
+# asserting a backend for a conversion nobody tested against it is a guess; here
+# the catalog IS the test -- audio.cpp's model manager downloads those exact
+# files and gufo's guide measured those exact bytes.
+#
+# both joins are REPO equality and both refuse to answer when two catalogs name
+# one repo. `--family omnivoice` and `gufo serve tts` pick a loader, and a model
+# whose weights two families both claim is a model where naming either is a
+# guess about which one a reader should run.
+def engine_match(weights, repo, quants):
+    """The catalog entries naming this model's repo or one of its pinned repos.
+
+    Returns (matches, names) -- every entry that named a repo of this model, and
+    which repos it named, so a caller can report an ambiguity instead of
+    silently picking one.
+    """
+    mine = {repo} | {q["repo"] for q in (quants or []) if q.get("repo")}
+    return [(name, sorted(w & mine)) for name, w in sorted(weights.items())
+            if w & mine]
+
+
+def package_path(pk):
+    """What to hand `--model` for this package.
+
+    The manager lays a package down under `models/<target_directory>`, so a gguf
+    package names the file inside it -- the spec writes
+    `OmniVoice-GGUF/omnivoice-q8_0.gguf` and the path is
+    `models/OmniVoice-GGUF/omnivoice-q8_0.gguf` -- and a snapshot package names
+    the DIRECTORY, because `--model` takes a model directory for those and its
+    first file is a `config.json`.
+    """
+    home = "models/%s" % (pk.get("target_directory") or pk.get("id"))
+    files = pk.get("files") or []
+    if pk.get("format") != "gguf" or not files:
+        return home
+    return "%s/%s" % (home, files[0].split("/")[-1])
+
+
+def audiocpp_block(repo, model, catalog):
+    """The audio.cpp family that downloads these weights, and what to run."""
+    hits = engine_match({f: {p["repo"] for p in (rec.get("packages") or [])
+                             if p.get("repo")}
+                         for f, rec in (catalog or {}).items()},
+                        repo, model.get("quants"))
+    if len(hits) != 1:
+        return None
+    name, matched = hits[0]
+    rec = catalog[name]
+    packages = rec.get("packages") or []
+    # only a package downloaded from the repo THIS model matched. `qwen3_asr` is
+    # one family holding two checkpoints, and its `recommended_package` is the
+    # 1.7b while the 0.6b is what the entry is keyed on: naming the recommended
+    # one would print a command for a model three times the size of the row
+    # above it. where the match came in through a pinned quant repo the family
+    # publishes no package of that repo, and the default is the only honest answer
+    here = [p for p in packages if p.get("repo") in matched] or packages
+    want = (rec.get("ui") or {}).get("recommended_package")
+    pk = (next((p for p in here if p.get("id") == want), None)
+          or next((p for p in here if p.get("default")), None)
+          or (here[0] if here else None))
+    out = {"family": name, "tasks": rec.get("tasks") or [],
+           "category": rec.get("category"), "matched": matched,
+           "packages": len(packages)}
+    if pk:
+        out["package"] = {"id": pk.get("id"), "repo": pk.get("repo"),
+                          "format": pk.get("format"),
+                          "precision": pk.get("precision"),
+                          "dir": pk.get("format") != "gguf",
+                          "path": package_path(pk)}
+    # and the package that reads the CHECKPOINT rather than audio.cpp's own
+    # conversion of it -- the one whose repo is the one this entry is keyed on.
+    # it is the difference between "install this package" and "these weights, as
+    # published", which is what the operate tab has to say out loud the way it
+    # says `-m auto` for crispasr and kokoro
+    native = next((p for p in packages if p.get("repo") == repo), None)
+    if native:
+        out["native"] = {"repo": repo, "format": native.get("format")}
+    return out
+
+
+def gufo_block(repo, model, guides):
+    """The gufo guide that loads these weights, and how it starts the server."""
+    hits = engine_match({s: {w.get("repo") for w in (rec.get("weights") or [])}
+                         for s, rec in (guides or {}).items()},
+                        repo, model.get("quants"))
+    if len(hits) != 1:
+        return None
+    name, matched = hits[0]
+    rec = guides[name]
+    out = {"slug": name, "display": rec.get("display"),
+           "modes": rec.get("modes"), "matched": matched,
+           "weights": rec.get("weights") or []}
+    if rec.get("serve"):
+        out["serve"] = rec["serve"]
+    return out
 
 
 def base_block(model, card, keys):
@@ -1166,6 +1298,8 @@ def build_model(repo, model, ctx):
                            ctx["voices"], ctx.setdefault("unnamed", []),
                            ctx["tensors"], repo)
     quants = with_bpw(quants, facts.get("params_total_b"))
+    ac = audiocpp_block(repo, model, ctx["audiocpp"])
+    gufo = gufo_block(repo, model, ctx["gufo"])
     name = model.get("name") or {}
     rec = {
         "repo": repo, "publisher": repo.split("/")[0],
@@ -1181,8 +1315,14 @@ def build_model(repo, model, ctx):
                                      note_data(), model=repo)
                   if model.get("notes") else None),
         "runtime": rendered_notes(model.get("runtime") or {}, repo),
-        "engines": engines_for(model),
+        "engines": engines_for(model, [e for e, block in (("audio.cpp", ac),
+                                                          ("gufo", gufo))
+                                       if block]),
         "crispasr": crispasr_block(model, ctx["backends"]),
+        # the two engines whose claim is a catalog join. either can be None, and
+        # None means the runtime is not offered rather than that it was skipped
+        "audiocpp": ac,
+        "gufo": gufo,
         "base": base_block(model, card, ctx["registry_keys"]),
         "native_low_bpw": model.get("native_low_bpw"),
         # why this entry is keyed on a gguf repo: nobody published weights for
@@ -1263,6 +1403,8 @@ def build():
            "voices": load_json("gguf-voices"),
            "tensors": load_json("gguf-tensors"),
            "backends": (load_json("crispasr").get("backends") or {}),
+           "audiocpp": (load_json("audiocpp").get("families") or {}),
+           "gufo": (load_json("gufo-support").get("models") or {}),
            "probes": load_json("template-probes"),
            "usecase": load_json("usecase"), "cards": load_json("model-cards"),
            "known_quants": set(support.get("quants") or []),

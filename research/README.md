@@ -20,6 +20,8 @@ date is in each file's provenance below.
 | `data/gguf-voices.json` | 2026-09-04 | the speaker names each TTS gguf ships, read from its own header |
 | `data/sdcpp-support.json` | 2026-09-04 | stable-diffusion.cpp's tensor-name detector, and which registry image models it fires on |
 | `data/crispasr.json` | 2026-09-04 | crispasr's own catalog: 85 backends with the repos each was published against, plus the capability bits it generates from `--list-backends-json` |
+| `data/audiocpp.json` | 2026-09-29 | audio.cpp's `model_specs/*.json`: 99 families with every package each downloads -- id, format, precision and the huggingface repo and path it comes from |
+| `data/gufo-support.json` | 2026-09-29 | gufo's per-model guides: the files it loads at pinned revisions, the `gufo serve <kind>` it starts with and the speculative mode its figures were measured under |
 | `data/gbench.json` | 2026-08-17 | gertlabs.com/rankings |
 | `data/gguf-sizes.json` | 2026-08-17 | huggingface hub tree api |
 | `data/gguf-tensors.json` | 2026-09-09 | the ggml type of every tensor in each published rung, read from its own tensor table: 1805 rungs over 177 repos |
@@ -31,6 +33,7 @@ date is in each file's provenance below.
 | `data/swe-rebench.json` | 2026-08-17 | swe-rebench.com |
 | `data/tbench.json` | 2026-08-17 | hf datasets, harborframework/terminal-bench-2-leaderboard |
 | `data/epoch.json` | 2026-08-17 | epoch.ai benchmarking hub (csv bundle) |
+| `data/livebench.json` | 2026-06-25 | livebench.ai: one pinned board, 23 graded tasks over 7 categories, plus the site's own model map for its open-weights flag |
 | `data/jevbench.json` | 2026-09-26 | benchmarkheaven.com/jev-models: one frozen revision of the System One board, 93 decision models, rerankers and classifiers, four axes each |
 | `data/model-facts.json` | 2026-08-17 | derived: hf config.json, safetensors index, chat template |
 | `data/chat-templates/` | 2026-08-17 | the chat templates themselves, verbatim, base repo and gguf header |
@@ -443,6 +446,36 @@ these are summed byte totals of the real files, so sharded quants aggregate and
 substitute: UD-* quants mix precisions per tensor, and gpt-oss-120b is within
 2gib of the same size at every tag because it is natively MXFP4.
 
+## the sixth text board
+
+`livebench.json` is 23 graded tasks with published answer keys under seven
+category banners -- reasoning, coding, agentic coding, mathematics, data
+analysis, language, instruction following. nothing else here asks about typos,
+floor plans and paraphrasing as three separate questions, which is the reason the
+categories are carried rather than the one number the site sorts its rows by.
+
+three requests build one board, and the cutoff is **pinned** the way jevbench's
+revision is: `table_<cutoff>.csv` for the scores, `categories_<cutoff>.json` for
+which task belongs to which banner, and the site's own model map for the
+`openweight` flag and the huggingface url. the board is a published thing, and a
+sweep that read whatever was newest would move 200 percentiles on somebody else's
+release day; `--cutoff` reads an older board and moving this repo's numbers is a
+commit that changes the pinned one.
+
+the flag is the only reason the third request exists. the rows are mostly hosted
+endpoints, and a row the site itself does not call open weights is never offered
+to the matcher -- the same rule every speech and image board here applies. that
+map is a javascript file whose nested `finetune: {...}` blocks defeat the naive
+one-line-per-entry regex, which is worth knowing before editing the parser: the
+first version silently dropped all three smaug rows along with their flags.
+
+**none of it is weighted.** it is the sixth board over the coding, math and
+reasoning axes the composite already spends weight on, its rows are endpoints
+rather than one harness over a checkpoint, and no redundancy analysis against the
+boards it overlaps has been done. `registry/dashboard.yaml` therefore carries
+`livebench.*: 0.0`: on the model, rankable by a reader who moves the slider, in
+the same way image editing and `jev.hard` are carried.
+
 ## the decision source
 
 `jevbench.json` is the board for the models that answer in probabilities. a
@@ -749,6 +782,7 @@ rather than uniformly:
 | `fetch-tts-arena`, `fetch-voicearena` | 24h | an arena moves only as fast as people vote, and a rating built on 600 votes does not turn over in an afternoon |
 | `fetch-genai-showdown` | 24h | four static json files that change when one person adds a model or a prompt, which is weeks apart |
 | `fetch-jevbench` | immutable | the url names a frozen revision, so only `--refresh` goes back out, and a new revision is a url change rather than a re-read |
+| `fetch-audiocpp`, `fetch-gufo-support` | 24h | the catalogs are a repo's own source files: they move when a family lands, which is a release event and not a feed. audio.cpp is 101 spec files and gufo 8 markdown ones, so a day of cache is what keeps a daily sweep off 109 conditional requests |
 
 48h rather than 24 because the point is a sweep run the next day, and anything
 shorter than the gap between two of them never saves a request. a model added

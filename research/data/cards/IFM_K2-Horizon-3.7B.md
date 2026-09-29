@@ -146,7 +146,7 @@ Some stages, such as SFT, have multiple phases with slight changes to the data m
 
 The tables below list the release artifacts for **K2-Horizon-3.7B**, their availability, and the expected release dates for remaining items.
 
-**Last updated:** 2026-09-11
+**Last updated:** 2026-09-28
 
 **Status:**
 
@@ -163,7 +163,8 @@ The tables below list the release artifacts for **K2-Horizon-3.7B**, their avail
 | Blog post | [Blog post](https://ifm.ai/blog/k2/) | Available | N/A |
 | Checkpoints | [Checkpoint inventory](#checkpoint-inventory) | Available | N/A |
 | Technical report | Not yet available | In Progress | End of September 2026 |
-| Code repository | [GitHub](https://github.com/ifm-ai/xllm) | In Progress | End of September 2026 |
+| Code repository | [GitHub](https://github.com/ifm-ai/xllm) | Available | N/A |
+| Data | [Hugging Face](https://huggingface.co/datasets/IFM/TxT360-v2) | Available | N/A |
 
 ### Checkpoint Inventory
 

@@ -1,0 +1,282 @@
+#!/usr/bin/env python3
+
+"""Fetch audio.cpp's own package catalog into data/audiocpp.json.
+
+    fetch-audiocpp                # write the capture
+    fetch-audiocpp --report       # what the registry carries against it
+
+audio.cpp is the second ggml engine with a crispasr-shaped problem: it is one
+binary carrying ~100 model families, and WHICH family a file needs is the whole
+difference between a command that runs and one that loads noise. its `--family`
+is the same kind of fact as crispasr's `--backend` -- a property of the weights,
+not a choice a host makes -- so the registry cannot claim the engine without
+naming it, and nothing here had read it.
+
+the catalog is read off `model_specs/*.json`, which the project itself calls
+"the current source of truth for default download links" (docs/model_manager.md).
+the readme's supported-model table is prose for humans and lists no repos; the
+specs are what the model manager actually downloads, so they are what a join on
+REPO can be built from. that join is the whole point: `kokoro` is a family,
+several checkpoints and three publishers, and matching on a word would claim all
+of them.
+
+what a spec says that matters here:
+
+  family        the `--family` argument, verbatim
+  tasks         what the loader answers -- tts, asr, diar, vc, ...
+  packages[]    one entry per downloadable package: its id (what
+                `audiocpp_model_manager install` takes), its format, its
+                precision, and the repo and path it comes from
+
+two facts per package, and they are not the same fact. audio.cpp republishes a
+gguf of most families under `audio-cpp/audio.cpp-gguf` AND ships a `safetensors`
+package that pulls the vendor checkpoint itself. so a model can be one audio.cpp
+loads WITHOUT any file this registry pins being one audio.cpp can read, which is
+kokoro's situation under crispasr again, and why the operate command names the
+package it would install rather than the rung on the row.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+
+import capture
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = "data/audiocpp.json"
+UPSTREAM = "0xShug0/audio.cpp"
+REF = "main"
+LIST_URL = "https://api.github.com/repos/%s/contents/model_specs" % UPSTREAM
+RAW = "https://raw.githubusercontent.com/%s/%s/model_specs/" % (UPSTREAM, REF)
+
+# one family, as the spec writes it, minus what nothing downstream asks. the
+# `ui` block is the WebUI's own layout: `recommended_package` is the one the
+# project tells a reader to start with, which is the package a command should
+# name, and `docs` is where the per-family CLI examples live.
+SPEC = ("family", "display_name", "description", "category", "status",
+        "tasks", "modes", "languages")
+UI = ("recommended_package", "docs")
+PACKAGE = ("id", "display_name", "default", "format", "precision",
+           "target_directory", "strip_prefix")
+# a gated repo needs a hub token and an accepted licence before the download
+# works, which is the licence story the dashboard already tells three ways
+DOWNLOAD = ("kind", "repo", "revision", "gated")
+
+# how many of a package's files the capture keeps
+FILE_LIMIT = 6
+
+
+def get(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def spec_names(body):
+    """The `model_specs/*.json` names, out of github's directory listing.
+
+    The listing is the only place the catalog is enumerated: audio.cpp has no
+    index file, and the readme counts families without naming their specs.
+    """
+    try:
+        entries = json.loads(body or "[]")
+    except ValueError:
+        return []
+    if not isinstance(entries, list):
+        return []
+    return sorted(e["name"] for e in entries
+                  if isinstance(e, dict) and str(e.get("name", "")).endswith(".json"))
+
+
+def package(pk, defaults):
+    """One downloadable package, with the repo it comes from resolved.
+
+    `download` is per-package and falls back to `package_defaults.download`,
+    which is how one spec holds both audio.cpp's own gguf and the vendor's
+    safetensors snapshot: the ggufs inherit the default repo and the native
+    packages name their own.
+    """
+    out = {k: pk[k] for k in PACKAGE if pk.get(k) is not None}
+    dl = dict(defaults)
+    dl.update(pk.get("download") or {})
+    for k in DOWNLOAD:
+        if dl.get(k) is not None:
+            out[k] = dl[k]
+    # the files a package downloads, capped: pocket-tts's native package lists
+    # 28 voice embeddings under `extra_files`, none of which a command names, and
+    # the capture is inlined into the page. the count is kept so the truncation
+    # is visible rather than silent
+    files = pk.get("files") or []
+    if files:
+        out["files"] = files[:FILE_LIMIT]
+        if len(files) > FILE_LIMIT:
+            out["files_more"] = len(files) - FILE_LIMIT
+    return out
+
+
+def spec(body):
+    """One family's record, or None if the body is not a spec."""
+    try:
+        d = json.loads(body or "")
+    except ValueError:
+        return None
+    if not isinstance(d, dict) or not d.get("family"):
+        return None
+    out = {k: d[k] for k in SPEC if d.get(k) is not None}
+    defaults = (d.get("package_defaults") or {}).get("download") or {}
+    out["packages"] = [package(pk, defaults) for pk in (d.get("packages") or [])
+                       if pk.get("id")]
+    ui = d.get("ui") or {}
+    keep = {k: ui[k] for k in UI if ui.get(k) is not None}
+    if keep:
+        out["ui"] = keep
+    tags = (d.get("runtime") or {}).get("tags")
+    if tags:
+        out["runtime"] = {"tags": tags}
+    return out
+
+
+def shape(specs):
+    """{meta, families: {family: record}}, dropping anything without a package."""
+    families = {}
+    for name, rec in sorted(specs.items()):
+        if rec and rec.get("packages"):
+            families[rec["family"]] = rec
+    return {"meta": {"repo": UPSTREAM, "ref": REF, "source": LIST_URL,
+                     "specs": len(specs)},
+            "families": families}
+
+
+def load_registry(path):
+    try:
+        import yaml
+    except ImportError:
+        sys.exit("!!! pyyaml not found")
+    return (yaml.safe_load(open(path)) or {}).get("models") or {}
+
+
+def repos_of(rec):
+    """{(repo, kind)} a family downloads from -- gguf, safetensors, or both."""
+    out = {}
+    for pk in rec.get("packages") or []:
+        if pk.get("repo"):
+            out.setdefault(pk["repo"], set()).add(pk.get("format") or "?")
+    return out
+
+
+def report(payload, registry):
+    """Coverage both ways, on REPO alone.
+
+    Inward, the only question the roster can ask of a runtime: of the weights we
+    carry, which does this one load. outward, the roster's growth list: which
+    families it ships that nothing here names.
+
+    Both are repo joins and neither is a name join. audio.cpp's packages are
+    named `qwen3-tts-12hz-1.7b-base-q8_0_v2.gguf` and this registry's rung is
+    `Qwen3-TTS-12Hz-1.7B-Base-GGUF`, and a fuzzy match between those is how a
+    roster starts claiming an engine for weights it has never seen.
+    """
+    fams = payload.get("families") or {}
+    pinned, bases = {}, set(registry)
+    for repo, m in registry.items():
+        for q in m.get("quants") or []:
+            if q.get("repo"):
+                pinned.setdefault(q["repo"], repo)
+
+    claimed, native = {}, {}
+    for fam, rec in fams.items():
+        for repo, kinds in repos_of(rec).items():
+            if repo in bases:
+                native.setdefault(repo, []).append(fam)
+            elif repo in pinned:
+                claimed.setdefault(repo, []).append(fam)
+
+    print("audio.cpp: %d families, %d package repo(s) named"
+          % (len(fams), len({r for rec in fams.values()
+                             for r in repos_of(rec)})))
+
+    print("\ncheckpoints on the roster that audio.cpp downloads:")
+    if not native:
+        print("  none -- no family's package names a registry model's repo")
+    for repo in sorted(native):
+        short = (registry[repo].get("name") or {}).get("short") or repo
+        print("  %-38s %s" % (short, ", ".join(sorted(native[repo]))))
+
+    print("\nrungs on the roster that audio.cpp downloads as published:")
+    if not claimed:
+        print("  none -- no family's package names a repo the registry pins")
+    for repo in sorted(claimed):
+        print("  %-38s %s" % (repo, ", ".join(sorted(claimed[repo]))))
+
+    # the outward direction. an engine with 100 families and a roster of 200
+    # models shares SEVEN checkpoints with it, and the report that only counts
+    # the seven cannot say what the other 93 are waiting for
+    rest = sorted(set(fams) - {f for v in list(native.values()) + list(claimed.values())
+                               for f in v})
+    print("\nfamilies no roster entry shares a repo with: %d of %d"
+          % (len(rest), len(fams)))
+    print("  " + ", ".join(rest))
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--registry",
+                    default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--report", action="store_true",
+                    help="read the capture and the registry and say nothing else")
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--max-age", type=int, default=86400)
+    ap.add_argument("--allow-shrink", action="store_true")
+    args = ap.parse_args()
+
+    path = capture.resolve(args.out)
+
+    if args.report:
+        if not os.path.exists(path):
+            return "!!! no capture at %s -- run fetch-audiocpp first" % path
+        with open(path) as f:
+            payload = json.load(f)
+        return report(payload, load_registry(args.registry))
+
+    listing = get(LIST_URL, "audiocpp-specs", args.max_age, args.refresh)
+    names = spec_names(listing)
+    if not names:
+        print("!!! the model_specs listing read no json files", file=sys.stderr)
+        return 1
+
+    specs, failed = {}, []
+    for name in names:
+        body = get(RAW + name, "audiocpp-" + name[:-5], args.max_age, args.refresh)
+        rec = spec(body) if body else None
+        if rec:
+            specs[name[:-5]] = rec
+        else:
+            failed.append(name)
+    payload = shape(specs)
+    if failed:
+        print("  %d of %d spec(s) unread: %s"
+              % (len(failed), len(names), ", ".join(failed[:6])), file=sys.stderr)
+
+    def count(p):
+        return len(p.get("families") or {})
+
+    wrote, now, before = capture.write(path, payload, count,
+                                       allow_shrink=args.allow_shrink,
+                                       label="families")
+    if not wrote:
+        print(capture.refused(path, now, before, "families"))
+        return 1
+    print("wrote %d families to %s" % (now, path))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

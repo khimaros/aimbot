@@ -172,6 +172,22 @@ def key_spaces(data=None):
         if dn:
             out["epoch"].setdefault(norm(dn), mv or dn)
 
+    # livebench scores hosted endpoints of open models exactly as it scores
+    # proprietary ones, and its own model map says which rows are open weights --
+    # the same filter every board here applies. the map publishes a huggingface
+    # url, so the join is a repo path rather than a resemblance; the rows it has
+    # no url for, a hosted model behind a reasoning-effort suffix like
+    # `inkling-xhigh`, resolve through `ids.livebench` in the registry.
+    livebench = {}
+    for name, r in ((load("livebench", data) or {}).get("models") or {}).items():
+        if not r.get("openweight"):
+            continue
+        livebench.setdefault(norm(name), name)
+        repo = (r.get("huggingface") or "").replace("https://huggingface.co/", "")
+        if repo:
+            livebench.setdefault(norm(repo.split("/")[-1]), name)
+    out["livebench"] = livebench
+
     speech = load("artificial-analysis-speech", data)
     spoken = {
         "aa-stt": open_keys(speech.get("speech-to-text") or {}, "openWeights",
@@ -272,7 +288,7 @@ def key_spaces(data=None):
 # additions are inert here and load-bearing there.
 BOARD_NEEDS = {
     "aa": "text", "gbench": "text", "lmarena": "text", "swerebench": "text",
-    "epoch": "text", "lang": "text", "card": "text",
+    "epoch": "text", "livebench": "text", "lang": "text", "card": "text",
     "aa-stt": "transcribes", "aa-stt-streaming": "transcribes",
     "voicearena": "transcribes", "open-asr": "transcribes",
     "aa-tts": "synthesizes", "tts-arena": "synthesizes",
@@ -351,7 +367,12 @@ def tiered(want, key):
 # `candidates` only sees one model at a time, so nothing there can catch that.
 # the site's own description says the row is the 9B, which is prose rather than
 # a handle, so the honest answer is to leave it unmatched.
-EXACT_ONLY = {"open-asr", "showdown-t2i", "showdown-edit"}
+# livebench rows are ENDPOINTS, and its own map carries the spelling variants:
+# `deepseek-v4-flash`, `deepseek-v4-flash-0731` and `deepseek-v4.1-flash-max` are
+# three rows about two models, and a row whose name is another's plus a release
+# date is not the same run. the map publishes a huggingface repo for most of them,
+# so every join here is either that repo or the row named in `ids.livebench`.
+EXACT_ONLY = {"open-asr", "showdown-t2i", "showdown-edit", "livebench"}
 
 
 def candidates(space, wants, sized=(), exact_only=False):

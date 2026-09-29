@@ -35,6 +35,13 @@ weights:
   gbench.agentic: 0.15
   lmarena.rating: 0.10
   swerebench.resolved: 0.10
+  # livebench is the sixth text board over the coding, math and reasoning axes the
+  # four above already weight, its rows are hosted endpoints rather than one
+  # harness run over a checkpoint, and no redundancy analysis of it against the
+  # boards it overlaps has been done. so all eight of its facets ride at zero, the
+  # way image editing and `jev.hard` do: on the model, rankable by a reader who
+  # moves the slider, and weighted once somebody has said what they add.
+  livebench.*: 0.0
   community.*: 0.05
   card.*: 0.05
   # the open asr leaderboard carries the transcription half at more depth than
@@ -272,3 +279,11 @@ runtimes:
   roles: {vae: --vae, llm: --llm}
 - {k: TTS.cpp, gguf: true}
 - {k: Breeze-TTS-2.cpp, gguf: true}
+# audio.cpp and gufo are the two engines whose claim is DERIVED rather than
+# typed: each publishes its own catalog of what it loads (audio.cpp's
+# `model_specs/*.json`, gufo's per-model guides, both naming hugging face repos),
+# and `scripts/build-viewer` joins that catalog to the registry by repo. so no
+# entry says `engine: audio.cpp` anywhere, and a family that stops shipping the
+# checkpoint stops being an option the moment the capture is refreshed.
+- {k: audio.cpp, gguf: true}
+- {k: gufo, gguf: true}

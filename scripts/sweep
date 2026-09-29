@@ -83,6 +83,13 @@ COLLECT = [
     # stable-diffusion.cpp detects by TENSOR NAME rather than by architecture,
     # so this reads its detector and then each gguf's own tensor table
     ("stable-diffusion.cpp support", ["./fetch-sdcpp-support"]),
+    # the two engines that are not llama.cpp and publish what they load as a
+    # CATALOG rather than as prose: audio.cpp's `model_specs/*.json` and gufo's
+    # per-model guides both name huggingface repos, which is what the engines of
+    # those models are joined from at build time. audio.cpp is 101 small spec
+    # files behind a day of cache, gufo is eight markdown files
+    ("audio.cpp catalog", ["./fetch-audiocpp"]),
+    ("gufo support", ["./fetch-gufo-support"]),
     # the image half's third board, and the only one of them that measures
     # rather than polls: fifteen prompts with published passing criteria, judged
     # pass or fail, plus twelve editing ones. four plain json files, so it is
@@ -93,6 +100,10 @@ COLLECT = [
     ("swe-rebench", ["./fetch-swerebench"]),
     ("terminal-bench", ["./fetch-tbench"]),
     ("epoch", ["./fetch-epoch"]),
+    # livebench, whose cutoff is pinned for the same reason jevbench's revision
+    # is: the site publishes a new board whenever it likes and that would move
+    # every percentile on the page. moving it is this line changing
+    ("livebench", ["./fetch-livebench"]),
     # the board for the decision half, and the only source here whose rows answer
     # in probabilities rather than tokens. one json endpoint per revision, so it
     # costs one conditional request

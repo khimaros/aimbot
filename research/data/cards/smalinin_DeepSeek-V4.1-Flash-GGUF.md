@@ -36,8 +36,8 @@ hyper-connections, MoE layers, and two very large n-gram Engram lookup tables.
 | --- | --- | --- | ---: | ---: |
 | **Q2_K backbone + Q5_K Engram** | Available | `Q2_K-Q5/DeepSeek-V4.1-Flash-EngramQ5-Q2_K-00001-of-00010.gguf` | **3.58** | **335.382 GB** |
 | **IQ2_XXS gate/up + Q2_K down + Q8_0 Engram (antirez-like)** | Available | `IQ2_XXS_GU-Q2_K_Down-Q8/DeepSeek-V4.1-Flash-EngramQ8-IQ2_XXS_GU-Q2_K_Down-00001-of-00010.gguf` | **3.97** | **371.438 GB** |
-| **Protected Q2_K + Q8_0 Engram** | Available | `Q2_K_Protected-Q8/DeepSeek-V4.1-Flash-Protected-Q2_K-Q8_0_Engram-imatrix-00001-of-00010.gguf` | **4.42** | **413.390 GB** |
-| **IQ3_XS backbone + Q8_0 Engram** | Available | `IQ3_XS-Q8/DeepSeek-V4.1-Flash-IQ3_XS-Q8_0_Engram-imatrix-00001-of-00010.gguf` | **4.64** | **434.024 GB** |
+| **Protected Q2_K + Q8_0 Engram** | Available | `Q2_K_Protected-Q8/DeepSeek-V4.1-Flash-EngramQ8-Q2_K_Protected-00001-of-00010.gguf` | **4.42** | **413.390 GB** |
+| **IQ3_XS backbone + Q8_0 Engram** | Available | `IQ3_XS-Q8/DeepSeek-V4.1-Flash-EngramQ8-IQ3_XS-00001-of-00010.gguf` | **4.64** | **434.024 GB** |
 | **MXFP4 conversion + Q8_0 Engram** | Available | `MXFP4/DeepSeek-V4.1-Flash-MXFP4-00001-of-00010.gguf` | **5.43** | **507.954 GB** |
 
 Download every shard of the selected variant and pass only shard

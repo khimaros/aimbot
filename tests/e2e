@@ -1122,6 +1122,130 @@ test('the operations section shows the runtimes that load THIS model', () => {
   RESET();
 });
 
+test('a sixth text board arrives without moving the ranking it overlaps', () => {
+  // livebench is 23 graded tasks over seven categories, and the facets reach the
+  // page one per category plus the overall the board sorts its rows by
+  const d = model('qwen3.8 27b');
+  const lb = Object.keys(d.facets).filter(k => k.startsWith('livebench.'));
+  eq(lb.length, 8, 'seven categories and an overall: ' + lb.join(','));
+  ok(d.facets['livebench.coding'].value > 0, 'the coding category is a number');
+  eq(D.facet_meta['livebench.math'].unit, 'score',
+     "percent correct, the way the board publishes it");
+
+  // and it is carried at NO weight. it is the sixth board over the coding, math
+  // and reasoning axes the composite already spends weight on, its rows are
+  // hosted endpoints rather than a harness run, and nothing has yet said what it
+  // adds -- so the default ranking cannot move when the capture lands
+  const w = Object.keys(D.weights).filter(k => k.startsWith('livebench'));
+  eq(w.length, 1, 'one livebench weighting: ' + w.join(','));
+  eq(D.weights[w[0]], 0, 'at zero');
+
+  // the group they render under has to say what it is, since a column a reader
+  // cannot ask the meaning of is a number with no source
+  const g = D.groups.find(x => x.name === 'livebench');
+  ok(g && g.about.length > 80, 'the factor group is described: ' + JSON.stringify(g));
+  ok(g.about.includes('endpoint'),
+     'and the description carries the caveat: these are served endpoints');
+});
+
+test('audio.cpp and gufo are engines their own catalogs claim', () => {
+  RESET();
+  // two runtimes the registry never WRITES: each project publishes a catalog of
+  // what it loads, naming huggingface repos, and `build-viewer` joins that to the
+  // registry. so a family that stops shipping a checkpoint stops being an option
+  // the moment the capture is refreshed, and no model can be marked as loading
+  // under an engine its own bytes disagree with.
+  const rt = k => (D.config.runtimes || []).find(r => r.k === k);
+  ok(rt('audio.cpp'), 'audio.cpp is a runtime the config declares');
+  ok(rt('gufo'), 'and so is gufo');
+  ok(DEFAULT_ENGINES.indexOf('audio.cpp') < 0 && DEFAULT_ENGINES.indexOf('gufo') < 0,
+     'neither is on by default: ' + DEFAULT_ENGINES.join(','));
+
+  ok(runtimesFor(model('omnivoice')).some(r => r.k === 'audio.cpp'),
+     'omnivoice runs under audio.cpp');
+  ok(runtimesFor(model('qwen3.8 27b')).some(r => r.k === 'gufo'),
+     'and qwen3.8 27b under gufo');
+
+  // AUDIO.CPP LOADS A PACKAGE AND NOT THE RUNG ON THE ROW, so the command
+  // installs that package and points --model at where it lands. an `hf://` here
+  // would be a path audio.cpp has no way to read.
+  //
+  // WHICH package is the part this page will not guess. a family publishes its
+  // own gguf of the checkpoint AND a snapshot of the checkpoint itself, and the
+  // spec says nothing that attributes a gguf to one checkpoint rather than a
+  // sibling in the same family, so the command names the package downloaded from
+  // the repo this entry is keyed on and counts the rest.
+  ops = {runtime: 'audio.cpp', repo: null, quant: null, profile: null};
+  const ac = snippets(model('omnivoice')).map(s => s.text).join('\n');
+  ok(/^audiocpp_model_manager install omnivoice_safetensors/m.test(ac),
+     'the package is installed by the manager: ' + ac);
+  ok(ac.includes('--family omnivoice'), 'the loader is named, not sniffed');
+  ok(ac.includes('--task tts'), 'and so is the task');
+  ok(ac.includes('--model models/OmniVoice'),
+     'a snapshot package is a directory: ' + ac);
+  ok(ac.includes('# omnivoice publishes 4 package'),
+     'and the other packages are counted, not hidden: ' + ac);
+  ok(!ac.includes('hf://'), 'and no hf:// reference reaches a local path');
+
+  // where the checkpoint IS distributed as gguf, the same rule lands on a file
+  // inside its target directory, which is the shape most families take
+  ops = {runtime: 'audio.cpp', repo: null, quant: null, profile: null};
+  const bit = snippets(model('vibevoice-bitnet')).map(s => s.text).join('\n');
+  ok(bit.includes('--model models/VibeVoice-ASR-BitNet/vibeasr-vae-encoder-i8_s.gguf'),
+     'a gguf package names its file: ' + bit);
+
+  // ONE FAMILY, TWO CHECKPOINTS. `qwen3_asr` is 0.6b and 1.7b, and the family's
+  // own recommended package is the 1.7b. handing it to the 0.6b row prints a
+  // command for a model three times the size of the row above it, which is the
+  // same class of wrong as the wrong crispasr conversion: it runs, and it is not
+  // this model.
+  ops = {runtime: 'audio.cpp', repo: null, quant: null, profile: null};
+  const small = snippets(model('qwen3-asr-0.6b')).map(s => s.text).join('\n');
+  ok(small.includes('models/Qwen3-ASR-0.6B'),
+     'the 0.6b takes the package from its own repo: ' + small);
+  ok(!small.includes('1.7b'), 'and never the family default: ' + small);
+  ok(small.includes('--task asr') && small.includes('--audio audio.wav'),
+     'an asr family is given audio and not text: ' + small);
+
+  // GUFO LOADS THE FILE ITS GUIDE WAS MEASURED AT, drafter included. the sidecar
+  // flag is the guide's own -- dflash-model here, mtp-model next door -- and a
+  // command that dropped it starts a server with no drafter at a fraction of the
+  // figure the guide quotes, silently.
+  ops = {runtime: 'gufo', repo: null, quant: null, profile: null};
+  const g = snippets(model('qwen3.8 27b')).map(s => s.text).join('\n');
+  ok(/^gufo serve /m.test(g), 'the fragment invokes gufo: ' + g);
+  ok(g.includes('gufo serve --port 8080 llm \\\n  --model '
+     + 'models/Qwen3.8-27B-UD-Q4_K_XL.gguf'),
+     'the subcommand comes before --model, as its own cli wants: ' + g);
+  ok(g.includes('--speculative dflash2'), 'at the mode it was measured with');
+  ok(g.includes('--dflash-model models/Qwen3.8-27B-DFlash2-Q4_K_M.gguf'),
+     'with the draft from its own repo: ' + g);
+  ok(g.includes('--revision'), 'and the revision the bytes were pinned at');
+
+  ops = {runtime: 'gufo', repo: null, quant: null, profile: null};
+  const flash = snippets(model('qwen3.8 flash next')).map(s => s.text).join('\n');
+  ok(flash.includes('--speculative mtp') && flash.includes('--mtp-model'),
+     'the mtp build gets the mtp flag: ' + flash);
+  ok(!flash.includes('--dflash-model'),
+     'and not the dflash one: ' + flash);
+
+  // the engine filter asks the same question the chips do, in the other
+  // direction: picking gufo is asking what THAT loads
+  filters.mods = new Set();
+  filters.flags = new Set();
+  filters.licenses = new Set();
+  filters.engines = new Set(['gufo']);
+  const gufoOnly = visible().map(m => m.short);
+  ok(gufoOnly.includes('qwen3.8 27b') && gufoOnly.includes('qwen-image-2.1'),
+     'gufo loads them: ' + gufoOnly.join(','));
+  eq(gufoOnly.includes('whisper-large-v3-turbo'), false,
+     'and gufo does not load whisper');
+
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  filters.engines = new Set(DEFAULT_ENGINES);
+  RESET();
+});
+
 test('quantization is its own tab, and the discount follows the quant you picked', () => {
   RESET();
   // everything about what a quant IS was spread over the operate tab, between

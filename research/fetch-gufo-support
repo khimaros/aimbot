@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+
+"""Which models gufo loads, and at which file, from its own model guides.
+
+    fetch-gufo-support               # write data/gufo-support.json
+    fetch-gufo-support --report       # what the roster carries against it
+
+gufo is the third engine over ggml that is not llama.cpp, and the first one this
+registry needs a name for rather than a note. it loads GGUFs this repo already
+pins -- unsloth's `Qwen3.8-27B-UD-Q8_K_XL.gguf`, flash-next's `UD-Q4_K_XL` and
+its `MTP/` sidecar -- on a target (gfx1151, 128 GiB unified) the dashboard's
+hardware section already models, and it is the engine that loads the deepseek v4
+flash files llama.cpp has no architecture for. until now the only place that
+fact could live was `runtime: {fork: ...}` prose.
+
+it is also the first engine here whose weights are PINNED BY REVISION. every
+model guide downloads at a named commit and quotes a measured figure for those
+bytes, so the capture records the commit with the file: a row that says "656
+tok/s pp" is a claim about `4ca7207`, and a registry rung that has since moved
+off it is a different claim.
+
+three things are read, all of them from the repo's own markdown:
+
+  README.md                     the models-and-benchmarks table: one row per
+                               model, with a hugging face link per FILE and the
+                               revision each was measured at
+  docs/models/<slug>/README.md how to start it -- the `gufo serve <kind>`
+                               invocation, including which speculative mode the
+                               measured figure was taken with
+  docs/SERVER.md               the subcommands the CLI has at all
+
+what is NOT read is the benchmark table. those numbers live in each model's
+BENCHMARKS.md against hardware only gufo has, and importing seven hand-picked
+peaks as facets next to a suite that measures every model the same way is how
+this repo's percentiles stop meaning anything.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+import capture
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = "data/gufo-support.json"
+UPSTREAM = "gufo-org/gufo"
+REF = "main"
+RAW = "https://raw.githubusercontent.com/%s/%s/" % (UPSTREAM, REF)
+# the models-and-benchmarks table in the README is the one that carries the
+# pinned hugging face links. `docs/models/README.md` is a shorter index of the
+# same seven rows and names no repo at all, so it cannot be the join
+INDEX = "README.md"
+SERVER = "docs/SERVER.md"
+
+# a weights cell is a ` · `-separated run of markdown links. /blob/ names one
+# file at one commit, /tree/ names a directory at one commit and a bare repo url
+# names a repo the guide expects you to resolve yourself -- which is what the
+# BF16 checkpoints are, and is recorded as no revision rather than an invented
+# "main"
+WEIGHT = re.compile(r"\[([^\]]*)\]\(https://huggingface\.co/([\w.-]+/[\w.-]+)"
+                    r"(?:/(?:blob|tree)/([^/]+)(/[^)]*)?)?\)")
+# the model index row's first cell: `[Qwen3.8 27B](docs/models/qwen3.8-27b/README.md)`
+DOC_LINK = re.compile(r"\[([^\]]+)\]\((docs/models/[\w.-]+/README\.md)\)")
+# the one line per model that starts a server, with the flags it was measured
+# with. only the flag NAMES are kept: the values in the guides are shell
+# variables and local paths, which say nothing a command could use
+SERVE = re.compile(r"gufo serve ([a-z]+)((?:[ \t]+--[a-z-]+(?:[ \t]+\S+)?)*)")
+FLAG = re.compile(r"--([a-z][a-z-]*)")
+# the CLI surface, from the server guide's own list of top-level commands
+SUBCOMMANDS = re.compile(r"^gufo ([a-z]+)$", re.M)
+# the models README's own header, which is prose and not a table
+NOISE = re.compile(r"^(model|---|\|model)", re.I)
+
+
+def get(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def weights(cell):
+    """The hugging face files one index cell names, as {repo, revision, file}."""
+    out = []
+    for label, repo, rev, path in WEIGHT.findall(cell):
+        w = {"repo": repo}
+        if rev:
+            w["revision"] = rev
+        if path:
+            w["file"] = path.lstrip("/")
+        if label:
+            w["label"] = label
+        if w not in out:
+            out.append(w)
+    return out
+
+
+def index(body):
+    """{slug: {display, doc, modes, weights}} out of the model index table."""
+    out = {}
+    for line in (body or "").splitlines():
+        if not line.strip().startswith("|") or NOISE.match(line.strip()):
+            continue
+        cols = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cols) < 3:
+            continue
+        doc = DOC_LINK.search(cols[0])
+        if not doc:
+            continue
+        slug = os.path.basename(os.path.dirname(doc.group(2)))
+        got = {"display": doc.group(1),
+               "doc": doc.group(2),
+               "modes": re.sub(r"\s+", " ", re.sub(r"\*\*", "", cols[1])).strip()}
+        w = weights(cols[2])
+        if w:
+            got["weights"] = w
+        out[slug] = got
+    return out
+
+
+def serve(model_md):
+    """The `gufo serve <kind> ...` line a guide tells you to run, or None.
+
+    The FIRST one, because that is the guide's own answer to "how do I run this"
+    and the ones after it are variants -- the tts guide shows the base model,
+    then the voice-cloning variant, then a second port. the flags ride along
+    because `--speculative dflash2 --dflash-model PATH` is the measured
+    configuration and dropping it would print a command that runs slower than
+    the figure the index quotes.
+    """
+    # the guides break a command across lines with a trailing backslash, which
+    # is the same command and would otherwise read as `serve tts` with no flags
+    m = SERVE.search((model_md or "").replace("\\\n", " "))
+    if not m:
+        return None
+    out = {"kind": m.group(1), "flags": FLAG.findall(m.group(2))}
+    # which speculative mode the guide measured, since `--speculative` is what
+    # the tg figure in the index was taken with and dflash2/dspark/mtp are three
+    # different sidecars
+    mode = re.search(r"--speculative[ \t]+([a-z0-9-]+)", m.group(2))
+    if mode:
+        out["speculative"] = mode.group(1)
+    return out
+
+
+def shape(models, docs, server):
+    """{meta, models: {slug: record}}."""
+    out = {}
+    for slug, rec in sorted(models.items()):
+        got = dict(rec)
+        s = serve(docs.get(slug))
+        if s:
+            got["serve"] = s
+        out[slug] = got
+    subs = sorted(set(SUBCOMMANDS.findall(server or "")))
+    return {"meta": {"repo": UPSTREAM, "ref": REF, "source": RAW + INDEX,
+                     "subcommands": subs},
+            "models": out}
+
+
+def load_registry(path):
+    try:
+        import yaml
+    except ImportError:
+        sys.exit("!!! pyyaml not found")
+    return (yaml.safe_load(open(path)) or {}).get("models") or {}
+
+
+def join(weights, keys, pinned):
+    """[(repo, what it is here)] for the repos one guide loads from.
+
+    REPO equality and nothing looser. gufo links a FILE inside a repo and the
+    registry pins a rung by TAG, and only the size capture knows that unsloth's
+    `Qwen3.8-27B-UD-Q8_K_XL.gguf` IS the `UD-Q8_K_XL` rung -- comparing file
+    names here would be a second naming scheme, which is the drift this repo
+    keeps deleting. the repo is the fact an engine claim needs: which weights
+    the loader reads, from where.
+    """
+    out = []
+    for w in weights or []:
+        where = ("checkpoint" if w["repo"] in keys
+                 else "pinned rungs" if w["repo"] in pinned else None)
+        if where and (w["repo"], where) not in out:
+            out.append((w["repo"], where))
+    return out
+
+
+def report(payload, registry):
+    """Each guide, and which of the weights it loads this roster names."""
+    models = payload.get("models") or {}
+    keys = set(registry)
+    pinned = {q["repo"] for m in registry.values()
+              for q in (m.get("quants") or []) if q.get("repo")}
+
+    print("gufo: %d model guide(s), %d subcommand(s)"
+          % (len(models), len((payload.get("meta") or {}).get("subcommands") or [])))
+    for slug, rec in sorted(models.items()):
+        hit = join(rec.get("weights"), keys, pinned)
+        print("  %-22s %-18s %s"
+              % (rec.get("display"), slug,
+                 "; ".join("%s (%s)" % hit_ for hit_ in hit)
+                 or "no repo this roster names"))
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--registry",
+                    default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--report", action="store_true",
+                    help="read the capture and the registry and say nothing else")
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--max-age", type=int, default=86400)
+    ap.add_argument("--allow-shrink", action="store_true")
+    args = ap.parse_args()
+
+    path = capture.resolve(args.out)
+    if args.report:
+        if not os.path.exists(path):
+            return "!!! no capture at %s -- run fetch-gufo-support first" % path
+        with open(path) as f:
+            return report(json.load(f), load_registry(args.registry))
+
+    body = get(RAW + INDEX, "gufo-readme", args.max_age, args.refresh)
+    models = index(body)
+    if not models:
+        print("!!! the model index read no rows", file=sys.stderr)
+        return 1
+
+    docs, missing = {}, []
+    for slug, rec in sorted(models.items()):
+        text = get(RAW + rec["doc"], "gufo-doc-" + slug, args.max_age, args.refresh)
+        if text:
+            docs[slug] = text
+        else:
+            missing.append(slug)
+    server = get(RAW + SERVER, "gufo-server", args.max_age, args.refresh)
+
+    payload = shape(models, docs, server)
+    if missing:
+        print("  %d guide(s) unread: %s" % (len(missing), ", ".join(missing)),
+              file=sys.stderr)
+
+    def count(p):
+        return len(p.get("models") or {})
+
+    wrote, now, before = capture.write(path, payload, count,
+                                       allow_shrink=args.allow_shrink,
+                                       label="models")
+    if not wrote:
+        print(capture.refused(path, now, before, "models"))
+        return 1
+    print("wrote %d models to %s" % (now, path))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

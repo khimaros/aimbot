@@ -3717,6 +3717,12 @@ function rungRuntime(q, m) {
 // is still a pure function of registry facts -- the quant repo, the profile's
 // samplers, the native context, the derived knob.
 
+// the `--task` values audio.cpp's own cli documents (docs/usage.md). a spec's
+// `tasks:` list is wider and names capabilities -- `clone`, `design` -- that the
+// flag spells `clon` and `vdes`, so only the words both sides use get spelled
+const AUDIOCPP_TASKS = ['gen', 'tts', 'clon', 'vc', 'svc', 's2s', 'asr',
+                        'align', 'vad', 'diar', 'sep', 'vdes', 'midi'];
+
 const SAMPLER_FLAG = {temp: '--temp', top_p: '--top-p', top_k: '--top-k',
                       min_p: '--min-p', presence_penalty: '--presence-penalty',
                       repeat_penalty: '--repeat-penalty'};
@@ -4024,6 +4030,72 @@ function otherRuntime(m, rt, pick) {
             text: ['tts-cli', '--model-path ' + ref,
                    '--prompt "hello world"',
                    '--save-path out.wav'].join(' \\\n  ')};
+  }
+  // audio.cpp and gufo are the two engines this page never takes a file from:
+  // each loads a weight it named for itself -- audio.cpp's own package of the
+  // checkpoint, gufo the exact file its guide was measured at -- so the command
+  // installs and points at THAT rather than at the rung on the row. the join is
+  // in the payload (`m.audiocpp`, `m.gufo`), read off each project's own catalog
+  // at build time, and it is absent whenever the catalog is ambiguous.
+  if (rt.k === 'audio.cpp') {
+    const ac = m.audiocpp || {}, pk = ac.package || {};
+    // `--task` is a separate argument from `--family` and its vocabulary is the
+    // cli's, not the spec's: a spec lists `clone` and `design` as capabilities
+    // and the flag accepts `clon` and `vdes`. only the tasks that appear in both
+    // are spelled, because a wrong --task is a loader that refuses to start
+    const task = (ac.tasks || []).find(t => AUDIOCPP_TASKS.includes(t));
+    const io = !task ? [] : task === 'asr' ? ['--audio audio.wav']
+                           : ['--text "hello world"', '--out out.wav'];
+    // which repo the bytes come from is the part a reader cannot guess from a
+    // model row: for most families audio.cpp republishes its own gguf, and for
+    // the rest it downloads the vendor checkpoint as a snapshot directory
+    const notes = [pk.repo ? `# ${pk.id} is downloaded from ${pk.repo}`
+                           : '# audio.cpp publishes no package of these weights',
+                   // the family may well publish a q8_0 gguf of the same thing,
+                   // but a spec does not say a package is THIS checkpoint rather
+                   // than a sibling, so only the one from the matched repo is
+                   // named and the rest is counted
+                   (ac.packages || 0) > 1
+                     ? `# ${ac.family} publishes ${ac.packages} package(s)` : '',
+                   pk.dir ? '# --model takes the snapshot directory, not one file'
+                          : ''].filter(Boolean);
+    return {label: `audio.cpp, ${ac.family || 'family not in the catalog'}`,
+            text: notes.concat(
+              [`audiocpp_model_manager install ${pk.id || '<package>'}`
+               + ' --models-dir models'],
+              [withNotes([], ['audiocpp_cli']
+                .concat(task ? [`--task ${task}`] : [])
+                .concat(ac.family ? [`--family ${ac.family}`]
+                                  : ['--family <family>'])
+                .concat([`--model ${pk.path || 'models/<package>'}`])
+                .concat(io))]).join('\n')};
+  }
+  if (rt.k === 'gufo') {
+    const g = m.gufo || {}, w = (g.weights || [])[0] || {};
+    const flags = (g.serve || {}).flags || [];
+    // the sidecar flag is the guide's own -- `--dflash-model` for the dflash2
+    // build, `--mtp-model` for the mtp one -- and the sidecar file is the weight
+    // whose label names the mode. naming the wrong one is a server that starts
+    // with no drafter and quietly runs at a fraction of the figure the guide
+    // quotes, which is the failure this page keeps ruling out one flag at a time
+    const draftFlag = flags.find(f => f !== 'model' && f.endsWith('-model'));
+    const mode = (g.serve || {}).speculative;
+    const draft = mode && draftFlag
+      ? (g.weights || []).find(x => x !== w && (x.label || '').toLowerCase()
+                                 .includes(mode.toLowerCase())) : null;
+    const at = x => `models/${(x.file || x.repo.split('/')[1])}`;
+    const notes = [w.repo
+      ? ['# gufo measured its figures on these bytes:', 'hf download', w.repo,
+         w.file || '', `--revision ${w.revision || '<revision>'}`,
+         '--local-dir models'].filter(Boolean).join(' ')
+      : '# gufo names no weights for this model'];
+    return {label: (g.serve ? `gufo serve ${g.serve.kind}` : 'gufo')
+              + ', on its own guide',
+            text: withNotes(notes,
+              [`gufo serve --port 8080 ${(g.serve || {}).kind || '<kind>'}`,
+               `--model ${w.repo ? at(w) : '<weights>'}`]
+              .concat(mode ? [`--speculative ${mode}`] : [])
+              .concat(draft ? [`--${draftFlag} ${at(draft)}`] : []))};
   }
   if (rt.k === 'vllm') {
     return {label: 'vllm serve, the base weights rather than a gguf',

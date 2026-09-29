@@ -1,0 +1,285 @@
+#!/usr/bin/env python3
+
+"""Fetch the LiveBench leaderboard into data/livebench.json.
+
+    fetch-livebench               # write the capture
+    fetch-livebench --report      # what the roster carries against it
+
+LiveBench is the sixth text board here and the widest single harness: 23 tasks
+over seven categories, each task a set of problems with a published answer key,
+scored as percent correct rather than by an elo or a game. It is the only source
+here that grades `does this model notice a typo`, `can it navigate a floor plan`
+and `will it follow an instruction it was just given` as separate numbers, which
+is why the categories are carried rather than the composite alone.
+
+three files, one board:
+
+  livebench.ai/table_<cutoff>.csv       one row per model, one column per task
+  livebench.ai/categories_<cutoff>.json which task belongs to which category
+  src/Table/modelLinks.js               the site's own model map: displayName,
+                                        organization, huggingface url and the
+                                        `openweight` flag its UI filters on
+
+the cutoff is PINNED, the way jevbench's revision is. the site keeps every board
+it has published and the newest is a code change on their side, so a sweep that
+re-reads whatever is newest would move 200 percentiles on somebody else's release
+day. `--cutoff` is how a reader looks at an older board and a new pinned cutoff
+is the commit that moves this repo's numbers.
+
+two things are read and one is not. The score columns are carried verbatim, and
+the overall is recomputed as the site computes it -- the mean of the seven
+category means, each category the mean of its own tasks -- because that is the
+figure the leaderboard orders by. what is NOT carried is the cost table: per
+model input and output prices and a cost-per-successful-task, which is a fact
+about a vendor's API price on a given day and not about weights, and this roster
+serves quants of them at whatever electricity the reader pays.
+
+the `openweight` flag is the whole reason modelLinks.js is read at all. the board
+is mostly hosted endpoints, and the registry only carries weights a person can
+download, so a row the site does not mark open is never offered to the matcher --
+see scripts/resolve-ids and the same rule on every speech and image board.
+"""
+
+import argparse
+import csv
+import io
+import json
+import os
+import re
+import subprocess
+import sys
+
+import capture
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = "data/livebench.json"
+CUTOFF = "2026-06-25"
+SITE = "https://livebench.ai"
+# the deployed bundle is minified and content-hashed, so its url changes with
+# every deploy; the map inside it is this file, one entry per line
+LINKS = "https://raw.githubusercontent.com/LiveBench/new-livebench/main/" \
+        "src/Table/modelLinks.js"
+
+# the site's field names in its own model map. `version` is a release date
+# string where a vendor has shipped a model twice, and it is carried because
+# `deepseek-v4-flash` and `deepseek-v4-flash-0731` are two rows of one family
+# rather than one model spelled twice
+FIELD = ("displayName", "organization", "huggingface", "version")
+ENTRY = re.compile(r'^\s*"([^"]+)":\s*\{(.*)$')
+KEY = re.compile(r'(\w+):\s*"((?:[^"\\]|\\.)*)"')
+OPEN = re.compile(r"openweight:\s*true")
+REASONER = re.compile(r"reasoner:\s*true")
+
+
+def get(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def entries(body):
+    """{slug: one entry's source} out of modelLinks.js.
+
+    Brace matching rather than a regex over the whole file: an entry may carry a
+    nested `finetune: {...}` or `variants: [...]`, and a `[^{}]*` pattern drops
+    every one of them -- which silently lost the three smaug rows and their
+    `openweight: true`.
+    """
+    out, buf, key, depth = {}, [], None, 0
+    for line in (body or "").splitlines():
+        if depth <= 0:
+            m = ENTRY.match(line)
+            if not m:
+                continue
+            key, buf = m.group(1), [m.group(2)]
+            depth = line.count("{") - line.count("}")
+            if depth <= 0:
+                out.setdefault(key, " ".join(buf))
+                key, buf = None, []
+            continue
+        buf.append(line)
+        depth += line.count("{") - line.count("}")
+        if depth <= 0:
+            out.setdefault(key, " ".join(buf))
+            key, buf, depth = None, [], 0
+    return {k: v for k, v in out.items() if "displayName" in v}
+
+
+def model_info(body):
+    """{slug: {display_name, organization, huggingface, openweight, ...}}."""
+    out = {}
+    for slug, blob in entries(body).items():
+        got = {}
+        for name in KEY.findall(re.sub(r"(finetune|variants):\s*\{[^{}]*\}", "", blob)):
+            if name[0] in FIELD:
+                got[{"displayName": "display_name"}.get(name[0], name[0])] = name[1]
+        got["openweight"] = bool(OPEN.search(blob))
+        got["reasoner"] = bool(REASONER.search(blob))
+        out[slug] = got
+    return out
+
+
+def table(body):
+    """{row name: {task: float}} out of the board csv.
+
+    The board writes a task a model was not run on as an empty cell, which is an
+    absence and not a zero -- a percentile pass over a zero for a task nobody ran
+    would rank a model on a question it was never asked.
+    """
+    out = {}
+    for row in csv.DictReader(io.StringIO(body or "")):
+        name = (row.get("model") or "").strip()
+        if not name:
+            continue
+        scores = {}
+        for task, v in row.items():
+            if task == "model" or v in (None, ""):
+                continue
+            try:
+                scores[task] = float(v)
+            except ValueError:
+                continue
+        out[name] = scores
+    return out
+
+
+def mean(values):
+    return round(sum(values) / len(values), 2) if values else None
+
+
+def shape(rows, categories, info, cutoff=CUTOFF):
+    """{meta, models}, each model carrying its own categories and overall."""
+    models = {}
+    for name, scores in sorted(rows.items()):
+        rec = dict(sorted(scores.items()))
+        cats = {}
+        for cat, tasks in sorted(categories.items()):
+            v = mean([scores[t] for t in tasks if t in scores])
+            if v is not None:
+                cats[cat] = v
+        if cats:
+            rec["overall"] = mean(list(cats.values()))
+        if not cats:
+            continue
+        rec["categories"] = cats
+        got = info.get(name) or {}
+        models[name] = {"scores": {k: v for k, v in rec.items()
+                                   if k not in ("categories", "overall")},
+                        "categories": cats,
+                        "overall": rec.get("overall"),
+                        "openweight": got.get("openweight", False),
+                        "reasoner": got.get("reasoner", False)}
+        for k in ("display_name", "organization", "huggingface", "version"):
+            if got.get(k):
+                models[name][k] = got[k]
+    return {"meta": {"cutoff": cutoff, "source": SITE, "links": LINKS,
+                     "tasks": sorted({t for tasks in categories.values()
+                                      for t in tasks}),
+                     "categories": categories,
+                     "overall": "mean of category means, as the site orders by"},
+            "models": models}
+
+
+def load_registry(path):
+    try:
+        import yaml
+    except ImportError:
+        sys.exit("!!! pyyaml not found")
+    return (yaml.safe_load(open(path)) or {}).get("models") or {}
+
+
+def report(payload, registry):
+    """The open-weights rows, and which of them this roster carries.
+
+    The join is the huggingface url modelLinks.js already publishes: a repo path
+    against a registry key, exact, which is the same join the open-asr board uses
+    and the only one that cannot put a hosted sku's score on an open model by
+    spelling accident.
+    """
+    models = payload.get("models") or {}
+    open_rows = {k: v for k, v in models.items() if v.get("openweight")}
+    print("livebench: %d row(s), %d the site marks open weights, cutoff %s"
+          % (len(models), len(open_rows),
+             (payload.get("meta") or {}).get("cutoff")))
+    print("\nname                              overall  on the roster")
+    for name, rec in sorted(open_rows.items(),
+                            key=lambda kv: -(kv[1].get("overall") or 0)):
+        url = (rec.get("huggingface") or "").replace("https://huggingface.co/", "")
+        here = url if url in registry else ""
+        print("  %-32s %6s  %s"
+              % (name, rec.get("overall"),
+                 here if here else "no repo this registry keys on"))
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--cutoff", default=CUTOFF,
+                    help="a board is a published thing; the default is pinned "
+                         "so a sweep cannot move 200 percentiles on their "
+                         "release day")
+    ap.add_argument("--registry",
+                    default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--report", action="store_true",
+                    help="read the capture and the registry and say nothing else")
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--max-age", type=int, default=86400)
+    ap.add_argument("--allow-shrink", action="store_true")
+    args = ap.parse_args()
+
+    path = capture.resolve(args.out)
+    if args.report:
+        if not os.path.exists(path):
+            return "!!! no capture at %s -- run fetch-livebench first" % path
+        with open(path) as f:
+            return report(json.load(f), load_registry(args.registry))
+
+    stamp = args.cutoff.replace("-", "_")
+    key = lambda name: "livebench-" + name + "-" + stamp
+    raw = get("%s/table_%s.csv" % (SITE, stamp), key("table"),
+              args.max_age, args.refresh)
+    cats = get("%s/categories_%s.json" % (SITE, stamp), key("categories"),
+               args.max_age, args.refresh)
+    links = get(LINKS, "livebench-links", args.max_age, args.refresh)
+
+    rows, groups = table(raw), {}
+    try:
+        groups = json.loads(cats or "{}")
+    except ValueError:
+        print("!!! the categories file did not answer json -- it has probably "
+              "moved", file=sys.stderr)
+    if not rows or not groups:
+        print("!!! no board read for cutoff %s (a new cutoff is a code change on "
+              "their side; pass --cutoff)" % args.cutoff, file=sys.stderr)
+        return 1
+
+    payload = shape(rows, groups, model_info(links), args.cutoff)
+    # the site keeps the score columns for tasks its own category map does not
+    # name, and dropping them silently is how a capture starts disagreeing with
+    # the page it was read from
+    loose = sorted({t for r in payload["models"].values() for t in r["scores"]}
+                   - set(payload["meta"]["tasks"]))
+    if loose:
+        print("  %d task(s) in no category: %s" % (len(loose), ", ".join(loose)),
+              file=sys.stderr)
+
+    def count(p):
+        return len(p.get("models") or {})
+
+    wrote, now, before = capture.write(path, payload, count,
+                                       allow_shrink=args.allow_shrink,
+                                       label="models")
+    if not wrote:
+        print(capture.refused(path, now, before, "models"))
+        return 1
+    print("wrote %d models to %s" % (now, path))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

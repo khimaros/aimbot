@@ -402,17 +402,22 @@ def check_crispasr(cr, where, f):
                          "nothing by itself")
 
 
-# every runtime this registry knows how to name. two of them are never WRITTEN
-# -- llama.cpp comes from `runtime.arch` and crispasr from a `crispasr:` block
-# -- and are listed because the derived list mixes with the written one and the
-# same vocabulary has to cover both. a name not here is a typo: `sd.cpp` and
+# every runtime this registry knows how to name. four of them are never WRITTEN
+# -- llama.cpp comes from `runtime.arch`, crispasr from a `crispasr:` block and
+# audio.cpp and gufo from each project's own catalog of what it loads -- and are
+# listed because the derived list mixes with the written one and the same
+# vocabulary has to cover both. a name not here is a typo: `sd.cpp` and
 # `stable-diffusion.cpp` would filter as two runtimes and neither would hold the
 # models the other has.
 ENGINES = ("llama.cpp", "vllm", "crispasr", "whisper.cpp",
-           "stable-diffusion.cpp", "TTS.cpp", "Breeze-TTS-2.cpp")
-# the two the registry states some other way, so writing them again is a second
-# place for the same fact to be wrong
-DERIVED_ENGINES = ("llama.cpp", "crispasr")
+           "stable-diffusion.cpp", "TTS.cpp", "Breeze-TTS-2.cpp",
+           "audio.cpp", "gufo")
+# the engines the registry states some other way, so writing them again is a
+# second place for the same fact to be wrong. the value is where it comes from.
+DERIVED_ENGINES = {"llama.cpp": "runtime.arch, from llama.cpp's own history",
+                   "crispasr": "a crispasr: block naming a backend",
+                   "audio.cpp": "a model_specs package naming this model's repo",
+                   "gufo": "a model guide naming this model's repo"}
 
 
 def check_engine(m, where, f):
@@ -429,10 +434,9 @@ def check_engine(m, where, f):
             f.add(where, "unknown engine %r (known: %s)"
                   % (name, ", ".join(ENGINES)))
         elif name in DERIVED_ENGINES:
-            f.add(where, "engine %r is derived -- %s -- so writing it here is a "
-                         "second copy that can disagree"
-                  % (name, "from runtime.arch" if name == "llama.cpp"
-                     else "from the crispasr block"))
+            f.add(where, "engine %r is derived -- from %s -- so writing it here "
+                         "is a second copy that can disagree"
+                  % (name, DERIVED_ENGINES[name]))
     if len(set(engine)) != len(engine):
         f.add(where, "engine lists a runtime twice: %s" % ", ".join(engine))
 

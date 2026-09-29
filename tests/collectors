@@ -6660,6 +6660,399 @@ def a_relative_capture_path_means_research_and_not_wherever_you_stood():
         shutil.rmtree(tmp)
 
 
+# audio.cpp's `model_specs/*.json`, three families deep. two shapes matter: a
+# package that names its own download repo and one that inherits the family's,
+# which is how one family holds both audio.cpp's own gguf and the vendor's
+# checkpoint, and a file list long enough to be voices rather than weights.
+AUDIOCPP_SPECS = {
+    "chatterbox": {
+        "family": "chatterbox", "display_name": "Chatterbox", "category": "tts",
+        "status": "supported", "tasks": ["tts", "clone", "vc"],
+        "package_defaults": {"download": {"kind": "huggingface_snapshot",
+                                          "repo": "audio-cpp/audio.cpp-gguf",
+                                          "revision": "main"}},
+        "ui": {"recommended_package": "chatterbox_q8_0"},
+        "packages": [
+            {"id": "chatterbox_q8_0", "default": True, "format": "gguf",
+             "precision": "q8_0", "target_directory": "Chatterbox-GGUF",
+             "strip_prefix": "Chatterbox-GGUF",
+             "files": ["Chatterbox-GGUF/chatterbox-q8_0.gguf"]},
+            {"id": "chatterbox_safetensors", "format": "safetensors",
+             "precision": "native", "target_directory": "chatterbox",
+             "download": {"repo": "ResembleAI/chatterbox"},
+             "files": ["model.safetensors", "config.json"]},
+        ],
+    },
+    # one family, TWO checkpoints: the recommended package is the 1.7b and the
+    # 0.6b is a sibling with its own repo
+    "qwen3_asr": {
+        "family": "qwen3_asr", "category": "asr", "tasks": ["asr"],
+        "package_defaults": {"download": {"repo": "audio-cpp/audio.cpp-gguf"}},
+        "ui": {"recommended_package": "qwen3_asr_1_7b_q8_0"},
+        "packages": [
+            {"id": "qwen3_asr_1_7b_q8_0", "default": True, "format": "gguf",
+             "precision": "q8_0", "target_directory": "Qwen3-ASR-1.7B-GGUF",
+             "files": ["Qwen3-ASR-1.7B-GGUF/qwen3-asr-1.7b-q8_0.gguf"]},
+            {"id": "qwen3_asr_0_6b_safetensors", "format": "safetensors",
+             "precision": "native", "target_directory": "Qwen3-ASR-0.6B",
+             "download": {"repo": "Qwen/Qwen3-ASR-0.6B", "gated": True},
+             "files": ["config.json"]},
+        ],
+    },
+    # a package whose "files" are 28 voice embeddings plus the model
+    "many_files": {
+        "family": "many_files", "category": "tts", "tasks": ["tts"],
+        "packages": [{"id": "many_files_all", "default": True,
+                      "format": "safetensors", "target_directory": "many",
+                      "files": ["f%d.json" % i for i in range(30)]}],
+    },
+}
+
+
+def audiocpp_spec(name):
+    mod = load_script("fetch_audiocpp", os.path.join(RESEARCH, "fetch-audiocpp"))
+    return mod.spec(json.dumps(AUDIOCPP_SPECS[name]))
+
+
+@test
+def an_audiocpp_package_inherits_its_family_download():
+    """Two repos in one spec, and only one of them is written per package.
+
+    audio.cpp republishes a gguf of most families under its own repo and ships a
+    `safetensors` package that pulls the vendor checkpoint. the gguf inherits
+    `package_defaults.download` and the native one names its own repo, so a
+    reader that takes the per-package field alone sees half the catalog
+    downloading from nowhere -- and the repo IS the join this registry uses to
+    decide which models audio.cpp loads.
+    """
+    rec = audiocpp_spec("chatterbox")
+    gguf, native = rec["packages"]
+    eq(gguf.get("repo"), "audio-cpp/audio.cpp-gguf", "the gguf inherits the repo")
+    eq(gguf.get("revision"), "main", "and the revision with it")
+    eq(native.get("repo"), "ResembleAI/chatterbox", "the native names its own")
+    eq(native.get("kind"), "huggingface_snapshot",
+       "and keeps the inherited kind, which is the same download method")
+
+
+@test
+def an_audiocpp_file_list_is_capped_and_says_so():
+    """A 30-file package is 27 voices and one model, and the page ships this.
+
+    pocket-tts' native package lists every speaker embedding it downloads, which
+    is a fact about the package and not one any command names. the count is kept
+    so the truncation is a stated limit rather than a silently short list.
+    """
+    pk = audiocpp_spec("many_files")["packages"][0]
+    eq(len(pk["files"]), 6, "the files list is capped")
+    eq(pk.get("files_more"), 24, "and says how many it left out")
+
+
+@test
+def an_audiocpp_listing_is_read_for_specs_only():
+    """The catalog is a directory of json and the api answers with everything."""
+    mod = load_script("fetch_audiocpp", os.path.join(RESEARCH, "fetch-audiocpp"))
+    listing = json.dumps([{"name": "omnivoice.json"}, {"name": "README.md"},
+                          {"name": "yue2.json"}, "a string", {"nope": 1}])
+    eq(mod.spec_names(listing), ["omnivoice.json", "yue2.json"],
+       "json specs, sorted, nothing else")
+    eq(mod.spec_names("not json"), [], "a 403 page reads as no specs")
+    eq(mod.spec_names(None), [], "and a failed fetch reads as none either")
+
+
+def audiocpp_capture():
+    """The capture as the collector writes it, not as the spec is written.
+
+    the shape that matters is the normalised one: `spec()` resolves each
+    package's repo off the family defaults, and the report joins on the result,
+    so a fixture that skipped the collector's own reader would be testing a shape
+    nothing downstream ever sees.
+    """
+    return {"families": {
+        "chatterbox": audiocpp_spec("chatterbox"),
+        "qwen3_asr": audiocpp_spec("qwen3_asr"),
+        # a family nothing here shares a repo with, which is 92 of the 99 today
+        "yue2": {"family": "yue2",
+                 "packages": [{"id": "y", "repo": "audio-cpp/Yue2-3B-GGUF"}]},
+    }}
+
+AUDIOCPP_REGISTRY = """version: 1
+models:
+  ResembleAI/chatterbox:
+    name:
+      short: chatterbox
+    quants:
+    - {repo: cstr/chatterbox-GGUF, quant: Q8_0}
+  Qwen/Qwen3-ASR-0.6B:
+    name:
+      short: qwen3-asr-0.6b
+    quants:
+    - {repo: cstr/Qwen3-ASR-0.6B-GGUF, quant: q8_0}
+  Vendor/Unrelated:
+    name:
+      short: unrelated
+    quants:
+    - {repo: Quanter/Unrelated-GGUF, quant: Q8_0}
+"""
+
+
+@test
+def the_audiocpp_report_answers_both_directions_on_repo_alone():
+    """Which of ours it loads, and which of its families nothing here matches.
+
+    The inward question is the one a runtime capture exists for, and the outward
+    one is where the roster grows from -- an engine with 99 families that shares
+    7 checkpoints with this roster cannot be reported by the 7 alone.
+
+    The join is repo equality. audio.cpp names
+    `Qwen3-TTS-12Hz-1.7B-Base-GGUF/qwen3-tts-12hz-1.7b-base-q8_0_v2.gguf` and a
+    registry rung is `Qwen3-TTS-12Hz-1.7B-Base-GGUF` + tag `Q8_0`, and a matcher
+    between those spellings is a second naming scheme with nothing keeping it
+    honest -- which is the thing this repo has deleted everywhere else.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        out = os.path.join(tmp, "audiocpp.json")
+        reg = os.path.join(tmp, "models.yaml")
+        with open(out, "w") as f:
+            json.dump(audiocpp_capture(), f)
+        with open(reg, "w") as f:
+            f.write(AUDIOCPP_REGISTRY)
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-audiocpp"),
+                            "--report", "--out", out, "--registry", reg],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                           text=True)
+        eq(r.returncode, 0, "the report runs: %s" % r.stdout.strip()[:200])
+        text = r.stdout
+        eq("chatterbox" in text, True, "the checkpoint we carry is named")
+        eq("qwen3-asr-0.6b" in text, True, "and so is the second one")
+        eq("yue2" in text, True, "the family nothing matches is still counted")
+        eq("unrelated" in text.lower(), False, "a model no package names is not")
+        eq("1 of 3" in text, True, "and the outward count says 1 of 3 matches none")
+    finally:
+        shutil.rmtree(tmp)
+
+
+# gufo's models-and-benchmarks row, three weights deep: a pinned file, a pinned
+# directory, a bare repo (which is how it cites a BF16 checkpoint), and a draft
+# in a repo that is not the target's.
+GUFO_INDEX = """# Models
+
+| Model | Inference modes | Hugging Face weights | Benchmarks |
+| --- | --- | --- | --- |
+| [Qwen3.8 27B](docs/models/qwen3.8-27b/README.md) | Q4/Q8, images, AR, **DFlash2** | Unsloth [Q8_K_XL](https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/blob/4ca7/Qwen3.8-27B-UD-Q8_K_XL.gguf) · [DFlash2 Q4_K_M](https://huggingface.co/z-lab/Qwen3.8-27B-DFlash2-GGUF/blob/2d95/Qwen3.8-27B-DFlash2-Q4_K_M.gguf) | [Benchmarks](BENCHMARKS.md) |
+| [Qwen3.8 Flash-Next](docs/models/qwen3.8-flash-next/README.md) | Q4, images, MTP | [Q4_K_XL](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb/UD-Q4_K_XL) | [Benchmarks](BENCHMARKS.md) |
+| [Qwen3-ASR 1.7B](docs/models/qwen3-asr/README.md) | Speech recognition | [BF16](https://huggingface.co/Qwen/Qwen3-ASR-1.7B) | [Benchmarks](BENCHMARKS.md) |
+| Dependency | Used for | nothing |
+| --- | --- | --- |
+"""
+
+GUFO_GUIDE = """## Load and run
+
+```sh
+MODEL=models/qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf
+DRAFT=models/qwen3.8-27b/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
+./result/bin/gufo chat --model "$MODEL"
+./result/bin/gufo serve llm --model "$MODEL" --speculative dflash2 \\
+  --dflash-model "$DRAFT" --sessions 2 --context 32768
+```
+"""
+
+GUFO_TTS_GUIDE = """```sh
+./result/bin/gufo serve tts \\
+  --model /persist/models/audio/Qwen3-TTS-12Hz-1.7B-CustomVoice
+```
+"""
+
+
+def gufo_module():
+    return load_script("fetch_gufo", os.path.join(RESEARCH, "fetch-gufo-support"))
+
+
+@test
+def gufos_index_row_names_the_bytes_it_measured():
+    """Repo, revision and file, because the benchmark is a claim about them.
+
+    gufo is the first engine here whose weights are pinned to a commit, and it
+    quotes tok/s figures for those bytes. a capture that kept the repo alone
+    would let a row that has since moved off `4ca7` keep reading as the measured
+    configuration, which is the drift between a claim and its evidence.
+
+    Three url shapes are one fact: /blob/ names a file at a revision, /tree/
+    names a directory at one, and a bare repo url names a checkpoint the guide
+    leaves unresolved -- recorded as no revision rather than an invented main.
+    """
+    rows = gufo_module().index(GUFO_INDEX)
+    eq(sorted(rows), ["qwen3-asr", "qwen3.8-27b", "qwen3.8-flash-next"],
+       "only the rows linking a guide, and the build table is not one")
+    w = rows["qwen3.8-27b"]["weights"]
+    eq(len(w), 2, "the target and the draft, from two repos")
+    eq(w[0]["repo"], "unsloth/Qwen3.8-27B-GGUF", "the target repo")
+    eq(w[0]["revision"], "4ca7", "at its commit")
+    eq(w[0]["file"], "Qwen3.8-27B-UD-Q8_K_XL.gguf", "and file")
+    eq(w[1]["repo"], "z-lab/Qwen3.8-27B-DFlash2-GGUF", "the draft is another repo")
+    eq(rows["qwen3.8-flash-next"]["weights"][0].get("file"), "UD-Q4_K_XL",
+       "a /tree/ link keeps its path")
+    asr = rows["qwen3-asr"]["weights"][0]
+    eq(asr["repo"], "Qwen/Qwen3-ASR-1.7B", "a bare repo link is still a repo")
+    eq("revision" in asr, False, "and carries no invented revision")
+    eq(rows["qwen3.8-27b"]["modes"], "Q4/Q8, images, AR, DFlash2",
+       "the mode column, minus the markdown bold")
+
+
+@test
+def gufos_serve_line_survives_a_continuation_and_keeps_its_mode():
+    """The measured invocation is one command over two lines.
+
+    `--speculative dflash2` is what the index's tg figure was taken with, and
+    `--dflash-model` versus `--mtp-model` is which sidecar the server loads: the
+    two qwen rows differ in exactly this flag and a command that dropped it
+    starts a server with no drafter at a fraction of the quoted speed.
+    """
+    mod = gufo_module()
+    got = mod.serve(GUFO_GUIDE)
+    eq(got["kind"], "llm", "the subcommand")
+    eq(got["speculative"], "dflash2", "the mode the figure was measured with")
+    eq("dflash-model" in got["flags"], True, "and the sidecar flag it names")
+    eq("context" in got["flags"], True, "flags after the continuation too")
+    eq(mod.serve(GUFO_TTS_GUIDE)["kind"], "tts", "a tts guide starts tts")
+    eq(mod.serve("no command here"), None, "and a guide with none says so")
+
+
+@test
+def gufos_join_names_what_the_repo_is_here():
+    """`checkpoint` and `pinned rungs` are different claims about the roster.
+
+    the qwen3-asr row loads the hub checkpoint, which is what one entry is keyed
+    on; the 27b row loads unsloth's gguf, which another entry PINES as a rung
+    among others. saying which is what lets the report point at the one number
+    worth moving: deepseek v4 flash, whose antirez repo gufo loads and this
+    registry does not carry at all.
+    """
+    mod = gufo_module()
+    rows = mod.index(GUFO_INDEX)
+    keys = {"Qwen/Qwen3-ASR-1.7B"}
+    pinned = {"unsloth/Qwen3.8-27B-GGUF"}
+    eq(mod.join(rows["qwen3-asr"]["weights"], keys, pinned),
+       [("Qwen/Qwen3-ASR-1.7B", "checkpoint")], "a key is a checkpoint")
+    eq(mod.join(rows["qwen3.8-27b"]["weights"], keys, pinned),
+       [("unsloth/Qwen3.8-27B-GGUF", "pinned rungs")], "a pinned repo is rungs")
+    eq(mod.join(rows["qwen3.8-flash-next"]["weights"], keys, pinned), [],
+       "a repo the roster names nowhere matches nothing")
+
+
+@test
+def an_engine_catalog_that_names_one_repo_twice_claims_nothing():
+    """Two loaders for one repo is not a tie to break, it is no answer.
+
+    `--family` and `gufo serve <kind>` pick a LOADER, and the registry's own rule
+    for crispasr is that a backend asserted for a conversion nobody tested it
+    against is a guess. the same applies when a family covers two checkpoints:
+    `qwen3_asr` recommends the 1.7b, and handing that package to the 0.6b entry
+    would print a command for a model three times the size of its own row.
+    """
+    bv = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    catalog = {"qwen3_asr": audiocpp_spec("qwen3_asr"),
+               "chatterbox": audiocpp_spec("chatterbox"),
+               # one repo, two families: which loader a reader should run is not
+               # in the data, so nothing is claimed
+               "two_hands": {"family": "two_hands",
+                             "packages": [{"id": "a", "repo": "Vendor/Both"}]},
+               "second_hand": {"family": "second_hand",
+                               "packages": [{"id": "c", "repo": "Vendor/Both"}]}}
+    eq(bv.audiocpp_block("Vendor/Both", {"quants": []}, catalog), None,
+       "a repo two families name gets no family")
+    del catalog["second_hand"]
+    eq(bv.audiocpp_block("Vendor/Both", {"quants": []}, catalog)["family"],
+       "two_hands", "and one family naming it is an answer")
+
+    got = bv.audiocpp_block("Qwen/Qwen3-ASR-0.6B", {"quants": []}, catalog)
+    eq(got["family"], "qwen3_asr", "the 0.6b joins the asr family")
+    eq(got["package"]["id"], "qwen3_asr_0_6b_safetensors",
+       "and takes the package downloaded from its OWN repo, not the family's "
+       "recommended 1.7b")
+    eq(got["package"]["dir"], True, "a snapshot package is a directory")
+    eq(got["package"]["path"], "models/Qwen3-ASR-0.6B",
+       "so --model names the directory and not its config.json")
+
+    # audio.cpp's own q8_0 of chatterbox is a package of the SAME FAMILY and
+    # nothing in the spec says it is this checkpoint rather than a sibling, so
+    # the command names the package that downloads from the repo we matched.
+    gguf = bv.audiocpp_block("ResembleAI/chatterbox", {"quants": []}, catalog)
+    eq(gguf["package"]["id"], "chatterbox_safetensors",
+       "the package from the matched repo, not the family's default gguf")
+    eq(gguf["package"]["path"], "models/chatterbox",
+       "a snapshot package is the directory it lands in")
+    eq(gguf["native"]["repo"], "ResembleAI/chatterbox",
+       "and that package IS the read-the-checkpoint-itself one")
+    eq(bv.audiocpp_block("Vendor/Both", {"quants": []}, catalog)["packages"], 1,
+       "the family's package count rides along, since the command picks one")
+
+
+@test
+def test_livebench_capture():
+    ac = load_script("fetch_livebench", os.path.join(RESEARCH, "fetch-livebench"))
+    # the site's own model map, with the two shapes that break a `[^{}]*` regex:
+    # an entry whose `finetune:` sub-object makes a brace-matcher stop early, and
+    # a row with no `huggingface:` at all because the endpoint is the product
+    links = """
+export const modelLinks = {
+    "kimi-k3": { url: "https://www.kimi.com/blog/kimi-k3", organization: "Moonshot AI", displayName: "Kimi K3", openweight: true, reasoner: true, huggingface: "https://huggingface.co/moonshotai/Kimi-K3"},
+    "smaug-flash": { url: "https://www.abacus.ai", displayName: "Smaug Flash", openweight: true, finetune: { organization: "Abacus.AI", baseModel: "DeepSeek V4 Flash 0731" } },
+    "inkling-xhigh": { url: "https://tmc.ai", organization: "Thinking Machines", displayName: "Inkling" },
+    "gpt-9-turbo": { url: "https://openai.com", displayName: "GPT-9", version: "2026-07-01" },
+};
+"""
+    info = ac.model_info(links)
+    eq(len(info), 4, "every entry, including the one with a nested finetune block")
+    eq(info["smaug-flash"]["openweight"], True,
+       "an entry with a nested block is not silently dropped -- the regex this "
+       "replaced lost all three smaug rows and their openweight flag")
+    eq(info["inkling-xhigh"]["openweight"], False,
+       "no flag means the site does not call it open, and truthiness is not a flag")
+    eq(info["gpt-9-turbo"]["version"], "2026-07-01", "a release date where one exists")
+
+    # a task a model was not run on is an empty cell, which is an absence and not
+    # a zero: a zero here would rank a model on a question it was never asked
+    csv = ("model,integrals_with_game,python,typos\n"
+           "qwen3.8-27b,90,80,\n"
+           "gpt-9-turbo,99,99,99\n")
+    cats = {"Mathematics": ["integrals_with_game"],
+            "Agentic Coding": ["python"], "Language": ["typos"]}
+    board = ac.shape(ac.table(csv), cats, info)
+    mine = board["models"]["qwen3.8-27b"]
+    eq(mine["scores"].get("typos"), None, "an empty cell is carried as no score")
+    eq("Language" in mine["categories"], False,
+       "and a category whose every task is blank is absent rather than zero")
+    # the site orders rows by the mean of the CATEGORY means, not of the tasks: a
+    # category with one task counts as much as one with seven
+    eq(mine["overall"], 85.0, "mean of category means, as the board orders by")
+    eq(mine["openweight"], False,
+       "an open row that the site has no flag for stays closed until ids say otherwise")
+    eq(board["models"]["gpt-9-turbo"]["overall"], 99.0, "a closed row is still captured")
+
+
+@test
+def test_livebench_facets():
+    au = load_script("analyze_usecase", os.path.join(RESEARCH, "analyze-usecase"))
+    board = {"meta": {"cutoff": "2026-06-25"},
+             "models": {"qwen3.8-27b": {
+                 "scores": {"python": 80.0, "integrals_with_game": 90.0},
+                 "categories": {"Mathematics": 90.0, "Agentic Coding": 80.0,
+                                "IF": 70.0},
+                 "overall": 80.0}}}
+    f = au.livebench_facets(board, {"livebench": "qwen3.8-27b"})
+    eq(sorted(k.split(".")[1] for k in f),
+       ["agentic", "if", "math", "score"],
+       "one facet per category the row has, plus the overall the board sorts by")
+    eq(f["livebench.agentic"]["value"], 80.0, "the category rate itself")
+    eq(f["livebench.agentic"]["group"], "livebench", "one factor group")
+    eq(f["livebench.math"]["label"], "mathematics", "in lower case, like every other label")
+    eq(f["livebench.score"]["ref"]["note"],
+       "qwen3.8-27b, cutoff 2026-06-25, 3 of its 7 categories",
+       "and the ref says which board and how much of it the row covers")
+    eq(au.livebench_facets(board, {}), {}, "a model with no id carries nothing")
+
+
 def main():
     bad = 0
     for fn in cases:

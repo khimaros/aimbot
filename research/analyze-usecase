@@ -170,12 +170,17 @@ SOURCES = {
     "jev": {"label": "jevbench",
             "file": "data/jevbench.json",
             "url": "https://benchmarkheaven.com/jev-models"},
+    "livebench": {"label": "livebench",
+                  "file": "data/livebench.json",
+                  "url": "https://livebench.ai/"},
 }
 
 # what a strong facet implies the model is FOR. only the axes where a high
 # score means a use case rather than a property; speed and context are
 # operational and say nothing about fit.
 USE_FOR = {
+    "livebench.coding": "coding", "livebench.agentic": "agentic / tool use",
+    "livebench.math": "mathematics",
     "aa.livecodebench": "coding", "aa.scicode": "scientific code",
     "aa.terminalbench": "agentic / tool use",
     "aa.terminalbench_v40": "agentic / tool use",
@@ -555,6 +560,58 @@ SHOWDOWN_BOARDS = [
 ]
 
 
+# livebench's own seven categories, in its words, to the facet key. the overall
+# is the mean of the seven rather than of the 23 tasks, which is how the board
+# orders its rows: a category with three tasks counts as much as one with seven.
+LIVEBENCH_AXES = [
+    ("score", "overall", "overall"),
+    ("reasoning", "Reasoning", "reasoning"),
+    ("coding", "Coding", "coding"),
+    ("agentic", "Agentic Coding", "agentic coding"),
+    ("math", "Mathematics", "mathematics"),
+    ("data", "Data Analysis", "data analysis"),
+    ("language", "Language", "language"),
+    ("if", "IF", "instruction following"),
+]
+
+
+def livebench_facets(board, ids):
+    """LiveBench, 23 graded tasks over seven categories.
+
+    Carried per category rather than as the one number the site sorts by, because
+    the categories are the point: it is the only source here that grades
+    proof-reading, spatial navigation and instruction adherence as separate
+    questions, and a model that is 20 points better on `typos` than on
+    `olympiad` is a different machine from one that is not.
+
+    Which is also why none of it is weighted. LiveBench is served endpoints of
+    models with open weights, on tasks that overlap the coding and math boards
+    this composite already carries, and no redundancy analysis of it against them
+    has been done -- so it rides the way image editing and `jev.hard` do: on the
+    model, rankable by a reader who moves the slider, and at no weight by default.
+    """
+    models = board.get("models") or {}
+    row = models.get(ids.get("livebench")) or {}
+    if not row:
+        return {}
+    cats = row.get("categories") or {}
+    out = {}
+    for suffix, path, label in LIVEBENCH_AXES:
+        v = row.get(path) if path == "overall" else cats.get(path)
+        if v is None:
+            continue
+        out["livebench.%s" % suffix] = {
+            "value": v, "label": label, "unit": "score", "group": "livebench",
+            # the row is named in the note rather than the url: the site is a
+            # single page whose per-row address is a search query
+            "ref": ref("livebench", None,
+                       "%s, cutoff %s, %d of its 7 categories"
+                       % (ids.get("livebench"),
+                          (board.get("meta") or {}).get("cutoff") or "?",
+                          len(cats)))}
+    return out
+
+
 def image_facets(board, lm, ids, lm_edit=None, showdown=None):
     """Five numbers over two questions: three sites rating generated pictures,
     and two rating EDITED ones.
@@ -641,6 +698,7 @@ def build(bt, registry):
     arena, voicearena = load("tts-arena"), load("voicearena")
     pictures, showdown = load("artificial-analysis-image"), load("genai-showdown")
     jev = load("jevbench").get("systems") or {}
+    livebench = load("livebench")
 
     def lm_board(name):
         """One lmarena board's entries, keyed by the name its ids use."""
@@ -664,6 +722,7 @@ def build(bt, registry):
         facets.update(speech_facets(speech, arena, voicearena, ids, open_asr))
         facets.update(image_facets(pictures, lm_images, ids, lm_edits, showdown))
         facets.update(jev_facets(jev, ids))
+        facets.update(livebench_facets(livebench, ids))
         rating = bt.lmarena_score(ids)
         if rating is not None:
             facets["lmarena.rating"] = {

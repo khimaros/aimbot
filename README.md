@@ -307,6 +307,82 @@ grows from. 64 backends are in that second list today, about twenty of them TTS.
     make sweep-report          # includes speech models with no engine, and no score
                                # and the crispasr backends the roster does not carry
 
+## engines that publish what they load
+
+`crispasr.backend` is written by hand because crispasr's README names repos for
+some backends and not others. two engines publish the same fact as a machine
+readable CATALOG, and for those the registry writes nothing at all:
+
+| engine | its catalog | what the join is | roster models it claims |
+| --- | --- | --- | --- |
+| `audio.cpp` | `model_specs/*.json`, ~100 families | the repo a package downloads from | 7 |
+| `gufo` | `docs/models/*`, one guide per model | the repo each guide's hugging face links name | 7 |
+
+so no entry anywhere says `engine: audio.cpp`, `models-validate` rejects one
+that did, and a family that stops shipping a checkpoint stops being an option
+the next time the capture is refreshed. `scripts/build-viewer` does the join and
+the operate tab prints what each one actually runs:
+
+```
+audiocpp_model_manager install omnivoice_safetensors --models-dir models
+audiocpp_cli \
+  --task tts \
+  --family omnivoice \
+  --model models/OmniVoice \
+  --text "hello world" \
+  --out out.wav
+
+gufo serve --port 8080 llm \
+  --model models/Qwen3.8-27B-UD-Q4_K_XL.gguf \
+  --speculative dflash2 \
+  --dflash-model models/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
+```
+
+**audio.cpp gets the package downloaded from the repo the entry is keyed on, and
+no other.** a family publishes its own gguf of the checkpoint AND a snapshot of
+the checkpoint itself, and the spec never says a gguf is THIS checkpoint rather
+than a sibling in the same family: `qwen3_asr` covers the 0.6b and the 1.7b and
+recommends the 1.7b, so handing its default package to the 0.6b entry would
+print a command for a model three times the size of its own row. the other
+packages are counted in a comment rather than guessed at.
+
+gufo is the engine that loads the files this registry's own `runtime:` block
+cannot place, and it is the reason `gufo` is in the vocabulary at all: its deepseek
+v4 flash guide runs antirez's `IQ2XXS` gguf plus the DSpark sidecar, which is the
+same file the registry describes as loading "on DwarfStar, not llama.cpp". the
+repo is not carried, so the report says so rather than the entry claiming an
+engine nothing pinned:
+
+    ./research/fetch-audiocpp --report    # which checkpoints it downloads, and the
+                                          # 92 families nothing here shares a repo with
+    ./research/fetch-gufo-support --report # each guide, and which of its files are here
+
+## a sixth text board, at zero weight
+
+livebench is 23 graded tasks with published answer keys under seven category
+banners, and it is the widest single harness here: nothing else asks about
+typos, floor plans and paraphrasing as three separate questions. the dashboard
+carries a facet for each category plus the overall the board sorts its rows by,
+over the 10 roster models its own model map marks open weights and joins to a
+repo this registry keys on:
+
+    ./research/fetch-livebench --report   # the open rows, and which join to a repo
+
+**none of it moves the ranking, on purpose.** it is the sixth board over the
+coding, math and reasoning axes the composite already spends weight on, its rows
+are hosted endpoints rather than one harness run over a checkpoint, and no
+redundancy analysis against the boards it overlaps has been done. so
+`registry/dashboard.yaml` carries `livebench.*: 0.0`: the numbers are on the
+model, and a reader who wants them ranked moves the slider. that is the same
+treatment image editing and `jev.hard` get, and for the same reason -- a new axis
+weighted by default redefines what the score means before anybody has said what
+it adds.
+
+the cutoff is pinned in `research/fetch-livebench` the way jevbench's revision is
+pinned in its collector: the site publishes a new board whenever it likes, and a
+sweep that read whatever was newest would move 200 percentiles on somebody else's
+release day.
+
 ## how good is the speech roster
 
 three sources score it, and they measure three different things:
