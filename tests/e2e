@@ -1213,14 +1213,41 @@ test('audio.cpp and gufo are engines their own catalogs claim', () => {
   // figure the guide quotes, silently.
   ops = {runtime: 'gufo', repo: null, quant: null, profile: null};
   const g = snippets(model('qwen3.8 27b')).map(s => s.text).join('\n');
+  // the path `hf download` actually lands a file at, rather than a directory
+  // this page invented: the cache layout is `hf download`'s own report, and its
+  // snapshot directory IS the revision -- so the pinned revision is both what
+  // gets fetched and what gets pointed at, with no layout to agree on first
+  const CACHE = '~/.cache/huggingface/hub';
+  const at = (repo, rev, file) =>
+    `${CACHE}/models--${repo.replace('/', '--')}/snapshots/${rev}/${file}`;
   ok(/^gufo serve /m.test(g), 'the fragment invokes gufo: ' + g);
   ok(g.includes('gufo serve --port 8080 llm \\\n  --model '
-     + 'models/Qwen3.8-27B-UD-Q4_K_XL.gguf'),
-     'the subcommand comes before --model, as its own cli wants: ' + g);
+     + at('unsloth/Qwen3.8-27B-GGUF', '4ca720788d1e01f1bff70c033e0d0028fd02e502',
+          'Qwen3.8-27B-UD-Q4_K_XL.gguf')),
+     'the subcommand comes before --model, at the default download path: ' + g);
   ok(g.includes('--speculative dflash2'), 'at the mode it was measured with');
-  ok(g.includes('--dflash-model models/Qwen3.8-27B-DFlash2-Q4_K_M.gguf'),
-     'with the draft from its own repo: ' + g);
-  ok(g.includes('--revision'), 'and the revision the bytes were pinned at');
+  ok(g.includes('--dflash-model '
+     + at('z-lab/Qwen3.8-27B-DFlash2-GGUF',
+          '2d9571f8ce46e151f61c6499c99dee6079e1d610',
+          'Qwen3.8-27B-DFlash2-Q4_K_M.gguf')),
+     'with the draft from its own repo, in its own cache entry: ' + g);
+  ok(g.includes('--revision 4ca720788d1e01f1bff70c033e0d0028fd02e502'),
+     'the download names the revision, which is the directory: ' + g);
+  ok(!g.includes('--local-dir'),
+     'and nothing settles a directory the path would then have to agree with: ' + g);
+  ok(!/ --model models\//.test(g), 'no models/ layout of ours: ' + g);
+  ok(g.includes('HF_HOME'),
+     'the note says the cache location is a default and can move: ' + g);
+  // EVERY NOTE ON ITS OWN LINE. three of them became one comma-separated line
+  // when the notes went from a single string to a list, and every `includes`
+  // assertion above still passed -- a comment block that reads as prose mush is
+  // not a comment block, and it certainly is not copy-pasteable
+  const head = g.split('\n').slice(0, g.split('\n').findIndex(l => /^gufo serve /.test(l)));
+  head.forEach((l, i) => ok(/^# |^hf download /.test(l) || /^hf download /.test(l),
+     'note line ' + i + ' is a comment or the fetch, not a fragment: ' + l));
+  ok(!head.join('').includes(',#'), 'no notes smeared together with commas: ' + g);
+  ok(head.filter(l => /^# /.test(l)).length >= 2,
+     'the warnings survive as their own lines: ' + head.join('|'));
 
   ops = {runtime: 'gufo', repo: null, quant: null, profile: null};
   const flash = snippets(model('qwen3.8 flash next')).map(s => s.text).join('\n');
@@ -1669,6 +1696,13 @@ test('each reset sits at the end of the row it belongs to', () => {
   });
 });
 
+// the two ends of the quant ladder read low to high, the way the ladder does
+test('the quant floor comes before the ceiling', () => {
+  const at = id => PAGE_HTML.indexOf('<select id="' + id + '"');
+  ok(at('floor') > 0 && at('cap') > 0, 'both ends are on the page');
+  ok(at('floor') < at('cap'), 'min sits left of max');
+});
+
 test('an empty table names the filters that emptied it, widest first', () => {
   RESET();
   filters.q = 'zzzz not a model name';
@@ -1963,6 +1997,24 @@ test('boots against the real data.json and draws every row', () => {
   eq(rows, visible().length, 'rows drawn');
   ok(rows > 20, 'a filtered-to-text roster is still most of the registry');
   ok(html('#rows').includes('qwen3.8 27b'), 'the top model is in the html');
+});
+
+// llama-tools' scripts/ladder.py serves any rung a pinned repo publishes, and
+// reads it from here rather than keeping a second copy of the sidecar and fork
+// rules. renaming any of these fields is a change to another repo's argv.
+test('the rung ladder another repo reads keeps its shape', () => {
+  const rungs = [];
+  D.models.forEach(m => {
+    ok(typeof m.repo === 'string' && m.repo, 'every model is keyed by repo');
+    (m.quants || []).forEach(q => {
+      ok(typeof q.repo === 'string' && Array.isArray(q.available),
+         m.repo + ': a pin names its repo and its ladder');
+      rungs.push(...q.available);
+    });
+  });
+  rungs.forEach(a => ok(typeof a.quant === 'string' && a.quant, 'a rung has a tag'));
+  ok(rungs.some(a => typeof a.file === 'string'), 'a rung may name its file');
+  ok(rungs.some(a => a.fork_type), 'and a fork-only rung says so');
 });
 
 test('the header draws one cell per shown column, and no others', () => {
@@ -3528,6 +3580,46 @@ test('a pasted link still opens the model and the tab it names', () => {
      'a load writes no fragment of its own');
   location.hash = '';
   RESET();
+});
+
+// the tab icon. `href="favicon.svg"` would ask a reader to deploy a second file
+// for a decoration, and the site is one file that opens off disk, so the mark
+// is inlined as a data uri. what it depicts is what the page is for: pointing a
+// box at a model.
+test('the page carries its own icon, and it is a monochrome crosshair', () => {
+  const links = [...PAGE_HTML.matchAll(/<link\b[^>]*rel="icon"[^>]*>/g)];
+  eq(links.length, 1, 'exactly one icon link');
+  const href = (links[0][0].match(/href="([^"]*)"/) || []).pop() || '';
+  ok(href.startsWith('data:image/svg+xml,'), 'inlined, not fetched: ' + href);
+  eq((PAGE_HTML.match(/href="[^"]*favicon/g) || []).length, 0,
+     'nothing asks the host for an icon file');
+  // a bare # is the url's own terminator, and a quote ends the attribute
+  eq(/[#"&<>]/.test(href), false, 'the encoding has to survive an href');
+  eq(/[^\x00-\x7f]/.test(links[0][0]), false, 'an href stays ascii');
+
+  const svg = decodeURIComponent(href.slice('data:image/svg+xml,'.length));
+  ok(svg.startsWith('<svg') && /xmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(svg),
+     'a standalone svg: ' + svg);
+  const box = (svg.match(/viewBox="([^"]*)"/) || []).pop() || '';
+  const [bx, by, bw, bh] = box.split(/\s+/).map(Number);
+  eq(bx + ',' + by + ',' + bw + ',' + bh, '0,0,32,32', 'a square canvas');
+
+  // monochrome in the literal sense: one colour, and no hue to clash with a
+  // reader's tab bar. mid grey because the one icon has to read on a light tab
+  // bar and a dark one, and a #fff reticle is invisible on the first.
+  const colors = [...new Set(svg.match(/#[0-9a-f]{6}/g) || [])];
+  eq(colors.length, 1, 'one colour: ' + colors.join(','));
+  const [cr, cg, cb] = colors[0].slice(1).match(/../g).map(h => parseInt(h, 16));
+  eq(cg, cr, 'no hue: r == g');
+  eq(cb, cr, 'no hue: r == b');
+  ok(cr >= 0x55 && cr <= 0xaa, 'dark enough for a light tab bar, light enough '
+     + 'for a dark one: ' + colors[0]);
+  eq(/gradient|animat|<style/i.test(svg), false, 'a mark, not an effect');
+
+  // a crosshair: a ring, a centre, and four ticks
+  eq((svg.match(/<circle/g) || []).length, 2, 'a ring and a centre');
+  eq(((svg.match(/<path[^>]*d="([^"]*)"/) || []).pop() || '').split('M').length - 1, 4,
+     'four ticks: ' + svg);
 });
 """
 

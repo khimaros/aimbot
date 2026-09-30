@@ -41,6 +41,7 @@ import os
 import re
 import subprocess
 import sys
+from urllib.parse import quote
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..")
@@ -58,6 +59,26 @@ BROWSER_API = re.compile(
     r"(?:querySelector|querySelectorAll|getElementById|createElement|"
     r"addEventListener|body|title|getItem|setItem|removeItem)\b")
 OUT_DIR = os.path.join(ROOT, "docs")
+
+# the tab icon: a reticle, because pointing a box at a model is the whole page.
+# inlined as a data uri rather than shipped as docs/favicon.svg, which would
+# make the site two files for the sake of a decoration.
+#
+# one grey and no tile: the same mark sits on a white tab bar and a black one,
+# and a mid grey reads on both where #fff is invisible on the first. strokes are
+# 3 of the 32 units so they survive the drop to 16, and the ticks touch the ring
+# so the two do not blur into separate marks at that size.
+FAVICON = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+    '<g fill="none" stroke="#8a8a8a" stroke-width="3">'
+    '<circle cx="16" cy="16" r="8.5"/>'
+    '<path d="M16 1v7M16 24v7M1 16h7M24 16h7"/>'
+    '</g><circle cx="16" cy="16" r="2" fill="#8a8a8a"/></svg>'
+)
+# the characters a data uri may not carry raw inside an href: '#' ends the url,
+# and a quote or an angle bracket ends the attribute
+FAVICON_SAFE = "/:='"
+
 
 sys.path.insert(0, os.path.join(ROOT, "research"))
 import notes  # noqa: E402  the reference vocabulary registry notes are written in
@@ -1518,7 +1539,8 @@ def render(payload):
         html = f.read()
     with open(ROSTER) as f:
         roster = f.read()
-    for want, where in (("__DATA_URL__", TEMPLATE), ("__ROSTER_JS__", TEMPLATE)):
+    for want, where in (("__DATA_URL__", TEMPLATE), ("__ROSTER_JS__", TEMPLATE),
+                        ("__FAVICON__", TEMPLATE)):
         if want not in html:
             sys.exit("!!! %s has no %s placeholder" % (where, want))
     # the export tail is what makes it a module under node and is meaningless
@@ -1530,7 +1552,9 @@ def render(payload):
         sys.exit("!!! %s reaches for %r; it has to run under node too"
                  % (ROSTER, found.group()))
     return (html.replace("__ROSTER_JS__", roster)
-                .replace("__DATA_URL__", "data.json"))
+                .replace("__DATA_URL__", "data.json")
+                .replace("__FAVICON__", "data:image/svg+xml,"
+                         + quote(FAVICON, safe=FAVICON_SAFE)))
 
 
 def write(path, text, check):

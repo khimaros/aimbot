@@ -333,10 +333,13 @@ audiocpp_cli \
   --out out.wav
 
 gufo serve --port 8080 llm \
-  --model models/Qwen3.8-27B-UD-Q4_K_XL.gguf \
+  --model ~/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-GGUF/snapshots/4ca7207/Qwen3.8-27B-UD-Q4_K_XL.gguf \
   --speculative dflash2 \
-  --dflash-model models/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
+  --dflash-model ~/.cache/huggingface/hub/models--z-lab--Qwen3.8-27B-DFlash2-GGUF/snapshots/2d9571f/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
 ```
+
+(the cache paths are abbreviated here. what the page prints is the full 40-character
+revision, and its `hf download` line carries the same one -- see below.)
 
 **audio.cpp gets the package downloaded from the repo the entry is keyed on, and
 no other.** a family publishes its own gguf of the checkpoint AND a snapshot of
@@ -345,6 +348,16 @@ than a sibling in the same family: `qwen3_asr` covers the 0.6b and the 1.7b and
 recommends the 1.7b, so handing its default package to the 0.6b entry would
 print a command for a model three times the size of its own row. the other
 packages are counted in a comment rather than guessed at.
+
+the gufo command points at **the path `hf download` reports for the bytes it
+fetched**, not at a directory this page picked. gufo's own guides fetch into
+`models/<family>` with `--local-dir` and then point there, which is two choices to
+keep in step; the cache layout is `hf download`'s own work and its snapshot
+directory IS the revision, so the pinned revision the guide was measured at is
+both what gets fetched and what gets pointed at. that makes `--revision`
+load-bearing rather than pedantic -- skip it and the same file lands under a
+directory named for whatever is current -- and `HF_HOME` moving the cache is said
+in a comment rather than assumed away.
 
 gufo is the engine that loads the files this registry's own `runtime:` block
 cannot place, and it is the reason `gufo` is in the vocabulary at all: its deepseek
@@ -472,7 +485,11 @@ server binary, how to group it -- is its own business, in its own file.
 
 llama-tools keeps its hosts in `etc/aimbot/<host>.yaml` and checks them with
 its own `scripts/llama-swap-validate`, which reads `registry/` for exactly
-those four keys and knows llama-swap for everything else.
+those four keys and knows llama-swap for everything else. a quant it may serve
+is a pin or any rung the pinned repo publishes: it reads each pin's `available`
+ladder out of `docs/data.json`, and skips the rungs marked `fork_type`, so
+`models[].repo` and `quants[].{repo, available[].{quant, file, fork_type}}`
+there are a contract with another repo rather than page internals.
 
 ## the viewer
 
@@ -480,6 +497,11 @@ those four keys and knows llama-swap for everything else.
 "good" means, open one, then read how to run it. `make site` regenerates it and
 `make lint` fails if the committed copy is behind the data. github pages serves
 it straight from the `docs/` folder on `master`.
+
+**the tab icon is inlined, and it is a reticle.** `href="favicon.svg"` would be
+a second file to deploy for a decoration, so `build-viewer` writes the mark into
+the page as a data uri: one grey, no tile, and the grey a mid one, because the
+same mark sits on a white tab bar and a black one and has to read on both.
 
 **the modality dropdown is how you get at the non-text half.** the roster is 89
 models and 28 of them read or write something other than text, which two
@@ -775,8 +797,8 @@ what a box can run turned out to be worth four bugs and a missing model:
   question with `unknown` rather than with `does not fit`.
 
 the registry's `quants:` list still says which publishers a model has at all --
-that is the curation layer, and what llama-tools reads -- but it no longer
-chooses among them. at the default 128gb box three of 74 rows read a different
+that is the curation layer, and llama-tools serves any rung those publishers'
+repos carry -- but it no longer chooses among them. at the default 128gb box three of 74 rows read a different
 file than before: mimo arriving, qwen3.5-27b moving to its MTP build, and
 qwen3.8 flash next taking agentionai's Q5_K_XL at 5.37 bits over unsloth's
 Q4_K_XL at 4.95, which is the shape of what the old rule discarded.

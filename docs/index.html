@@ -2,6 +2,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>aimbot &middot; model registry</title>
+<!-- the tab icon is a data uri rather than docs/favicon.svg: the site is one
+     file a reader can open off disk, and a decoration is not worth a second.
+     data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2032%2032%22%3E%3Cg%20fill=%22none%22%20stroke=%22%238a8a8a%22%20stroke-width=%223%22%3E%3Ccircle%20cx=%2216%22%20cy=%2216%22%20r=%228.5%22/%3E%3Cpath%20d=%22M16%201v7M16%2024v7M1%2016h7M24%2016h7%22/%3E%3C/g%3E%3Ccircle%20cx=%2216%22%20cy=%2216%22%20r=%222%22%20fill=%22%238a8a8a%22/%3E%3C/svg%3E is filled by scripts/build-viewer, which holds the mark -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2032%2032%22%3E%3Cg%20fill=%22none%22%20stroke=%22%238a8a8a%22%20stroke-width=%223%22%3E%3Ccircle%20cx=%2216%22%20cy=%2216%22%20r=%228.5%22/%3E%3Cpath%20d=%22M16%201v7M16%2024v7M1%2016h7M24%2016h7%22/%3E%3C/g%3E%3Ccircle%20cx=%2216%22%20cy=%2216%22%20r=%222%22%20fill=%22%238a8a8a%22/%3E%3C/svg%3E">
 <style>/* dark, minimal, monospace, borrowed from quantbench's dashboard. colour
    carries meaning and nothing else: a measurement, a claim the model makes
    about itself, a behaviour that silently drops your message. no gradients, no
@@ -283,8 +287,8 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     </select>
     <select id="reserve" data-help="held back for everything that is not weights or kv cache: compute buffers, the host, whatever else is resident. 12 gib is the default because a nominal 128 gib box does not have 128 to give -- measured on the strix halo this document is scoped to, the firmware and igpu aperture take 2.9, the resident os about 5.9, and llama.cpp's compute buffers about 2, which is 10.9 before a single weight is loaded"></select>
     <select id="ctx" data-help="the context you need to serve. its kv cache is computed from each model's own attention geometry -- full, windowed and linear layers counted separately -- and subtracted before anything is asked to fit. a model whose native window is shorter is not a fit at all. the cache is sized at f16, llama.cpp's default; --cache-type-k/v q8_0 roughly halves every figure here"></select>
-    <select id="cap" data-help="how far up the quant ladder to go. past q8 the extra bytes buy nothing measurable and cost decode speed, so the fit stops there unless you say otherwise"></select>
     <select id="floor" data-help="how far down is still worth running. below this a model reads as not fitting rather than as a two-bit version of itself"></select>
+    <select id="cap" data-help="how far up the quant ladder to go. past q8 the extra bytes buy nothing measurable and cost decode speed, so the fit stops there unless you say otherwise"></select>
     <select id="bw" data-help="how fast the box reads memory, from its spec sheet. decode is bandwidth bound, so this drives the `tg t/s` column: effective bandwidth over the bytes one token reads, which is the active weights at the fitted quant plus the kv cache at your context"></select>
     <select id="flops" data-help="what the box computes at, dense fp16, from its spec sheet. prefill is compute bound rather than bandwidth bound, so it drives the `pp t/s` column on its own: two flops per active weight per prompt token"></select>
     <button class="rst" id="reset-hardware" aria-label="reset hardware"></button>
@@ -3715,6 +3719,14 @@ function rungRuntime(q, m) {
 // built FROM: some repos publish twenty quants, and a snippet for the one the
 // registry pins is not much use to somebody who cannot fit it. every flag below
 // is still a pure function of registry facts -- the quant repo, the profile's
+// where `hf download` puts a file when it is told nothing else, and what it prints
+// back. the snapshot directory IS the revision, so a pinned revision is both the
+// bytes that get fetched and the path that gets pointed at -- no directory for a
+// reader to agree with the tool on first. HF_HOME/HF_HUB_CACHE move it, and for
+// gufo the pinned revision has to travel with the download: without it the same
+// file lands in a directory named for somebody else's snapshot.
+const HF_CACHE = '~/.cache/huggingface/hub';
+
 // samplers, the native context, the derived knob.
 
 // the `--task` values audio.cpp's own cli documents (docs/usage.md). a spec's
@@ -4083,12 +4095,24 @@ function otherRuntime(m, rt, pick) {
     const draft = mode && draftFlag
       ? (g.weights || []).find(x => x !== w && (x.label || '').toLowerCase()
                                  .includes(mode.toLowerCase())) : null;
-    const at = x => `models/${(x.file || x.repo.split('/')[1])}`;
-    const notes = [w.repo
-      ? ['# gufo measured its figures on these bytes:', 'hf download', w.repo,
-         w.file || '', `--revision ${w.revision || '<revision>'}`,
-         '--local-dir models'].filter(Boolean).join(' ')
-      : '# gufo names no weights for this model'];
+    // the path `hf download` reports for the bytes it just fetched, rather than
+    // a directory this page picked and a --local-dir that has to agree with it.
+    // the weight is a file in some repos and a subdirectory in others -- the
+    // flash next rung is `UD-Q4_K_XL/` -- and both read the same way from here
+    const at = x => [HF_CACHE, `models--${(x.repo || '').replace('/', '--')}`,
+                     `snapshots/${x.revision || '<revision>'}`,
+                     x.file].filter(Boolean).join('/');
+    // one flat list: `withNotes` joins these with newlines, so a nested array
+    // here arrives as ONE line with commas where the line breaks were
+    const notes = w.repo
+      ? ['# gufo measured its figures on these bytes:',
+         ['hf download', w.repo, w.file || '',
+          `--revision ${w.revision || '<revision>'}`].filter(Boolean).join(' '),
+         // without --revision the same file lands under a directory named for
+         // whatever is current, and the path below is somebody else's snapshot
+         '# --revision is the directory: skip it and this path is not there',
+         '# that is hf download\'s default cache; HF_HOME moves it']
+      : ['# gufo names no weights for this model'];
     return {label: (g.serve ? `gufo serve ${g.serve.kind}` : 'gufo')
               + ', on its own guide',
             text: withNotes(notes,
