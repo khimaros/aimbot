@@ -1,0 +1,4506 @@
+
+const nodes = {};
+const el = key => nodes[key] || (nodes[key] = {
+  style: {}, dataset: {}, children: [], value: '', textContent: '', innerHTML: '',
+  classList: {add(){}, remove(){}, toggle(){}, contains(){return false}},
+  setAttribute(){}, getAttribute(){return 'false'}, addEventListener(){},
+  querySelector(s){ return el(key + ' ' + s); }, querySelectorAll(){ return []; },
+  getBoundingClientRect(){ return {left:0, top:0, bottom:0, width:0, height:0}; },
+  onclick: null,
+});
+global.document = {
+  querySelector(s){ return el(s); }, querySelectorAll(){ return []; },
+  addEventListener(){}, body: el('body'), title: '',
+};
+global.window = global;
+global.location = {hash: '', pathname: '/', search: ''};
+// a history write lands in the address bar the way a browser puts it there, and
+// is recorded: the page keeps the url current, so a case has to be able to read
+// what the last draw wrote -- and whether a draw wrote anything at all
+const fragment = url => { const i = String(url).indexOf('#'); return i < 0 ? '' : url.slice(i); };
+global.history = {
+  writes: [],
+  replaceState(_t, _s, url) { this.writes.push('replace'); location.hash = fragment(url); },
+  pushState(_t, _s, url) { this.writes.push('push'); location.hash = fragment(url); },
+};
+const mem = {};
+global.localStorage = {
+  getItem(k){ return k in mem ? mem[k] : null; },
+  setItem(k, v){ mem[k] = v; }, removeItem(k){ delete mem[k]; },
+};
+global.addEventListener = () => {};
+global.innerWidth = 1200;
+global.innerHeight = 800;
+global.CSS = {escape: s => s};
+// the shipped markup, for the few things no code path writes: a static glyph
+// in the toolbar is the same bytes a browser is handed, and the stub above
+// never parses html, so a case that wants to read it reads this
+const PAGE_HTML = require('fs').readFileSync("/home/pawalls/src/github.com/khimaros/aimbot/docs/index.html", 'utf8');
+const PAYLOAD = require('fs').readFileSync("/home/pawalls/src/github.com/khimaros/aimbot/docs/data.json", 'utf8');
+// the registry's own count, so "the payload is the whole registry" stays the
+// assertion when a model is added rather than becoming a number to bump
+const REGISTRY_MODELS = 216;
+global.fetch = () => Promise.resolve({json: () => JSON.parse(PAYLOAD)});
+process.on('unhandledRejection', e => {
+  console.log('FAIL boot threw: ' + ((e && e.stack) || e));
+  process.exit(1);
+});
+const html = s => el(s).innerHTML;
+
+// aimbot registry viewer.
+//
+// reads data.json -- one file, built by scripts/build-viewer from the registry
+// and the research captures -- and renders three things in the order somebody
+// actually asks for them: which models are good, why they are good, and how to
+// run the one you picked.
+//
+// NOTHING is measured that was not measured. a model with no gbench entry has
+// no gbench facet, and the evidence column says how many of the weighted
+// factors it actually had. an absence is never scored as a zero, because a
+// model nobody has measured is not a bad model -- but it is not scored as
+// exempt either: the composite shrinks toward the middle by the weight that
+// measured nothing, so an unmeasured model reads as unremarkable rather than as
+// whatever its one remaining factor says.
+const DATA_URL = 'data.json';
+
+const store = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem('aim-' + k)) ?? d; } catch (e) { return d; } },
+  set(k, v) { localStorage.setItem('aim-' + k, JSON.stringify(v)); },
+};
+
+// the roster's arithmetic, with no page around it.
+//
+// this is everything the dashboard COMPUTES rather than displays: which quant
+// fits a box, what its kv cache costs, how far a context can be stretched, what
+// a quant cost in quality, and the composite that ranks the result. it touches
+// no dom and reads no localStorage, so it runs the same under node as it does
+// in a browser.
+//
+// it exists because three things need those answers and only one of them is a
+// browser. `docs/index.html` inlines this file and puts controls on it,
+// `scripts/aimbot` requires it to answer from a terminal, and
+// `research/dashboard-table` requires it to generate MODELS.md's ranking. one
+// implementation, because two of them drifted once already -- the page scored a
+// mean of percentiles while a second composite in python min-max normalised raw
+// values, and they disagreed about which model was first.
+//
+// the FACTS come from `docs/data.json`, which `scripts/build-viewer` writes out
+// of `registry/models.yaml` and the research captures. the DEFAULTS come from
+// `registry/dashboard.yaml` through the same file. nothing is hardcoded here
+// that a reader of the registry would want to argue with.
+
+let D = null;                       // the payload
+let W = {};                         // facet key -> weight
+// where the table starts: the best score first, which is the question the page
+// is built to answer. the page overwrites this from localStorage once it
+// boots, and its own table reset puts it back, so it is a constant here rather
+// than a literal at two sites that can disagree.
+const DEFAULT_SORT = {k: 'score', dir: -1};
+let sort = {...DEFAULT_SORT};
+// the runtimes selected by default: the three that load most of this roster and
+// that a reader here is likely to have built. it is a multi-select rather than
+// one choice because a model can have two -- whisper's files load in crispasr
+// and in stock whisper.cpp -- and because narrowing to one runtime is a
+// question about a box rather than about the models.
+let DEFAULT_ENGINES = [];
+// the licence tiers selected by default. `permissive` alone: a reader here is
+// deciding what to run, and a licence they cannot ship under is not a
+// candidate. the other two tiers are a tick away rather than unreachable.
+let DEFAULT_LICENSES = [];
+// `params` is a band in BILLIONS and is not the same question as whether a
+// model fits: a 27b at Q1_0 is 3.5 gib and is not a small model. off by
+// default at both ends, the way every other filter here is.
+let filters = {q: '', kind: new Set(), pub: '', flags: new Set(),
+               engines: new Set(), mods: new Set(), pubs: new Set(),
+               licenses: new Set(), minParams: null, maxParams: null};
+let folded = new Set();             // collapsed factor groups
+let hidden = new Set();
+let order = [];
+let openRepo = null;
+let tab = 'overview';
+
+const fmt = new Intl.NumberFormat();
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c =>
+  ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const num = (v, d = 1) => v === null || v === undefined ? '' : (+v).toFixed(d);
+const pctOf = v => Math.round((v || 0) * 100) + '%';
+// the thinking vocabulary, with the level a client gets by sending nothing in
+// bold. that level is not always the cheap one: kimi k3 defaults to `max`, and
+// the gemma 4 templates do not think at all until asked.
+const levels = (t, sep = ' ') => {
+  // a switch has two states and no vocabulary. the words are for reading --
+  // what a client sends is the boolean itself
+  if (t.kind === 'boolean') {
+    return ['off', 'on'].map(s => t.default === (s === 'on') ? `<b>${s}</b>` : s).join(sep);
+  }
+  return (t.accepts || []).map(l => l === t.default ? `<b>${esc(l)}</b>` : esc(l)).join(sep);
+};
+const gib = v => v === undefined || v === null ? '' : (+v).toFixed(1);
+const ctxLabel = v => !v ? '' : v >= 1000 ? Math.round(v / 1024) + 'k' : String(v);
+// a counted parameter total is 27.78b and the vendor calls it 27b. neither is
+// wrong, and one decimal is as much as anyone reads -- the exact figure is on
+// hover
+const round1 = v => v === undefined || v === null ? '' : (Math.round(v * 10) / 10);
+
+// a note or a verdict, as plain text. the parts carry rendered references --
+// `{gib}` became a figure at build time -- and the ones that are objects know
+// what they are SHOWN as. lives here rather than with the modal because the
+// search haystack reads it, and a grep that could not see a note would miss
+// the sentence that says what a model is for.
+const proseText = parts => !parts ? ''
+  : (Array.isArray(parts) ? parts : [parts])
+      .map(p => typeof p === 'string' ? p : p.shown).join('');
+
+// active parameters: the vendor's own naming convention first, since it is
+// exact and covers models nobody has scored, then artificial analysis, and for
+// a dense model the total it already has. never larger than the total, which
+// is what comparing a counted 29.78b against an advertised 30b produced.
+function activeB(m) {
+  const total = m.facts.params_total_b;
+  const a = m.facts.params_active_b ?? m.params.advertised_active_b
+    ?? (m.facts.experts ? undefined : total);
+  if (a === undefined) return undefined;
+  return total ? Math.min(a, total) : a;
+}
+
+// --- scoring -----------------------------------------------------------------
+//
+// a weight key is either a facet key (aa.scicode) or a prefix wildcard
+// (card.*), which averages every facet under it. the wildcard exists because
+// card claims and epoch runs are per benchmark: a reader wants one knob for
+// "how much do i trust what the vendor says", not eleven.
+
+const facetKeys = (m, key) => key.endsWith('.*')
+  ? Object.keys(m.facets).filter(k => k.startsWith(key.slice(0, -1)))
+  : (m.facets[key] ? [key] : []);
+
+// --- effective values --------------------------------------------------------
+//
+// a benchmark measures the model; a local roster runs a QUANT of it. `raw` is
+// what the source published, `effective` is that discounted by the retention
+// build-tables' curve predicts for the pinned quant's bits per weight -- the
+// same adjustment MODELS.md's composite makes, from the same curve.
+//
+// only the three artificial analysis indices are scaled. the other sources
+// measured a served endpoint whose precision this repo does not know, so
+// discounting them would invent a number rather than adjust one.
+
+let effective = true;
+let budget = null;                  // gib of memory, or null
+// weights are not the whole resident set: the kv cache grows with context and
+// the compute buffers are not free either. what is left after that reserve is
+// what a quant has to fit in, which is why build-tables budgets 105 of a 128gb
+// box rather than 128.
+let reserve = 0;
+const usable = () => budget === null ? null : Math.max(0, budget - reserve);
+
+// the quant ladder's ceiling and floor, and every other default, come from
+// `registry/dashboard.yaml` through `docs/data.json`. they are judgements --
+// how far up the ladder is worth climbing, how much of a box to hold back --
+// and they were consts in the page where nothing but the page could read them
+// and nobody reviewing the registry would find them. applyConfig fills them in
+// before anything reads them.
+let CAPS = [];
+let FLOORS = [];
+let cap = null;
+let floor = null;
+const capBpw = () => (CAPS.find(c => c[0] === cap) || CAPS[0])[1];
+const floorBpw = () => (FLOORS.find(c => c[0] === floor) || FLOORS[0])[1];
+
+// the cap and the floor pick a rung off a LADDER, and a ladder is a text
+// model's problem: a speech or image model publishes one or two files and there
+// is nothing to choose between. applying them there disqualified every non-text
+// model on the roster -- 22 of 87 -- on a box with 116gib free.
+//
+// the bpw they compare is not trustworthy for those models either, which is why
+// this is a rule about ladders rather than a wider cap. `bpw` is size over
+// parameter count, and for a speech model the parameter count names a COMPONENT
+// where the gguf carries several: qwen3-tts 0.6b ships a 1.23gib file tagged
+// Q8_0 against a `0.6` figure counting only the talker, which computes to 17.7
+// bits per weight. reading the tag instead is no better -- unsloth's
+// UD-Q8_K_XL is genuinely ~11.8 bpw and the 11 ceiling excludes it correctly,
+// which a tag saying `Q8` would undo.
+const laddered = m => m.kind === 'text';
+
+// the bits a plain quant tag names. `max q8` used to do nothing at all to a
+// speech or image model -- the ceiling compares bits per weight, that number is
+// not trustworthy there, so the whole test was skipped and z-image went on
+// offering its f16 rung under a q8 ceiling. the TAG is trustworthy where the
+// bpw is not: a repo that publishes `F16` and `Q8_0` is telling you which is
+// which, and a speech repo publishes nothing more exotic than that.
+//
+// text models keep the bpw comparison, because there the tag is the thing that
+// lies: unsloth's UD-Q8_K_XL is genuinely ~11.8 bpw and the ceiling excludes it
+// correctly, which a tag reading `Q8` would undo.
+const TAG_BITS = /^(?:UD-|AD-)?(?:(?:BF|F)(\d+)|I?Q(\d+))/i;
+const tagBits = tag => {
+  const m = TAG_BITS.exec(tag || '');
+  return m ? +(m[1] || m[2]) : null;
+};
+const capBits = () => cap === 'none' ? Infinity : +cap.slice(1);
+
+function affordable(m, all, room) {
+  const fits = all.filter(c => c.gib && c.gib <= room);
+  if (!laddered(m)) {
+    // a PREFERENCE, so it yields rather than emptying the list: pyannote
+    // publishes one f32 file and nothing else, and a ceiling that hid it would
+    // report the model as not fitting a box with room for it fifty times over
+    const bits = capBits();
+    const under = fits.filter(c => (tagBits(c.quant) ?? 0) <= bits);
+    return under.length ? under : fits;
+  }
+  const ceiling = capBpw(), bottom = floorBpw();
+  return fits.filter(c => !c.bpw
+    || (rungBpw(c) <= ceiling && rungBpw(c) >= bottom));
+}
+
+// how far `bpw` may sit from the tensor table before it stops being evidence.
+// the two agree within noise on 1671 of 1687 text rungs, so this is about the
+// handful where the denominator is wrong rather than about rounding.
+const BPW_DISAGREE = 0.25;
+
+// WHAT A RUNG IS WORTH, in one number, because three questions ask it and were
+// being answered twice: which rung a row reads as, whether a rung clears the
+// ceiling and the floor, and how much of the model's quality survives the
+// quantization. they read the same bits per weight now, so the page cannot rank
+// a rung as its best offering and discount it as a worse one in the next column
+// -- and it cannot rank by file size at all, which is the other reason this had
+// to be one number: the pool spans publishers, and a bigger FILE stopped
+// meaning more bits the moment a second repo's packing entered the list.
+//
+// `bpw` is file size over `params_total_b`, and that denominator describes the
+// CHECKPOINT rather than the file: minicpm-v 4.6 counts its vision encoder,
+// ships it as a separate mmproj and the language half alone in the gguf, so
+// every rung reads 1.7x too cheap and its F16 sat under a q8 ceiling at a
+// computed 9.32 against a true 16. lfm2.5 2.6b is the same fault inverted -- a
+// drafter folded into the file inflates it, its Q4_0 reads 9.45 against a true
+// 4.70, and a q6 ceiling hid a rung that clears it while the quality curve
+// credited the target with the head's bits.
+//
+// where the tensor table disagrees it wins, because it counted what is in the
+// file. where they agree the nominal figure stands: the ceilings are calibrated
+// against that scale, and swapping wholesale would throw qwen3.5-0.8b's Q4_K_S
+// out of `max q4` on a 10% difference. reading the TAG instead is no fix
+// either -- gpt-oss ships mxfp4 under an F16 name at a true 4.48 bpw, which
+// belongs under a q8 ceiling and which a tag test would have excluded.
+//
+// bytes that are not the target's weights are excluded from this number by the
+// tensor table rather than by a discount of their own: speculative decoding is
+// output-preserving, so a drafter costs room and buys speed -- which is what
+// `draftGib` and `draftYield` are for -- and taking quality for it as well
+// would charge the same file twice.
+const rungBpw = c => c.realBpw && c.bpw
+  && Math.abs(c.realBpw - c.bpw) / c.bpw > BPW_DISAGREE ? c.realBpw : c.bpw;
+
+// best first, on that number. two rungs worth the same bits are separated by
+// whether the build can draft -- equal quality and half the tokens per second
+// is not a tie -- then by the smaller download, then by repo so that the order
+// does not depend on which publisher's listing the size table happened to read
+// first. a rung with no bits figure at all -- a repo with no tensor table and no
+// parameter count -- ranks last rather than inventing a position.
+const byQuality = list => [...list].sort((a, b) =>
+  ((rungBpw(b) ?? -1) - (rungBpw(a) ?? -1))
+  || ((a.speculative === false ? 1 : 0) - (b.speculative === false ? 1 : 0))
+  || ((a.gib ?? Infinity) - (b.gib ?? Infinity))
+  || String(a.repo).localeCompare(String(b.repo))
+  || String(a.quant).localeCompare(String(b.quant)));
+
+// context to serve, and what its kv cache costs. the geometry comes from each
+// model's own config: full-attention layers hold a cache that grows with the
+// context, windowed layers hold at most their window, and a linear-attention
+// layer holds a fixed state that does not scale at all. counting every layer
+// as global would overstate gemma 4 31b several times over.
+let KV_BYTES = 2;                   // f16 keys and values, llama.cpp's default
+let minCtx = 0;
+
+// what one token costs in cache, per layer that holds one. latent attention
+// keeps a single compressed vector instead of a key and a value per head, and
+// costing it the naive way overstates kimi k3 by 24.7x, ling 3.0 flash by
+// 14.2x and deepseek v4 flash by 1.8x -- always as "this will not fit".
+const kvPerToken = a => a.latent
+  ? a.latent * KV_BYTES : 2 * a.kv_heads * a.head_dim * KV_BYTES;
+
+function kvGib(m, ctx) {
+  const a = m.facts.attn;
+  if (!a || !ctx) return 0;
+  const perTok = kvPerToken(a);
+  const windowed = a.window ? a.other_layers * Math.min(ctx, a.window) : 0;
+  return perTok * (a.full_layers * ctx + windowed) / (1024 ** 3);
+}
+
+// what it was trained on, as opposed to what yarn extends it to. gpt-oss is
+// the case that makes the difference worth a column: 4096 trained, 131072
+// reported, a factor of 32 of extrapolation between them.
+const trainCtx = m => m.facts.context_trained || m.facts.context_native;
+
+// a model that cannot reach the context is not a fit at it. this reads the
+// EXTENDED window, since that is what llama.cpp serves out of the gguf without
+// a flag; whether the extrapolated part is worth having is the reader's call,
+// and the two columns put both numbers in front of them.
+//
+// a context window is a TEXT model's promise, so the demand is asked of text
+// models and of nothing else. two rounds of the same bug got it here.
+//
+// first: a model publishing NO window has not failed to reach one, and `|| 0`
+// said it had, so the whole non-text roster read as `does not fit` on a box
+// with 128gib free. that was fixed by passing an absent window.
+//
+// which left the half the absence was standing in for. breeze-tts-2 is 3.2gib
+// at Q8_0 and declares 2048 -- the text its encoder takes, not a chat context
+// anybody is going to fill -- and failed a 131072 demand on a 128gib box. so
+// did 20 other entries: most of the speech roster, both translators, both
+// punctuators. `fits vram` is a control about MEMORY, and answering it with a
+// context mismatch is the same category error as reading "no quant fits" off
+// zero quants. what makes the rule right for text and wrong here is not
+// whether a number was published, it is whether a reader chooses the context:
+// that is `kind: text`, a model served as a chat or completion endpoint.
+const reaches = m => !minCtx || m.kind !== 'text' || !m.facts.context_native
+  || m.facts.context_native >= minCtx;
+
+// and the cache charged against a model is the one it can hold. asking for
+// 131072 tokens against a 2048-token window bills for a cache that cannot
+// exist, which is the same demand arriving through the arithmetic instead of
+// through the filter.
+const wantCtx = m => m.facts.context_native
+  ? Math.min(minCtx, m.facts.context_native) : minCtx;
+
+// the longest context whose cache fits beside the weights. windowed layers cap
+// at their window, so past that only the full-attention layers keep growing.
+function fitContext(m) {
+  const q = activeQuant(m), a = m.facts.attn, native = m.facts.context_native;
+  if (!budget || !q || !q.gib || !a || !native) return null;
+  const room = (usable() - q.gib - draftGib(m, q)) * (1024 ** 3);
+  if (room <= 0) return 0;
+  const perTok = kvPerToken(a);
+  const windowed = a.window ? a.other_layers * a.window * perTok : 0;
+  const ctx = (room - windowed) / (perTok * a.full_layers);
+  // never above the trained window: going past it needs rope scaling, which is
+  // the consumer's decision rather than a number this page can report
+  return Math.max(0, Math.min(native, Math.floor(ctx)));
+}
+
+// every (repo, quant) this model can be read as. keyed by the pair because a
+// model may declare two quants OUT OF THE SAME repo -- gemma 4 31b pins Q8_0
+// and UD-Q4_K_XL -- and expanding that repo's listing once per declared quant
+// listed all 25 of them twice.
+function quantChoices(m) {
+  const seen = new Map();
+  m.quants.forEach(q => {
+    const alt = (q.available || []).length ? q.available
+      : [{quant: q.quant, file: q.file, gib: q.gib, bpw: q.bpw}];
+    alt.forEach(a => {
+      const key = q.repo + ':' + a.quant;
+      const was = seen.get(key);
+      if (was) { was.pinned = was.pinned || a.quant === q.quant; return; }
+      // `file` is what to fetch, `quant` is what to call it. they differ where
+      // a repo does not name its files after the tag -- whisper.cpp's
+      // `ggml-large-v3-turbo-q8_0.bin` is the Q8_0 rung
+      seen.set(key, {repo: q.repo, quant: a.quant, file: a.file || a.quant,
+                     gib: a.gib, bpw: a.bpw,
+                     // what the file IS, where its tensor table has been read.
+                     // `realBpw` is over the block geometry of every tensor;
+                     // `bpw` beside it is file size over parameter count
+                     types: a.types, realBpw: a.real_bpw,
+                     pinned: a.quant === q.quant, speculative: q.speculative,
+                     forkType: a.fork_type, crispasr: q.crispasr,
+                     note: a.quant === q.quant ? proseText(q.note) : undefined});
+    });
+  });
+  return [...seen.values()];
+}
+
+// whether a rung can draft at all. the capability is a property of the GGUF
+// rather than of the model: `draft-mtp` needs the nextn head, which qwen ships
+// only in the `-MTP-GGUF` build, so the plain build of the same model cannot
+// draft however the model entry describes the method. it used to be answered
+// about a REPO, which made choosing a build a decision about which of several
+// repos to read a model from at all; it is a fact about the file.
+const rungDrafts = c => c.speculative !== false;
+
+// which rung this model is being READ as: the best-quality one whose footprint
+// fits, out of every rung the registry lists for the model. the pool has always
+// been the whole list -- `quantChoices` expands each entry's published files --
+// and what used to be scoped to one repo was only the CHOICE, which is why a
+// model could be reported as too big for a box with room for it: mimo v2.6 flash
+// publishes 117.55 gib at its first-listed repo and 91.91 at its last, and the
+// search stopped at the first.
+//
+// the registry's own rung still answers the two cases where nothing can be
+// chosen from: no budget, and a repo publishing no file sizes (hy3), where
+// reporting it as too big would be a measurement this repo does not have.
+//
+// over whatever set the caller hands it, which is the whole pool for the fit and
+// one repo's rungs once a reader has narrowed the choice by hand on the operate
+// tab. same test either way, so the two cannot disagree about what fits.
+function bestOf(m, all) {
+  if (!all.length) return null;
+  if (!budget || !all.some(c => c.gib)) return all.find(c => c.pinned) || all[0] || null;
+  if (!reaches(m)) return null;
+  const room = usable() - kvGib(m, wantCtx(m)) - draftGib(m);
+  const fits = affordable(m, all, room);
+  return fits.length ? byQuality(fits)[0] : null;
+}
+
+const bestRung = m => bestOf(m, rungPool(m));
+
+// --- speculative decoding ----------------------------------------------------
+//
+// drafting proposes n tokens and the target verifies them in ONE pass, keeping
+// everything up to the first rejection. so the gain is tokens per target pass,
+// and with a per-token acceptance p the expected yield is 1 + sum(p^k) over
+// k=1..n -- geometric, which is why the terms past the third are worth almost
+// nothing and why the registry drafts 3 for qwen3.8 and 6 for qwen3.6.
+//
+// p is a single number for every model, which is the weak part of this. it is
+// set to the value that reproduces the only end-to-end measurement this repo
+// holds: qwen3.8 27b on a strix halo under vulkan with the MTP predictor, at
+// 16.68 / 14.24 / 12.74 t/s for UD-Q5_K_XL / Q6_K / Q8_0. against the same
+// arithmetic without drafting that is 1.97x, 1.90x and 2.16x; 1 + sum(0.55^k,
+// k=1..3) is 2.02. MODELS.md records the same log reporting acceptance between
+// 0.546 and 0.88 on one model, so treat this as the middle of a wide range.
+const DRAFT_ACCEPT = 0.55;
+
+// the drafter's weights have to be resident either way; what differs is only
+// whether the publisher put them in the quant or beside it. qwen's -MTP- build
+// carries the head, so the quant already paid; gemma, deepseek and glimmer
+// ship a sidecar, so it is added here and comes out of the vram budget.
+const draftKind = m => (m.speculative || {}).type || '';
+// `q` is the rung being charged: a build shipped without the head has no
+// drafter to keep resident, and billing it for one both wastes the room and
+// hides a rung that fits without it. left off, the charge is the declared
+// sidecar -- the answer while the choice of rung is still open, which is the
+// fit and the ladder, and never the row a reader is looking at.
+const draftGib = (m, q) => q && !rungDrafts(q)
+  ? 0 : ((m.speculative || {}).draft || {}).gib || 0;
+
+// what drafting yields, wherever the vendor ships a drafter. the read cost of
+// the draft pass itself is NOT modelled -- for a head of half a gib beside 30
+// of weights that is noise, for deepseek's 10gib dspark it is not -- so this
+// is an upper bound, tightest where the drafter is smallest.
+function draftYield(m, q = activeQuant(m)) {
+  const n = (m.speculative || {}).n_max;
+  if (!draftKind(m) || (q && !rungDrafts(q))) return 1;
+  let out = 1, p = 1;
+  for (let k = 0; k < (n || 3); k++) { p *= DRAFT_ACCEPT; out += p; }
+  return out;
+}
+
+// which RUNTIMES load one rung. the model's engines answer wherever the rung
+// says nothing of its own, and there is one place a rung does speak: crispasr
+// reads the conversion whose backend the registry names and loads the others
+// WITHOUT complaint, into noise -- cstr's qwen3-tts conversion and ours
+// namespace their metadata differently and ship different codec tensor counts.
+// so once any sibling declares a backend, the rungs that do not are not
+// crispasr files, and a view whose runtimes are crispasr has no business
+// ranking one. where nothing distinguishes them, they are all candidates.
+//
+// the rule is the operate tab's repo picker's, lifted to where the fit can use
+// it: a rung no selected runtime loads never failed the fit, and ranking it at
+// all is answering with a file nobody can serve. it is what made a 1.23 gib
+// qwen3-tts file beat the 0.9 gib one crispasr loads -- more bits per parameter
+// by its own tensor table, and no engine on the roster that reads it.
+//
+// gufo is the other rung that speaks: it loads the files its guide measured, so
+// it is an engine for those rungs only, and for none where the guide names the
+// checkpoint rather than a gguf.
+const crispasrNamed = m => quantChoices(m).some(c => (c.crispasr || {}).backend);
+const gufoLoads = (m, c) => ((m.gufo || {}).rungs || [])
+  .some(r => r.repo === c.repo && r.quant === c.quant);
+function rungEngines(m, c, named) {
+  const out = new Set(c.engine || []);
+  if ((c.crispasr || {}).backend) out.add('crispasr');
+  else if (named) (m.engines || []).forEach(e => { if (e !== 'crispasr') out.add(e); });
+  else { if ((m.crispasr || {}).backend) out.add('crispasr');
+         (m.engines || []).forEach(e => out.add(e)); }
+  if (!gufoLoads(m, c)) out.delete('gufo');
+  return out;
+}
+
+// the pool the choice is made from: every rung the registry lists that one of
+// the runtimes this view has selected can actually load. no runtime picked is
+// no runtime filter, which is also how the entries nothing here runs stay.
+function rungPool(m) {
+  const all = quantChoices(m);
+  if (!filters.engines.size) return all;
+  const named = crispasrNamed(m);
+  return all.filter(c => [...rungEngines(m, c, named)]
+    .some(e => filters.engines.has(e)));
+}
+
+// which rung a ROW is being read as. an expanded row carries its own; a model
+// row asks for the best that fits.
+const activeQuant = m => m._q !== undefined ? m._q : bestRung(m);
+
+// the rung a row NAMES when the fit has no answer. where no rung clears the
+// budget the smallest rung anyone publishes is what the quant, gib and bpw
+// columns read, because a cell saying `does not fit` answers `fits vram` from a
+// column about which file the row is about -- and said it loudest when that
+// filter was switched off, to somebody who had just said they were not asking.
+// the miss is marked rather than hidden: `fits vram` is where no fits lives, and
+// `gib` here is how far over the box the closest rung still is.
+//
+// DISPLAY ONLY. the retention behind a quality score stays on `activeQuant`, and
+// the reason is measurable: scoring the models that fit nothing at their
+// smallest rung moves their facets, and percentiles are a rank over the whole
+// roster, so 80.3 became 85.6 for a model that fits fine -- models filtered out
+// of the view re-ranking the ones in it. a rung nobody can load may be named;
+// it does not get to move a ranking.
+const readQuant = m => activeQuant(m) || smallestRung(m);
+
+function smallestRung(m) {
+  const all = rungPool(m);
+  const sized = all.filter(c => c.gib);
+  // a repo that publishes no sizes has not failed to be small, and its pinned
+  // rung is the answer that does not invent a measurement
+  if (!sized.length) return all.find(c => c.pinned) || all[0] || null;
+  return sized.reduce((a, b) => (b.gib < a.gib ? b : a));
+}
+// an entry with no quants at all -- onnx-only weights the roster carries to say
+// what it is MISSING -- has no size to weigh, and answering "does it fit" with
+// `no` states something the data does not. it passes here, and the runtime
+// filter, which is the one that means unservable, is what hides it. `fits vram`
+// is on by default, so getting this wrong makes those entries unreachable.
+// and the same answer is owed to an entry no selected runtime loads at all:
+// three of the speech roster name no engine anybody has written down, so their
+// pool is empty the moment a runtime is picked, and "does not fit" would be a
+// claim about memory backed by a fact about runtimes.
+const fitsBudget = m => !budget || !m.quants.length || !rungPool(m).length
+  || !!activeQuant(m);
+
+// what goes after the colon in `repo:TAG`, which llama.cpp resolves against a
+// type name or a filename. the type where the rung has one, the filename where
+// it does not -- a vae or a voice embedding ships at one precision and names no
+// rung, so its `quant:` is absent rather than holding the filename it used to.
+const hfTag = q => (q.quant || q.file);
+
+// who built the gguf, which is the repo's owner and usually NOT the model's
+// publisher: most rungs here are unsloth's or bartowski's work over somebody
+// else's weights, and whose build you are about to download is part of the
+// answer to which quant fits.
+const quantAuthor = q => (q.repo || '').split('/')[0];
+
+// every rung the reader is being offered, best first.
+// with `fits vram` on that is what clears the budget, the ceiling and the floor:
+// the same test the fit uses, without the last step that picks one, so `every
+// quant that fits` and `the one that fits` can never disagree about what fits.
+// with it OFF the page is not being asked what fits, and a ladder that still
+// stopped at the budget would be answering a question somebody turned off -- it
+// read as a fact about the model the size of the box they stopped caring about.
+// the row keeps READING one rung, because one row names one quant.
+function fittingQuants(m) {
+  const all = rungPool(m);
+  if (!all.length) return [];
+  if (!budget || !all.some(c => c.gib)) {
+    const q = readQuant(m);
+    return q ? [q] : [];
+  }
+  if (!filters.flags.has('fits')) {
+    // a rung nobody weighed is not a rung that failed the weighing, so it stays
+    // on the ladder rather than dropping out with the fit
+    return byQuality(all);
+  }
+  // the SAME room the fit charges, drafter included: a ladder that bills only
+  // the weights offers rungs the row could never read, and deepseek v4 flash
+  // was handing out UD-IQ3_S at 108.1 of a 116 gib box that the draft file
+  // takes past the end
+  const room = usable() - kvGib(m, wantCtx(m)) - draftGib(m);
+  return byQuality(affordable(m, all, room));
+}
+
+// one row per model, or one per (model, quant). the expanded row inherits the
+// model rather than copying it, so every column reads the same facts and only
+// the quant differs -- and it carries its own score, because quant adjusted
+// discounts by the quant, which is the whole reason to look at the ladder.
+function expand(models) {
+  if (!allQuants) return models;
+  return models.flatMap(m => {
+    const qs = fittingQuants(m);
+    if (qs.length < 2) return [m];
+    return qs.map(q => Object.assign(Object.create(m), {_q: q, _s: null}));
+  });
+}
+
+// --- speed -------------------------------------------------------------------
+//
+// the two halves of inference are limited by two different things, so they read
+// two different settings and neither is derivable from the other. generating a
+// token reads every active weight and the whole cache once, which is bandwidth;
+// prefilling a prompt multiplies through the same weights, which is flops.
+//
+// both selects take the SPEC SHEET number, because that is what a reader knows
+// about their box, and the efficiencies below turn it into what the box does.
+// they are rules of thumb rather than measurements -- decode streams weights
+// almost perfectly, a prefill matmul lands nowhere near peak -- so the columns
+// are worth an order of magnitude and a comparison between models, not a
+// promise. 256 gb/s of strix halo through this arrives at the 160 gb/s
+// build-tables measures.
+let BW_EFFICIENCY = 0;
+let FLOPS_EFFICIENCY = 0;
+let BANDWIDTHS = [];
+let FLOPSES = [];
+let bandwidth = 0;
+let flops = 0;
+let allQuants = false;             // one row per model, or one per rung offered
+
+// two bounds rather than one number. decode reads the active weights every
+// step, and the whole cache with them -- which starts empty and ends up the
+// bigger half for a model that skimped on gqa. `empty` is the figure everyone
+// quotes; `full` is what it decays to with the context you asked for resident.
+// ling 3.0 flash is the case that makes the difference worth printing: 42 full
+// attention layers at 32 kv heads is 84 gib of cache at 128k, against 5 gib of
+// active weights.
+function tgTps(m) {
+  const q = activeQuant(m), a = activeB(m);
+  if (!bandwidth || !q || !q.bpw || a === undefined) return null;
+  const eff = bandwidth * 1e9 * BW_EFFICIENCY;
+  const weights = a * 1e9 * q.bpw / 8;
+  const y = draftYield(m, q);
+  return {empty: y * eff / weights,
+          full: y * eff / (weights + kvGib(m, wantCtx(m)) * (1024 ** 3)),
+          draft: y};
+}
+
+// prefill is two flops per active weight per token and ignores attention's
+// quadratic term, so it reads optimistic on a long prompt. it does not depend
+// on the quant: llama.cpp dequantizes to compute either way.
+function ppTps(m) {
+  const a = activeB(m);
+  return flops && a !== undefined ? flops * 1e12 * FLOPS_EFFICIENCY / (2 * a * 1e9) : null;
+}
+
+// the curve for THIS model: its own measurement if somebody ran one ON THE RUNG
+// ASKED ABOUT -- the one scored, unless a caller names another -- the median of
+// the measured curves once enough models have one, and build-tables' fitted
+// curve otherwise. which one answered is never hidden.
+//
+// a sweep measures FILES, not a model. ISTA's card scores its own GSQ-RCO rungs
+// of qwen3.8 27b and unsloth's UD rungs over the same three benchmarks and they
+// differ by more than eight points of task average at 2.5 bpw, so lending one
+// family's curve to the other's rung would report a number nobody measured.
+//
+// and it answers for a MODEL, not for one rung at a time. a sweep is a curve of
+// the files it ran against the publisher's own base, and two sweeps of one model
+// are not one scale: ISTA's GSQ-RCO sweep of qwen3.8 flash next reads 0.994 kept
+// at 3.37 bpw where the fit reads 0.955 there and 0.982 at 5.37, so a ladder
+// discounting one rung by each answers `fewer bits is better` -- in the quality
+// column, against the pick the fit makes on bits, on the same screen. qwen3.8
+// 27b carries three sweeps from three quantizers and publishes rungs from all
+// three, so nothing measured on any of them can rank the others: the common curve
+// is what they share, and it is the scale the rest of the roster is on anyway.
+// the sweep is not thrown away -- the quantization tab still prints every one of
+// them, with whose files and what metric.
+const speaksFor = (m, c) => quantChoices(m)
+  .every(rung => !c.quant_repo || rung.repo === c.quant_repo);
+
+function curveFor(m, q = activeQuant(m)) {
+  const r = D.retention;
+  const own = (r.measured || {})[m.repo] || [];
+  const mine = own.find(c => q && c.quant_repo === q.repo && speaksFor(m, c))
+    || own.find(c => !c.quant_repo && speaksFor(m, c));
+  if (mine) return {points: mine.points, kind: 'measured', src: mine};
+  if (r.median && r.median.points) return {points: r.median.points, kind: 'median', src: r.median};
+  return {points: r.fitted.points, kind: 'fitted', src: r.fitted};
+}
+
+// the sweeps a model carries that the discount did NOT use, which the reader of
+// the quantization tab is going to ask about -- they are on the page three rows
+// below the line that says which curve answered. nothing to explain when a
+// measurement did answer.
+const unusedSweeps = (m, c) => c.kind === 'measured' ? []
+  : ((D.retention.measured || {})[m.repo] || []);
+
+function interpolate(c, bpw) {
+  if (bpw <= c[0][0]) return c[0][1];
+  for (let i = 0; i < c.length - 1; i++) {
+    const [x0, y0] = c[i], [x1, y1] = c[i + 1];
+    if (bpw >= x0 && bpw <= x1) return y0 + (y1 - y0) * (bpw - x0) / (x1 - x0);
+  }
+  return 1;
+}
+
+// a MEASURED curve can be shorter than the fitted one and stop well above the
+// rungs a reader can select. quesma ran qwen3.8 27b at three arms on
+// terminal-bench and the lowest is 3.11 bpw; clamping there would answer 0.904
+// for a two-bit quant where the fit says 0.778 -- a measurement of one model
+// making its thin quants look BETTER than the general case, purely because
+// nobody ran that arm. below its own range a measured curve therefore defers to
+// the fitted one, which is the wider evidence rather than the narrower silence.
+function retention(bpw, m, q = activeQuant(m)) {
+  const c = curveFor(m, q);
+  if (c.kind === 'measured' && bpw < c.points[0][0]) {
+    return interpolate(D.retention.fitted.points, bpw);
+  }
+  return interpolate(c.points, bpw);
+}
+
+// a model whose weights are natively low-bpw is not paying a quantization
+// penalty for being small, so it is exempt -- the registry says which
+function modelRetention(m) {
+  if (!effective || m.native_low_bpw) return 1;
+  const q = activeQuant(m);
+  // the same bits the ladder ranked the rung on: the curve is a curve of bits
+  // per weight, and feeding it a figure the ceiling refused to trust is how a
+  // rung folded around a drafter came to be credited with the head's precision
+  return q && rungBpw(q) ? retention(rungBpw(q), m, q) : 1;
+}
+
+// whether the rung being served sits below everything the curve measured, where
+// `retention` returns the lowest fitted point forever rather than continuing to
+// fall. the fitted curve stops at deepseek v3.1's 2.21 bpw and a 1.67 bpw rung
+// reads as keeping 77.8%, which is not a prediction -- it is the last thing the
+// curve knew. quesma's qwen3.8 27b sweep is the only measurement in that region
+// and it found a 27b collapsing to chance at 1.8 bpw, so the flat part is
+// evidenced against on the one model anybody has run there.
+function belowCurve(m, q = m && activeQuant(m)) {
+  if (!m || m.native_low_bpw) return false;
+  return !!(q && rungBpw(q) && rungBpw(q) < curveFor(m, q).points[0][0]);
+}
+
+// an ALLOWLIST: a facet is discounted only where the curve is evidence about
+// what it measures. the curve is one sweep of one model on a code-editing pass
+// rate, so it answers for code and says so about everything else. build-viewer
+// refuses to build a facet that is on neither list.
+let scaledSet = null;
+const scaledFacet = key =>
+  (scaledSet || (scaledSet = new Set(D.retention.scaled))).has(key);
+
+let evidenceOf = null;
+function whyNotScaled(key) {
+  if (!evidenceOf) {
+    evidenceOf = {};
+    D.retention.evidence.forEach(e => e.facets.forEach(k => { evidenceOf[k] = e; }));
+  }
+  return (evidenceOf[key] || {}).why || '';
+}
+const facetValue = (m, key) => m.facets[key].value
+  * (scaledFacet(key) ? modelRetention(m) : 1);
+
+// percentiles ship precomputed over raw values, so effective mode has to rank
+// the cohort again -- against the scaled numbers, or a discount every model
+// paid would move nobody
+let pctCache = null;
+
+function facetPctRaw(m, key) {
+  const f = m.facets[key];
+  if (!effective || !scaledFacet(key)) return f.pct;
+  if (!pctCache) {
+    pctCache = {};
+    const all = new Set();
+    D.models.forEach(x => Object.keys(x.facets).forEach(k => all.add(k)));
+    all.forEach(k => {
+      if (!scaledFacet(k)) return;
+      pctCache[k] = D.models.filter(x => x.facets[k]).map(x => facetValue(x, k));
+    });
+  }
+  const pop = pctCache[key] || [];
+  if (pop.length < 2) return null;
+  const v = facetValue(m, key);
+  // the same plotting position analyze-usecase computes for the raw values --
+  // half the ties counted -- or effective mode would rank a cohort by one rule
+  // and raw mode by another, and only one of them would give the bottom of a
+  // three-model cohort a number that is not zero
+  return Math.round(100 * (pop.filter(x => x < v).length
+    + 0.5 * pop.filter(x => x === v).length) / pop.length);
+}
+
+function facetPct(m, key) {
+  const keys = facetKeys(m, key).map(k => facetPctRaw(m, k)).filter(p => p !== null);
+  if (!keys.length) return null;
+  return keys.reduce((a, p) => a + p, 0) / keys.length;
+}
+
+// whether a weighted factor is a question anybody asks of this model. one
+// weight set spans text, speech and image, and a text model has no word error
+// rate -- counting the speech sliders against it would read in the evidence
+// column as MISSING EVIDENCE rather than as a question nobody put to it.
+//
+// a board-scored factor asks by CAPABILITY, from `board_needs`, which is
+// resolve-ids' own table of what each source measures. kind is close and wrong
+// at the edges: gemma 4 e4b is a text model with an audio encoder and voice
+// arena publishes its word error rate, and reading `some text model carries
+// this` off that one row put a transcription factor in every text model's
+// denominator. anything not scored by a board -- a card claim, a forum, a
+// per-language rate -- falls back to the kind, where it belongs.
+function can(m) {
+  const ins = m.modalities.input || [], outs = m.modalities.output || [];
+  const out = new Set();
+  if (m.kind === 'text') out.add('text');
+  if (ins.includes('audio') && outs.includes('text')) out.add('transcribes');
+  if (outs.includes('audio')) out.add('synthesizes');
+  if (outs.includes('image')) out.add('draws');
+  // a capability and not a shape: what a decision model emits is a probability,
+  // which is no modality. `resolve-ids`' BOARD_NEEDS says the same thing about
+  // what jevbench measures, and the two have to agree or the derive scores a
+  // model the page then leaves out of the factor's denominator
+  if (m.kind === 'decision') out.add('decides');
+  return out;
+}
+
+let kindFacets = null;
+function asked(m, key) {
+  const need = (D.board_needs || {})[key.split('.')[0]];
+  if (need) return can(m).has(need);
+  if (!kindFacets) {
+    kindFacets = {};
+    D.models.forEach(x => {
+      const s = kindFacets[x.kind] || (kindFacets[x.kind] = new Set());
+      Object.keys(x.facets).forEach(k => s.add(k));
+    });
+  }
+  const have = kindFacets[m.kind] || new Set();
+  return key.endsWith('.*')
+    ? [...have].some(k => k.startsWith(key.slice(0, -1)))
+    : have.has(key);
+}
+
+// the composite: weighted mean of percentiles over the facets PRESENT, shrunk
+// toward the middle by the weight that measured nothing.
+//
+// dividing by the weight actually used and stopping there is the obvious
+// choice and the wrong one, and research/build-tables rejected it first: it
+// redistributes the missing weight onto whatever the model DOES have, so a
+// model measured by one source has that source counted twenty times harder
+// than a model measured by seven. bonsai 27b took 19th of 92 that way, on a
+// single forum percentile at weight 0.05 -- ahead of the qwen3.6 27b it is a
+// 1-bit rebuild of, which carries six of the seven factors.
+//
+// so the uncovered weight is scored as the middle instead of as nothing. these
+// are percentiles, whose median is 50 by construction, which is what makes the
+// prior a constant rather than a fit: `unmeasured` becomes `typical`, which is
+// the honest reading of an absence. a model measured on everything has no
+// uncovered weight and is untouched by construction.
+const SHRINK_PRIOR = 50;            // the percentile an unmeasured factor is worth
+const SHRINK_LAMBDA = 0.5;          // how much of the uncovered weight speaks
+
+// the prior cuts both ways, and only one of them is argued for above. it stops
+// one good factor carrying a model up, and by the same arithmetic it stops one
+// bad factor pulling it down: at 5% coverage the prior is 91% of the
+// denominator, so the number is about the roster's median and not about the
+// model. minicpm5 1b read 47 off a single 13th-percentile forum score, ahead of
+// the 2b that beat it on that factor and on three more.
+//
+// so below this share of the asked weight there is no number worth printing,
+// the same way there is none at zero coverage. this is a share of WEIGHT rather
+// than a count of factors because the composite spends weight: four of the 0.05
+// factors and one of the 0.3 ones are the same evidence, and `evidence` reports
+// this share for that reason.
+const COVER_FLOOR = 0.20;
+
+function score(m) {
+  let num = 0, den = 0, denMax = 0, have = 0, want = 0;
+  for (const [key, w] of Object.entries(W)) {
+    // two different questions, and both have to pass: `relevant` is whether the
+    // VIEW is asking this, `asked` is whether this model could answer it. a
+    // transcription board over the language-model roster fails the first; a
+    // coding score for whisper fails the second
+    if (!w || !relevant(key) || !asked(m, key)) continue;
+    want++; denMax += w;
+    const p = facetPct(m, key);
+    if (p === null) continue;
+    have++; num += w * p; den += w;
+  }
+  const cover = denMax ? den / denMax : 0;
+  if (!den || cover < COVER_FLOOR) return {value: null, have, want, cover};
+  const k = SHRINK_LAMBDA * (denMax - den);
+  return {value: (num + k * SHRINK_PRIOR) / (den + k), have, want, cover};
+}
+
+const scored = m => (m._s || (m._s = score(m)));
+// the memo is only valid for the weights, the quant discount and the SHAPE the
+// score was computed under, so every setter that moves one of those drops it.
+// it was four hand-written copies of this loop before the shape joined them.
+const clearScores = () => D.models.forEach(m => { m._s = null; });
+
+// --- columns -----------------------------------------------------------------
+//
+// defined once: each column knows its label, how to pull a sortable value, and
+// how to draw its cell. sorting, hiding and reordering are generic over this
+// list rather than written per column.
+
+const facetCell = (m, key, digits) => {
+  const f = m.facets[key];
+  if (!f) return '<td class="n faint">-</td>';
+  const pct = facetPctRaw(m, key);
+  const scaled = effective && scaledFacet(key) && modelRetention(m) < 1;
+  // a number left alone under `quant adjusted` says so, rather than looking
+  // like one the discount forgot
+  const held = effective && !scaledFacet(key) && modelRetention(m) < 1;
+  return `<td class="n${scaled ? ' eff' : ''}"${scaled
+    ? ` title="${num(f.value, digits)} raw, x${modelRetention(m).toFixed(3)} `
+      + `${curveFor(m).kind} retention at ${(activeQuant(m) || {}).bpw} bpw"`
+    : held ? ` title="published as-is: ${esc(whyNotScaled(key))}"` : ''}>`
+    + `<span class="bar" style="--w:${pct === null ? 0 : pct}%">`
+    + `<span>${num(facetValue(m, key), digits)}</span></span></td>`;
+};
+const facetVal = (m, key) => m.facets[key] ? facetValue(m, key) : -1;
+
+// an arithmetic estimate never wears the certainty of a measured column: no
+// percentile bar behind it, and a `~` in front of the number
+const tps = v => v >= 100 ? String(Math.round(v)) : num(v, 1);
+const noEstimate = (on, hint) => on
+  ? '<td class="n faint" title="it publishes no active parameter count, or nothing'
+    + ' it publishes fits the budget">?</td>'
+  : `<td class="n faint" title="${esc(hint)}">-</td>`;
+
+const COLUMNS = [
+  {k: 'rank', t: '#', num: true, get: m => m._rank,
+   help: 'rank under the current weights. it renumbers when you change them',
+   cell: m => `<td class="n faint">${m._rank}</td>`},
+  {k: 'short', t: 'model', num: false, get: m => m.short,
+   help: "the registry's name for it, and who publishes it",
+   // the quant rides along here too: with one row per quant the name repeats,
+   // and the `quant` column is one somebody may have hidden
+   cell: m => `<td>${esc(m.short)}<span class="sub"> ${esc(m._q ? m._q.quant
+     : m.publisher)}</span></td>`},
+  {k: 'score', t: 'quality', num: true, get: m => scored(m).value ?? -1,
+   help: "the weighted mean of its percentiles, over the factors it was actually measured on, pulled toward 50 by the weight that measured nothing. under 20% coverage that pull decides the answer, so no number is shown at all -- see the evidence column. set the weights under factors",
+   cell: m => {
+     const s = scored(m);
+     if (s.value === null) {
+       return `<td class="n faint" title="${s.have
+         ? `measured on ${pctOf(s.cover)} of the weight this view asks for, `
+           + `under the ${pctOf(COVER_FLOOR)} a composite needs before it says `
+           + `more about this model than about the middle of the roster`
+         : 'none of the weighted factors measured this model'}">-</td>`;
+     }
+     // a percentile is a rank, so it steps rather than slides: the ladder can
+     // hold one number over several rungs while the discount behind it moves
+     // the whole way. say what the discount was, so a flat column reads as
+     // "still ahead of everything" rather than as a number that never updated
+     const r = modelRetention(m), q = activeQuant(m);
+     // below the curve's lowest measured point the multiplier stops falling, so
+     // the number is a floor rather than a prediction and has to say which
+     const floored = effective && belowCurve(m)
+       ? `; ${rungBpw(q)} bpw is below the lowest rung the curve measured `
+         + `(${curveFor(m).points[0][0]}), so this is its floor rather than a `
+         + `prediction -- the only sweep run that low found a 27b at chance`
+       : '';
+     const title = effective && r < 1 && q
+       ? ` title="${num(s.value, 1)}, scored at x${r.toFixed(3)} `
+         + `${curveFor(m).kind} retention for ${esc(q.quant)} at ${rungBpw(q)} bpw${floored}"`
+       : ` title="${num(s.value, 1)}"`;
+     return `<td class="n"${title}><span class="bar" style="--w:${s.value}%">`
+       + `<span>${num(s.value, 0)}</span></span></td>`;
+   }},
+  {k: 'evidence', t: 'evidence', num: true, get: m => scored(m).cover,
+   help: 'how much of the weight this view asks for was actually measured, as a share. it reads WEIGHT rather than a count of factors because that is what the composite spends -- four of the cheap factors and one of the dear ones are the same evidence. under 20% no quality is reported at all',
+   cell: m => {
+     const s = scored(m);
+     const cls = s.cover >= 0.999 ? 'dim' : s.cover >= COVER_FLOOR ? 'warn' : 'faint';
+     return `<td class="n ${cls}" title="${s.have} of ${s.want} weighted factors`
+       + ` measured this model, ${pctOf(s.cover)} of the weight asked for">`
+       + `${pctOf(s.cover)}</td>`;
+   }},
+  {k: 'kind', t: 'kind', num: false, get: m => m.kind,
+   help: 'what the registry classifies it as: text, speech, image, video, decision or a crispasr pipeline kind',
+   cell: m => `<td class="dim">${esc(m.kind)}</td>`},
+  {k: 'params', t: 'params', num: true, get: m => m.facts.params_total_b ?? -1,
+   help: 'total parameters, counted from the weights that ship. a * means the vendor advertises a different number; hover for both',
+   cell: m => {
+     const p = m.facts.params_total_b, adv = m.params.advertised_total_b;
+     const act = m.params.advertised_active_b;
+     if (!p && !adv) return '<td class="n faint">-</td>';
+     // the counted total and the advertised one disagree by 7% on deepseek v4
+     // flash, so the number is labelled rather than quietly averaged
+     const off = p && adv && Math.abs(p - adv) / adv > 0.03;
+     const shown = p || adv;
+     const named = m.facts.params_source === 'name';
+     const title = !p
+       ? ` title="${adv}b, the vendor's figure; nothing here counted the tensors"`
+       : named
+         ? ` title="${p}b, taken from the name -- this repo's safetensors index does not add up"`
+         : ` title="${p}b counted from the safetensors index${adv ? `, ${adv}b advertised` : ''}"`;
+     return `<td class="n"${title}>${round1(shown)}b`
+       + (off ? '<span class="sub" data-help="the counted total and the advertised one'
+         + ' disagree by more than 3%; hover the number for both"> *</span>' : '') + '</td>';
+   }},
+  {k: 'active', t: 'active', num: true, get: m => activeB(m) ?? -1,
+   help: 'parameters used per token. taken from the name a vendor encodes it in (-A3B), or artificial analysis where it has one. a dense model uses all of them, so it repeats the total',
+   cell: m => {
+     const a = activeB(m);
+     if (a === undefined) return '<td class="n faint">-</td>';
+     return `<td class="n">${round1(a)}b</td>`;
+   }},
+  {k: 'experts', t: 'experts', num: true, get: m => m.facts.experts ?? -1,
+   help: 'experts routed per token, of the total. a count of experts, not of parameters: qwen3.6 35b a3b routes 8 of 256 and that comes to about 3b',
+   cell: m => {
+     const e = m.facts.experts, a = m.facts.experts_active;
+     if (e) return `<td class="n dim">${a ? a + ' / ' : ''}${e}</td>`;
+     // a model activating far fewer parameters than it holds is a mixture
+     // whose config did not name its experts in any key this reads. calling
+     // that dense would be asserting something false
+     const act = activeB(m), total = m.facts.params_total_b;
+     if (act && total && act < total * 0.9) return '<td class="n faint"'
+       + ' data-help="a mixture of experts, but its config does not publish the counts">?</td>';
+     return '<td class="n faint">dense</td>';
+   }},
+  {k: 'ctx', t: 'train ctx', num: true, get: m => trainCtx(m) ?? -1,
+   help: 'the window it was actually trained on. where a vendor ships a rope or yarn config the longer number is bought rather than trained, and this is the number before that',
+   cell: m => `<td class="n">${ctxLabel(trainCtx(m)) || '<span class="faint">-</span>'}</td>`},
+  {k: 'extctx', t: 'ext ctx', num: true, get: m => m.facts.context_native ?? -1,
+   help: 'how far rope or yarn scaling takes it, which is what the config reports and what llama.cpp reads out of the gguf. equal to the trained window unless the vendor ships a scaling config',
+   cell: m => {
+     const ext = m.facts.context_native, r = m.facts.rope;
+     if (!ext) return '<td class="n"><span class="faint">-</span></td>';
+     return `<td class="n${r ? ' warn' : ' dim'}"${r
+       ? ` title="${esc(r.type)} x${r.factor} over a ${ctxLabel(r.original)} trained`
+         + ' window: extrapolated, not trained"' : ''}>${ctxLabel(ext)}</td>`;
+   }},
+  {k: 'fitctx', t: 'fits ctx', num: true, get: m => fitContext(m) ?? -1,
+   help: 'the longest context whose kv cache still fits once the weights and the reserve are paid for, capped at what the model was trained for. the cache is sized at f16, llama.cpp\'s default, so quantizing it with --cache-type-k/v q8_0 buys roughly twice this. needs a vram budget',
+   cell: m => {
+     if (!budget) return '<td class="n faint" title="set a vram budget under hardware">-</td>';
+     const c = fitContext(m);
+     if (c === null) return '<td class="n faint">-</td>';
+     const full = c >= (m.facts.context_native || 0);
+     return `<td class="n${full ? '' : ' warn'}">${ctxLabel(c)}</td>`;
+   }},
+  {k: 'quant', t: 'quant', num: false, get: m => (readQuant(m) || {}).quant || '',
+   help: 'the quant the row is read as, and who built it. with a vram budget set, the best one that fits, out of every publisher of the model rather than one; without a budget, the one the registry pins. where nothing fits it names the smallest rung published and marks it, because the row is still being read from a file',
+   cell: m => {
+     const q = readQuant(m);
+     // two different nothings. an entry with no files published is a gap in the
+     // roster, and an entry whose files no runtime on this page is known to
+     // load is a fact about runtimes -- `does not fit` would blame the box for
+     // either, and a dash says the roster is empty when it is not
+     if (!q && m.quants.length && !rungPool(m).length) {
+       return '<td class="faint" title="no runtime this page offers is known to load it">no runtime</td>';
+     }
+     if (!q) return '<td class="faint" title="the roster carries no gguf for this entry">-</td>';
+     const miss = !activeQuant(m);
+     return `<td${miss ? ' class="warn" title="nothing this repo publishes clears the budget and context set on the page: this is its smallest rung"'
+                       : ` title="${esc(q.repo)}"`}>${esc(q.quant)}`
+       + `<span class="sub"> ${esc(quantAuthor(q))}</span></td>`;
+   }},
+  {k: 'size', t: 'gib', num: true,
+   get: m => readQuant(m) ? readQuant(m).gib + draftGib(m, readQuant(m)) : -1,
+   help: 'what has to be resident before any cache: the weights at the quant the row reads, plus the drafter where the publisher ships it as a separate file rather than folding it into the build. the kv cache is not included -- add the kv gib column for that',
+   cell: m => {
+     const q = readQuant(m);
+     if (!q || q.gib === undefined) return '<td class="n"><span class="faint">-</span></td>';
+     const d = draftGib(m, readQuant(m));
+     // the weight of a rung nothing fits is the size of the miss, so it wears
+     // the same warning the quant name does
+     return `<td class="n${!activeQuant(m) ? ' warn' : ''}"${d ? ` title="${gib(q.gib)} weights + ${gib(d)} for `
+       + `${esc(m.speculative.draft.file)}, the ${esc(draftKind(m))} head"` : ''}>`
+       + `${gib(q.gib + d)}`
+       + (d ? '<span class="sub"> +d</span>' : '') + '</td>';
+   }},
+  {k: 'kv', t: 'kv gib', num: true, get: m => kvGib(m, wantCtx(m)),
+   help: 'what the kv cache costs at the context you set, at f16 keys and values -- llama.cpp\'s default, and what this page assumes throughout. --cache-type-k/v q8_0 roughly halves it. resident memory is this plus gib plus the reserve',
+   cell: m => {
+     const v = kvGib(m, wantCtx(m));
+     if (!minCtx) return '<td class="n faint" title="set a context under hardware">-</td>';
+     if (!m.facts.attn) return '<td class="n faint" title="its config publishes no attention geometry">?</td>';
+     return `<td class="n dim">${gib(v)}</td>`;
+   }},
+  {k: 'bpw', t: 'bpw', num: true, get: m => (readQuant(m) || {}).bpw ?? -1,
+   help: 'bits per weight: the file over the parameter count. where a rung publishes a tensor table that disagrees with that by more than a packer\'s rounding -- a drafter folded into the file, a component counted in the denominator and shipped beside the gguf -- the page judges the rung by the table instead, so this cell and the quality behind it can name different numbers',
+   cell: m => `<td class="n dim">${num((readQuant(m) || {}).bpw, 2) || '-'}</td>`},
+  {k: 'tg', t: 'tg t/s', num: true, get: m => (tgTps(m) || {}).empty ?? -1,
+   help: 'estimated tokens generated per second with the cache empty: the bandwidth you set, discounted, over the active weights at the fitted quant, times what speculative decoding yields where the model ships a drafter. it does not charge for reading the drafter itself, so it runs optimistic for a large one. a second, dimmer figure appears where a full cache at your context costs more than 15% of it. arithmetic, never a measurement',
+   cell: m => {
+     const t = tgTps(m);
+     if (!t) return noEstimate(bandwidth, 'set a memory bandwidth under hardware');
+     const decay = t.full < t.empty * 0.85;
+     return `<td class="n dim" title="${tps(t.empty)} t/s with the cache empty`
+       + (minCtx ? `, ${tps(t.full)} t/s with ${ctxLabel(minCtx)} of it resident` : '')
+       + (t.draft > 1 ? `. includes x${t.draft.toFixed(2)} from ${esc(draftKind(m))}`
+         + ` drafting ${(m.speculative.n_max || 3)} tokens; without it, `
+         + `${tps(t.empty / t.draft)} t/s` : '')
+       + `">~${tps(t.empty)}`
+       + (decay ? `<span class="sub"> ${tps(t.full)}</span>` : '') + '</td>';
+   }},
+  {k: 'pp', t: 'pp t/s', num: true, get: m => ppTps(m) ?? -1,
+   help: 'estimated prompt tokens prefilled per second: the compute you set, discounted, over two flops per active weight. it ignores attention, so it reads optimistic on a long prompt',
+   cell: m => {
+     const v = ppTps(m);
+     return v === null ? noEstimate(flops, 'set a compute figure under hardware')
+       : `<td class="n dim">~${tps(v)}</td>`;
+   }},
+  {k: 'scicode', t: 'aa scicode', num: true, get: m => facetVal(m, 'aa.scicode'),
+   help: 'scicode pass rate on artificial analysis\' harness. it carries the coding weight their coding index carried until they retired it',
+   cell: m => facetCell(m, 'aa.scicode', 1)},
+  {k: 'tbench', t: 'aa tbench', num: true, get: m => facetVal(m, 'aa.terminalbench'),
+   help: 'terminal-bench 2.1 pass rate: tool use and multi-step terminal work. it carries the agentic weight their agentic index carried',
+   cell: m => facetCell(m, 'aa.terminalbench', 1)},
+  {k: 'gbench', t: 'gbench', num: true, get: m => facetVal(m, 'gbench.agentic'),
+   help: 'gbench agentic coding score. models play generated games, so there is no problem set to train against',
+   cell: m => facetCell(m, 'gbench.agentic', 3)},
+  {k: 'swe', t: 'swe-reb', num: true, get: m => facetVal(m, 'swerebench.resolved'),
+   help: 'swe-rebench resolved rate, on pull requests merged after the model shipped',
+   cell: m => facetCell(m, 'swerebench.resolved', 1)},
+  {k: 'arena', t: 'arena', num: true, get: m => facetVal(m, 'lmarena.rating'),
+   help: 'lmarena rating, style controlled. human preference rather than a grader',
+   cell: m => facetCell(m, 'lmarena.rating', 0)},
+  {k: 'community', t: 'community', num: true,
+   get: m => facetVal(m, 'community.reddit-localllama'),
+   help: 'mentions on r/LocalLLaMA, and how many of the opinionated ones were positive',
+   cell: m => {
+     const f = m.facets['community.reddit-localllama'];
+     if (!f) return '<td class="n faint">-</td>';
+     const a = f.approval;
+     return `<td class="n"><span class="bar" style="--w:${f.pct || 0}%"><span>${f.mentions}`
+       + (a === null || a === undefined ? '' : `<span class="sub"> ${a}%</span>`) + '</span></span></td>';
+   }},
+  {k: 'langs', t: 'best langs', num: false, get: m => (m.languages[0] || {}).lang || '',
+   help: 'the languages gbench scored it highest on',
+   cell: m => `<td class="dim">${esc(m.languages.slice(0, 3).map(l => l.lang).join(' ')) || '-'}</td>`},
+  {k: 'bestfor', t: 'best for', num: false, get: m => (m.derived.best_for || [])[0] || '',
+   help: 'the uses where it lands in the top third of the models measured on them',
+   cell: m => `<td class="dim">${esc((m.derived.best_for || []).slice(0, 2).join(', ')) || '-'}</td>`},
+  {k: 'think', t: 'thinking', num: false,
+   get: m => (m.thinking.accepts || []).join(' / ') || (m.thinking.knob ? 'off / on' : ''),
+   help: 'the thinking levels its chat template takes, with the default in bold',
+   cell: m => {
+     const t = m.thinking;
+     if (!t.knob) return '<td class="faint"'
+       + ' data-help="its chat template reads no thinking control, so there is nothing to set">'
+       + 'none</td>';
+     const undef = t.default === undefined && t.gate_default === undefined;
+     return `<td class="dim"${undef
+       ? ' data-help="no default: sending nothing injects no directive at all, so the model\'s own behaviour applies"'
+       : ''}>${levels(t, ' / ')}${undef ? '<span class="sub"> ?</span>' : ''}</td>`;
+   }},
+  {k: 'profiles', t: 'profiles', num: false, get: m => Object.keys(m.sampling).join(','),
+   help: 'the sampling profiles the registry defines for it',
+   cell: m => `<td class="dim">${esc(Object.keys(m.sampling).join(' ')) || '-'}</td>`},
+  {k: 'spec', t: 'draft', num: false, get: m => m.speculative.type || '',
+   help: 'the speculative decoding method it supports, if any',
+   cell: m => `<td class="dim">${esc(m.speculative.type || '')}${m.speculative.n_max ? `<span class="sub"> n${m.speculative.n_max}</span>` : ''}</td>`},
+  // the id rather than the hub's tag: 29 models declare the tag `other` and
+  // sort together under it, which tells a reader nothing. the tier rides in the
+  // cell because the filter acts on the tier, and a model that vanished should
+  // be identifiable by the same column that explains why
+  {k: 'license', t: 'license', num: false, get: m => licenseOf(m).id || '',
+   help: 'the licence its huggingface repo declares, under its own name rather than the hub\'s `other`, with how registry/licenses.yaml classifies it. `unknown` is nobody here having read those terms, not a verdict on them',
+   cell: m => {
+     const l = licenseOf(m);
+     return `<td class="dim">${esc(l.id || '-')}`
+       + `<span class="sub" title="${esc(l.why || tierHelp(l.tier))}"> ${esc(l.tier)}</span></td>`;
+   }},
+  {k: 'downloads', t: 'downloads', num: true, get: m => (m.card.hub || {}).downloads ?? -1,
+   help: 'huggingface downloads last month. adoption, not quality',
+   cell: m => `<td class="n dim">${(m.card.hub || {}).downloads ? fmt.format(m.card.hub.downloads) : '-'}</td>`},
+  {k: 'repo', t: 'repo', num: false, get: m => m.repo,
+   help: 'the huggingface repo. every join in this registry is keyed on it',
+   cell: m => `<td class="dim">${esc(m.repo)}</td>`},
+];
+
+// the tier a licence nobody has classified lands in. spelled in
+// registry/licenses.yaml; named here so the column, the filter and that file
+// cannot disagree about it. the filter names no tier of its own -- it selects
+// over whatever that file declares, so a fourth tier would need no code here.
+//
+// `license` is JOINED in build-viewer out of the captured string and the
+// classification table, so this is a read rather than a derivation: the licence
+// is a fact and the tier is a judgement, and neither moves when a reader moves
+// a slider.
+const UNKNOWN_TIER = 'unknown';
+const licenseOf = m => m.license || {tier: UNKNOWN_TIER};
+const tierHelp = k => ((D.licenses || []).find(t => t.k === k) || {}).help || '';
+
+// which table columns read a scaled facet, so the header can say so
+const SCALED_COLUMNS = {scicode: 'aa.scicode', tbench: 'aa.terminalbench',
+                        gbench: 'gbench.agentic', swe: 'swerebench.resolved',
+                        arena: 'lmarena.rating'};
+
+// what the page opens on, all of it out of `registry/dashboard.yaml`: the
+// column order and which of them start hidden, the box a reader is assumed to
+// have, and the filters that are already pressed.
+//
+// `pp` and `tg` are hidden AND gated on their hardware figure: switching one
+// on under the gear does nothing until there is a bandwidth or a compute
+// number for it to read.
+//
+// the modality list is carried as a set because the filter tests membership
+// and the share link carries a list, but the control is ONE choice: the shapes
+// overlap rather than partition -- `audio to text` and `language models` share
+// gemma 4, `any to text` contains both -- so picking two of them says less
+// than picking the one that describes what you are after.
+let DEFAULT_ORDER = [];
+let DEFAULT_HIDDEN = [];
+let DEFAULT_HARDWARE = {};
+let DEFAULT_FLAGS = [];
+let DEFAULT_MODALITIES = [];
+let DEFAULT_MODALITY = '';
+const col = k => COLUMNS.find(c => c.k === k);
+// a column of `-` reads as missing data rather than as a setting you have not
+// made, so the two estimates come and go with the hardware figure behind them
+// instead of being one more thing to find under the gear
+const NEEDS = {tg: () => !!bandwidth, pp: () => !!flops};
+const available = k => !NEEDS[k] || NEEDS[k]();
+const shown = () => order.filter(k => !hidden.has(k) && available(k));
+
+// --- filtering ---------------------------------------------------------------
+
+// what a model turns into what. `text` and `vision` used to be two chips you
+// could hold down together, which said "a text model that also takes images"
+// and could say nothing at all about the speech half of the roster -- there is
+// no combination of two toggles that means audio in and text out. one list of
+// shapes replaces them, and the shapes are the ones llama-swap-groups derives
+// its group membership from, so a reader and a host name the same things.
+//
+// `text` stays first and stays the default because it is what a reader of this
+// roster is usually after. it used to stay for a second reason -- MODELS.md's
+// ranking blocks are generated by booting this page, so the default view WAS
+// the document's roster -- and `research/dashboard-table` pins its own now,
+// modality and flags both, because a ui default that rewrites a document is one
+// decision doing two jobs.
+//
+// `language models` is the registry's own `kind`, which is a classification
+// rather than a shape: it means an LLM you serve as a chat endpoint. that is
+// neither a superset nor a subset of `any to text` -- 34 of its members take
+// images,
+// video or audio in, one of them emits embeddings and no text at all, and the
+// twelve transcribers that DO emit text are `kind: speech` and not in it.
+const MODALITIES = [
+  {k: 'text', t: 'language models', test: m => m.kind === 'text',
+   help: 'the registry `kind`: an LLM you serve as a chat or completion endpoint, whatever else it also takes in. this is the roster MODELS.md ranks'},
+  {k: 'any2t', t: 'any to text', test: m => modOut(m, 'text'),
+   help: 'everything that emits text, which is the language models plus the transcribers -- a wider roster than that one and a different one'},
+  {k: 't2t', t: 'text to text', test: m => m.kind === 'text'
+     && !modIn(m, 'image') && !modIn(m, 'audio'),
+   help: 'text in, text out, and nothing else in'},
+  {k: 'v2t', t: 'vision to text', test: m => m.kind === 'text' && modIn(m, 'image'),
+   help: 'takes images in, according to its own config'},
+  // no `kind` test: this used to read `kind === 'speech'` on the grounds that an
+  // LLM which merely accepts audio is not a transcription model, and the
+  // evidence went the other way. crispasr carries a backend for gemma 4 and
+  // voice arena publishes its word error rate in seven languages -- it
+  // transcribes, in 140 languages, and a filter for `audio in, text out` that
+  // hides it is answering a different question than the one it asks
+  {k: 'a2t', t: 'audio to text', test: m => modIn(m, 'audio') && modOut(m, 'text'),
+   help: 'transcription: audio in, text out, whether that is all it does or one of several things'},
+  {k: 't2a', t: 'text to audio', test: m => modOut(m, 'audio'),
+   help: 'speech synthesis'},
+  {k: 't2i', t: 'text to image', test: m => modOut(m, 'image'),
+   help: 'image generation'},
+  // the same binary as `text to image` and a different output. without its own
+  // chip a model that emits frames sits in the image roster answering a
+  // question it was not asked, and its percentiles would be computed against
+  // models no image board scores
+  {k: 't2v', t: 'text to video', test: m => modOut(m, 'video'),
+   help: 'video generation, on the same stable-diffusion.cpp binary as the image models. no board this repo collects rates them, so they carry no score'},
+  {k: 't2e', t: 'text to embeddings', test: m => modOut(m, 'embeddings'),
+   help: 'embedding models'},
+  // served, unlike the three pipeline kinds below it, and it answers nothing: it
+  // reads a state and typed questions and returns a probability per option. so
+  // it is in no shape at all -- `any to text` is right to leave it out, since it
+  // emits no tokens -- and the kind is the only way to ask for it
+  {k: 'decide', t: 'decisions', test: m => m.kind === 'decision',
+   help: 'typed decisions in one forward pass: a probability per option and nothing generated. jevbench rates them, and its calibration axis is the only one here'},
+  {k: 'diar', t: 'diarization', test: m => m.kind === 'diarize',
+   help: 'weights --diarize loads, beside an ASR model or in place of a whole '
+     + 'method. they transcribe nothing and are scored by nobody'},
+  // `post` and `translate` carry no `modalities` block on purpose, the way the
+  // diarizers do not: they run inside crispasr's pipeline rather than being
+  // served, and declaring text in / text out would put a punctuation restorer
+  // in `any to text` beside the language models. that leaves the kind as the
+  // only thing to select them by
+  {k: 'post', t: 'transcript post', test: m => m.kind === 'post',
+   help: 'punctuation and language id, applied to a transcript after it exists. crispasr runs them by flag rather than by --backend, and no board scores them'},
+  {k: 'mt', t: 'translation', test: m => m.kind === 'translate',
+   help: 'text in, text in another language out. crispasr loads them to translate a transcript, and they are scored by nobody here'},
+];
+const modIn = (m, x) => (m.modalities.input || []).includes(x);
+const modOut = (m, x) => (m.modalities.output || []).includes(x);
+// the shapes currently picked. nothing picked filters nothing out, so the test
+// is a union over what IS picked rather than over the whole list.
+const modsOn = () => MODALITIES.filter(x => filters.mods.has(x.k));
+const inModality = m => !filters.mods.size || modsOn().some(x => x.test(m));
+
+// the size band, as one predicate so the filter, the account of an empty table
+// and the row's reset all answer for the same test. an unknown size cannot
+// satisfy a band. this is the opposite of the rule the fit uses -- there a model
+// with no context window has not FAILED to reach one, so it passes -- and the
+// difference is what the filter is about: `fits vram` asks a question about a
+// box and this one asks a question about the attribute itself. 32 entries
+// publish no count, and answering "what is in the 1-4b class" with them at the
+// top of the list is answering with the models whose size nobody knows.
+// `!= null` rather than `!== null`, so an UNSET bound is off whether it is null
+// or undefined: the strict test read an absent field as a bound that had been
+// set, and every model publishing no parameter count -- 32 of them -- vanished
+// from every view including the default one.
+const fitsParams = m => {
+  if (filters.minParams == null && filters.maxParams == null) return true;
+  const tp = m.facts.params_total_b;
+  return tp != null && (filters.minParams == null || tp >= filters.minParams)
+    && (filters.maxParams == null || tp <= filters.maxParams);
+};
+
+// the band in the words a reader would use for it, since it reaches the empty
+// table as the name of the thing to put down
+const paramsBand = () => (filters.minParams != null && filters.maxParams != null)
+  ? filters.minParams + '-' + filters.maxParams + 'b'
+  : (filters.minParams != null ? 'at least ' : 'at most ')
+    + (filters.minParams != null ? filters.minParams : filters.maxParams) + 'b';
+
+// what each shape is ABOUT, in the same capability vocabulary `board_needs`
+// uses. this is a claim about the VIEW rather than about whichever model in it
+// happens to qualify, and that distinction is the whole point: eight models are
+// `kind: text` and also transcribe -- the gemma 4 family, mimo v2.5, inkling --
+// so asking "can any model here be asked this" turned on all 105 factors in
+// both `language models` and `audio to text`, and the two lists came out
+// byte-identical. it also put inkling 12th on an audio-to-text board on the
+// strength of its reasoning scores, where its transcription evidence puts it
+// 34th.
+//
+// `any to text` is the one that is genuinely about both, and says so: its help
+// text calls it the language models plus the transcribers. the shapes with an
+// empty list are the ones no board this repo collects rates at all.
+const MODALITY_ABOUT = {
+  text: ['text'], t2t: ['text'], v2t: ['text'],
+  any2t: ['text', 'transcribes'],
+  a2t: ['transcribes'], t2a: ['synthesizes'], t2i: ['draws'],
+  t2v: [], t2e: [], decide: ['decides'], diar: [], post: [], mt: [],
+};
+
+// the capabilities the current view is asking about, or null for no restriction
+// -- nothing picked is every shape, so it is every question.
+function askingAbout() {
+  if (!filters.mods.size) return null;
+  const out = new Set();
+  filters.mods.forEach(k => (MODALITY_ABOUT[k] || []).forEach(c => out.add(c)));
+  return out;
+}
+
+// whether the view is asking this question at all, as distinct from whether a
+// model could answer it. a group with no declared capability is asked
+// everywhere: `community` is the only one, because any model can be discussed.
+function relevant(key) {
+  const need = (D.board_needs || {})[key.split('.')[0]];
+  if (!need) return true;
+  const about = askingAbout();
+  return !about || about.has(need);
+}
+
+// `shown: false` keeps the filter without the button. speculative and the
+// thinking knob are columns and detail-page facts as well, and as toggles they
+// answered a question nobody was asking of the whole roster -- a shared link
+// carrying one still applies, which is why the test stays here.
+const FLAGS = [
+  {k: 'draft', t: 'speculative', shown: false, test: m => !!m.speculative.type,
+   help: 'the registry records a speculative decoding method for it'},
+  {k: 'think', t: 'thinking knob', shown: false, test: m => !!m.thinking.knob,
+   help: 'its chat template reads a thinking control'},
+  {k: 'fits', t: 'fits vram', test: m => fitsBudget(m),
+   help: 'some quant of it fits your vram, after the reserve and the context kv cache'},
+];
+
+// a stored or shared filter set can name a flag this page no longer offers, the
+// way a stored column order can name a column since dropped -- carrying the key
+// would put it in every share link with nothing left to test it. the licence
+// tiers get the same treatment against registry/licenses.yaml, which is what
+// drops a stored `permissive` boolean rather than reading it as a tier
+const knownFlags = ks => ks.filter(k => FLAGS.some(f => f.k === k));
+const licenseTiers = () => (D.licenses || []).map(t => t.k);
+const knownLicenses = ks => ks.filter(k => licenseTiers().includes(k));
+
+function haystack(m) {
+  return m._hay || (m._hay = [m.repo, m.short, m.match, m.facts.arch, m.facts.model_type,
+    proseText(m.notes), m.card.summary, (m.derived.best_for || []).join(' '),
+    ((m.card.hub || {}).tags || []).join(' '), Object.keys(m.tasks).join(' '),
+    m.quants.map(q => q.repo + ' ' + q.quant).join(' ')].join(' ').toLowerCase());
+}
+
+function visible() {
+  const q = filters.q.trim().toLowerCase();
+  return D.models.filter(m => {
+    if (q && !haystack(m).includes(q)) return false;
+    if (filters.pubs.size && !filters.pubs.has(m.publisher)) return false;
+    if (!inModality(m)) return false;
+    if (!fitsParams(m)) return false;
+    // no runtime selected means no runtime filter, the way no flags does. a
+    // model with an EMPTY engine list is one nothing here loads, so it only
+    // appears once the filter is off entirely
+    if (filters.engines.size
+        && !(m.engines || []).some(e => filters.engines.has(e))) return false;
+    // the same rule for the licence, over the tiers registry/licenses.yaml
+    // declares. every model is in exactly one, so this is a pick rather than
+    // the engines' any-of -- and selecting none is no licence filter, which is
+    // how the restricted and the unclassified come back
+    if (filters.licenses.size
+        && !filters.licenses.has(licenseOf(m).tier)) return false;
+    for (const f of filters.flags) {
+      const flag = FLAGS.find(x => x.k === f);
+      if (flag && !flag.test(m)) return false;
+    }
+    return true;
+  });
+}
+
+function sorted(rows) {
+  const c = col(sort.k) || col('score');
+  const out = [...rows].sort((a, b) => {
+    const x = c.get(a), y = c.get(b);
+    const d = c.num ? (x - y) : String(x).localeCompare(String(y));
+    // expanded rows of one model tie on everything the model owns, so the
+    // quant breaks it and the ladder reads largest to smallest
+    return d * sort.dir || a.short.localeCompare(b.short)
+      || ((b._q || {}).gib || 0) - ((a._q || {}).gib || 0);
+  });
+  return out;
+}
+
+// the rows a table would draw, in order, each carrying the rank it landed at.
+// rank is a position in the CURRENT ranking rather than a property of a model,
+// so it renumbers when the weights move -- which is the point of it. split out
+// of drawTable so that something with no dom can ask for the same list.
+function rankedRows() {
+  const rows = sorted(expand(visible()));
+  rows.forEach((m, i) => { m._rank = i + 1; });
+  return rows;
+}
+
+// --- configuration -----------------------------------------------------------
+
+// every default, out of the payload. the config travels from
+// `registry/dashboard.yaml` through `scripts/build-viewer` into
+// `docs/data.json`, so the page, `scripts/aimbot` and MODELS.md read one copy
+// of it and a judgement about what the ranking means lives beside the models
+// it ranks. must run before anything renders, and before the page restores
+// whatever a reader stored over the top.
+function applyConfig(cfg) {
+  CAPS = cfg.caps.map(c => [c.k, c.bpw === null ? Infinity : c.bpw, c.label]);
+  FLOORS = cfg.floors.map(c => [c.k, c.bpw, c.label]);
+  cap = cfg.hardware.cap;
+  floor = cfg.hardware.floor;
+  BW_EFFICIENCY = cfg.speed.bandwidth_efficiency;
+  FLOPS_EFFICIENCY = cfg.speed.flops_efficiency;
+  KV_BYTES = cfg.speed.kv_bytes;
+  BANDWIDTHS = cfg.speed.bandwidths.map(b => [b.value, b.label]);
+  FLOPSES = cfg.speed.flopses.map(f => [f.value, f.label]);
+  DEFAULT_ORDER = cfg.columns.order;
+  DEFAULT_HIDDEN = cfg.columns.hidden;
+  DEFAULT_HARDWARE = cfg.hardware;
+  DEFAULT_FLAGS = cfg.filters.flags;
+  DEFAULT_MODALITIES = cfg.filters.modalities;
+  DEFAULT_MODALITY = cfg.filters.modalities[0];
+  DEFAULT_ENGINES = cfg.filters.engines;
+  DEFAULT_LICENSES = cfg.filters.licenses;
+  RUNTIMES = cfg.runtimes;
+  // a list in the config so the order it was written in survives a payload
+  // written with sorted keys, and an object here because every caller looks a
+  // preset up by name
+  PRESETS = Object.fromEntries(cfg.presets.map(p => [p.k, {
+    t: p.title,
+    w: () => {
+      if (!p.base) return {...(p.weights || {})};
+      const w = {...D.weights};
+      (p.drop_prefixes || []).forEach(pre => Object.keys(w).forEach(
+        x => { if (x.startsWith(pre)) delete w[x]; }));
+      return w;
+    },
+  }]));
+}
+
+// the named weightings and the runtimes a snippet can be written for. filled
+// by applyConfig; declared here because the page reads both.
+let PRESETS = {};
+let RUNTIMES = [];
+
+// the state a reader gets with nothing stored and nothing shared, which is the
+// view MODELS.md is generated from. the page calls this and then layers its
+// localStorage and any shared link over the top; a consumer with no browser
+// calls it and stops, and the two therefore start from the same place.
+function loadRoster(payload) {
+  D = payload;
+  applyConfig(D.config);
+  W = {...D.weights};
+  order = [...DEFAULT_ORDER];
+  COLUMNS.forEach(c => { if (!order.includes(c.k)) order.push(c.k); });
+  hidden = new Set(DEFAULT_HIDDEN);
+  filters = {q: '', kind: new Set(), pub: '', pubs: new Set(),
+             mods: new Set(DEFAULT_MODALITIES), flags: new Set(DEFAULT_FLAGS),
+             engines: new Set(DEFAULT_ENGINES),
+             licenses: new Set(DEFAULT_LICENSES),
+             minParams: null, maxParams: null};
+  budget = DEFAULT_HARDWARE.budget;
+  reserve = DEFAULT_HARDWARE.reserve;
+  minCtx = DEFAULT_HARDWARE.minCtx;
+  cap = DEFAULT_HARDWARE.cap;
+  floor = DEFAULT_HARDWARE.floor;
+  bandwidth = DEFAULT_HARDWARE.bandwidth;
+  flops = DEFAULT_HARDWARE.flops;
+  return D;
+}
+
+// one place to apply the settings a caller without controls would otherwise
+// have to reach in and set, which is what a cli is. every field is optional and
+// an absent one leaves the default alone.
+function applySettings(o) {
+  o = o || {};
+  // zero is the page's way of saying no budget rather than a budget of none,
+  // which is what its own `#ram` control does with it
+  if (o.ram !== undefined && o.ram !== null) budget = o.ram > 0 ? o.ram : null;
+  if (o.reserve !== undefined && o.reserve !== null) reserve = o.reserve;
+  if (o.ctx !== undefined && o.ctx !== null) minCtx = o.ctx;
+  if (o.cap) cap = o.cap;
+  if (o.floor) floor = o.floor;
+  if (o.bandwidth !== undefined && o.bandwidth !== null) bandwidth = o.bandwidth;
+  if (o.flops !== undefined && o.flops !== null) flops = o.flops;
+  if (o.raw) effective = false;
+  if (o.ladder) allQuants = true;
+  // the page opens with filters already on, so naming one REPLACES that
+  // default and `all` drops the four of them
+  if (o.all) {
+    filters.mods = new Set(); filters.flags = new Set(); filters.engines = new Set();
+    filters.licenses = new Set();
+  }
+  if (o.modalities && o.modalities.length) filters.mods = new Set(o.modalities);
+  if (o.flags && o.flags.length) filters.flags = new Set(o.flags);
+  if (o.engines && o.engines.length) filters.engines = new Set(o.engines);
+  if (o.licenses && o.licenses.length) filters.licenses = new Set(o.licenses);
+  if (o.publishers && o.publishers.length) filters.pubs = new Set(o.publishers);
+  if (o.minParams !== undefined && o.minParams !== null) filters.minParams = o.minParams;
+  if (o.maxParams !== undefined && o.maxParams !== null) filters.maxParams = o.maxParams;
+  if (o.grep) filters.q = o.grep;
+  if (o.weights && PRESETS[o.weights]) W = PRESETS[o.weights].w();
+  if (o.sort) {
+    const c = col(o.sort);
+    // a number reads largest first and a name reads A first, which is what the
+    // page does when a header is clicked for the first time
+    sort = {k: o.sort, dir: o.asc === undefined || o.asc === null
+            ? (c && c.num ? -1 : 1) : (o.asc ? 1 : -1)};
+  } else if (o.asc !== undefined && o.asc !== null) {
+    sort = {k: sort.k, dir: o.asc ? 1 : -1};
+  }
+  clearScores();
+}
+
+// what the page offers, read off this file rather than restated by a consumer.
+// a column added here is askable from the cli the same day.
+const vocabulary = () => ({
+  columns: COLUMNS.map(c => ({k: c.k, t: c.t, num: !!c.num, help: c.help || ''})),
+  modalities: MODALITIES.map(m => ({k: m.k, t: m.t, help: m.help || ''})),
+  flags: FLAGS.map(f => ({k: f.k, t: f.t, help: f.help || ''})),
+  presets: Object.keys(PRESETS).map(k => ({k: k, t: PRESETS[k].t})),
+  engines: [...new Set(D.models.flatMap(m => m.engines || []))].sort(),
+  publishers: [...new Set(D.models.map(m => m.publisher))].sort(),
+  caps: CAPS.map(c => c[0]), floors: FLOORS.map(c => c[0]),
+  licenses: (D.licenses || []).map(t => ({k: t.k, t: t.label || t.k,
+                                          help: t.help || ''})),
+});
+
+// how many models each active filter is responsible for removing, so a caller
+// can say WHY the roster is shorter than the registry. one pass per filter with
+// that filter ALONE, which is the number a reader is asking for -- "this many
+// are not permissive" -- rather than the marginal one, which depends on the
+// order they happen to be applied in and is a fact about nothing. they overlap,
+// so they do not sum to the difference, and a caller printing them should say
+// so rather than imply an accounting.
+const filterCounts = () => {
+  const total = D.models.length, out = [];
+  // the search text and the publisher list are filters too, and this list used
+  // to leave both out -- the search being the worse omission, since a query
+  // nothing matches is the one case where the account is the whole answer
+  if (filters.q.trim()) {
+    const q = filters.q.trim().toLowerCase();
+    out.push({k: 'search', t: filters.q.trim(),
+              dropped: total - D.models.filter(m => haystack(m).includes(q)).length});
+  }
+  if (filters.mods.size) {
+    out.push({k: 'modality', t: [...filters.mods].join(','),
+              dropped: total - D.models.filter(inModality).length});
+  }
+  if (filters.engines.size) {
+    out.push({k: 'engine', t: [...filters.engines].join(','),
+              dropped: total - D.models.filter(
+                m => (m.engines || []).some(e => filters.engines.has(e))).length});
+  }
+  // the band empties a table by itself -- a floor above the biggest model here
+  // is a table with no rows -- and it was the one the account still left out
+  if (filters.minParams != null || filters.maxParams != null) {
+    out.push({k: 'params', t: paramsBand(),
+              dropped: total - D.models.filter(fitsParams).length});
+  }
+  if (filters.pubs.size) {
+    out.push({k: 'publisher', t: [...filters.pubs].join(','),
+              dropped: total - D.models.filter(
+                m => filters.pubs.has(m.publisher)).length});
+  }
+  if (filters.licenses.size) {
+    out.push({k: 'license', t: [...filters.licenses].join(','),
+              dropped: total - D.models.filter(
+                m => filters.licenses.has(licenseOf(m).tier)).length});
+  }
+  filters.flags.forEach(k => {
+    const flag = FLAGS.find(x => x.k === k);
+    if (flag) {
+      out.push({k: k, t: flag.t,
+                dropped: total - D.models.filter(flag.test).length});
+    }
+  });
+  // widest first. the reader asking is the one with an empty table, and what
+  // they want is the biggest lever, not the order the controls happen to sit in
+  return out.sort((a, b) => b.dropped - a.dropped);
+};
+
+// the current hardware, for a caller that wants to print what it answered under
+const hardware = () => ({budget, reserve, minCtx, cap, floor, effective,
+                         bandwidth, flops});
+
+// under node this is a module; inlined into the page it is not, and the page
+// reads every one of these as a plain global from the same scope.
+
+// THE ARITHMETIC IS NOT IN THIS FILE. `scripts/roster.js` holds it -- the fit,
+// the kv cache, the retention curves, the composite, the column definitions --
+// and `scripts/build-viewer` inlines it directly above this script when it
+// writes `docs/index.html`, so every name it defines is in scope here.
+//
+// it is a separate file because a browser is not the only thing that needs
+// those answers: `scripts/aimbot` requires it to query the roster from a
+// terminal and `research/dashboard-table` requires it to generate MODELS.md's
+// ranking, neither of which can afford to reimplement a ranking that would
+// then disagree with this page. what is left below is the half that needs a
+// dom: drawing, the modal, the controls and the share link.
+// --- table -------------------------------------------------------------------
+
+function tableHead() {
+  return '<tr>' + shown().map(k => {
+    const c = col(k);
+    const arrow = sort.k === k ? `<span class="ord">${sort.dir > 0 ? '^' : 'v'}</span>` : '';
+    const eff = effective && SCALED_COLUMNS[k];
+    const help = (c.help || '') + (eff ? '. shown discounted for the quant being read' : '');
+    // data-help only: a `title` beside it means the styled panel appears at
+    // once and the native tooltip fades in on top of it a second later
+    return `<th class="${c.num ? 'n' : ''}" data-k="${k}" data-help="${esc(help)}">`
+      + `${c.t}${eff ? ' <span class="faint">eff</span>' : ''}${arrow}</th>`;
+  }).join('') + '</tr>';
+}
+
+function drawTable() {
+  // sorted, expanded and ranked by roster.js, so the cli and this page cannot
+  // disagree about the order or about what rank a row is at
+  const rows = rankedRows();
+  document.querySelector('#head').innerHTML = tableHead();
+  document.querySelector('#rows').innerHTML = rows.length
+    ? rows.map(m => {
+        // every row carries the quant it is showing, ladder or not, so the
+        // modal opens on what was clicked rather than on what it would have
+        // chosen for itself. the repo goes with it: two builds of one model
+        // name their files identically, 0.42gib apart
+        const q = activeQuant(m);
+        return `<tr data-repo="${esc(m.repo)}"`
+          + (q ? ` data-qrepo="${esc(q.repo)}" data-quant="${esc(q.quant)}"` : '') + '>'
+          + shown().map(k => col(k).cell(m)).join('') + '</tr>';
+      }).join('')
+    : emptyTable();
+  wireHeaders();
+  document.querySelectorAll('#rows tr[data-repo]').forEach(tr => {
+    tr.onclick = () => openModel(tr.dataset.repo, null,
+      {repo: tr.dataset.qrepo, quant: tr.dataset.quant});
+  });
+  document.querySelectorAll('#rows [data-clear]').forEach(b => {
+    b.onclick = () => clearFilter(b.dataset.clear);
+  });
+  syncResets();
+  syncHash();
+}
+
+// an empty table is a question about the controls rather than about the roster,
+// so it is answered with the account the cli prints: every filter that is on,
+// what it hides measured ALONE against the whole registry, widest first. they
+// overlap -- 190 hidden by the shape and 60 by the licence is not 250 of 202 --
+// which is why the line says "alone" rather than implying an accounting.
+function emptyTable() {
+  const biting = filterCounts().filter(f => f.dropped);
+  const span = `<tr><td class="empty" colspan="${shown().length}">`;
+  if (!biting.length) return span + 'nothing matches</td></tr>';
+  return span + 'nothing matches'
+    + `<div class="relax">${biting.map(f =>
+        `<button data-clear="${f.k}" data-help="takes this one filter off and`
+        + ` leaves every other one exactly where it is">`
+        + `${esc(relaxLabel(f))} hides ${f.dropped} of ${D.models.length}</button>`)
+        .join('')}</div>`
+    // the caveat the numbers need: they are per filter alone, so they are not an
+    // accounting of the difference and never will be
+    + `<div class="faint">each count is that filter alone against all `
+    + `${D.models.length}. they overlap, so they do not add up.</div></td></tr>`;
+}
+
+// a flag names itself (`fits vram`); the rest are a value with no kind
+// attached, and "permissive" alone does not read as the licence menu. the
+// modality's own words come from MODALITIES, because the reader read
+// `text to image` in the dropdown rather than the key it is stored under.
+const RELAX_KIND = {search: 'the search', modality: 'the shape',
+                    engine: 'the runtime', license: 'the licence',
+                    publisher: 'the publisher'};
+const relaxLabel = f => {
+  if (FLAGS.some(x => x.k === f.k)) return f.t;
+  // the multi-selects store a comma-joined list, which is what the payload's
+  // own words arrive as, and the modality keys are keys rather than words
+  const t = (f.k === 'modality'
+    ? [...filters.mods].map(k => (MODALITIES.find(x => x.k === k) || {}).t || k)
+    : f.t.split(',')).join(', ');
+  return `${RELAX_KIND[f.k] || f.k} "${t}"`;
+};
+
+// one filter off, from the empty table itself. each is the empty set rather
+// than the default, because "none picked is no filter at all" is what every one
+// of these controls already means -- and a reader told the licence menu hid
+// everything does not want the default licence back, they want the menu off.
+// `drawChrome` then repaints the whole toolbar, because a control still showing
+// a filter the state no longer holds is worse than a repaint.
+function clearFilter(k) {
+  if (k === 'search') filters.q = '';
+  else if (k === 'modality') filters.mods = new Set();
+  else if (k === 'engine') filters.engines = new Set();
+  else if (k === 'license') filters.licenses = new Set();
+  else if (k === 'publisher') filters.pubs = new Set();
+  else filters.flags.delete(k);
+  saveFilters();
+  clearScores();
+  drawChrome();
+  drawFactors();
+  drawTable();
+}
+
+function wireHeaders() {
+  document.querySelectorAll('th[data-k]').forEach(th => {
+    th.onclick = () => {
+      const k = th.dataset.k;
+      sort = sort.k === k ? {k, dir: -sort.dir} : {k, dir: col(k).num ? -1 : 1};
+      store.set('sort', sort);
+      drawTable();
+    };
+  });
+}
+
+// --- factors -----------------------------------------------------------------
+
+const WEIGHT_KEYS = () => {
+  // every facet at least two models carry -- a facet with one model cannot be
+  // a percentile, so weighting it would rank that model against itself -- plus
+  // a `.*` roll-up for any source with enough benchmarks to be unreadable one
+  // slider at a time.
+  const keys = new Set(Object.keys(W));
+  const perPrefix = {};
+  Object.keys(D.facet_meta).forEach(k => {
+    const p = k.split('.')[0];
+    perPrefix[p] = (perPrefix[p] || 0) + 1;
+    if (coverage(k) >= 2) keys.add(k);
+  });
+  Object.entries(perPrefix).forEach(([p, n]) => { if (n >= 3) keys.add(p + '.*'); });
+  return [...keys].filter(k => coverage(k) >= 2 || W[k]);
+};
+
+// every group present, for the "start collapsed" default. computing it beats
+// a hardcoded list that silently stops covering a group somebody adds later.
+const allGroups = () => [...new Set(Object.keys(D.facet_meta).map(groupOf))];
+
+function coverage(key) {
+  return D.models.filter(m => facetPct(m, key) !== null).length;
+}
+
+function facetLabel(key) {
+  if (key.endsWith('.*')) {
+    const prefix = key.slice(0, -1);
+    const n = Object.keys(D.facet_meta).filter(k => k.startsWith(prefix)).length;
+    return `every ${key.slice(0, -2)} benchmark (${n})`;
+  }
+  return (D.facet_meta[key] || {}).label || key;
+}
+
+function groupOf(key) {
+  if (key.endsWith('.*')) {
+    const prefix = key.slice(0, -1);
+    const any = Object.keys(D.facet_meta).find(k => k.startsWith(prefix));
+    return any ? D.facet_meta[any].group : key;
+  }
+  return (D.facet_meta[key] || {}).group || 'other';
+}
+
+// named weightings, offered in the ranking row. each is a whole answer to "what
+// is quality", so picking one REPLACES the weights rather than nudging them --
+// which is why the select falls back to `custom ranking` the moment a slider
+// moves off a preset.
+const sameWeights = (a, b) => {
+  const live = w => Object.keys(w).filter(k => w[k]).sort();
+  const ka = live(a), kb = live(b);
+  return ka.length === kb.length && ka.every((k, i) => kb[i] === k
+    && Math.abs(a[k] - b[k]) < 1e-9);
+};
+const presetName = () => Object.keys(PRESETS).find(p => sameWeights(W, PRESETS[p].w())) || '';
+// a picked set against the set it should be compared to, which is usually a
+// list straight out of the payload. order and size only, never identity: the
+// defaults are never the same object twice.
+const sameSet = (a, b) => a.size === [...b].length && [...b].every(k => a.has(k));
+
+// a preset means nothing for a modality whose models carry none of the facets
+// it weights: `writing code` over transcription models ranks every row on
+// nothing and prints a column of dashes. the same rule the modality list uses
+// on itself -- a dead option is dropped -- except that whatever is SELECTED
+// stays listed, or switching modality would blank the control that says what
+// the current ranking is.
+// whether any model in the current view is even measured on this factor. a
+// slider that moves nothing on screen is not a decision, and the sidebar is a
+// list of decisions: 60 text benchmarks over a roster of transcription models
+// is a wall to scroll past to reach the four that apply.
+const factorApplies = k => relevant(k)
+  && D.models.some(m => inModality(m) && asked(m, k));
+
+// what forums said and what the card documents, which any model can carry
+// whatever it does. they are tie-breakers WITHIN a ranking rather than the thing
+// it measures, so they do not decide whether one is worth offering: `writing
+// code` weights them 0.15 between them, and once every non-text model gained a
+// `name.match` and started scoring on reddit, that alone made the preset live
+// over a roster of synthesis models -- ranking them by chatter under a heading
+// that says code. the community preset weights nothing else and is unaffected:
+// it falls through to the empty case below.
+const CROSSCUTTING = /^(?:community|card)\./;
+
+function presetFits(key) {
+  const w = PRESETS[key].w();
+  const keys = Object.keys(w).filter(k => w[k] && !CROSSCUTTING.test(k));
+  return !keys.length || keys.some(factorApplies);
+}
+
+// which of the two dropdowns is open, or null. one at a time: they sit beside
+// each other and both are wider than the control that opened them.
+let openMenu = null;
+
+// a dropdown you pick SEVERAL things from -- the summary button, and a menu
+// that stays open while you pick, because picking one thing is not what it is
+// for. a native `<select multiple>` renders as a scrolling list box rather than
+// a dropdown, and a chip row spends a line of the toolbar per option.
+function drawMulti(id, attr, items, chosen, summary) {
+  const el = document.querySelector('#' + id);
+  if (!el) return;
+  const open = openMenu === id;
+  el.innerHTML = `<button class="ms-btn" aria-expanded="${open}">${esc(summary)}</button>`
+    + `<div class="ms-menu${open ? ' open' : ''}">`
+    // no `data-help` per row: the help panel opens over the menu and covers the
+    // options under the one being read, and a shape or a runtime name explains
+    // itself. the control keeps its own help, on the wrapper.
+    + items.map(it =>
+      `<button ${attr}="${esc(it.k)}" aria-pressed="${chosen.has(it.k)}">${esc(it.t)}`
+      + (it.n === undefined ? '' : ` <span class="faint">${it.n}</span>`)
+      + '</button>').join('') + '</div>';
+
+  // a click anywhere in here is a pick, and must not reach the document handler
+  // below. it goes on the WRAPPER, which survives: the handlers under it redraw
+  // `el.innerHTML`, so the node that was clicked is detached by the time the
+  // event bubbles, and `contains(e.target)` reads a click from inside the menu
+  // as one from outside it. that shut each menu in the same gesture that opened
+  // it, which is a dropdown that cannot be opened at all.
+  el.onclick = e => {
+    hideTip();
+    e.stopPropagation();
+  };
+
+  const btn = el.querySelector('.ms-btn');
+  if (btn) btn.onclick = () => { openMenu = open ? null : id; drawFilterMenus(); };
+  el.querySelectorAll('[' + attr + ']').forEach(b => {
+    b.onclick = () => {
+      const k = b.getAttribute(attr);
+      chosen.has(k) ? chosen.delete(k) : chosen.add(k);
+      saveFilters();
+      drawFilterMenus();
+      // both depend on the shapes in view: `writing code` is not offered over a
+      // roster of transcription models, and neither is a slider for it
+      drawPreset();
+      drawFactors();
+      drawTable();
+    };
+  });
+}
+
+// what the closed button says. one pick reads as itself; several read as a
+// count, because three runtime names do not fit in a toolbar
+const summarize = (items, chosen, none, plural) => {
+  const on = items.filter(i => chosen.has(i.k));
+  return !on.length ? none : on.length === 1 ? on[0].t
+    : `${on.length} ${plural}`;
+};
+
+// one shape at a time, and a shape nothing on the roster has is a dead option:
+// count first and keep only what would select something. the default always
+// stays, so the control can never come up empty.
+function drawModalities() {
+  const el = document.querySelector('#modality');
+  if (!el) return;
+  const picked = [...filters.mods][0] || '';
+  // "no shape picked" is a state the page can reach -- clearing the filter from
+  // an empty table, a share link, the cli's --all -- and it means every shape.
+  // a select that showed `language models` while the table held every shape was
+  // the control lying about the rows under it, so the state gets a row of its
+  // own. only when nothing is picked: the shapes partition the roster between
+  // them and a permanent `every shape` choice would be a choice of nothing.
+  el.innerHTML = (picked ? '' : `<option value="" selected>every shape`
+    + ` (${D.models.length})</option>`)
+    + MODALITIES.map(x => {
+    const n = D.models.filter(x.test).length;
+    if (!n && x.k !== DEFAULT_MODALITY) return '';
+    return `<option value="${x.k}"${x.k === picked ? ' selected' : ''}`
+      + ` title="${esc(x.help || '')}">${esc(x.t)} (${n})</option>`;
+  }).join('');
+  el.onchange = e => {
+    // the empty option is the state, not a shape named ""
+    filters.mods = e.target.value ? new Set([e.target.value]) : new Set();
+    saveFilters();
+    hideTip();
+    // the score depends on the shape now -- a model that both transcribes and
+    // reasons is judged on one half or the other -- so the memo goes first
+    clearScores();
+    // all three depend on the shapes in view: `writing code` is not offered
+    // over a roster of transcription models, and neither is a slider for it
+    drawPreset();
+    drawFactors();
+    drawTable();
+  };
+}
+
+// one entry per runtime the roster actually has models for, with how many. a
+// runtime nothing here loads would be a toggle that empties the table.
+function drawEngines() {
+  const counts = {};
+  D.models.forEach(m => (m.engines || []).forEach(e => {
+    counts[e] = (counts[e] || 0) + 1;
+  }));
+  const items = Object.keys(counts).sort().map(e => ({
+    k: e, t: e, n: counts[e],
+    help: `${e} loads ${counts[e]} of these`}));
+  drawMulti('engines-ms', 'data-engine', items, filters.engines,
+            summarize(items, filters.engines, 'any runtime', 'runtimes'));
+}
+
+// one entry per licence tier, in the order registry/licenses.yaml declares them
+// rather than alphabetically -- that file writes them permissive, restricted,
+// unknown, which is the order a reader weighs them in. the count matters more
+// here than on the other menus: it is what makes a tier this view is hiding
+// visibly there rather than silently absent.
+function drawLicenses() {
+  const counts = {};
+  D.models.forEach(m => {
+    const t = licenseOf(m).tier;
+    counts[t] = (counts[t] || 0) + 1;
+  });
+  const items = (D.licenses || []).map(t => ({
+    k: t.k, t: t.label || t.k, n: counts[t.k] || 0, help: t.help || ''}));
+  drawMulti('license-ms', 'data-license', items, filters.licenses,
+            summarize(items, filters.licenses, 'every licence', 'tiers'));
+}
+
+// a publisher capitalizes its own name however it likes -- `Qwen` beside
+// `google` -- and ascii order puts every capital ahead of every lowercase one,
+// which reads as two alphabets in one menu
+const byName = (a, b) => a.toLowerCase().localeCompare(b.toLowerCase());
+
+// every publisher on the roster, with how many models it has there
+function drawPublishers() {
+  const counts = {};
+  D.models.forEach(m => { counts[m.publisher] = (counts[m.publisher] || 0) + 1; });
+  const items = Object.keys(counts).sort(byName).map(p => ({k: p, t: p, n: counts[p]}));
+  drawMulti('pub-ms', 'data-pub', items, filters.pubs,
+            summarize(items, filters.pubs, 'every publisher', 'publishers'));
+}
+
+const drawFilterMenus = () => {
+  drawModalities(); drawEngines(); drawLicenses(); drawPublishers();
+};
+
+// a menu that stays open while you pick has to close on a click that is not a
+// pick. the button that opened it and every option inside it are within the
+// wrapper, so `contains` covers both without a flag per control.
+document.addEventListener('click', e => {
+  if (!openMenu) return;
+  const el = document.querySelector('#' + openMenu);
+  if (el && el.contains && !el.contains(e.target)) {
+    openMenu = null;
+    drawFilterMenus();
+  }
+});
+
+function drawPreset() {
+  const cur = presetName();
+  document.querySelector('#preset').innerHTML =
+    (cur ? '' : '<option value="" selected>custom ranking</option>')
+    + Object.entries(PRESETS).filter(([k]) => k === cur || presetFits(k))
+      .map(([k, p]) =>
+        `<option value="${k}"${k === cur ? ' selected' : ''}>${esc(p.t)}</option>`).join('');
+}
+
+function drawFactors() {
+  const box = document.querySelector('#factors');
+  const keys = WEIGHT_KEYS().filter(factorApplies);
+  const groups = new Map();
+  keys.forEach(k => {
+    const g = groupOf(k);
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(k);
+  });
+  const about = Object.fromEntries(D.groups.map(g => [g.name, g.about]));
+  const order = D.groups.map(g => g.name).filter(n => groups.has(n))
+    .concat([...groups.keys()].filter(n => !about[n]));
+
+  box.innerHTML = '<div class="hint">quality is whatever you say it is. a weight of zero '
+    + 'drops the factor; a model missing a factor is scored as typical on it, never '
+    + 'zero for the absence and never exempt from it.</div>'
+    + order.map(g => {
+      const shut = folded.has(g);
+      // 22 artificial analysis benchmarks and 11 languages do not all need to
+      // be on screen at once; a group that says how many of its weights are
+      // live can stay shut without hiding anything
+      const live = groups.get(g).filter(k => W[k]).length;
+      return `<div class="group${shut ? ' shut' : ''}">`
+      + `<h3 data-group="${esc(g)}">${shut ? '+' : '-'} ${esc(g)}`
+      + ` <span class="faint">${groups.get(g).length}`
+      + (live ? `, ${live} weighted` : '') + '</span></h3>'
+      + (about[g] ? `<p>${esc(about[g])}</p>` : '')
+      + groups.get(g).sort((a, b) => (b.endsWith('.*') - a.endsWith('.*')) || a.localeCompare(b)).map(k => {
+        const w = Math.round((W[k] || 0) * 100);
+        return `<div class="wrow">
+          <label for="w-${esc(k)}"><b>${esc(facetLabel(k))}</b> <span class="faint">${esc(k)}</span></label>
+          <input type="range" id="w-${esc(k)}" data-key="${esc(k)}" min="0" max="50" value="${w}">
+          <span class="wv" data-for="${esc(k)}">${w ? w + '%' : '-'}</span>
+          <span class="cov">${coverage(k)} models</span>
+        </div>`;
+      }).join('') + '</div>';
+    }).join('');
+
+  box.querySelectorAll('h3[data-group]').forEach(h => {
+    h.onclick = () => {
+      const g = h.dataset.group;
+      folded.has(g) ? folded.delete(g) : folded.add(g);
+      store.set('folded', [...folded]);
+      drawFactors();
+    };
+  });
+
+  box.querySelectorAll('input[type=range]').forEach(r => {
+    r.oninput = () => {
+      const k = r.dataset.key, v = +r.value / 100;
+      if (v) W[k] = v; else delete W[k];
+      box.querySelector(`[data-for="${CSS.escape(k)}"]`).textContent = v ? Math.round(v * 100) + '%' : '-';
+      reweigh();
+    };
+  });
+}
+
+function reweigh() {
+  clearScores();
+  rememberWeights();
+  drawPreset();
+  drawTable();
+}
+
+// --- column picker -----------------------------------------------------------
+
+// a list of column keys against the columns this build knows. a stored list can
+// name one that has gone away, and a build can gain one that every stored list
+// predates: the old one drops and the new one joins the end.
+const knownColumns = ks => ks.filter(k => COLUMNS.some(c => c.k === k));
+const withNewColumns = o => {
+  COLUMNS.forEach(c => { if (!o.includes(c.k)) o.push(c.k); });
+  return o;
+};
+
+// what the reader who never touched a column has: the registry's own order, and
+// the registry's own columns switched off. the reset has to reach the defaults
+// the same way `boot()` does, since a page that restored a stored view would
+// otherwise show a live reset for a table nobody had changed.
+const defaultOrder = () => withNewColumns(knownColumns([...DEFAULT_ORDER]));
+const defaultHidden = () => new Set(knownColumns(DEFAULT_HIDDEN));
+
+function drawColumns() {
+  const box = document.querySelector('#cols');
+  // the button is 14px of line and cannot show that most of the table is put
+  // away, so the hover says it instead -- and it is rebuilt here rather than
+  // left as the static line, which goes stale on the first toggle
+  document.querySelector('#cols-btn').dataset.help =
+    `show, hide and reorder the table's columns. ${shown().length} of `
+    + `${order.length} are on screen. drag to reorder`;
+  // the same explanation the column header carries, so a reader deciding
+  // whether to switch one on does not have to switch it on to find out
+  box.innerHTML = order.map(k =>
+    `<button draggable="true" data-k="${k}" aria-pressed="${!hidden.has(k) && available(k)}"`
+    + ` data-help="${esc(available(k) ? col(k).help || ''
+      : 'it estimates from a hardware figure you have not set, so there is'
+        + ' nothing to show yet')}"`
+    + `>${col(k).t}</button>`
+  ).join('');
+  box.querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      const k = b.dataset.k;
+      hidden.has(k) ? hidden.delete(k) : hidden.add(k);
+      if (!shown().length) hidden.delete(k);
+      store.set('hidden', [...hidden]);
+      drawColumns(); drawTable();
+    };
+    b.ondragstart = e => { e.dataTransfer.setData('text/plain', b.dataset.k); b.classList.add('drag'); };
+    b.ondragend = () => b.classList.remove('drag');
+    b.ondragover = e => { e.preventDefault(); b.classList.add('drop'); };
+    b.ondragleave = () => b.classList.remove('drop');
+    b.ondrop = e => {
+      e.preventDefault(); b.classList.remove('drop');
+      const from = e.dataTransfer.getData('text/plain'), to = b.dataset.k;
+      if (from && from !== to) {
+        order.splice(order.indexOf(to), 0, ...order.splice(order.indexOf(from), 1));
+        store.set('order', order);
+        drawColumns(); drawTable();
+      }
+    };
+  });
+}
+
+// --- references --------------------------------------------------------------
+//
+// every number carries where it came from. the marker is small on purpose:
+// hover shows the source and, where we hold one, the sentence itself.
+
+function refMark(ref, quote) {
+  if (!ref) return '';
+  const payload = esc(JSON.stringify({...ref, quote: quote || ref.quote || ''}));
+  const href = ref.url ? ` href="${esc(ref.url)}" target="_blank" rel="noopener"` : '';
+  return `<a class="ref" data-ref="${payload}"${href}>[src]</a>`;
+}
+
+function showTip(el) {
+  let r;
+  try { r = JSON.parse(el.dataset.ref); } catch (e) { return; }
+  const tip = document.querySelector('#tip');
+  const bits = [r.source, r.id, r.file].filter(Boolean).map(esc).join(' &middot; ');
+  tip.innerHTML = `<div class="meta">${bits}</div>`
+    + (r.quote ? `<q>${esc(r.quote)}</q>` : '')
+    + (r.note ? `<div class="meta">${esc(r.note)}</div>` : '')
+    + (r.title ? `<div class="meta">${esc(r.title)}</div>` : '');
+  const box = el.getBoundingClientRect();
+  tip.style.display = 'block';
+  const w = tip.getBoundingClientRect();
+  tip.style.left = Math.max(8, Math.min(box.left, innerWidth - w.width - 12)) + 'px';
+  tip.style.top = (box.bottom + w.height + 12 > innerHeight
+    ? box.top - w.height - 6 : box.bottom + 6) + 'px';
+}
+
+// a column header explains itself on hover, through the same panel the
+// references use -- the native tooltip takes a second to appear and half the
+// columns are numbers nobody can name on sight
+function showHelp(el) {
+  const tip = document.querySelector('#tip');
+  // a column key or a flag name is worth naming; an element id is not
+  const label = el.dataset.k || el.dataset.flag || '';
+  tip.innerHTML = (label ? `<div class="meta">${esc(label)}</div>` : '')
+    + esc(el.dataset.help);
+  const box = el.getBoundingClientRect();
+  tip.style.display = 'block';
+  const w = tip.getBoundingClientRect();
+  tip.style.left = Math.max(8, Math.min(box.left, innerWidth - w.width - 12)) + 'px';
+  tip.style.top = (box.bottom + 6) + 'px';
+}
+
+// what the panel is currently explaining. the panel belongs to that element and
+// to nothing else: leaving it hides the panel even though the pointer may be
+// over the panel itself, which is the only reading that lets you run down a
+// toolbar without the last explanation following you.
+let tipFor = null;
+
+const hideTip = () => {
+  tipFor = null;
+  document.querySelector('#tip').style.display = 'none';
+};
+
+function onHover(e) {
+  // a dropdown is open: the panel would sit exactly where the menu is, and the
+  // redraw that opened the menu fires `mouseover` for the node that REPLACED
+  // the one under a stationary pointer -- which is how the panel came back the
+  // instant the click dismissed it, and why clicking looked like it did nothing
+  if (openMenu) { hideTip(); return; }
+  // on the attribute rather than on either class: the `[src]` marker beside a
+  // cell and a figure underlined inside a sentence are the same claim about
+  // where a number came from, and they carry the same payload
+  const ref = e.target.closest('[data-ref]');
+  const th = e.target.closest('[data-help]');
+  if (ref) { showTip(ref); tipFor = ref; }
+  else if (th) { showHelp(th); tipFor = th; }
+  else hideTip();
+}
+
+document.addEventListener('mouseover', onHover);
+// pressing anything dismisses it: you are using the control, not asking what it
+// is, and mousedown lands before the click handler redraws anything
+document.addEventListener('mousedown', hideTip);
+
+// mouseover alone leaves one hole: a pointer that leaves the button for a gap
+// no element claims, or for the window, fires no `over` anywhere and the panel
+// stays up. `out` closes it. moving to a CHILD of the same element is not
+// leaving it -- the count inside a menu row is a child.
+document.addEventListener('mouseout', e => {
+  if (!tipFor || e.target !== tipFor) return;
+  if (e.relatedTarget && tipFor.contains && tipFor.contains(e.relatedTarget)) return;
+  hideTip();
+});
+
+// --- methodology -------------------------------------------------------------
+//
+// every number on this page is derived from a file in the repo, and the
+// derivations have opinions in them. this is where those opinions are written
+// down, with a link to the code that holds each one.
+
+function methodology() {
+  const src = (label, path) =>
+    `<a href="${esc(D.repo_url)}/blob/${esc(D.branch)}/${esc(path)}"`
+    + ` target="_blank" rel="noopener">${esc(label)}</a>`;
+  const sec = (title, body, refs) => `<h3>${esc(title)}</h3>${body}`
+    + (refs ? `<p class="faint">${refs}</p>` : '');
+
+  return sec('quality',
+    '<p>a weighted mean of percentiles, not of scores. each measurement is turned'
+    + ' into the model\'s rank among the registry models carrying that same'
+    + ' measurement, and those percentiles are averaged using the weights you set'
+    + ' under factors. scores are not comparable across sources -- an elo, a'
+    + ' gscore and an index share no units -- and percentiles are.</p>'
+    + '<p>the weights it opens on are set by a'
+    + ' redundancy analysis rather than by taste: gbench is 96% predictable from'
+    + ' artificial analysis, so it carries less than its apparent independence'
+    + ' suggests, and lmarena and swe-rebench are in at 0.10 because they miss'
+    + ' nine and thirteen of the roster respectively.</p>',
+    'weights and the reasoning: ' + src('scripts/build-viewer', 'scripts/build-viewer'))
+
+  + sec('the cohort is this registry',
+    '<p>p79 on coding means it beat 79% of the registry models that also carry a'
+    + ' coding score -- not 79% of every model in the world. the question a local'
+    + ' roster asks is "best of what i can run", and ranking a 27b against a'
+    + ' frontier api model answers a different one. the `of` column on the quality'
+    + ' tab says how many models each percentile was computed against.</p>',
+    src('research/analyze-usecase', 'research/analyze-usecase'))
+
+  + sec('a missing measurement is never a zero, and never a free pass',
+    '<p>a model gbench has not played simply has no gbench facet, and the evidence'
+    + ' column says how many of the weighted factors it was actually measured on.'
+    + ' 3/7 there is a gap in the evidence, not a verdict on the model. 22 of the'
+    + ' 41 text models are not on the gbench board at all -- that is upstream; the'
+    + ' api publishes 98 models and no more.</p>'
+    + `<p>the gap is scored as the MIDDLE, not dropped. dividing by the weight`
+    + ' actually used sounds neutral and is not: it hands the missing weight to'
+    + ' whatever the model does have, so one forum percentile at weight 0.05 can'
+    + ' carry a whole ranking. these are percentiles, whose median is 50, so half'
+    + ' the uncovered weight is scored at 50 instead -- unmeasured reads as'
+    + ' typical. a model measured on every factor asked of it has no uncovered'
+    + ' weight and is not moved at all.</p>')
+
+  + sec('quant adjusted, and what it is evidence for',
+    '<p>a benchmark scores the model at the precision the scorer served. this'
+    + ' roster runs a gguf of it, so `quant adjusted` multiplies the score by the'
+    + ' retention the quant\'s bits per weight predict, then recomputes the'
+    + ' percentiles against the discounted cohort.</p>'
+    + `<p>the curve is ONE sweep: unsloth ran deepseek v3.1 at eight quants on`
+    + ' aider polyglot -- 71.6 at bf16 down to 55.7 at one bit -- and published'
+    + ' the pass rates. that is evidence about a model writing and editing code,'
+    + ' so it is applied to the coding and software-agent benchmarks and to'
+    + ` nothing else. ${(D.retention.scaled || []).length} of`
+    + ` ${Object.keys(D.facet_meta).length} facets are discounted; the rest keep`
+    + ' their published number and say why on hover. that is the same rule as'
+    + ' never scoring a missing measurement as a zero -- an unmeasured effect is'
+    + ' not no effect, and inventing the correction is worse than admitting it'
+    + ' is unknown.</p>'
+    + '<p>two things about the curve are worth holding against it. it was fitted'
+    + ' to a 671b model and is applied unchanged to a 27b one, and quantization'
+    + ' damage is widely reported to scale with how little redundancy a model'
+    + ' has -- so the low rungs read optimistic for small models, and the two'
+    + ' published sweeps this repo does hold are also of large models (127b and'
+    + ' 250b). and it is nearly flat above q4: 0.974 at 4.72 bpw, 0.987 at 5.77.'
+    + ' both proxy sweeps agree on that shape -- solar open2\'s perplexity moves'
+    + ' 0.9% from 6.57 to 4.35 bpw and then 87% by 1.93 -- so the flatness is'
+    + ' corroborated even where the depth is not.</p>'
+    + '<p>models with natively low-bpw weights are exempt: they are not paying a'
+    + ' quantization penalty for being small.</p>',
+    'the curve: ' + src('research/build-tables CURVE', 'research/build-tables')
+    + ' &middot; the classification: '
+    + src('scripts/build-viewer QUANT_EVIDENCE', 'scripts/build-viewer'))
+
+  + sec('memory',
+    '<p>the quant shown is the best that fits in the vram you set, out of every'
+    + ' publisher of the model, once the'
+    + ' reserve and the context\'s kv cache are paid for. the cache is computed'
+    + ' from each model\'s own attention geometry rather than a rule of thumb:'
+    + ' full-attention layers hold a cache that grows with context, windowed'
+    + ' layers hold at most their window, and linear-attention layers hold a fixed'
+    + ' state. counting every layer as global overstates gemma 4 31b several times'
+    + ' over. a model whose native window is shorter than the context asked for is'
+    + ' not a fit at it: getting there means rope scaling, which is the'
+    + ' consumer\'s call.</p>',
+    src('research/fetch-model-facts', 'research/fetch-model-facts'))
+
+  + sec('speed is estimated, not measured',
+    '<p>the two speed columns are arithmetic on your own hardware settings, and'
+    + ' nothing in this repo has timed these models. generating a token reads'
+    + ' every active weight at the fitted quant, so `tg t/s` is bandwidth over'
+    + ' that; prefilling multiplies through the same weights, so `pp t/s` is'
+    + ' compute over two flops per active weight and ignores attention, which'
+    + ' makes it optimistic on a long prompt.</p>'
+    + '<p>decode also re-reads the whole kv cache every step, which starts empty'
+    + ' and ends up the bigger half for a model that skimped on grouped-query'
+    + ' attention. the column leads with the empty-cache figure, because that is'
+    + ' the one anybody quotes, and prints the full-cache figure beside it when'
+    + ' the difference is worth more than 15%. ling 3.0 flash is the case that'
+    + ' makes it worth printing: 42 full-attention layers at 32 kv heads is 84'
+    + ' gib of cache at 128k against 5 gib of active weights, so it runs fast'
+    + ' empty and crawls full.</p>'
+    + `<p>both selects take the spec sheet figure and discount it: ${BW_EFFICIENCY}`
+    + ` of peak bandwidth, ${FLOPS_EFFICIENCY} of peak flops. those two are rules`
+    + ' of thumb, not measurements -- decode streams weights nearly perfectly'
+    + ' while a prefill matmul lands nowhere near peak. read the columns as an'
+    + ' order of magnitude and as a comparison between models. a model that'
+    + ' publishes no active parameter count gets no estimate rather than a'
+    + ' guess.</p>',
+    'the same arithmetic, against a fixed 160 gb/s: '
+    + src('research/build-tables --table speed', 'research/build-tables'))
+
+  + sec('sentiment',
+    '<p>mentions are counted per sentence, not per comment, so a comment naming'
+    + ' five models and five tasks does not manufacture twenty-five claims. scores'
+    + ' are compared only against comments at the same depth in the same thread,'
+    + ' because a raw upvote count mostly measures how much drama a thread had.'
+    + ' the four forums are kept apart: reddit argues about which model is best'
+    + ' and the huggingface discussion tab reports whether a quant loads at all.'
+    + ' polarity comes from a deliberately blunt lexicon -- "x is better than y"'
+    + ' scores positive for both -- so every claim keeps the sentence and a link'
+    + ' to the thread.</p>',
+    src('research/analyze-task-mentions', 'research/analyze-task-mentions'))
+
+  + sec('what the vendor says',
+    '<p>card claims are kept apart from measurements and marked vendor-reported.'
+    + ' across 70 matched claims the median runs +0.9 over third-party measurement'
+    + ' of the same model on the same benchmark, and 42 of 70 overstate, so the'
+    + ' constant is subtracted before use. sampling profiles record which source'
+    + ' their numbers still agree with -- the quant repo\'s card, the vendor\'s,'
+    + ' the shipped generation_config, or nothing published.</p>',
+    src('research/analyze-self-report', 'research/analyze-self-report') + ' &middot; '
+    + src('scripts/resolve-samplers', 'scripts/resolve-samplers'))
+
+  + sec('turns and thinking',
+    '<p>what a chat template does with the roles you send is derived by executing'
+    + ' it against fixed conversations, not by reading it. `dropped` is the one to'
+    + ' fear: the template renders, the server returns 200, and your message is'
+    + ' not in the prompt. the thinking default is what the template does when the'
+    + ' client sends nothing, found by rendering with the knob absent.</p>',
+    src('research/analyze-chat-templates', 'research/analyze-chat-templates'))
+
+  + sec('every number has a file',
+    '<p>hover any [src] for the source, the capture it came from and, for a'
+    + ' community claim, the sentence somebody wrote. the captures are committed'
+    + ' and content-addressed in data.json under `provenance`, so a refresh shows'
+    + ' up as a diff rather than a silent change of conclusions.</p>',
+    src('research/README.md', 'research/README.md') + ' &middot; '
+    + src('the registry', 'registry/models.yaml'));
+}
+
+// --- detail modal ------------------------------------------------------------
+
+const TABS = ['overview', 'quality', 'community', 'vendor', 'quantization',
+              'operate'];
+let openDoc = null;                 // the methodology note, when it is up
+
+function drawDoc() {
+  document.querySelector('#modal').classList.add('open');
+  document.body.classList.add('locked');
+  document.querySelector('#m-name').textContent = 'methodology';
+  document.querySelector('#m-repo').innerHTML =
+    'how every number on this page is arrived at, and where it is wrong';
+  document.querySelector('#tabs').innerHTML = '';
+  const body = document.querySelector('#body');
+  body.innerHTML = methodology();
+  body.scrollTop = 0;
+}
+
+// the model AND the tab live in the hash, so a link can point at the operate
+// tab of one model rather than at the page and a set of instructions
+function openModel(repo, want, pick) {
+  if (repo !== openRepo) ops = {runtime: null, repo: null, quant: null, profile: null};
+  if (pick && pick.quant) { ops.repo = pick.repo || null; ops.quant = pick.quant; }
+  openRepo = repo;
+  tab = want || tab;
+  syncHash(true);
+  drawModal();
+}
+
+function closeModel() {
+  openRepo = null;
+  openDoc = null;
+  document.querySelector('#modal').classList.remove('open');
+  document.body.classList.remove('locked');
+  // the table behind it is still the reader's table, so the fragment keeps the
+  // settings with it and drops only the model -- clearing the whole hash threw
+  // away the part of the link they had not finished copying
+  syncHash();
+}
+
+// say something on a button for a moment and put it back exactly as it was.
+//
+// innerHTML rather than textContent, which is the whole reason this is a
+// function: `#share` is an SVG icon, an svg contributes no text, so
+// saving `textContent` saved "" -- and assigning textContent DESTROYS the svg.
+// the icon went blank on the first copy and never came back. the handler was
+// written when that button had a text label and nothing connected the two when
+// it became an icon.
+function flashLabel(btn, text, ms) {
+  const was = btn.innerHTML;
+  btn.textContent = text;
+  setTimeout(() => { btn.innerHTML = was; }, ms);
+  return was;
+}
+
+function drawModal(keepScroll) {
+  if (openDoc) return drawDoc();
+  const m = D.models.find(x => x.repo === openRepo);
+  if (!m) return closeModel();
+  document.querySelector('#modal').classList.add('open');
+  document.body.classList.add('locked');
+  document.querySelector('#m-name').textContent = m.short;
+  document.querySelector('#m-repo').innerHTML =
+    `<a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.repo)}</a>`
+    + ` &middot; <a href="${esc(m.entry_url)}" target="_blank" rel="noopener">registry entry</a>`;
+  document.querySelector('#tabs').innerHTML = TABS.map(t =>
+    `<button data-tab="${t}" aria-pressed="${t === tab}">${t}</button>`).join('');
+  document.querySelectorAll('#tabs button').forEach(b => {
+    b.onclick = () => openModel(openRepo, b.dataset.tab);
+  });
+  const body = document.querySelector('#body');
+  // a picker redraw keeps the reader where they were; opening a model or a tab
+  // starts at the top
+  const y = keepScroll ? body.scrollTop : 0;
+  body.innerHTML = ({overview: tabOverview, quality: tabQuality,
+                     community: tabCommunity, vendor: tabVendor,
+                     quantization: tabQuantization,
+                     operate: tabOperate})[tab](m);
+  body.scrollTop = y;
+  body.querySelectorAll('[data-pick-repo]').forEach(b => {
+    b.onclick = () => {
+      ops.repo = b.dataset.pickRepo;
+      // a repo row carries no quant: switching repo falls back to the quant
+      // that repo pins rather than to a tag the other repo happened to have
+      ops.quant = b.dataset.pickQuant || null;
+      drawModal(true);
+    };
+  });
+  body.querySelectorAll('[data-runtime]').forEach(b => {
+    b.onclick = () => {
+      ops.runtime = b.dataset.runtime;
+      ops.repo = null;
+      ops.quant = null;
+      drawModal(true);
+    };
+  });
+  body.querySelectorAll('[data-profile]').forEach(b => {
+    b.onclick = () => { ops.profile = b.dataset.profile; drawModal(true); };
+  });
+  body.querySelectorAll('.copy').forEach(b => {
+    b.onclick = e => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(b.parentElement.querySelector('pre').textContent);
+      flashLabel(b, 'copied', 1200);
+    };
+  });
+}
+
+// two columns by default; `one` for a list whose values are sentences, where
+// wrapping into a second column makes the reading order zigzag
+// the speakers baked into the file being read. `voices` sits on the registry
+// quant rather than on the choice, so this looks it up by repo and tag and
+// falls back to the repo -- an expanded row can be reading an `available` rung
+// the registry never declared, and the speaker list is the repo's either way.
+const VOICES_SHOWN = 8;
+function voiceList(m, q) {
+  if (!q) return '';
+  const rows = m.quants || [];
+  const row = rows.find(x => x.repo === q.repo && x.quant === q.quant)
+    || rows.find(x => x.repo === q.repo);
+  const v = (row || {}).voices;
+  if (!v || !v.length) return '';
+  const head = v.slice(0, VOICES_SHOWN).map(esc).join(', ');
+  // all of them on hover: kokoro ships fifty and a wall of names is not a fact
+  // anybody reads, but the one they want has to be in there somewhere
+  return `<span title="${esc(v.join(', '))}">${v.length}: ${head}`
+    + (v.length > VOICES_SHOWN
+       ? ` <span class="sub">and ${v.length - VOICES_SHOWN} more</span>` : '')
+    + '</span>';
+}
+
+const kv = (pairs, cls = '') => `<div class="kv ${cls}">`
+  + pairs.filter(p => p[1] !== undefined && p[1] !== null && p[1] !== '')
+    .map(([k, v]) => `<div><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`)
+    .join('') + '</div>';
+
+// the base a model was made from, as one cell. a base on the roster opens that
+// model rather than printing a repo path, since the reason to record the pair is
+// to read one against the other.
+function baseLine(m) {
+  const b = m.base;
+  if (!b) return '';
+  const rel = b.relation ? `<span class="sub"> ${esc(b.relation)}</span>` : '';
+  const via = b.source === 'card'
+    ? '<span class="sub" title="the hub declares no base_model for this repo; read off the card">, off the card</span>' : '';
+  const more = (b.also || []).length
+    ? `<span class="sub"> +${b.also.length} more</span>` : '';
+  if (!b.on_roster) return esc(b.repo) + rel + via + more;
+  const other = D.models.find(x => x.repo === b.repo);
+  return `<a href="#model=${encodeURIComponent(b.repo)}">${esc(other ? other.short : b.repo)}</a>`
+    + rel + via + more;
+}
+
+function tabOverview(m) {
+  const f = m.facts, s = scored(m);
+  const use = m.derived.best_for || [];
+  const weak = m.derived.weak_for || [];
+  const hub = m.card.hub || {};
+  // the vendor's own paragraph is on the prose tab, under ours. up here it was
+  // the first thing read about a model, which gave the marketing copy the
+  // position the measurements had earned
+  const a = m.assessed || {};
+  // prose is a list of parts now, and an empty list is truthy
+  const has = v => Array.isArray(v) ? v.length : !!v;
+  const said = has(a.one_liner) || has(a.notes) || has(m.notes);
+  return (said ? '<h3>assessment</h3>' : '')
+    + (has(a.one_liner) ? `<p class="lead">${proseHtml(a.one_liner, m)}</p>` : '')
+    + (has(m.notes) ? `<p>${proseHtml(m.notes, m)}</p>` : '')
+    + (has(a.notes) ? `<p>${proseHtml(a.notes, m)}</p>` : '')
+    + (has(a.one_liner) || has(a.notes)
+      ? kv([['use for', (a.use_for || []).map(v => proseHtml(v, m)).join(', ')],
+            ['avoid for', (a.avoid_for || []).map(v => proseHtml(v, m)).join(', ')
+              || '<span class="faint">-</span>'],
+            ['evidence', esc(a.confidence || '')],
+            ['assessed', esc(a.assessed_on || '')]])
+        + evidenceTable(m, a.evidence || []) : '')
+    + '<h3>what it is for</h3>'
+    + (use.length || weak.length || m.languages.length
+      ? kv([['measured strongest at', esc(use.join(', ')) || '<span class="faint">no facet in the top third</span>'],
+            ['measured weakest at', esc(weak.join(', ')) || '<span class="faint">-</span>'],
+            ['strongest languages', m.languages.slice(0, 4).map(l =>
+              `${esc(l.lang)} <span class="sub">${Math.round(l.rate * 100)}%</span>`).join(', ')
+              || '<span class="faint">gbench has not played it</span>'],
+            ['forums use it for', Object.entries(m.tasks).sort((a, b) => b[1].n - a[1].n)
+              .slice(0, 5).map(([t, v]) => `${esc(t)} <span class="sub">${v.n}`
+                + (v.pos - v.neg ? `, ${v.pos - v.neg > 0 ? '+' : ''}${v.pos - v.neg}` : '')
+                + '</span>').join(', ')]])
+      : '<p class="faint">nothing has measured this model yet.</p>')
+    + '<h3>facts</h3>'
+    + kv([['kind', esc(m.kind)], ['publisher', esc(m.publisher)],
+          ['architecture', esc(f.arch || f.model_type || '')],
+          ['parameters', f.params_total_b ? f.params_total_b + 'b'
+            + (f.experts ? ` <span class="sub">${f.experts} experts, ${f.experts_active || '?'} active</span>` : '') : ''],
+          ['layers / hidden', f.layers ? `${f.layers} / ${f.hidden || '?'}` : ''],
+          ['native context', ctxLabel(f.context_native)],
+          ['gguf context', ctxLabel(f.context_gguf)],
+          ['mtp layers', f.mtp_layers],
+          ['license', esc(hub.license || '')],
+          // WHAT IT WAS MADE FROM. most bases are a `-Base` pretrain nobody
+          // serves, which is provenance; the ones CARRIED here are a pair a
+          // reader can compare, so those link to the other row and the rest are
+          // plain text. `source` says whether the hub declared it or a human
+          // read it off the card, because 3 of the 53 have no hub answer
+          ['derived from', baseLine(m)],
+          ['downloads', hub.downloads ? fmt.format(hub.downloads) : ''],
+          ['likes', hub.likes],
+          ['first published', (hub.createdAt || '').slice(0, 10)],
+          ['modalities', esc((m.modalities.input || []).join(',') + ' -> ' + (m.modalities.output || []).join(','))],
+          // the speakers the file being read ships. per QUANT, so this follows
+          // the row you clicked: two conversions of one checkpoint answer
+          // differently, and crispasr's GET /v1/voices lists the clone
+          // directory rather than what is baked in, so this is the only place
+          // the built-in names are readable
+          ['built-in voices', voiceList(m, activeQuant(m))],
+          // "unmeasured" is only true at zero coverage. a model held back by
+          // the floor WAS measured, and saying so is the whole point of
+          // withholding the number rather than printing the prior
+          ['quality', s.value === null
+            ? (s.have
+              ? `<span class="faint">measured on ${pctOf(s.cover)} of the weight`
+                + ` asked for, under the ${pctOf(COVER_FLOOR)} a composite needs</span>`
+              : '<span class="faint">unmeasured</span>')
+            : `${num(s.value, 0)} <span class="sub">on ${s.have} of ${s.want}`
+              + ` weighted factors, ${pctOf(s.cover)} of the weight</span>`]])
+    + idsSection(m);
+}
+
+// a gscore of 0.4517 rounded to one decimal is three models tied at 0.5
+const DIGITS = {share: 3, gscore: 3, elo: 0, index: 1, rate: 1, score: 2};
+
+function facetTable(m, keys) {
+  return '<table><thead><tr><th>measurement</th><th class="n">value</th>'
+    + '<th class="n">percentile</th><th class="n">of</th><th>source</th></tr></thead><tbody>'
+    + keys.map(k => {
+      const f = m.facets[k], meta = D.facet_meta[k] || {};
+      const p = facetPctRaw(m, k);
+      const pct = p === null ? '' : p;
+      return `<tr><td>${esc(meta.label || k)}`
+        + (meta.vendor_reported ? ' <span class="warn">vendor-reported</span>' : '')
+        + (f.low_confidence ? ' <span class="warn">thin sample</span>' : '')
+        + (effective && scaledFacet(k) && modelRetention(m) < 1
+          ? ` <span class="faint">x${modelRetention(m).toFixed(3)} for the quant</span>` : '')
+        + `</td><td class="n">${num(facetValue(m, k), DIGITS[meta.unit] ?? 2)}</td>`
+        + `<td class="n"><span class="bar" style="--w:${pct || 0}%"><span>${pct === '' ? '-' : pct}</span></span></td>`
+        + `<td class="n faint">${f.cohort || ''}</td>`
+        + `<td>${refMark(f.ref)}</td></tr>`;
+    }).join('') + '</tbody></table>';
+}
+
+function tabQuality(m) {
+  // community included: it carries 15% of the default ranking, and leaving it
+  // out made the weights on this tab fail to add up to what the table used
+  const keys = Object.keys(m.facets);
+  if (!keys.length) return '<p class="faint">no source in this corpus has measured this model. '
+    + 'that is a gap in the measurement, not a verdict on the model.</p>';
+
+  // the weight a facet carries. a `.*` wildcard weights the group's AVERAGE
+  // once, so it is reported as shared rather than as that much per facet --
+  // summing it per facet said card claims were 55% of a ranking they are 5% of
+  const wildFor = k => Object.entries(W).find(([wk, v]) =>
+    v && wk.endsWith('.*') && k.startsWith(wk.slice(0, -1)));
+  const weightOf = k => W[k] || (wildFor(k) || [0, 0])[1];
+  const shared = k => !W[k] && !!wildFor(k);
+
+  // one section per source, sections ordered by the weight the reader put on
+  // them: what they said matters leads, the rest is still there to read
+  const byGroup = new Map();
+  keys.forEach(k => {
+    const g = (D.facet_meta[k] || {}).group || 'other';
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g).push(k);
+  });
+  const groupWeight = g => {
+    let total = 0;
+    const wilds = new Set();
+    byGroup.get(g).forEach(k => {
+      if (W[k]) { total += W[k]; return; }
+      const wild = wildFor(k);
+      if (wild) wilds.add(wild[0]);
+    });
+    wilds.forEach(wk => { total += W[wk]; });
+    return total;
+  };
+  const groups = [...byGroup.keys()].sort((a, b) =>
+    (groupWeight(b) - groupWeight(a)) || a.localeCompare(b));
+
+  return groups.map(g => {
+    const gw = groupWeight(g);
+    const rows = byGroup.get(g).sort((a, b) => (weightOf(b) - weightOf(a))
+      || ((facetPctRaw(m, b) ?? -1) - (facetPctRaw(m, a) ?? -1))
+      || a.localeCompare(b));
+    return `<h3>${esc(g)}`
+      + (gw ? ` <span class="faint">${Math.round(gw * 100)}% of the ranking</span>` : '')
+      + '</h3>'
+      + '<table><thead><tr><th>measurement</th><th class="n">weight</th>'
+      + '<th class="n">value</th><th class="n">percentile</th><th class="n">of</th>'
+      + '<th>ref</th></tr></thead><tbody>'
+      + rows.map(k => {
+        const f = m.facets[k], meta = D.facet_meta[k] || {};
+        const pv = facetPctRaw(m, k);
+        const pct = pv === null ? '' : pv;
+        const w = weightOf(k);
+        return `<tr><td>${esc(meta.label || k)}`
+          + (meta.vendor_reported ? ' <span class="warn">vendor-reported</span>' : '')
+          + (f.low_confidence ? ' <span class="warn">thin sample</span>' : '')
+          + (effective && scaledFacet(k) && modelRetention(m) < 1
+            ? ` <span class="faint">x${modelRetention(m).toFixed(3)} for the quant</span>`
+              + refMark({source: curveFor(m).kind + ' retention curve',
+                         file: curveFor(m).src.file,
+                         url: D.repo_url + '/blob/' + D.branch + '/' + curveFor(m).src.file,
+                         note: curveFor(m).src.source}) : '')
+          + `</td><td class="n${w && !shared(k) ? '' : ' faint'}">`
+          + (w ? Math.round(w * 100) + '%' + (shared(k) ? ' shared' : '') : '-') + '</td>'
+          + `<td class="n">${num(facetValue(m, k), DIGITS[meta.unit] ?? 2)}</td>`
+          + `<td class="n"><span class="bar" style="--w:${pct || 0}%"><span>`
+          + `${pct === '' ? '-' : pct}</span></span></td>`
+          + `<td class="n faint">${f.cohort || ''}</td>`
+          + `<td>${refMark(f.ref)}</td></tr>`;
+      }).join('') + '</tbody></table>';
+  }).join('')
+    + '<p class="faint">percentile is against the registry models carrying the same'
+    + ' measurement, and `of` is how many that is. a weight of zero still shows: it'
+    + ' is a measurement you chose not to rank on, not one nobody made.</p>';
+}
+
+function communitySection(m) {
+  const sources = Object.entries(m.community);
+  if (!sources.length) return '';
+  return '<h3>sentiment</h3>'
+    + '<table><thead><tr><th>forum</th><th class="n">mentions</th><th class="n">threads</th>'
+    + '<th class="n">approval</th><th class="n">median rel</th><th>references</th></tr></thead><tbody>'
+    + sources.map(([src, s]) => {
+      const refs = (s.refs || []).map(r => refMark({source: src, url: r.url, title: r.title,
+        note: r.score !== undefined ? `score ${r.score}` : ''}, r.quote)).join(' ');
+      const cls = s.approval === null ? 'faint' : s.approval >= 60 ? 'ok' : s.approval <= 40 ? 'bad' : 'dim';
+      return `<tr><td>${esc(src)}</td><td class="n">${s.mentions}</td>`
+        + `<td class="n faint">${s.threads ?? ''}</td>`
+        + `<td class="n ${cls}">${s.approval === null || s.approval === undefined ? '-' : s.approval + '%'}</td>`
+        + `<td class="n dim">${s.median_rel === null || s.median_rel === undefined ? '-' : Math.round(s.median_rel)}</td>`
+        + `<td>${refs}</td></tr>`;
+    }).join('') + '</tbody></table>'
+    + '<p class="faint">approval is the share of polarised sentences that were positive. '
+    + 'median rel is how those comments scored against comments at the same depth in the '
+    + 'same thread, where 50 is unremarkable. hover a [src] for the sentence itself.</p>';
+}
+
+// the benchmark ids this model is known by at each source, which is how every
+// join in this repo is made
+function idsSection(m) {
+  const ids = Object.entries(m.ids).filter(([, v]) => v);
+  if (!ids.length) return '';
+  return '<h3>ids at each source</h3>'
+    + '<table><thead><tr><th>source</th><th>id</th></tr></thead><tbody>'
+    + ids.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="dim">${esc(v)}</td></tr>`).join('')
+    + '</tbody></table>';
+}
+
+// a citation that names a facet is resolved against the live number, so a
+// claim written in march and a capture refreshed in august sit side by side
+// rather than the older one quietly standing in for both
+const FACET_CITED = /^([a-z]+\.[a-z0-9_-]+)/;
+
+// prose arrives as PARTS: words, and the references between them carrying the
+// key each one resolved. research/verdicts.py and research/notes.py emit them,
+// because the renderer is the only thing that knows which reference produced
+// which figure -- recognising the rendered text again here would be a second
+// implementation of the substitution, and could not attribute a cross-model
+// reference at all, since those print bare on purpose. `proseText` flattens
+// them to plain words and lives in roster.js, because the search haystack
+// reads it too.
+
+// what the panel says about a figure standing in a sentence: the source the
+// table cell cites, plus what the percentile is OF, which is the part a reader
+// cannot get from the number itself
+function proseRef(part, m) {
+  // a note's vocabulary: `{card}` resolves to somewhere to go, `{gib}` and
+  // `{bpw}` to a figure out of a capture. both answer "where did this come
+  // from", which is the only question the panel is for. a quoted comment in a
+  // verdict is the same shape, and brings the comment it was cut from
+  if (part.url) return {url: part.url, source: part.field, id: part.locator || '',
+                        quote: part.quote};
+  if (part.ref) return part.ref;
+  // a cross-model reference names the REPO, which is the registry's key for a
+  // model and not what `model()` resolves. a comparison against something the
+  // roster has stopped carrying falls back to the words as written
+  const owner = part.repo
+    ? D.models.find(x => x.repo === part.repo) : m;
+  if (!owner) return null;
+  const f = owner && owner.facets[part.key];
+  if (!f) return null;
+  const meta = D.facet_meta[part.key] || {};
+  const said = [];
+  if (part.repo) said.push(owner.short);
+  if (meta.label) said.push(meta.label);
+  // the published rank first, because it is the one the sentence printed at
+  // build time. the discounted rank follows under its own name, or hovering a
+  // `p99` answers p96 and contradicts the figure it sits on
+  if (f.pct != null && f.cohort) {
+    said.push('p' + f.pct + ' of ' + f.cohort + ' models carrying it');
+  }
+  const adjusted = effective && scaledFacet(part.key) ? facetPctRaw(owner, part.key) : null;
+  if (adjusted !== null) said.push('p' + adjusted + ' quant adjusted');
+  return {...(f.ref || {}), note: said.join(' · ') || undefined};
+}
+
+// one paragraph of prose, with every figure in it hoverable
+function proseHtml(parts, m) {
+  if (!parts) return '';
+  return (Array.isArray(parts) ? parts : [parts]).map(p => {
+    if (typeof p === 'string') return esc(p);
+    const ref = proseRef(p, m);
+    if (!ref) return esc(p.shown);
+    const payload = esc(JSON.stringify(ref));
+    const href = ref.url ? ` href="${esc(ref.url)}" target="_blank" rel="noopener"` : '';
+    return `<a class="cited" data-ref="${payload}"${href}>${esc(p.shown)}</a>`;
+  }).join('');
+}
+
+
+// the PUBLISHED figures, because they are what the claim prints: it renders its
+// percentile at build time, and a column ranking the discounted cohort beside it
+// read as the sentence being wrong. the discounted rank gets a column of its own
+// while the discount is on, and the source is the figure's own link in the
+// claim rather than a column repeating it.
+function evidenceTable(m, evidence) {
+  if (!evidence.length) return '';
+  return '<h3>evidence cited</h3>'
+    + '<table><thead><tr><th>claim</th>'
+    + '<th class="n" data-help="the score as its source published it">value</th>'
+    + '<th class="n" data-help="where that score ranks among the registry models'
+    + ' carrying the same measurement: the percentile the claim prints">percentile</th>'
+    + (effective ? '<th class="n" data-help="the same rank once every model\'s score'
+      + ' is discounted to the quant that fits your budget. only the coding and'
+      + ' software-agent benchmarks are discounted">quant adjusted</th>' : '')
+    + '</tr></thead><tbody>'
+    + evidence.map(e => {
+      // the key is the first part rather than something to find in the words:
+      // an evidence line IS a reference and a clause about it
+      const lead = (Array.isArray(e) ? e : []).find(p => typeof p !== 'string');
+      const key = lead ? lead.key : (FACET_CITED.exec(e) || [])[1];
+      const f = key && m.facets[key];
+      if (!f) {
+        return `<tr><td colspan="${effective ? 4 : 3}">${proseHtml(e, m) || esc(e)}</td></tr>`;
+      }
+      const meta = D.facet_meta[key] || {};
+      const adjusted = !effective ? ''
+        : scaledFacet(key) ? `<td class="n">${facetPctRaw(m, key) ?? '-'}</td>`
+        : `<td class="n"><span class="faint" data-help="${esc(whyNotScaled(key))}">-</span></td>`;
+      return `<tr><td>${proseHtml(e, m)}</td>`
+        + `<td class="n">${num(f.value, DIGITS[meta.unit] ?? 2)}</td>`
+        + `<td class="n">${f.pct ?? '-'}</td>${adjusted}</tr>`;
+    }).join('') + '</tbody></table>';
+}
+
+// every forum in one place: the counts, then the sentences behind them
+function tabCommunity(m) {
+  // the numbers, then what people use it for, then the sentences behind both
+  let out = communitySection(m);
+  const tasks = Object.entries(m.tasks || {}).sort((a, b) => b[1].n - a[1].n);
+  if (tasks.length) {
+    const forums = Object.keys(m.community);
+    const top = tasks[0][1].n;
+    out += '<h3>use cases</h3>'
+      + '<table><thead><tr><th>task</th>'
+      + forums.map(f => `<th class="n">${esc(f)}</th>`).join('')
+      + '<th class="n">all</th><th class="n">positive</th>'
+      + '<th class="n">negative</th><th class="n">net</th></tr></thead><tbody>'
+      + tasks.map(([t, v]) => {
+        // a task named only in passing has no verdict either way, which is not
+        // the same as a task people are split on
+        const net = v.pos - v.neg;
+        const cls = net > 0 ? 'ok' : net < 0 ? 'bad' : 'faint';
+        return `<tr><td>${esc(t)}</td>`
+          + forums.map(f => {
+            const c = ((m.community[f] || {}).tasks || {})[t];
+            return `<td class="n${c ? '' : ' faint'}">${c ? c.n : '-'}</td>`;
+          }).join('')
+          + `<td class="n"><span class="bar" style="--w:${Math.round(100 * v.n / top)}%">`
+          + `<span>${v.n}</span></span></td>`
+          + `<td class="n${v.pos ? ' ok' : ' faint'}">${v.pos || '-'}</td>`
+          + `<td class="n${v.neg ? ' bad' : ' faint'}">${v.neg || '-'}</td>`
+          + `<td class="n ${cls}">${net > 0 ? '+' + net : net || '0'}</td></tr>`;
+      }).join('')
+      + '</tbody></table>'
+      + '<p class="faint">the polarity is the same blunt lexicon the sentiment'
+      + ' table uses: "x is better than y at planning" scores positive for both,'
+      + ' so read a net beside the quotes rather than as a verdict.</p>';
+  }
+  // per forum rather than pooled and truncated: one busy huggingface thread
+  // would otherwise use up the whole list and reddit would never appear
+  Object.entries(m.community).forEach(([src, s]) => {
+    const refs = (s.refs || []).slice(0, 6);
+    if (!refs.length) return;
+    out += `<h3>discussions on ${esc(src)} `
+      + `<span class="faint">${s.mentions} mentions in ${s.threads || '?'} threads</span></h3>`
+      + refs.map(r => `<div class="quote">${esc(r.quote)}<span class="src">`
+        + `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || r.url)}</a>`
+        + (r.score !== undefined ? ` &middot; score ${r.score}` : '')
+        + (r.rel !== undefined ? ` &middot; ${r.rel}th percentile in its thread` : '')
+        + '</span></div>').join('');
+  });
+  return out || '<p class="faint">no forum in this corpus mentions this model.</p>';
+}
+
+// everything the people selling the model say about it, kept together and
+// kept apart from the measurements
+function tabVendor(m) {
+  const c = m.card;
+  let out = '';
+  if (c.summary) out += `<h3>what the card says</h3><p class="lead">${esc(c.summary)}</p>`;
+  if (c.highlights && c.highlights.length) {
+    out += '<ul>' + c.highlights.map(h => `<li>${esc(h)}</li>`).join('') + '</ul>';
+  }
+  if (c.card_url) out += `<p><a href="${esc(c.card_url)}" target="_blank" rel="noopener">read the full card</a></p>`;
+  if (c.claimed && Object.keys(c.claimed).length) {
+    out += '<h3>what it claims about itself <span class="faint">runs about +0.9 over third-party'
+      + ' measurement of the same model on the same benchmark</span></h3>'
+      + '<table><thead><tr><th>benchmark</th><th class="n">claimed</th>'
+      + '<th>what the card says about others</th></tr></thead><tbody>'
+      + Object.entries(c.claimed).sort().map(([b, v]) => {
+        const peers = (c.others || {})[b] || {};
+        return `<tr><td>${esc(b.replace(/_/g, ' '))}</td><td class="n">${v}</td>`
+          + `<td class="dim">${Object.entries(peers).slice(0, 4)
+            .map(([n, pv]) => `${esc(n)} ${pv}`).join(', ')}</td></tr>`;
+      }).join('') + '</tbody></table>';
+  }
+  // the two cards are kept apart. they are not the same claim: the quantizer
+  // republishes the vendor's numbers sometimes and its own the rest of the
+  // time, which is exactly why fetch-model-cards reads both
+  const cardSets = (title, sets) => !sets || !sets.length ? '' : `<h3>${title}</h3>`
+    + sets.slice(0, 6).map(x => '<div class="profile">'
+      + (x.label ? `<div class="pdesc">${esc(x.label)}</div>` : '')
+      + '<div class="pvals">' + Object.entries(x.values || {}).map(([k, v]) =>
+        `<span><span class="k">${esc(k)}</span> ${esc(v)}</span>`).join('')
+      + '</div></div>').join('');
+  out += cardSets('samplers the model\'s own card documents', c.samplers);
+  out += cardSets('samplers ' + esc(c.quant_repo || 'the quant repo')
+    + ' documents', c.quant_samplers);
+  const hub = c.hub || {};
+  if (hub.tags && hub.tags.length) {
+    out += '<h3>hub tags</h3><div class="chips">'
+      + hub.tags.map(t => `<span class="chip">${esc(t)}</span>`).join('') + '</div>';
+  }
+  return out || '<p class="faint">this model publishes no parseable card.</p>';
+}
+
+// samplers in the order a reader thinks about them, with labels short enough
+// to sit beside their value rather than above a column of them
+const SAMPLERS = [['temp', 'temp'], ['top_p', 'top_p'], ['top_k', 'top_k'],
+                  ['min_p', 'min_p'], ['presence_penalty', 'presence'],
+                  ['repeat_penalty', 'repeat']];
+
+// every quant a repo publishes, with what it weighs. it was crammed into the
+// buttons, where twenty-five chips carrying three numbers each is a wall rather
+// than a menu.
+const out_link = (url, label) =>
+  `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a>`;
+
+// which build opens the file at all, which is upstream of every other number
+// here: a model nothing can load has no speed, no fit and no score worth
+// reading. derived from llama.cpp's own history by scripts/resolve-runtime,
+// except the fork and the PR, which nothing in that history knows.
+function runtimeBlock(m) {
+  const r = m.runtime || {};
+  if (!r.arch) return '';
+  const rows = [['gguf architecture', esc(r.arch)]];
+  if (r.mainline) {
+    rows.push(['loads on', r.since
+      ? `mainline llama.cpp <b>${esc(r.since)}</b> or newer`
+      : 'mainline llama.cpp']);
+    if (r.merged) rows.push(['merged upstream', esc(r.merged)]);
+  } else {
+    rows.push(['loads on', '<span class="warn">not mainline llama.cpp</span>'
+      + (r.near ? ` -- the header says <code>${esc(r.arch)}</code> where mainline`
+                + ` spells it <code>${esc(r.near)}</code>, and the lookup is exact` : '')]);
+    if (r.fork) rows.push(['fork', out_link('https://github.com/' + r.fork, r.fork)
+      + (r.branch ? ` (<code>${esc(r.branch)}</code> branch)` : '')]);
+    if (r.patch) rows.push(['patch shipped in',
+                            out_link('https://huggingface.co/' + r.patch, r.patch)]);
+    if (r.tracking) rows.push(['tracking',
+                               out_link(r.tracking, r.tracking.split('/').slice(-2).join(' '))]);
+  }
+  if (r.note) rows.push(['', `<span class="dim">${proseHtml(r.note, m)}</span>`]);
+  return '<h3>what loads it</h3><table><tbody>'
+    + rows.map(([k, v]) => `<tr><th class="nw">${k}</th><td>${v}</td></tr>`).join('')
+    + '</tbody></table>';
+}
+
+function quantTable(m, repo, pick) {
+  const rows = quantChoices(m).filter(c => c.repo === repo);
+  if (!rows.length) return '';
+  // no notes column: what the registry says about its own pick is in `what the
+  // registry pins` above, and repeating it here said it twice. a size over the
+  // budget is coloured instead of captioned.
+  // `bpw` is file size over parameter count; `read` is the same number off the
+  // block geometry of every tensor. they are close and not equal, and where a
+  // model publishes no parameter count -- most of the speech half -- the
+  // derived one is blank and the read one is the only figure there is
+  const anyRead = rows.some(c => c.realBpw);
+  return `<h3>quants in <span class="faint">${esc(repo)}</span></h3>`
+    + '<table><thead><tr><th>quant</th><th class="n">gib</th>'
+    + '<th class="n">bpw</th>'
+    + (anyRead ? '<th class="n" data-help="read from the file\'s tensor table'
+       + ' rather than derived from its size">read</th>' : '')
+    + (anyRead ? '<th data-help="the ggml type of every tensor in the file, by'
+       + ' share of weights. a rung\'s name is its publisher\'s label, and most'
+       + ' of them are a mix">layers</th>' : '')
+    + '</tr></thead><tbody>'
+    + rows.map(c => {
+      const over = budget && c.gib && c.gib > usable();
+      // a size beside a rung reads as an offer, so a rung mainline has no type
+      // for says so ON ITS NAME. a column of its own printed `mainline` nine
+      // rows in ten to say something about the tenth
+      return `<tr><td class="nw${c.forkType ? ' warn' : ''}"${c.forkType
+        ? ` data-help="${esc(c.forkType)}. this rung needs the fork that published it"`
+        : ''}>${pick && c.repo === pick.repo && c.quant === pick.quant
+          ? `<b>${esc(c.quant)}</b>` : esc(c.quant)}`
+        + (c.forkType ? ' <span class="faint">a fork</span>' : '') + '</td>'
+        + `<td class="n${over ? ' warn' : ''}"${over
+          ? ' data-help="larger than the vram left after the reserve and the kv cache"' : ''}>`
+        + `${gib(c.gib) || '-'}</td>`
+        + `<td class="n dim">${num(c.bpw, 2) || '-'}</td>`
+        + (anyRead ? `<td class="n dim">${num(c.realBpw, 2) || '-'}</td>`
+          + `<td>${typeChips(c.types)}</td>` : '') + '</tr>';
+    }).join('') + '</tbody></table>';
+}
+
+// a ladder per repo that publishes one, which is what makes the set a fact about
+// the model rather than a view of a selection: the rung in bold is the one the
+// page is SCORING, so it is the rung the discount above was computed at. the
+// note goes once at the end, since three repos said it three times.
+function quantLadders(m) {
+  const rows = quantChoices(m);
+  const pick = activeQuant(m);
+  const tables = [...new Set(rows.map(c => c.repo))]
+    .map(r => quantTable(m, r, pick)).join('');
+  if (!tables) return '';
+  return tables + (rows.some(c => c.realBpw)
+    ? '<p class="faint">`read` and the layer mix come out of each'
+      + ' file\'s own tensor table; `bpw` beside them is file size over parameter'
+      + ' count. the share is of WEIGHTS rather than of tensors, because a'
+      + " model's hundreds of f32 norms are most of its tensors and almost none"
+      + ' of its size.</p>' : '');
+}
+
+// the mix, small enough to sit in a table cell. sorted here rather than trusted
+// from the payload: data.json is written with sorted keys, so the collector's
+// own descending order does not survive the trip.
+//
+// a COUNT rather than a share floor, which was tried first and reads badly at
+// both ends: a two-type file came out `Q4_K 98% +1 2%`, hiding one name to save
+// nothing, and a floor low enough to show it printed all nine of an unsloth
+// rung. four names and a tail bounds the cell whatever the file is.
+const MIX_SHOWN = 4;
+
+// a share that rounds down to nothing is not nothing. `0%` beside a type name
+// reads as "this type is not in the file", which is the opposite of what it
+// means -- the f32 norms of a bf16 rung are real tensors and a thousandth of
+// its weights. a type recorded at an actual zero is left out instead, because
+// there the reading IS correct and the chip is noise.
+const share = v => Math.round(v * 100) ? Math.round(v * 100) + '%' : '&lt;1%';
+
+function typeChips(types) {
+  if (!types) return '<span class="dim">-</span>';
+  const all = Object.entries(types).filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1]);
+  if (!all.length) return '<span class="dim">-</span>';
+  const big = all.slice(0, MIX_SHOWN);
+  const rest = all.slice(MIX_SHOWN);
+  const tail = rest.reduce((s, [, v]) => s + v, 0);
+  return big.map(([t, v]) => '<span class="chip" data-help="'
+    + `${num(v * 100, 2)}% of the weights">${esc(t)} `
+    + `<span class="faint">${share(v)}</span></span>`).join(' ')
+    + (rest.length ? ' <span class="chip dim" data-help="'
+      + esc(rest.map(([t, v]) => `${t} ${num(v * 100, 2)}%`).join(', '))
+      + `">+${rest.length} <span class="faint">${share(tail)}`
+      + '</span></span>' : '');
+}
+
+// a quality sweep somebody actually ran on this model's quants. it is not the
+// retention curve and cannot be: perplexity and kl say how far the weights
+// moved, not how much of a benchmark score survived, and nothing published
+// maps one onto the other. shown because it is the only per-model measurement
+// of quantization damage that exists for these models at all.
+// what `quant adjusted` does to the rung picked on operate, and on what
+// evidence. the discount moves every scaled number on the page and was
+// explained nowhere per model: the methodology note describes the mechanism and
+// the model's own arithmetic -- which rung, which curve, which multiplier -- was
+// left to be inferred from a tooltip on a cell. it follows the pick rather than
+// the rung the table scores, because the question beside a command is what
+// THAT file keeps, and the curve can change with the repo as well as the bits.
+function discountBlock(m, q) {
+  if (!q) return '';
+  const c = curveFor(m, q);
+  const kept = retention(rungBpw(q) || 16, m, q);
+  const scored = readQuant(m);
+  const rows = [];
+  // the bits this page judges the rung by, which is the tensor table where that
+  // table and the file size disagree; naming both is the only way the row and
+  // the retention under it stay readable when they differ
+  const bits = rungBpw(q);
+  const shown = !bits ? '' : `at ${num(bits, 2)} bits per weight`
+    + (bits === q.bpw ? '' : ` <span class="faint">by its tensor table, which is`
+      + ` what the ceiling and the retention read; the file over the parameter`
+      + ` count says ${num(q.bpw, 2)}</span>`);
+  rows.push(['rung', `${esc(q.quant)}${shown ? ` ${shown}` : ''}`
+    + ' <span class="dim">-- ' + (!activeQuant(m)
+      ? 'nothing here fits your budget, so the table ranks its smallest rung'
+      : scored.repo === q.repo && scored.quant === q.quant
+        ? 'also the rung the table ranks, the best that fits your budget'
+        : `the table ranks ${esc(scored.quant)}`
+          + (scored.repo !== q.repo ? ` out of ${esc(scored.repo)}` : '')
+          + ', the best that fits your budget') + '</span>']);
+  // a sweep listed below this line that the discount refused to use needs its
+  // reason on the same row: the rungs being ranked come from more publishers
+  // than any one sweep ran files of, so no measured curve on the model can rank
+  // another publisher's rung without inventing the number
+  const unused = unusedSweeps(m, c);
+  rows.push(['curve', (c.kind === 'measured'
+    ? `<b>measured on these files</b> &middot; ${esc(c.src.metric)}`
+      + ` &middot; ${esc(c.src.quant_repo || '')}`
+    : c.kind === 'median'
+      ? 'the median of every measured sweep'
+      : `fitted &middot; ${esc(c.src.source || '')}`)
+    + (unused.length ? ` <span class="dim">-- and not the ${unused.length} sweep${
+      unused.length > 1 ? 's' : ''} this model carries below, because each ran one
+       publisher's files against its own base and this ladder ranks rungs from
+       more publishers than that</span>` : '')]);
+  if (c.kind === 'measured' && c.src.ref) rows.push(['source', refMark(c.src.ref)]);
+  rows.push(['keeps', m.native_low_bpw
+    ? 'exempt: the weights are natively low-bpw, so this is not quantization loss'
+    : !effective
+      ? `<span class="dim">nothing, while <b>quant adjusted</b> is off. it would be
+         ${num(kept * 100, 1)}%</span>`
+      : `<b>${num(kept * 100, 1)}%</b> of the measured score, on the facets below`]);
+  if (belowCurve(m, q)) {
+    rows.push(['note', '<span class="warn">this rung sits below everything the curve'
+      + ' measured, so the figure is the last thing the curve knew rather than a'
+      + ' prediction</span>']);
+  }
+  const scaled = (D.retention.evidence || []).filter(e => e.scaled);
+  const held = (D.retention.evidence || []).filter(e => !e.scaled);
+  const names = es => es.map(e => esc(e.name)).join(', ') || 'nothing';
+  return '<h3>what the quality discount did</h3>'
+    + '<table><tbody>'
+    + rows.map(([k, v]) => `<tr><th class="nw">${k}</th><td>${v}</td></tr>`).join('')
+    + '</tbody></table>'
+    + `<p class="faint">discounted: ${names(scaled)}. published as-is: ${names(held)}`
+    + ' -- the curve is a code-editing pass rate, so it is evidence about writing'
+    + ' code and says nothing about the rest.</p>';
+}
+
+// a sweep is published up the quant ladder, and that is the last order to read
+// it in: what a reader brings to one is "which rung do i pull", and in ladder
+// order the answer is theirs to work out. byteshape's qwen3.8 27b sweep is the
+// case -- its two plain rungs diverge more than unsloth's dynamic ones a fifth
+// of a bit UNDER them, which reads as jitter up the ladder and as two rows out
+// of place near the bottom here. `better` says which way the metric runs;
+// retention declares none, because a share of bf16 only runs one way. ties keep
+// ladder order, which a stable sort gives.
+const bestFirst = c => c.points
+  .map(([bpw, v], i) => [(c.quants || [])[i] || '', bpw, v])
+  .sort((a, b) => (c.better === 'lower' ? 1 : -1) * (a[2] - b[2]));
+
+// one row shape for both sweep tables. they differ only in what the bar is a
+// share of -- retention is already a share of bf16, a proxy metric is scaled
+// against the worst rung of its own sweep -- and the source cell spans the
+// table off the first row DRAWN, so it is emitted inside the sorted map.
+const sweepRows = (c, width, text) => bestFirst(c).map(([quant, bpw, v], i) =>
+  `<tr><td>${esc(quant)}</td><td class="n dim">${num(bpw, 2)}</td>`
+  + `<td class="n"><span class="bar" style="--w:${Math.round(width(v))}%">`
+  + `<span>${text(v)}</span></span></td>`
+  + (i ? '' : `<td rowspan="${c.points.length}">${refMark(c.ref)}</td>`)
+  + '</tr>').join('');
+
+// the arms somebody actually ran, which is where a measured curve comes from.
+// this is the only place they are shown: they drive the discount and were
+// otherwise visible as a shape in the arithmetic and nowhere as numbers.
+function measuredTable(m) {
+  return ((D.retention.measured || {})[m.repo] || []).map(c =>
+    `<h3>measured on this model <span class="faint">${esc(c.metric)}`
+    + `${c.quant_repo ? ', on ' + esc(c.quant_repo) : ''}, best first</span></h3>`
+    + '<table><thead><tr><th>quant</th><th class="n">bpw</th>'
+    + '<th class="n">retention</th><th>source</th></tr></thead><tbody>'
+    + sweepRows(c, v => 100 * v, v => num(v * 100, 1) + '%')
+    + '</tbody></table>').join('');
+}
+
+// NOTHING here reads the operate tab's chips, and that is the whole rule for
+// what belongs. the ladder is here because this is the tab about what a quant IS
+// -- the read bpw and the layer mix are its columns -- and it is drawn for EVERY
+// repo publishing rungs rather than for the picked one. filtered by that pick it
+// was a view of a selection: choosing a quant to write a command for silently
+// redrew a tab about scoring, and the runtime chip reached further still, because
+// `repoChoices` narrows to the conversions a runtime declares. what is here is
+// true of the model however you happen to be running it: what the registry pins,
+// what each rung is, and who measured what. the discount is arithmetic about the
+// picked rung, so it sits beside the picker on operate.
+function tabQuantization(m) {
+  return registryPins(m) + quantLadders(m) + measuredTable(m) + sweepTable(m);
+}
+
+function registryPins(m) {
+  return '<h3>what the registry pins</h3>'
+    // "quant tag" rather than "quant": it is the string after the colon in
+    // `--hf-repo repo:TAG`, which llama.cpp resolves against a type name or a
+    // filename. a component is one specific file rather than a rung, so most of
+    // them name the file -- 21 of the 41 have no type to name at all, a vae or a
+    // voice embedding being shipped at whatever precision the publisher chose
+    + '<table><thead><tr><th>repo</th><th>quant tag</th><th class="n">gib</th>'
+    + '<th class="n">bpw</th><th>role</th><th>note</th></tr></thead><tbody>'
+    + m.quants.concat(m.components || []).map(q =>
+      `<tr><td><a href="${esc('https://huggingface.co/' + q.repo)}" target="_blank" rel="noopener">${esc(q.repo)}</a></td>`
+      + `<td>${esc(hfTag(q))}</td><td class="n">${gib(q.gib) || '-'}</td>`
+      + `<td class="n dim">${num(q.bpw, 2) || '-'}</td>`
+      + `<td class="dim">${esc(q.role || '')}</td>`
+      + `<td class="dim">${proseHtml(q.note, m)}${rungRuntime(q, m)}</td></tr>`).join('')
+    + '</tbody></table>';
+}
+
+function sweepTable(m) {
+  const all = (D.retention.proxies || {})[m.repo] || [];
+  if (!all.length) return '';
+  return all.map(c => {
+    const worst = Math.max(...c.points.map(p => p[1]));
+    return `<h3>published quant sweep <span class="faint">${esc(c.metric)},`
+    + ` ${c.better} is better${c.quant_repo ? ', on ' + esc(c.quant_repo) : ''},`
+    + ' best first</span></h3>'
+    + '<table><thead><tr><th>quant</th><th class="n">bpw</th>'
+    + `<th class="n">${esc(c.metric)}</th><th>source</th></tr></thead><tbody>`
+    + sweepRows(c, v => 100 * v / worst, v => num(v, 4))
+    + '</tbody></table>';
+  }).join('')
+    + '<p class="faint">this is not what `quant adjusted` multiplies by. it measures'
+    + ' how far the quantized weights moved from full precision, not how much of a'
+    + ' benchmark score survived, and there is no published mapping between the'
+    + ' two.</p>';
+}
+
+// the samplers of the profile actually selected, rather than every profile the
+// model declares: the snippet above was built from exactly one of them
+function samplerTable(m, name) {
+  const p = m.sampling[name];
+  if (!p) return '';
+  const d = D.sampling.profiles[name.replace(/^upstream-/, '')] || {};
+  const fields = SAMPLERS.concat([['thinking', 'thinking']]);
+  return `<h3>${esc(name)} samplers</h3>`
+    + (d.summary ? `<p class="faint">${esc(d.summary)}</p>` : '')
+    + '<table><thead><tr>'
+    + fields.map(([, label]) => `<th class="n">${esc(label)}</th>`).join('')
+    + '<th>tuned for</th><th>agrees with</th></tr></thead><tbody><tr>'
+    + fields.map(([f]) => `<td class="n">${p[f] === undefined
+      ? '<span class="faint">-</span>' : esc(p[f])}</td>`).join('')
+    + `<td class="dim">${esc((p.tuned || []).join(' '))}</td>`
+    + `<td class="dim">${esc(p.source || '')}</td></tr></tbody></table>`
+    + (p.note ? `<p class="faint">${proseHtml(p.note, m)}</p>` : '');
+}
+
+// the template facts for the repo SELECTED, not the one the registry records.
+// the two disagree often enough that showing one under the other's name would
+// be wrong rather than approximate: qwen3.6-27b's base repo rejects a
+// developer message and both unsloth builds fold it into system.
+function templateSection(m, repo) {
+  const block = (m.templates || {})[repo];
+  if (!block) return '';
+  const t = block.thinking || {}, u = block.turns || {};
+  const states = [
+    ['thinking knob', esc(t.knob || '') + (t.kind === 'boolean'
+      ? ' <span class="faint">a switch: send it true or false</span>' : '')],
+    ['thinking switch', t.gate ? esc(t.gate)
+      + (t.gate_default !== undefined
+        ? ` <span class="faint">defaults to ${t.gate_default ? 'on' : 'off'}</span>` : '') : ''],
+    [t.kind === 'boolean' ? 'states' : 'accepts', t.knob ? levels(t, ', ')
+      + (t.default !== undefined
+        ? '' : '') : ''],
+    ['aliases', esc(Object.entries(t.aliases || {}).map(([a, b]) => a + ' -> ' + b).join(', '))],
+  ];
+  const roles = [
+    ['developer role', turnWord(u.developer)],
+    ['leading system messages kept', esc(u.leading_system_max ?? '')],
+    ['system after an assistant turn', turnWord(u.mid_system)],
+    ['developer after an assistant turn', turnWord(u.mid_developer)],
+  ];
+  return `<h3>chat template <span class="faint">${esc(repo)}</span></h3>`
+    + (t.knob ? kv(states, 'one') : '')
+    + kv(roles, 'one')
+    ;
+}
+
+// the selection rows of the operate tab, one shape for all four of them. the
+// click handlers are bound on the modal body rather than per tab, so a row still
+// works wherever it is drawn.
+const pickRow = (label, body) =>
+  `<div class="pickrow"><span class="k">${label}</span>`
+  + `<span class="chips">${body}</span></div>`;
+
+const repoRow = (m, repo, counts) => pickRow('repo', repoChoices(m).map(r =>
+  `<button class="chip${r === repo ? ' on' : ''}" data-pick-repo="${esc(r)}">${esc(r)}`
+  // the count is how many quants this repo publishes, which is nothing to say
+  // about a base repo vllm is going to load whole
+  + (counts
+    ? ` <span class="faint">${rungsUnder(m).filter(c => c.repo === r).length}`
+      + (rungsUnder(m).some(c => c.repo === r && rungDrafts(c))
+        ? ' ' + esc((m.speculative || {}).type || 'drafts') : '')
+      + '</span>' : '')
+  + '</button>').join(''));
+
+const quantRow = (m, repo, pick) =>
+  pickRow('quant', rungsUnder(m).filter(c => c.repo === repo).map(c =>
+    `<button class="chip${pick && c.quant === pick.quant ? ' on' : ''}"`
+    + ` data-pick-repo="${esc(c.repo)}" data-pick-quant="${esc(c.quant)}"`
+    + ` data-help="${c.gib ? `${gib(c.gib)} gib${rungBpw(c) ? `, ${rungBpw(c)} bits per weight` : ''}`
+      : 'this repo publishes no file sizes'}">`
+    + `${esc(c.quant)}</button>`).join(''));
+
+// what drafts for a model that ships a drafter, beside the command that would
+// turn it on. the drafter's own weights are resident whether it accepts a token
+// or not, so its size belongs with the rung's rather than in a column nobody
+// reads next to it -- and the NOTE here is the measured half: what acceptance
+// somebody actually saw, and how many tokens the head can really yield. two of
+// those were written, validated, rendered and shipped to a page that drew them
+// nowhere.
+function draftBlock(m, pick) {
+  const s = m.speculative || {};
+  const note = Array.isArray(s.note) ? s.note : [];
+  if (!s.draft && !s.type && !note.length) return '';
+  const rows = [];
+  if (s.type) rows.push(['kind', esc(s.type)]);
+  if (s.draft && s.draft.repo) {
+    rows.push(['drafter', out_link('https://huggingface.co/' + s.draft.repo, s.draft.repo)
+      + (s.draft.file ? ` <code>${esc(s.draft.file)}</code>` : '')]);
+  }
+  if (s.draft && s.draft.gib) {
+    rows.push(['costs', `${gib(s.draft.gib)} gib resident, on top of the weights`]);
+  }
+  if (s.n_max) rows.push(['drafts', `${s.n_max} token${s.n_max === 1 ? '' : 's'} at most`]);
+  // the rung decides: a repo may publish one build with the head folded in and
+  // one without, and offering `--draft-max` beside the one that cannot speculate
+  // is a flag that does nothing
+  if (pick && pick.speculative === false) {
+    rows.push(['on this rung',
+               '<span class="warn">it does not draft</span> -- this build ships '
+               + 'without the head']);
+  }
+  if (note.length) rows.push(['', `<span class="dim">${proseHtml(note, m)}</span>`]);
+  // a second method, where the model has one. it is NOT priced into the fit and
+  // must not read as though it were: only one drafter is resident, and the
+  // entry's own is the one the numbers above were computed with. qwen3.8 27b is
+  // the case -- the head in its own file, or a faster one from inco that is a
+  // separate download and cannot see an image
+  (s.alternatives || []).forEach(a => {
+    const bits = [`<code>${esc(a.type)}</code>`];
+    if (a.draft && a.draft.repo) {
+      bits.push('from ' + out_link('https://huggingface.co/' + a.draft.repo, a.draft.repo)
+        + (a.draft.file ? ` <code>${esc(a.draft.file)}</code>` : ''));
+    }
+    if (a.draft && a.draft.gib) bits.push(`${gib(a.draft.gib)} gib to download`);
+    if (a.n_max) bits.push(`drafts ${a.n_max}`);
+    if (a.since) bits.push(`needs ${esc(a.since)}`);
+    const why = Array.isArray(a.note) ? proseHtml(a.note, m) : '';
+    rows.push(['or', bits.join(', ')
+      + (why ? `<br><span class="dim">${why}</span>` : '')]);
+  });
+  return '<h3>what drafts for it</h3><table><tbody>'
+    + rows.map(([k, v]) => `<tr><th class="nw">${k}</th><td>${v}</td></tr>`).join('')
+    + '</tbody></table>';
+}
+
+function tabOperate(m) {
+  const profiles = Object.entries(m.sampling);
+  const repo = pickedRepo(m), pick = pickedQuant(m), profile = pickedProfile(m);
+  // a runtime with nothing to say builds none, and a bare heading over nothing
+  // is worse than no heading
+  const configs = snippets(m);
+  let out = '<h3>how to run it</h3>'
+    + '<div class="picks">'
+    + pickRow('runtime', runtimesFor(m).map(r =>
+      `<button class="chip${r.k === pickedRuntime(m).k ? ' on' : ''}"`
+      + ` data-runtime="${esc(r.k)}">${esc(r.k)}</button>`).join(''))
+    + repoRow(m, repo, pickedRuntime(m).gguf)
+    + (pickedRuntime(m).gguf ? quantRow(m, repo, pick) : '')
+    + (profiles.length > 1 ? pickRow('samplers', profiles.map(([name]) =>
+      `<button class="chip${name === profile ? ' on' : ''}"`
+      + ` data-profile="${esc(name)}">${esc(name)}</button>`).join('')) : '')
+    + '</div>'
+    // under a heading like every other section, and only the server command
+    // open: it is what a reader came for, where a client config is twenty lines
+    // that pushed the samplers off the screen. each label stays visible, so
+    // opening another is a decision rather than a search
+    + (configs.length ? '<h3>example configs</h3>'
+      + configs.map(o => `<details class="snippet"${o.open ? ' open' : ''}>`
+        + `<summary class="faint">${esc(o.label)}</summary>`
+        + `<button class="copy">copy</button><pre>${esc(o.text)}</pre></details>`)
+        .join('') : '')
+    + discountBlock(m, pick)
+    + samplerTable(m, profile)
+    + templateSection(m, repo);
+
+  out += runtimeBlock(m);
+  out += draftBlock(m, pick);
+  return out;
+}
+
+// a runtime block on a single rung, which is where a file mainline cannot load
+// says so even though the model's architecture is merged -- deepseek v4.1's
+// pins declare `deepseek4` and still fail on the tensor table
+function rungRuntime(q, m) {
+  const r = q.runtime || {};
+  if (!r.note && !r.fork && !r.tracking) return '';
+  const where = r.fork ? out_link('https://github.com/' + r.fork, r.fork)
+    : r.tracking ? out_link(r.tracking, r.tracking.split('/').slice(-2).join(' ')) : '';
+  return '<div class="faint">what loads this file' + (where ? ': ' + where : '')
+    + (r.note ? ' -- ' + proseHtml(r.note, m) : '') + '</div>';
+}
+
+// --- run snippets ------------------------------------------------------------
+//
+// built here rather than at build time because the reader chooses what they are
+// built FROM: some repos publish twenty quants, and a snippet for the one the
+// registry pins is not much use to somebody who cannot fit it. every flag below
+// is still a pure function of registry facts -- the quant repo, the profile's
+// where `hf download` puts a file when it is told nothing else, and what it prints
+// back. the snapshot directory IS the revision, so a pinned revision is both the
+// bytes that get fetched and the path that gets pointed at -- no directory for a
+// reader to agree with the tool on first. HF_HOME/HF_HUB_CACHE move it, and for
+// gufo the pinned revision has to travel with the download: without it the same
+// file lands in a directory named for somebody else's snapshot.
+const HF_CACHE = '~/.cache/huggingface/hub';
+
+// samplers, the native context, the derived knob.
+
+// the `--task` values audio.cpp's own cli documents (docs/usage.md). a spec's
+// `tasks:` list is wider and names capabilities -- `clone`, `design` -- that the
+// flag spells `clon` and `vdes`, so only the words both sides use get spelled
+const AUDIOCPP_TASKS = ['gen', 'tts', 'clon', 'vc', 'svc', 's2s', 'asr',
+                        'align', 'vad', 'diar', 'sep', 'vdes', 'midi'];
+
+const SAMPLER_FLAG = {temp: '--temp', top_p: '--top-p', top_k: '--top-k',
+                      min_p: '--min-p', presence_penalty: '--presence-penalty',
+                      repeat_penalty: '--repeat-penalty'};
+let ops = {runtime: null, repo: null, quant: null, profile: null};
+
+// what you are being shown a command for. the runtime decides which repos are
+// even candidates: llama.cpp and anything speaking to it serve a GGUF, vllm
+// serves the base weights and cannot load one at all.
+//
+// this used to be two entries offered for every model, which meant a
+// transcription model was shown a `llama-server --hf-repo` line that will not
+// load it and an image model was offered vllm. the list is now the model's own
+// `engines`, joined at build time from the architecture llama.cpp merged, the
+// crispasr backend the registry names, and the runtimes written down because
+// nothing derives them.
+//
+// gufo reads a gguf only where its guide names one; where the guide names the
+// checkpoint it loads the base repo whole, the way vllm does.
+const runtimesFor = m => RUNTIMES.filter(r => (m.engines || []).includes(r.k))
+  .map(r => r.k === 'gufo' ? {...r, gguf: !!((m.gufo || {}).rungs || []).length} : r);
+const pickedRuntime = m => {
+  const mine = runtimesFor(m);
+  return mine.find(r => r.k === ops.runtime) || mine[0] || {k: '', gguf: true};
+};
+// the rungs the picked runtime can load, which is every rung but under gufo
+const rungsUnder = m => pickedRuntime(m).k === 'gufo'
+  ? quantChoices(m).filter(c => gufoLoads(m, c)) : quantChoices(m);
+
+// `quantChoices` -- every (repo, quant) a model can be read as -- is in
+// roster.js, because the fit is built on it.
+
+// repo first, then quant within it. the two repos of a model are not
+// interchangeable: only the -MTP- build of qwen3.6-27b carries the nextn head,
+// and its files are identically named 0.42gib apart.
+//
+// and the runtime narrows it further, because `not interchangeable` cuts the
+// other way too. crispasr reads cstr's qwen3-tts conversion and not ours -- the
+// two namespace their metadata differently and ship different codec tensor
+// counts -- and it reads every key with a DEFAULT, so the wrong file loads
+// without complaint and emits noise. a picker that offers both is offering a
+// command that cannot work. the registry says which rung declares the runtime;
+// where nothing distinguishes them, they are all candidates.
+function repoChoices(m) {
+  const rt = pickedRuntime(m);
+  if (!rt.gguf) return [m.repo];
+  const all = [...new Set(rungsUnder(m).map(c => c.repo))];
+  if (rt.k !== 'crispasr') return all;
+  const declared = all.filter(r => quantChoices(m).some(
+    c => c.repo === r && (c.crispasr || {}).backend));
+  if (declared.length) return declared;
+  // no rung names it: fall back to the repos crispasr's own catalog was
+  // published against, and to everything if it names none of them either
+  const reads = (m.crispasr || {}).repos || [];
+  const known = all.filter(r => reads.includes(r));
+  return known.length ? known : all;
+}
+
+function pickedRepo(m) {
+  const repos = repoChoices(m);
+  if (repos.includes(ops.repo)) return ops.repo;
+  // the row's own rung, so the modal opens on what was clicked rather than on a
+  // repo the table stopped reading from
+  const pref = (activeQuant(m) || {}).repo;
+  return repos.includes(pref) ? pref : repos[0] || null;
+}
+
+function pickedQuant(m) {
+  const repo = pickedRepo(m);
+  const inRepo = rungsUnder(m).filter(c => c.repo === repo);
+  // having been TOLD which repo, the best rung of that one is the answer: the
+  // fit's own test over the set the reader narrowed by hand
+  return inRepo.find(c => c.quant === ops.quant)
+    || bestOf(m, inRepo) || inRepo.find(c => c.pinned) || inRepo[0] || null;
+}
+
+function pickedProfile(m) {
+  const names = Object.keys(m.sampling);
+  if (ops.profile && m.sampling[ops.profile]) return ops.profile;
+  return ['tool-use', 'thinking', 'instruct'].find(n => names.includes(n)) || names[0] || '';
+}
+
+function llamaServer(m, pick, profileName) {
+  const p = m.sampling[profileName] || {};
+  const cmd = ['llama-server'];
+  if (pick) cmd.push(`--hf-repo ${pick.repo}:${pick.quant}`);
+  // no `--mmproj` case, deliberately, and it is the same rule the drafter below
+  // follows: a sidecar in the SERVED repo is llama.cpp's to resolve. a vision
+  // projector is auto-downloaded beside the weights whenever the model came
+  // from `-hf`, and `common/arg.cpp` makes that conditional on the flag being
+  // unset -- `download_mmproj = use_mmproj && !no_mmproj && mmproj.path.empty()
+  // && mmproj.url.empty()`. so naming it here would SUPPRESS the fetch that
+  // works, and point `mmproj.path` at an `hf://` string read as a local file.
+  // nothing in the registry carries the projector as a component either: 42
+  // entries take images and none of them has a `components:` block at all.
+  const notes = (m.components || []).map(componentNote);
+  // speculative decoding is a property of the GGUF, not of the model: a quant
+  // saying `speculative: false` cannot draft whatever the model declares
+  const spec = (pick && pick.speculative === false) ? {} : (m.speculative || {});
+  // a drafter in the served repo needs no flag -- llama.cpp resolves a sidecar
+  // beside the weights on its own, and the head folded into the build is simply
+  // there. one somebody ELSE published is a second download and has to be asked
+  // for by name, which is what `-hfd <user>/<model>:<quant>` takes
+  if (spec.draft && pick && spec.draft.repo !== pick.repo) {
+    cmd.push(`--hf-repo-draft ${spec.draft.repo}:${spec.draft.file}`);
+  }
+  if (spec.type) {
+    cmd.push('--spec-type ' + spec.type);
+    if (spec.n_max) cmd.push('--spec-draft-n-max ' + spec.n_max);
+  }
+  if (m.facts.context_native) cmd.push('-c ' + m.facts.context_native);
+  Object.entries(SAMPLER_FLAG).forEach(([f, flag]) => {
+    if (p[f] !== undefined && p[f] !== null) cmd.push(`${flag} ${p[f]}`);
+  });
+  // the turns and thinking facts in this registry were derived by executing the
+  // template, which llama.cpp only does under --jinja
+  cmd.push('--jinja');
+  return withNotes(notes, cmd);
+}
+
+// pi's thinking enum, ascending. a template level outside it cannot be asked
+// for, so it is not advertised. LEVEL_ALIAS is the reverse direction from the
+// registry's own `thinking.aliases`: these are the template's words for pi's
+// `off` -- inkling and solar say `none`, hy3 says `no_think`.
+const PI_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+const PI_LEVEL_ALIAS = {none: 'off', no_think: 'off', disabled: 'off'};
+
+// {pi level: the word this model's template wants for it}, or null for a level
+// it has no way to express. null is meaningful: it HIDES a level pi would
+// otherwise offer and the template would reject.
+function piThinkingLevels(m) {
+  const t = m.thinking || {};
+  if (!t.knob) return null;
+  if (t.kind === 'boolean') return {off: 'off', high: 'high'};
+  const accepts = t.accepts || [];
+  if (!accepts.length) return null;
+  const out = {};
+  // a template that grades levels but keeps a separate gate can still be
+  // turned off, through the gate rather than through the graded knob
+  if (t.gate) out.off = 'off';
+  accepts.forEach(lv => {
+    const pi = PI_LEVEL_ALIAS[lv] || lv;
+    if (PI_LEVELS.includes(pi)) out[pi] = lv;
+  });
+  // `thinking.aliases` is deliberately NOT read here. it resolves a level a
+  // sampling profile asked for onto one the template accepts, which is a
+  // different question from what vocabulary to advertise -- and llama-tools
+  // builds the deployed config without it, so reading it here would put two
+  // configs for the same model in front of a reader that disagree
+  return Object.keys(out).length ? out : null;
+}
+
+// an entry for ~/.pi/agent/models.json, per pi.dev/docs/latest/custom-provider.
+//
+// llama-tools builds the same thing from llama-swap's SERVED metadata, which is
+// the authority for a running host and can differ from this: a server predating
+// the `knob` field advertises no level at all. this one is what the registry
+// knows, which is what a reader pointing pi at their own llama-server wants.
+function piProvider(m, pick, profileName, gguf) {
+  // the id is whatever the server advertises: `repo:QUANT` is what
+  // `--hf-repo` names a gguf, and vllm serves the base repo under its own name
+  if (gguf && !pick) return null;
+  const id = gguf ? `${pick.repo}:${pick.quant}` : m.repo;
+  const t = m.thinking || {};
+  const tuned = (m.sampling[profileName] || {}).tuned || [];
+  const levels = piThinkingLevels(m);
+  const reasoning = tuned.includes('reason') || !!t.knob;
+  // pi's schema takes text and image only; audio is rejected outright
+  const input = (m.modalities.input || ['text']).filter(x => x === 'text' || x === 'image');
+  const compat = {maxTokensField: 'max_completion_tokens'};
+  if (reasoning && levels && t.knob && t.knob !== 'enable_thinking') {
+    // a graded knob rides beside the gate. where the template grades no "off"
+    // of its own, the kwarg is dropped entirely rather than sent a word the
+    // template never defined
+    const effort = {$var: 'thinking.effort'};
+    if (!levels.off || levels.off === 'off') effort.omitWhenOff = true;
+    compat.thinkingFormat = 'chat-template';
+    compat.chatTemplateKwargs = {
+      [t.gate || 'enable_thinking']: {$var: 'thinking.enabled'},
+      [t.knob]: effort,
+    };
+  } else if (reasoning && t.knob === 'enable_thinking') {
+    compat.thinkingFormat = 'qwen-chat-template';
+  }
+  const entry = {id, name: id, reasoning,
+    input: input.length ? input : ['text'],
+    cost: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0},
+    compat};
+  if (reasoning && levels) {
+    entry.thinkingLevelMap = {};
+    PI_LEVELS.forEach(lv => { entry.thinkingLevelMap[lv] = levels[lv] || null; });
+  }
+  if (m.facts.context_native) {
+    entry.contextWindow = m.facts.context_native;
+    entry.maxTokens = m.facts.context_native;
+  }
+  return JSON.stringify({providers: {local: {baseUrl: 'http://localhost:8080/v1',
+    api: 'openai-completions', apiKey: 'none', models: [entry]}}}, null, 2);
+}
+
+// a component by role, as `hf://repo:file` -- which is how every runtime here
+// takes a weight it did not download itself
+const partOf = (m, role) => (m.components || []).find(c => c.role === role);
+// `hfTag`, not `c.quant`: a component is as often pinned by FILENAME as by tag
+// -- every vae here is, since `ae.safetensors` is not a quant -- and reading
+// the tag alone put a literal `undefined` into the command for 11 of the 16
+// image models
+const hfRef = c => c ? `hf://${c.repo}:${hfTag(c)}` : null;
+
+// a companion this page has no flag for is NAMED rather than dropped: the
+// reader needs to know the file is required even where this page will not guess
+// what to call it -- see the closing branch of otherRuntime on not inventing a
+// runtime's flags.
+const componentNote = c => `# also needs (${c.role}): ${hfRef(c)}`;
+
+// the notes go ABOVE the command and never inside it. a `#` on a continued line
+// is not a comment on that line: the backslash-newline is removed before
+// comments are read, so it swallows the rest of the command AND the
+// continuation, and every argument after it runs as its own command.
+// cosyvoice3 carries five companions, so this is the difference between a
+// command a reader can paste and `--tts: command not found`.
+const withNotes = (notes, argv) => notes.concat([argv.join(' \\\n  ')]).join('\n');
+
+// which flag a component of each role travels under, out of the runtime's own
+// entry in registry/dashboard.yaml rather than spelled here. the same map is
+// hand-written in llama-tools, which is why it moved: one fact, two repos,
+// nothing keeping them equal.
+const roleFlags = k => ((D.config.runtimes || []).find(r => r.k === k) || {}).roles || {};
+
+// split a model's components into the ones this runtime has a flag for and the
+// ones it does not. the second list is NAMED rather than dropped or guessed at,
+// which is what sd.cpp used to do with ideogram 4's `uncond` -- that branch
+// never looked at components at all, so the file went unmentioned entirely.
+function partition(m, k) {
+  const flags = roleFlags(k);
+  const args = [], notes = [];
+  (m.components || []).forEach(c => {
+    (flags[c.role] ? args : notes).push(
+      flags[c.role] ? `${flags[c.role]} ${hfRef(c)}` : componentNote(c));
+  });
+  return {args, notes};
+}
+
+// the command each runtime wants, built from the same registry facts the
+// llama.cpp one is. the roles are not decoration: `role: diffusion`, `vae` and
+// `llm` are the three files stable-diffusion.cpp asks for by those names, and
+// kokoro's `role: model-path` is TTS.cpp's own flag.
+function otherRuntime(m, rt, pick) {
+  // the FILE, not the tag: none of these runtimes resolves `repo:Q8_0` the way
+  // llama.cpp's `--hf-repo` does, and the two are the same string except where
+  // the publisher names its files something else
+  const ref = pick ? `hf://${pick.repo}:${pick.file || pick.quant}` : '<weights>';
+  if (rt.k === 'crispasr') {
+    // the backend can be pinned on the quant rather than the model: two
+    // conversions of one checkpoint, and only one of them loads
+    // PER FIELD, never as a block with a fallback. the rung's block and the
+    // model's carry different things -- the backend follows the conversion and
+    // a licence gate may too -- so `pick.crispasr || m.crispasr` reads whichever
+    // block exists and then finds the other's field missing. dropping
+    // `--backend` is not a missing flag but a wrong load: crispasr sniffs the
+    // gguf instead, and 11 entries here have a written backend the detector
+    // disagrees with
+    const at = f => ((pick || {}).crispasr || {})[f] || (m.crispasr || {})[f];
+    const backend = at('backend');
+    const speaks = (m.modalities.output || []).includes('audio');
+    // `-m auto` where the pinned file is not one crispasr reads. kokoro is the
+    // case: this registry pins a TTS.cpp conversion and crispasr converts the
+    // checkpoint itself, so naming our file would be a command that fails
+    const reads = (m.crispasr || {}).repos || [];
+    const mine = pick && (!reads.length || reads.includes(pick.repo));
+    // the companions, which crispasr does NOT resolve for itself: twelve
+    // entries here load a second file beside the model and the command used to
+    // name none of them, which is a server that starts and emits nothing
+    const part = partition(m, rt.k);
+    const gate = at('accept_license');
+    return {label: `crispasr, ${speaks ? 'synthesis' : 'transcription'}`
+              + (mine ? '' : ' -- it downloads its own conversion'),
+            text: withNotes(
+              part.notes,
+              ['crispasr'].concat(
+                backend ? ['--backend ' + backend] : [],
+                ['-m ' + (mine ? ref : 'auto')],
+                part.args,
+                // crispasr will not fetch weights it considers non-commercial
+                // until the caller names the licence. read off its own table,
+                // not from the licence tier: one of the seven non-permissive
+                // crispasr models here is gated
+                gate ? ['--accept-license ' + gate] : [],
+                speaks ? ['--tts "hello world"', '--tts-output out.wav']
+                       : ['-f audio.wav']))};
+  }
+  if (rt.k === 'whisper.cpp') {
+    return {label: 'whisper.cpp, the files this repo pins are its own',
+            text: `whisper-cli \\\n  -m ${ref} \\\n  -f audio.wav`};
+  }
+  if (rt.k === 'stable-diffusion.cpp') {
+    // the flagged components come from the runtime's own map, so a placeholder
+    // is only needed where the registry pins none at all -- sd.cpp will not
+    // start without a vae and a text encoder, and saying `<vae>` is clearer
+    // than a command that silently omits one
+    const part = partition(m, rt.k);
+    const flags = roleFlags(rt.k);
+    const missing = Object.keys(flags)
+      .filter(r => !partOf(m, r))
+      .map(r => `${flags[r]} <${r}>`);
+    return {label: 'stable-diffusion.cpp, three files',
+            text: withNotes(part.notes,
+              ['sd', '--diffusion-model ' + ref].concat(
+                part.args, missing, ['-p "a photograph of a cat"']))};
+  }
+  if (rt.k === 'TTS.cpp') {
+    return {label: 'TTS.cpp',
+            text: ['tts-cli', '--model-path ' + ref,
+                   '--prompt "hello world"',
+                   '--save-path out.wav'].join(' \\\n  ')};
+  }
+  // audio.cpp and gufo are the two engines this page never takes a file from:
+  // each loads a weight it named for itself -- audio.cpp's own package of the
+  // checkpoint, gufo the exact file its guide was measured at -- so the command
+  // installs and points at THAT rather than at the rung on the row. the join is
+  // in the payload (`m.audiocpp`, `m.gufo`), read off each project's own catalog
+  // at build time, and it is absent whenever the catalog is ambiguous.
+  if (rt.k === 'audio.cpp') {
+    const ac = m.audiocpp || {}, pk = ac.package || {};
+    // `--task` is a separate argument from `--family` and its vocabulary is the
+    // cli's, not the spec's: a spec lists `clone` and `design` as capabilities
+    // and the flag accepts `clon` and `vdes`. only the tasks that appear in both
+    // are spelled, because a wrong --task is a loader that refuses to start
+    const task = (ac.tasks || []).find(t => AUDIOCPP_TASKS.includes(t));
+    const io = !task ? [] : task === 'asr' ? ['--audio audio.wav']
+                           : ['--text "hello world"', '--out out.wav'];
+    // which repo the bytes come from is the part a reader cannot guess from a
+    // model row: for most families audio.cpp republishes its own gguf, and for
+    // the rest it downloads the vendor checkpoint as a snapshot directory
+    const notes = [pk.repo ? `# ${pk.id} is downloaded from ${pk.repo}`
+                           : '# audio.cpp publishes no package of these weights',
+                   // the family may well publish a q8_0 gguf of the same thing,
+                   // but a spec does not say a package is THIS checkpoint rather
+                   // than a sibling, so only the one from the matched repo is
+                   // named and the rest is counted
+                   (ac.packages || 0) > 1
+                     ? `# ${ac.family} publishes ${ac.packages} package(s)` : '',
+                   pk.dir ? '# --model takes the snapshot directory, not one file'
+                          : ''].filter(Boolean);
+    return {label: `audio.cpp, ${ac.family || 'family not in the catalog'}`,
+            text: notes.concat(
+              [`audiocpp_model_manager install ${pk.id || '<package>'}`
+               + ' --models-dir models'],
+              [withNotes([], ['audiocpp_cli']
+                .concat(task ? [`--task ${task}`] : [])
+                .concat(ac.family ? [`--family ${ac.family}`]
+                                  : ['--family <family>'])
+                .concat([`--model ${pk.path || 'models/<package>'}`])
+                .concat(io))]).join('\n')};
+  }
+  if (rt.k === 'gufo') {
+    // the weight behind the picked rung, and the guide's first where the guide
+    // names the checkpoint and no rung is its own
+    const g = m.gufo || {};
+    const rung = (g.rungs || []).find(r => pick && r.repo === pick.repo
+                                           && r.quant === pick.quant) || {};
+    const w = (g.weights || []).find(x => x.repo === rung.repo && x.file === rung.file)
+      || (g.weights || [])[0] || {};
+    const flags = (g.serve || {}).flags || [];
+    // the sidecar flag is the guide's own -- `--dflash-model` for the dflash2
+    // build, `--mtp-model` for the mtp one -- and the sidecar file is the weight
+    // whose label names the mode. naming the wrong one is a server that starts
+    // with no drafter and quietly runs at a fraction of the figure the guide
+    // quotes, which is the failure this page keeps ruling out one flag at a time
+    const draftFlag = flags.find(f => f !== 'model' && f.endsWith('-model'));
+    const mode = (g.serve || {}).speculative;
+    const draft = mode && draftFlag
+      ? (g.weights || []).find(x => x !== w && (x.label || '').toLowerCase()
+                                 .includes(mode.toLowerCase())) : null;
+    // the path `hf download` reports for the bytes it just fetched, rather than
+    // a directory this page picked and a --local-dir that has to agree with it.
+    // the weight is a file in some repos and a subdirectory in others -- the
+    // flash next rung is `UD-Q4_K_XL/` -- and both read the same way from here
+    const at = x => [HF_CACHE, `models--${(x.repo || '').replace('/', '--')}`,
+                     `snapshots/${x.revision || '<revision>'}`,
+                     x.file].filter(Boolean).join('/');
+    // one flat list: `withNotes` joins these with newlines, so a nested array
+    // here arrives as ONE line with commas where the line breaks were
+    const notes = w.repo
+      ? ['# gufo measured its figures on these bytes:',
+         ['hf download', w.repo, w.file || '',
+          `--revision ${w.revision || '<revision>'}`].filter(Boolean).join(' '),
+         // without --revision the same file lands under a directory named for
+         // whatever is current, and the path below is somebody else's snapshot
+         '# --revision is the directory: skip it and this path is not there',
+         '# that is hf download\'s default cache; HF_HOME moves it']
+      : ['# gufo names no weights for this model'];
+    return {label: (g.serve ? `gufo serve ${g.serve.kind}` : 'gufo')
+              + ', on its own guide',
+            text: withNotes(notes,
+              [`gufo serve --port 8080 ${(g.serve || {}).kind || '<kind>'}`,
+               `--model ${w.repo ? at(w) : '<weights>'}`]
+              .concat(mode ? [`--speculative ${mode}`] : [])
+              .concat(draft ? [`--${draftFlag} ${at(draft)}`] : []))};
+  }
+  if (rt.k === 'vllm') {
+    return {label: 'vllm serve, the base weights rather than a gguf',
+            text: ['vllm serve ' + m.repo].concat(
+              m.facts.context_native ? ['--max-model-len ' + m.facts.context_native] : [])
+              .join(' \\\n  ')};
+  }
+  // a runtime named because it is the only thing that loads the file, and this
+  // page has never run it: say where it lives rather than invent its flags
+  return {label: rt.k + ', which this page cannot spell a command for',
+          text: `# ${ref}\n# needs ${rt.k}; see the registry notes for where it lives`};
+}
+
+// one runtime at a time. four commands stacked up made the reader scroll past
+// three they had not asked for to reach the one they had.
+function snippets(m) {
+  const rt = pickedRuntime(m), pick = pickedQuant(m), profile = pickedProfile(m);
+  const out = [];
+  if (!rt.k) return out;
+  if (rt.k === 'llama.cpp') {
+    out.push({label: `llama-server, ${profile || 'no'} samplers`,
+              text: llamaServer(m, pick, profile), open: true});
+  } else {
+    out.push(otherRuntime(m, rt, pick));
+  }
+  // pi has to be told the level vocabulary; it cannot read a chat template
+  const pi = piProvider(m, pick, profile, rt.gguf);
+  if (pi) out.push({label: '~/.pi/agent/models.json', text: pi});
+  return out;
+}
+// the word alone, coloured. what `dropped` means is stated once per model
+// rather than beside every field that says it
+// what each outcome means rides on the word rather than in a paragraph under
+// the table, where it repeated for every field that used the same word
+const TURN_MEANS = {
+  dropped: 'the template renders, the server returns 200, and your message is not in the prompt',
+  rejected: 'the template raises, so the request fails rather than losing the message silently',
+  'as-system': 'folded into the system message rather than kept as its own role',
+  own: 'kept as its own role',
+  ok: 'kept where you put it',
+  reordered: 'kept, but moved to another position in the prompt',
+};
+const turnWord = v => !v ? '' : `<span class="${
+  v === 'dropped' ? 'bad' : v === 'rejected' ? 'warn' : 'ok'}"`
+  + ` data-help="${esc(TURN_MEANS[v] || '')}">${esc(v)}</span>`;
+
+// --- wiring ------------------------------------------------------------------
+
+function drawChrome() {
+  document.querySelector('#nav').innerHTML = '<a href="#methodology" id="doc-link">methodology</a>'
+    + [
+    ['the repo', D.repo_url],
+    ['registry', `${D.repo_url}/blob/${D.branch}/registry/models.yaml`],
+    ['the comparison', `${D.repo_url}/blob/${D.branch}/MODELS.md`],
+    ['the research', `${D.repo_url}/blob/${D.branch}/research/README.md`],
+  ].map(([t, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`).join('');
+  document.querySelector('#doc-link').onclick = e => {
+    e.preventDefault();
+    openDoc = true;
+    drawModal();
+  };
+
+  document.querySelector('#kinds').innerHTML =
+    FLAGS.filter(f => f.shown !== false).map(f =>
+      `<button data-flag="${f.k}" data-help="${esc(f.help || '')}"`
+      + ` aria-pressed="${filters.flags.has(f.k)}">${f.t}</button>`).join('');
+  document.querySelectorAll('[data-flag]').forEach(b => {
+    b.onclick = () => {
+      const k = b.dataset.flag;
+      filters.flags.has(k) ? filters.flags.delete(k) : filters.flags.add(k);
+      b.setAttribute('aria-pressed', filters.flags.has(k));
+      saveFilters();
+      drawTable();
+    };
+  });
+
+  // the sizes cards and unified-memory boxes actually come in
+  document.querySelector('#ram').innerHTML = '<option value="">any vram</option>'
+    + [8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 512].map(g =>
+      `<option value="${g}"${g === budget ? ' selected' : ''}>${g} gib vram</option>`).join('');
+  document.querySelector('#cap').innerHTML = CAPS.map(([k, , label]) =>
+    `<option value="${k}"${k === cap ? ' selected' : ''}>${label}</option>`).join('');
+  // 1 gib is the dedicated box: nothing resident but llama.cpp's compute
+  // buffers, a notch below the 2 that a machine with a host on it rounds up to
+  document.querySelector('#reserve').innerHTML = [0, 1, 2, 4, 8, 12, 16, 24].map(g =>
+    `<option value="${g}"${g === reserve ? ' selected' : ''}>`
+    + (g ? `${g} gib reserve` : 'no reserve') + '</option>').join('');
+  document.querySelector('#ctx').innerHTML = [0, 4096, 8192, 16384, 32768, 65536,
+    131072, 262144, 524288, 1048576].map(c =>
+    `<option value="${c}"${c === minCtx ? ' selected' : ''}>`
+    + (c ? `min ${ctxLabel(c)} context` : 'any context') + '</option>').join('');
+  document.querySelector('#floor').innerHTML = FLOORS.map(([k, , label]) =>
+    `<option value="${k}"${k === floor ? ' selected' : ''}>${label}</option>`).join('');
+  document.querySelector('#bw').innerHTML = BANDWIDTHS.map(([v, label]) =>
+    `<option value="${v}"${v === bandwidth ? ' selected' : ''}>${label}</option>`).join('');
+  document.querySelector('#flops').innerHTML = FLOPSES.map(([v, label]) =>
+    `<option value="${v}"${v === flops ? ' selected' : ''}>${label}</option>`).join('');
+  drawPreset();
+  drawFilterMenus();
+
+  document.querySelector('#q').value = filters.q;
+
+  const n = Object.keys(D.provenance).length;
+  document.querySelector('#foot').innerHTML =
+    `every number on this page comes from a file in the repo: ${n} captures, `
+    + `content-addressed in data.json under <code>provenance</code>. `
+    + `click a row for the model, hover a [src] for the sentence or the source behind a number.`
+    + `<br>quality is a weighted mean of percentiles within this registry -- not against `
+    + `frontier api models -- over the factors each model actually carries, pulled toward `
+    + `50 by the weight that measured nothing.`;
+}
+
+// --- share links -------------------------------------------------------------
+//
+// the point of this page is that you decide what `good` means and the ranking
+// moves, which makes "the table I am looking at" the thing worth sending
+// somebody. every setting lives in localStorage, which cannot be sent, so a
+// share link carries them in the fragment instead -- alongside the `model=` and
+// `tab=` this already understood.
+//
+// only what DIFFERS from the defaults goes in. that keeps a link short, and it
+// makes the link itself readable: what is in the url is exactly what the sender
+// changed, which is the interesting part of any ranking somebody hands you.
+const SHARE_KEY = 's';
+
+const changed = (now, base) => Object.fromEntries(
+  Object.keys(now).filter(k => JSON.stringify(now[k]) !== JSON.stringify(base[k]))
+    .map(k => [k, now[k]]));
+
+function shareState() {
+  const hw = Object.fromEntries(Object.keys(DEFAULT_HARDWARE).map(k => [k, HW_GET[k]()]));
+  const st = {
+    hw: changed(hw, DEFAULT_HARDWARE),
+    w: changed(W, D.weights),
+    // the params band is a filter the row reset puts back, so it travels: a
+    // link that quietly dropped it would open on a wider table than the one the
+    // reader was looking at
+    f: changed({q: filters.q, pubs: [...filters.pubs].sort(),
+                mods: [...filters.mods].sort(),
+                flags: [...filters.flags].sort(),
+                engines: [...filters.engines].sort(),
+                licenses: [...filters.licenses].sort()},
+               {q: '', pubs: [], mods: [...DEFAULT_MODALITIES].sort(),
+                flags: [...DEFAULT_FLAGS].sort(),
+                engines: [...DEFAULT_ENGINES].sort(),
+                licenses: [...DEFAULT_LICENSES].sort()}),
+  };
+  if (sort.k !== 'score' || sort.dir !== -1) st.sort = sort;
+  if (JSON.stringify([...hidden].sort()) !== JSON.stringify([...DEFAULT_HIDDEN].sort()))
+    st.hidden = [...hidden];
+  if (JSON.stringify(order) !== JSON.stringify(DEFAULT_ORDER)) st.order = order;
+  if (allQuants) st.ladder = true;
+  if (!effective) st.eff = false;
+  // an empty section says nothing, so it is not carried
+  Object.keys(st).forEach(k => {
+    const v = st[k];
+    if (v && typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length) delete st[k];
+  });
+  return st;
+}
+
+// the fragment of that link, and the one writer of it. the address bar carries
+// the same thing the copy button copies, so a reader who never notices the
+// button still has a link to the table in front of them -- and a modal that is
+// open is part of that table, which is why model and tab are built here too.
+function shareFragment() {
+  const st = shareState();
+  const parts = [];
+  if (Object.keys(st).length) parts.push(SHARE_KEY + '=' + encodeURIComponent(JSON.stringify(st)));
+  if (openRepo) parts.push('model=' + encodeURIComponent(openRepo));
+  if (openRepo && tab !== TABS[0]) parts.push('tab=' + tab);
+  return parts.length ? '#' + parts.join('&') : '';
+}
+
+function shareLink() {
+  return location.origin + location.pathname + location.search + shareFragment();
+}
+
+// whether boot has read the incoming fragment yet. see boot().
+let booted = false;
+
+// `replaceState` rather than assigning `location.hash`, which would put a
+// history entry behind every keystroke of a search AND fire `hashchange`, so
+// the sync would re-enter applyHash and redraw the table under the reader.
+// replaceState fires nothing, and writes nothing when the view has not moved.
+//
+// `push` is for opening a model, which is a navigation: it is the entry the
+// back button has been closing the modal with, and stays one.
+function syncHash(push) {
+  // boot reads a pasted link AFTER its first draw, so nothing before it may
+  // rewrite the fragment: it would be written from a state the link had not
+  // been applied to, and a link naming a model would arrive opening nothing.
+  if (!booted) return;
+  const f = shareFragment();
+  if (f === location.hash) return;
+  const url = location.pathname + location.search + f;
+  if (push) history.pushState(null, '', url);
+  else history.replaceState(null, '', url);
+}
+
+// state only: boot draws once after this, so touching the dom here would be a
+// second render against half-applied settings
+function applyState(st) {
+  Object.entries(st.hw || {}).forEach(([k, v]) => {
+    if (HW_SET[k]) { HW_SET[k](v); store.set(k, HW_GET[k]()); }
+  });
+  if (st.w) { W = {...D.weights, ...st.w}; rememberWeights(); }
+  if (st.f) {
+    if (st.f.q !== undefined) filters.q = st.f.q;
+    // `pub` was one publisher before it was several; a link from then still reads
+    if (st.f.pub) filters.pubs = new Set([st.f.pub]);
+    if (st.f.pubs) filters.pubs = new Set(st.f.pubs);
+    // `mod` was one shape before it was several; a link from then still reads
+    if (st.f.mod !== undefined) filters.mods = new Set([st.f.mod]);
+    if (st.f.mods) filters.mods = new Set(st.f.mods);
+    // a link written while the licence filter was a `permissive` FLAG carries
+    // that key; `knownFlags` drops it, which lands the reader on this page's
+    // licence default rather than on a filter with nothing left to test it
+    if (st.f.flags) filters.flags = new Set(knownFlags(st.f.flags));
+    if (st.f.engines) filters.engines = new Set(st.f.engines);
+    if (st.f.licenses) filters.licenses = new Set(knownLicenses(st.f.licenses));
+    saveFilters();
+    // a shared link can land on a different shape than the one booted, and the
+    // score is computed under a shape
+    clearScores();
+  }
+  if (st.sort) { sort = st.sort; store.set('sort', sort); }
+  if (st.hidden) { hidden = new Set(st.hidden); store.set('hidden', [...hidden]); }
+  if (st.order) {
+    order = withNewColumns(knownColumns(st.order));
+    store.set('order', order);
+  }
+  if (st.ladder !== undefined) store.set('allQuants', !!st.ladder);
+  if (st.eff !== undefined) store.set('effective', !!st.eff);
+}
+
+// `s=` and not `models=`: anchored so a key ending in s does not match
+const SHARE_RE = new RegExp('(?:^|[#&])' + SHARE_KEY + '=([^&]+)');
+
+function hashState() {
+  const m = SHARE_RE.exec(location.hash);
+  if (!m) return null;
+  try {
+    const st = JSON.parse(decodeURIComponent(m[1]));
+    return st && typeof st === 'object' ? st : null;
+  } catch (e) {
+    // a truncated link is a bad paste, not a reason to show a blank page
+    return null;
+  }
+}
+
+function applyHash() {
+  const m = /model=([^&]+)/.exec(location.hash);
+  const t = /tab=(\w+)/.exec(location.hash);
+  // links written before the merge still resolve
+  if (t) tab = ['prose', 'analysis'].includes(t[1]) ? 'overview'
+    : (TABS.includes(t[1]) ? t[1] : tab);
+  if (m) {
+    openRepo = decodeURIComponent(m[1]);
+    drawModal();
+  } else {
+    document.querySelector('#modal').classList.remove('open');
+    document.body.classList.remove('locked');
+    openRepo = null;
+  }
+}
+
+// the weights a returning reader gets. theirs, plus any factor that did not
+// EXIST when they last saved -- which is not the same as one they turned off.
+//
+// this went wrong once and silently: the speech and image boards were
+// collected, joined and given default weights, and a browser holding a
+// text-only weight set from before them kept scoring every voice model null,
+// because a stored map wins over the defaults and those keys were simply not in
+// it. so the defaults are stored ALONGSIDE the weights, and a key present in
+// today's defaults and absent from that snapshot is one the reader never saw.
+// a key they dragged to zero is deleted from W and present in the snapshot,
+// which is how the two cases are told apart.
+// a browser that stored weights BEFORE the snapshot existed has no snapshot, so
+// every default reads as new and the reader gets today's defaults for anything
+// they had zeroed. that happens once, to the browsers the bug was live in, and
+// it is the recoverable direction: the alternative is leaving them unscored.
+function restoreWeights() {
+  const saved = store.get('weights', null);
+  if (!saved) return {...D.weights};
+  const base = store.get('weights-base', null) || {};
+  const out = {...saved};
+  Object.keys(D.weights).forEach(k => {
+    if (!(k in base)) out[k] = D.weights[k];
+  });
+  return out;
+}
+
+// both halves together, always: storing the weights without the defaults they
+// were chosen against loses the ability to tell "off" from "new"
+function rememberWeights() {
+  store.set('weights', W);
+  store.set('weights-base', D.weights);
+}
+
+// every default on this page, out of the payload. the config travels from
+// `registry/dashboard.yaml` through `scripts/build-viewer` into
+// `docs/data.json`, so the page, `scripts/aimbot` and MODELS.md read one copy
+// of it and a judgement about what the ranking means lives beside the models
+// it ranks. must run before anything renders, and before boot() restores what
+// a reader stored over the top.
+// roster.js answers with the state a reader gets having stored nothing, which
+// is the view MODELS.md is generated from. everything below layers this
+// browser's localStorage and any shared link over the top of that.
+function boot(payload) {
+  loadRoster(payload);
+  W = restoreWeights();
+  // shut on a first visit: eight headers is a menu, sixty sliders is a wall.
+  // a stored [] is a reader who opened them, so only a MISSING key defaults
+  folded = new Set(store.get('folded', null) || allGroups());
+  order = withNewColumns(knownColumns(store.get('order', DEFAULT_ORDER)));
+  hidden = new Set(knownColumns(store.get('hidden', DEFAULT_HIDDEN)));
+
+  // BEFORE drawChrome, which builds the hardware selects and marks `selected`
+  // against these: restoring them afterwards left every dropdown showing its
+  // default while the value behind it was the stored one
+  // SPREAD over what roster.js already set rather than replacing it: a literal
+  // here has to list every field the module has, and the day it gained a
+  // parameter band this dropped it back to undefined -- harmless only because
+  // the band treats undefined as unset
+  const f = store.get('filters', null);
+  filters = {...filters,
+             q: (f || {}).q || '', kind: new Set(),
+             pubs: new Set(f && f.pubs ? f.pubs : f && f.pub ? [f.pub] : []),
+             mods: new Set(f && f.mods ? f.mods
+                           : f && f.mod ? [f.mod] : DEFAULT_MODALITIES),
+             flags: new Set(knownFlags(f ? f.flags || [] : DEFAULT_FLAGS)),
+             engines: new Set(f && f.engines ? f.engines : DEFAULT_ENGINES),
+             // a reader who stored filters before the licence menu existed has
+             // no `licenses` key, and lands on this page's default rather than
+             // on no licence filter at all
+             licenses: new Set(knownLicenses(
+               f && f.licenses ? f.licenses : DEFAULT_LICENSES))};
+  Object.entries(DEFAULT_HARDWARE).forEach(([k, v]) => HW_SET[k](store.get(k, v)));
+
+  // a shared link beats what this browser happened to have stored: somebody
+  // sent a table, and the point is to see THAT one. same place as the stored
+  // settings, for the same reason -- drawChrome marks `selected` against these
+  const shared = hashState();
+  if (shared) applyState(shared);
+
+  drawChrome();
+  setLadder(store.get('allQuants', false));
+  setEffective(store.get('effective', true));
+  drawFactors();
+  drawColumns();
+  wireResets();
+  drawTable();
+  applyHash();
+  // the sync is live from here, and nothing is written on LOAD: a returning
+  // reader's stored view is theirs already, and a url they did not narrow should
+  // not read as though they had. it starts following the view at the first thing
+  // they change.
+  booted = true;
+}
+
+const effBtn = () => document.querySelector('#eff-btn');
+function setEffective(on) {
+  effective = on;
+  pctCache = null;
+  clearScores();
+  effBtn().setAttribute('aria-pressed', on ? 'true' : 'false');
+  store.set('effective', on);
+  drawTable();
+  if (openRepo) drawModal(true);
+}
+effBtn().onclick = () => setEffective(!effective);
+
+const ladderBtn = () => document.querySelector('#ladder-btn');
+// it lives with the filters and behaves like one: pressed is the narrower
+// table, and releasing it lets the rest of each model's ladder through
+function setLadder(on) {
+  allQuants = on;
+  ladderBtn().setAttribute('aria-pressed', on ? 'false' : 'true');
+  store.set('allQuants', on);
+  drawTable();
+}
+ladderBtn().onclick = () => setLadder(!allQuants);
+
+// one setter for the whole hardware row: each control names the one key it
+// owns, so adding a setting is a line here and a line in the markup rather than
+// a wider positional signature at six call sites.
+const HW_GET = {budget: () => budget, reserve: () => reserve, cap: () => cap,
+                minCtx: () => minCtx, floor: () => floor,
+                bandwidth: () => bandwidth, flops: () => flops};
+const HW_SET = {
+  budget: v => { budget = v > 0 ? v : null; },
+  reserve: v => { reserve = v; }, cap: v => { cap = v; },
+  minCtx: v => { minCtx = v; }, floor: v => { floor = v; },
+  bandwidth: v => { bandwidth = v; }, flops: v => { flops = v; },
+};
+
+function setHardware(patch) {
+  Object.entries(patch).forEach(([k, v]) => {
+    HW_SET[k](v);
+    store.set(k, HW_GET[k]());
+  });
+  pctCache = null;
+  clearScores();
+  drawColumns();
+  drawTable();
+  if (openRepo) drawModal(true);
+}
+
+[['#ram', 'budget', true], ['#reserve', 'reserve', true], ['#cap', 'cap', false],
+ ['#ctx', 'minCtx', true], ['#floor', 'floor', false],
+ ['#bw', 'bandwidth', true], ['#flops', 'flops', true],
+].forEach(([sel, key, numeric]) => {
+  document.querySelector(sel).onchange = e =>
+    setHardware({[key]: numeric ? +e.target.value : e.target.value});
+});
+
+function saveFilters() {
+  store.set('filters', {q: filters.q, pubs: [...filters.pubs],
+                        mods: [...filters.mods],
+                        flags: [...filters.flags],
+                        engines: [...filters.engines],
+                        licenses: [...filters.licenses]});
+}
+
+document.querySelector('#q').oninput = e => {
+  filters.q = e.target.value;
+  saveFilters();
+  drawTable();
+};
+document.querySelector('#preset').onchange = e => {
+  if (!e.target.value) return;
+  W = PRESETS[e.target.value].w();
+  reweigh();
+  drawFactors();
+};
+['factors', 'cols'].forEach(id => {
+  const btn = document.querySelector('#' + id + '-btn');
+  const set = open => {
+    btn.setAttribute('aria-pressed', open);
+    document.querySelector('#' + id).classList.toggle('open', open);
+    store.set(id + '-open', open);
+  };
+  btn.onclick = () => set(btn.getAttribute('aria-pressed') !== 'true');
+  set(store.get(id + '-open', false));
+});
+document.querySelector('#share').onclick = async () => {
+  // the clipboard half only: the address bar already holds this url, because
+  // every change rewrites it, so the fallback the label offers -- "in the address
+  // bar" -- is the same link rather than one written on the way past
+  const btn = document.querySelector('#share'), url = shareLink();
+  let ok = true;
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch (e) {
+    ok = false;
+  }
+  flashLabel(btn, ok ? 'copied' : 'in the address bar', 1600);
+};
+
+// --- putting one row back --------------------------------------------------
+//
+// one reset per row of controls. the single button this page shipped with
+// cleared the weighting along with the columns and the box, so a reader who
+// wanted the ranking back got their whole table back too -- which is why it
+// went unpressed until something was already lost. each section names the state
+// it owns, so a click cannot reach past its own row, and says whether it is
+// still where the page opened, which is what keeps its button dead until there
+// is something to undo.
+//
+// the mark itself, drawn rather than typed for the same reason as every other
+// icon here: a unicode undo glyph leans on the font having it, and several do
+// not. an arrow back to the dot it started at, because that is what it does --
+// the round arrow it replaces is the reload glyph, and nothing on this page
+// reloads anything.
+const RESET_ICON = '<svg class="icon" viewBox="0 0 16 16" width="14" height="14"'
+  + ' aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.55"'
+  + ' stroke-linecap="round" stroke-linejoin="round">'
+  + '<path d="M2.6 8.2a5.5 5.5 0 1 0 5.4-5.7A6 6 0 0 0 3.6 4.3L2 6"/>'
+  + '<path d="M2 2.4v3.6h3.6"/>'
+  + '<circle cx="8.2" cy="8.2" r="1.05" fill="currentColor" stroke="none"/></svg>';
+
+const SECTIONS = {
+  hardware: {
+    label: 'hardware',
+    about: 'vram, reserve, context, the ceiling and floor of the quant ladder,'
+      + ' bandwidth and compute',
+    at: () => Object.entries(DEFAULT_HARDWARE)
+      .every(([k, v]) => HW_GET[k]() === v),
+    back: () => setHardware({...DEFAULT_HARDWARE}),
+    keys: () => Object.keys(DEFAULT_HARDWARE),
+  },
+  ranking: {
+    label: 'ranking',
+    about: 'every factor weight, `quant adjusted`, and which of the weighting'
+      + ' sidebar\'s groups are shut',
+    at: () => sameWeights(W, D.weights) && effective
+      && sameSet(folded, allGroups()),
+    back: () => {
+      W = {...D.weights};
+      folded = new Set(allGroups());
+      setEffective(true);
+    },
+    keys: () => ['weights', 'weights-base', 'effective', 'folded'],
+  },
+  filter: {
+    label: 'filter',
+    about: 'the search, the shape, the runtimes, the licences, the publishers,'
+      + ' the kind chips and `best quant`',
+    at: () => !filters.q && !filters.pubs.size && !filters.minParams
+      && !filters.maxParams
+      && sameSet(filters.mods, DEFAULT_MODALITIES)
+      && sameSet(filters.flags, DEFAULT_FLAGS)
+      && sameSet(filters.engines, DEFAULT_ENGINES)
+      && sameSet(filters.licenses, DEFAULT_LICENSES) && !allQuants,
+    back: () => {
+      filters = {...filters, q: '', kind: new Set(), pubs: new Set(),
+                 mods: new Set(DEFAULT_MODALITIES), flags: new Set(DEFAULT_FLAGS),
+                 engines: new Set(DEFAULT_ENGINES),
+                 licenses: new Set(DEFAULT_LICENSES),
+                 minParams: null, maxParams: null};
+      setLadder(false);
+    },
+    keys: () => ['filters', 'allQuants'],
+  },
+  table: {
+    label: 'table',
+    about: 'which columns are on, their order, and what the rows are sorted by',
+    at: () => sameSet(hidden, defaultHidden())
+      && order.join(',') === defaultOrder().join(',')
+      && sort.k === DEFAULT_SORT.k && sort.dir === DEFAULT_SORT.dir,
+    back: () => {
+      hidden = defaultHidden();
+      order = defaultOrder();
+      sort = {...DEFAULT_SORT};
+    },
+    keys: () => ['hidden', 'order', 'sort'],
+  },
+};
+
+const rowResetBtn = k => document.querySelector('#reset-' + k);
+
+// each row's button, once: the mark, what it puts back, and the click. the dead
+// state is not the native `disabled` property but data-off, because a disabled
+// button takes no pointer events and the hover text is the only thing that can
+// say why pressing it would do nothing.
+function wireResets() {
+  Object.entries(SECTIONS).forEach(([k, s]) => {
+    const btn = rowResetBtn(k);
+    btn.innerHTML = RESET_ICON;
+    btn.onclick = () => resetSection(k);
+  });
+  syncResets();
+}
+
+// live or dead, every row. drawn with the table because that is the last thing
+// every row touches on its way to the screen, so the buttons cannot disagree
+// with the state the table was just built from.
+function syncResets() {
+  Object.entries(SECTIONS).forEach(([k, s]) => {
+    const btn = rowResetBtn(k), at = s.at();
+    btn.dataset.off = at ? '1' : '0';
+    btn.setAttribute('aria-disabled', at ? 'true' : 'false');
+    btn.dataset.help = `reset the ${s.label} controls and nothing else -- ${s.about}`
+      + ' -- back to what this page opens on'
+      + (at ? '. nothing in this row has moved, so there is nothing to undo' : '');
+  });
+}
+
+function resetSection(k) {
+  const s = SECTIONS[k];
+  // a dead button is dead: redrawing as though something had been put back is
+  // how a control starts lying about what it does
+  if (s.at()) return;
+  s.back();
+  // the stored copy goes with it, or the next load restores what was just put
+  // back. setEffective and setLadder write theirs on the way, so this is last.
+  s.keys().forEach(key => localStorage.removeItem('aim-' + key));
+  // drawChrome rebuilds every control from the state just restored, which is
+  // also how the default filters come back pressed rather than looking off
+  drawChrome(); drawFactors(); drawColumns(); drawTable();
+}
+document.querySelector('#m-close').onclick = closeModel;
+document.querySelector('#modal').onclick = e => { if (e.target.id === 'modal') closeModel(); };
+addEventListener('keydown', e => {
+  if (e.key === 'Escape' && (openRepo || openDoc)) closeModel();
+});
+addEventListener('hashchange', applyHash);
+
+fetch(DATA_URL, {cache: 'no-cache'})
+  .then(r => r.json())
+  .then(boot)
+  .catch(e => {
+    document.querySelector('#rows').innerHTML =
+      `<tr><td class="empty bad">could not load ${DATA_URL}: ${esc(e.message)}</td></tr>`;
+  });
+
+setTimeout(() => {
+  if (!D) { console.error('the page never booted'); process.exit(1); }
+  // the ROSTER THIS DOCUMENT RANKS, pinned rather than inherited. it used to be
+  // whatever the page opened on, which made a change to a ui default a rewrite
+  // of MODELS.md: the two questions -- what a reader should see first, and
+  // which models this document is about -- are not the same question and had
+  // one answer between them.
+  //
+  // the FLAGS are pinned for the same reason and were not, which is half a fix:
+  // filtering the page on the licence took the document's roster from 69 models
+  // to 62, qwen3.8 flash next among the seven, and it surfaced as a prose block
+  // referencing a subject the ranking no longer had. a licence is a reason a
+  // READER might not want a model; it is not a reason this document is not
+  // about it, and the comparison is worth less if the models it declines to
+  // compare are the ones somebody could not ship.
+  //
+  // an EMPTY licence set is every tier, and it has to be said rather than left
+  // out: the page opens on `permissive` alone, so inheriting that default is
+  // the same seven models going missing by a different route.
+  filters.mods = new Set(['text']);
+  filters.flags = new Set(['fits']);
+  filters.licenses = new Set();
+  drawTable();
+  const rows = sorted(visible()).map(m => ({
+    rank: m._rank, short: m.short, publisher: m.publisher,
+    quant: (activeQuant(m) || {}).quant || null,
+    gib: (activeQuant(m) || {}).gib || null,
+    bpw: (activeQuant(m) || {}).bpw || null,
+    retention: modelRetention(m),
+    score: scored(m).value, have: scored(m).have, want: scored(m).want,
+    cover: scored(m).cover,
+    ctx: fitContext(m),
+    ids: m.ids || {},
+    total_b: m.facts.params_total_b ?? null, active_b: activeB(m) ?? null,
+    // the raw intelligence index, unscaled by the quant discount, because the
+    // effective-II table prints both halves and the arithmetic between them
+    ii: m.facts && m.facets['aa.intelligence']
+      ? m.facets['aa.intelligence'].value : null,
+    facets: Object.fromEntries(Object.keys(SCALED_COLUMNS).map(k =>
+      [k, m.facets[SCALED_COLUMNS[k]]
+          ? {value: facetValue(m, SCALED_COLUMNS[k]),
+             pct: facetPctRaw(m, SCALED_COLUMNS[k])} : null])),
+    community: m.facets['community.reddit-localllama']
+      ? facetValue(m, 'community.reddit-localllama') : null,
+    // `card.*` is a wildcard weight on the page: one knob for "how much do i
+    // trust what the vendor says", averaged over every claim it published
+    card: (ks => ks.length
+      ? ks.reduce((a, k) => a + facetPctRaw(m, k), 0) / ks.length : null)(
+      Object.keys(m.facets).filter(k => k.startsWith('card.'))),
+  }));
+  // the same ranking under each of the page's named weightings. this table was
+  // a SECOND composite in python for a long time, and it answered differently:
+  // it put glm-5.3-flash first where the page puts qwen3.8 flash next, in a
+  // document every other block of which is generated from the page. the
+  // weightings are the page's own presets rather than a set invented here, so
+  // "what if you weight coding" means on screen what it means in the document.
+  const presets = {};
+  Object.keys(PRESETS).forEach(name => {
+    if (name === 'clear') return;
+    W = PRESETS[name].w();
+    // the score is memoized per model and the memo is only valid for the
+    // weights it was computed under, so every preset has to drop it -- without
+    // this the five rows came out identical, which is what a second composite
+    // in python was invented to avoid saying
+    clearScores();
+    drawTable();
+    presets[name] = {
+      title: PRESETS[name].t,
+      top: sorted(visible()).slice(0, 4).map(m => ({short: m.short,
+                                                    score: scored(m).value})),
+    };
+  });
+  W = {...D.weights};
+  clearScores();
+  drawTable();
+
+  // exit only once the payload has actually left: node's stdout to a PIPE is
+  // async, so `console.log` followed by `process.exit` truncates at the pipe
+  // buffer. this payload passed 8192 bytes when a quant note grew, and the
+  // reader got `Unterminated string ... column 8191` rather than a short read
+  process.stdout.write(JSON.stringify({
+    weights: D.weights, hardware: {budget, reserve, minCtx, cap, floor},
+    effective, rows, presets,
+  }), () => process.exit(0));
+}, 0);

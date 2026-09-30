@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+
+"""Fill each decision model's `readout:` block from its author's own config.
+
+    resolve-readout            # report only
+    resolve-readout --write    # update registry/models.yaml
+    resolve-readout --check    # fail if the registry is behind the capture
+
+a `readout:` says how a client gets an answer out of a model -- through its own
+chat template, through a named plain layout the weights were trained on, or not
+through llama-server's logits at all because the answer comes off a custom head.
+verdict reads it as `meta.llamaswap.readout` and picks its prompt from it, so a
+wrong one is a model read through a prompt it never saw.
+
+DERIVED where the author says it machine-readably: decider's
+`decider_config.json`, shipped beside the pinned gguf, names the layout and the
+temperatures fitted to those bytes. a config is only read from the repo the pin
+lives in (see research/fetch-author-configs), and a layout it names that has no
+counterpart in LAYOUTS is left for review rather than guessed at.
+
+HAND-WRITTEN everywhere else, from the card, with `source: card`. a hand block
+where a derived one exists is replaced by the derived one, the rule `base:`
+follows: the registry fills the source's silence and never overrules it. `note`
+and `head` are read back and kept, so a --write refreshes the derived half
+without deleting what somebody researched.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+CONFIGS = os.path.join(HERE, "..", "research", "data", "author-configs.json")
+
+sys.path.insert(0, HERE)
+import registry_patch  # noqa: E402  the splice, shared with resolve-runtime
+
+# (config file, the layout it names) -> the layout name verdict's spec/layouts
+# carries. decider's code also has a `chat` layout, which verdict has no spec
+# for yet, so it is deliberately absent
+LAYOUTS = {("decider_config.json", "plain"): "decider-plain"}
+
+FIELDS = ("kind", "layout", "source", "temperature", "head", "note")
+KEPT = ("head", "note")
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("!!! pyyaml not found")
+
+
+def block_for(repo, model, configs):
+    """The derived `readout:` for one model, or None if no config says it."""
+    for q in model.get("quants") or []:
+        for name, cfg in sorted((configs.get(q.get("repo")) or {}).items()):
+            layout = LAYOUTS.get((name, cfg.get("layout")))
+            if not layout:
+                continue
+            out = {"kind": "layout", "layout": layout, "source": "author-config"}
+            temp = {}
+            if cfg.get("temperature") is not None:
+                temp["overall"] = cfg["temperature"]
+            temp.update(cfg.get("temperature_by_type") or {})
+            if temp:
+                out["temperature"] = temp
+            have = model.get("readout") or {}
+            out.update({k: have[k] for k in KEPT if k in have})
+            return out
+    return None
+
+
+def render(block):
+    """The block as registry lines, at the registry's indent (see resolve-runtime)."""
+    out = ["    readout:"]
+    for k in FIELDS:
+        if k in block:
+            dumped = yaml.safe_dump({k: block[k]}, width=90, sort_keys=False).rstrip()
+            out += ["      " + l for l in dumped.split("\n")]
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--registry", default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--configs", default=CONFIGS)
+    ap.add_argument("--write", action="store_true")
+    ap.add_argument("--check", action="store_true",
+                    help="exit non-zero if the registry does not match the capture")
+    args = ap.parse_args()
+
+    try:
+        configs = json.load(open(args.configs)).get("repos") or {}
+    except (IOError, ValueError):
+        sys.exit("!!! no %s -- run research/fetch-author-configs" % args.configs)
+
+    reg = (yaml.safe_load(open(args.registry)) or {}).get("models") or {}
+    blocks, stale, review = {}, [], []
+    for repo, m in reg.items():
+        if m.get("kind") != "decision":
+            continue
+        block = block_for(repo, m, configs)
+        have = m.get("readout")
+        if block:
+            blocks[repo] = block
+            if have != block:
+                stale.append(repo)
+        elif not have:
+            # no config and nothing written: the chat template is what a client
+            # would fall back to, and for a base-model fine-tune that template
+            # was inherited rather than trained -- a human reads the card
+            review.append(repo)
+        got = block or have or {}
+        print("  %-42s %-7s %-16s %s" % (repo, got.get("kind") or "-",
+                                         got.get("layout") or "",
+                                         got.get("source") or "REVIEW"))
+
+    print("\n%d derived, %d behind the capture, %d with no readout to review"
+          % (len(blocks), len(stale), len(review)))
+    if args.check and stale:
+        sys.exit("!!! %d model(s) behind research/data/author-configs.json: %s\n"
+                 "    run scripts/resolve-readout --write"
+                 % (len(stale), ", ".join(sorted(stale))))
+    if args.write:
+        n = registry_patch.patch_blocks(
+            args.registry, {r: {"readout": render(b)} for r, b in blocks.items()},
+            after="thinking")
+        print("wrote %s: %d readout block(s)" % (args.registry, n))
+
+
+if __name__ == "__main__":
+    main()

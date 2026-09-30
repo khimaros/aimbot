@@ -193,8 +193,8 @@ verdict.
 | 20 | qwen3.6 35b a3b | UD-Q8_K_XL | 36.4 | 256k | 76% | **44.9** |
 | 21 | gemma 4 12b | UD-Q8_K_XL | 12.7 | 256k | 38% | **44.8** |
 | 22 | qwen3.5-35b-a3b | UD-Q8_K_XL | 45.3 | 256k | 29% | **44.8** |
-| 23 | qwen3 coder next | UD-Q8_K_XL | 80.4 | 256k | 71% | **44.4** |
-| 24 | glm-4.5-air | Q6_K | 92.2 | 128k | 24% | **44.4** |
+| 23 | glm-4.5-air | Q6_K | 92.2 | 128k | 24% | **44.4** |
+| 24 | qwen3 coder next | UD-Q8_K_XL | 80.4 | 256k | 71% | **44.4** |
 | 25 | gemma 4 26b a4b | UD-Q8_K_XL | 25.7 | 256k | 90% | **43.6** |
 | 26 | qwen3.5-4b | UD-Q8_K_XL | 5.7 | 256k | 38% | **42.1** |
 | 27 | granite 4.2 30b | Q8_0 | 29.0 | 128k | 62% | **38.9** |
@@ -215,7 +215,7 @@ verdict.
 | 42 | gpt-oss-120b | F16 | 60.9 | 128k | 86% | **28.7** |
 | 43 | qwen3.5-0.8b | Q8_0 | 0.8 | 256k | 38% | **27.4** |
 | 44 | granite 4.2 3b | Q8_0 | 3.6 | 128k | 62% | **26.2** |
-| 45 | minicpm5 2b | Q8_0 | 2.5 | 128k | 67% | **26.2** |
+| 45 | minicpm5 2b | Q8_0 | 2.5 | 128k | 67% | **26.1** |
 | 46 | lfm2.5 2.6b | Q8_0 | 2.7 | 128k | 67% | **20.3** |
 | 47 | ministral 3 3b | Q8_0 | 3.4 | 256k | 62% | **16.7** |
 | 48 | bonsai 2 27b | PQ2_0 | 6.7 | - | 10% | **-** |
@@ -568,7 +568,7 @@ so picking one here and picking it on screen give the same answer.
 | weighting | top four |
 |---|---|
 | balanced ranking | **qwen3.8 flash next 80.7** > qwen3.8 27b 77.3 > glm-5.3-flash 69.6 > deepseek v4 flash 0731 64.8 |
-| writing code | **qwen3.8 flash next 73.7** > qwen3.8 27b 72.4 > minimax m2.7 68.1 > inkling small 63.9 |
+| writing code | **qwen3.8 flash next 73.7** > qwen3.8 27b 72.4 > minimax m2.7 68.0 > inkling small 63.9 |
 | agentic and tool use | **qwen3.8 27b 80.4** > qwen3.8 flash next 77.9 > glm-5.3-flash 77.4 > qwen3.6 27b 75.5 |
 | third-party measurement only | **qwen3.8 flash next 82.5** > qwen3.8 27b 77.4 > glm-5.3-flash 70.8 > deepseek v4 flash 0731 65.5 |
 | what people report | **muse glimmer 85.5** > glm-4.5-air 83.6 > qwen3.5 122b a10b 83.5 > qwen3.8 27b 80.5 |
@@ -706,8 +706,8 @@ adjusting them would be extrapolation.
 | qwen3.6 35b a3b | **44.9** | 36.2 | 44.5 | - | - | 29.8 | 3.8 | 62 | 76% |
 | gemma 4 12b | **44.8** | - | 27.1 | - | - | - | 3.7 | 37 | 38% |
 | qwen3.5-35b-a3b | **44.8** | - | - | - | 1395 | 30.6 | 2.9 | 54 | 29% |
-| qwen3 coder next | **44.4** | 35.9 | 37.8 | - | - | 47.3 | 3.0 | - | 71% |
 | glm-4.5-air | **44.4** | - | - | - | 1373 | 32.4 | 4.3 | - | 24% |
+| qwen3 coder next | **44.4** | 35.9 | 37.8 | - | - | 47.3 | 3.0 | - | 71% |
 | gemma 4 26b a4b | **43.6** | 39.7 | 38.6 | 0.120 | 1438 | - | 3.4 | 52 | 90% |
 | qwen3.5-4b | **42.1** | - | 25.7 | - | - | - | 3.3 | 30 | 38% |
 | granite 4.2 30b | **38.9** | 37.5 | 26.3 | - | - | - | - | - | 62% |
@@ -728,7 +728,7 @@ adjusting them would be extrapolation.
 | gpt-oss-120b | **28.7** | 34.0 | 26.2 | 0.204 | - | 26.8 | 3.6 | - | 86% |
 | qwen3.5-0.8b | **27.4** | - | 0.0 | - | - | - | 2.5 | 3 | 38% |
 | granite 4.2 3b | **26.2** | 25.1 | 13.7 | - | - | - | - | - | 62% |
-| minicpm5 2b | **26.2** | 26.0 | 8.5 | - | - | - | 0.8 | 23 | 67% |
+| minicpm5 2b | **26.1** | 26.0 | 8.5 | - | - | - | 0.8 | 23 | 67% |
 | lfm2.5 2.6b | **20.3** | 14.2 | 4.5 | - | - | - | 0.8 | 21 | 67% |
 | ministral 3 3b | **16.7** | 15.1 | 0.0 | - | - | - | 1.0 | - | 62% |
 | bonsai 2 27b | **-** | - | - | - | - | - | 2.0 | 75 | 10% |
@@ -1363,7 +1363,27 @@ following instructions, against epoch.scicode p6 on scientific code and
 aa.itbench_sre p19 on an sre tool loop. it calls tools reliably and writes
 the code around them badly.
 
-#### 23. qwen3 coder next
+#### 23. glm-4.5-air
+
+a year-old 106b that people still run because it fits, and that every newer
+model on this roster beats.
+
+- **use for** a 128gb box with nothing newer installed
+- **avoid for** coding, science / reasoning, agentic / tool use
+- **runs at** Q6_K, 92.2 gib, 3/7 of the weighted factors measured it
+- **evidence** aa.intelligence p39; aa.hle p33; lmarena.rating p7; swerebench.resolved p41; hf-discussions 44 mentions at 80% approval
+- **confidence in that evidence** high
+
+carried because the discussion tab is still busy -- hf-discussions 44
+mentions at 80% approval over its own repo and unsloth's, mostly about what
+speed it gets on a strix halo -- and because a model that is measured and
+superseded is more useful in the table than absent from it. artificial
+analysis has it deprecated, and all but two of the percentiles it holds are
+in the bottom half: livecodebench aa.livecodebench p81 and agentic
+aa.terminalbench_hard p58 are the exceptions. neither its card nor unsloth's
+documents a sampler set, which is why its profile reads tuned-here.
+
+#### 24. qwen3 coder next
 
 resolves real merged pull requests well above what its benchmark indices
 predict, on a harness built from commits made after its release.
@@ -1383,26 +1403,6 @@ swe-rebench result and the decode speed rather than the indices. the
 hallucination score is the worst in the set. the tool calling is what goes
 first at four bits: "Q4 sometimes fails with toolcalls", and an IQ4_NL user
 reports a "tool calling issue" that the IQ4_XS did not have.
-
-#### 24. glm-4.5-air
-
-a year-old 106b that people still run because it fits, and that every newer
-model on this roster beats.
-
-- **use for** a 128gb box with nothing newer installed
-- **avoid for** coding, science / reasoning, agentic / tool use
-- **runs at** Q6_K, 92.2 gib, 3/7 of the weighted factors measured it
-- **evidence** aa.intelligence p39; aa.hle p33; lmarena.rating p7; swerebench.resolved p41; hf-discussions 44 mentions at 80% approval
-- **confidence in that evidence** high
-
-carried because the discussion tab is still busy -- hf-discussions 44
-mentions at 80% approval over its own repo and unsloth's, mostly about what
-speed it gets on a strix halo -- and because a model that is measured and
-superseded is more useful in the table than absent from it. artificial
-analysis has it deprecated, and all but two of the percentiles it holds are
-in the bottom half: livecodebench aa.livecodebench p81 and agentic
-aa.terminalbench_hard p58 are the exceptions. neither its card nor unsloth's
-documents a sampler set, which is why its profile reads tuned-here.
 
 #### 25. gemma 4 26b a4b
 
@@ -2733,8 +2733,8 @@ model over a terse correct one.
 | qwen3.6 35b a3b | 20 | - | - | - |
 | gemma 4 12b | 21 | - | - | - |
 | qwen3.5-35b-a3b | 22 | 1395 | 29,043 | 1250 |
-| qwen3 coder next | 23 | - | - | - |
-| glm-4.5-air | 24 | 1373 | 30,367 | - |
+| glm-4.5-air | 23 | 1373 | 30,367 | - |
+| qwen3 coder next | 24 | - | - | - |
 | gemma 4 26b a4b | 25 | 1438 | 5,804 | 1362 |
 | qwen3.5-4b | 26 | - | - | - |
 | granite 4.2 30b | 27 | - | - | - |
@@ -4230,9 +4230,11 @@ two hardware facts drive every recommendation below:
 | canary-1b-v2 |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | canary-qwen-2.5b |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | chatterbox |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
+| cld3 |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | cohere-transcribe-03-2026 |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | cosyvoice3-tts |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | csm |  |  |  |  |  |  |  |  |  | yes | yes |  |  |  |  |  |  |  |  |
+| data2vec-audio |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | decider-4b |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | yes |  |  |  |
 | deepseek v4 flash 0731 |  | yes |  |  |  |  |  | yes |  |  | yes | yes |  |  |  | yes |  |  | yes |
 | deepseek v4 pro 0813 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | yes |
@@ -4243,6 +4245,7 @@ two hardware facts drive every recommendation below:
 | exaone 4.0 1.2b |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |  |  |
 | fable-fusion 711 |  |  | yes |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | fara 1.5 27b |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |  |  |
+| fastconformer-ctc-large |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | fastpitch |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | firered-asr |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | fireredpunc |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
@@ -4282,6 +4285,7 @@ two hardware facts drive every recommendation below:
 | granite-speech-4.1-plus |  |  |  |  |  |  |  |  |  | yes |  |  | yes |  |  |  |  |  |  |
 | higgs-stt |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | hojo-asr-v1 |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
+| hubert-large |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | hy3 | yes | yes |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |  |  |
 | indextts |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | inkling |  | yes |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | yes |
@@ -4296,7 +4300,9 @@ two hardware facts drive every recommendation below:
 | laguna s 2.1 |  | yes |  |  |  |  | yes | yes |  |  | yes | yes |  |  |  |  |  |  | yes |
 | laguna xs 2.1 |  | yes |  |  |  |  |  | yes |  |  | yes |  |  |  |  |  |  |  |  |
 | lfm2-audio |  |  |  |  | yes |  |  |  |  | yes | yes |  |  |  |  |  |  |  |  |
+| lfm2-audio-jp |  |  |  |  | yes |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | lfm2.5 2.6b |  |  | yes |  | yes |  |  | yes |  |  |  |  |  |  |  | yes |  |  |  |
+| lid-176 |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | ling 3.0 flash |  | yes |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |  |  |
 | ling 3.0 tiny |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |  |  |
 | m2m100 |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
@@ -4331,6 +4337,7 @@ two hardware facts drive every recommendation below:
 | nemotron-3.5-asr-streaming-0.6b |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | omniasr |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | omniasr-llm |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
+| omniasr-llm-unlimited |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | omnivoice |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | ornith 1.0 35b |  | yes |  |  |  |  |  | yes |  |  |  |  |  |  |  |  | yes |  | yes |
 | ornith 1.5 35b a3b |  | yes |  |  |  |  |  | yes |  |  |  |  |  |  |  |  | yes |  |  |
@@ -4342,6 +4349,7 @@ two hardware facts drive every recommendation below:
 | paraformer |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | parakeet-ctc-0.6b |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | parakeet-ctc-1.1b |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
+| parakeet-ctc-1.1b-ja |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | parakeet-tdt-0.6b-v2 |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | parakeet-tdt-0.6b-v3 |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | parler-tts |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
@@ -4396,7 +4404,7 @@ two hardware facts drive every recommendation below:
 | voxtral-mini-4b-realtime-2602 |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | voxtral-small-24b |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |  |  |
 | voxtral-tts |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
-| wav2vec2 |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
+| wav2vec2-xlsr-en |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | wespeaker-resnet34-lm |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |
 | z-image-turbo |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | yes |
 | zonos-tts |  |  |  |  |  |  |  |  |  | yes |  |  |  |  |  |  |  |  |  |

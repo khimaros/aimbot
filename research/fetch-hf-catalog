@@ -3,13 +3,13 @@
 """Fetch GGUF repos from the hub into data/hf-catalog.json -- for discovery.
 
 Every other collector here is asked about models this document already chose:
-repos.txt is hand-curated and each fetcher goes and looks up what is on it.
+the registry is hand-curated and each fetcher goes and looks up what is on it.
 That can never surface anything new. This one runs the other way and asks the
 hub what exists, two ways:
 
   trending   the GGUF text-generation repos being downloaded right now, which
              is how a release, a requantization or a fine-tune that nobody
-             added to repos.txt gets noticed
+             added to the registry gets noticed
   authors    every GGUF repo from the publishers in publishers.txt, which is
              how "has unsloth shipped a quant of X yet" stops being a manual
              check
@@ -19,10 +19,7 @@ with abliterated merges, 2B models and architectures llama.cpp cannot load.
 That is expected. The report marks which repos are already tracked and leaves
 the judgement to a human.
 
-"Tracked" means the registry OR repos.txt, not repos.txt alone. repos.txt is a
-33-entry sizing list; the registry carries 127 repos across its base keys and
-their quant sources, so reading only the former reported repos this document
-already serves as ones it does not carry.
+"Tracked" means a registry key or any repo its quants and components name.
 
 Three API notes, all learned the hard way. `sort=trending` is a 400; the field
 is `trendingScore`. `apps=llama.cpp`, which the website URL carries, is
@@ -104,17 +101,16 @@ def shape(m, tracked):
     return r
 
 
-def tracked_repos(repos_path, registry_path):
-    """Every repo this document already carries, lowercased.
+def tracked_repos(registry_path):
+    """Every repo the registry already carries, lowercased.
 
-    Both sources count: a repo reaches a reader either because somebody listed
-    it for sizing or because a registry entry serves it. Case is folded because
-    the hub and the registry disagree on it -- `unsloth/gemma-4-12b-it-GGUF`
-    and `unsloth/gemma-4-12B-it-GGUF` are one repo, and an exact match reports
-    the second as missing while the first sits in the roster.
+    Case is folded because the hub and the registry disagree on it --
+    `unsloth/gemma-4-12b-it-GGUF` and `unsloth/gemma-4-12B-it-GGUF` are one
+    repo, and an exact match reports the second as missing while the first sits
+    in the roster.
     """
     import yaml
-    out = {r.lower() for r in read_list(repos_path)}
+    out = set()
     models = (yaml.safe_load(open(registry_path)) or {}).get("models") or {}
     for base, m in models.items():
         out.add(base.lower())
@@ -159,7 +155,6 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="data/hf-catalog.json")
-    ap.add_argument("--repos", default="repos.txt")
     ap.add_argument("--authors", default="publishers.txt")
     # 6, because a capped author sweep is a silent hole rather than a smaller
     # one: `base_model` is only readable for a repo this capture holds, so a
@@ -183,7 +178,7 @@ def main():
                     help="print what counts as already carried, and exit")
     args = ap.parse_args()
 
-    tracked = tracked_repos(args.repos, args.registry)
+    tracked = tracked_repos(args.registry)
     if args.tracked:
         print("\n".join(sorted(tracked)))
         return

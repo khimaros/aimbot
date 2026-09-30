@@ -355,7 +355,7 @@
    "assessed_on": "2026-09-08"
   },
   "Mapika/decider-4b": {
-   "one_liner": "a 4b that answers a typed question with a probability per option instead of a sentence, and it is first of 89 ranked systems on the one board that scores that.",
+   "one_liner": "a 4b that answers a typed question with a probability per option instead of a sentence, fifth of 89 ranked systems on the one board that scores that and the smallest of the top five.",
    "use_for": [
     "routing, triage and classification in front of a bigger model, where the answer has to be one of the options supplied and nothing else",
     "confidence-gated decisions, since the number is the product: per-type temperatures over the option logits and an abstain threshold in the client",
@@ -366,18 +366,248 @@
     "anything needing a sentence out of it -- it generates nothing, and the chat template its gguf carries is inherited machinery the readout skips",
     "trusting its confidence on hard multi-step items, where its own card puts calibration error at 0.147 against the v2 weights' 0.046",
     "form filling: the card states that one of the two issue #9 cases is answered wrongly at this revision and sends you back to v1",
-    "quantized rungs below the pinned q8, where nothing here has measured what a rung costs a probability rather than a sample"
+    "quantized rungs below the pinned q8, where nothing here has measured what a rung costs a probability rather than a sample",
+    "a llama-server with parallel slots, when the probabilities matter: its gguf card says several prompts in one decode move them by up to 0.16 at q4"
    ],
-   "notes": "two numbers matter more than the score. the first is the public-minus-sealed gap: 83.5% on the frozen public items against {jev.sealed} on 308 sealed after every system on the board shipped, which is this benchmark's contamination signal and this row's is the widest on it. the second is that the row joins on `decider-4b-v2` while the hub now serves v2.1 -- the card's own comparison is +0.7 regression accuracy, worse calibration on hard items and one form-filling case still wrong, so treat {jev.score} as the v2 weights' and not as a measurement of the file this entry points at. everything else about it is unusually well documented: two training stages, the optimizer argued from a controlled quarter-data run, and a release that failed its own pre-registered rules and says which.",
+   "notes": "two things matter more than the score. the first is the sealed half: {jev.sealed} on items frozen after every system on the board shipped, 11.9 points under its public half -- a real gap, though no longer the widest on the board. the second is that the row is `decider-4b-v2` while the pin is Mapika's own v2.1 gguf -- the card's own comparison is +0.7 regression accuracy, worse calibration on hard items and one form-filling case still wrong, so treat {jev.score} as the v2 weights' and not as a measurement of the file this entry serves. read it through the plain layout its `decider_config.json` names, never the chat template the gguf carries. everything else about it is unusually well documented: two training stages, the optimizer argued from a controlled quarter-data run, and a release that failed its own pre-registered rules and says which.",
    "confidence": "medium",
    "evidence": [
-    "{jev.score} -- first of 89 ranked systems, on the only board here whose rows are decision models rather than chat models",
+    "{jev.score} -- fifth of 89 ranked systems on jevbench v1.5.0, the only board here whose rows are decision models rather than chat models",
     "{jev.intelligence} intelligence / {jev.calibration} calibration / {jev.sealed} sealed -- three of its four axes, the composite left unweighted",
     "no forum prose at all: four days old, so `name.match` scores nothing and no community facet can exist",
     "params_total_b 4.21 counted from the safetensors that ship; runtime qwen35, mainline since b7990, 262144 context in the header and in the config",
     "claim: the card's own tables, published with their regressions and with pre-registered release rules it did not pass"
    ],
-   "assessed_on": "2026-09-26"
+   "assessed_on": "2026-09-30"
+  },
+  "Mapika/decider-2b": {
+   "one_liner": "decider-4b's half-size sibling, read the same way and ranked well below it.",
+   "use_for": [
+    "the same typed decisions as decider-4b on a box where 2.5 gib matters more than accuracy",
+    "cpu-only routing, where a 2b forward pass per state is cheap"
+   ],
+   "avoid_for": [
+    "anything the 4b fits for: it is 22nd of 89 on jevbench where the 4b is fifth",
+    "generation, for the reason the 4b gives: it reads option logits and writes nothing"
+   ],
+   "notes": "the board's row is `decider-2b` and the pin is the v11 gguf from the author's own repo, with a `decider_config.json` beside it naming the plain layout and per-type temperatures -- so the readout is derived rather than guessed. {jev.sealed} sealed against a public half about 13 points higher is the same shape of gap as its sibling's.",
+   "confidence": "medium",
+   "evidence": [
+    "{jev.score} -- 22nd of 89 ranked systems on jevbench v1.5.0",
+    "{jev.intelligence} intelligence / {jev.calibration} calibration / {jev.sealed} sealed",
+    "runtime qwen35, mainline since b7990",
+    "no forum prose: a week old"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "EldanRing/Winnow-12B": {
+   "one_liner": "the best open-weights decision model on jevbench, and the only one near the top that scores higher on the sealed items than on the public ones.",
+   "use_for": [
+    "typed decisions where accuracy matters more than size: second of 89 ranked systems",
+    "a decision model that is also a working chat and vision model, from the same weights"
+   ],
+   "avoid_for": [
+    "calibrated probabilities out of the box: the card says the temperature is 1.0 with no fitted calibration map",
+    "a 16 gib-or-smaller budget with room for anything else, at 12 gib for the q8 alone"
+   ],
+   "notes": "the sealed half is the finding: {jev.sealed} on items frozen after every system shipped, about four points ABOVE its public half, where decider-4b is twelve below. that is the one signal on this board that is hard to get from training on the public items. it is a gemma 4 12b it LoRA read through its own chat template; the author's llama.cpp fork adds the decision endpoint, and stock llama.cpp loads the file.",
+   "confidence": "medium",
+   "evidence": [
+    "{jev.score} -- second of 89 ranked systems on jevbench v1.5.0",
+    "{jev.intelligence} intelligence / {jev.calibration} calibration / {jev.sealed} sealed",
+    "runtime gemma4, mainline since b8637; gguf only, no safetensors released",
+    "no forum prose: nine days old"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "akhilaaa3/Jev-Omni": {
+   "one_liner": "fourth on jevbench with no sealed-set drop at all, and not something llama-server can answer with on its own.",
+   "use_for": [
+    "typed decisions through the author's adapter, which applies the trained head to llama.cpp embeddings",
+    "decisions over images, audio or video, which its adapter accepts"
+   ],
+   "avoid_for": [
+    "any client that reads llama-server logits: the answer comes off a separate 256-way head",
+    "chat: a text-generation request is not the classifier"
+   ],
+   "notes": "{jev.sealed} sealed against a public half within a tenth of a point of it -- as clean as this board's contamination check gets. the cost is the serving shape: an embedding server plus an fp32 head the caller applies, which is why it is carried and not served on the roster's host.",
+   "confidence": "medium",
+   "evidence": [
+    "{jev.score} -- fourth of 89 ranked systems on jevbench v1.5.0",
+    "{jev.intelligence} intelligence / {jev.calibration} calibration / {jev.sealed} sealed",
+    "runtime gemma4, mainline since b8637; the gguf is a third-party conversion carrying the author's head",
+    "no forum prose"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "alibiserikbay/JevK5": {
+   "one_liner": "a qwen3.5 4b decision model whose ranked version is not the one its author now recommends.",
+   "use_for": [
+    "typed decisions from llama-server's `/completion` token probabilities, with the per-file temperature the card lists"
+   ],
+   "avoid_for": [
+    "reading its board rank as the v0.3 file's: the board measured v0.2",
+    "a client that only knows chat or decider's plain layout -- its prompt is its own"
+   ],
+   "notes": "the pin is v0.2 because that is what jevbench ranked (16th of 89); the same repo's v0.3 is what the author recommends and is on the board unranked. the board lists its weights as `open: unknown`, which is why no jevbench facet joins here even though the row exists.",
+   "confidence": "low",
+   "evidence": [
+    "jevbench v1.5.0 row `jevk5-v02`, 16th of 89, not joined: `open` is unknown",
+    "runtime qwen35, mainline since b7990",
+    "the card's own 231-item runs, v0.2 q8 at 228 of 231 against its bf16"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "StandardThinking/StandardOne-8B": {
+   "one_liner": "a ministral 3 8b decision model with a clean sealed set and a middling rank.",
+   "use_for": [
+    "typed decisions where a small sealed-set drop matters more than the top score"
+   ],
+   "avoid_for": [
+    "matching the card's numbers through a different prompt: they were measured with the author's adapter wording",
+    "the top of the board: 18th of 89"
+   ],
+   "notes": "{jev.sealed} sealed against a public half under a point higher, so its rank is not borrowed from the public items. the card's figures were measured on sglang behind `jev-adapter`; the gguf here is a separate release nobody has scored.",
+   "confidence": "low",
+   "evidence": [
+    "{jev.score} -- 18th of 89 ranked systems on jevbench v1.5.0",
+    "{jev.intelligence} intelligence / {jev.calibration} calibration / {jev.sealed} sealed",
+    "runtime mistral3, mainline since b7216"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "grider-transwithai/parakeet-ctc-1.1b-ja": {
+   "one_liner": "the 1.1b ctc parakeet fine-tuned for japanese, on the backend the english ones use.",
+   "use_for": [
+    "japanese transcription on crispasr's fastconformer-ctc path"
+   ],
+   "avoid_for": [
+    "english or anything else: it is a japanese fine-tune"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "crispasr backend fastconformer-ctc",
+    "upstream ships `.nemo` only; cstr publishes the gguf",
+    "no board scores it"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "nvidia/stt_en_fastconformer_ctc_large": {
+   "one_liner": "nemo's english fastconformer ctc, the architecture the ctc parakeets scale up, with no gguf to run.",
+   "use_for": [
+    "reference for the parakeet ctc line"
+   ],
+   "avoid_for": [
+    "serving from this roster: nobody has converted it, so there is no rung"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "crispasr backend fastconformer-ctc, named against nvidia's own `.nemo` repo",
+    "no gguf; no board scores it"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "LiquidAI/LFM2.5-Audio-1.5B-JP": {
+   "one_liner": "the japanese build of lfm2-audio, on the same backend and the same licence.",
+   "use_for": [
+    "japanese transcription with liquid's audio model"
+   ],
+   "avoid_for": [
+    "use under a standard open licence: the weights are under liquid's own LFM Open License"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "crispasr backend lfm2-audio, with an f16 detokenizer beside the q5_k pin",
+    "no board scores it"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "cstr/omniasr-llm-unlimited-300m-v2-GGUF": {
+   "one_liner": "omniasr-llm 300m built for audio of any length, in 15-second segments.",
+   "use_for": [
+    "long recordings in any of omniasr's 1600+ languages"
+   ],
+   "avoid_for": [
+    "short clips, where the plain omniasr-llm build is the same model without the segmenting"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "crispasr backend omniasr-llm",
+    "meta publishes it on github only, so the key is cstr's gguf",
+    "no board scores it"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "facebook/hubert-large-ls960-ft": {
+   "one_liner": "hubert large on librispeech, one of three checkpoints crispasr's wav2vec2 backend dispatches.",
+   "use_for": [
+    "english transcription on the wav2vec2 family path"
+   ],
+   "avoid_for": [
+    "anything but english read speech: 960 hours of librispeech is all it saw"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "crispasr backend wav2vec2; cstr publishes f16 and q4_k",
+    "no board scores it"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "jonatasgrosman/wav2vec2-large-xlsr-53-english": {
+   "one_liner": "the xlsr-53 english fine-tune crispasr's wav2vec2 backend is named after, with no gguf to run.",
+   "use_for": [
+    "reference for the wav2vec2 family path"
+   ],
+   "avoid_for": [
+    "serving from this roster: no conversion exists, so there is no rung"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "crispasr backend wav2vec2",
+    "no gguf; no board scores it"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "cstr/cld3-GGUF": {
+   "one_liner": "google's compact language detector as a crispasr post step.",
+   "use_for": [
+    "identifying the language of a transcript cheaply"
+   ],
+   "avoid_for": [
+    "transcription -- it runs after one"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind post, crispasr.post language-id",
+    "no upstream on the hub: cld3 is a C++ library, so the key is cstr's gguf",
+    "no board scores it",
+    "Apache-2.0"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "cstr/fasttext-lid176-GGUF": {
+   "one_liner": "fasttext's lid.176 as a crispasr post step, under a share-alike licence.",
+   "use_for": [
+    "identifying the language of a transcript among 176"
+   ],
+   "avoid_for": [
+    "transcription -- it runs after one",
+    "a pipeline that cannot carry share-alike terms"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind post, crispasr.post language-id",
+    "no upstream on the hub: lid.176 ships as a fasttext `.bin`, so the key is cstr's gguf",
+    "no board scores it",
+    "cc-by-sa-3.0 per the conversion's card"
+   ],
+   "assessed_on": "2026-09-30"
   },
   "MiniMaxAI/MiniMax-M2.5": {
    "one_liner": "a deprecated tool-use model that still beats its own successor on the tau2 suite and on little else.",

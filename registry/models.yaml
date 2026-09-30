@@ -1011,18 +1011,17 @@ models:
       against v2's 0.046), one form-filling case is answered wrongly, and JevBench
       is where both show up.
     quants:
-    - repo: mradermacher/decider-4b-GGUF
+    - repo: Mapika/decider-4b-GGUF
       quant: Q8_0
-      # the size table keys this pack by FILENAME, because its rungs read
-      # `decider-4b.Q8_0.gguf` and a dot is not a separator the tag reader knows
-      file: decider-4b.Q8_0.gguf
+      file: decider-4b-v2.1-Q8_0.gguf
       role: model
-      note: the only conversion of it, and a static one -- {card@mradermacher/decider-4b-GGUF}
-        publishes no imatrix rung and says the weighted quants may not come. the
-        pin is q8 {gib} rather than the q4 its own table marks "fast, recommended",
-        because the answer here is a distribution over the option letters rather
-        than a sampled continuation, and no sweep here has measured what a lower
-        rung costs a probability
+      note: the author's own conversion, and it is v2.1 where jevbench measured v2,
+        so the board's row is about the previous weights. {card@Mapika/decider-4b-GGUF}
+        calls q8 {gib} the same quality as bf16, and it is the pin because the answer
+        is a distribution over option letters and nothing here has measured what a
+        lower rung costs a probability. the card also says to score one prompt per
+        decode -- several in one batch move a probability by up to 0.16 at q4 -- which
+        a llama-server with parallel slots does not promise
     runtime:
       arch: qwen35
       mainline: true
@@ -1039,7 +1038,7 @@ models:
       # beside the language models, which is the claim `kind` exists to avoid
       output: []
     turns:
-      source: mradermacher/decider-4b-GGUF
+      source: Mapika/decider-4b-GGUF
       developer: rejected
       leading_system_max: 1
       mid_system: rejected
@@ -1048,6 +1047,252 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+    readout:
+      kind: layout
+      layout: decider-plain
+      source: author-config
+      temperature:
+        overall: 1.099
+        choice: 1.11
+        noul: 1.56
+        score: 1.287
+  Mapika/decider-2b:
+    kind: decision
+    name:
+      short: decider-2b
+      match: decider[\s-]*2b\b
+    notes: >-
+      decider-4b's smaller sibling on qwen3.5 2b base, read the same way: the
+      option-letter logits at each answer slot of the plain layout
+      `decider.prompt` builds, divided by the temperatures in
+      `decider_config.json`, and never through the chat template the gguf still
+      carries {card}.
+    quants:
+    - repo: Mapika/decider-2b-GGUF
+      quant: Q8_0
+      file: decider-2b-v11-Q8_0.gguf
+      role: model
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      jev: decider-2b
+    modalities:
+      input:
+      - text
+      output: []
+    turns:
+      source: Mapika/decider-2b-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
+    readout:
+      kind: layout
+      layout: decider-plain
+      source: author-config
+      temperature:
+        overall: 1.145
+        choice: 1.164
+        noul: 1.624
+        score: 1.124
+  # the board's #2 and a gguf-only release: the repo ships `config.json` and the
+  # tokenizer as reference files beside two ggufs and no safetensors at all
+  EldanRing/Winnow-12B:
+    kind: decision
+    gguf_only: true
+    name:
+      short: winnow-12b
+      match: winnow[\s-]*12b\b
+    notes: >-
+      a gemma 4 12b it LoRA, merged and published as gguf only. the answer is
+      read from answer-token logits normalized over the supplied options at
+      temperature 1.0 with no fitted calibration map {card}, and the author's
+      decision api is a llama.cpp-based fork rather than mainline llama-server.
+    quants:
+    - repo: EldanRing/Winnow-12B
+      quant: Q8_0
+      file: gguf/Winnow-12B-Q8_0.gguf
+      role: model
+    runtime:
+      arch: gemma4
+      mainline: true
+      since: b8637
+      merged: '2026-04-02'
+    ids:
+      jev: winnow-12b
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      - audio
+      output: []
+    turns:
+      source: EldanRing/Winnow-12B
+      developer: as-system
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
+    readout:
+      kind: layout
+      layout: winnow
+      source: hand
+      temperature:
+        overall: 1.0
+      note: stock llama.cpp loads the gguf directly; the author's fork adds the
+        `/v1/systemone` endpoint and shared-prefix branching over the same weights.
+        the layout keeps the gemma chat template and fills each turn with winnow's
+        own JSON-quoted wording, per winnow-inference's `native/protocol.h` at 77d1458
+  akhilaaa3/Jev-Omni:
+    kind: decision
+    name:
+      short: jev-omni
+      match: jev[\s-]*omni\b
+    notes: >-
+      gemma 4 12b it fine-tuned with a trained 256-way decision head, and the
+      head is the model: a plain text-generation request is not the classifier.
+      on llama.cpp the gguf runs as an embedding server (`--embedding --pooling
+      none --embd-normalize -1`) and the fp32 head in `decision-head-f32.npz` is
+      applied by the caller {card@ngquocvinh/Jev-Omni-GGUF}.
+    quants:
+    - repo: ngquocvinh/Jev-Omni-GGUF
+      quant: Q8_0
+    runtime:
+      arch: gemma4
+      mainline: true
+      since: b8637
+      merged: '2026-04-02'
+    ids:
+      jev: jev-omni
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      - audio
+      output: []
+    turns:
+      source: ngquocvinh/Jev-Omni-GGUF
+      developer: as-system
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
+    readout:
+      kind: head
+      source: card
+      head:
+        repo: ngquocvinh/Jev-Omni-GGUF
+        file: decision-head-f32.npz
+      note: the 256-way head reads unnormalized token embeddings, so the gguf is
+        served with `--embedding --pooling none --embd-normalize -1` and the head is
+        applied by the author's `jev_omni_gguf_decide.py`
+  alibiserikbay/JevK5:
+    kind: decision
+    name:
+      short: jevk5 4b
+      match: jevk5(?![\s-]*(?:2|9)b)
+    notes: >-
+      a qwen3.5 4b decision model read from the answer-letter logits of
+      llama-server's `/completion`, with a temperature per FILE rather than per
+      model {card@alibiserikbay/JevK5-GGUF}. the pin is v0.2, the version
+      jevbench measured; the same repo also publishes v0.3, which the author
+      recommends and which the board has not ranked.
+    quants:
+    - repo: alibiserikbay/JevK5-GGUF
+      quant: Q8_0
+      file: jevk5-4b-v0.2-Q8_0.gguf
+      role: model
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      jev: ''
+    modalities:
+      input:
+      - text
+      output: []
+    turns:
+      source: alibiserikbay/JevK5-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
+    readout:
+      kind: layout
+      layout: semif
+      source: card
+      temperature:
+        overall: 1.532
+        knockout: 0.77
+      note: the one-pass JSON prompt comes from SemIf (SemIf-OpenJev's `core.py`
+        `direct_messages`) and is read off `/completion` token probabilities; these
+        are the v0.2 file's temperatures, and `knockout` applies only to questions
+        with more than 16 options
+  StandardThinking/StandardOne-8B:
+    kind: decision
+    name:
+      short: standardone-8b
+      match: standard[\s-]*one[\s-]*8b\b
+    notes: >-
+      a ministral 3 8b instruct merge served behind the author's `jev-adapter`,
+      which phrases the question through the model's own chat template with no
+      system prompt and applies per-answer-type temperatures {card}. the card's
+      figures were measured on sglang; the gguf is a separate release.
+    quants:
+    - repo: StandardThinking/StandardOne-8B-GGUF
+      quant: Q8_0
+    runtime:
+      arch: mistral3
+      mainline: true
+      since: b7216
+      merged: '2025-12-01'
+    ids:
+      jev: standardone-8b
+    modalities:
+      input:
+      - text
+      - image
+      output: []
+    turns:
+      source: StandardThinking/StandardOne-8B-GGUF
+      developer: rejected
+      leading_system_max: unlimited
+      mid_system: rejected
+      mid_developer: rejected
+    readout:
+      kind: layout
+      layout: standardone-native
+      source: card
+      temperature:
+        overall: 0.85
+        choice: 0.85
+        noul: 0.85
+        score: 0.7
+      note: >-
+        the card's recommended `native` wording from `jev-adapter` (`State:` /
+        `Question:` / `Options:` headers, options as `A. name: description`) inside
+        the chat template with no system turn
   # CARRIED AS A BASE, not as a candidate. qwen3 8b is two generations behind the
   # qwen3.5/3.6/3.8 entries beside it and nobody should pick it off this roster
   # today. it is here because `prism-ml/Ternary-Bonsai-8B` derives from it, and a
@@ -2103,9 +2348,11 @@ models:
         separate {gib@bartowski/MiMo-V2.6-Distill-Qwen-9B-GGUF:mmproj:F16} mmproj'
     - repo: bartowski/MiMo-V2.6-Distill-Qwen-9B-GGUF
       quant: Q8_0
-      note: 'the top of bartowski''s quantized rungs at {gib} and {bpw}, and also the whole of
-        ggml-org''s conversion of these weights, which published this one file and
-        nothing under it'
+      note: 'the top of bartowski''s quantized rungs at {gib} and {bpw}'
+    - repo: ggml-org/MiMo-V2.6-Distill-Qwen-9B-GGUF
+      quant: Q8_0
+      note: 'the whole of ggml-org''s conversion of these weights, which published this
+        one file at {gib} and nothing under it'
     runtime:
       arch: qwen35
       mainline: true
@@ -2662,6 +2909,12 @@ models:
     quants:
     - repo: unsloth/DeepSeek-V4-Flash-0731-GGUF
       quant: UD-IQ3_XXS
+    - repo: Rednalreden/DeepSeek-V4-Flash-0731-dwarfstar-q2-gguf
+      quant: IQ2_XXS-mixed
+      file: DeepSeek-V4-Flash-0731-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-imatrix.gguf
+      note: one {gib} file tuned for a 128gb box. the filename is the recipe -- routed
+        experts at iq2_xxs with their down projections at q2_k, and attention, shared
+        experts and the output kept at q8 {card@Rednalreden/DeepSeek-V4-Flash-0731-dwarfstar-q2-gguf}
     runtime:
       arch: deepseek4
       mainline: true
@@ -6467,6 +6720,7 @@ models:
     runtime:
       arch: glm5next
       mainline: false
+      near: glm5-next
       tracking: https://github.com/ggml-org/llama.cpp/pull/27754
       note: unmerged, and three PRs are open for the same architecture. 27754 is the one tracked because
         it is the one unsloth's card tells a reader to build to run these files; 27773 is the one
@@ -8833,14 +9087,14 @@ models:
     kind: speech
     name:
       short: lfm2-audio
-      match: lfm[\s-]*2(?:\.5)?[\s-]*audio
+      match: lfm[\s-]*2(?:\.5)?[\s-]*audio(?![\s-]*(?:1\.5b[\s-]*)?jp\b)
     notes: >-
       liquid's audio model on their LFM2 backbone, which the card {card} calls
       their "updated end-to-end audio foundation model". crispasr names a japanese
       conversion beside the base one under the same backend; that is a sibling
-      rather than a rung, so this entry pins the base and the japanese build is
-      left out rather than stacked in. the weights are under the "LFM Open License
-      v1.0" {card}, liquid's own terms rather than a standard licence.
+      rather than a rung, so it is an entry of its own rather than stacked in
+      here. the weights are under the "LFM Open License v1.0" {card}, liquid's own
+      terms rather than a standard licence.
     quants:
     - repo: cstr/lfm2-audio-1.5b-GGUF
       quant: Q8_0
@@ -8872,6 +9126,38 @@ models:
       leading_system_max: unlimited
       mid_system: ok
       mid_developer: ok
+  LiquidAI/LFM2.5-Audio-1.5B-JP:
+    kind: speech
+    name:
+      short: lfm2-audio-jp
+      match: lfm[\s-]*2(?:\.5)?[\s-]*audio[\s-]*(?:1\.5b[\s-]*)?jp\b
+    notes: >-
+      the japanese build of lfm2-audio {card}, on the same crispasr backend and
+      under the same "LFM Open License v1.0". cstr publishes no q8 of it, so the
+      pin is q5_k.
+    quants:
+    - repo: cstr/lfm2-audio-1.5b-jp-GGUF
+      quant: Q5_K
+      file: lfm2-audio-1.5b-jp-q5_k.gguf
+      role: model
+      crispasr:
+        backend: lfm2-audio
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+    components:
+    - repo: cstr/lfm2-audio-1.5b-jp-GGUF
+      quant: F16
+      file: lfm2-audio-1.5b-jp-f16-detokenizer.gguf
+      role: detokenizer
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
   XiaomiMiMo/MiMo-V2.5-ASR:
     kind: speech
     name:
@@ -9095,13 +9381,13 @@ models:
     kind: speech
     name:
       short: omniasr-llm
-      match: omni[\s-]*asr[\s-]*(?:llm|300m)
+      match: omni[\s-]*asr[\s-]*(?:llm(?![\s-]*unlimited)|300m)
     notes: >-
       the LLM-decoder variant of the same omnilingual line at 300m, against the
       CTC head above; the card {card} places it in "the **Omnilingual ASR**
       family released by Meta AI". crispasr names an `unlimited` conversion beside it under
-      the same backend -- a longer-context build rather than a rung -- and this
-      entry pins the base one.
+      the same backend -- a longer-context build rather than a rung -- which is
+      an entry of its own.
     quants:
     - repo: cstr/omniasr-llm-300m-v2-GGUF
       quant: Q8_0
@@ -9114,6 +9400,36 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: omniASR-LLM-7B
+      open-asr: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  # keyed on the gguf: meta publishes the unlimited build from its github repo
+  # and nowhere on the hub, so cstr's conversion is the only repo there is
+  cstr/omniasr-llm-unlimited-300m-v2-GGUF:
+    kind: speech
+    gguf_only: true
+    name:
+      short: omniasr-llm-unlimited
+      match: omni[\s-]*asr[\s-]*llm[\s-]*unlimited
+    notes: >-
+      the long-audio build of omniasr-llm 300m: a 15-second sliding-segment
+      protocol for audio of any length {card}, on the same crispasr backend.
+      the pin is q4_k, the rung the card recommends, since cstr publishes no q8.
+    quants:
+    - repo: cstr/omniasr-llm-unlimited-300m-v2-GGUF
+      quant: Q4_K
+      file: omniasr-llm-unlimited-300m-v2-q4_k.gguf
+      role: model
+      crispasr:
+        backend: omniasr-llm
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
       open-asr: ''
     modalities:
       input:
@@ -9249,17 +9565,16 @@ models:
   facebook/data2vec-audio-base-960h:
     kind: speech
     name:
-      short: wav2vec2
-      match: data2vec[\s-]*audio|\bwav2vec2\b
+      short: data2vec-audio
+      match: data2vec[\s-]*audio
     notes: >-
-      the wav2vec2 family backend -- the card {card} pins it to "960 hours of
-      Librispeech on 16kHz sampled speech audio", so it is english and nothing
-      else -- and the one row in crispasr's README naming three unrelated
-      checkpoints: a wav2vec2 xlsr english finetune, this
-      data2vec model and a hubert one. three architectures sharing a dispatch
-      path rather than one model with three conversions, so this entry pins the
-      data2vec conversion that is sized and leaves the other two out rather than
-      claiming them as rungs.
+      on crispasr's wav2vec2 family backend -- the card {card} pins it to "960
+      hours of Librispeech on 16kHz sampled speech audio", so it is english and
+      nothing else -- which is the one row in crispasr's README naming three
+      unrelated checkpoints: a wav2vec2 xlsr english finetune, this data2vec
+      model and a hubert one. three architectures sharing a dispatch path rather
+      than one model with three conversions, so each is an entry of its own
+      rather than a rung of this one.
     quants:
     - repo: cstr/data2vec-audio-960h-GGUF
       quant: Q8_0
@@ -9279,6 +9594,33 @@ models:
       - audio
       output:
       - text
+  facebook/hubert-large-ls960-ft:
+    kind: speech
+    name:
+      short: hubert-large
+      match: hubert[\s-]*large
+    notes: >-
+      meta's hubert large fine-tuned on 960 hours of librispeech {card}, english
+      only, on the same wav2vec2 dispatch path as data2vec-audio. cstr publishes
+      f16 and q4_k and no q8, and at this size the f16 is the pin.
+    quants:
+    - repo: cstr/hubert-large-ls960-ft-GGUF
+      quant: F16
+      file: hubert-large-ls960-ft-f16.gguf
+      role: model
+      crispasr:
+        backend: wav2vec2
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
   # CARRIED WITH NO QUANTS. crispasr's README names only the vendor's own repo
   # for each of these -- no cstr conversion exists and `fetch-gguf-sizes` finds
   # no gguf in the repo itself -- so there is no rung a consumer could select.
@@ -9287,6 +9629,51 @@ models:
   # to there is nothing narrower to say. most of these carry crispasr's
   # `auto-download` capability, which is the binary fetching the weights itself
   # rather than loading something from this roster.
+  jonatasgrosman/wav2vec2-large-xlsr-53-english:
+    kind: speech
+    name:
+      short: wav2vec2-xlsr-en
+      match: wav2vec2[\s-]*(?:large[\s-]*)?xlsr(?:[\s-]*53)?[\s-]*en
+    notes: >-
+      the xlsr-53 wav2vec2 fine-tuned on english common voice {card}, the
+      checkpoint crispasr's wav2vec2 backend is named after.
+    quants: []
+    crispasr:
+      backend: wav2vec2
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+  nvidia/stt_en_fastconformer_ctc_large:
+    kind: speech
+    name:
+      short: fastconformer-ctc-large
+      match: stt[\s_-]*en[\s_-]*fastconformer[\s_-]*ctc[\s_-]*large
+    notes: >-
+      nemo's own english fastconformer ctc {card}, the architecture the ctc
+      parakeets scale up. it is published as a `.nemo` and nobody has converted
+      it, so there is no rung to select.
+    quants: []
+    crispasr:
+      backend: fastconformer-ctc
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
   # CARRIED BECAUSE A BOARD ALREADY SCORES THEM. every entry below arrives with
   # a number rather than needing one: the open ASR leaderboard publishes a word
   # error rate against a huggingface repo id, and artificial analysis rates the
@@ -9515,7 +9902,7 @@ models:
     kind: speech
     name:
       short: parakeet-ctc-1.1b
-      match: parakeet[\s-]*ctc[\s-]*1\.1b
+      match: parakeet[\s-]*ctc[\s-]*1\.1b(?![\s-]*ja\b)
     notes: >-
       the 1.1b rung of the CTC parakeet, "an XXL version of FastConformer CTC
       [1] (around 1.1B parameters) model" per the card {card}, reached by the
@@ -9535,6 +9922,32 @@ models:
       tts-arena: ''
       voicearena: ''
       open-asr: nvidia/parakeet-ctc-1.1b
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  grider-transwithai/parakeet-ctc-1.1b-ja:
+    kind: speech
+    name:
+      short: parakeet-ctc-1.1b-ja
+      match: parakeet[\s-]*ctc[\s-]*1\.1b[\s-]*ja
+    notes: >-
+      a japanese fine-tune of the 1.1b ctc parakeet {card}, on the same
+      `fastconformer-ctc` backend. the upstream ships `.nemo` files only, so
+      cstr's conversion is the gguf.
+    quants:
+    - repo: cstr/parakeet-ctc-1.1b-ja-GGUF
+      quant: Q8_0
+      role: model
+      crispasr:
+        backend: fastconformer-ctc
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -10108,18 +10521,42 @@ models:
       role: model
     crispasr:
       post: language-id
-  # NOT CARRIED: `cld3` and `lid-176`, crispasr's other two language-id steps.
-  # both exist on the hub only as cstr's conversion -- cld3's upstream is a C++
-  # library and fasttext's lid.176 ships as a `.bin` from fasttext.cc -- so the
-  # only key available for either is a gguf repo, which `make lint` rejects and
-  # should: the key is what every capture joins on, and pointed at a conversion
-  # all of them answer about the converter.
-  #
-  # `facebook/fasttext-language-identification` is on the hub and is NOT the
-  # upstream of lid-176: it identifies 217 languages where lid.176 does 176, so
-  # keying on it would assert a lineage that is not there. glotlid-v3 above
-  # covers the same job with a real upstream, which is why losing these two
-  # costs the roster a duplicate rather than a capability.
+  # crispasr's other two language-id steps, keyed on cstr's conversions because
+  # neither has an upstream on the hub: cld3 is a C++ library and lid.176 ships
+  # as a `.bin` from fasttext.cc. `facebook/fasttext-language-identification` is
+  # NOT lid-176's upstream -- it identifies 217 languages where lid.176 does
+  # 176 -- so keying on it would assert a lineage that is not there.
+  cstr/cld3-GGUF:
+    kind: post
+    gguf_only: true
+    name:
+      short: cld3
+      match: \bcld3\b
+    notes: >-
+      google's compact language detector as a crispasr post step {card}, the
+      smallest of the three here; glotlid-v3 covers the same job with an upstream
+      on the hub.
+    quants:
+    - repo: cstr/cld3-GGUF
+      quant: F16
+      role: model
+    crispasr:
+      post: language-id
+  cstr/fasttext-lid176-GGUF:
+    kind: post
+    gguf_only: true
+    name:
+      short: lid-176
+      match: lid[\s.-]*176\b
+    notes: >-
+      fasttext's lid.176 as a crispasr post step {card}: 176 languages, and a
+      share-alike licence where glotlid-v3 and cld3 are apache.
+    quants:
+    - repo: cstr/fasttext-lid176-GGUF
+      quant: F16
+      role: model
+    crispasr:
+      post: language-id
   oliverguhr/fullstop-punctuation-multilang-large:
     kind: post
     name:

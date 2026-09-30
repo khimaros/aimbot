@@ -2,7 +2,7 @@
 
 """What each published gguf ACTUALLY is, read out of its own tensor table.
 
-    fetch-gguf-tensors                 # every repo in repos.txt
+    fetch-gguf-tensors                 # every gguf repo the registry names
     fetch-gguf-tensors --repo R        # one
     fetch-gguf-tensors --refresh       # go back to the network
 
@@ -217,7 +217,6 @@ def rungs(repo, max_age, refresh):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--repos", default="repos.txt")
     ap.add_argument("--registry", default=sizes.REGISTRY)
     ap.add_argument("--out", default="data/gguf-tensors.json")
     ap.add_argument("--repo", help="read one gguf repo rather than the roster")
@@ -228,9 +227,8 @@ def main():
     args = ap.parse_args()
 
     # the same roster the sizer reads, from the same function: a rung this skips
-    # is a ladder the viewer draws with sizes and no layer mix, and reading
-    # repos.txt alone silently left out every repo named only in the registry
-    names = [args.repo] if args.repo else sizes.roster(args.repos, args.registry)
+    # is a ladder the viewer draws with sizes and no layer mix
+    names = [args.repo] if args.repo else sizes.roster(args.registry)
 
     # the capture is the durable cache and the downloaded bytes are scratch.
     # reaching one tensor table means transferring the vocabulary in front of

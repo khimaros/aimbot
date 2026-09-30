@@ -328,6 +328,46 @@ def check_base(b, where, keys, f):
     # IS carried, because then the two rows can be read against each other
     if b.get("repo") and b["repo"] == where:
         f.add(where, "base.repo is the entry itself")
+
+
+# how a client reads an answer out of the model, which verdict consumes as
+# `meta.llamaswap.readout`. `chat` builds the prompt from the model's own
+# template, `layout` renders a named plain layout the weights were trained on
+# (the name is one of verdict's spec/layouts), and `head` is a custom head no
+# llama-server logit reaches, so it names where the head lives
+READOUT_FIELDS = {"kind", "layout", "source", "temperature", "head", "note"}
+READOUT_KINDS = ("chat", "layout", "head")
+# strongest first. `author-config` is derived by resolve-readout from the config
+# shipped beside the pinned file; the rest are written by hand from the card
+READOUT_SOURCES = ("author-config", "card", "hand")
+
+
+def check_readout(r, where, f):
+    """A readout block says one way to read the model, and enough to act on it."""
+    if r is None:
+        return
+    if not isinstance(r, dict):
+        f.add(where, "readout must be a mapping, got %r" % (r,))
+        return
+    unknown = sorted(set(r) - READOUT_FIELDS)
+    if unknown:
+        f.add(where, "unknown readout field(s) %s (known: %s)"
+              % (", ".join(unknown), ", ".join(sorted(READOUT_FIELDS))))
+    if r.get("kind") not in READOUT_KINDS:
+        f.add(where, "readout.kind %r must be one of %s"
+              % (r.get("kind"), ", ".join(READOUT_KINDS)))
+    if r.get("source") not in READOUT_SOURCES:
+        f.add(where, "readout.source %r must be one of %s"
+              % (r.get("source"), ", ".join(READOUT_SOURCES)))
+    if (r.get("kind") == "layout") != bool(r.get("layout")):
+        f.add(where, "readout.layout needs kind: layout, and kind: layout needs "
+                     "a layout name")
+    head = r.get("head") or {}
+    if (r.get("kind") == "head") != bool(head.get("repo") and head.get("file")):
+        f.add(where, "readout.head needs kind: head, and kind: head needs "
+                     "head: {repo, file} saying where the head lives")
+    if not isinstance(r.get("temperature") or {}, dict):
+        f.add(where, "readout.temperature is a mapping of answer type to value")
 # what a weight can be to a diarization run. none of them transcribes: an
 # embedder turns a span of audio into a speaker vector, a segmenter says only
 # WHEN the speaker changed, and `end-to-end` is the whole job in one network --
@@ -581,6 +621,7 @@ def check_registry(models, sampling, f):
         check_runtime(m.get("runtime"), repo, f)
         check_crispasr(m.get("crispasr"), repo, f)
         check_base(m.get("base"), repo, models, f)
+        check_readout(m.get("readout"), repo, f)
         check_speculative(m.get("speculative"), repo, f)
         check_engine(m, repo, f)
         check_diarize_kind(m, repo, f)

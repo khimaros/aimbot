@@ -1211,7 +1211,7 @@ test('audio.cpp and gufo are engines their own catalogs claim', () => {
   // flag is the guide's own -- dflash-model here, mtp-model next door -- and a
   // command that dropped it starts a server with no drafter at a fraction of the
   // figure the guide quotes, silently.
-  ops = {runtime: 'gufo', repo: null, quant: null, profile: null};
+  ops = {runtime: 'gufo', repo: null, quant: 'UD-Q4_K_XL', profile: null};
   const g = snippets(model('qwen3.8 27b')).map(s => s.text).join('\n');
   // the path `hf download` actually lands a file at, rather than a directory
   // this page invented: the cache layout is `hf download`'s own report, and its
@@ -1270,6 +1270,61 @@ test('audio.cpp and gufo are engines their own catalogs claim', () => {
 
   ops = {runtime: null, repo: null, quant: null, profile: null};
   filters.engines = new Set(DEFAULT_ENGINES);
+  RESET();
+});
+
+test('a runtime is offered only where it loads the model and the rung', () => {
+  RESET();
+  // the runtime chips are the model's own engines. every runtime on every
+  // model was a gufo chip on hundreds of rows gufo has never loaded
+  const chips = m => (tabOperate(m).match(/data-runtime="[^"]+"/g) || [])
+    .map(s => s.slice(14, -1));
+  const gemma = D.models.find(m => !(m.engines || []).includes('gufo')
+                                   && (m.engines || []).includes('llama.cpp'));
+  eq(chips(gemma).includes('gufo'), false, 'no gufo chip on ' + gemma.short);
+  eq(chips(gemma).join(','), runtimesFor(gemma).map(r => r.k).join(','),
+     'the chips are the runtimes that load it');
+  ok(chips(model('qwen3.8 27b')).includes('gufo'), 'and gufo where it does');
+
+  // GUFO LOADS THE FILES ITS GUIDE NAMES, not every rung of a model it names
+  const m = model('qwen3.8 27b');
+  const tags = c => c.repo + ':' + c.quant;
+  eq((m.gufo.rungs || []).map(tags).sort().join(','),
+     'unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_XL,unsloth/Qwen3.8-27B-GGUF:UD-Q8_K_XL',
+     'the rungs are the two the guide measured');
+  const named = crispasrNamed(m);
+  const byteshape = quantChoices(m).find(c => c.repo.startsWith('byteshape/'));
+  eq(rungEngines(m, byteshape, named).has('gufo'), false,
+     'a byteshape file is not a gufo file');
+  ok(rungEngines(m, byteshape, named).has('llama.cpp'), 'though llama.cpp loads it');
+  filters.engines = new Set(['gufo']);
+  eq(rungPool(m).map(tags).sort().join(','),
+     (m.gufo.rungs || []).map(tags).sort().join(','),
+     'a gufo view ranks only what gufo loads');
+  filters.engines = new Set(DEFAULT_ENGINES);
+
+  // the drafter is a sidecar, not a rung: `MTP/mtp-...-Q8_0.gguf` is not Q8_0
+  const flash = model('qwen3.8 flash next');
+  eq((flash.gufo.rungs || []).map(c => c.quant).join(','), 'UD-Q4_K_XL',
+     'the mtp head does not make Q8_0 a gufo rung');
+
+  // under gufo the picker offers gufo's files, and the one picked is served
+  ops = {runtime: 'gufo', repo: null, quant: null, profile: null};
+  eq(repoChoices(m).join(','), 'unsloth/Qwen3.8-27B-GGUF', 'one repo to pick');
+  ops.quant = 'UD-Q8_K_XL';
+  const g = snippets(m).map(s => s.text).join('\n');
+  ok(g.includes('/Qwen3.8-27B-UD-Q8_K_XL.gguf'), 'the picked rung is served: ' + g);
+  ok(!g.includes('UD-Q4_K_XL.gguf'), 'and not the first one listed: ' + g);
+
+  // where the guide names the checkpoint itself, no gguf rung is gufo's, and
+  // the picker says so the way it does for vllm
+  const tts = model('qwen3-tts-1.7b-base');
+  eq((tts.gufo.rungs || []).length, 0, 'gufo loads the checkpoint, no gguf');
+  ops = {runtime: 'gufo', repo: null, quant: null, profile: null};
+  eq(pickedRuntime(tts).gguf, false, 'so it is not offered a quant');
+  eq(repoChoices(tts).join(','), tts.repo, 'and reads the base repo');
+
+  ops = {runtime: null, repo: null, quant: null, profile: null};
   RESET();
 });
 

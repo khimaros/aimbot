@@ -354,8 +354,7 @@ QUANT_EVIDENCE = [
      "typed decisions, read off option-letter logits in one forward pass. every "
      "row was measured through the author's own server in bf16, and no quantized "
      "run of any of them has been measured here",
-     ["jev.score", "jev.intelligence", "jev.calibration", "jev.hard",
-      "jev.sealed"]),
+     ["jev.score", "jev.intelligence", "jev.calibration", "jev.sealed"]),
 ]
 
 SCALED_FACETS = {k for _, yes, _, keys in QUANT_EVIDENCE if yes for k in keys}
@@ -1272,6 +1271,32 @@ def gufo_block(repo, model, guides):
     return out
 
 
+def gufo_rungs(gufo, quants):
+    """The rungs of this model that are files a gufo guide names.
+
+    gufo loads the bytes its guide measured, so it is an engine for those rungs
+    and not for every file of a model it names. a weight is matched to the
+    LONGEST tag of its repo that its file stem ends in, so `UD-Q4_K_XL` wins over
+    `Q4_K_XL`; the drafter sidecar is skipped, because `mtp-...-Q8_0.gguf` is a
+    head and not the Q8_0 rung. a guide naming the checkpoint matches nothing.
+    """
+    mode = ((gufo.get("serve") or {}).get("speculative") or "").lower()
+    out = []
+    for w in gufo.get("weights") or []:
+        if not w.get("file") or (mode and mode in (w.get("label") or "").lower()):
+            continue
+        stem = re.sub(r"(-\d{5}-of-\d{5})?\.gguf$", "", w["file"])
+        tags = {a["quant"] for q in quants if q.get("repo") == w.get("repo")
+                for a in (q.get("available") or [q])}
+        hits = [t for t in tags if any(p == t or p.endswith("-" + t)
+                                       for p in stem.split("/"))]
+        quant = max(hits, key=len) if hits else None
+        if quant and not any(r["repo"] == w["repo"] and r["quant"] == quant
+                             for r in out):
+            out.append({"repo": w["repo"], "quant": quant, "file": w["file"]})
+    return out
+
+
 def base_block(model, card, keys):
     """What this model was made from, and whether that thing is on the roster.
 
@@ -1321,6 +1346,8 @@ def build_model(repo, model, ctx):
     quants = with_bpw(quants, facts.get("params_total_b"))
     ac = audiocpp_block(repo, model, ctx["audiocpp"])
     gufo = gufo_block(repo, model, ctx["gufo"])
+    if gufo:
+        gufo["rungs"] = gufo_rungs(gufo, quants)
     name = model.get("name") or {}
     rec = {
         "repo": repo, "publisher": repo.split("/")[0],

@@ -205,24 +205,20 @@ models:
 
 
 @test
-def tracked_counts_the_registry_not_just_repos_txt():
-    """a repo the registry serves is carried, however it got there.
+def tracked_counts_every_repo_the_registry_names():
+    """a repo the registry serves is carried, whichever block names it.
 
-    repos.txt is a hand-kept sizing list and the registry is the roster, so
-    reading only the former puts repos this document already serves under a
-    heading that says it does not carry them. case is folded because the hub
-    and the registry disagree on it for the same repo.
+    missing one puts a repo this document already serves under a heading that
+    says it does not carry it. case is folded because the hub and the registry
+    disagree on it for the same repo.
     """
     tmp = tempfile.mkdtemp()
     try:
         reg = os.path.join(tmp, "models.yaml")
-        repos = os.path.join(tmp, "repos.txt")
         with open(reg, "w") as f:
             f.write(REGISTRY_FIXTURE)
-        with open(repos, "w") as f:
-            f.write("Seeded/Only-In-Repos-Txt\n# a comment\n\n")
         r = subprocess.run([os.path.join(RESEARCH, "fetch-hf-catalog"), "--tracked",
-                            "--repos", repos, "--registry", reg],
+                            "--registry", reg],
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     finally:
         shutil.rmtree(tmp)
@@ -235,10 +231,8 @@ def tracked_counts_the_registry_not_just_repos_txt():
     eq("quanter/model-a-gguf" in got, True, "a quant source is carried")
     eq("other/model-a-gguf" in got, True, "a second quant source is carried")
     eq("vendor/model-b-encoder" in got, True, "a component repo is carried")
-    eq("seeded/only-in-repos-txt" in got, True, "repos.txt still counts")
     eq("quanter/model-b-gguf" in got, True, "case is folded, not compared raw")
     eq(sorted(got), sorted(x.lower() for x in got), "everything is lowercased")
-    eq("# a comment" in got, False, "comments are not repos")
 
 # a tree listing exercising every naming convention this corpus has run into.
 # served from the httpcache rather than a socket: fetch-gguf-sizes builds its
@@ -304,19 +298,18 @@ def seed_cache(key, payload, raw=False):
 
 
 def roster_args(tmp, *repos, **kw):
-    """`--repos`/`--registry` over fixtures in `tmp`, as argv.
+    """`--registry` over a fixture in `tmp` that pins each of `repos`, as argv.
 
-    Both have to be named. The sizer and the tensor reader resolve their roster
-    from the union of the two, so a case passing only repos.txt falls back to
-    the REAL registry and goes to the network for every repo on it.
+    It has to be named: the sizer and the tensor reader resolve their roster
+    from the registry, so a case without one falls back to the REAL registry
+    and goes to the network for every repo on it.
     """
-    path = os.path.join(tmp, "repos.txt")
-    with open(path, "w") as f:
-        f.write("".join(r + "\n" for r in repos))
     reg = os.path.join(tmp, "models.yaml")
     with open(reg, "w") as f:
-        f.write(kw.get("registry", "models: {}\n"))
-    return ["--repos", path, "--registry", reg]
+        f.write(kw.get("registry", "models:\n"))
+        f.write("".join("  roster/fixture-%d:\n    quants:\n    - {repo: %s, quant: Q8_0}\n"
+                        % (i, r) for i, r in enumerate(repos)))
+    return ["--registry", reg]
 
 
 @test
@@ -583,10 +576,10 @@ def a_drafter_may_live_in_a_repo_the_model_does_not_pin():
 def a_cross_repo_drafter_is_sized_like_any_other_file():
     """A drafter nothing pins is a download nobody measured.
 
-    The sizer's roster is the registry's `quants:` and `components:` unioned
-    with repos.txt, and a drafter is in none of those -- so the one file the
-    page charges for beside the weights was the one file with no byte count.
-    It has to be sized for the same reason a rung does: it is resident.
+    The sizer's roster was the registry's `quants:` and `components:`, and a
+    drafter is in neither -- so the one file the page charges for beside the
+    weights was the one file with no byte count. It has to be sized for the
+    same reason a rung does: it is resident.
     """
     mod = load_script_with_research("fetch_gguf_sizes", "fetch-gguf-sizes")
     tmp = tempfile.mkdtemp()
@@ -594,10 +587,7 @@ def a_cross_repo_drafter_is_sized_like_any_other_file():
         reg = os.path.join(tmp, "models.yaml")
         with open(reg, "w") as f:
             f.write(SPEC_REGISTRY)
-        repos = os.path.join(tmp, "repos.txt")
-        with open(repos, "w") as f:
-            f.write("")
-        got = mod.roster(repos, reg)
+        got = mod.roster(reg)
     finally:
         shutil.rmtree(tmp)
     eq("Fixture/Drafted-GGUF" in got, True, "the weights are sized, as before")
@@ -746,9 +736,8 @@ def a_type_mainline_ships_is_costed_rather_than_counted_at_nothing():
     eq(rung["bpw"], 2.25, "at 18 bytes per 64 elements: %r" % (rung,))
 
 
-# a repo the registry serves and repos.txt does not name. this is the shape the
-# roster actually has -- repos.txt is the hand-kept sizing list and the registry
-# is what the page offers -- and agentionai's flash-next ladder is the live case
+# a repo only the registry names, which is every repo now; agentionai's
+# flash-next ladder was the live case when the tensor reader read a side list
 TENSOR_REGISTRY_REPO = "test-tensors/Registry-Only-GGUF"
 TENSOR_REGISTRY_FIXTURE = """
 models:
@@ -761,11 +750,11 @@ models:
 
 
 @test
-def the_tensor_reader_covers_the_registry_not_just_repos_txt():
+def the_tensor_reader_covers_the_registry():
     """The two collectors that read a repo have to read the SAME repos.
 
-    fetch-gguf-sizes unions repos.txt with every repo the registry's `quants:`
-    and `components:` name; the tensor reader read repos.txt alone. So a repo
+    fetch-gguf-sizes read every repo the registry's `quants:` and `components:`
+    name; the tensor reader once read a hand-kept side list alone. So a repo
     reachable only through the registry got a ladder with sizes on it and no
     tensor table behind them, and the viewer drops the `read` and `layers`
     columns for a ladder where nothing was read -- the mix is not blank, it is
@@ -805,7 +794,7 @@ def the_tensor_reader_covers_the_registry_not_just_repos_txt():
 
     eq("%s:Q6_K" % TENSOR_REGISTRY_REPO in got, True,
        "a registry-only repo is read: %s" % sorted(got))
-    eq("%s:Q4_K" % TENSOR_REPO in got, True, "and repos.txt still counts")
+    eq("%s:Q4_K" % TENSOR_REPO in got, True, "and so is every other pinned repo")
 
 
 @test
@@ -6866,6 +6855,128 @@ GUFO_TTS_GUIDE = """```sh
 
 def gufo_module():
     return load_script("fetch_gufo", os.path.join(RESEARCH, "fetch-gufo-support"))
+
+
+# one v1.5 row, cut to the fields the capture and the facets read. v1.5 stopped
+# publishing a pooled tier accuracy and a sealed accuracy share: both became
+# per-type splits under `intelligence`, with the sealed half as a score
+JEV15_ROW = {"key": "widget-4b-v2", "display": "widget", "open": "yes",
+             "ranked": True, "rank": 5, "jevbench_score": 71.3,
+             "axes": {"intelligence": 55.8, "calibration": 85.6},
+             "intelligence": {"I_open": 61.7, "I_sealed": 49.8, "gap": 11.9,
+                              "per_type_split": {"open|choice": {"cc": 80.4}}}}
+
+
+@test
+def a_new_jevbench_revision_is_a_new_fetch():
+    """The immutable cache is per revision, or bumping the url re-reads the old run.
+
+    The collector cached under one fixed key with `--immutable`, so moving the
+    url from v1.4.2 to v1.5.0 served the v1.4.2 bytes back and wrote them out
+    labelled with nothing but their own revision.
+    """
+    mod = load_script("fetch_jevbench", os.path.join(RESEARCH, "fetch-jevbench"))
+    a = mod.cache_key("https://benchmarkheaven.com/api/jevbench/v1.4.2")
+    b = mod.cache_key("https://benchmarkheaven.com/api/jevbench/v1.5.0")
+    eq(a != b, True, "two revisions, two cache entries: %r %r" % (a, b))
+
+
+@test
+def jevbench_v15_keeps_the_sealed_half_and_the_facets_read_it():
+    """v1.5 moved the sealed half under `intelligence`; the capture follows it.
+
+    The sealed items are this board's contamination check, and the facet that
+    carries them read `sealed_accuracy`, which v1.5 no longer publishes. Without
+    the move `jev.sealed` silently disappears from every decision model.
+    """
+    mod = load_script("fetch_jevbench", os.path.join(RESEARCH, "fetch-jevbench"))
+    got = mod.shape({"revision": "v1.5.0", "systems": [JEV15_ROW]})
+    row = got["systems"]["widget-4b-v2"]
+    eq(row.get("intelligence"), {"I_open": 61.7, "I_sealed": 49.8, "gap": 11.9},
+       "the sealed half is kept, and the per-type split is not")
+    au = load_script_with_research("analyze_usecase", "analyze-usecase")
+    f = au.jev_facets(got["systems"], {"jev": "widget-4b-v2"}, "v1.5.0")
+    eq(f["jev.sealed"]["value"], 49.8, "the sealed facet reads I_sealed")
+    eq(f["jev.score"]["value"], 71.3, "the composite is where it was")
+    eq("11.9 points" in f["jev.sealed"]["ref"]["note"], True,
+       "the gap rides on the ref: %r" % f["jev.sealed"]["ref"])
+    eq("v1.5.0" in f["jev.sealed"]["ref"]["note"], True, "and so does the revision")
+
+
+READOUT_FIXTURE = """version: 1
+models:
+  Vendor/Decider:
+    kind: decision
+    name: {short: decider fixture, match: 'decider[\\s-]*fixture'}
+    quants:
+    - {repo: Vendor/Decider-GGUF, quant: Q8_0}
+    readout:
+%s
+"""
+
+
+@test
+def a_readout_names_how_the_model_is_read_and_nothing_else():
+    """The vocabulary verdict consumes, checked where it is written.
+
+    `kind` decides what a client builds: the chat template, a named plain
+    layout, or nothing at all because a custom head needs its author's server.
+    A layout with no name and a head with no location are blocks a consumer
+    cannot act on, and an unknown kind is a startup error in verdict.
+    """
+    good = ("      kind: layout\n      layout: decider-plain\n"
+            "      source: author-config\n"
+            "      temperature: {overall: 1.099, choice: 1.11}")
+    code, findings, _ = validate(READOUT_FIXTURE % good)
+    eq([x["error"] for x in findings if "readout" in x["error"]], [],
+       "a derived decider block is clean")
+    for body, why in (("      kind: generate", "must be one of"),
+                      ("      kind: layout\n      source: card", "layout needs"),
+                      ("      kind: head\n      source: card", "head needs"),
+                      ("      kind: chat\n      source: guessed", "source"),
+                      ("      kind: chat\n      source: card\n      colour: red",
+                       "unknown readout field")):
+        code, findings, _ = validate(READOUT_FIXTURE % body)
+        errs = " ".join(x["error"] for x in findings)
+        eq(why in errs, True, "%r is refused with %r: %s" % (body.strip(), why, errs))
+
+
+def readout_module():
+    return load_script("resolve_readout", os.path.join(ROOT, "scripts", "resolve-readout"))
+
+
+@test
+def a_readout_is_derived_from_the_config_beside_the_pinned_bytes():
+    """The author's config in the SERVED repo decides; the base repo's does not.
+
+    decider ships `decider_config.json` beside its ggufs, naming the layout the
+    weights were trained on and the temperatures fitted to them. JevK5's base
+    repo carries a config too, but for v0.3 while the pin is v0.2: its
+    temperature is not this file's, so a config is only read where the pinned
+    quant lives.
+    """
+    mod = readout_module()
+    decider = {"kind": "decision",
+               "quants": [{"repo": "Mapika/decider-4b-GGUF", "quant": "Q8_0"}],
+               "readout": {"note": "kept"}}
+    configs = {"Mapika/decider-4b-GGUF": {"decider_config.json": {
+        "layout": "plain", "temperature": 1.099,
+        "temperature_by_type": {"choice": 1.11, "noul": 1.56}}}}
+    got = mod.block_for("Mapika/decider-4b", decider, configs)
+    eq(got, {"kind": "layout", "layout": "decider-plain", "source": "author-config",
+             "temperature": {"overall": 1.099, "choice": 1.11, "noul": 1.56},
+             "note": "kept"}, "the layout and the calibration, and the hand note")
+
+    jevk5 = {"kind": "decision",
+             "quants": [{"repo": "alibiserikbay/JevK5-GGUF", "quant": "Q8_0"}]}
+    base_only = {"alibiserikbay/JevK5": {"jevk5_config.json": {"temperature": 1.22}}}
+    eq(mod.block_for("alibiserikbay/JevK5", jevk5, base_only), None,
+       "a config in the base repo says nothing about the pinned file")
+
+    # a layout the config names but verdict has no spec for is not guessed at
+    odd = {"Mapika/decider-4b-GGUF": {"decider_config.json": {"layout": "chat"}}}
+    eq(mod.block_for("Mapika/decider-4b", decider, odd), None,
+       "an unmapped layout is left for review")
 
 
 @test

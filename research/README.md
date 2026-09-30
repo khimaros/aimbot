@@ -221,9 +221,9 @@ than as file size over parameter count -- the derived one counts the f32 norms
 and the embedding and output tensors as if they were quantized body.
 
 it is keyed `repo:tag` on the same tags `files_by_tag` produces, so a rung is
-the same thing to both collectors, and both resolve the same roster: repos.txt
-unioned with every repo the registry's `quants:` and `components:` name. reading
-repos.txt alone left 30 registry-only repos unread, which on the page is a
+the same thing to both collectors, and both resolve the same roster: every repo
+the registry's `quants:`, `components:` and drafters name. reading a hand-kept
+side list alone once left 30 registry-only repos unread, which on the page is a
 ladder drawn with sizes and no layer mix at all -- the columns are dropped
 rather than blanked, so nothing said the data was missing.
 
@@ -314,8 +314,8 @@ not "how good is this model" but "does it run, and what else exists".
 `hf-discussions.json` is the only source here where a failure is attached to a
 specific quant of a specific repo -- reddit argues about models, the discussion
 tab on `unsloth/Laguna-S-2.1-GGUF` says UD-Q5_K_L emits no tokens under rocm on
-strix halo. keyed by the same repos.txt the sizes come from, so the two line
-up. the listing has no bodies, so the most-discussed dozen per repo are fetched
+strix halo. keyed by the same registry repos the sizes come from, so the two
+line up. the listing has no bodies, so the most-discussed dozen per repo are fetched
 in full.
 
 `github-issues.json` covers llama.cpp, where backend bugs get diagnosed. the
@@ -664,7 +664,7 @@ the cleanest signal in the set.
 ```
 cd research
 ./fetch-artificial-analysis
-./fetch-gguf-sizes                 # registry quants and components, unioned with repos.txt
+./fetch-gguf-sizes                 # registry quants, components and drafters
 ./fetch-gguf-tensors               # the same roster, read again for its types
 ./fetch-hackernews
 ./fetch-gbench
@@ -675,7 +675,7 @@ cd research
 ./fetch-model-facts                # derived: arch, params, ctx, mtp, thinking knob
 ./fetch-chat-templates             # the templates themselves, base repo and gguf header
 ./fetch-model-cards                # what models claim about themselves
-./fetch-hf-discussions             # repos.txt again, so it lines up with the sizes
+./fetch-hf-discussions             # the registry's repos again, so it lines up with the sizes
 ./fetch-github-issues              # ~7s/query: unauthenticated search is 10/min
 ./fetch-level1techs
 ./fetch-hf-catalog                 # publishers.txt; discovery, not lookup

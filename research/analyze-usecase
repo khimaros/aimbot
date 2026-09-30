@@ -511,32 +511,33 @@ def speech_facets(speech, arena, voicearena, ids, open_asr=None):
 JEV_AXES = [("score", ("jevbench_score",), "jevbench score (25:25:25:25)", "score"),
             ("intelligence", ("axes", "intelligence"), "intelligence", "score"),
             ("calibration", ("axes", "calibration"), "calibration", "score"),
-            ("hard", ("tiers", "hard"), "hard tier accuracy", "share"),
-            ("sealed", ("sealed_accuracy",), "sealed tier accuracy", "share")]
+            ("sealed", ("intelligence", "I_sealed"), "sealed-item intelligence",
+             "score")]
 
 
-def jev_facets(board, ids):
+def jev_facets(board, ids, revision=None):
     """JevBench, for the models that answer in probabilities rather than tokens.
 
-    Five numbers over two questions. The first is how good the answers are
-    (score, intelligence, hard tier) and the second is whether the model knows:
+    Four numbers over two questions. The first is how good the answers are
+    (score, intelligence) and the second is whether the model knows:
     `calibration` is a score no other source here has any notion of, and
-    `sealed` is the swe-rebench move on this board -- 308 items frozen after
-    every system shipped, so a model 49 points better on the public items than on
-    the sealed ones is telling on itself. Both halves are carried per row rather
-    than averaged, because the gap between them IS the finding.
+    `sealed` is the swe-rebench move on this board -- items frozen after every
+    system shipped, so a model well ahead on the public items is telling on
+    itself. Both halves are carried per row rather than averaged, because the gap
+    between them IS the finding. v1.5 publishes no pooled tier accuracy, so the
+    hard tier is no longer a facet.
     """
     row = (board.get(ids.get("jev")) or {})
     if not row:
         return {}
     total = sum(1 for r in board.values() if r.get("ranked"))
     note = ("rank %s of %d ranked systems, revision %s"
-            % (row.get("rank") or "-", total, row.get("new_in") or "the pinned run"))
-    # the public-minus-sealed gap is a LOSS, and every facet here ranks higher as
+            % (row.get("rank") or "-", total, revision or "the pinned run"))
+    # the open-minus-sealed gap is a LOSS, and every facet here ranks higher as
     # better, so it is not a facet of its own. it rides on the sealed one's ref
-    # line, where a reader sees the accuracy and how much of it the frozen items
+    # line, where a reader sees the score and how much of it the frozen items
     # did not survive
-    gap = row.get("public_minus_sealed_gap_pp")
+    gap = (row.get("intelligence") or {}).get("gap")
     if gap is not None:
         note += "; the public items read %.1f points higher than the sealed ones" % gap
     out = {}
@@ -587,7 +588,7 @@ def livebench_facets(board, ids):
     Which is also why none of it is weighted. LiveBench is served endpoints of
     models with open weights, on tasks that overlap the coding and math boards
     this composite already carries, and no redundancy analysis of it against them
-    has been done -- so it rides the way image editing and `jev.hard` do: on the
+    has been done -- so it rides the way image editing and `jev.sealed` do: on the
     model, rankable by a reader who moves the slider, and at no weight by default.
     """
     models = board.get("models") or {}
@@ -698,6 +699,7 @@ def build(bt, registry):
     arena, voicearena = load("tts-arena"), load("voicearena")
     pictures, showdown = load("artificial-analysis-image"), load("genai-showdown")
     jev = load("jevbench").get("systems") or {}
+    jev_revision = (load("jevbench").get("meta") or {}).get("revision")
     livebench = load("livebench")
 
     def lm_board(name):
@@ -721,7 +723,7 @@ def build(bt, registry):
         facets.update(community_facet(sent.get(short) or {}))
         facets.update(speech_facets(speech, arena, voicearena, ids, open_asr))
         facets.update(image_facets(pictures, lm_images, ids, lm_edits, showdown))
-        facets.update(jev_facets(jev, ids))
+        facets.update(jev_facets(jev, ids, jev_revision))
         facets.update(livebench_facets(livebench, ids))
         rating = bt.lmarena_score(ids)
         if rating is not None:

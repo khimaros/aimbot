@@ -54,6 +54,7 @@ lint: deps
 	./scripts/resolve-turns --check
 	./scripts/resolve-samplers --check
 	./scripts/resolve-runtime --check
+	./scripts/resolve-readout --check
 	cd research && ./fetch-quant-sweeps --check
 	./research/refresh-tables --check
 	cd research && ./analyze-usecase --check

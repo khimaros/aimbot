@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+
+"""The config files decision-model authors ship beside their weights.
+
+    fetch-author-configs        # write data/author-configs.json
+
+a decision model is read, not sampled: a client builds a prompt, reads the
+option-letter logits at an answer slot and divides them by a fitted
+temperature. which prompt, and which temperature, is the author's to say, and
+decider says it in a machine-readable file -- `decider_config.json` names the
+`layout` the weights were trained on and the per-answer-type temperatures. that
+is what `scripts/resolve-readout` derives a `readout:` block from.
+
+only the repos a registry decision model PINS are read, because a config is a
+claim about the bytes beside it: JevK5's base repo carries v0.3's temperatures
+while the pinned gguf is v0.2, and a config read off the base would calibrate
+the wrong file.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+
+import capture
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REGISTRY = os.path.join(HERE, "..", "registry", "models.yaml")
+OUT = "data/author-configs.json"
+RAW = "https://huggingface.co/%s/raw/main/%s"
+
+# the filenames an author has used for a readout config. one today; the list is
+# where the next family goes
+AUTHOR_CONFIGS = ("decider_config.json",)
+
+# a day, the same cadence as the model cards: these move when a release does
+MAX_AGE = 86400
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("!!! pyyaml not found")
+
+
+def get(repo, name, refresh):
+    """The decoded config, or None where the repo ships no such file."""
+    cmd = [os.path.join(HERE, "httpcache"), RAW % (repo, name),
+           "--key", "authorcfg-%s-%s" % (repo.replace("/", "_"), name),
+           "--max-age", str(MAX_AGE)]
+    if refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                          text=True)
+    if proc.returncode:
+        return None
+    try:
+        got = json.loads(proc.stdout)
+    except ValueError:
+        return None
+    return got if isinstance(got, dict) else None
+
+
+def pinned_repos(registry):
+    """Every quant repo a decision model pins, in registry order."""
+    out = []
+    for m in (registry.get("models") or {}).values():
+        if m.get("kind") != "decision":
+            continue
+        for q in m.get("quants") or []:
+            if q.get("repo") and q["repo"] not in out:
+                out.append(q["repo"])
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--registry", default=REGISTRY)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true")
+    args = ap.parse_args()
+
+    registry = yaml.safe_load(open(args.registry)) or {}
+    repos = {}
+    for repo in pinned_repos(registry):
+        found = {n: c for n in AUTHOR_CONFIGS
+                 for c in [get(repo, n, args.refresh)] if c is not None}
+        print("  %-46s %s" % (repo, ", ".join(sorted(found)) or "-"))
+        if found:
+            repos[repo] = found
+
+    written, now, before = capture.write(args.out, {"repos": repos},
+                                         lambda p: len(p["repos"]),
+                                         allow_shrink=args.allow_shrink)
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "repos"))
+    print("wrote %s: %d repo(s) with an author config" % (args.out, now))
+
+
+if __name__ == "__main__":
+    main()

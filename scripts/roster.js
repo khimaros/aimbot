@@ -429,13 +429,20 @@ function draftYield(m, q = activeQuant(m)) {
 // all is answering with a file nobody can serve. it is what made a 1.23 gib
 // qwen3-tts file beat the 0.9 gib one crispasr loads -- more bits per parameter
 // by its own tensor table, and no engine on the roster that reads it.
+//
+// gufo is the other rung that speaks: it loads the files its guide measured, so
+// it is an engine for those rungs only, and for none where the guide names the
+// checkpoint rather than a gguf.
 const crispasrNamed = m => quantChoices(m).some(c => (c.crispasr || {}).backend);
+const gufoLoads = (m, c) => ((m.gufo || {}).rungs || [])
+  .some(r => r.repo === c.repo && r.quant === c.quant);
 function rungEngines(m, c, named) {
   const out = new Set(c.engine || []);
   if ((c.crispasr || {}).backend) out.add('crispasr');
   else if (named) (m.engines || []).forEach(e => { if (e !== 'crispasr') out.add(e); });
   else { if ((m.crispasr || {}).backend) out.add('crispasr');
          (m.engines || []).forEach(e => out.add(e)); }
+  if (!gufoLoads(m, c)) out.delete('gufo');
   return out;
 }
 

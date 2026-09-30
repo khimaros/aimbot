@@ -24,7 +24,6 @@ registry/dashboard.yaml         what the dashboard opens with: the composite
                                 and floor, which filters are already pressed
                                 and the column order
 research/usecase-assessed.json  the written judgement about each model
-research/repos.txt              gguf repos to size and read discussions from
 .env.example                    the llm endpoint's shape; copy to .env, which is
                                 gitignored and read by research/llm.py
 mise.toml                       the toolchain: python, node and uv pinned to a
@@ -296,7 +295,7 @@ that had become glm-5.3-flash.
 
 ## adding a model
 
-the six steps below are the shape of it. `.claude/skills/add-model/SKILL.md` is
+the five steps below are the shape of it. `.claude/skills/add-model/SKILL.md` is
 the same thing at working depth -- the field vocabularies, which blocks a
 derive step will overwrite and which it reads back, and the traps that cost an
 afternoon each -- and it is what an agent asked to add a model should read
@@ -306,24 +305,25 @@ instead of rediscovering them.
    `name.short`, `name.match`, at least one `quants[]` entry and `modalities`.
    write the sampling profile's values from the card; leave `source` off and
    `ids` empty.
-2. add its gguf repo to `research/repos.txt` if a consumer would size it.
-3. run `scripts/sweep --stage collect` then `--stage derive`. that fills
-   `turns`, `thinking`, `ids`, `runtime` and each profile's `source`.
-4. `./scripts/models-validate --modalities` will tell you if the input
+2. run `scripts/sweep --stage collect` then `--stage derive`. that fills
+   `turns`, `thinking`, `ids`, `runtime`, `readout` and each profile's
+   `source`. every collector reads its repos from the registry, so a repo is
+   sized once it is pinned.
+3. `./scripts/models-validate --modalities` will tell you if the input
    modalities you typed disagree with the model's own `config.json`. fix the
    registry, not the check. `--runtime` is the same question for the loader: if
    it says mainline does not carry the architecture, find the fork or the PR and
    write it into `runtime:` by hand, or lint will fail on a model that names
    nowhere to get a build.
-5. write its block in `research/usecase-assessed.json`. `analyze-usecase
+4. write its block in `research/usecase-assessed.json`. `analyze-usecase
    --missing` lists what is unassessed; the numbers to ground it in are in
    `research/data/usecase.json` under the same repo key.
-6. `scripts/sweep --stage build`, then `scripts/sweep --stage check`. `--stage`
+5. `scripts/sweep --stage build`, then `scripts/sweep --stage check`. `--stage`
    takes one value, so passing it twice runs only the second.
 
 ## adding a speech model
 
-the same six steps, minus the ones that describe a text model: there is no
+the same five steps, minus the ones that describe a text model: there is no
 sampling profile to name and no thinking knob. two things replace them.
 
 `name.match` used to be skipped here too, on the grounds that no forum prose to

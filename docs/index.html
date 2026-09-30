@@ -817,13 +817,20 @@ function draftYield(m, q = activeQuant(m)) {
 // all is answering with a file nobody can serve. it is what made a 1.23 gib
 // qwen3-tts file beat the 0.9 gib one crispasr loads -- more bits per parameter
 // by its own tensor table, and no engine on the roster that reads it.
+//
+// gufo is the other rung that speaks: it loads the files its guide measured, so
+// it is an engine for those rungs only, and for none where the guide names the
+// checkpoint rather than a gguf.
 const crispasrNamed = m => quantChoices(m).some(c => (c.crispasr || {}).backend);
+const gufoLoads = (m, c) => ((m.gufo || {}).rungs || [])
+  .some(r => r.repo === c.repo && r.quant === c.quant);
 function rungEngines(m, c, named) {
   const out = new Set(c.engine || []);
   if ((c.crispasr || {}).backend) out.add('crispasr');
   else if (named) (m.engines || []).forEach(e => { if (e !== 'crispasr') out.add(e); });
   else { if ((m.crispasr || {}).backend) out.add('crispasr');
          (m.engines || []).forEach(e => out.add(e)); }
+  if (!gufoLoads(m, c)) out.delete('gufo');
   return out;
 }
 
@@ -3599,14 +3606,14 @@ const repoRow = (m, repo, counts) => pickRow('repo', repoChoices(m).map(r =>
   // the count is how many quants this repo publishes, which is nothing to say
   // about a base repo vllm is going to load whole
   + (counts
-    ? ` <span class="faint">${quantChoices(m).filter(c => c.repo === r).length}`
-      + (quantChoices(m).some(c => c.repo === r && rungDrafts(c))
+    ? ` <span class="faint">${rungsUnder(m).filter(c => c.repo === r).length}`
+      + (rungsUnder(m).some(c => c.repo === r && rungDrafts(c))
         ? ' ' + esc((m.speculative || {}).type || 'drafts') : '')
       + '</span>' : '')
   + '</button>').join(''));
 
 const quantRow = (m, repo, pick) =>
-  pickRow('quant', quantChoices(m).filter(c => c.repo === repo).map(c =>
+  pickRow('quant', rungsUnder(m).filter(c => c.repo === repo).map(c =>
     `<button class="chip${pick && c.quant === pick.quant ? ' on' : ''}"`
     + ` data-pick-repo="${esc(c.repo)}" data-pick-quant="${esc(c.quant)}"`
     + ` data-help="${c.gib ? `${gib(c.gib)} gib${rungBpw(c) ? `, ${rungBpw(c)} bits per weight` : ''}`
@@ -3674,7 +3681,7 @@ function tabOperate(m) {
   const configs = snippets(m);
   let out = '<h3>how to run it</h3>'
     + '<div class="picks">'
-    + pickRow('runtime', RUNTIMES.map(r =>
+    + pickRow('runtime', runtimesFor(m).map(r =>
       `<button class="chip${r.k === pickedRuntime(m).k ? ' on' : ''}"`
       + ` data-runtime="${esc(r.k)}">${esc(r.k)}</button>`).join(''))
     + repoRow(m, repo, pickedRuntime(m).gguf)
@@ -3750,11 +3757,18 @@ let ops = {runtime: null, repo: null, quant: null, profile: null};
 // `engines`, joined at build time from the architecture llama.cpp merged, the
 // crispasr backend the registry names, and the runtimes written down because
 // nothing derives them.
-const runtimesFor = m => RUNTIMES.filter(r => (m.engines || []).includes(r.k));
+//
+// gufo reads a gguf only where its guide names one; where the guide names the
+// checkpoint it loads the base repo whole, the way vllm does.
+const runtimesFor = m => RUNTIMES.filter(r => (m.engines || []).includes(r.k))
+  .map(r => r.k === 'gufo' ? {...r, gguf: !!((m.gufo || {}).rungs || []).length} : r);
 const pickedRuntime = m => {
   const mine = runtimesFor(m);
   return mine.find(r => r.k === ops.runtime) || mine[0] || {k: '', gguf: true};
 };
+// the rungs the picked runtime can load, which is every rung but under gufo
+const rungsUnder = m => pickedRuntime(m).k === 'gufo'
+  ? quantChoices(m).filter(c => gufoLoads(m, c)) : quantChoices(m);
 
 // `quantChoices` -- every (repo, quant) a model can be read as -- is in
 // roster.js, because the fit is built on it.
@@ -3773,7 +3787,7 @@ const pickedRuntime = m => {
 function repoChoices(m) {
   const rt = pickedRuntime(m);
   if (!rt.gguf) return [m.repo];
-  const all = [...new Set(quantChoices(m).map(c => c.repo))];
+  const all = [...new Set(rungsUnder(m).map(c => c.repo))];
   if (rt.k !== 'crispasr') return all;
   const declared = all.filter(r => quantChoices(m).some(
     c => c.repo === r && (c.crispasr || {}).backend));
@@ -3796,7 +3810,7 @@ function pickedRepo(m) {
 
 function pickedQuant(m) {
   const repo = pickedRepo(m);
-  const inRepo = quantChoices(m).filter(c => c.repo === repo);
+  const inRepo = rungsUnder(m).filter(c => c.repo === repo);
   // having been TOLD which repo, the best rung of that one is the answer: the
   // fit's own test over the set the reader narrowed by hand
   return inRepo.find(c => c.quant === ops.quant)
@@ -4083,7 +4097,13 @@ function otherRuntime(m, rt, pick) {
                 .concat(io))]).join('\n')};
   }
   if (rt.k === 'gufo') {
-    const g = m.gufo || {}, w = (g.weights || [])[0] || {};
+    // the weight behind the picked rung, and the guide's first where the guide
+    // names the checkpoint and no rung is its own
+    const g = m.gufo || {};
+    const rung = (g.rungs || []).find(r => pick && r.repo === pick.repo
+                                           && r.quant === pick.quant) || {};
+    const w = (g.weights || []).find(x => x.repo === rung.repo && x.file === rung.file)
+      || (g.weights || [])[0] || {};
     const flags = (g.serve || {}).flags || [];
     // the sidecar flag is the guide's own -- `--dflash-model` for the dflash2
     // build, `--mtp-model` for the mtp one -- and the sidecar file is the weight

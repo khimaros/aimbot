@@ -9,11 +9,11 @@ UD-Q5_K_XL emits no tokens under rocm on strix halo. MODELS.md and the roadmap
 already cite that kind of report by hand -- this collects it.
 
 Repos come from THE REGISTRY -- every base repo, every quant and every
-component -- unioned with repos.txt. That claim used to read "the same list
-fetch-gguf-sizes sizes", and it stopped being true when sizes moved to the
-registry and this did not: sizes covered 112 repos while this covered 41, and
-everything added to the roster since, including the whole speech and image half,
-had no discussion coverage at all.
+component. That claim used to read "the same list fetch-gguf-sizes sizes", and
+it stopped being true when sizes moved to the registry and this did not: sizes
+covered 112 repos while this covered 41, and everything added to the roster
+since, including the whole speech and image half, had no discussion coverage at
+all.
 
 Bodies are pulled PER MODEL rather than per repo. A model is several repos here
 -- its own, one or more gguf conversions, sometimes a vae or a text encoder --
@@ -108,8 +108,8 @@ def by_model(out):
     """{model: [(repo, discussion), ...]} over everything collected.
 
     The aggregate the roster actually wants: what is being reported about THIS
-    MODEL, wherever it was posted. A repo that belongs to no registry model --
-    repos.txt carries a few -- is grouped under its own name so nothing is lost.
+    MODEL, wherever it was posted. A repo with no model recorded is grouped
+    under its own name so nothing is lost.
     """
     groups = {}
     for repo, box in out.items():
@@ -121,7 +121,6 @@ def by_model(out):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--repos", default="repos.txt")
     ap.add_argument("--registry",
                     default=os.path.join(HERE, "..", "registry", "models.yaml"))
     ap.add_argument("--out", default="data/hf-discussions.json")
@@ -137,12 +136,7 @@ def main():
                          "than the capture on disk")
     args = ap.parse_args()
 
-    with open(args.repos) as f:
-        listed = [l.split("#")[0].strip() for l in f]
-    owner = registry_repos(args.registry)
-    # registry order first, then whatever repos.txt adds on its own: the
-    # registry is the roster and repos.txt is a hand-kept extra
-    repos = list(owner) + [r for r in listed if r and r not in owner]
+    repos = list(registry_repos(args.registry))
 
     out, threads = {}, 0
     for repo in repos:

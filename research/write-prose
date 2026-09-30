@@ -292,6 +292,10 @@ def cmd_stamp(args, models):
         for block in prose.blocks(surface):
             if block.id in led and block.id not in touched:
                 continue
+            # --grep keeps a stamp to the blocks the stamper wrote, rather than
+            # claiming whatever else is unstamped in the tree
+            if args.grep and not re.search(args.grep, block.id):
+                continue
             facets = prose.facts_for(block, models)
             row = dict(led.get(block.id) or {})
             row.setdefault("author", args.stamp)

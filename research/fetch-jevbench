@@ -24,14 +24,17 @@ is what a frozen run MEANS, and `--immutable` is the cache claim that says so ou
 loud. `benchmarkheaven.com/jev-models` is the page a reader wants; the revision is
 in its payload and `--url` overrides.
 
-Two things are deliberately not carried. The per-row `presets` and `rank_under`
-are the same composite at six weightings, which is the page's slider rather than
-a fact about the model, and `sealed_aggregate`'s per-family accuracies are 90%
-of the bytes for a breakdown no question here asks. What IS kept is
-`sealed_accuracy` and the public-minus-sealed gap, because that gap is this
-board's swe-rebench move: the sealed items were frozen after every system
-shipped, so a model that scored 49 points better on the public items than on the
-sealed ones (decider-4b v2 does) is telling on itself.
+Two things are deliberately not carried. The per-row `scores`, `ranks` and
+`views` are the same composite at other weightings, which is the page's slider
+rather than a fact about the model, and the per-type, per-tier split under
+`intelligence` is most of the bytes for a breakdown no question here asks. What
+IS kept is the sealed intelligence and its gap to the open items, because that
+gap is this board's swe-rebench move: the sealed items were frozen after every
+system shipped, so a model that scores well above its sealed half on the public
+items is telling on itself.
+
+The revision is also the cache key. The cache entry is immutable and the url is
+not: under one fixed key a bumped url re-read the previous run.
 
 The revision the roster reads is pinned in the URL above. A row's key names the
 VERSION the board measured -- `decider-4b-v2` is the v2 weights -- and it is
@@ -48,7 +51,7 @@ import sys
 
 import capture
 
-URL = "https://benchmarkheaven.com/api/jevbench/v1.4.2"
+URL = "https://benchmarkheaven.com/api/jevbench/v1.5.0"
 
 # the board's own header, minus the running commentary. `revision_log` is 20
 # prose entries about how the scoring changed and `footnotes` is 93 more; both
@@ -59,18 +62,26 @@ META = ("benchmark", "revision", "protocol", "status", "generated_utc",
 
 # one row, minus the page's own bookkeeping and the reproduction hashes
 ROW = ("display", "author", "repo", "class", "licence", "open", "underlying",
-       "has_distribution", "probability_source", "endpoint_kind", "api_flag",
-       "ranked", "listing", "not_ranked_because", "partial", "rank",
-       "jevbench_score", "axes", "tiers", "public_accuracy", "sealed_accuracy",
-       "public_minus_sealed_gap_pp", "new_in", "scoring_note", "footnote")
+       "endpoint_kind", "endpoint_condition", "api_flag", "ranked", "listing",
+       "not_ranked_because", "rank", "jevbench_score", "axes")
 
 SPEED = ("p50_s_raw", "p95_s_raw", "hardware", "adjustment")
 
+# v1.5 publishes the sealed items as a score under `intelligence` rather than as
+# an accuracy share, and the gap beside it. the per-type split is the page's
+# drill-down and is most of the bytes
+INTELLIGENCE = ("I_open", "I_sealed", "gap")
 
-def fetch(url, key, refresh):
+
+def cache_key(url):
+    """One cache entry per revision: the entry is immutable, the url is not."""
+    return "jevbench-" + url.rstrip("/").rsplit("/", 1)[-1]
+
+
+def fetch(url, refresh):
     """The decoded payload, or None if the endpoint could not be read."""
     here = os.path.dirname(os.path.abspath(__file__))
-    cmd = [os.path.join(here, "httpcache"), url, "--key", key, "--immutable"]
+    cmd = [os.path.join(here, "httpcache"), url, "--key", cache_key(url), "--immutable"]
     if refresh:
         cmd.append("--refresh")
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
@@ -92,6 +103,9 @@ def row(r):
     got = {k: sp[k] for k in SPEED if sp.get(k) is not None}
     if got:
         out["speed"] = got
+    intel = r.get("intelligence") or {}
+    if isinstance(intel, dict) and any(k in intel for k in INTELLIGENCE):
+        out["intelligence"] = {k: intel[k] for k in INTELLIGENCE if k in intel}
     cost = r.get("cost") or {}
     if cost.get("usd_per_1000") is not None:
         # `basis` is a paragraph saying whose list price the estimate used, and
@@ -122,7 +136,7 @@ def main():
                     help="write even though the board holds fewer systems than before")
     args = ap.parse_args()
 
-    got = shape(fetch(args.url, "jevbench", args.refresh) or {})
+    got = shape(fetch(args.url, args.refresh) or {})
     rows = got.get("systems") or {}
     if not rows:
         sys.exit("!!! no systems in the board -- the endpoint changed shape")
