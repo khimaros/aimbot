@@ -222,7 +222,7 @@ and the embedding and output tensors as if they were quantized body.
 
 it is keyed `repo:tag` on the same tags `files_by_tag` produces, so a rung is
 the same thing to both collectors, and both resolve the same roster: every repo
-the registry's `quants:`, `components:` and drafters name. reading a hand-kept
+the registry's `repos:`, `components:` and drafters name. reading a hand-kept
 side list alone once left 30 registry-only repos unread, which on the page is a
 ladder drawn with sizes and no layer mix at all -- the columns are dropped
 rather than blanked, so nothing said the data was missing.
@@ -524,6 +524,7 @@ vocabulary is a taxonomy of what the system even is: `system-one-open`,
 ./build-tables --budget 96         # every table at a different memory budget
 ./dashboard-table --table ranking  # the ranking, by RUNNING docs/index.html
 ./dashboard-table --table weights  # the same rows under each of the page's presets
+./dashboard-table --table modalities  # every other shape the page offers, one ranking each
 ./analyze-task-mentions            # model/task co-occurrence counts from reddit
 ./analyze-task-mentions --task debugging   # the sentences behind one column
 ./analyze-task-mentions --sentiment        # reception, by thread-and-depth percentile

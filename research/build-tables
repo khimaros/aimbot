@@ -28,36 +28,41 @@ import statistics
 import subprocess
 import sys
 
+import rungs
+
 GIB = 2 ** 30
 
-# weight budget on a 128gb strix halo. the box has 119.2 gib; ~110 gib is the
-# practical resident ceiling once the host and compute buffers are paid for, and
-# what is left for weights depends entirely on the model's kv cache. 105 is the
-# measured-behaviour default: deepseek v4 flash 0731 runs UD-IQ3_XXS (97.1) plus
-# a 10.2 gib dspark drafter, i.e. 107.3 gib resident, and glm-4.5-air has been
-# run at ~109 gib. use --budget to test the sensitivity of the ranking.
-BUDGET_GIB = 105.0
 
-# MODELS.md ranks a model at the quant that fits the budget above, and caps
-# some of them below it: past Q8 the extra bytes buy nothing measurable and cost
-# decode, so every dense model and small moe is pinned there. that is a POLICY --
-# "what to run at 105 gib" is a choice this document makes, and the registry
-# holds facts -- so it lives here, keyed by the registry's own `name.short`.
-# everything else about the roster is derived: which models, from which repo,
-# with which ids, comes from registry/models.yaml. it used to be a table here,
-# and adding a model to the registry then left this document silently unaware
-# of it.
-PINS = {
-    "qwen3.6 27b": "Q8_0",
-    "qwen3.6 35b a3b": "Q8_0",
-    "qwen3.8 27b": "Q8_0",
-    "muse glimmer": "Q8_0",
-    "gemma 4 31b": "UD-Q8_K_XL",
-    "gemma 4 26b a4b": "Q8_0",
-    "gpt-oss-120b": "UD-Q8_K_XL",
-    "qwen3 coder next": "Q8_0",
-    "nemotron 3.5 lightning": "Q8_0",
-}
+AIMBOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "aimbot")
+
+
+def dashboard_picks(ram=None):
+    """({registry key: rung}, hardware) -- the dashboard's best quant for each model.
+
+    The page fits every rung each repo publishes against the hardware and takes
+    the one it predicts is best, and this document reads that pick rather than
+    choosing a rung a second way: a hand-kept table of per-model picks here once
+    disagreed with the page it was meant to describe. Where nothing fits, the
+    rung is the smallest published and `fits` is false. `ram` is `--budget`,
+    for sensitivity; unset, the page's own default box; 0, no budget at all.
+    """
+    cmd = [AIMBOT, "--all", "--json"] + (["--ram", str(ram), "--reserve", "0"]
+                                         if ram is not None else [])
+    d = json.loads(subprocess.run(cmd, stdout=subprocess.PIPE, text=True, check=True).stdout)
+    return {r["repo"]: r["rung"] for r in d["rows"] if r.get("rung")}, d["hardware"]
+
+
+def held_by(rung, facts, hardware):
+    """What keeps a rung from fitting, or None where it fits.
+
+    Two different sentences: the model's own context window is shorter than
+    the view asks for (or unknown), or the box cannot hold the weights and the
+    cache at that context.
+    """
+    if rung.get("fits"):
+        return None
+    native = facts.get("context_native") or facts.get("context_gguf")
+    return "context" if not native or native < hardware["minCtx"] else "memory"
 
 
 def default_repo(m):
@@ -68,34 +73,30 @@ def default_repo(m):
     one carries the nextn head, and taking whichever was listed first sized the
     build that cannot draft.
     """
-    repos = []
-    for q in m.get("quants") or []:
-        if q["repo"] not in repos:
-            repos.append(q["repo"])
+    repos = rungs.repos(m)
     if (m.get("speculative") or {}).get("type"):
         for r in repos:
-            if any(q["repo"] == r and q.get("speculative") is not False
-                   for q in m.get("quants") or []):
-                return r
-    return repos[0] if repos else None
+            if r.get("speculative") is not False:
+                return r["repo"]
+    return repos[0]["repo"] if repos else None
 
 
 def roster():
     """Every text model in the registry, with the repo and ids to read it by.
 
-    Yields (short, repo, pin, aa_slug, model). A model with no gguf repo is
+    Yields (short, key, repo, aa_slug, model). A model with no gguf repo is
     skipped; everything else is filtered downstream, by whether a source
     measured it and by whether a quant of it fits.
     """
     out = []
-    for repo, m in registry_models().items():
+    for key, m in registry_models().items():
         if m.get("kind", "text") != "text":
             continue
         gguf = default_repo(m)
         if not gguf:
             continue
-        short = (m.get("name") or {}).get("short") or repo.lower()
-        out.append((short, gguf, PINS.get(short), (m.get("ids") or {}).get("aa"), m))
+        short = (m.get("name") or {}).get("short") or key.lower()
+        out.append((short, key, gguf, (m.get("ids") or {}).get("aa"), m))
     return out
 
 
@@ -151,8 +152,8 @@ def by_gguf_repo():
     """gguf repo -> its registry entry, which is how ROSTER joins to facts."""
     out = {}
     for repo, m in registry_models().items():
-        for q in (m.get("quants") or []) + (m.get("components") or []):
-            out.setdefault(q["repo"], m)
+        for r in rungs.weight_repos(m):
+            out.setdefault(r, m)
     return out
 
 
@@ -327,40 +328,9 @@ def model_facts():
     return d.get("models") or {k: v for k, v in d.items() if not k.startswith("_")}
 
 
-# a repo carries more than quants: vision projectors, drafter heads and imatrix
-# files all sit beside the weights. a full filename is NOT excluded here, unlike
-# in the viewer -- AngelSlim publishes hy3's mtp build as `Hy3-Q2_K_XL-mtp.gguf`
-# and that build is the one this document sizes, so the ceiling below is what
-# keeps a repo's stray bf16 upload out rather than its file extension.
-NOT_A_QUANT = re.compile(r"^(mmproj|mtp|dspark|dflash|eagle3)|imatrix", re.I)
-
-# past q8 the extra bytes buy nothing measurable and cost decode speed, so the
-# fit stops there rather than handing a small model bf16 because it happened to
-# fit. same ceiling the viewer opens on, in the same units.
-CAP_BPW = 11.0
 
 
-def quant_at(repo, sizes, pin, budget, params_b):
-    """The quant this document ranks a model at: the pin, or the largest that fits.
-
-    "Fits" is two limits, not one -- the memory budget and the q8 ceiling --
-    and a pin is honoured only where it clears both, so a stale pin cannot put
-    a model on a rung this document says nothing runs at.
-    """
-    real = {k: v for k, v in (sizes.get(repo) or {}).items()
-            if not NOT_A_QUANT.search(k)}
-    bpw = lambda b: b * 8 / (params_b * 1e9) if params_b else 0
-    ok = {k: v for k, v in real.items()
-          if v / GIB <= budget and bpw(v) <= CAP_BPW}
-    if not ok:
-        return None, None
-    if pin and pin in ok:
-        return pin, ok[pin] / GIB
-    gib, quant = sorted((v / GIB, k) for k, v in ok.items())[-1]
-    return quant, gib
-
-
-def load(budget=BUDGET_GIB):
+def load(budget=None, picks=None):
     """Every registry text model with a quant that fits, joined to its scores.
 
     A model no source has measured and whose shape nothing publishes cannot be
@@ -370,16 +340,20 @@ def load(budget=BUDGET_GIB):
     sizes = json.load(open("data/gguf-sizes.json"))
     facts = model_facts()
     srcs = source_ids()
+    picks = dashboard_picks(budget)[0] if picks is None else picks
     rows = []
-    for short, repo, pin, aa_slug, m in roster():
+    for short, key, repo, aa_slug, m in roster():
         # a roster repo the sizes do not carry drops the model from every table
         # without a word, which is how canonicalising two gemma repo spellings
         # silently deleted two rows. say so instead
         if not sizes.get(repo):
             print("!!! %-32s no sizes for %s" % (short, repo), file=sys.stderr)
             continue
+        rung = picks.get(key) or {}
+        if not rung.get("fits"):
+            continue
         d = aa.get(aa_slug) if aa_slug else None
-        f = facts.get(next(iter(k for k, v in registry_models().items() if v is m))) or {}
+        f = facts.get(key) or {}
         total = (d or {}).get("totalParameters") or f.get("params_total_b")
         # AA has not scored it, but the weights say what shape it is, so it can
         # still rank on whatever else measured it with the rest imputed
@@ -390,9 +364,7 @@ def load(budget=BUDGET_GIB):
                  "activeParameters": f.get("params_active_b"),
                  "intelligenceIndex": None, "scicode": None,
                  "terminalbenchV21": None}
-        quant, gib = quant_at(repo, sizes, pin, budget, total)
-        if quant is None:
-            continue
+        repo, quant, gib = rung["repo"], rung["quant"], rung["gib"]
         bpw = gib * GIB * 8 / (total * 1e9)
         ret = 1.0 if m.get("native_low_bpw") else retention(bpw)
         ids = srcs.get(short, {})
@@ -459,59 +431,50 @@ def hub_popularity(cat=None, cards=None):
     return pop
 
 
-def pinned_size(repo_sizes, quant):
-    """The bytes of one pinned rung, by `file:` first and the tag second.
+def unranked(budget=None):
+    """(short, repo, quant, gib, held, facts, model) for every roster model not ranked.
 
-    The size table is keyed by whatever the repo publishes -- a quant tag where
-    the filenames carry one, the filename where they do not -- so a rung may
-    carry both and only `file:` names the key. build-viewer resolves a rung in
-    this order; this document looked up the tag alone and sized kokoro,
-    whisper turbo, pyannote, titanet and deepseek v4.1 as `?`.
-    """
-    q = quant or {}
-    return (repo_sizes or {}).get(q.get("file") or q.get("quant") or "")
-
-
-def unranked(budget=BUDGET_GIB):
-    """(short, repo, quant, gib, facts, model) for every roster model not ranked.
+    `held` is None where a rung fits, else what holds it back: "memory" or
+    "context".
 
     Two reasons a model is here and they are different questions, so the caller
-    splits them: nothing measured it, or nothing that fits measures it.
+    splits them: nothing measured it, or nothing that fits measures it. The rung
+    is the dashboard's -- its pick where one fits, its smallest where memory
+    holds it back, and its best with no budget where its own window does, since
+    no box fits that and the smallest rung would answer a question nobody asked.
     """
-    sizes = json.load(open("data/gguf-sizes.json"))
     facts = model_facts()
-    ranked = {r["name"] for r in load(budget)}
+    picks, hardware = dashboard_picks(budget)
+    best = None
+    ranked = {r["name"] for r in load(budget, picks)}
     out = []
-    for short, repo, pin, aa_slug, m in roster():
+    for short, key, repo, aa_slug, m in roster():
         if short in ranked:
             continue
-        f = facts.get(next(iter(k for k, v in registry_models().items() if v is m))) or {}
-        # the registry's own pin, not this document's budget rule: a model that
-        # does not fit is being SIZED here rather than ranked, and the size to
-        # report is the one the registry recommends
-        q = next((q for q in m.get("quants") or [] if q["repo"] == repo), None)
-        rp = (q or {}).get("quant")
-        b = pinned_size(sizes.get(repo), q)
-        if b is None:
-            quant, gib = quant_at(repo, sizes, pin, budget, f.get("params_total_b"))
-        else:
-            quant, gib = rp, b / GIB
-        out.append((short, repo, quant, gib, f, m))
+        rung, f = picks.get(key) or {}, facts.get(key) or {}
+        held = held_by(rung, f, hardware)
+        if held == "context":
+            best = dashboard_picks(0)[0] if best is None else best
+            rung = best.get(key) or rung
+        out.append((short, rung.get("repo") or repo, rung.get("quant"), rung.get("gib"),
+                    held, f, m))
     return out
 
 
-def size_row(short, repo, quant, gib, f, m, pop):
+def size_row(short, repo, quant, gib, f, m, pop, held=None):
     import notes as note_refs
     p = pop.get(repo) or {}
-    first = (m.get("quants") or [{}])[0]
-    note = first.get("note") or m.get("notes") or ""
+    # the note written about THIS rung, where there is one, and the model's own
+    # otherwise
+    hit = rungs.facts_for(m, quant, repo) if quant else None
+    note = ((hit or (None, None, {}))[2].get("note")) or m.get("notes") or ""
     # the references in a note become figures here rather than being stored
     # rendered, so this column cannot print a size the repo stopped having
-    note = note_refs.render(note, first.get("repo") or repo,
-                            first.get("file") or first.get("quant"),
+    note = note_refs.render(note, repo, [k for k in ((hit or (0, None))[1], quant) if k],
                             note_refs.load(), model=repo)[0]
+    label = quant_label(quant) if quant else "-"
     return "| %s | %s | %s | %s / %s | %s | %s | %s |" % (
-        short, quant_label(quant) if quant else "-",
+        short, label + (", context short of the view" if held == "context" else ""),
         "%.1f" % gib if gib else "?",
         "%gb" % f["params_total_b"] if f.get("params_total_b") else "?",
         "%gb" % f["params_active_b"] if f.get("params_active_b") else "?",
@@ -520,7 +483,7 @@ def size_row(short, repo, quant, gib, f, m, pop):
         note.replace("\n", " ").strip())
 
 
-def table_unscored(_rows, budget=BUDGET_GIB):
+def table_unscored(_rows, budget=None):
     """What can be said about a model no benchmark suite has measured.
 
     Deliberately not a ranking and deliberately not merged into the composite:
@@ -532,13 +495,13 @@ def table_unscored(_rows, budget=BUDGET_GIB):
     pop = hub_popularity()
     print("| model | quant | size (gib) | total / active | downloads | likes | note |")
     print("|---|---|--:|---|--:|--:|---|")
-    for short, repo, quant, gib, f, m in unranked(budget):
-        if gib and gib > budget:
+    for short, repo, quant, gib, held, f, m in unranked(budget):
+        if held == "memory":
             continue
-        print(size_row(short, repo, quant, gib, f, m, pop))
+        print(size_row(short, repo, quant, gib, f, m, pop, held))
 
 
-def table_oversize(_rows, budget=BUDGET_GIB):
+def table_oversize(_rows, budget=None):
     """The models this box cannot hold, sized so the gap is a number.
 
     They are carried because they are what the runnable models are being
@@ -548,8 +511,8 @@ def table_oversize(_rows, budget=BUDGET_GIB):
     pop = hub_popularity()
     print("| model | smallest quant | size (gib) | total / active | downloads | likes | note |")
     print("|---|---|--:|---|--:|--:|---|")
-    rows = [r for r in unranked(budget) if r[3] and r[3] > budget]
-    for short, repo, quant, gib, f, m in sorted(rows, key=lambda r: r[3]):
+    rows = [r for r in unranked(budget) if r[4] == "memory"]
+    for short, repo, quant, gib, held, f, m in sorted(rows, key=lambda r: r[3]):
         print(size_row(short, repo, quant, gib, f, m, pop))
 
 
@@ -559,7 +522,7 @@ FORUM_TASKS = ("agentic", "planning", "long context")
 FORUM_FLOOR = 20
 
 
-def table_forum(_rows, budget=BUDGET_GIB):
+def table_forum(_rows, budget=None):
     """How often each model comes up on r/LocalLLaMA, and how it lands.
 
     This was typed by hand for four captures, which is how it came to show
@@ -616,8 +579,9 @@ def main():
     ap.add_argument("--table",
                     choices=["speed", "unscored", "oversize", "forum", "all"],
                     default="all")
-    ap.add_argument("--budget", type=float, default=BUDGET_GIB,
-                    help="gib available for weights (default %(default)s)")
+    ap.add_argument("--budget", type=float,
+                    help="gib of memory to fit in, for sensitivity; unset, the "
+                         "dashboard's own default box")
     args = ap.parse_args()
     rows = load(args.budget)
     for name, fn in [("speed", table_speed), ("unscored", table_unscored),

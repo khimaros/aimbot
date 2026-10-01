@@ -41,6 +41,7 @@ import subprocess
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import capture  # noqa: E402  the do-not-shrink guard
+import rungs  # noqa: E402  a model's repos, whichever shape the registry is in
 
 from html.parser import HTMLParser
 
@@ -527,9 +528,8 @@ def main():
         # just the first one's: a registry note hangs off a rung and quotes the
         # card of the repo that rung came out of, and ISTA-DASLab's benchmark
         # table is on the third entry of a ladder
-        for i, q in enumerate(m.get("quants") or []):
-            qrepo = q.get("repo")
-            if not qrepo or qrepo in kept:
+        for i, qrepo in enumerate(rungs.repo_names(m)):
+            if qrepo in kept:
                 continue
             qtext = get(RAW % qrepo, "qcard-%s" % qrepo.replace("/", "_"),
                         args.max_age, args.refresh)

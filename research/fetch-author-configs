@@ -24,6 +24,7 @@ import subprocess
 import sys
 
 import capture
+import rungs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REGISTRY = os.path.join(HERE, "..", "registry", "models.yaml")
@@ -67,9 +68,7 @@ def pinned_repos(registry):
     for m in (registry.get("models") or {}).values():
         if m.get("kind") != "decision":
             continue
-        for q in m.get("quants") or []:
-            if q.get("repo") and q["repo"] not in out:
-                out.append(q["repo"])
+        out += [r for r in rungs.repo_names(m) if r not in out]
     return out
 
 

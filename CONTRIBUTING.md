@@ -156,7 +156,7 @@ reading:
   two different failures. an architecture mainline has no entry for refuses the
   file outright, and the model needs a `fork:`, `patch:` or `tracking:` written
   on it. a quant TYPE mainline has no name for only costs part of a ladder, so
-  the pin can be fine while rungs under it are unreachable.
+  some rungs of a repo can be fine while others are unreachable.
 - **speech models with no engine to load them and no score to rank them**, which
   are the two gaps the text half does not have: a text model's loader is derived
   and lint fails without it, and five leaderboards score it.
@@ -302,13 +302,13 @@ afternoon each -- and it is what an agent asked to add a model should read
 instead of rediscovering them.
 
 1. add the base repo as a key in `registry/models.yaml` with `kind`,
-   `name.short`, `name.match`, at least one `quants[]` entry and `modalities`.
+   `name.short`, `name.match`, at least one `repos[]` entry and `modalities`.
    write the sampling profile's values from the card; leave `source` off and
    `ids` empty.
 2. run `scripts/sweep --stage collect` then `--stage derive`. that fills
    `turns`, `thinking`, `ids`, `runtime`, `readout` and each profile's
    `source`. every collector reads its repos from the registry, so a repo is
-   sized once it is pinned.
+   sized once it is listed.
 3. `./scripts/models-validate --modalities` will tell you if the input
    modalities you typed disagree with the model's own `config.json`. fix the
    registry, not the check. `--runtime` is the same question for the loader: if

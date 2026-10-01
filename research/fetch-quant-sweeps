@@ -58,6 +58,8 @@ import re
 import subprocess
 import sys
 
+import rungs
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = "quant-curves.json"
 RAW = "https://huggingface.co/%s/raw/main/README.md"
@@ -328,7 +330,7 @@ def main():
                   % (repo, spec["url"]), file=sys.stderr)
         # the quantizer measures its own quants, so its card answers before the
         # vendor's; both are read because either may carry the table
-        for source in [q["repo"] for q in (m.get("quants") or [])] + [repo]:
+        for source in rungs.repo_names(m) + [repo]:
             found = None
             for table in rows_of(card(source, args.max_age, args.refresh)):
                 found = sweep_from(table, params)

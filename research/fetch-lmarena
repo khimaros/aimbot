@@ -16,6 +16,10 @@ says which (`-style_control` vs `-raw`), so the distinction is never guessed.
 
 Every board is kept, media ones included, because they cost little and the
 alternative is refetching when the question changes.
+
+Each arena has its own page. The overview once embedded every board in full and
+now carries only a few top entries per arena, so the boards are read one page
+per arena and merged.
 """
 
 import argparse
@@ -24,7 +28,11 @@ import os
 import subprocess
 import sys
 
-URL = "https://lmarena.ai/leaderboard"
+URL = "https://lmarena.ai/leaderboard/%s"
+# the arenas the overview links to. webdev was a board here once and its page
+# no longer embeds one; a page that answers nothing is reported and skipped
+ARENAS = ("text", "vision", "document", "search", "text-to-image",
+          "image-edit", "text-to-video", "image-to-video", "video-edit")
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/140.0.0.0 Safari/537.36")
 
@@ -60,48 +68,60 @@ def board_name(rec):
     return bid
 
 
+def page(arena, max_age, refresh):
+    """The board records one arena's page embeds, as json lines."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    cmd = [os.path.join(here, "rsc-extract"), URL % arena, "--key", "lmarena-" + arena,
+           "--match", '"leaderboardSlug":', "--max-age", str(max_age),
+           "--header", "User-Agent: " + UA]
+    if refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    return proc.stdout.splitlines() if proc.returncode == 0 else []
+
+
+def collect(pages):
+    """{boards, models} merged over every page's records."""
+    boards, models = {}, {}
+    for lines in pages:
+        for line in lines:
+            rec = json.loads(line)
+            name, entries = board_name(rec), rec.get("entries") or []
+            if not name or not entries:
+                continue
+            boards[name] = dict(
+                total_votes=rec.get("totalVotes"), total_models=rec.get("totalModels"),
+                style_control=(rec.get("params") or {}).get("styleControl"),
+                entries=[{k: e[k] for k in ENTRY if e.get(k) is not None}
+                         for e in entries])
+            for e in entries:
+                m = e.get("modelDisplayName")
+                if m:
+                    models.setdefault(m, {}).update(
+                        organization=e.get("modelOrganization"), license=e.get("license"))
+    for m in models.values():
+        lic = (m.get("license") or "").lower()
+        m["openWeights"] = any(t in lic for t in OPEN_LICENSES)
+    return {"boards": boards, "models": models}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default="data/lmarena.json")
-    ap.add_argument("--url", default=URL)
     ap.add_argument("--max-age", type=int, default=6 * 3600)
     ap.add_argument("--refresh", action="store_true")
     args = ap.parse_args()
 
-    here = os.path.dirname(os.path.abspath(__file__))
-    cmd = [os.path.join(here, "rsc-extract"), args.url, "--key", "lmarena",
-           "--match", '"leaderboardSlug":', "--max-age", str(args.max_age),
-           "--header", "User-Agent: " + UA]
-    if args.refresh:
-        cmd.append("--refresh")
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
-    if proc.returncode:
-        sys.exit(proc.returncode)
-
-    boards, models = {}, {}
-    for line in proc.stdout.splitlines():
-        rec = json.loads(line)
-        name, entries = board_name(rec), rec.get("entries") or []
-        if not name or not entries:
-            continue
-        boards[name] = dict(
-            total_votes=rec.get("totalVotes"), total_models=rec.get("totalModels"),
-            style_control=(rec.get("params") or {}).get("styleControl"),
-            entries=[{k: e[k] for k in ENTRY if e.get(k) is not None} for e in entries])
-        for e in entries:
-            m = e.get("modelDisplayName")
-            if m:
-                models.setdefault(m, {}).update(
-                    organization=e.get("modelOrganization"), license=e.get("license"))
-
+    pages = []
+    for arena in ARENAS:
+        lines = page(arena, args.max_age, args.refresh)
+        if not lines:
+            print("  %-16s no leaderboard on the page" % arena, file=sys.stderr)
+        pages.append(lines)
+    out = collect(pages)
+    boards, models = out["boards"], out["models"]
     if not boards:
         sys.exit("no leaderboards found -- the page structure probably changed")
-
-    for m in models.values():
-        lic = (m.get("license") or "").lower()
-        m["openWeights"] = any(t in lic for t in OPEN_LICENSES)
-
-    out = {"boards": boards, "models": models}
     with open(args.out, "w") as f:
         json.dump(out, f, indent=1, sort_keys=True)
     ow = sum(1 for m in models.values() if m["openWeights"])

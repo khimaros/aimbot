@@ -46,6 +46,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import llm  # noqa: E402
 import publishers  # noqa: E402  the `[role]` parser, shared with resolve-base
+import rungs  # noqa: E402  a model's repos, whichever shape the registry is in
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = "data/proposals.json"
@@ -381,9 +382,7 @@ def carried_repos(registry_path):
     out = set()
     for repo, m in models.items():
         out.add(repo.lower())
-        for q in (m.get("quants") or []) + (m.get("components") or []):
-            if q.get("repo"):
-                out.add(q["repo"].lower())
+        out.update(r.lower() for r in rungs.weight_repos(m))
     return out
 
 

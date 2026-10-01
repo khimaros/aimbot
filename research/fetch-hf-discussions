@@ -36,6 +36,7 @@ import subprocess
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import capture  # noqa: E402  the do-not-shrink guard
+import rungs  # noqa: E402  a model's repos, whichever shape the registry is in
 
 import time
 
@@ -84,7 +85,7 @@ def thread_text(detail):
 def registry_repos(path):
     """{repo: the model it belongs to} for every repo the registry names.
 
-    A model is its base repo plus its quants and components, and all of them
+    A model is its base repo plus its repos and components, and all of them
     have a discussion tab. The base repo is where the vendor's own users report;
     a gguf repo is where somebody says UD-Q5_K_XL emits no tokens under rocm.
     """
@@ -96,11 +97,10 @@ def registry_repos(path):
     out = {}
     for base, m in models.items():
         out.setdefault(base, base)
-        for w in (m.get("quants") or []) + (m.get("components") or []):
-            if w.get("repo"):
-                # first writer wins: two models can share a conversion, and the
-                # aggregate should not claim it twice
-                out.setdefault(w["repo"], base)
+        for r in rungs.weight_repos(m):
+            # first writer wins: two models can share a conversion, and the
+            # aggregate should not claim it twice
+            out.setdefault(r, base)
     return out
 
 
@@ -136,10 +136,11 @@ def main():
                          "than the capture on disk")
     args = ap.parse_args()
 
-    repos = list(registry_repos(args.registry))
+    # {repo: the model it belongs to}, which each repo's threads carry
+    owner = registry_repos(args.registry)
 
     out, threads = {}, 0
-    for repo in repos:
+    for repo in owner:
         found = []
         for p in range(args.pages):
             d = get(LIST % (repo, p), "hfd-%s-p%d" % (slug(repo), p), args.max_age, args.refresh)

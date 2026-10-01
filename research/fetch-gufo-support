@@ -43,6 +43,7 @@ import subprocess
 import sys
 
 import capture
+import rungs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = "data/gufo-support.json"
@@ -194,8 +195,7 @@ def report(payload, registry):
     """Each guide, and which of the weights it loads this roster names."""
     models = payload.get("models") or {}
     keys = set(registry)
-    pinned = {q["repo"] for m in registry.values()
-              for q in (m.get("quants") or []) if q.get("repo")}
+    pinned = {r for m in registry.values() for r in rungs.repo_names(m)}
 
     print("gufo: %d model guide(s), %d subcommand(s)"
           % (len(models), len((payload.get("meta") or {}).get("subcommands") or [])))

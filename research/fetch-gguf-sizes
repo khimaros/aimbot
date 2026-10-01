@@ -8,7 +8,7 @@ natively-MXFP4 models like gpt-oss-120b are the same size at every quant tag.
 This sums the actual byte totals reported by the huggingface tree API, grouped
 by quant tag, so MODELS.md can compare against a real memory budget.
 
-Repos come from the registry's quants, components and drafters.
+Repos come from the registry's repos, components and drafters.
 """
 
 import argparse
@@ -20,6 +20,7 @@ import subprocess
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import capture  # noqa: E402  the do-not-shrink guard
+import rungs  # noqa: E402  a model's repos, whichever shape the registry is in
 
 
 TREE = "https://huggingface.co/api/models/%s/tree/main?recursive=true"
@@ -114,13 +115,14 @@ def tree(repo, max_age=MAX_AGE, refresh=False):
     return t if isinstance(t, list) else None
 
 
-def files_by_tag(repo, max_age=MAX_AGE, refresh=False):
+def files_by_tag(repo, max_age=MAX_AGE, refresh=False, pinned=(), drafter=False):
     """{tag: [(path, size)]} for every weight file, sharded ones grouped.
 
     Split out from `quants` because the tensor reader needs the same grouping
     and the PATHS as well: a tag is not a filename, and deciding which file a
     rung is has to be settled in one place or the two collectors disagree about
-    what a rung even is.
+    what a rung even is. `pinned` is the files the registry names in this repo,
+    and `drafter` says the registry names the repo as a model's drafter.
     """
     t = tree(repo, max_age, refresh)
     if t is None:
@@ -131,33 +133,81 @@ def files_by_tag(repo, max_age=MAX_AGE, refresh=False):
         if e.get("type") != "file" or not WEIGHTS.search(path):
             continue
         size = e.get("size") or (e.get("lfs") or {}).get("size") or 0
-        if "/" in path:
-            tag = path.split("/")[0]
-        else:
-            m = QUANT.search(path)
-            # uppercased so `s2-pro-q8_0.gguf` and `Model-Q8_0.gguf` are one
-            # rung. every tag that matched before this was already uppercase,
-            # so no existing key moves
-            tag = m.group(1).upper() if m else SHARD.sub(".gguf", path)
-        if "mmproj" in path.lower():
-            tag = "mmproj:" + tag
-        elif is_sidecar(path):
-            marker = SIDECAR.search(path).group(1).lower()
-            if not tag.lower().startswith(marker):
-                tag = "%s:%s" % (marker, tag)
-        agg[tag].append((path, size))
-    return dict(agg)
+        agg[tag_of(path)].append((path, size))
+    return split_pinned(agg if drafter else drafters_are_the_build(agg), pinned)
 
 
-def quants(repo, max_age=MAX_AGE, refresh=False):
-    by = files_by_tag(repo, max_age, refresh)
+def drafters_are_the_build(agg):
+    """Undo the sidecar prefix where a repo holds nothing BUT sidecar names.
+
+    A drafter sits beside the weights it drafts for. Tiel-coder names every
+    file `...-MTP-UD-Q4_K_XL.gguf`, the marker before the quant where bonsai's
+    `dspark` drafter puts it, and with no other weights in the repo the marker
+    names the build rather than a sidecar to it. A repo the registry names as a
+    drafter never reaches here: it holds only drafters because that is what it is.
+    """
+    weights = [t for t in agg if not t.startswith("mmproj:")]
+    markers = {t.split(":", 1)[0] for t in weights if ":" in t}
+    if not weights or any(":" not in t for t in weights) or \
+            not markers <= {m.lower() for m in ("dspark", "dflash", "mtp", "eagle3")}:
+        return agg
+    return {t if t.startswith("mmproj:") else t.split(":", 1)[1]: files
+            for t, files in agg.items()}
+
+
+def tag_of(path):
+    """The rung a weight file belongs to."""
+    if "/" in path:
+        tag, name = path.split("/")[0], path.rpartition("/")[2]
+        # a folder naming neither a quant nor a drafter, over a file that names
+        # its own quant, is only where the file lives -- winnow ships its ggufs
+        # under `gguf/` -- so the file is tagged by its own name rather than
+        # filed with every sibling as a rung called `gguf`
+        if not (QUANT_AT.search(tag) or SIDECAR.search(tag)) and QUANT.search(name):
+            tag = tag_of(name)
+    else:
+        m = QUANT.search(path)
+        # uppercased so `s2-pro-q8_0.gguf` and `Model-Q8_0.gguf` are one
+        # rung. every tag that matched before this was already uppercase,
+        # so no existing key moves
+        tag = m.group(1).upper() if m else SHARD.sub(".gguf", path)
+    if "mmproj" in path.lower():
+        return "mmproj:" + tag if not tag.startswith("mmproj:") else tag
+    if is_sidecar(path):
+        marker = SIDECAR.search(path).group(1).lower()
+        if not tag.lower().startswith(marker):
+            return "%s:%s" % (marker, tag)
+    return tag
+
+
+def split_pinned(agg, pinned):
+    """A pinned file gets a key of its own where its tag gathered other files.
+
+    A tag is a size class, not a file: JevK5 publishes five `Q8_0` files -- two
+    versions at 4b, two at 9b and a 2b -- and keyed by tag they summed into one
+    27.97 gib rung that the pin on the 4.2 gib v0.2 file then read. only the
+    pinned file moves, so every key a registry `quant:` already resolves stays.
+    """
+    out = {}
+    for tag, files in agg.items():
+        stems = {SHARD.sub(".gguf", p) for p, _ in files}
+        for p, size in files:
+            name = SHARD.sub(".gguf", p.rpartition("/")[2])
+            key = name if len(stems) > 1 and name in pinned else tag
+            out.setdefault(key, []).append((p, size))
+    return out
+
+
+def quants(repo, max_age=MAX_AGE, refresh=False, pinned=(), drafter=False):
+    by = files_by_tag(repo, max_age, refresh, pinned, drafter)
     if by is None:
         return None
     return {tag: sum(size for _, size in files) for tag, files in by.items()}
 
 
 def roster(registry=REGISTRY):
-    """Every gguf repo the registry names: quants, components and drafters.
+    """Every gguf repo the registry names: repos, components and drafters,
+    and the key of an entry with none.
 
     Shared with the tensor reader for the same reason `files_by_tag` is: sizes
     and tensors answer two halves of one question about one file, and a reader
@@ -170,14 +220,43 @@ def roster(registry=REGISTRY):
     repos = {}
     try:
         import yaml
-        for m in ((yaml.safe_load(open(registry)) or {}).get("models") or {}).values():
-            for q in (m.get("quants") or []) + (m.get("components") or []) \
-                    + drafters(m):
-                if q.get("repo"):
-                    repos[q["repo"].lower()] = q["repo"]
+        for key, m in ((yaml.safe_load(open(registry)) or {}).get("models") or {}).items():
+            # an entry with no repo claims its own repo holds no gguf, and
+            # reading that repo and finding nothing is the evidence for it
+            if not rungs.repo_names(m):
+                repos[key.lower()] = key
+            for r in rungs.weight_repos(m) + [b["repo"] for b in drafters(m)]:
+                repos[r.lower()] = r
     except (IOError, ImportError):
         pass
     return sorted(repos.values())
+
+
+def pinned_files(registry=REGISTRY):
+    """{repo: {file basename}} for every file the registry names by filename."""
+    out = collections.defaultdict(set)
+    try:
+        import yaml
+        for m in ((yaml.safe_load(open(registry)) or {}).get("models") or {}).values():
+            for r, key, _facts in rungs.files(m):
+                if rungs.is_filename(key):
+                    out[r["repo"]].add(key.rpartition("/")[2])
+            for c in m.get("components") or []:
+                if c.get("repo") and c.get("file"):
+                    out[c["repo"]].add(c["file"].rpartition("/")[2])
+    except (IOError, ImportError):
+        pass
+    return out
+
+
+def drafter_repos(registry=REGISTRY):
+    """Every repo the registry names as some model's separate drafter."""
+    try:
+        import yaml
+        models = ((yaml.safe_load(open(registry)) or {}).get("models") or {}).values()
+    except (IOError, ImportError):
+        return set()
+    return {b["repo"] for m in models for b in drafters(m)}
 
 
 def drafters(m):
@@ -206,9 +285,9 @@ def main():
                          "than the capture on disk")
     args = ap.parse_args()
 
-    out = {}
+    out, pinned, heads = {}, pinned_files(args.registry), drafter_repos(args.registry)
     for repo in roster(args.registry):
-        q = quants(repo, args.max_age, args.refresh)
+        q = quants(repo, args.max_age, args.refresh, pinned.get(repo, ()), repo in heads)
         if q is None:
             print("  %-52s unavailable" % repo, file=sys.stderr)
             continue

@@ -193,12 +193,12 @@ def flight_undefined_becomes_null():
 REGISTRY_FIXTURE = """version: 1
 models:
   Vendor/Model-A:
-    quants:
-    - {repo: Quanter/Model-A-GGUF, quant: Q8_0}
-    - {repo: Other/Model-A-GGUF, quant: F16}
+    repos:
+    - {repo: Quanter/Model-A-GGUF, files: {Q8_0: {}}}
+    - {repo: Other/Model-A-GGUF, files: {F16: {}}}
   Vendor/Model-B:
-    quants:
-    - {repo: Quanter/MODEL-b-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Quanter/MODEL-b-GGUF, files: {Q8_0: {}}}
     components:
     - {repo: Vendor/Model-B-Encoder, quant: F16}
 """
@@ -297,6 +297,85 @@ def seed_cache(key, payload, raw=False):
     return [body, os.path.join(CACHE, key + ".meta")]
 
 
+def sizes_of(tree, pinned=(), drafter=False):
+    """fetch-gguf-sizes' own grouping over a tree listing, with no network."""
+    mod = load_script_with_research("fetch_gguf_sizes", "fetch-gguf-sizes")
+    mod.tree = lambda *a, **k: [dict(e, type="file") for e in tree]
+    return mod.quants("fixture/Repo", pinned=set(pinned), drafter=drafter)
+
+
+@test
+def a_directory_is_a_tag_only_where_it_names_a_quant():
+    """winnow ships its ggufs under `gguf/`, and that is a folder, not a rung.
+
+    unsloth shards a big quant into a directory named for it, so the directory
+    used to be the tag for every file under one -- which filed winnow's q8 and
+    bf16 together as a 23 gib rung called `gguf`, and left the pinned q8 with
+    no size at all.
+    """
+    got = sizes_of([
+        {"path": "gguf/Winnow-12B-Q8_0.gguf", "size": 12},
+        {"path": "gguf/Winnow-12B-BF16.gguf", "size": 22},
+        {"path": "UD-Q4_K_XL/M-UD-Q4_K_XL-00001-of-00002.gguf", "size": 3},
+        {"path": "UD-Q4_K_XL/M-UD-Q4_K_XL-00002-of-00002.gguf", "size": 4},
+        {"path": "AP-Q4_K_XL/M-Q4_K_XL.gguf", "size": 5},
+        {"path": "MTP/mtp-M-Q8_0.gguf", "size": 1},
+        {"path": "MTP/mtp-M-BF16.gguf", "size": 2}])
+    eq(got.get("Q8_0"), 12, "a file under a plain folder is tagged by its name: %r" % got)
+    eq(got.get("BF16"), 22, "and so is its sibling")
+    eq("gguf" in got, False, "the folder is not a rung")
+    eq(got.get("UD-Q4_K_XL"), 7, "a quant-named folder still groups its shards")
+    eq(got.get("AP-Q4_K_XL"), 5, "and keeps a prefix its files do not carry")
+    eq(got.get("MTP"), 3, "a drafter folder is still one key")
+
+
+@test
+def a_repo_of_nothing_but_drafter_names_is_the_model():
+    """`-MTP-` in every filename names the build, not a sidecar beside it.
+
+    tiel-coder ships `Tiel-Coder-35B-A3B-MTP-UD-Q4_K_XL.gguf` and eight more like
+    it, the marker before the quant exactly where bonsai's `dspark` drafter puts
+    it -- but a drafter sits BESIDE weights, and this repo has no other weights.
+    keyed as nine sidecars, no rung of it had a size.
+    """
+    got = sizes_of([
+        {"path": "Tiel-Coder-35B-A3B-MTP-UD-Q4_K_XL.gguf", "size": 21},
+        {"path": "Tiel-Coder-35B-A3B-MTP-UD-Q8_K_XL.gguf", "size": 36},
+        {"path": "mmproj-BF16.gguf", "size": 1}])
+    eq(got.get("UD-Q4_K_XL"), 21, "the rungs are rungs: %r" % got)
+    eq(got.get("mmproj:BF16"), 1, "and the projector is still a projector")
+    mixed = sizes_of([
+        {"path": "Bonsai-27B-Q4_1.gguf", "size": 15},
+        {"path": "Bonsai-27B-dspark-Q4_1.gguf", "size": 2}])
+    eq(mixed.get("dspark:Q4_1"), 2, "beside weights, a drafter is a drafter: %r" % mixed)
+    # a repo the registry names as a model's drafter holds only drafters, and
+    # they stay drafters -- LFM2.5-2.6B-DSpark-GGUF is one
+    only = sizes_of([{"path": "LFM2.5-2.6B-DSpark-Q8_0.gguf", "size": 3}], drafter=True)
+    eq(only.get("dspark:Q8_0"), 3, "a drafter repo keeps its drafters: %r" % only)
+
+
+@test
+def a_pinned_file_is_sized_alone_where_its_tag_names_several():
+    """JevK5 publishes five `Q8_0` files -- two versions, three sizes.
+
+    keyed by tag they summed into one 27.97 gib rung, and the registry's pin on
+    the 4.2 gib v0.2 file read that sum. a tag is a size class, so a file the
+    registry names by `file:` gets a key of its own wherever its tag gathered
+    other files; every other key is left where it was.
+    """
+    tree = [
+        {"path": "jevk5-4b-v0.2-Q8_0.gguf", "size": 4},
+        {"path": "jevk5-4b-v0.3-Q8_0.gguf", "size": 5},
+        {"path": "jevk5-9b-v0.3-Q8_0.gguf", "size": 9},
+        {"path": "M-Q6_K-00001-of-00002.gguf", "size": 1},
+        {"path": "M-Q6_K-00002-of-00002.gguf", "size": 1}]
+    got = sizes_of(tree, pinned=["jevk5-4b-v0.2-Q8_0.gguf"])
+    eq(got.get("jevk5-4b-v0.2-Q8_0.gguf"), 4, "the pinned file is sized alone: %r" % got)
+    eq(got.get("Q8_0"), 14, "and leaves the rest of its tag where it was")
+    eq(got.get("Q6_K"), 2, "shards of one file are still one rung")
+    eq(sizes_of(tree).get("Q8_0"), 18, "with nothing pinned nothing moves")
+
+
 def roster_args(tmp, *repos, **kw):
     """`--registry` over a fixture in `tmp` that pins each of `repos`, as argv.
 
@@ -307,7 +386,7 @@ def roster_args(tmp, *repos, **kw):
     reg = os.path.join(tmp, "models.yaml")
     with open(reg, "w") as f:
         f.write(kw.get("registry", "models:\n"))
-        f.write("".join("  roster/fixture-%d:\n    quants:\n    - {repo: %s, quant: Q8_0}\n"
+        f.write("".join("  roster/fixture-%d:\n    repos:\n    - {repo: %s, files: {Q8_0: {}}}\n"
                         % (i, r) for i, r in enumerate(repos)))
     return ["--registry", reg]
 
@@ -459,14 +538,14 @@ models:
     name:
       short: widget 1.0 35b
       match: widget[\\s-]*1?\\.?0?[\\s-]*35b|\\bwidget\\b
-    quants: [{repo: Fixture/Widget-1.0-35B-GGUF, quant: Q8_0}]
+    repos: [{repo: Fixture/Widget-1.0-35B-GGUF, files: {Q8_0: {}}}]
     sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
   Fixture/Widget-1.0-9B:
     kind: text
     name:
       short: widget 1.0 9b
       match: widget[\\s-]*1?\\.?0?[\\s-]*9b
-    quants: [{repo: Fixture/Widget-1.0-9B-GGUF, quant: Q8_0}]
+    repos: [{repo: Fixture/Widget-1.0-9B-GGUF, files: {Q8_0: {}}}]
     sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
 """
 
@@ -478,7 +557,7 @@ models:
   Fixture/Written:
     kind: text
     name: {short: fixture written}
-    quants: [{repo: Fixture/Written-GGUF, quant: Q8_0}]
+    repos: [{repo: Fixture/Written-GGUF, files: {Q8_0: {}}}]
     sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
 """
 
@@ -488,8 +567,8 @@ models:
   Fixture/Named:
     kind: speech
     name: {short: fixture named}
-    quants:
-    - {repo: Fixture/Named-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Fixture/Named-GGUF, files: {Q8_0: {}}}
     components:
     - {repo: Fixture/Named-GGUF, quant: fixture-bigvgan.gguf, role: vocoder}
     - {repo: Fixture/Named-GGUF, quant: fixture-vae.safetensors, role: vae}
@@ -521,8 +600,8 @@ models:
   Fixture/Drafted:
     kind: text
     name: {short: fixture drafted}
-    quants:
-    - {repo: Fixture/Drafted-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Fixture/Drafted-GGUF, files: {Q8_0: {}}}
     speculative:
       type: draft-mtp
       n_max: 3
@@ -576,7 +655,7 @@ def a_drafter_may_live_in_a_repo_the_model_does_not_pin():
 def a_cross_repo_drafter_is_sized_like_any_other_file():
     """A drafter nothing pins is a download nobody measured.
 
-    The sizer's roster was the registry's `quants:` and `components:`, and a
+    The sizer's roster was the registry's `repos:` and `components:`, and a
     drafter is in neither -- so the one file the page charges for beside the
     weights was the one file with no byte count. It has to be sized for the
     same reason a rung does: it is resident.
@@ -593,6 +672,103 @@ def a_cross_repo_drafter_is_sized_like_any_other_file():
     eq("Fixture/Drafted-GGUF" in got, True, "the weights are sized, as before")
     eq("outside/Drafter-GGUF" in got, True,
        "and so is the drafter the model does not pin: %r" % (got,))
+
+
+@test
+def lmarena_reads_every_arena_from_its_own_page():
+    """lmarena split its one leaderboard page into a page per arena.
+
+    the overview now embeds only a few top entries per arena, keyed
+    `arenaSlug`, so the full boards the facets read -- text, text to image,
+    image edit -- come off `/leaderboard/<arena>`, each in the record shape the
+    old page carried all of them in. boards from several pages merge into one
+    capture, and a model seen on two boards is one model.
+    """
+    mod = load_script("fetch_lmarena", os.path.join(RESEARCH, "fetch-lmarena"))
+    for arena in ("text", "text-to-image", "image-edit"):
+        eq(arena in mod.ARENAS, True, "the %s page is read: %r" % (arena, mod.ARENAS))
+    rec = lambda board, name, lic: json.dumps({
+        "id": mod.BOARD_PREFIX + board + mod.BOARD_SUFFIX, "totalVotes": 9,
+        "entries": [{"modelDisplayName": name, "rating": 1000, "license": lic}]})
+    got = mod.collect([[rec("text-overall-style_control", "model-a", "Apache 2.0")],
+                       [rec("text_to_image-overall-raw", "model-a", "Apache 2.0"),
+                        rec("text_to_image-overall-raw", "", "")]])
+    eq(sorted(got["boards"]), ["text-overall-style_control", "text_to_image-overall-raw"],
+       "one board per page, merged")
+    eq(list(got["models"]), ["model-a"], "one model across boards")
+    eq(got["models"]["model-a"]["openWeights"], True, "with its licence read")
+
+
+@test
+def gbench_asks_for_the_whole_board():
+    """The rankings api answers 100 rows unless asked for more.
+
+    gemma 4 26b sat at rank 98 of 100; eighteen new entries pushed it off the
+    page and every figure a verdict quoted about it went unresolved, while the
+    row count stayed exactly 100 and nothing noticed. the request names a
+    limit above the board, and a result that fills it is refused as truncated.
+    """
+    mod = load_script("fetch_gbench", os.path.join(RESEARCH, "fetch-gbench"))
+    eq("limit=%d" % mod.LIMIT in mod.API, True, "the request names a limit: %s" % mod.API)
+    eq(mod.LIMIT > 118, True, "above the 118 rows the board holds today")
+    eq(mod.LIMIT <= 500, True, "and at most 500: above it the api answers its default page")
+    eq(mod.truncated([{}] * mod.LIMIT), True, "a result that fills the page is cut off")
+    eq(mod.truncated([{}] * 100), True,
+       "and so is exactly the default page, which is what an ignored limit returns")
+    eq(mod.truncated([{}] * 118), False, "and one that does not is the whole board")
+
+
+@test
+def discussions_are_collected_per_registry_model():
+    """The discussion collector runs end to end off the registry alone.
+
+    it read a hand-kept side list and the registry, and removing the list left
+    a name only the list had defined -- a NameError on the first repo with a
+    discussion, which only a sweep ever found. each repo's threads carry the
+    model they are about, which is what the per-model ranking groups on.
+    """
+    repo = "fixture/Talked-About-GGUF"
+    written = seed_cache("hfd-%s-p0" % re.sub(r"\W+", "_", repo),
+                         {"count": 1, "discussions": [
+                             {"num": 1, "title": "emits no tokens", "numComments": 3}]})
+    tmp = tempfile.mkdtemp()
+    try:
+        out = os.path.join(tmp, "d.json")
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-hf-discussions"),
+                            "--out", out, "--bodies", "0", "--pages", "1",
+                            "--max-age", "999999999", "--delay", "0"]
+                           + roster_args(tmp, repo),
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        eq(r.returncode, 0, "the collector runs: %s" % r.stderr[-400:])
+        got = json.load(open(out))
+    finally:
+        for p in written:
+            os.path.exists(p) and os.remove(p)
+        shutil.rmtree(tmp)
+    eq(got[repo]["model"], "roster/fixture-0", "the thread names its model: %r" % got)
+
+
+@test
+def a_model_with_no_rung_is_still_looked_at():
+    """A `repos: []` entry is the claim that its own repo holds no gguf.
+
+    The crispasr models carried with no conversion are keyed on the vendor's
+    repo, and the sizer reading that repo and finding nothing is the evidence
+    for the empty list. A hand-kept side list used to carry those repos; with
+    the registry as the only roster, the key itself has to be read.
+    """
+    mod = load_script_with_research("fetch_gguf_sizes", "fetch-gguf-sizes")
+    tmp = tempfile.mkdtemp()
+    try:
+        reg = os.path.join(tmp, "models.yaml")
+        with open(reg, "w") as f:
+            f.write("models:\n  vendor/No-Rungs:\n    kind: speech\n    repos: []\n"
+                    "  vendor/Has-Rungs:\n    repos:\n    - {repo: q/Has-GGUF, files: {Q8_0: {}}}\n")
+        got = mod.roster(reg)
+    finally:
+        shutil.rmtree(tmp)
+    eq("vendor/No-Rungs" in got, True, "a model with no rung is read: %r" % (got,))
+    eq("vendor/Has-Rungs" in got, False, "a model with rungs is read through them")
 
 
 TENSOR_REPO = "test-tensors/Fixture-GGUF"
@@ -743,9 +919,9 @@ TENSOR_REGISTRY_FIXTURE = """
 models:
   Vendor/Registry-Only:
     kind: text
-    quants:
+    repos:
     - repo: %s
-      quant: Q6_K
+      files: {Q6_K: {}}
 """ % TENSOR_REGISTRY_REPO
 
 
@@ -753,7 +929,7 @@ models:
 def the_tensor_reader_covers_the_registry():
     """The two collectors that read a repo have to read the SAME repos.
 
-    fetch-gguf-sizes read every repo the registry's `quants:` and `components:`
+    fetch-gguf-sizes read every repo the registry's `repos:` and `components:`
     name; the tensor reader once read a hand-kept side list alone. So a repo
     reachable only through the registry got a ladder with sizes on it and no
     tensor table behind them, and the viewer drops the `read` and `layers`
@@ -960,31 +1136,57 @@ def an_immutable_cache_entry_is_never_refetched_unless_forced():
 
 
 @test
-def a_rung_pinned_by_filename_is_still_sized():
-    """`file:` answers the size table before `quant:` does, in BOTH documents.
+def models_md_sizes_a_model_at_the_dashboards_best_quant():
+    """The document reads the page's pick; it does not choose a rung of its own.
 
-    The size table is keyed by whatever the repo publishes -- a quant tag where
-    the filenames carry one, the filename where they do not -- which is exactly
-    why a rung may carry both. build-viewer resolved it in that order and
-    build-tables looked up the tag alone, so six pinned rungs sized as `?` in
-    MODELS.md while the page showed them: kokoro's two espeak builds, whisper
-    turbo's two ggml `.bin` files, pyannote, titanet, and deepseek v4.1, whose
-    only complete gguf is `DSV41-mixedq2.gguf` at 157 gib.
+    build-tables once ranked a model at a hand-kept per-model pick, and before
+    that at the tag alone, so six rungs keyed by filename sized as `?` while
+    the page showed them. The page's fit is the one rule: the best rung it
+    predicts under the hardware, or the smallest published where none fits.
     """
     bt = load_script("build_tables", os.path.join(RESEARCH, "build-tables"))
-    sizes = {"DSV41-mixedq2.gguf": 168929929664, "Q8_0": 42}
+    picks, hardware = bt.dashboard_picks()
+    code, out, _ = aimbot_cli("--all", "--json")
+    cli = {r["repo"]: r["rung"] for r in json.loads(out)["rows"] if r.get("rung")}
+    eq(picks, cli, "the document's rungs are the dashboard's, row for row")
+    eq(any(not r["fits"] for r in picks.values()) and any(r["fits"] for r in picks.values()),
+       True, "and it can tell a pick from a smallest-published fallback")
+    # a rung that does not fit says why, since "the box cannot hold it" and "its
+    # context window is shorter than the view" belong in different tables. hy3
+    # is 83 gib and still does not fit: its cache at the view's context does
+    view = {"minCtx": 131072}
+    eq(bt.held_by({"fits": False}, {"context_native": 262144}, view), "memory",
+       "a long window that does not fit is memory")
+    eq(bt.held_by({"fits": False}, {"context_native": 40960}, view), "context",
+       "a window shorter than the view is context")
+    eq(bt.held_by({"fits": True}, {}, view), None, "and a fit is held by nothing")
 
-    eq(bt.pinned_size(sizes, {"quant": "IQ2_XXS-mixed",
-                              "file": "DSV41-mixedq2.gguf"}), 168929929664,
-       "the filename answers where the tag names no key")
-    eq(bt.pinned_size(sizes, {"quant": "Q8_0"}), 42,
-       "and the tag still answers on its own")
-    # a rung whose `file:` the repo does not publish falls through rather than
-    # silently reporting the tag's bytes: they are different objects
-    eq(bt.pinned_size(sizes, {"quant": "Q8_0", "file": "absent.gguf"}), None,
-       "a named file that is not there is not the tag")
-    eq(bt.pinned_size(sizes, {"quant": "IQ3_XXS"}), None,
-       "and an unpublished tag is still nothing")
+
+@test
+def a_model_held_by_its_context_is_sized_at_its_best_rung():
+    """No box ever fits a window shorter than the view, so the fit has no pick.
+
+    The page then falls back to the smallest rung published, which is the right
+    offer for memory and the wrong one here: qwen3 8b read as UD-IQ1_S at 2.1
+    gib when nothing about memory holds it back. And the marker the table puts
+    on those rows was passed as the quant, so no note on the file could match.
+    """
+    bt = load_script("build_tables", os.path.join(RESEARCH, "build-tables"))
+    best, _ = bt.dashboard_picks(0)
+    here = os.getcwd()
+    os.chdir(RESEARCH)
+    try:
+        rows = {r[0]: r for r in bt.unranked()}
+    finally:
+        os.chdir(here)
+    short, repo, quant, gib, held = rows["qwen3 8b"][:5]
+    eq(held, "context", "qwen3 8b is held by its window")
+    eq((repo, quant), (best["Qwen/Qwen3-8B"]["repo"], best["Qwen/Qwen3-8B"]["quant"]),
+       "and sized at the rung it would be read at with no budget")
+    m = {"repos": [{"repo": "pub/W-GGUF", "files": {"Q8_0": {"note": "the file's own words"}}}]}
+    row = bt.size_row("w", "pub/W-GGUF", "Q8_0", 1.0, {}, m, {}, held="context")
+    eq("the file's own words" in row and "context short of the view" in row, True,
+       "the marked row still carries its file's note: %s" % row)
 
 
 @test
@@ -1026,7 +1228,7 @@ def a_quant_field_has_to_name_a_quant():
     The split is `quant:` for the tag and `file:` for the object, because a repo
     is free not to name its files after the tag. There was a check for this and
     it had two holes, which is how 32 rows walked through it: it ran over
-    `quants:` and never over `components:`, where every one of the 32 sat, and
+    `repos:` and never over `components:`, where every one of the 32 sat, and
     it tested for a `.gguf`/`.bin` SUFFIX rather than asking whether the string
     names a quant at all -- so `ae.safetensors` passed, and so did
     `Fara1.5-27B-bf16`, which is a model name with a type glued on the end.
@@ -1074,9 +1276,9 @@ def the_shipped_quant_ladder_names_only_quants():
                                                      "models-validate"))
     with open(os.path.join(ROOT, "docs", "data.json")) as f:
         data = json.load(f)
-    bad = [(m["short"], q["repo"], a["quant"])
-           for m in data["models"] for q in m.get("quants") or []
-           for a in q.get("available") or []
+    bad = [(m["short"], r["repo"], a["quant"])
+           for m in data["models"] for r in m.get("repos") or []
+           for a in r.get("available") or []
            if not mv.is_quant_name(a["quant"])]
     eq(bad, [], "every offered rung names a quant, got %d that do not: %r"
        % (len(bad), bad[:6]))
@@ -1297,6 +1499,36 @@ def the_query_cli_answers_what_the_dashboard_answers():
 
 
 @test
+def models_md_ranks_every_other_modality_the_way_the_page_does():
+    """One section per shape the page offers, each the page filtered to it.
+
+    The document ranked language models and nothing else, so a reader after a
+    transcriber or an image model had to open the dashboard to learn the roster
+    carries forty of them. The text shapes are the ranking above and are left
+    out rather than printed twice. Fit is not a filter here: an embedding model
+    whose window is shorter than the view asks for has not failed at anything a
+    reader of that section is asking, and it vanished under the vram filter.
+    """
+    r = subprocess.run([os.path.join(RESEARCH, "dashboard-table"), "--table", "modalities"],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    eq(r.returncode, 0, "dashboard-table runs: %s" % r.stderr[-300:])
+    heads = re.findall(r"^### (.+)$", r.stdout, re.M)
+    for want in ("audio to text", "text to audio", "text to image", "decisions",
+                 "text to embeddings"):
+        eq(want in heads, True, "a section for %s: %r" % (want, heads))
+    eq([h for h in heads if h in ("language models", "any to text", "text to text")], [],
+       "and none repeating the ranking above")
+    eq("embeddinggemma-300m" in r.stdout, True, "a context-held embedder is listed")
+    code, out, _ = aimbot_cli("--modality", "a2t", "--flag", "",
+                              "--license", "permissive,restricted,unknown",
+                              "--engine", "", "--json")
+    first = json.loads(out)["rows"][0]["short"]["text"].split(" ")[0]
+    section = r.stdout.split("### audio to text", 1)[1].split("###", 1)[0]
+    eq(re.search(r"^\| 1 \| %s \|" % re.escape(first), section, re.M) is not None, True,
+       "and each is ranked as the page ranks it: %s first" % first)
+
+
+@test
 def the_query_cli_fits_to_the_hardware_it_is_given():
     """The columns worth asking for are the ones that depend on the reader.
 
@@ -1366,6 +1598,25 @@ def the_query_cli_refuses_a_name_the_page_does_not_define():
                       ("--flag", "nope"), ("--weights", "nope")):
         code, _, err = aimbot_cli(flag, bad)
         eq(code != 0, True, "%s %s fails" % (flag, bad))
+    # every json row names its registry key, which is what a client joins to
+    # the `meta.llamaswap.registry` a served model carries
+    code, out, _ = aimbot_cli("--modality", "decision", "--all", "--json")
+    rows = json.loads(out)["rows"]
+    eq(all("/" in (r.get("repo") or "") for r in rows), True,
+       "each row carries its registry key: %r" % [r.get("repo") for r in rows][:5])
+    # and the rung the dashboard's fit picked, as data: build-tables sizes
+    # MODELS.md off it rather than choosing a rung a second, different way
+    picked = [r for r in rows if r.get("rung")]
+    eq(bool(picked) and all(r["rung"]["repo"] and r["rung"]["quant"]
+                            and r["rung"]["gib"] for r in picked), True,
+       "a fitted row names its rung's repo, tag and size: %r" % [r.get("rung") for r in rows][:3])
+    # a renamed id is not a typo: `decide` became `decision`, and a script
+    # written against the old name gets the same rows rather than an error
+    new = aimbot_cli("--modality", "decision", "--json")
+    old = aimbot_cli("--modality", "decide", "--json")
+    eq(old[0], 0, "the old chip id still runs: %r" % old[2][-200:])
+    eq(json.loads(old[1])["rows"], json.loads(new[1])["rows"],
+       "and reads the renamed chip")
 
 
 UNSHAPED_REGISTRY = """version: 1
@@ -1511,12 +1762,12 @@ version: 1
 models:
   Vendor/Supported:
     kind: text
-    quants:
-    - {repo: Test-Support/Supported-GGUF, quant: Q4_K_M}
+    repos:
+    - {repo: Test-Support/Supported-GGUF, files: {Q4_K_M: {}}}
   Vendor/Hyphenated:
     kind: text
-    quants:
-    - {repo: Test-Support/Hyphenated-GGUF, quant: Q4_K_M}
+    repos:
+    - {repo: Test-Support/Hyphenated-GGUF, files: {Q4_K_M: {}}}
 """
 
 
@@ -1583,8 +1834,8 @@ models:
   Vendor/Model:
     kind: text
     name: {short: nowhere model, match: 'nowhere[\\s-]*model'}
-    quants:
-    - {repo: Quanter/Model-GGUF, quant: Q4_K_M}
+    repos:
+    - {repo: Quanter/Model-GGUF, files: {Q4_K_M: {}}}
     runtime:
       arch: madeup
       mainline: false
@@ -1613,8 +1864,8 @@ models:
   Vendor/Model:
     kind: text
     name: {short: dated model, match: 'dated[\\s-]*model'}
-    quants:
-    - {repo: Quanter/Model-GGUF, quant: Q4_K_M}
+    repos:
+    - {repo: Quanter/Model-GGUF, files: {Q4_K_M: {}}}
     runtime: {arch: llama, mainline: true, since: '2026-08-27'}
     sampling:
       instruct: {source: quant-card, temp: 0.7}
@@ -1628,12 +1879,13 @@ models:
   Vendor/Carried-Arch-Unloadable-File:
     kind: text
     name: {short: unloadable model, match: 'unloadable[\\s-]*model'}
-    quants:
+    repos:
     - repo: Quanter/Unloadable-GGUF
-      quant: Q4_K_M
-      runtime:
-        mainline: false
-        tracking: https://github.com/ggml-org/llama.cpp/pull/28696
+      files:
+        Q4_K_M:
+          runtime:
+            mainline: false
+            tracking: https://github.com/ggml-org/llama.cpp/pull/28696
     runtime:
       arch: llama
       mainline: true
@@ -1757,7 +2009,7 @@ models:
   Vendor/Narrowed:
     kind: text
     name: {short: fixture narrowed}
-    quants: [{repo: Quanter/Narrowed-GGUF, quant: Q8_0}]
+    repos: [{repo: Quanter/Narrowed-GGUF, files: {Q8_0: {}}}]
     sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
     thinking:
       knob: reasoning_effort
@@ -1766,7 +2018,7 @@ models:
   Vendor/Toggle:
     kind: text
     name: {short: fixture toggle}
-    quants: [{repo: Quanter/Toggle-GGUF, quant: Q8_0}]
+    repos: [{repo: Quanter/Toggle-GGUF, files: {Q8_0: {}}}]
     sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
     thinking:
       knob: reasoning_effort
@@ -1848,7 +2100,7 @@ models:
   Vendor/Narrowed:
     kind: text
     name: {short: fixture narrowed}
-    quants: [{repo: Quanter/Narrowed-GGUF, quant: Q8_0}]
+    repos: [{repo: Quanter/Narrowed-GGUF, files: {Q8_0: {}}}]
     sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
     turns:
       source: Quanter/Narrowed-GGUF
@@ -2500,11 +2752,11 @@ def a_registry_note_names_a_figure_rather_than_typing_it():
 
 
 @test
-def a_pinned_rung_the_publisher_never_shipped_is_reported():
+def a_written_rung_the_publisher_never_shipped_is_reported():
     """A rung with no size reaches the page with no size, and nothing said so.
 
     `unsloth/Qwen3.5-397B-A17B-GGUF` publishes 29 tiers and none of them is
-    `UD-Q2_K_XL`; the registry pinned that name anyway. The lookup missed, the
+    `UD-Q2_K_XL`; the registry wrote a note on that name anyway. The lookup missed, the
     row went out with an empty size, the viewer drew it, and the only reason it
     surfaced was a registry note trying to reference `{gib}` and being refused.
 
@@ -2516,10 +2768,9 @@ def a_pinned_rung_the_publisher_never_shipped_is_reported():
     sizes = {"pub/Widget-GGUF": {"Q4_K_M": 8 * 2 ** 30, "Q8_0": 14 * 2 ** 30},
              "pub/Named-GGUF": {"widget-f32.gguf": 2 ** 30}}
     models = {
-        "pub/Widget": {"quants": [
-            {"repo": "pub/Widget-GGUF", "quant": "UD-Q2_K_XL"},
-            {"repo": "pub/Widget-GGUF", "quant": "Q8_0"}]},
-        # pinned by filename against a repo that keys by filename: fine, and the
+        "pub/Widget": {"repos": [{"repo": "pub/Widget-GGUF", "files": {
+            "UD-Q2_K_XL": {"note": "the smallest"}, "Q8_0": {"note": "the largest"}}}]},
+        # named by filename against a repo that keys by filename: fine, and the
         # case that made the first version of this check cry wolf
         "pub/Named": {"components": [
             {"repo": "pub/Named-GGUF", "quant": "F32",
@@ -2654,8 +2905,8 @@ def a_typed_figure_becomes_a_reference_only_while_it_is_still_true():
                                      "Q8_0": int(27.05 * 2 ** 30)},
                       "pub/W-MTP-GGUF": {"Q8_0": int(26.63 * 2 ** 30)}},
             "tensors": {}, "facts": {}, "cards_dir": None}
-    entry = {"quants": [{"repo": "pub/W-GGUF", "quant": "IQ3_S"},
-                        {"repo": "pub/W-MTP-GGUF", "quant": "Q8_0"}]}
+    entry = {"repos": [{"repo": "pub/W-GGUF", "files": {"IQ3_S": {}}},
+                       {"repo": "pub/W-MTP-GGUF", "files": {"Q8_0": {}}}]}
 
     got, done, stale = notes.convert(
         "the rung is 10.96 gib, against 27.05 gib for the top of the ladder",
@@ -2728,8 +2979,8 @@ def a_note_describing_the_pin_is_checked_against_the_pin():
 
     found = notes.check_structure("so the pin names its file", "pub/W-GGUF",
                                   "Q8_0", data, pin={"quant": "Q8_0"})
-    eq(any("`file:`" in w for w in found), True,
-       "a pin with no file: is caught saying it has one: %r" % found)
+    eq(any("filename" in w for w in found), True,
+       "a rung written under no filename is caught saying it has one: %r" % found)
     eq(notes.check_structure("so the pin names its file", "pub/W-GGUF", "x.gguf",
                              data, pin={"quant": "Q8_0", "file": "x.gguf"}), [],
        "and one that does is left alone")
@@ -2937,8 +3188,8 @@ def a_sheet_offers_no_reference_that_does_not_resolve():
     data = dict(notes.load(),
                 sizes={"pub/Main-GGUF": {"Q4_K_M": 4 * gib, "Q6_K": 6 * gib},
                        "other/Main-GGUF": {"Q8_0": 8 * gib}})
-    entry = {"quants": [{"repo": "pub/Main-GGUF", "quant": "Q4_K_M"},
-                        {"repo": "other/Main-GGUF", "quant": "Q8_0"}]}
+    entry = {"repos": [{"repo": "pub/Main-GGUF", "files": {"Q4_K_M": {}}},
+                       {"repo": "other/Main-GGUF", "files": {"Q8_0": {}}}]}
     sheet = notes.fact_sheet("pub/Main-GGUF", "Q4_K_M", data, entry=entry)
 
     # the one line that names a reference in order to FORBID it is not an offer
@@ -2984,11 +3235,12 @@ def a_redraft_is_handed_what_the_registry_already_says():
     gib = 2 ** 30
     data = dict(notes.load(), sizes={"pub/Main-GGUF": {"Q4_K_M": 4 * gib}})
     pin = {"repo": "pub/Main-GGUF", "quant": "Q4_K_M"}
-    entry = {"kind": "speech", "quants": [pin], "crispasr": {"backend": "mainasr"}}
+    entry = {"kind": "speech", "repos": [{"repo": "pub/Main-GGUF", "files": {"Q4_K_M": {}}}],
+             "crispasr": {"backend": "mainasr"}}
     said = "measured here: a stock build reads this tensor wrong rather than refusing it"
 
     block = prose.Block("registry-note",
-                        "registry-note:pub/Main#quants[pub/Main-GGUF:Q4_K_M].note",
+                        "registry-note:pub/Main#repos[pub/Main-GGUF].files[Q4_K_M].note",
                         {"note": said}, "pub/Main",
                         {"repo": "pub/Main-GGUF", "quant": "Q4_K_M", "entry": entry, "pin": pin})
     sheet = wp.sheet_for(block, {}, data)
@@ -3069,7 +3321,9 @@ def the_note_sheet_leaves_fit_to_the_reader_and_drafting_to_the_rung():
     gib = 2 ** 30
     data = dict(notes.load(), sizes={"pub/Main-GGUF": {"Q4_K_M": 4 * gib}})
     pin = {"repo": "pub/Main-GGUF", "quant": "Q4_K_M", "speculative": False}
-    entry = {"quants": [pin], "speculative": {"type": "draft-mtp", "n_max": 6}}
+    entry = {"repos": [{"repo": "pub/Main-GGUF", "speculative": False,
+                        "files": {"Q4_K_M": {}}}],
+             "speculative": {"type": "draft-mtp", "n_max": 6}}
     sheet = notes.fact_sheet("pub/Main-GGUF", "Q4_K_M", data, entry=entry, pin=pin)
     eq(re.search(r"\bfits?\b|the box|usable on", sheet, re.I), None,
        "no fit verdict on the sheet: %r" % sheet)
@@ -3423,38 +3677,38 @@ models:
   Fixture/Both:
     kind: speech
     name: {short: both}
-    quants:
-    - {repo: Q/Both-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Q/Both-GGUF, files: {Q8_0: {}}}
     crispasr: {backend: parakeet, diarize: embedder}
     modalities: {input: [audio], output: [text]}
   Fixture/Diarizer-Mislabelled:
     kind: speech
     name: {short: diarizer mislabelled}
-    quants:
-    - {repo: Q/Emb-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Q/Emb-GGUF, files: {Q8_0: {}}}
     crispasr: {diarize: embedder}
   Fixture/Diarize-Kind-No-Role:
     kind: diarize
     name: {short: diarize kind no role}
-    quants:
-    - {repo: Q/Seg-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Q/Seg-GGUF, files: {Q8_0: {}}}
   Fixture/Unknown-Role:
     kind: diarize
     name: {short: unknown role}
-    quants:
-    - {repo: Q/Weird-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Q/Weird-GGUF, files: {Q8_0: {}}}
     crispasr: {diarize: transcription}
   Fixture/Whole-Diarizer:
     kind: diarize
     name: {short: whole diarizer}
-    quants:
-    - {repo: Q/Whole-Diarizer-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Q/Whole-Diarizer-GGUF, files: {Q8_0: {}}}
     crispasr: {diarize: end-to-end}
   Fixture/Fine:
     kind: speech
     name: {short: fine}
-    quants:
-    - {repo: Q/Fine-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Q/Fine-GGUF, files: {Q8_0: {}}}
     crispasr: {backend: whisper}
     modalities: {input: [audio], output: [text]}
 """
@@ -3507,32 +3761,32 @@ models:
   Fixture/Punctuator:
     kind: post
     name: {short: fixture-punc}
-    quants:
-    - {repo: Q/Punctuator-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Q/Punctuator-GGUF, files: {Q8_0: {}}}
     crispasr: {post: punctuation}
   Fixture/Post-Kind-No-Role:
     kind: post
     name: {short: fixture-post-bare}
-    quants:
-    - {repo: Q/Bare-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Q/Bare-GGUF, files: {Q8_0: {}}}
   Fixture/Role-Mislabelled:
     kind: speech
     name: {short: fixture-mislabelled}
-    quants:
-    - {repo: Q/Mislabelled-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Q/Mislabelled-GGUF, files: {Q8_0: {}}}
     crispasr: {post: language-id}
     modalities: {input: [text, audio], output: [text]}
   Fixture/Unknown-Post-Role:
     kind: post
     name: {short: fixture-unknown}
-    quants:
-    - {repo: Q/Unknown-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Q/Unknown-GGUF, files: {Q8_0: {}}}
     crispasr: {post: transcribing}
   Fixture/Post-And-Backend:
     kind: post
     name: {short: fixture-both}
-    quants:
-    - {repo: Q/Both-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Q/Both-GGUF, files: {Q8_0: {}}}
     crispasr: {post: punctuation, backend: whisper}
 """
 
@@ -3597,15 +3851,15 @@ models:
   vendor/Open-Transcriber:
     kind: speech
     name: {short: open-transcriber}
-    quants:
-    - {repo: Q/Open-Transcriber-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Q/Open-Transcriber-GGUF, files: {Q8_0: {}}}
     crispasr: {backend: whisper}
     modalities: {input: [audio], output: [text]}
   vendor/Widget-TTS-GGUF:
     kind: speech
     name: {short: widget-tts}
-    quants:
-    - {repo: vendor/Widget-TTS-GGUF, quant: Q8_0}
+    repos:
+    - {repo: vendor/Widget-TTS-GGUF, files: {Q8_0: {}}}
     modalities: {input: [text], output: [audio]}
 """
 
@@ -4078,20 +4332,20 @@ models:
   vendor/Fixture-Klein-4B:
     kind: image
     name: {short: fixture-klein-4b}
-    quants:
-    - {repo: vendor/Fixture-Klein-4B-GGUF, quant: Q8_0}
+    repos:
+    - {repo: vendor/Fixture-Klein-4B-GGUF, files: {Q8_0: {}}}
     modalities: {input: [text], output: [image]}
   vendor/Fixture-Klein-9B:
     kind: image
     name: {short: fixture-klein-9b}
-    quants:
-    - {repo: vendor/Fixture-Klein-9B-GGUF, quant: Q8_0}
+    repos:
+    - {repo: vendor/Fixture-Klein-9B-GGUF, files: {Q8_0: {}}}
     modalities: {input: [text], output: [image]}
   vendor/Fixture-Local-1:
     kind: image
     name: {short: fixture-local-1}
-    quants:
-    - {repo: vendor/Fixture-Local-1-GGUF, quant: Q8_0}
+    repos:
+    - {repo: vendor/Fixture-Local-1-GGUF, files: {Q8_0: {}}}
     modalities: {input: [text], output: [image]}
 """
 
@@ -4519,28 +4773,28 @@ models:
   Vendor/Real-Weights:
     kind: speech
     name: {short: real-weights}
-    quants:
-    - {repo: converter/Real-Weights-GGUF, quant: Q8_0}
+    repos:
+    - {repo: converter/Real-Weights-GGUF, files: {Q8_0: {}}}
     modalities: {input: [text], output: [audio]}
   converter/Also-Real-GGUF:
     kind: speech
     name: {short: also-real}
-    quants:
-    - {repo: other/Also-Real-GGUF, quant: Q8_0}
-    - {repo: converter/Also-Real-GGUF, quant: Q8_0}
+    repos:
+    - {repo: other/Also-Real-GGUF, files: {Q8_0: {}}}
+    - {repo: converter/Also-Real-GGUF, files: {Q8_0: {}}}
     modalities: {input: [text], output: [audio]}
   Vendor/Voxtral-4B-TTS-2603:
     kind: speech
     name: {short: ships-its-own}
-    quants:
-    - {repo: Vendor/Voxtral-4B-TTS-2603, quant: Q8_0}
+    repos:
+    - {repo: Vendor/Voxtral-4B-TTS-2603, files: {Q8_0: {}}}
     modalities: {input: [text], output: [audio]}
   vendor/Only-As-Gguf-gguf:
     kind: speech
     name: {short: only-as-gguf}
     gguf_only: true
-    quants:
-    - {repo: vendor/Only-As-Gguf-gguf, quant: Q8_0}
+    repos:
+    - {repo: vendor/Only-As-Gguf-gguf, files: {Q8_0: {}}}
     modalities: {input: [text], output: [audio]}
 """
 
@@ -4556,8 +4810,8 @@ def a_model_is_keyed_on_weights_not_on_a_conversion_of_itself():
     has no config.json at all, so the facts degrade to what can be read off the
     name. It also shows up in the table, where publisher is the converter.
 
-    The tell is cheap and exact: the key appearing in the entry's own `quants`.
-    A conversion listed as a quant is the ordinary case and must not fire.
+    The tell is cheap and exact: the key appearing in the entry's own `repos`.
+    A conversion listed as a repo is the ordinary case and must not fire.
     """
     code, findings, _ = validate(CONVERSION_KEYED_REGISTRY)
     where = {}
@@ -4571,7 +4825,7 @@ def a_model_is_keyed_on_weights_not_on_a_conversion_of_itself():
        "an entry keyed on the weights, carrying a conversion as a quant, is the "
        "ordinary case and must not fire")
     # a lab that publishes gguf INSIDE its weights repo is keyed exactly right,
-    # and the key is legitimately one of its own quants. mistral's
+    # and the key is legitimately one of its own repos. mistral's
     # Voxtral-4B-TTS-2603 is the real one: safetensors, no separate conversion.
     # what makes the other case wrong is that the key names a conversion, which
     # the repo says in its name
@@ -5095,7 +5349,7 @@ models:
   Vendor/Written:
     kind: text
     name: {short: widget 3.8 27b}
-    quants: [{repo: Q/W-GGUF, quant: Q8_0}]
+    repos: [{repo: Q/W-GGUF, files: {Q8_0: {}}}]
     sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
   Vendor/Spoken:
     kind: speech
@@ -5106,11 +5360,11 @@ models:
   Vendor/Duplicate:
     kind: text
     name: {short: widget 3.8 27b}
-    quants: [{repo: Q/D-GGUF, quant: Q8_0}]
+    repos: [{repo: Q/D-GGUF, files: {Q8_0: {}}}]
     sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
   Vendor/Nameless:
     kind: text
-    quants: [{repo: Q/N-GGUF, quant: Q8_0}]
+    repos: [{repo: Q/N-GGUF, files: {Q8_0: {}}}]
     sampling: {instruct: {temp: 0.7, top_p: 0.8, top_k: 20}}
 """
 
@@ -5362,15 +5616,18 @@ models:
   vendor/Speaks:
     kind: speech
     name: {short: fixture speaks}
-    quants:
-    - {repo: Q/Speaks-GGUF, quant: F32, file: Speaks_espeak.gguf, role: model-path}
-    - {repo: Q/Speaks-GGUF, quant: Q8_0, file: Speaks_espeak_Q8.gguf, role: model-path}
-    - {repo: Q/Plain-GGUF, quant: Q8_0}
+    repos:
+    - repo: Q/Speaks-GGUF
+      role: model-path
+      files:
+        Speaks_espeak.gguf: {quant: F32}
+        Speaks_espeak_Q8.gguf: {quant: Q8_0}
+    - {repo: Q/Plain-GGUF, files: {Q8_0: {}}}
     modalities: {input: [text], output: [audio]}
   vendor/Listens:
     kind: speech
     name: {short: fixture listens}
-    quants: [{repo: Q/Listens-GGUF, quant: Q8_0}]
+    repos: [{repo: Q/Listens-GGUF, files: {Q8_0: {}}}]
     modalities: {input: [audio], output: [text]}
 """
 
@@ -5388,18 +5645,25 @@ def a_rung_pinned_by_filename_is_read_for_its_voices():
     where the committed capture holds four. The shrink guard is what caught it,
     two collectors and a sweep later.
     """
-    mod = load_script("fetch_gguf_voices",
-                      os.path.join(RESEARCH, "fetch-gguf-voices"))
+    mod = load_script_with_research("fetch_gguf_voices", "fetch-gguf-voices")
     import yaml
-    rows = list(mod.emitters(yaml.safe_load(VOICES_REGISTRY)))
+    # every rung each repo publishes is read, off the sizes capture: the
+    # speakers are in the file and any rung may be the one served. a projector
+    # beside them is not a speaking weight
+    sizes = {"Q/Speaks-GGUF": {"Speaks_espeak.gguf": 1, "Speaks_espeak_Q8.gguf": 1,
+                               "mmproj:F16": 1},
+             "Q/Plain-GGUF": {"Q8_0": 1, "Q4_K": 1},
+             "Q/Listens-GGUF": {"Q8_0": 1}}
+    rows = list(mod.emitters(yaml.safe_load(VOICES_REGISTRY), sizes))
 
-    eq([r[0] for r in rows], ["vendor/Speaks"] * 3,
+    eq([r[0] for r in rows], ["vendor/Speaks"] * 4,
        "only a model that EMITS audio is read, got %r" % (rows,))
     # the tuple is (base, repo, quant, file): the file is what the hub is asked
     # for and what the capture is keyed by, so losing it here loses both
-    eq([r[3] for r in rows],
-       ["Speaks_espeak.gguf", "Speaks_espeak_Q8.gguf", None],
-       "a pinned filename reaches the reader, and a rung without one is None")
+    eq([(r[2], r[3]) for r in rows],
+       [("F32", "Speaks_espeak.gguf"), ("Q8_0", "Speaks_espeak_Q8.gguf"),
+        ("Q8_0", None), ("Q4_K", None)],
+       "a filename reaches the reader with the tag written for it; a tag has no file")
     eq(mod.resolve_filename("Q/Speaks-GGUF", "F32", "Speaks_espeak.gguf"),
        "Speaks_espeak.gguf",
        "and answers for the rung outright rather than asking the hub what F32 is")
@@ -5488,8 +5752,8 @@ models:
     kind: image
     name: {short: ideogram-4}
     engine: [stable-diffusion.cpp]
-    quants:
-    - {repo: leejet/ideogram-4-GGUF, quant: Q4_0}
+    repos:
+    - {repo: leejet/ideogram-4-GGUF, files: {Q4_0: {}}}
     modalities: {input: [text], output: [image]}
 """
 
@@ -5646,8 +5910,8 @@ def a_carry_decision_that_never_landed_is_still_outstanding():
                     "  vendor/Landed:\n"
                     "    kind: text\n"
                     "    name: {short: landed}\n"
-                    "    quants:\n"
-                    "    - {repo: vendor/Landed-GGUF, quant: Q8_0}\n"
+                    "    repos:\n"
+                    "    - {repo: vendor/Landed-GGUF, files: {Q8_0: {}}}\n"
                     "    modalities: {input: [text], output: [text]}\n")
         r = subprocess.run([os.path.join(RESEARCH, "propose"), "--report",
                             "--out", props, "--decided", decided,
@@ -6359,14 +6623,14 @@ models:
   UsefulSensors/moonshine-base:
     kind: speech
     name: {short: moonshine}
-    quants:
-    - {repo: cstr/moonshine-base-GGUF, quant: Q8_0}
+    repos:
+    - {repo: cstr/moonshine-base-GGUF, files: {Q8_0: {}}}
     modalities: {input: [text, audio], output: [text]}
   Qwen/Qwen3-ASR-1.7B:
     kind: speech
     name: {short: qwen3-asr-1.7b}
-    quants:
-    - {repo: cstr/qwen3-asr-GGUF, quant: Q8_0}
+    repos:
+    - {repo: cstr/qwen3-asr-GGUF, files: {Q8_0: {}}}
     modalities: {input: [text, audio], output: [text]}
 """
 
@@ -6484,22 +6748,22 @@ models:
   vendor/Chatty-Speech:
     kind: speech
     name: {short: chatty-speech}
-    quants:
-    - {repo: vendor/Chatty-Speech-GGUF, quant: Q8_0}
+    repos:
+    - {repo: vendor/Chatty-Speech-GGUF, files: {Q8_0: {}}}
     modalities: {input: [text, audio], output: [text]}
   vendor/Quiet-Speech:
     kind: speech
     name: {short: quiet-speech}
-    quants:
-    - {repo: vendor/Quiet-Speech-GGUF, quant: Q8_0}
+    repos:
+    - {repo: vendor/Quiet-Speech-GGUF, files: {Q8_0: {}}}
     modalities: {input: [text, audio], output: [text]}
   vendor/Aliased-Speech:
     kind: speech
     name:
       short: aliased-speech
       match: aliased[\\s-]*speech
-    quants:
-    - {repo: vendor/Aliased-Speech-GGUF, quant: Q8_0}
+    repos:
+    - {repo: vendor/Aliased-Speech-GGUF, files: {Q8_0: {}}}
     modalities: {input: [text, audio], output: [text]}
 """
 
@@ -6769,18 +7033,18 @@ models:
   ResembleAI/chatterbox:
     name:
       short: chatterbox
-    quants:
-    - {repo: cstr/chatterbox-GGUF, quant: Q8_0}
+    repos:
+    - {repo: cstr/chatterbox-GGUF, files: {Q8_0: {}}}
   Qwen/Qwen3-ASR-0.6B:
     name:
       short: qwen3-asr-0.6b
-    quants:
-    - {repo: cstr/Qwen3-ASR-0.6B-GGUF, quant: q8_0}
+    repos:
+    - {repo: cstr/Qwen3-ASR-0.6B-GGUF, files: {q8_0: {}}}
   Vendor/Unrelated:
     name:
       short: unrelated
-    quants:
-    - {repo: Quanter/Unrelated-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Quanter/Unrelated-GGUF, files: {Q8_0: {}}}
 """
 
 
@@ -6903,13 +7167,53 @@ def jevbench_v15_keeps_the_sealed_half_and_the_facets_read_it():
     eq("v1.5.0" in f["jev.sealed"]["ref"]["note"], True, "and so does the revision")
 
 
+def verdict_row(model, when, accuracy, layout="decider-plain"):
+    return {"model": model, "suite": "jevbench-public", "measured_utc": when,
+            "variant": {"layout": layout, "order_averaging": 1, "prior_correction": False},
+            "metrics": {"accuracy": accuracy, "n": 231},
+            "weights": {"repo": "Mapika/decider-4b-GGUF", "revision": "b79f",
+                        "file": "decider-4b-v2.1-Q8_0.gguf"},
+            "path": "eval/results/jevbench/x"}
+
+
+@test
+def verdict_keeps_one_row_per_model_suite_and_variant():
+    """verdict's export is a second decision source, kept apart from the board.
+
+    one row per (model, suite, variant) is its stated key, and where two runs
+    share one the later measured_utc wins -- so a re-run replaces a stale
+    number rather than sitting beside it. a different layout is a different
+    variant and survives: the page shows variants, it never averages them.
+    """
+    mod = load_script("fetch_verdict", os.path.join(RESEARCH, "fetch-verdict"))
+    got = mod.shape({"schema": "verdict-export/1", "source": "verdict",
+                     "verdict_rev": "06bd", "hardware": "kairos",
+                     "rows": [verdict_row("decider-4b:Q8_0", "2026-09-30T19:00:00+00:00", 0.70),
+                              verdict_row("decider-4b:Q8_0", "2026-09-30T21:00:00+00:00", 0.74),
+                              verdict_row("decider-4b:Q8_0", "2026-09-30T20:00:00+00:00", 0.60,
+                                          layout="chat")]})
+    rows = got["rows"]
+    eq(len(rows), 2, "two variants, one row each: %r" % rows)
+    plain = [r for r in rows if r["variant"]["layout"] == "decider-plain"][0]
+    eq(plain["metrics"]["accuracy"], 0.74, "the later run of a key wins")
+    eq(got["meta"]["verdict_rev"], "06bd", "the revision the run used is kept")
+    eq(plain["weights"]["file"], "decider-4b-v2.1-Q8_0.gguf", "and what it loaded")
+
+
+@test
+def verdict_refuses_a_schema_it_was_not_written_for():
+    mod = load_script("fetch_verdict", os.path.join(RESEARCH, "fetch-verdict"))
+    eq(mod.shape({"schema": "verdict-export/2", "rows": [verdict_row("m", "t", 1)]}),
+       None, "an unknown schema is not read as if it were known")
+
+
 READOUT_FIXTURE = """version: 1
 models:
   Vendor/Decider:
     kind: decision
     name: {short: decider fixture, match: 'decider[\\s-]*fixture'}
-    quants:
-    - {repo: Vendor/Decider-GGUF, quant: Q8_0}
+    repos:
+    - {repo: Vendor/Decider-GGUF, files: {Q8_0: {}}}
     readout:
 %s
 """
@@ -6941,6 +7245,97 @@ def a_readout_names_how_the_model_is_read_and_nothing_else():
         eq(why in errs, True, "%r is refused with %r: %s" % (body.strip(), why, errs))
 
 
+@test
+def a_text_model_that_decides_says_what_measured_it():
+    """`decides:` puts a text model in the decisions chip, so it cites evidence.
+
+    it is written by hand, once, from verdict's run: a block with no source or
+    no note is a claim nobody can check, and it is refused.
+    """
+    base = """version: 1
+models:
+  Vendor/Chatty:
+    kind: text
+    name: {short: chatty model, match: 'chatty[\\\\s-]*model'}
+    repos:
+    - {repo: Quanter/Chatty-GGUF, files: {Q8_0: {}}}
+    sampling:
+      instruct: {source: quant-card, temp: 0.7}
+    decides:
+%s
+"""
+    good = "      source: verdict\n      note: 0.866 on jevbench's public items"
+    code, findings, _ = validate(base % good)
+    eq([f["error"] for f in findings if "decides" in f["error"]], [], "a cited block is clean")
+    for body, why in (("      source: verdict", "note"),
+                      ("      source: vibes\n      note: x", "source"),
+                      ("      source: verdict\n      note: x\n      score: 1", "unknown")):
+        code, findings, _ = validate(base % body)
+        errs = " ".join(f["error"] for f in findings)
+        eq("decides" in errs and why in errs, True, "%r is refused: %s" % (body.strip(), errs))
+
+
+@test
+def transcribe_cpp_is_an_engine_a_speech_model_can_name():
+    """handy-computer's parakeet ggufs load in transcribe.cpp and nothing else.
+
+    no crispasr backend reads them -- cstr's own conversion of parakeet-unified
+    gives "transcript garbage" by its maintainer's account -- so the engine is
+    written on the entry the way whisper.cpp's is.
+    """
+    code, findings, _ = validate("""version: 1
+models:
+  nvidia/parakeet-fixture:
+    kind: speech
+    name: {short: parakeet fixture, match: 'parakeet[\\\\s-]*fixture'}
+    repos:
+    - {repo: handy-computer/parakeet-fixture-gguf, files: {Q8_0: {}}}
+    engine: [transcribe.cpp]
+    modalities: {input: [text, audio], output: [text]}
+""")
+    eq([f["error"] for f in findings if "engine" in f["error"]], [],
+       "transcribe.cpp is a known engine")
+
+
+def rungs_module():
+    sys.path.insert(0, RESEARCH)
+    try:
+        import rungs
+        return rungs
+    finally:
+        sys.path.remove(RESEARCH)
+
+
+@test
+def a_model_reads_as_repos_bare_or_with_facts():
+    """`repos:` names membership and per-file facts, and a bare name is a repo.
+
+    what a repo is (role, crispasr backend, drafting) never varies inside it,
+    and what one file is (a note, a fork, a tag its name does not carry) is
+    keyed by that file. a bare string says only that the repo is carried, and
+    reads as the same row with nothing written about any file.
+    """
+    rungs = rungs_module()
+    m = {"repos": [
+        "unsloth/M-GGUF",
+        {"repo": "cstr/M-GGUF", "role": "model", "crispasr": {"backend": "cohere"},
+         "speculative": False,
+         "files": {"Q8_0": {"note": "the one to use"},
+                   "m-f16.bin": {"quant": "F16", "runtime": {"fork": "x/y"}}}}]}
+    got = rungs.repos(m)
+    eq([r["repo"] for r in got], ["unsloth/M-GGUF", "cstr/M-GGUF"], "repos in order")
+    eq(got[0], {"repo": "unsloth/M-GGUF", "files": {}}, "a bare repo")
+    eq({k: got[1][k] for k in ("role", "crispasr", "speculative")},
+       {"role": "model", "crispasr": {"backend": "cohere"}, "speculative": False},
+       "what the repo is")
+    eq(got[1]["files"], {"Q8_0": {"note": "the one to use"},
+                         "m-f16.bin": {"quant": "F16", "runtime": {"fork": "x/y"}}},
+       "what each file is, and only where it says something")
+    eq(rungs.repo_names(m), ["unsloth/M-GGUF", "cstr/M-GGUF"], "membership")
+    eq(rungs.facts_for(m, "F16")[1], "m-f16.bin",
+       "a file keyed by its name answers for the tag written beside it")
+
+
 def readout_module():
     return load_script("resolve_readout", os.path.join(ROOT, "scripts", "resolve-readout"))
 
@@ -6957,7 +7352,7 @@ def a_readout_is_derived_from_the_config_beside_the_pinned_bytes():
     """
     mod = readout_module()
     decider = {"kind": "decision",
-               "quants": [{"repo": "Mapika/decider-4b-GGUF", "quant": "Q8_0"}],
+               "repos": [{"repo": "Mapika/decider-4b-GGUF", "files": {"Q8_0": {}}}],
                "readout": {"note": "kept"}}
     configs = {"Mapika/decider-4b-GGUF": {"decider_config.json": {
         "layout": "plain", "temperature": 1.099,
@@ -6968,7 +7363,7 @@ def a_readout_is_derived_from_the_config_beside_the_pinned_bytes():
              "note": "kept"}, "the layout and the calibration, and the hand note")
 
     jevk5 = {"kind": "decision",
-             "quants": [{"repo": "alibiserikbay/JevK5-GGUF", "quant": "Q8_0"}]}
+             "repos": [{"repo": "alibiserikbay/JevK5-GGUF", "files": {"Q8_0": {}}}]}
     base_only = {"alibiserikbay/JevK5": {"jevk5_config.json": {"temperature": 1.22}}}
     eq(mod.block_for("alibiserikbay/JevK5", jevk5, base_only), None,
        "a config in the base repo says nothing about the pinned file")
@@ -7070,13 +7465,13 @@ def an_engine_catalog_that_names_one_repo_twice_claims_nothing():
                              "packages": [{"id": "a", "repo": "Vendor/Both"}]},
                "second_hand": {"family": "second_hand",
                                "packages": [{"id": "c", "repo": "Vendor/Both"}]}}
-    eq(bv.audiocpp_block("Vendor/Both", {"quants": []}, catalog), None,
+    eq(bv.audiocpp_block("Vendor/Both", {"repos": []}, catalog), None,
        "a repo two families name gets no family")
     del catalog["second_hand"]
-    eq(bv.audiocpp_block("Vendor/Both", {"quants": []}, catalog)["family"],
+    eq(bv.audiocpp_block("Vendor/Both", {"repos": []}, catalog)["family"],
        "two_hands", "and one family naming it is an answer")
 
-    got = bv.audiocpp_block("Qwen/Qwen3-ASR-0.6B", {"quants": []}, catalog)
+    got = bv.audiocpp_block("Qwen/Qwen3-ASR-0.6B", {"repos": []}, catalog)
     eq(got["family"], "qwen3_asr", "the 0.6b joins the asr family")
     eq(got["package"]["id"], "qwen3_asr_0_6b_safetensors",
        "and takes the package downloaded from its OWN repo, not the family's "
@@ -7088,14 +7483,14 @@ def an_engine_catalog_that_names_one_repo_twice_claims_nothing():
     # audio.cpp's own q8_0 of chatterbox is a package of the SAME FAMILY and
     # nothing in the spec says it is this checkpoint rather than a sibling, so
     # the command names the package that downloads from the repo we matched.
-    gguf = bv.audiocpp_block("ResembleAI/chatterbox", {"quants": []}, catalog)
+    gguf = bv.audiocpp_block("ResembleAI/chatterbox", {"repos": []}, catalog)
     eq(gguf["package"]["id"], "chatterbox_safetensors",
        "the package from the matched repo, not the family's default gguf")
     eq(gguf["package"]["path"], "models/chatterbox",
        "a snapshot package is the directory it lands in")
     eq(gguf["native"]["repo"], "ResembleAI/chatterbox",
        "and that package IS the read-the-checkpoint-itself one")
-    eq(bv.audiocpp_block("Vendor/Both", {"quants": []}, catalog)["packages"], 1,
+    eq(bv.audiocpp_block("Vendor/Both", {"repos": []}, catalog)["packages"], 1,
        "the family's package count rides along, since the command picks one")
 
 

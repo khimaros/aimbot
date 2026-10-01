@@ -82,6 +82,7 @@ FAVICON_SAFE = "/:='"
 
 sys.path.insert(0, os.path.join(ROOT, "research"))
 import notes  # noqa: E402  the reference vocabulary registry notes are written in
+import rungs  # noqa: E402  a model's repos, whichever shape the registry is in
 
 
 import verdicts  # noqa: E402  the reference vocabulary the assessed prose uses
@@ -687,18 +688,21 @@ def draft_of(block, model, sizes):
                 return {"repo": block["repo"], "file": key, "bytes": have[key],
                         "gib": round(have[key] / GIB, 2)}
         return {"repo": block["repo"], "file": block.get("quant")}
-    found = []
-    for q in model.get("quants") or []:
-        for key, size in (sizes.get(q["repo"]) or {}).items():
-            if key.lower().startswith(kind):
-                found.append((size, q["repo"], key))
-    if not found:
-        return None
-    # a bare tag is the aggregate over every variant of the head; the concrete
-    # file beside it is the one that gets loaded
-    concrete = [f for f in found if ".gguf" in f[2] or ":" in f[2]]
-    size, repo, key = min(concrete or found)
-    return {"repo": repo, "file": key, "bytes": size, "gib": round(size / GIB, 2)}
+    # the FIRST repo that ships a head, in registry order, and not the smallest
+    # head anywhere: ggml-org publishes a separate `mtp-*.gguf` for qwen3.8 27b
+    # beside unsloth's build that already carries one, and taking the smaller
+    # sent the page's command off to fetch a second copy from another repo
+    for repo in rungs.repo_names(model):
+        found = [(size, repo, key) for key, size in (sizes.get(repo) or {}).items()
+                 if key.lower().startswith(kind)]
+        if not found:
+            continue
+        # a bare tag is the aggregate over every variant of the head; the
+        # concrete file beside it is the one that gets loaded
+        concrete = [f for f in found if ".gguf" in f[2] or ":" in f[2]]
+        size, repo, key = min(concrete or found)
+        return {"repo": repo, "file": key, "bytes": size, "gib": round(size / GIB, 2)}
+    return None
 
 
 def speculative(model, sizes):
@@ -774,29 +778,33 @@ def retention_curve():
 
 
 def unshipped_rungs(models, sizes):
-    """[(repo, quant, what the repo does have)] for a pin nobody published.
+    """[(repo, key, what the repo does have)] for a file nobody published.
 
-    A rung whose lookup misses reaches the page with an empty size rather than
-    an error, so the registry can name a tier that does not exist and nothing
-    says so. `unsloth/Qwen3.5-397B-A17B-GGUF` publishes 29 of them and none is
-    `UD-Q2_K_XL`; the pin sat there until a note tried to reference its size.
+    A fact written about a file the repo does not have reaches no rung, so it
+    is lost without an error, and the registry can name a tier that does not
+    exist and nothing says so. `unsloth/Qwen3.5-397B-A17B-GGUF` publishes 29
+    rungs and none is `UD-Q2_K_XL`; a pin on it sat there until a note tried to
+    reference its size. A component is one file and is checked the same way.
 
     This is the mirror of the `unnamed` report beside it -- that one names a
-    published file the ladder cannot offer, this one names an offered rung the
+    published file the ladder cannot offer, this one names a file the
     publisher never shipped -- and it is the direction that costs a reader.
     """
     out = []
     for model in models.values():
-        for q in (model.get("quants") or []) + (model.get("components") or []):
-            have = sizes.get(q.get("repo")) or {}
+        named = [(r["repo"], [key, facts.get("quant")]) for r, key, facts in rungs.files(model)]
+        named += [(c.get("repo"), [c.get("file"), c.get("quant")])
+                  for c in model.get("components") or []]
+        for repo, keys in named:
+            have = sizes.get(repo) or {}
             if not have:
                 # a repo the size collector has never read is a different
                 # problem, and reporting every rung of it as missing would bury
                 # the one that is actually wrong
                 continue
-            if any(have.get(k) is not None for k in (q.get("file"), q.get("quant")) if k):
+            if any(have.get(k) is not None for k in keys if k):
                 continue
-            out.append((q["repo"], q.get("quant") or q.get("file"), tuple(sorted(have))))
+            out.append((repo, next(k for k in keys if k), tuple(sorted(have))))
     return [(repo, tag, list(have)) for repo, tag, have in sorted(set(out))]
 
 
@@ -979,9 +987,9 @@ def file_stem(name):
     return QUANT_TOKEN.sub("", bare).lower()
 
 
-def quant_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
-               tensors=None, repo=None):
-    """Each declared quant, with what it weighs and what that is per weight.
+def repo_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
+              tensors=None, repo=None):
+    """Each of the model's repos, with every rung it publishes and what each weighs.
 
     A rung also carries whether a stock llama.cpp can load it. The ladder is
     built from what a repo publishes, and a publisher is free to publish rungs
@@ -989,62 +997,44 @@ def quant_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
     `IQ5_K` are 10 of its 28. Offering those as choices with a size beside them
     is the page answering "what else is there" with files that will not open.
 
+    What the registry writes about one file -- a note, the fork that loads it,
+    the tag its name does not carry -- lands on that rung, and what it writes
+    about the repo (role, crispasr backend, drafting) on the row.
+
     `unnamed` collects the files dropped for carrying no type name, so a ladder
     that quietly got shorter says so.
     """
     params = None
     out = []
     unnamed = [] if unnamed is None else unnamed
-    # every file this model pins, under the tag the registry gives it. built
-    # first because the ladder is per RUNG and the naming is per MODEL: the Q8_0
-    # rung lists the unsuffixed file as an alternate, and without this it stayed
-    # a filename there while reading `F16` one rung up
-    pinned = {q["file"]: q["quant"] for q in (model.get("quants") or [])
-              if q.get("file")}
-    for q in model.get("quants") or []:
-        repo_sizes = sizes.get(q["repo"]) or {}
-        row = dict(q)
-        # the note's references become figures HERE rather than being stored
-        # rendered, so what the page prints is read from the capture on the
-        # build that prints it. see research/notes.py
-        if row.get("note"):
-            row["note"] = notes.render_parts(row["note"], q["repo"],
-                                             q.get("file") or q["quant"],
-                                             note_data(), model=repo)
-        # and the rung's own runtime block, whose note is about this file too
-        if isinstance(row.get("runtime"), dict):
-            row["runtime"] = rendered_notes(row["runtime"], q["repo"],
-                                            q.get("file") or q["quant"])
-        row["url"] = HF + q["repo"]
-        # the size table is keyed by whatever the repo publishes: a quant tag
-        # where the filenames carry one, the filename itself where they do not,
-        # and BOTH where a file carries a tag the derivation could read. `file:`
-        # says which this rung is, and the tag is the fallback
-        b = repo_sizes.get(q.get("file")) or repo_sizes.get(q["quant"])
-        if b:
-            row["bytes"] = b
-            row["gib"] = round(b / GIB, 2)
-        # every other quant published in the same repo, so a reader who cannot
-        # fit the pinned one can see what else is there -- but only the ones
-        # that are the SAME MODEL. one repo can hold several: whisper.cpp
-        # publishes 33 files over eight checkpoints, and offering
-        # `ggml-medium.bin` as an alternate rung of large-v3-turbo is offering a
-        # different model at a smaller size. where the rung names a file, the
-        # alternates are the files that differ from it only by quant token --
-        # and the derived tags, which name no file and so name no other model.
+    for r in rungs.repos(model):
+        repo_sizes = sizes.get(r["repo"]) or {}
+        row = {"repo": r["repo"], "url": HF + r["repo"]}
+        row.update({k: r[k] for k in rungs.REPO_FIELDS if k in r})
+        # the tag the registry gives a file whose name carries none: kokoro's
+        # `Kokoro_espeak.gguf` is the F32 rung, whisper's `ggml-large-v3-turbo.bin`
+        # the F16 one, and nothing in either name says so
+        tagged = {k: f["quant"] for k, f in r["files"].items() if f.get("quant")}
+        # only the rungs that are the SAME MODEL. one repo can hold several:
+        # whisper.cpp publishes 33 files over eight checkpoints, and offering
+        # `ggml-medium.bin` as a rung of large-v3-turbo is offering a different
+        # model at a smaller size. where the registry names this model's files by
+        # filename, the rungs are the files that differ from one of them only by
+        # quant token -- and the derived tags, which name no file and so name no
+        # other model.
         alt = repo_sizes.items()
         drop = NOT_A_QUANT
-        if q.get("file"):
-            want = file_stem(q["file"])
+        stems = {file_stem(k) for k in r["files"] if is_filename(k)}
+        if stems:
             alt = [(k, v) for k, v in alt
-                   if not is_filename(k) or file_stem(k) == want]
+                   if not is_filename(k) or file_stem(k) in stems]
             # `.gguf` in NOT_A_QUANT is there to keep filename keys out of a tag
             # ladder, and the stem filter above has already done that job better:
             # what is left IS this model at another size. kokoro publishes five
             # espeak rungs and the blanket rule hid four of them.
             drop = SIDECAR_NAME
         row["available"] = sorted(
-            ({"quant": k, "gib": round(v / GIB, 2)}
+            ({"quant": k, "gib": round(v / GIB, 2), "bytes": v}
              for k, v in alt if not drop.search(k)),
             key=lambda x: x["gib"])
         # a ladder is a list of TYPES and the page labels each rung by name, so a
@@ -1055,9 +1045,9 @@ def quant_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
             fork = known_quants and fork_type(a["quant"], known_quants)
             if fork:
                 a["fork_type"] = fork
-            # one the registry already pins, which knows the tag for its file
-            if a["quant"] in pinned:
-                a["file"], a["quant"] = a["quant"], pinned[a["quant"]]
+            # one the registry names, which knows the tag for its file
+            if a["quant"] in tagged:
+                a["file"], a["quant"] = a["quant"], tagged[a["quant"]]
             elif not is_quant_name(a["quant"]):
                 # a name carrying a quant token is shown under that token:
                 # `ggml-large-v3-turbo-q5_0.bin` is the Q5_0 rung, and a ladder
@@ -1080,42 +1070,50 @@ def quant_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
                     # `indextts-gpt.gguf` is a real full-precision build whose
                     # publisher tagged nothing. neither can be offered as a
                     # choice, so both are dropped and counted
-                    unnamed.append("%s:%s" % (q["repo"], a["quant"]))
+                    unnamed.append("%s:%s" % (r["repo"], a["quant"]))
                     continue
                 a["file"], a["quant"] = a["quant"], token.group(0).strip("-_").upper()
+            key = a.get("file") or a["quant"]
             # what the file IS, where its tensor table has been read. the label
             # is the publisher's and says very little: `UD-Q4_K_XL` is nine ggml
             # types with Q5_K over 42% of the weights. keyed by the tag the
             # sizes collector used, which is the same grouping this ladder is
-            t = (tensors or {}).get("%s:%s" % (q["repo"], a.get("file") or a["quant"]))
+            t = (tensors or {}).get("%s:%s" % (r["repo"], key))
             if t:
                 a["types"] = t["types"]
                 if sized(t["types"]):
                     a["real_bpw"] = t["bpw"]
+            # the speakers this FILE ships, read out of its own header: two
+            # conversions of one checkpoint answer differently, cstr's qwen3-tts
+            # carrying nine names where ours carries none
+            spk = ((voices or {}).get("%s:%s" % (r["repo"], key)) or {}).get("voices")
+            if spk:
+                a["voices"] = spk
+            # what the registry writes about this file, its references made
+            # figures HERE so the page prints what the capture says on the build
+            # that prints it. the file first and then the tag, the order the
+            # size table is keyed in
+            facts = r["files"].get(a.get("file")) or r["files"].get(a["quant"]) or {}
+            keys = [k for k in (a.get("file"), a["quant"]) if k]
+            if facts.get("note"):
+                a["note"] = notes.render_parts(facts["note"], r["repo"], keys,
+                                               note_data(), model=repo)
+            if isinstance(facts.get("runtime"), dict):
+                a["runtime"] = rendered_notes(facts["runtime"], r["repo"], keys)
             named.append(a)
         row["available"] = named
-        # the speakers this FILE ships, read out of its own header. per quant
-        # rather than per model because two conversions of one checkpoint
-        # answer differently: cstr's qwen3-tts carries nine names where ours
-        # carries none, and a reader needs the list for the rung being served
-        spk = ((voices or {}).get(
-            "%s:%s" % (q["repo"], q.get("file") or q["quant"])) or {}).get("voices")
-        if spk:
-            row["voices"] = spk
         out.append(row)
     return out, params
 
 
-def with_bpw(quants, params_b):
+def with_bpw(rows, params_b):
     """Bits per weight, which is the number that predicts quantization loss."""
-    if not params_b:
-        return quants
-    for q in quants:
-        if q.get("bytes"):
-            q["bpw"] = round(q["bytes"] * 8 / (params_b * 1e9), 2)
-        for a in q.get("available") or []:
-            a["bpw"] = round(a["gib"] * GIB * 8 / (params_b * 1e9), 2)
-    return quants
+    for row in rows:
+        for a in row.get("available") or []:
+            b = a.pop("bytes", None)
+            if params_b and b:
+                a["bpw"] = round(b * 8 / (params_b * 1e9), 2)
+    return rows
 
 
 # which runtimes load a model, joined here because two of them are stated in
@@ -1136,8 +1134,7 @@ def engines_for(model, loaded=()):
     out = set(model.get("engine") or []) | set(loaded)
     if (model.get("runtime") or {}).get("arch"):
         out.add("llama.cpp")
-    if model.get("crispasr") or any(q.get("crispasr")
-                                    for q in (model.get("quants") or [])):
+    if model.get("crispasr") or any(r.get("crispasr") for r in rungs.repos(model)):
         out.add("crispasr")
     if model.get("kind", "text") == "text":
         out.add("vllm")
@@ -1152,8 +1149,8 @@ def engines_for(model, loaded=()):
 def crispasr_block(model, backends):
     """The registry's crispasr fact, plus the repos the catalog names for it."""
     block = dict(model.get("crispasr") or {})
-    names = {block.get("backend")} | {(q.get("crispasr") or {}).get("backend")
-                                      for q in (model.get("quants") or [])}
+    names = {block.get("backend")} | {(r.get("crispasr") or {}).get("backend")
+                                      for r in rungs.repos(model)}
     repos = []
     for name in sorted(n for n in names if n):
         cat = backends.get(name) or {}
@@ -1183,14 +1180,14 @@ def crispasr_block(model, backends):
 # one repo. `--family omnivoice` and `gufo serve tts` pick a loader, and a model
 # whose weights two families both claim is a model where naming either is a
 # guess about which one a reader should run.
-def engine_match(weights, repo, quants):
-    """The catalog entries naming this model's repo or one of its pinned repos.
+def engine_match(weights, repo, model):
+    """The catalog entries naming this model's key or one of its repos.
 
     Returns (matches, names) -- every entry that named a repo of this model, and
     which repos it named, so a caller can report an ambiguity instead of
     silently picking one.
     """
-    mine = {repo} | {q["repo"] for q in (quants or []) if q.get("repo")}
+    mine = {repo} | set(rungs.repo_names(model))
     return [(name, sorted(w & mine)) for name, w in sorted(weights.items())
             if w & mine]
 
@@ -1217,7 +1214,7 @@ def audiocpp_block(repo, model, catalog):
     hits = engine_match({f: {p["repo"] for p in (rec.get("packages") or [])
                              if p.get("repo")}
                          for f, rec in (catalog or {}).items()},
-                        repo, model.get("quants"))
+                        repo, model)
     if len(hits) != 1:
         return None
     name, matched = hits[0]
@@ -1258,7 +1255,7 @@ def gufo_block(repo, model, guides):
     """The gufo guide that loads these weights, and how it starts the server."""
     hits = engine_match({s: {w.get("repo") for w in (rec.get("weights") or [])}
                          for s, rec in (guides or {}).items()},
-                        repo, model.get("quants"))
+                        repo, model)
     if len(hits) != 1:
         return None
     name, matched = hits[0]
@@ -1271,7 +1268,7 @@ def gufo_block(repo, model, guides):
     return out
 
 
-def gufo_rungs(gufo, quants):
+def gufo_rungs(gufo, rows):
     """The rungs of this model that are files a gufo guide names.
 
     gufo loads the bytes its guide measured, so it is an engine for those rungs
@@ -1286,8 +1283,8 @@ def gufo_rungs(gufo, quants):
         if not w.get("file") or (mode and mode in (w.get("label") or "").lower()):
             continue
         stem = re.sub(r"(-\d{5}-of-\d{5})?\.gguf$", "", w["file"])
-        tags = {a["quant"] for q in quants if q.get("repo") == w.get("repo")
-                for a in (q.get("available") or [q])}
+        tags = {a["quant"] for row in rows if row["repo"] == w.get("repo")
+                for a in row.get("available") or []}
         hits = [t for t in tags if any(p == t or p.endswith("-" + t)
                                        for p in stem.split("/"))]
         quant = max(hits, key=len) if hits else None
@@ -1340,14 +1337,14 @@ def build_model(repo, model, ctx):
     facts = ctx["facts"].get(repo) or {}
     use = (ctx["usecase"].get("models") or {}).get(repo) or {}
     card = ctx["cards"].get(repo) or {}
-    quants, _ = quant_rows(model, ctx["sizes"], ctx["known_quants"],
-                           ctx["voices"], ctx.setdefault("unnamed", []),
-                           ctx["tensors"], repo)
-    quants = with_bpw(quants, facts.get("params_total_b"))
+    rows, _ = repo_rows(model, ctx["sizes"], ctx["known_quants"],
+                        ctx["voices"], ctx.setdefault("unnamed", []),
+                        ctx["tensors"], repo)
+    rows = with_bpw(rows, facts.get("params_total_b"))
     ac = audiocpp_block(repo, model, ctx["audiocpp"])
     gufo = gufo_block(repo, model, ctx["gufo"])
     if gufo:
-        gufo["rungs"] = gufo_rungs(gufo, quants)
+        gufo["rungs"] = gufo_rungs(gufo, rows)
     name = model.get("name") or {}
     rec = {
         "repo": repo, "publisher": repo.split("/")[0],
@@ -1377,8 +1374,10 @@ def build_model(repo, model, ctx):
         # it in any other form. carried so the page and the checks read the
         # same assertion the registry makes
         "gguf_only": model.get("gguf_only"),
+        # a text model that measured as a decision model, and the run that did
+        "decides": rendered_notes(model.get("decides"), repo) or None,
         "modalities": model.get("modalities") or {},
-        "facts": facts, "quants": quants,
+        "facts": facts, "repos": rows,
         "components": [rendered_notes(c, c.get("repo") or repo,
                                       c.get("file") or c.get("quant"))
                        for c in (model.get("components") or [])],
@@ -1387,7 +1386,7 @@ def build_model(repo, model, ctx):
         "thinking": rendered_notes(model.get("thinking") or {}, repo),
         "turns": rendered_notes(model.get("turns") or {}, repo),
         "templates": per_repo_templates(
-            [repo] + [q["repo"] for q in (model.get("quants") or [])],
+            [repo] + rungs.repo_names(model),
             ctx["probes"], model.get("thinking")),
         "ids": model.get("ids") or {},
         "params": use.get("params") or {},

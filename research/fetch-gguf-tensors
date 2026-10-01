@@ -199,9 +199,9 @@ def summarise(rows):
                       for k, v in sorted(by.items(), key=lambda kv: -kv[1])}}
 
 
-def rungs(repo, max_age, refresh):
+def rungs(repo, max_age, refresh, pinned=(), drafter=False):
     """(tag, [path]) for every rung this repo publishes, sidecars dropped."""
-    by = sizes.files_by_tag(repo, max_age, refresh)
+    by = sizes.files_by_tag(repo, max_age, refresh, pinned, drafter)
     if by is None:
         return []
     out = []
@@ -246,9 +246,11 @@ def main():
         out = {}
     known = set(out)
 
-    failed = 0
+    failed, pinned = 0, sizes.pinned_files(args.registry)
+    heads = sizes.drafter_repos(args.registry)
     for repo in names:
-        for tag, paths in rungs(repo, args.max_age, args.refresh):
+        for tag, paths in rungs(repo, args.max_age, args.refresh,
+                                pinned.get(repo, ()), repo in heads):
             if "%s:%s" % (repo, tag) in known:
                 continue
             rows = []

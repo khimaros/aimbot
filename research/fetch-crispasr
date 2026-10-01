@@ -36,6 +36,7 @@ import subprocess
 import sys
 
 import capture
+import rungs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = "data/crispasr.json"
@@ -297,11 +298,11 @@ def by_arch(payload, registry):
     agree, differ, new = [], [], []
     for repo, m in sorted(registry.items()):
         written = ((m.get("crispasr") or {}).get("backend")
-                   or next((q["crispasr"]["backend"] for q in (m.get("quants") or [])
-                            if (q.get("crispasr") or {}).get("backend")), None))
+                   or next((r["crispasr"]["backend"] for r in rungs.repos(m)
+                            if (r.get("crispasr") or {}).get("backend")), None))
         found = None
-        for q in (m.get("quants") or []):
-            arch = repo_arch.get(q.get("repo"))
+        for r in rungs.repo_names(m):
+            arch = repo_arch.get(r)
             if arch and arch in index:
                 found = index[arch]
                 break
@@ -327,19 +328,17 @@ def report(payload, registry):
     owned = {}
     for repo, m in registry.items():
         owned[repo] = repo
-        for q in (m.get("quants") or []) + (m.get("components") or []):
-            owned[q["repo"]] = repo
+        for r in rungs.weight_repos(m):
+            owned[r] = repo
     # a model that names ANY crispasr use is claimed: the diarizers carry
     # `crispasr.diarize` rather than a backend, and reading only backends
     # reported foxnose as an unclaimed runtime for a weight the registry has
     # carried under that recipe from the start
     claimed = {r for r, m in registry.items()
-               if m.get("crispasr") or any(q.get("crispasr")
-                                           for q in (m.get("quants") or []))}
+               if m.get("crispasr") or any(x.get("crispasr") for x in rungs.repos(m))}
     named = {b for m in registry.values()
              for b in [((m.get("crispasr") or {}).get("backend"))]
-             + [((q.get("crispasr") or {}).get("backend"))
-                for q in (m.get("quants") or [])] if b}
+             + [((x.get("crispasr") or {}).get("backend")) for x in rungs.repos(m)] if b}
 
     print("crispasr: %d backends, %d with a repo, %d capability rows, "
           "%d architectures"

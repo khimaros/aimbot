@@ -24,7 +24,23 @@ import os
 import subprocess
 import sys
 
-API = "https://gertlabs.com/api/v1/global/rankings"
+# the api answers 100 rows unless told otherwise, and the board outgrew that:
+# gemma 4 26b fell off at rank 98 when eighteen models were added above it.
+# `limit` is the only paging parameter it honours (page/offset are ignored),
+# and only up to 500 -- above that it silently answers the default page again
+LIMIT = 500
+DEFAULT_PAGE = 100
+API = "https://gertlabs.com/api/v1/global/rankings?limit=%d" % LIMIT
+
+
+def truncated(rankings):
+    """Whether a result may be a cut-off board rather than the whole of it.
+
+    Either it filled the page it asked for, or it is exactly the default page,
+    which is what an ignored `limit` returns -- and a count that stays fixed is
+    how the first truncation went unnoticed.
+    """
+    return len(rankings) >= LIMIT or len(rankings) == DEFAULT_PAGE
 
 # per-mode sub-objects worth keeping, minus their per_game blobs
 MODES = ["agentic_coding", "oneshot_coding", "decision_making"]
@@ -86,6 +102,9 @@ def main():
     rankings = payload.get("data", {}).get("rankings")
     if not rankings:
         sys.exit("no rankings in payload")
+    if truncated(rankings):
+        sys.exit("!!! %d rows fill the %d asked for, so the board may be cut off; "
+                 "raise LIMIT" % (len(rankings), LIMIT))
 
     out = []
     for r in rankings:

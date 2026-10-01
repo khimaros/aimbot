@@ -34,7 +34,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIGS = os.path.join(HERE, "..", "research", "data", "author-configs.json")
 
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, "..", "research"))
 import registry_patch  # noqa: E402  the splice, shared with resolve-runtime
+import rungs  # noqa: E402  a model's repos, whichever shape the registry is in
 
 # (config file, the layout it names) -> the layout name verdict's spec/layouts
 # carries. decider's code also has a `chat` layout, which verdict has no spec
@@ -52,8 +54,8 @@ except ImportError:
 
 def block_for(repo, model, configs):
     """The derived `readout:` for one model, or None if no config says it."""
-    for q in model.get("quants") or []:
-        for name, cfg in sorted((configs.get(q.get("repo")) or {}).items()):
+    for r in rungs.repo_names(model):
+        for name, cfg in sorted((configs.get(r) or {}).items()):
             layout = LAYOUTS.get((name, cfg.get("layout")))
             if not layout:
                 continue

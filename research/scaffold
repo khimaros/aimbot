@@ -46,6 +46,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import publishers  # noqa: E402  the `[role]` table, shared with propose
+import rungs  # noqa: E402  a model's repos, whichever shape the registry is in
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -81,7 +82,7 @@ def carried_backends(models):
     """Every crispasr backend some registry entry already names."""
     out = set()
     for m in models.values():
-        blocks = [m.get("crispasr")] + [q.get("crispasr") for q in (m.get("quants") or [])]
+        blocks = [m.get("crispasr")] + [r.get("crispasr") for r in rungs.repos(m)]
         for b in blocks:
             if b and b.get("backend"):
                 out.add(b["backend"])
@@ -166,16 +167,12 @@ def draft(backend, spec, bases, sizes):
     lines.append("    notes: TODO  # what it is for, and why the roster carries it")
     todo.append("notes: no capture holds prose about why a model is worth having")
 
-    lines.append("    quants:")
+    lines.append("    repos:")
     for i, repo in enumerate(spec.get("gguf") or []):
-        q = quant_for(repo, sizes)
         lines.append("    - repo: %s" % repo)
-        if q:
-            lines.append("      quant: %s" % q)
-        else:
-            lines.append("      quant: TODO  # nothing sized this repo; pin it here "
-                         "and run fetch-gguf-sizes")
-            todo.append("quant: %s is not in gguf-sizes.json" % repo)
+        if not quant_for(repo, sizes):
+            todo.append("repo: %s is not in gguf-sizes.json; run fetch-gguf-sizes "
+                        "once the entry is in" % repo)
         # crispasr dispatches on ONE file, so only the first carries the backend.
         # what the others ARE is not derivable and was guessed at once: drafting
         # them as codecs is right for orpheus and zonos, which decode through
@@ -187,11 +184,11 @@ def draft(backend, spec, bases, sizes):
             lines.append("      crispasr:")
             lines.append("        backend: %s" % backend)
         else:
-            lines.append("      role: TODO  # a rung of the same model, a sibling"
+            lines.append("      role: TODO  # another repo of the same model, a sibling"
                          " that wants its own entry,")
             lines.append("                  # or a codec this one decodes through")
             todo.append("role: %s is the %s repo this backend names; decide "
-                        "whether it is a rung, a sibling or a component"
+                        "whether it is this model, a sibling or a component"
                         % (repo, "second" if i == 1 else "%dth" % (i + 1)))
 
     lines.append("    modalities:")
@@ -254,7 +251,7 @@ def main():
                                               for k, n in sorted(by_kind.items())))
             print("  %d have a base repo to key on, %d do not"
                   % (keyed, len(fresh) - keyed))
-            print("  %d have every gguf sized, %d need a pin + fetch-gguf-sizes"
+            print("  %d have every gguf sized, %d need an entry + fetch-gguf-sizes"
                   % (quanted, len(fresh) - quanted))
             print("  draft them with: ./scaffold --kind tts")
         print("  %d more name weights that ARE carried, reached by another "

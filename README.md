@@ -270,8 +270,8 @@ runtimes for ~60 ASR architectures behind one binary. which runtime is
 ```yaml
   nvidia/parakeet-tdt-0.6b-v3:
     kind: speech
-    quants:
-    - {repo: cstr/parakeet-tdt-0.6b-v3-GGUF, quant: Q8_0, role: model}
+    repos:
+    - {repo: cstr/parakeet-tdt-0.6b-v3-GGUF, role: model}
     crispasr:
       backend: parakeet
 ```
@@ -295,7 +295,7 @@ is not a part of a pipeline -- it is the pipeline, one network emitting a
 speaker probability per 10 ms for up to eight speakers, which crispasr loads
 with `--diarize-model` where the other two come in through `--diarize-embedder`
 and `--sherpa-segment-model`. nvidia ships the gguf itself, inside the weights
-repo, so this is the one entry whose key and whose pinned file are the same
+repo, so this is the one entry whose key and whose listed repo are the same
 repo: there is no conversion to prefer and nobody else's name to key on.
 
 coverage is reported in both directions, because they answer different
@@ -457,10 +457,11 @@ one entry, trimmed:
 Qwen/Qwen3.8-27B:
   kind: text
   name: {short: qwen3.8 27b, match: 'qwen\s*-?3\.8[\s-]*27b|qwen3\.8-27b'}
-  quants:
+  repos:
     - repo: unsloth/Qwen3.8-27B-GGUF
-      quant: Q8_0
-      note: measured +0.02% perplexity against bf16 over 580 chunks ...
+      files:
+        Q8_0:
+          note: measured +0.02% perplexity against bf16 over 580 chunks ...
   speculative: {type: draft-mtp, n_max: 3}
   sampling:
     thinking: {temp: 1.0, top_p: 0.95, top_k: 20, min_p: 0.0,
@@ -471,10 +472,12 @@ Qwen/Qwen3.8-27B:
   ids: {aa: '', gbench: '', lmarena: '', swerebench: '', epoch: ''}
 ```
 
-a consumer addresses this by four keys: the repo, a `quants[]` repo/quant pair,
-a `sampling` profile name, and a `speculative` block it may decline -- and which
-a quant may decline on its behalf, since `draft-mtp` needs a nextn head that only
-the `-MTP-GGUF` build of the same model carries.
+a consumer addresses this by four keys: the repo, a `repos[]` repo and a tag or
+file in it, a `sampling` profile name, and a `speculative` block it may decline
+-- and which a repo may decline on its behalf, since `draft-mtp` needs a nextn
+head that only the `-MTP-GGUF` build of the same model carries. `repos:` is
+ordered, most preferred first; which rung to run is the consumer's call, and
+this page's is the best quality that fits.
 
 where a profile deliberately departs from what the vendor documents, the
 vendor's own set is recorded beside it as `upstream-<profile>` rather than
@@ -486,10 +489,11 @@ server binary, how to group it -- is its own business, in its own file.
 llama-tools keeps its hosts in `etc/aimbot/<host>.yaml` and checks them with
 its own `scripts/llama-swap-validate`, which reads `registry/` for exactly
 those four keys and knows llama-swap for everything else. a quant it may serve
-is a pin or any rung the pinned repo publishes: it reads each pin's `available`
-ladder out of `docs/data.json`, and skips the rungs marked `fork_type`, so
-`models[].repo` and `quants[].{repo, available[].{quant, file, fork_type}}`
-there are a contract with another repo rather than page internals.
+is any rung a listed repo publishes, resolved in repo order: it reads each
+repo's `available` ladder out of `docs/data.json`, and skips the rungs marked
+`fork_type`, so `models[].repo` and `repos[].{repo, role, crispasr, speculative,
+available[].{quant, file, fork_type}}` there are a contract with another repo
+rather than page internals.
 
 ## the viewer
 
@@ -580,8 +584,8 @@ wrong:
   crispasr generates out of `--list-backends-json`. that caught `gemma4-e4b`,
   which is a row in crispasr's readme -- named after the model -- and not a
   backend at all: the readme says the E4B "runs on `--backend gemma4-e2b`".
-- some pinned file must be one crispasr RECOGNISES. that caught gemma 4
-  outright: the gguf this registry pins declares `gemma4`, crispasr's table
+- some listed repo must hold a file crispasr RECOGNISES. that caught gemma 4
+  outright: the gguf this registry lists declares `gemma4`, crispasr's table
   knows `gemma4_e2b`, and it loads cstr's separate ASR conversion rather than
   our file. the claim is gone and the reason is in the entry.
 - the rule NOT applied is `the written backend must equal the detected one`.
@@ -796,9 +800,9 @@ what a box can run turned out to be worth four bugs and a missing model:
   three speech entries name no engine at all, and an empty pool answers a memory
   question with `unknown` rather than with `does not fit`.
 
-the registry's `quants:` list still says which publishers a model has at all --
-that is the curation layer, and llama-tools serves any rung those publishers'
-repos carry -- but it no longer chooses among them. at the default 128gb box three of 74 rows read a different
+the registry's `repos:` list says which publishers a model has at all -- that
+is the curation layer, and llama-tools serves any rung those publishers' repos
+carry -- but it does not choose among them. at the default 128gb box three of 74 rows read a different
 file than before: mimo arriving, qwen3.5-27b moving to its MTP build, and
 qwen3.8 flash next taking agentionai's Q5_K_XL at 5.37 bits over unsloth's
 Q4_K_XL at 4.95, which is the shape of what the old rule discarded.
@@ -898,7 +902,7 @@ captured. neither reason covers DFlash 2. inco publishes it FOR qwen3.8 27b --
 its `base_model` says so -- it is sized and its tensors are read like any other
 file here, and no amount of looking through qwen's repos finds it, because the
 publisher is a third party. so `speculative` may carry a `repo:` and the rung of
-it to fetch, and lint refuses one naming a repo the model already pins: that
+it to fetch, and lint refuses one naming a repo the model already lists: that
 would be a hand-written pairing standing in for a lookup that works.
 
 `alternatives:` is the other half. a model can have two methods and they need
@@ -922,7 +926,7 @@ wide range rather than a constant.
 of it. `quant adjusted` in the ranking row is on by default, since that is the
 number a local roster is actually asking about; release it and the scores are
 exactly what the source published. on, it
-discounts by the retention `research/build-tables` fits for the pinned quant's
+discounts by the retention `research/build-tables` fits for the chosen quant's
 bits per weight. that curve is imported rather than restated, so the page and
 MODELS.md cannot disagree about what effective means. it changes the answer:
 kimi k3 runs at UD-IQ1_S, 1.71 bpw, 0.778 retention, and falls from second to
@@ -1018,12 +1022,12 @@ a model's detail opens as a modal deep-linked in the
 url (`#model=Qwen/Qwen3.6-27B&tab=operate`) with six tabs, one per kind of
 claim: `overview` what it is, `quality` what third parties measured, `community`
 what each forum said, `vendor` what the people selling it say, `quantization`
-what the registry pins and what each published rung is, and `operate` how to run
+what the registry says about each repo and what each published rung is, and `operate` how to run
 it and what the rung you picked costs. keeping the vendor's own paragraph on its own tab is the point rather
 than tidiness -- it used to open the overview, which gave marketing copy the
 position the measurements earned.
 
-the `quantization` tab carries the files the registry pins, with their notes,
+the `quantization` tab carries the repos the registry lists and its notes on single files,
 and the rung ladder: every quant each repo publishes, with the bits per weight
 derived from file size beside the bits per weight READ out of that file's tensor
 table, and the ggml type mix behind the label -- next to who measured what. the
@@ -1059,7 +1063,7 @@ one its own ladder scores highest.
 the `operate` tab emits a `llama-server` argv, open by default, a pi
 `models.json` provider block, the request body carrying the thinking knob, and a
 vllm line -- built from a quant and a sampling profile you pick, since some repos
-publish twenty quants and a snippet for the one the registry pinned is no use to
+publish twenty quants and a snippet for the best of them is no use to
 somebody who cannot fit it. beside them is what the retention discount does to
 the picked rung and which curve says so, since a measured curve answers only for
 the repo it ran and not always for the model. every flag in them is a pure function of registry facts -- the
@@ -1220,6 +1224,12 @@ and `make lint` fails if the document is behind. the dom stub lives in
 `scripts/pageboot.py` and is shared with `tests/e2e`, so the page under test and
 the page the document is generated from are the same boot.
 
+the ranking is language models, and `## other modalities` is everything else
+the page's shape filter offers -- vision, transcription, speech, image, video,
+embeddings, decisions and the crispasr pipeline weights -- each the page
+filtered to that one shape, over every licence and runtime, with a rung that
+does not fit marked rather than dropped.
+
 the per-model prose is generated too. `research/build-sections` renders the
 picks, the role index and one verdict per ranked model out of
 `research/usecase-assessed.json`, which is where the written judgement already
@@ -1282,8 +1292,7 @@ the defaults are the page's, not none: a 128gb box with 12 reserved at 128k,
 language models only, that fit, on a runtime you are likely to have built, under
 any licence. naming a `--modality`, `--flag`, `--engine` or `--license` replaces
 that default and `--all` drops all of them. `--ram 0` asks what the roster looks
-like with no budget at all, which is the registry's pinned rung rather than a
-fit.
+like with no budget at all, which reads each model at its best-quality rung.
 
 **and it says which filter took the rest.** a model missing from the output was
 usually filtered rather than absent, and that used to be something a reader had

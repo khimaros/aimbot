@@ -12,7 +12,7 @@ quants and sampling.
     resolve-turns --write      # update registry/models.yaml
 
 The facts are taken from the gguf repo a consumer actually serves -- the
-model's first `quants[]` entry -- and `source:` records which repo that was,
+model's first repo -- and `source:` records which repo that was,
 because the two sides disagree far too often to leave implicit: 11 of the 39
 models with both carry a gguf template that accepts a developer message where
 the base repo rejects it, unsloth having patched the role in on the way through
@@ -46,6 +46,9 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROBES = os.path.join(HERE, "..", "research", "data", "template-probes.json")
+sys.path.insert(0, os.path.join(HERE, "..", "research"))
+import rungs  # noqa: E402  a model's repos, whichever shape the registry is in
+
 MODEL_KEY = re.compile(r"^  (\S.*?):\s*$")
 FIELDS = {"turns": ["source", "developer", "leading_system_max", "mid_system",
                     "mid_developer", "upstream_differs"],
@@ -89,13 +92,13 @@ def turns_for(probe):
 def served(model, probes):
     """(repo, probe) for the template a consumer actually gets, or (None, None).
 
-    The first quant entry is what a consumer serves, so it answers before the
-    base repo does. Falling back the other way would describe a template nobody
+    The first repo is what a consumer serves, so it answers before the base
+    repo does. Falling back the other way would describe a template nobody
     runs.
     """
-    for q in (model.get("quants") or []):
-        if q.get("repo") in probes:
-            return q["repo"], probes[q["repo"]]
+    for r in rungs.repo_names(model):
+        if r in probes:
+            return r, probes[r]
     return None, None
 
 
@@ -298,9 +301,8 @@ def contradictions(reg, probes, resolved):
         if repo not in resolved:
             continue
         want = {k: v for k, v in resolved[repo]["turns"].items() if k != "source"}
-        for q in (model.get("quants") or []):
-            other = q.get("repo")
-            if not other or other == resolved[repo]["turns"]["source"] or other not in probes:
+        for other in rungs.repo_names(model):
+            if other == resolved[repo]["turns"]["source"] or other not in probes:
                 continue
             got = turns_for(probes[other])
             diff = [k for k in want if want[k] != got[k]]

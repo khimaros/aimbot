@@ -1,17 +1,20 @@
 # ROADMAP
 
 ```
-[ ] determine why the roster only has a single quant per repo, which limits llama-tools use
-[ ] clarify whether lowercase "gb" means gigabits or gigabytes
+[ ] import verdict benchmarks for decisions models
+[ ] show a summary of how many models are excluded by filters (like CLI) in the dashboard
+[ ] width of quant layer table should be proportionate to percent (bar chart)
 [ ] add more hardware presets: new mac studio, various graphics cards (1080ti, rx5090, etc)
+[ ] clarify whether lowercase "gb" means gigabits or gigabytes
 
+[>] spec decoding defined per-repo in the registry
+[>] add some "milestone" or "benchmark" frontier models to the tables
+[>] somehow factor thinking level data from benchmarks that report it into our dashboard
 [>] min/max quant as a slider with two segments
 [>] llama-server command in dashboard should be identical to production
-[>] width of quant layer table should be proportionate to percent (bar chart)
-[>] spec decoding defined per-quant in the registry
 [>] hide the flops hardware section when t/s column is off
-[>] add some "milestone" or "benchmark" frontier models to the tables
 
+[x] determine why the roster only has a single quant per repo, which limits llama-tools use
 [x] create a new favicon with a simple monochrome crosshair
 [x] support new backend: https://github.com/0xShug0/audio.cpp
 [x] support new backend: https://github.com/gufo-org/gufo/

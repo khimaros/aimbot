@@ -22,6 +22,9 @@ ids has no business reformatting them.
 
 import re
 
+# the block every generated block is spliced after
+MEMBERSHIP = ("repos",)
+
 # `  owner/name:` at model depth, as distinct from the `    key:` inside it
 MODEL_KEY = re.compile(r"^  (\S.*?):\s*$")
 BLOCK_KEY = re.compile(r"^    (\S+):\s*$")
@@ -59,8 +62,9 @@ def patch_blocks(path, blocks, after=None):
     A block that is absent is inserted after the `after:` block when that is
     given and found, and otherwise appended to the end of the model's body --
     the only other position that cannot end up between a comment and the key
-    it explains.
+    it explains. `after` may name several blocks, the first present wins.
     """
+    anchors = (after,) if isinstance(after, str) else tuple(after or ())
     lines = open(path).read().split("\n")
     out, i, n = [], 0, 0
     while i < len(lines):
@@ -84,7 +88,7 @@ def patch_blocks(path, blocks, after=None):
                 continue
             body.append(lines[i])
             i += 1
-            if name == after:
+            if name in anchors:
                 # the anchor's own body has to be copied before anything is
                 # inserted behind it, or the new block lands inside it
                 while i < len(lines) and (lines[i].startswith(BLOCK_INDENT)

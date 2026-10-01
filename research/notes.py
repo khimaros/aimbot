@@ -33,6 +33,7 @@ import json
 import os
 import re
 
+import rungs
 import verdicts
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -389,7 +390,7 @@ def served_by(entry):
     entry = entry or {}
     out = []
     backends = {(entry.get("crispasr") or {}).get("backend")} | {
-        (q.get("crispasr") or {}).get("backend") for q in entry.get("quants") or []}
+        (r.get("crispasr") or {}).get("backend") for r in rungs.repos(entry)}
     for name in sorted(b for b in backends if b):
         out.append("crispasr backend %s" % name)
     if (entry.get("runtime") or {}).get("arch"):
@@ -407,9 +408,8 @@ def _ladders(entry, repo, data):
     the rung's own size. Handing over one repo got card summaries back.
     """
     out = []
-    for q in ((entry or {}).get("quants") or []) + ((entry or {}).get("components") or []):
-        at = q.get("repo")
-        if not at or at == repo or any(at == seen for seen, _ in out):
+    for at in rungs.weight_repos(entry or {}):
+        if at == repo:
             continue
         out.append((at, [(t, g) for t, g, _ in rungs_of(at, data)]))
     return out
@@ -454,13 +454,13 @@ def fact_sheet(repo, quant, data, model=None, entry=None, pin=None):
         for tag, gib, bpw in others:
             lines.append("    %-40s %8.2f gib  %s"
                          % ("{gib@%s}" % tag, gib, ("%.2f bpw" % bpw) if bpw else "-"))
-    for at, rungs in _ladders(entry, repo, data):
-        if not rungs:
+    for at, ladder in _ladders(entry, repo, data):
+        if not ladder:
             lines.append("  the registry also carries %s, which the size capture "
                          "has not read" % at)
             continue
         lines.append("  the same model is also published by %s:" % at)
-        for tag, other in rungs:
+        for tag, other in ladder:
             lines.append("    %-40s %8.2f gib" % ("{gib@%s:%s}" % (at, tag), other))
     # a rung marked `speculative: false` is the file the entry's drafter is NOT
     # in, and showing it the entry's drafter is how a draft came to say it drafts
@@ -530,8 +530,8 @@ def _candidates(repo, quant, data, entry=None):
         if quant is not None and tag in _keys(quant):
             continue
         out.append(("{gib@%s}" % tag, sizes[tag] / GIB))
-    for at, rungs in _ladders(entry, repo, data):
-        for tag, gib in rungs:
+    for at, ladder in _ladders(entry, repo, data):
+        for tag, gib in ladder:
             out.append(("{gib@%s:%s}" % (at, tag), gib))
     return out
 
@@ -644,20 +644,20 @@ def check_structure(text, repo, quant, data, pin=None, model=None, entry=None):
 
     A MODEL-level note gets the whole entry rather than one rung, because that
     is where the claim was found: FireRedPunc says "the pin names its file" in
-    its `notes:`, and the pin it means is a `quants:` entry two fields down.
+    its `notes:`, and the file it means is a `repos:` key two fields down.
     """
     out = []
     text = text or ""
     if NAMES_FILE.search(text):
-        pins = [pin] if pin else ((entry or {}).get("quants") or [])
-        if pins and not any((p or {}).get("file") for p in pins):
-            out.append("says the pin names its file, and no pin here has a "
-                       "`file:` -- %s" % ", ".join(
-                           "`quant: %s`" % (p.get("quant") or "?") for p in pins))
-    rungs = rungs_of(repo, data)
+        named = [pin.get("file")] if pin else [
+            k for _, k, _ in rungs.files(entry or {}) if rungs.is_filename(k)]
+        if not any(named):
+            out.append("says the pin names its file, and nothing here is written "
+                       "under a filename")
+    ladder = rungs_of(repo, data)
     for m in NO_RUNG.finditer(text):
         tag = m.group(1) or m.group(2)
-        if any(t.lower() == tag.lower() for t, _, _ in rungs):
+        if any(t.lower() == tag.lower() for t, _, _ in ladder):
             out.append("says there is no %s here, and the capture holds one" % tag)
     return out
 

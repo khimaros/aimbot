@@ -37,7 +37,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "..", "research", "data")
 
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, "..", "research"))
 import registry_patch  # noqa: E402  the splice, shared with resolve-runtime
+import rungs  # noqa: E402  a model's repos, whichever shape the registry is in
 
 try:
     import yaml
@@ -435,7 +437,7 @@ def roster_names(reg):
     out = set()
     for repo, m in reg.items():
         cands = [repo.split("/")[-1], (m.get("name") or {}).get("short") or ""]
-        cands += [(q.get("repo") or "").split("/")[-1] for q in (m.get("quants") or [])]
+        cands += [r.split("/")[-1] for r in rungs.repo_names(m)]
         for c in cands:
             if not c:
                 continue
@@ -501,7 +503,7 @@ def patch_ids(path, reg):
     was therefore matched, counted as filled and silently dropped: qwen3.8 flash
     next carried AA and lmarena matches for a full capture that way and reached
     MODELS.md unscored. The splice lives in registry_patch now, shared with
-    resolve-runtime, and inserts after `quants:` when the block is absent.
+    resolve-runtime, and inserts after the repos when the block is absent.
     """
     blocks = {}
     for repo, m in reg.items():
@@ -512,7 +514,7 @@ def patch_ids(path, reg):
         # `...` document-end marker that breaks the file
         blocks[repo] = {"ids": ["    ids:"] + ["      " + yaml.safe_dump({k: v}).strip()
                                                for k, v in ids.items()]}
-    return registry_patch.patch_blocks(path, blocks, after="quants")
+    return registry_patch.patch_blocks(path, blocks, after=registry_patch.MEMBERSHIP)
 
 
 def main():

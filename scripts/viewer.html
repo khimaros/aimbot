@@ -1247,10 +1247,8 @@ function drawModal(keepScroll) {
 const VOICES_SHOWN = 8;
 function voiceList(m, q) {
   if (!q) return '';
-  const rows = m.quants || [];
-  const row = rows.find(x => x.repo === q.repo && x.quant === q.quant)
-    || rows.find(x => x.repo === q.repo);
-  const v = (row || {}).voices;
+  const v = q.voices
+    || (quantChoices(m).find(c => c.repo === q.repo && c.voices) || {}).voices;
   if (!v || !v.length) return '';
   const head = v.slice(0, VOICES_SHOWN).map(esc).join(', ');
   // all of them on hover: kokoro ships fifty and a wall of names is not a fact
@@ -1929,25 +1927,39 @@ function measuredTable(m) {
 // what each rung is, and who measured what. the discount is arithmetic about the
 // picked rung, so it sits beside the picker on operate.
 function tabQuantization(m) {
-  return registryPins(m) + quantLadders(m) + measuredTable(m) + sweepTable(m);
+  return registryFacts(m) + quantLadders(m) + measuredTable(m) + sweepTable(m);
 }
 
-function registryPins(m) {
-  return '<h3>what the registry pins</h3>'
-    // "quant tag" rather than "quant": it is the string after the colon in
-    // `--hf-repo repo:TAG`, which llama.cpp resolves against a type name or a
-    // filename. a component is one specific file rather than a rung, so most of
-    // them name the file -- 21 of the 41 have no type to name at all, a vae or a
-    // voice embedding being shipped at whatever precision the publisher chose
-    + '<table><thead><tr><th>repo</th><th>quant tag</th><th class="n">gib</th>'
-    + '<th class="n">bpw</th><th>role</th><th>note</th></tr></thead><tbody>'
-    + m.quants.concat(m.components || []).map(q =>
-      `<tr><td><a href="${esc('https://huggingface.co/' + q.repo)}" target="_blank" rel="noopener">${esc(q.repo)}</a></td>`
+const repoLink = r => `<a href="${esc('https://huggingface.co/' + r)}" target="_blank" rel="noopener">${esc(r)}</a>`;
+
+// what the registry WRITES about this model's weights, which is not a choice of
+// rung -- the fit makes that. per repo, what every file in it is (the argv role,
+// the crispasr backend that reads that conversion, whether its build drafts);
+// per file, what the registry says about that one file; and the components.
+function registryFacts(m) {
+  const repos = (m.repos || []).map(r =>
+    `<tr><td>${repoLink(r.repo)}</td><td class="dim">${esc(r.role || '')}</td>`
+    + `<td class="dim">${esc((r.crispasr || {}).backend || '')}</td>`
+    + `<td class="dim">${r.speculative === false ? 'no' : ''}</td></tr>`).join('');
+  // "quant tag" rather than "quant": it is the string after the colon in
+  // `--hf-repo repo:TAG`, which llama.cpp resolves against a type name or a
+  // filename. a component is one specific file rather than a rung, so most of
+  // them name the file -- a vae or a voice embedding ships at whatever
+  // precision the publisher chose
+  const files = quantChoices(m).filter(c => c.note || c.runtime)
+    .concat(m.components || []).map(q =>
+      `<tr><td>${repoLink(q.repo)}</td>`
       + `<td>${esc(hfTag(q))}</td><td class="n">${gib(q.gib) || '-'}</td>`
       + `<td class="n dim">${num(q.bpw, 2) || '-'}</td>`
       + `<td class="dim">${esc(q.role || '')}</td>`
-      + `<td class="dim">${proseHtml(q.note, m)}${rungRuntime(q, m)}</td></tr>`).join('')
-    + '</tbody></table>';
+      + `<td class="dim">${proseHtml(q.noteParts || q.note, m)}${rungRuntime(q, m)}</td></tr>`).join('');
+  return '<h3>the repos it is published in</h3>'
+    + '<table><thead><tr><th>repo</th><th>role</th><th>crispasr backend</th>'
+    + '<th>drafts</th></tr></thead><tbody>' + repos + '</tbody></table>'
+    + (files ? '<h3>what the registry says about one file</h3>'
+      + '<table><thead><tr><th>repo</th><th>quant tag</th><th class="n">gib</th>'
+      + '<th class="n">bpw</th><th>role</th><th>note</th></tr></thead><tbody>'
+      + files + '</tbody></table>' : '');
 }
 
 function sweepTable(m) {
@@ -2239,7 +2251,7 @@ function pickedQuant(m) {
   // having been TOLD which repo, the best rung of that one is the answer: the
   // fit's own test over the set the reader narrowed by hand
   return inRepo.find(c => c.quant === ops.quant)
-    || bestOf(m, inRepo) || inRepo.find(c => c.pinned) || inRepo[0] || null;
+    || bestOf(m, inRepo) || inRepo[0] || null;
 }
 
 function pickedProfile(m) {
@@ -2778,8 +2790,8 @@ function applyState(st) {
     if (st.f.pub) filters.pubs = new Set([st.f.pub]);
     if (st.f.pubs) filters.pubs = new Set(st.f.pubs);
     // `mod` was one shape before it was several; a link from then still reads
-    if (st.f.mod !== undefined) filters.mods = new Set([st.f.mod]);
-    if (st.f.mods) filters.mods = new Set(st.f.mods);
+    if (st.f.mod !== undefined) filters.mods = new Set(knownMods([st.f.mod]));
+    if (st.f.mods) filters.mods = new Set(knownMods(st.f.mods));
     // a link written while the licence filter was a `permissive` FLAG carries
     // that key; `knownFlags` drops it, which lands the reader on this page's
     // licence default rather than on a filter with nothing left to test it
@@ -2894,8 +2906,8 @@ function boot(payload) {
   filters = {...filters,
              q: (f || {}).q || '', kind: new Set(),
              pubs: new Set(f && f.pubs ? f.pubs : f && f.pub ? [f.pub] : []),
-             mods: new Set(f && f.mods ? f.mods
-                           : f && f.mod ? [f.mod] : DEFAULT_MODALITIES),
+             mods: new Set(knownMods(f && f.mods ? f.mods
+                                     : f && f.mod ? [f.mod] : DEFAULT_MODALITIES)),
              flags: new Set(knownFlags(f ? f.flags || [] : DEFAULT_FLAGS)),
              engines: new Set(f && f.engines ? f.engines : DEFAULT_ENGINES),
              // a reader who stored filters before the licence menu existed has

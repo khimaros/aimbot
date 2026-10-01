@@ -45,6 +45,8 @@ import os
 import subprocess
 import sys
 
+import rungs
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = "https://huggingface.co/%s/raw/main/%s"
 GGUF_API = "https://huggingface.co/api/models/%s?expand[]=gguf"
@@ -136,13 +138,7 @@ def repo_pairs(args):
     models = yaml.safe_load(open(args.registry)).get("models") or {}
     out = []
     for repo, m in models.items():
-        seen, ggufs = set(), []
-        for q in (m.get("quants") or []) + (m.get("components") or []):
-            r = q.get("repo")
-            if r and r not in seen:
-                seen.add(r)
-                ggufs.append(r)
-        out.append((repo, ggufs))
+        out.append((repo, rungs.weight_repos(m)))
     return out
 
 

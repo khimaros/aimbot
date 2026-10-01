@@ -41,6 +41,7 @@ import subprocess
 import sys
 
 import capture
+import rungs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = "data/sdcpp-support.json"
@@ -211,15 +212,24 @@ def match(names, signatures):
     return hits[0]
 
 
-def diffusion_quants(registry):
-    """Every rung that IS a diffusion model, which is the file sd.cpp loads."""
+def diffusion_repos(registry):
+    """(model, repo) for each model's first repo of diffusion weights.
+
+    sd.cpp detects an architecture by tensor NAME, and every rung of one
+    conversion carries the same names, so one repo per model is enough.
+    """
     out = []
     for repo, m in sorted(registry.items()):
-        for q in m.get("quants") or []:
-            if q.get("role") == "diffusion":
-                out.append((repo, q))
-                break
+        hit = next((r["repo"] for r in rungs.repos(m) if r.get("role") == "diffusion"), None)
+        if hit:
+            out.append((repo, hit))
     return out
+
+
+def smallest_file(sizes, repo):
+    """The cheapest weight of a repo to read a tensor table from, as a key."""
+    keys = [k for k in sizes.get(repo) or {} if ":" not in k]
+    return min(keys, key=lambda k: sizes[repo][k]) if keys else None
 
 
 def load_registry(path):
@@ -306,16 +316,20 @@ def main():
 
     reader = load_voices_reader()
     models = {}
-    for repo, q in diffusion_quants(registry):
+    sizes = json.load(open(os.path.join(HERE, "data", "gguf-sizes.json")))
+    for repo, weights in diffusion_repos(registry):
+        key = smallest_file(sizes, weights)
+        if not key:
+            continue
         # a tag is not a filename, and a ranged GET needs one. the same resolver
         # the voices collector uses, which anchors on the END of the stem
         # because `q8_0` matches three files in some repos
-        name = q.get("file") or reader.resolve_filename(q["repo"], q["quant"])
-        names = tensor_names(reader, q["repo"], name) if name else None
+        name = key if rungs.is_filename(key) else reader.resolve_filename(weights, key)
+        names = tensor_names(reader, weights, name) if name else None
         if not names:
             continue
         version, sig = match(names, signatures)
-        models[repo] = {"repo": q["repo"], "tensors": len(names),
+        models[repo] = {"repo": weights, "tensors": len(names),
                         "version": version, "signature": sig}
         print("  %-46s %-22s %s" % (repo, version or "no signature", sig or ""),
               file=sys.stderr)

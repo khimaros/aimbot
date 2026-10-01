@@ -46,6 +46,8 @@ import struct
 import subprocess
 import sys
 
+import rungs
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 GGUF_API = "https://huggingface.co/api/models/%s?expand[]=gguf"
 TREE = "https://huggingface.co/api/models/%s/tree/main?recursive=true"
@@ -163,9 +165,8 @@ def gguf_repos(registry):
     models = yaml.safe_load(open(registry)).get("models") or {}
     seen = {}
     for base, m in models.items():
-        for q in (m.get("quants") or []) + (m.get("components") or []):
-            if q.get("repo"):
-                seen.setdefault(q["repo"], base)
+        for r in rungs.weight_repos(m):
+            seen.setdefault(r, base)
     return seen
 
 

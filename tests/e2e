@@ -65,6 +65,9 @@ const model = short => {
   if (!m) throw new Error('no model named ' + short);
   return m;
 };
+// every published file of a model, each carrying the repo it sits in
+const rungsOf = m => (m.repos || []).flatMap(r =>
+  (r.available || []).map(a => Object.assign({repo: r.repo}, a)));
 // the preset keys the drawn <select> is offering, read off the html the page
 // wrote rather than off the table it was built from
 const presetOptions = () =>
@@ -178,7 +181,7 @@ test('the vram filter judges what has a size, and passes what has none', () => {
   setHardware({...DEFAULT_HARDWARE, budget: 1});
   const tiny = visible().map(m => m.short);
   ok(tiny.length < shown_.length, 'a 1gib budget drops rows: ' + tiny);
-  ok(tiny.every(s => !model(s).quants.length || fitsBudget(model(s))),
+  ok(tiny.every(s => !quantChoices(model(s)).length || fitsBudget(model(s))),
      'everything left either has no size or fits');
 
   RESET();
@@ -196,7 +199,7 @@ test('turning the vram filter off opens the ladder rather than capping it', () =
   const short_ = 'qwen3.8 flash next';
   const rows = () => expand(visible().filter(m => m.short === short_))
     .map(r => (r._q || {}).gib).filter(Boolean);
-  const published = Math.max(...model(short_).quants
+  const published = Math.max(...model(short_).repos
     .flatMap(q => (q.available || []).map(a => a.gib || 0)));
 
   setLadder(true);
@@ -753,8 +756,28 @@ test('a decision model is its own roster, on a board of its own', () => {
   eq(visible().some(m => m.short === 'decider-4b'), false,
      'out of the language models, and out of what the document ranks');
 
-  filters.mods = new Set(['decide']);
+  // the chip id is the kind's own noun, like every other id that names a kind
+  eq(MODALITIES.some(m => m.k === 'decide'), false, 'no `decide` chip id');
+  filters.mods = new Set(['decision']);
   ok(visible().some(m => m.short === 'decider-4b'), 'in the decisions chip');
+
+  // a link written while the id was `decide` still lands on the same chip
+  applyState({f: {mods: ['decide']}});
+  eq([...filters.mods].join(','), 'decision', 'an old link reads the renamed id');
+  RESET();
+
+  // a TEXT model that measured as a good decision model is in the chip too,
+  // on a hand-written `decides:` block citing verdict's run -- it keeps its
+  // kind, so it stays a language model as well
+  const g = model('gemma 4 12b');
+  eq(g.kind, 'text', 'still a language model');
+  ok(g.decides && g.decides.source === 'verdict', 'marked from verdict: '
+     + JSON.stringify(g.decides));
+  filters.mods = new Set(['decision']);
+  ok(visible().some(m => m.short === 'gemma 4 12b'), 'in the decisions chip');
+  eq(visible().some(m => m.short === 'gpt-oss 20b'), false,
+     'and a text model below the bar is not');
+  RESET();
 
   // and the chip is not a cabinet of one: the point of adding the kind is that
   // a board exists for it, so the row has to carry the board's numbers rather
@@ -957,7 +980,7 @@ test('the operations section shows the runtimes that load THIS model', () => {
   // matching the FILENAME instead would have made it fire and broken serving.
   ops = {runtime: null, repo: null, quant: null, profile: null};
   const vis = D.models.filter(m => (m.modalities.input || []).includes('image')
-    && m.runtime.arch && m.quants.length);
+    && m.runtime.arch && m.repos.length);
   ok(vis.length > 10, 'enough vision models to be a real test: ' + vis.length);
   vis.forEach(m => {
     const c = snippets(m).map(s => s.text).join('\n');
@@ -1015,7 +1038,7 @@ test('the operations section shows the runtimes that load THIS model', () => {
   // the gate ONLY on the rung and the backend ONLY on the model, so neither
   // assertion below can pass off the other level
   moved.crispasr = {repos: (moved.crispasr || {}).repos, backend: 'bt2-tts'};
-  moved.quants.forEach(q => {
+  moved.repos.forEach(q => {
     if (q.crispasr) q.crispasr = {accept_license: 'other'};
   });
   const movedCmd = snippets(moved).map(s => s.text).join('\n');
@@ -1045,7 +1068,7 @@ test('the operations section shows the runtimes that load THIS model', () => {
   // the exact blindness the code was fixed for: pocket-tts' gate is on its rung,
   // so a model-level test called it ungated and then failed on the flag
   const gateOf = m => (m.crispasr || {}).accept_license
-    || (m.quants || []).map(q => (q.crispasr || {}).accept_license).find(Boolean);
+    || (m.repos || []).map(q => (q.crispasr || {}).accept_license).find(Boolean);
   const ungated = D.models.filter(m => (m.engines || []).includes('crispasr')
     && !gateOf(m));
   ok(gateOf(model('pocket-tts')), 'pocket-tts is gated, on its rung');
@@ -1332,8 +1355,8 @@ test('quantization is its own tab, and the discount follows the quant you picked
   RESET();
   // everything about what a quant IS was spread over the operate tab, between
   // the run snippets and the sampler table -- the rung ladder, the published
-  // sweep -- and it has its own tab now. what the registry pins is one more
-  // fact about the files, so it is there too.
+  // sweep -- and it has its own tab now. what the registry says about each repo
+  // is one more fact about the files, so it is there too.
   ok(TABS.includes('quantization'), 'the tab exists: ' + TABS);
 
   // qwen3.8 27b is the model three people ran on their own files, so it is the
@@ -1371,14 +1394,14 @@ test('quantization is its own tab, and the discount follows the quant you picked
   const repos = [...new Set(quantChoices(measured).map(c => c.repo))];
   repos.forEach(r => ok(html_.includes('quants in <span class="faint">' + r),
      'every publishing repo gets its ladder, missing ' + r));
-  ok(html_.includes('what the registry pins'), 'the pinned files are on the tab about files');
+  ok(html_.includes('the repos it is published in'), 'the repos are on the tab about files');
   eq(html_.includes('what the quality discount did'), false,
      'and the discount is not: it is arithmetic about the rung picked on operate');
 
   openModel(measured.repo, 'operate');
   const op = html('#body');
   eq(op.includes('quants in'), false, 'the ladder is not on operate as well');
-  eq(op.includes('what the registry pins'), false, 'nor the pins');
+  eq(op.includes('the repos it is published in'), false, 'nor the repos');
   ok(op.includes('data-pick-quant'), 'the pickers stay, since a snippet reads them');
   // the command is what a reader opens the tab for; the other configs are not
   const opened = [...op.matchAll(/<details[^>]*\bopen\b[^>]*>\s*<summary[^>]*>([^<]*)</g)]
@@ -1486,12 +1509,12 @@ test('the quant sweep tables are sorted best first', () => {
 
 test('a model with baked speakers lists them on its detail page', () => {
   RESET();
-  const withVoices = D.models.filter(m => (m.quants || []).some(q => q.voices));
+  const withVoices = D.models.filter(m => rungsOf(m).some(q => q.voices));
   ok(withVoices.length >= 3, 'the roster carries models with voices ('
      + withVoices.length + ')');
 
   const kokoro = model('kokoro-v1');
-  const q = (kokoro.quants || []).find(x => x.voices);
+  const q = rungsOf(kokoro).find(x => x.voices);
   eq(q.voices.length, 50, 'kokoro ships fifty');
   const html_ = tabOverview(kokoro);
   ok(html_.includes('built-in voices'), 'the field is rendered');
@@ -1887,7 +1910,7 @@ test('a model that publishes no context window still fits', () => {
 
   // `(context_native || 0) >= minCtx` read absent as zero, so every one of
   // these reported `does not fit` on a box with 116gib free
-  const sized = noWindow.filter(m => m.quants.some(q => q.gib));
+  const sized = noWindow.filter(m => rungsOf(m).some(q => q.gib));
   ok(sized.length > 5, 'enough of them are sized to be a real test');
   const bad = sized.filter(m => !fitsBudget(m)).map(m => m.short);
   eq(bad.join(', '), '', 'sized models with no window must fit');
@@ -1897,7 +1920,7 @@ test('a model that publishes no context window still fits', () => {
   // which is the only kind a context budget is a question about. see the case
   // below for the half of the roster this used to take with it.
   const short = D.models.filter(m => m.kind === 'text' && m.facts.context_native
-    && m.facts.context_native < minCtx && m.quants.length);
+    && m.facts.context_native < minCtx && m.repos.length);
   ok(short.length >= 4, 'enough short-window text models have files to be a real test');
   ok(short.every(m => !fitsBudget(m)),
      'a text model whose window is genuinely too short still does not fit: '
@@ -1925,14 +1948,14 @@ test('a context budget is a question about text models, not about a vocoder', ()
   const bt2 = model('breeze-tts-2');
   ok(bt2.facts.context_native && bt2.facts.context_native < minCtx,
      'it declares a window far shorter than the demand: ' + bt2.facts.context_native);
-  ok(bt2.quants.some(q => q.gib && q.gib < 5), 'and a rung that plainly fits');
+  ok(rungsOf(bt2).some(q => q.gib && q.gib < 5), 'and a rung that plainly fits');
   ok(fitsBudget(bt2), 'so it fits');
   ok(activeQuant(bt2), 'and reads a rung rather than `does not fit`');
 
   // it was never one model: 21 non-text entries declare a short window, which
   // is most of the speech roster plus both translators and both punctuators
   const shortOther = D.models.filter(m => m.kind !== 'text'
-    && m.facts.context_native && m.facts.context_native < minCtx && m.quants.length);
+    && m.facts.context_native && m.facts.context_native < minCtx && m.repos.length);
   ok(shortOther.length > 10,
      'this was hiding a lot of the roster: ' + shortOther.length);
   ok(shortOther.every(m => fitsBudget(m)),
@@ -2061,7 +2084,7 @@ test('the rung ladder another repo reads keeps its shape', () => {
   const rungs = [];
   D.models.forEach(m => {
     ok(typeof m.repo === 'string' && m.repo, 'every model is keyed by repo');
-    (m.quants || []).forEach(q => {
+    (m.repos || []).forEach(q => {
       ok(typeof q.repo === 'string' && Array.isArray(q.available),
          m.repo + ': a pin names its repo and its ladder');
       rungs.push(...q.available);
@@ -2287,7 +2310,7 @@ test('a model is read from the weights, not from a conversion of them', () => {
     // against is keying on somebody ELSE'S conversion, and the name is how the
     // registry tells the two apart, so the test reads it the same way.
     const conversion = s => /[-_.](gguf|ggml)$/i.test(s);
-    const conversions = new Set(m.quants.map(q => q.repo).filter(conversion));
+    const conversions = new Set(m.repos.map(q => q.repo).filter(conversion));
     ok(!conversions.has(m.repo), m.short + ' is keyed on ' + m.repo
       + ', which is one of its own quants');
   });
@@ -2503,10 +2526,10 @@ test('a second publisher takes the ranking off a sweep that measured one', () =>
   eq(curveFor(m).kind, 'measured', 'one publisher, and the sweep ranks it');
   // pretend a second quantizer published a rung of the same model
   const rung = quantChoices(m)[0];
-  m.quants[0].available = (m.quants[0].available || [Object.assign({}, rung)])
+  m.repos[0].available = (m.repos[0].available || [Object.assign({}, rung)])
     .concat([Object.assign({}, rung, {quant: rung.quant + '-OTHER'})]);
-  const before = m.quants.length;
-  m.quants.push({repo: 'someone-else/' + repo.split('/').pop(),
+  const before = m.repos.length;
+  m.repos.push({repo: 'someone-else/' + repo.split('/').pop(),
                  quant: 'Q8_0', available: [{quant: 'Q8_0', gib: 1, bpw: 8}]});
   clearScores();
   try {
@@ -2517,7 +2540,7 @@ test('a second publisher takes the ranking off a sweep that measured one', () =>
     ok(quantChoices(m).every(x => curveFor(m, x).kind === c.kind),
       'every rung of the model is discounted on that one curve');
   } finally {
-    m.quants.length = before;
+    m.repos.length = before;
     delete D.retention.measured[m.repo];
     clearScores();
   }
@@ -2644,7 +2667,7 @@ test('a note that resolved a reference is hoverable where it is shown', () => {
     // cannot prove it lost either
     // a rung's own `runtime` block is here too: it is where a file mainline
     // cannot load says so, even when the model's architecture is merged
-    const rungs = (m.quants || []).concat(m.components || []);
+    const rungs = (m.repos || []).concat(m.components || []);
     const held = [m.notes, (m.speculative || {}).note, (m.runtime || {}).note]
       .concat(rungs.map(q => q.note), rungs.map(q => (q.runtime || {}).note));
     const drawn = Object.values(tabs)
@@ -2986,7 +3009,7 @@ test('a sidecar drafter is resident, so it counts against vram', () => {
     const s = m.speculative || {};
     [s, ...(s.alternatives || [])].forEach(b => {
       if (!b.repo) return;
-      ok(!(m.quants || []).some(q => q.repo === b.repo),
+      ok(!(m.repos || []).some(q => q.repo === b.repo),
         m.short + ' hand-pairs ' + b.repo + ', which it already pins');
     });
   });
@@ -3013,7 +3036,7 @@ test('a bits-per-weight nobody could compute is not shown as one', () => {
   // 0.179. the count is a fact worth keeping and the average over it is not a
   // number at all
   const bad = [];
-  D.models.forEach(m => (m.quants || []).forEach(q => (q.available || []).forEach(a => {
+  D.models.forEach(m => (m.repos || []).forEach(q => (q.available || []).forEach(a => {
     if (a.real_bpw === undefined || a.real_bpw === null) return;
     const unknown = Object.entries(a.types || {})
       .filter(([t]) => /^type\d+$/.test(t))
@@ -3034,9 +3057,10 @@ test('a ladder is one model at several sizes, however the files are named', () =
   // and the stem is what the bpw broke: five rungs of the same model reached
   // the page as five one-rung models with nothing to switch to
   const m = model('qwen3.8 27b');
-  const bs = m.quants.find(q => q.repo.startsWith('byteshape/'));
+  const bs = m.repos.find(q => q.repo.startsWith('byteshape/'));
   ok(bs, 'the byteshape rung is carried');
-  ok(bs.gib > 0, 'and it is sized, at ' + bs.gib + ' gib');
+  ok(bs.available.every(a => a.gib > 0), 'and it is sized: '
+     + bs.available.map(a => a.gib));
   eq(bs.available.length, 5, 'the whole ladder is offered beside it, not just itself: '
      + JSON.stringify(bs.available.map(a => a.quant)));
   // and each rung is labelled by its TYPE rather than by a filename, which is
@@ -3052,17 +3076,17 @@ test('a model no stock build loads is carried from more than one converter', () 
   // run" for it, and a rung the size table never saw is a rung the page can put
   // nowhere -- it reaches the row with no size and nothing errors
   const m = model('deepseek v4.1 flash');
-  const repos = new Set(m.quants.map(q => q.repo));
+  const repos = new Set(m.repos.map(q => q.repo));
   ok(repos.size >= 4, 'rungs from at least four publishers: ' + [...repos].join(' '));
-  m.quants.forEach(q => {
-    ok(q.gib > 0, q.repo + ' is sized, at ' + q.gib);
+  m.repos.forEach(q => {
+    ok(q.available.some(a => a.gib > 0), q.repo + ' is sized');
     // and each says where a build comes from, since none of them is mainline
     const r = q.runtime || m.runtime;
     ok(r.mainline || r.fork || r.tracking || r.patch, q.repo + ' names where to build');
   });
   // the rungs are actually different files: a repo mirroring another's shards is
   // a second download of one rung rather than a second rung
-  const sizes = m.quants.map(q => q.gib);
+  const sizes = rungsOf(m).map(q => q.gib).filter(Boolean);
   ok(Math.max(...sizes) - Math.min(...sizes) > 50,
      'the rungs span real sizes: ' + sizes.join(' '));
   // and the method the entry advertises has a file behind it: the entry says
@@ -3077,7 +3101,7 @@ test('a rung named after a recipe keeps its name rather than a token out of it',
   // ladder labeler reads a quant token out of the name and landed on the tail,
   // so a 312gib q2_k backbone reached the page labelled `Q5` -- a type it is
   // not -- and `IQ3_XS-Q8` became `Q8`
-  const sm = model('deepseek v4.1 flash').quants.find(q => q.repo.startsWith('smalinin/'));
+  const sm = model('deepseek v4.1 flash').repos.find(q => q.repo.startsWith('smalinin/'));
   ok(sm, 'the pack is carried');
   const labels = sm.available.map(a => a.quant);
   ok(!labels.includes('Q5'), 'no rung is named after its engram table: ' + labels);
@@ -3307,7 +3331,7 @@ test('clicking a row opens the modal on the quant the row showed', () => {
 
 test('the table and the modal agree on which repo a model is read from', () => {
   RESET();
-  D.models.filter(m => m.quants.length && activeQuant(m)).forEach(m => {
+  D.models.filter(m => m.repos.length && activeQuant(m)).forEach(m => {
     openModel(m.repo, null, null);
     ops = {runtime: null, repo: null, quant: null, profile: null};
     eq(pickedRepo(m), activeQuant(m).repo, m.short + ' repo');
@@ -3345,7 +3369,7 @@ test('a model mainline cannot load says where to go instead', () => {
 test('the ladder marks a rung mainline has no quant type for', () => {
   RESET();
   // laguna m.1 is quantized by one uploader on ik_llama.cpp, so 10 of its 28
-  // rungs are types mainline has no GGML_TYPE for. the pin is not one of them
+  // rungs are types mainline has no GGML_TYPE for and the rest load
   const m = model('laguna m.1');
   const rungs = quantChoices(m);
   const fork = rungs.filter(c => c.forkType);
@@ -3354,8 +3378,8 @@ test('the ladder marks a rung mainline has no quant type for', () => {
   ok(fork.some(c => c.quant.endsWith('_R4')), 'the repacked ones are among them');
   ok(fork.every(c => /:/.test(c.forkType)),
      'each says why, not just that: ' + fork.map(c => c.forkType).join(' | '));
-  const pinned = rungs.find(c => c.pinned);
-  ok(pinned && !pinned.forkType, 'and the pinned rung is NOT one of them');
+  const pinned = rungs.find(c => !c.forkType);
+  ok(pinned, 'and a rung mainline loads is offered beside them');
   // the mark rides on the rung's NAME rather than in a column of its own. a
   // `loads on` column said `mainline` on nine rows in ten to say something
   // about the tenth, and the tenth is the only one a reader needs told: a size
@@ -3411,7 +3435,7 @@ test('the ladder and the fit read every repo the registry lists', () => {
   filters.flags.delete('fits');
   const qs = fittingQuants(m);
   const repos = new Set(qs.map(q => q.repo));
-  eq(repos.size, new Set(m.quants.map(q => q.repo)).size,
+  eq(repos.size, new Set(m.repos.map(q => q.repo)).size,
      'every repo the registry lists is on the ladder: ' + [...repos].join(' '));
   ok(qs.some(q => /^TrevorJS\//.test(q.repo) && q.quant === 'IQ2_XS'),
      'TrevorJS iq2_xs is on it');

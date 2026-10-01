@@ -38,6 +38,7 @@ import subprocess
 import sys
 
 import capture
+import rungs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = "data/open-asr.json"
@@ -108,9 +109,8 @@ def report(rows, registry_path):
     models = (yaml.safe_load(open(registry_path)) or {}).get("models") or {}
     keys = {k.lower(): k for k in models}
     for repo, m in models.items():
-        for q in (m.get("quants") or []):
-            if q.get("repo"):
-                keys.setdefault(q["repo"].lower(), repo)
+        for r in rungs.repo_names(m):
+            keys.setdefault(r.lower(), repo)
     hit = {r: v for r, v in rows.items() if r.lower() in keys}
     miss = {r: v for r, v in rows.items()
             if r.lower() not in keys and v.get("open_weights")}

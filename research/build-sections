@@ -25,6 +25,8 @@ import re
 import subprocess
 import sys
 
+import rungs
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 ASSESSED = os.path.join(HERE, "usecase-assessed.json")
@@ -168,8 +170,10 @@ def section_picks(rows, a, s2r, reg):
         repo = s2r.get(r["short"])
         v = verdict(a.get(repo) or {}, repo)
         m = reg.get(repo) or {}
-        q = next((x for x in (m.get("quants") or []) if x.get("quant") == r["quant"]),
-                 (m.get("quants") or [{}])[0])
+        hit = rungs.facts_for(m, r["quant"]) or ({}, None, {})
+        q = dict(hit[2], repo=hit[0].get("repo"),
+                 file=hit[1] if hit[1] and rungs.is_filename(hit[1]) else None,
+                 quant=r["quant"])
         print("%d. **%s at %s (%s gib)**, %s" % (
             r["rank"], r["short"], r["quant"] or "?",
             "%.1f" % r["gib"] if r["gib"] else "?",

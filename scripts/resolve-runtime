@@ -34,7 +34,9 @@ DATA = os.path.join(HERE, "..", "research", "data")
 SUPPORT = os.path.join(DATA, "llama-support.json")
 
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, "..", "research"))
 import registry_patch  # noqa: E402  the splice, shared with resolve-ids
+import rungs  # noqa: E402  a model's repos, whichever shape the registry is in
 
 # the order the block prints in: what it is, whether a stock build has it, and
 # then the two coordinates of when. `near` only appears when it is the reason
@@ -59,7 +61,7 @@ except ImportError:
 
 def block_for(model, support):
     """The `runtime:` value for one model, or (None, reason) if it gets none."""
-    repos = [q["repo"] for q in (model.get("quants") or []) if q.get("repo")]
+    repos = rungs.repo_names(model)
     archs = sorted({support["repos"][r] for r in repos if r in support["repos"]})
     if not archs:
         return None, "no gguf header declared an architecture"
@@ -92,14 +94,14 @@ def render(block):
 
 
 def patch(path, blocks):
-    """Insert or replace each model's `runtime:` block, after `quants:`.
+    """Insert or replace each model's `runtime:` block, after its repos.
 
     The splice is registry_patch's, shared with resolve-ids: a model added
     without a block has to GET one, which is the half resolve-ids was missing.
     """
     return registry_patch.patch_blocks(
         path, {repo: {"runtime": render(b)} for repo, b in blocks.items()},
-        after="quants")
+        after=registry_patch.MEMBERSHIP)
 
 
 def main():

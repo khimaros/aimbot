@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+
+"""Fetch verdict's measured results into data/verdict.json.
+
+    fetch-verdict                          # the pinned revision's export
+    fetch-verdict --path FILE              # a local export, for development
+
+verdict is the client that reads decision models through llama-swap on the
+roster's own host, and it publishes what it measured as structured data:
+jevbench's 231 PUBLIC items run through its own endpoint, the option mass each
+model keeps on a verification question, a 16-case element-selection smoke test
+and whole agent runs. it is a SECOND source beside the jevbench board and is
+kept apart from it on purpose -- public items only, a strix halo igpu over a
+vpn, and the same model under several layouts -- so none of it is a board row
+and nothing here averages it into one.
+
+one row per (model, suite, variant) is the export's own key, and where two runs
+share one the later `measured_utc` wins. the `model` field is a llama-swap id,
+which is not a stable name for weights -- `decider-4b:Q8_0` served two different
+files on one day -- so rows are joined to the registry downstream by the
+`weights: {repo, revision, file}` each row carries, never by the id.
+
+the url carries a verdict revision, pinned the way fetch-jevbench pins a board
+revision: a sweep that does not move it re-reads the same run.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+
+import capture
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = "data/verdict.json"
+SCHEMA = "verdict-export/1"
+# unset until verdict publishes an export at a commit; --path reads a local one
+REV = None
+URL = "https://raw.githubusercontent.com/khimaros/verdict/%s/eval/results/export.json"
+
+META = ("schema", "source", "hardware", "suites", "metrics_units",
+        "verdict_rev", "verdict_dirty")
+ROW = ("model", "suite", "variant", "metrics", "weights", "weights_source",
+       "llama_cpp_build", "measured_utc", "measured_utc_source",
+       "dataset_sha256", "path")
+
+
+def key(row):
+    """(model, suite, variant) with the variant as a stable, hashable value."""
+    return (row.get("model"), row.get("suite"),
+            json.dumps(row.get("variant") or {}, sort_keys=True))
+
+
+def shape(payload):
+    """{meta, rows} with one row per key, or None for a schema this does not know."""
+    if (payload or {}).get("schema") != SCHEMA:
+        return None
+    rows = {}
+    for r in payload.get("rows") or []:
+        row = {k: r[k] for k in ROW if k in r}
+        k = key(row)
+        if k not in rows or (row.get("measured_utc") or "") > (rows[k].get("measured_utc") or ""):
+            rows[k] = row
+    return {"meta": {k: payload[k] for k in META if k in payload},
+            "rows": [rows[k] for k in sorted(rows)]}
+
+
+def fetch(url, refresh):
+    """The decoded export, or None if the url could not be read."""
+    cmd = [os.path.join(HERE, "httpcache"), url,
+           "--key", "verdict-" + url.split("/")[-4], "--immutable"]
+    if refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    try:
+        return json.loads(proc.stdout) if proc.returncode == 0 else None
+    except ValueError:
+        return None
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--path", help="read a local export instead of the pinned url")
+    ap.add_argument("--rev", default=REV, help="the verdict commit to read")
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true")
+    args = ap.parse_args()
+
+    if args.path:
+        payload = json.load(open(args.path))
+    elif args.rev:
+        payload = fetch(URL % args.rev, args.refresh)
+    else:
+        sys.exit("!!! no verdict revision is pinned yet; pass --path or --rev")
+    got = shape(payload)
+    if got is None:
+        sys.exit("!!! not a %s export -- the schema moved, read it before "
+                 "trusting it" % SCHEMA)
+
+    written, now, before = capture.write(args.out, got, lambda p: len(p["rows"]),
+                                         allow_shrink=args.allow_shrink)
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "rows"))
+    weighed = sum(1 for r in got["rows"] if (r.get("weights") or {}).get("file"))
+    print("wrote %s: %d rows, %d naming the weights they measured, at verdict %s"
+          % (args.out, now, weighed, (got["meta"].get("verdict_rev") or "?")[:12]))
+
+
+if __name__ == "__main__":
+    main()

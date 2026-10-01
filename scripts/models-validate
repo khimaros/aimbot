@@ -22,6 +22,8 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "research"))
+import rungs  # noqa: E402  a model's repos, whichever shape the registry is in
 REGISTRY = os.path.join(HERE, "..", "registry")
 DATA = os.path.join(HERE, "..", "research", "data")
 
@@ -139,8 +141,7 @@ def report_aliases(models, discussions=None):
     # {registry repo: threads captured across its own repo and its conversions}
     captured = {}
     for repo, m in everything.items():
-        names = [repo] + [q.get("repo") for q in
-                          (m.get("quants") or []) + (m.get("components") or [])]
+        names = [repo] + rungs.weight_repos(m)
         n = 0
         for name in names:
             rec = (discussions or {}).get(name) or {}
@@ -368,6 +369,85 @@ def check_readout(r, where, f):
                      "head: {repo, file} saying where the head lives")
     if not isinstance(r.get("temperature") or {}, dict):
         f.add(where, "readout.temperature is a mapping of answer type to value")
+
+
+# a model of another kind that MEASURED as a good decision model, which puts it
+# in the decisions chip beside the dedicated ones. written by hand, once, from
+# the run that measured it, so the note is the evidence and is required
+DECIDES_FIELDS = {"source", "note"}
+DECIDES_SOURCES = ("verdict",)
+
+
+# what a `repos:` entry may say about the whole repo, and about one of its files
+REPO_ENTRY_FIELDS = {"repo", "files"} | set(rungs.REPO_FIELDS)
+FILE_FACT_FIELDS = set(rungs.FILE_FIELDS)
+
+
+def check_repos(m, where, f):
+    """A model's repos: named once each, and every fact on them well formed.
+
+    `role`, `crispasr` and `speculative` describe a whole repo; `files:` holds
+    what one file is, keyed by its tag or by its filename. A tag key is a type
+    and names its own tag; a filename key is the object and says which type it
+    is in `quant:` wherever the name does not.
+    """
+    seen = set()
+    for e in m.get("repos") or []:
+        e = {"repo": e} if isinstance(e, str) else e
+        if not isinstance(e, dict) or not e.get("repo"):
+            f.add(where, "every repo entry needs a repo: %r" % (e,))
+            continue
+        if e["repo"] in seen:
+            f.add(where, "%s is listed twice; one entry per repo" % e["repo"])
+        seen.add(e["repo"])
+        unknown = sorted(set(e) - REPO_ENTRY_FIELDS)
+        if unknown:
+            f.add(where, "unknown field(s) %s on %s (known: %s)"
+                  % (", ".join(unknown), e["repo"], ", ".join(sorted(REPO_ENTRY_FIELDS))))
+        for key, facts in (e.get("files") or {}).items():
+            at = "%s/%s" % (e["repo"], key)
+            facts = facts or {}
+            unknown = sorted(set(facts) - FILE_FACT_FIELDS)
+            if unknown:
+                f.add(where, "unknown field(s) %s on %s (known: %s)"
+                      % (", ".join(unknown), at, ", ".join(sorted(FILE_FACT_FIELDS))))
+            # a key that is neither a type nor a filename is still an object --
+            # smalinin's folder of shards -- as long as `quant:` says its type
+            tag = is_quant_name(str(key))
+            if "quant" in facts:
+                if tag and not rungs.is_filename(str(key)):
+                    f.add(where, "%s: a tag key names its own tag; `quant:` is for "
+                                 "a file whose name carries none" % at)
+                elif not is_quant_name(facts["quant"]):
+                    f.add(where, "%s: quant %r does not name a quantization type"
+                          % (at, facts["quant"]))
+            elif not tag and not rungs.is_filename(str(key)):
+                f.add(where, "%s: a files key is a quant tag, or names a file and "
+                             "says its tag in `quant:`" % at)
+    for r in rungs.repos(m):
+        if r.get("speculative") not in (None, False):
+            f.add(where, "%s: speculative on a repo is only ever `false`" % r["repo"])
+        check_crispasr(r.get("crispasr"), "%s/%s" % (where, r["repo"]), f)
+        for key, facts in r["files"].items():
+            check_runtime(facts.get("runtime"), "%s/%s" % (r["repo"], key), f)
+
+
+def check_decides(d, where, f):
+    """A `decides:` block names what measured the model and cites it."""
+    if d is None:
+        return
+    if not isinstance(d, dict):
+        f.add(where, "decides must be a mapping, got %r" % (d,))
+        return
+    unknown = sorted(set(d) - DECIDES_FIELDS)
+    if unknown:
+        f.add(where, "unknown decides field(s) %s (known: %s)"
+              % (", ".join(unknown), ", ".join(sorted(DECIDES_FIELDS))))
+    if d.get("source") not in DECIDES_SOURCES:
+        f.add(where, "decides.source %r must be one of %s"
+              % (d.get("source"), ", ".join(DECIDES_SOURCES)))
+    if not d.get("note"):
+        f.add(where, "decides needs a note citing the run that measured it")
 # what a weight can be to a diarization run. none of them transcribes: an
 # embedder turns a span of audio into a speaker vector, a segmenter says only
 # WHEN the speaker changed, and `end-to-end` is the whole job in one network --
@@ -449,7 +529,7 @@ def check_crispasr(cr, where, f):
 # vocabulary has to cover both. a name not here is a typo: `sd.cpp` and
 # `stable-diffusion.cpp` would filter as two runtimes and neither would hold the
 # models the other has.
-ENGINES = ("llama.cpp", "vllm", "crispasr", "whisper.cpp",
+ENGINES = ("llama.cpp", "vllm", "crispasr", "whisper.cpp", "transcribe.cpp",
            "stable-diffusion.cpp", "TTS.cpp", "Breeze-TTS-2.cpp",
            "audio.cpp", "gufo")
 # the engines the registry states some other way, so writing them again is a
@@ -543,62 +623,27 @@ def check_registry(models, sampling, f):
                 f.add(repo, "name.match is not a valid regex: %s" % e)
 
         kind = m.get("kind", "text")
-        quants = m.get("quants") or []
-        if not quants and kind == "text":
-            f.add(repo, "at least one quant is required")
-        # `quant:` names the TYPE and `file:` names the object, because a repo is
-        # free not to name its files after the tag. a rung must say which type it
-        # is; a component is one specific file rather than a rung of a ladder, so
-        # it may say only which file -- a vae or a voice embedding has no rung to
-        # name. either way a `quant:` that is present has to be a type.
-        #
-        # this ran over `quants:` alone and tested for a `.gguf`/`.bin` suffix,
-        # which is how 32 rows walked through it: every one of them was a
-        # component, and `ae.safetensors` was not on the list anyway.
-        for q in quants + (m.get("components") or []):
-            component = q not in quants
-            if not q.get("repo"):
-                f.add(repo, "every quant needs a repo: %r" % (q,))
-            if not q.get("quant") and not (component and q.get("file")):
-                f.add(repo, "every quant needs a quant: %r" % (q,))
-            if q.get("quant") and not is_quant_name(q["quant"]):
+        check_repos(m, repo, f)
+        if not rungs.repo_names(m) and kind == "text":
+            f.add(repo, "at least one repo is required")
+        # a component is one specific file rather than a ladder, so it may say
+        # only which file -- a vae or a voice embedding has no rung to name --
+        # but a `quant:` that is present has to be a type
+        for c in m.get("components") or []:
+            if not c.get("repo"):
+                f.add(repo, "every component needs a repo: %r" % (c,))
+            if not c.get("quant") and not c.get("file"):
+                f.add(repo, "every component needs a quant or a file: %r" % (c,))
+            if c.get("quant") and not is_quant_name(c["quant"]):
                 f.add(repo, "quant %r does not name a quantization type; if it "
-                            "names the object, that is `file:`" % q["quant"])
-            where = "%s/%s" % (repo, q.get("quant") or q.get("file"))
-            check_runtime(q.get("runtime"), where, f)
-            check_crispasr(q.get("crispasr"), where, f)
-        # TWO RUNGS OF ONE REPO SHARING A TAG SILENTLY BECOME ONE. the page keys
-        # its ladder on `repo + ':' + quant` and the second write loses to the
-        # first, so a rung added in good faith disappears between here and the
-        # table with nothing printed at any layer -- lint passed it, the build
-        # printed no note, and the ladder was simply short.
-        #
-        # the advice names `file:` rather than the repo because that is what
-        # actually separates them: a tag is a size CLASS and byteshape publishes
-        # several rungs of one, which is why those pins carry both. reading the
-        # bpw annotation off to recover a tidy `IQ3_S` once summed three files of
-        # qwen3.6 35b a3b into a 26.16 gib rung that is none of them -- caught
-        # only because the size was visibly wrong. the same collision reaching a
-        # FETCH gets the wrong file, which is not visibly anything.
-        seen_rungs = {}
-        for q in quants:
-            key = (q.get("repo"), q.get("quant"))
-            if not all(key):
-                continue
-            if key in seen_rungs:
-                f.add(repo, "two rungs of %s are both tagged %s; a tag is a size "
-                            "class rather than a file, so name each one's `file:` "
-                            "beside it -- keyed on the tag alone the second is "
-                            "dropped from the ladder without a word"
-                      % (key[0], key[1]))
-            seen_rungs[key] = True
+                            "names the object, that is `file:`" % c["quant"])
         # the key is what every capture joins on: model-cards reads that repo's
         # README, model-facts its config.json, hf-catalog its downloads. keyed on
         # a conversion, all three answer about whoever ran the quantizer -- and a
         # gguf repo carries no config.json, so the facts degrade to what the name
         # spells.
         #
-        # the key appearing in the entry's own quants is necessary and not
+        # the key appearing in the entry's own repos is necessary and not
         # sufficient: a lab that ships gguf inside its weights repo is keyed
         # exactly right and hits it too. mistral's Voxtral-4B-TTS-2603 is that
         # case, safetensors and no separate conversion. what separates them is
@@ -611,17 +656,18 @@ def check_registry(models, sampling, f):
         # anything to point at. `gguf_only:` is that assertion, made per entry
         # because whether weights exist somewhere is something a person checked
         # rather than something the name says.
-        if repo in {q.get("repo") for q in quants} and CONVERSION_NAME.search(repo) \
+        if repo in rungs.repo_names(m) and CONVERSION_NAME.search(repo) \
                 and not m.get("gguf_only"):
             f.add(repo, "key is a conversion of itself: it is listed in this "
-                        "entry's own quants. key the entry on the weights and "
-                        "keep the conversion as a quant -- or, where the release "
+                        "entry's own repos. key the entry on the weights and "
+                        "keep the conversion as a repo -- or, where the release "
                         "never had any, say `gguf_only: true`")
 
         check_runtime(m.get("runtime"), repo, f)
         check_crispasr(m.get("crispasr"), repo, f)
         check_base(m.get("base"), repo, models, f)
         check_readout(m.get("readout"), repo, f)
+        check_decides(m.get("decides"), repo, f)
         check_speculative(m.get("speculative"), repo, f)
         check_engine(m, repo, f)
         check_diarize_kind(m, repo, f)
@@ -905,16 +951,18 @@ def unloadable(m):
     `deepseek4`, which mainline has carried since b9840, so the derived block
     says mainline true while a stock build accepts the arch string and then
     fails on the tensor table. Whether a FILE loads is a property of how that
-    one file was converted, so it can only be stated per quant -- and a model
-    whose every pinned rung says `mainline: false` is unloadable however
-    carried its architecture is.
+    one file was converted, so it can only be stated per file -- and a model
+    every one of whose repos has only files marked `mainline: false` is
+    unloadable however carried its architecture is.
     """
     rt = m.get("runtime") or {}
     if rt.get("mainline") is False:
         return rt
-    blocks = [q.get("runtime") or {} for q in (m.get("quants") or [])]
-    if blocks and all(b.get("mainline") is False for b in blocks):
-        return dict(rt, **blocks[0])
+    per_repo = [[facts.get("runtime") or {} for facts in r["files"].values()]
+                for r in rungs.repos(m)]
+    if per_repo and all(blocks and all(b.get("mainline") is False for b in blocks)
+                        for blocks in per_repo):
+        return dict(rt, **per_repo[0][0])
     return None
 
 
@@ -956,20 +1004,20 @@ def report_runtime(models, support, sizes):
                                     rt.get("tracking") or rt.get("fork")
                                     or rt.get("patch") or "nowhere recorded"))
 
-    rungs = []
+    forked = []
     for repo, m in sorted((models.get("models") or {}).items()):
-        for qrepo in {q["repo"] for q in (m.get("quants") or []) if q.get("repo")}:
+        for qrepo in rungs.repo_names(m):
             bad = sorted({r for r in (fork_type(t, known)
                                       for t in (sizes.get(qrepo) or {})) if r})
             if bad:
-                rungs.append((qrepo, len(sizes.get(qrepo) or {}), bad))
+                forked.append((qrepo, len(sizes.get(qrepo) or {}), bad))
     print("\nruntime: %d repo(s) publishing rungs mainline cannot load"
-          % len(rungs))
-    for qrepo, total, bad in rungs:
+          % len(forked))
+    for qrepo, total, bad in forked:
         print("  %s -- %d of %d rungs" % (qrepo, len(bad), total))
         for reason in bad:
             print("     %s" % reason)
-    return off, rungs
+    return off, forked
 
 
 def report_thinking(models, facts):
@@ -1044,8 +1092,7 @@ def check_backend_reachable(models, data, f):
         return
     for repo, m in sorted((models.get("models") or {}).items()):
         blocks = [(repo, m.get("crispasr"))]
-        blocks += [("%s/%s" % (repo, q.get("quant")), q.get("crispasr"))
-                   for q in (m.get("quants") or [])]
+        blocks += [("%s/%s" % (repo, r["repo"]), r.get("crispasr")) for r in rungs.repos(m)]
         for where, block in blocks:
             backend = (block or {}).get("backend")
             if not backend:
@@ -1054,11 +1101,10 @@ def check_backend_reachable(models, data, f):
                 f.add(where, "crispasr backend %r is not one the binary carries; "
                              "the feature matrix lists %d and this is not among "
                              "them" % (backend, len(names)))
-            # every file this model pins, since a model-level block speaks for
-            # the whole entry and a quant-level one still ships in a repo
+            # every repo this model names, since a model-level block speaks for
+            # the whole entry and a repo-level one still ships in a repo
             archs = set()
-            for q in (m.get("quants") or []):
-                r = q.get("repo")
+            for r in rungs.repo_names(m):
                 if r in per_file:
                     archs.update(per_file[r])
                 elif r in repo_arch:
@@ -1145,16 +1191,16 @@ def report_roles(models):
     """
     quant_roles, comp_roles = {}, {}
     for repo, m in sorted((models.get("models") or {}).items()):
-        for q in (m.get("quants") or []):
-            if q.get("role"):
-                quant_roles.setdefault(q["role"], []).append(repo)
+        for r in rungs.repos(m):
+            if r.get("role"):
+                quant_roles.setdefault(r["role"], []).append(repo)
         for c in (m.get("components") or []):
             if c.get("role"):
                 comp_roles.setdefault(c["role"], []).append(repo)
     both = sorted(set(quant_roles) & set(comp_roles))
-    print("\nroles: %d under quants:, %d under components:, %d in both"
+    print("\nroles: %d under repos:, %d under components:, %d in both"
           % (len(quant_roles), len(comp_roles), len(both)))
-    for label, table in (("quants", quant_roles), ("components", comp_roles)):
+    for label, table in (("repos", quant_roles), ("components", comp_roles)):
         print("  under %s:" % label)
         for role in sorted(table):
             print("    %-22s %3d  e.g. %s" % (role, len(table[role]), table[role][0]))
@@ -1178,13 +1224,13 @@ def report_speech(models):
     board has got to yet.
     """
     def backends(m):
-        """Every crispasr backend that reaches this model, quants included.
+        """Every crispasr backend that reaches this model, its repos' included.
 
-        A model whose only loadable conversion is one of its quants is engined:
-        qwen3-tts names none at the model level because only the cstr rung
+        A model whose only loadable conversion is one of its repos is engined:
+        qwen3-tts names none at the model level because only the cstr repo
         carries the metadata namespace crispasr reads.
         """
-        blocks = [m.get("crispasr")] + [q.get("crispasr") for q in m.get("quants") or []]
+        blocks = [m.get("crispasr")] + [r.get("crispasr") for r in rungs.repos(m)]
         return sorted({b["backend"] for b in blocks if (b or {}).get("backend")})
 
     speech = [(repo, m) for repo, m in sorted((models.get("models") or {}).items())

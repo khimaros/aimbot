@@ -15,6 +15,7 @@ by opening it, and print what the table says.
     ./dashboard-table --table weights     # the same rows under each named preset
     ./dashboard-table --table arena       # lmarena elo beside that rank
     ./dashboard-table --table effective   # the index discounted by the fitted quant
+    ./dashboard-table --table modalities  # every other shape, one ranking each
     ./dashboard-table --json              # the rows themselves
 
 `--table ranking` is the page's default: text models, a quant that fits a 128gb
@@ -33,6 +34,7 @@ import argparse
 import json
 import os
 import sys
+import textwrap
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -44,8 +46,14 @@ TEXT_BOARD = "text-overall-style_control"
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import pageboot  # noqa: E402
 
+# the shapes the ranking above already is: `text` is its roster, and the other
+# two are the language models again with or without the transcribers
+RANKED_ABOVE = ("text", "any2t", "t2t")
+
 # the page computes every one of these; nothing here recomputes any of them
 EMIT = """
+const RANKED_ABOVE = %s;
+""" % json.dumps(RANKED_ABOVE) + """
 setTimeout(() => {
   if (!D) { console.error('the page never booted'); process.exit(1); }
   // the ROSTER THIS DOCUMENT RANKS, pinned rather than inherited. it used to be
@@ -122,13 +130,30 @@ setTimeout(() => {
   clearScores();
   drawTable();
 
+  // every other shape the page offers, one at a time. every runtime and no fit
+  // filter: a window shorter than the view is not a reason a transcriber or an
+  // embedder is off a list about transcribers or embedders
+  const modalities = MODALITIES.filter(x => !RANKED_ABOVE.includes(x.k)).map(x => {
+    filters.mods = new Set([x.k]);
+    filters.flags = new Set();
+    filters.engines = new Set();
+    drawTable();
+    return {title: x.t, help: x.help, rows: sorted(visible()).map(m => {
+      const q = readQuant(m);
+      return {rank: m._rank, short: m.short, quant: q ? q.quant : null,
+              publisher: q ? q.repo.split('/')[0] : null, gib: q ? q.gib : null,
+              fits: !!activeQuant(m), score: scored(m).value, cover: scored(m).cover,
+              engines: [...(q ? rungEngines(m, q, crispasrNamed(m)) : m.engines || [])]};
+    })};
+  });
+
   // exit only once the payload has actually left: node's stdout to a PIPE is
   // async, so `console.log` followed by `process.exit` truncates at the pipe
   // buffer. this payload passed 8192 bytes when a quant note grew, and the
   // reader got `Unterminated string ... column 8191` rather than a short read
   process.stdout.write(JSON.stringify({
     weights: D.weights, hardware: {budget, reserve, minCtx, cap, floor},
-    effective, rows, presets,
+    effective, rows, presets, modalities,
   }), () => process.exit(0));
 }, 0);
 """
@@ -245,17 +270,39 @@ def table_effective(d):
             num(r["ii"]), r["retention"] or 1.0, num(eff)))
 
 
+def table_modalities(d):
+    """Every other shape the page offers, each ranked as the page ranks it.
+
+    The chip's own help is the lead, so the document describes a shape in the
+    words the dashboard uses for it. A rung that does not fit the box is still
+    named, as the page names it, and marked.
+    """
+    print("each table is the dashboard filtered to one shape, over every licence "
+          "and every\nruntime, with fit marked rather than filtered.")
+    for mod in d["modalities"]:
+        print("\n### %s\n\n%s\n" % (mod["title"], textwrap.fill(mod["help"], 79)))
+        if not mod["rows"]:
+            print("nothing on the roster has this shape.")
+            continue
+        print("| # | model | quant | size (gib) | runs on | evidence | quality |")
+        print("|--:|---|---|--:|---|--:|--:|")
+        for r in mod["rows"]:
+            quant = "-" if not r["quant"] else "%s %s%s" % (
+                r["quant"], r["publisher"], "" if r["fits"] else ", over the box")
+            print("| %d | %s | %s | %s | %s | %s | **%s** |" % (
+                r["rank"], r["short"], quant, num(r["gib"]),
+                ", ".join(sorted(r["engines"])) or "-", cover(r), num(r["score"], 1)))
+
+
 TABLES = {"ranking": table_ranking, "components": table_components,
           "weights": table_weights, "arena": table_arena,
-          "effective": table_effective}
+          "effective": table_effective, "modalities": table_modalities}
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--table", default="ranking",
-                    choices=["ranking", "components", "weights",
-                             "arena", "effective"])
+    ap.add_argument("--table", default="ranking", choices=list(TABLES))
     ap.add_argument("--json", action="store_true", help="the rows, unformatted")
     ap.add_argument("--keep", action="store_true", help="leave the probe on disk")
     args = ap.parse_args()

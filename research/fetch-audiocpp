@@ -43,6 +43,7 @@ import subprocess
 import sys
 
 import capture
+import rungs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = "data/audiocpp.json"
@@ -184,9 +185,8 @@ def report(payload, registry):
     fams = payload.get("families") or {}
     pinned, bases = {}, set(registry)
     for repo, m in registry.items():
-        for q in m.get("quants") or []:
-            if q.get("repo"):
-                pinned.setdefault(q["repo"], repo)
+        for r in rungs.repo_names(m):
+            pinned.setdefault(r, repo)
 
     claimed, native = {}, {}
     for fam, rec in fams.items():

@@ -400,6 +400,57 @@
    ],
    "assessed_on": "2026-09-30"
   },
+  "Mapika/decider-35b-a3b": {
+   "one_liner": "the decider readout on a 35b moe, ranked well below its 4b sibling on the one board that scores both.",
+   "use_for": [
+    "trying the decider readout at a size where the backbone knows more, if 34 gib is spare"
+   ],
+   "avoid_for": [
+    "picking it over decider-4b on the evidence here: the board puts the 4b far above it",
+    "trusting its confidence on hard items, which its own card calls overconfident"
+   ],
+   "notes": "{jev.sealed} sealed. every card figure is bf16 through the author's engine, and the only gguf is a static third-party conversion with no decider config beside it, so its readout is written from the card rather than derived.",
+   "confidence": "low",
+   "evidence": [
+    "{jev.score} on jevbench v1.5.0, 35th of 89 ranked systems",
+    "{jev.intelligence} intelligence / {jev.calibration} calibration",
+    "runtime qwen35moe, mainline"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "IFM/K2-Horizon-7B": {
+   "one_liner": "the dense middle of IFM's k2-horizon family, which stock llama.cpp cannot load yet.",
+   "use_for": [
+    "watching: a 7b-core model from a family whose 3.7b scores well for its size"
+   ],
+   "avoid_for": [
+    "serving on mainline llama.cpp, which has no `k2-horizon` architecture; the vendor's fork is the only loader"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "runtime k2-horizon, not mainline; vendor fork MBZUAI-IFM/llama.cpp",
+    "the gguf header counts about 9b in all against the 7b core the name counts",
+    "no forum prose yet"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "IFM/K2-Horizon-MoVA-36B-A4B": {
+   "one_liner": "a 36b moe with mixture-of-values attention and a 512k window, on an architecture mainline llama.cpp does not carry.",
+   "use_for": [
+    "long-context work on the vendor's fork, if the fork is an acceptable dependency"
+   ],
+   "avoid_for": [
+    "serving on mainline llama.cpp, which cannot load `k2-horizon`",
+    "assuming the card's figures transfer to a gguf: its validated serving is bf16 on sglang or vllm"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "runtime k2-horizon, not mainline; vendor fork MBZUAI-IFM/llama.cpp",
+    "4b active of 36b stored, 100 experts with 8 per token",
+    "no forum prose yet"
+   ],
+   "assessed_on": "2026-09-30"
+  },
   "EldanRing/Winnow-12B": {
    "one_liner": "the best open-weights decision model on jevbench, and the only one near the top that scores higher on the sealed items than on the public ones.",
    "use_for": [
@@ -473,6 +524,56 @@
     "{jev.score} -- 18th of 89 ranked systems on jevbench v1.5.0",
     "{jev.intelligence} intelligence / {jev.calibration} calibration / {jev.sealed} sealed",
     "runtime mistral3, mainline since b7216"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "CohereLabs/cohere-transcribe-arabic-07-2026": {
+   "one_liner": "cohere's transcriber fine-tuned for arabic, on the same crispasr backend as the original.",
+   "use_for": [
+    "arabic transcription, with english beside it"
+   ],
+   "avoid_for": [
+    "any other language: it answers a wrong language tag fluently rather than failing"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "crispasr backend cohere, gated behind the vendor's terms",
+    "no board scores it yet"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "nvidia/parakeet-unified-en-0.6b": {
+   "one_liner": "one english parakeet for offline and streaming transcription, loadable only through transcribe.cpp.",
+   "use_for": [
+    "english transcription that has to stream at 160 ms or better and also run offline"
+   ],
+   "avoid_for": [
+    "latency below 160 ms, where its own card says it starts to degrade",
+    "a crispasr setup: no backend reads this gguf"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "engine transcribe.cpp; handy-computer's conversion",
+    "licence unclear: the gguf says cc-by-4.0, nvidia's card its own open model licence"
+   ],
+   "assessed_on": "2026-09-30"
+  },
+  "nvidia/multitalker-parakeet-streaming-0.6b-v1": {
+   "one_liner": "streaming transcription of overlapping speakers, shipped as a bundle with nvidia's streaming sortformer.",
+   "use_for": [
+    "meetings with overlapping speech, up to four speakers, on transcribe.cpp"
+   ],
+   "avoid_for": [
+    "a single speaker, where it costs a model instance per speaker for nothing",
+    "a crispasr setup: no backend reads this gguf"
+   ],
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "engine transcribe.cpp; handy-computer's bundles embed the diarizer",
+    "no board scores it"
    ],
    "assessed_on": "2026-09-30"
   },
@@ -1322,7 +1423,7 @@
    "avoid_for": [
     "factual recall"
    ],
-   "notes": "artificial analysis scored it three days after release, and it leads qwen3.8-27b on most of the axes the two share: {aa.intelligence:value} against {aa.intelligence@Qwen/Qwen3.8-27B:value}, terminal-bench {aa.terminalbench:value} against {aa.terminalbench@Qwen/Qwen3.8-27B:value}. three go the other way and they are the ones to know about: the 27b answers where this one declines ({aa.non_hallucination} against {aa.non_hallucination@Qwen/Qwen3.8-27B}), holds a longer context better ({aa.lcr} against {aa.lcr@Qwen/Qwen3.8-27B}) and is ahead on tool use ({aa.tau_banking} against {aa.tau_banking@Qwen/Qwen3.8-27B}). what the forums discuss is none of that. {community.hf-discussions}, almost all about speed and memory: \"~ 11ts (no MTP)\" {q:92272aaa} against a 22 for qwen3.5 122b on the same box. the main ggufs carry no MTP head, and the separate heads unsloth has since published need llama.cpp PR 28243, still open, so a stock build decodes without one. 41% of the file is the n-gram table, which is what both the '4x slower than it should be' and the 'keep the n-gram table on nvme' threads are about, and it is also why the quant ladder bottoms out at 67.6gib -- its 160-column rows take only block-32 types. AtomicChat is the one publisher that shards the table separately, so 38 of their 93 gb page from ssd rather than staying resident.",
+   "notes": "artificial analysis scored it three days after release, and it leads qwen3.8-27b on most of the axes the two share: {aa.intelligence:value} against {aa.intelligence@Qwen/Qwen3.8-27B:value}, terminal-bench {aa.terminalbench:value} against {aa.terminalbench@Qwen/Qwen3.8-27B:value}. three go the other way and they are the ones to know about: the 27b answers where this one declines ({aa.non_hallucination} against {aa.non_hallucination@Qwen/Qwen3.8-27B}), holds a longer context better ({aa.lcr} against {aa.lcr@Qwen/Qwen3.8-27B}) and is ahead on tool use ({aa.tau_banking} against {aa.tau_banking@Qwen/Qwen3.8-27B}). what the forums discuss is none of that. {community.hf-discussions}, almost all about speed and memory. the main ggufs carry no MTP head, and the separate heads unsloth has since published need llama.cpp PR 28243, still open, so a stock build decodes without one. 41% of the file is the n-gram table, which is what both the '4x slower than it should be' and the 'keep the n-gram table on nvme' threads are about, and it is also why the quant ladder bottoms out at 67.6gib -- its 160-column rows take only block-32 types. AtomicChat is the one publisher that shards the table separately, so 38 of their 93 gb page from ssd rather than staying resident.",
    "confidence": "medium",
    "evidence": [
     "{aa.terminalbench:value}",
@@ -2080,7 +2181,7 @@
     "{gbench.oneshot:value}",
     "{lmarena.rating:value}",
     "{aa.terminalbench}",
-    "hf-discussions 73 mentions at 83% approval"
+    "hf-discussions 74 mentions at 83% approval"
    ],
    "assessed_on": "2026-08-17"
   },

@@ -81,7 +81,14 @@ if (OPT.list) {
   roster.applySettings(OPT);
   const keys = OPT.columns.length ? OPT.columns : roster.shown();
   const rows = roster.rankedRows().map(m => {
-    const row = {};
+    // the registry key rides on every row whatever the columns, since it is
+    // what a client joins to a served model's `meta.llamaswap.registry`; and
+    // the rung the quant column reads -- the fit's pick, or where nothing fits
+    // the smallest one published, with `fits` saying which
+    const q = roster.readQuant(m);
+    const row = {repo: m.repo, rung: q ? {repo: q.repo, quant: q.quant, file: q.file,
+                                          gib: q.gib, bpw: q.bpw ?? null,
+                                          fits: !!roster.activeQuant(m)} : null};
     keys.forEach(k => {
       const c = roster.col(k);
       if (!c) return;
@@ -170,8 +177,10 @@ def options(args):
 
 def check(opt, vocab):
     """Every name the caller used, against the page's own vocabulary."""
+    # a renamed id is known: roster.js reads it as the new one
     known = {"columns": [c["k"] for c in vocab["columns"]],
-             "modalities": [m["k"] for m in vocab["modalities"]],
+             "modalities": [m["k"] for m in vocab["modalities"]]
+                           + list((vocab.get("renamed") or {}).get("modalities") or {}),
              "flags": [f["k"] for f in vocab["flags"]],
              "engines": vocab["engines"], "publishers": vocab["publishers"],
              "licenses": [t["k"] for t in (vocab.get("licenses") or [])],

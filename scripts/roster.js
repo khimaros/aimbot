@@ -309,33 +309,30 @@ function fitContext(m) {
   return Math.max(0, Math.min(native, Math.floor(ctx)));
 }
 
-// every (repo, quant) this model can be read as. keyed by the pair because a
-// model may declare two quants OUT OF THE SAME repo -- gemma 4 31b pins Q8_0
-// and UD-Q4_K_XL -- and expanding that repo's listing once per declared quant
-// listed all 25 of them twice.
+// every (repo, quant) this model can be read as: each of its repos, every rung
+// that repo publishes. what the repo is (its role, the crispasr backend that
+// reads it, whether its build drafts) rides on each of its rungs, and what the
+// registry writes about one file rides on that rung alone.
 function quantChoices(m) {
   const seen = new Map();
-  m.quants.forEach(q => {
-    const alt = (q.available || []).length ? q.available
-      : [{quant: q.quant, file: q.file, gib: q.gib, bpw: q.bpw}];
-    alt.forEach(a => {
-      const key = q.repo + ':' + a.quant;
-      const was = seen.get(key);
-      if (was) { was.pinned = was.pinned || a.quant === q.quant; return; }
-      // `file` is what to fetch, `quant` is what to call it. they differ where
-      // a repo does not name its files after the tag -- whisper.cpp's
-      // `ggml-large-v3-turbo-q8_0.bin` is the Q8_0 rung
-      seen.set(key, {repo: q.repo, quant: a.quant, file: a.file || a.quant,
-                     gib: a.gib, bpw: a.bpw,
-                     // what the file IS, where its tensor table has been read.
-                     // `realBpw` is over the block geometry of every tensor;
-                     // `bpw` beside it is file size over parameter count
-                     types: a.types, realBpw: a.real_bpw,
-                     pinned: a.quant === q.quant, speculative: q.speculative,
-                     forkType: a.fork_type, crispasr: q.crispasr,
-                     note: a.quant === q.quant ? proseText(q.note) : undefined});
-    });
-  });
+  (m.repos || []).forEach(r => (r.available || []).forEach(a => {
+    const key = r.repo + ':' + a.quant;
+    if (seen.has(key)) return;
+    // `file` is what to fetch, `quant` is what to call it. they differ where
+    // a repo does not name its files after the tag -- whisper.cpp's
+    // `ggml-large-v3-turbo-q8_0.bin` is the Q8_0 rung
+    seen.set(key, {repo: r.repo, quant: a.quant, file: a.file || a.quant,
+                   gib: a.gib, bpw: a.bpw,
+                   // what the file IS, where its tensor table has been read.
+                   // `realBpw` is over the block geometry of every tensor;
+                   // `bpw` beside it is file size over parameter count
+                   types: a.types, realBpw: a.real_bpw,
+                   role: r.role, speculative: r.speculative, crispasr: r.crispasr,
+                   forkType: a.fork_type, runtime: a.runtime, voices: a.voices,
+                   // the words for the tables that print text, and the parts --
+                   // references and all -- for the page that links them
+                   note: a.note ? proseText(a.note) : undefined, noteParts: a.note});
+  }));
   return [...seen.values()];
 }
 
@@ -355,16 +352,19 @@ const rungDrafts = c => c.speculative !== false;
 // publishes 117.55 gib at its first-listed repo and 91.91 at its last, and the
 // search stopped at the first.
 //
-// the registry's own rung still answers the two cases where nothing can be
-// chosen from: no budget, and a repo publishing no file sizes (hy3), where
-// reporting it as too big would be a measurement this repo does not have.
+// the same rule answers where there is no budget, with unlimited room -- so the
+// ceiling and the floor still decide, and the best rung under them wins -- and
+// where a repo publishes no file sizes (hy3), by type alone, since reporting it
+// as too big would be a measurement this repo does not have. nothing the
+// registry writes picks a rung.
 //
 // over whatever set the caller hands it, which is the whole pool for the fit and
 // one repo's rungs once a reader has narrowed the choice by hand on the operate
 // tab. same test either way, so the two cannot disagree about what fits.
 function bestOf(m, all) {
   if (!all.length) return null;
-  if (!budget || !all.some(c => c.gib)) return all.find(c => c.pinned) || all[0] || null;
+  if (!all.some(c => c.gib)) return byQuality(all)[0];
+  if (!budget) return byQuality(affordable(m, all, Infinity))[0] || byQuality(all)[0];
   if (!reaches(m)) return null;
   const room = usable() - kvGib(m, wantCtx(m)) - draftGib(m);
   const fits = affordable(m, all, room);
@@ -480,9 +480,9 @@ const readQuant = m => activeQuant(m) || smallestRung(m);
 function smallestRung(m) {
   const all = rungPool(m);
   const sized = all.filter(c => c.gib);
-  // a repo that publishes no sizes has not failed to be small, and its pinned
-  // rung is the answer that does not invent a measurement
-  if (!sized.length) return all.find(c => c.pinned) || all[0] || null;
+  // a repo that publishes no sizes has not failed to be small, and the lowest
+  // rung by type is the answer that does not invent a measurement
+  if (!sized.length) return byQuality(all).slice(-1)[0] || null;
   return sized.reduce((a, b) => (b.gib < a.gib ? b : a));
 }
 // an entry with no quants at all -- onnx-only weights the roster carries to say
@@ -494,7 +494,7 @@ function smallestRung(m) {
 // three of the speech roster name no engine anybody has written down, so their
 // pool is empty the moment a runtime is picked, and "does not fit" would be a
 // claim about memory backed by a fact about runtimes.
-const fitsBudget = m => !budget || !m.quants.length || !rungPool(m).length
+const fitsBudget = m => !budget || !quantChoices(m).length || !rungPool(m).length
   || !!activeQuant(m);
 
 // what goes after the colon in `repo:TAG`, which llama.cpp resolves against a
@@ -993,7 +993,7 @@ const COLUMNS = [
      // roster, and an entry whose files no runtime on this page is known to
      // load is a fact about runtimes -- `does not fit` would blame the box for
      // either, and a dash says the roster is empty when it is not
-     if (!q && m.quants.length && !rungPool(m).length) {
+     if (!q && quantChoices(m).length && !rungPool(m).length) {
        return '<td class="faint" title="no runtime this page offers is known to load it">no runtime</td>';
      }
      if (!q) return '<td class="faint" title="the roster carries no gguf for this entry">-</td>';
@@ -1218,7 +1218,8 @@ const MODALITIES = [
   // reads a state and typed questions and returns a probability per option. so
   // it is in no shape at all -- `any to text` is right to leave it out, since it
   // emits no tokens -- and the kind is the only way to ask for it
-  {k: 'decide', t: 'decisions', test: m => m.kind === 'decision',
+  // a text model that measured as one joins them on its `decides:` block
+  {k: 'decision', t: 'decisions', test: m => m.kind === 'decision' || !!m.decides,
    help: 'typed decisions in one forward pass: a probability per option and nothing generated. jevbench rates them, and its calibration axis is the only one here'},
   {k: 'diar', t: 'diarization', test: m => m.kind === 'diarize',
    help: 'weights --diarize loads, beside an ASR model or in place of a whole '
@@ -1283,8 +1284,14 @@ const MODALITY_ABOUT = {
   text: ['text'], t2t: ['text'], v2t: ['text'],
   any2t: ['text', 'transcribes'],
   a2t: ['transcribes'], t2a: ['synthesizes'], t2i: ['draws'],
-  t2v: [], t2e: [], decide: ['decides'], diar: [], post: [], mt: [],
+  t2v: [], t2e: [], decision: ['decides'], diar: [], post: [], mt: [],
 };
+
+// chip ids that were renamed, old -> new, so a share link or a script written
+// against the old id reads the chip it meant rather than an empty filter.
+// `decide` was the one verb among the kind ids; it is the kind's noun now
+const MOD_RENAMED = {decide: 'decision'};
+const knownMods = ks => ks.map(k => MOD_RENAMED[k] || k);
 
 // the capabilities the current view is asking about, or null for no restriction
 // -- nothing picked is every shape, so it is every question.
@@ -1331,7 +1338,7 @@ function haystack(m) {
   return m._hay || (m._hay = [m.repo, m.short, m.match, m.facts.arch, m.facts.model_type,
     proseText(m.notes), m.card.summary, (m.derived.best_for || []).join(' '),
     ((m.card.hub || {}).tags || []).join(' '), Object.keys(m.tasks).join(' '),
-    m.quants.map(q => q.repo + ' ' + q.quant).join(' ')].join(' ').toLowerCase());
+    (m.repos || []).map(r => r.repo).join(' ')].join(' ').toLowerCase());
 }
 
 function visible() {
@@ -1478,7 +1485,7 @@ function applySettings(o) {
     filters.mods = new Set(); filters.flags = new Set(); filters.engines = new Set();
     filters.licenses = new Set();
   }
-  if (o.modalities && o.modalities.length) filters.mods = new Set(o.modalities);
+  if (o.modalities && o.modalities.length) filters.mods = new Set(knownMods(o.modalities));
   if (o.flags && o.flags.length) filters.flags = new Set(o.flags);
   if (o.engines && o.engines.length) filters.engines = new Set(o.engines);
   if (o.licenses && o.licenses.length) filters.licenses = new Set(o.licenses);
@@ -1504,6 +1511,7 @@ function applySettings(o) {
 const vocabulary = () => ({
   columns: COLUMNS.map(c => ({k: c.k, t: c.t, num: !!c.num, help: c.help || ''})),
   modalities: MODALITIES.map(m => ({k: m.k, t: m.t, help: m.help || ''})),
+  renamed: {modalities: MOD_RENAMED},
   flags: FLAGS.map(f => ({k: f.k, t: f.t, help: f.help || ''})),
   presets: Object.keys(PRESETS).map(k => ({k: k, t: PRESETS[k].t})),
   engines: [...new Set(D.models.flatMap(m => m.engines || []))].sort(),
@@ -1576,7 +1584,7 @@ const hardware = () => ({budget, reserve, minCtx, cap, floor, effective,
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {loadRoster, applySettings, rankedRows, vocabulary, hardware,
                     filterCounts, licenseOf,
-                    visible, sorted, expand, col, shown, scored, activeQuant,
+                    visible, sorted, expand, col, shown, scored, activeQuant, readQuant,
                     fittingQuants, quantChoices, rungPool, rungEngines,
                     unusedSweeps, kvGib, fitContext, tgTps, ppTps,
                     modelRetention, curveFor, belowCurve, facetValue, facetPctRaw,

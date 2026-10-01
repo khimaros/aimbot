@@ -19,7 +19,7 @@ with abliterated merges, 2B models and architectures llama.cpp cannot load.
 That is expected. The report marks which repos are already tracked and leaves
 the judgement to a human.
 
-"Tracked" means a registry key or any repo its quants and components name.
+"Tracked" means a registry key or any repo its repos and components name.
 
 Three API notes, all learned the hard way. `sort=trending` is a 400; the field
 is `trendingScore`. `apps=llama.cpp`, which the website URL carries, is
@@ -35,6 +35,8 @@ import subprocess
 import sys
 import time
 import urllib.parse
+
+import rungs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REGISTRY = os.path.join(HERE, "..", "registry", "models.yaml")
@@ -114,9 +116,7 @@ def tracked_repos(registry_path):
     models = (yaml.safe_load(open(registry_path)) or {}).get("models") or {}
     for base, m in models.items():
         out.add(base.lower())
-        for q in (m.get("quants") or []) + (m.get("components") or []):
-            if q.get("repo"):
-                out.add(q["repo"].lower())
+        out.update(r.lower() for r in rungs.weight_repos(m))
     return out
 
 

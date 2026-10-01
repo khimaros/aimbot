@@ -46,6 +46,8 @@ import re
 import subprocess
 import sys
 
+import rungs
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = "https://huggingface.co/%s/raw/main/%s"
 API = "https://huggingface.co/api/models/%s?expand[]=safetensors"
@@ -435,7 +437,7 @@ def main():
         models = yaml.safe_load(open(args.registry)).get("models") or {}
         repos = list(models)
         # the gguf that would actually be served, for the context fallback
-        gguf_repos = {r: (m.get("quants") or [{}])[0].get("repo")
+        gguf_repos = {r: (rungs.repo_names(m) or [None])[0]
                       for r, m in models.items()}
 
     out = {}
