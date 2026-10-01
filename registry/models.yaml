@@ -1378,9 +1378,16 @@ models:
       head:
         repo: ngquocvinh/Jev-Omni-GGUF
         file: decision-head-f32.npz
-      note: the 256-way head reads unnormalized token embeddings, so the gguf is
-        served with `--embedding --pooling none --embd-normalize -1` and the head is
-        applied by the author's `jev_omni_gguf_decide.py`
+        revision: f07b38e109cbc9b338029f88faeb3e6b6f894c73
+        sha256: 47b346e120dc9110ef7c0b610cf5d1f459ddcdb05ffd3cd126b6938d88a8bb77
+        kind: linear
+        name: jev-omni
+        reads:
+          states: last
+      note: the 256-way head reads one vector, the last token's unnormalized hidden
+        state. the author's `jev_omni_gguf_decide.py` serves the gguf with `--embedding
+        --pooling none --embd-normalize -1` and takes the last row itself, which is
+        the author's launch and more than the head requires
   alibiserikbay/JevK5:
     kind: decision
     name:
@@ -1473,6 +1480,145 @@ models:
         the card's recommended `native` wording from `jev-adapter` (`State:` /
         `Question:` / `Options:` headers, options as `A. name: description`) inside
         the chat template with no system turn
+  # the head is a network of its own rather than a matrix: two evidence-routing
+  # layers and four decoder layers over EVERY position's final hidden state, plus
+  # the backbone's output embedding rows for each option's tokens. jev-omni's
+  # head is one product a caller applies to an embedding; this one is a second
+  # forward pass, and no gguf of clef carries it
+  Cloudflare/clef:
+    kind: decision
+    name:
+      short: clef
+      # `clef-flash` is a separate release on a different backbone, and a clef
+      # is also a thing on a stave, which the tts and music entries get asked about
+      match: (?<!treble\s)(?<!bass\s)\bclef\b(?![\s-]*flash)
+    notes: >-
+      post-trained from `Qwen/Qwen3.8-27B` with a joint schema head, "a small transformer
+      head that reads the backbone's final hidden states" {card} and "scores all
+      options of all questions jointly". the prompt is the author's own
+      `STATE:` / `SCHEMA FIELDS:` layout from `joint_schema_model.py`, and the
+      answer is one logit per option softmaxed per question with no temperature
+      published. every figure on the card is the bf16 safetensors through that
+      script on one H200. the head ships as `joint_head.safetensors` in the base
+      repo only, so a gguf here is the backbone alone, and the card describes no
+      way to read a decision out of text it generates.
+    repos:
+    - repo: abenzerps/Clef-GGUF
+      files:
+        Q8_0:
+          note: the top of the only full ladder of it at {gib}, and the rung to take for the
+            reason decider's is -- the answer is a distribution and nothing has measured what
+            a lower rung costs one. the card {card} shows it answering a chat prompt, which is
+            the backbone talking and not the model the vendor benchmarked
+    - prithivMLmods/clef-GGUF
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      jev: ''
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output: []
+    readout:
+      kind: head
+      source: card
+      head:
+        repo: Cloudflare/clef
+        file: joint_head.safetensors
+        # no `name`: nothing can call this head on a gguf yet, and verdict
+        # refuses a head with none
+        reads:
+          states: all
+      note: the head needs the final hidden state of every position AND the
+        backbone's output embedding matrix, which an embedding server does not hand
+        out. the only caller published is the torch one in `joint_schema_model.py`,
+        so nothing applies this head to a gguf today
+    turns:
+      source: abenzerps/Clef-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, xhigh]
+      default: xhigh
+  Cloudflare/clef-flash:
+    kind: decision
+    name:
+      short: clef-flash
+      match: \bclef[\s-]*flash\b
+    notes: >-
+      clef's smaller sibling on qwen3.5 9b, read the same way: the same
+      `joint_schema_model.py`, and a joint schema head of the same shape that
+      "scores all options of all questions jointly" {card}. the head is
+      `joint_head.safetensors` in the base repo and in no gguf, so what is said
+      of clef's ggufs holds for these.
+    repos:
+    - repo: bartowski/Cloudflare_clef-flash-GGUF
+      files:
+        Q8_0:
+          note: the rung to take at {gib}, for the reason clef's is. every rung below it was
+            built with an imatrix "rendered through this model's own chat template"
+            {card}, and the vendor's script never sends that template -- it writes its own
+            `STATE:` / `SCHEMA FIELDS:` prompt -- so the importance weights were measured on
+            activations the decision readout does not produce. Q8_0 is the one rung where
+            that cannot matter much
+    - prithivMLmods/clef-flash-GGUF
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      jev: ''
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output: []
+    readout:
+      kind: head
+      source: card
+      head:
+        repo: Cloudflare/clef-flash
+        file: joint_head.safetensors
+        revision: 17f0b0ad64efb65d273590632833508766b2aae6
+        sha256: 19cdcec8c81dc9212be320fff47462ab342fbc1278be4368fb3da71241cf5ba0
+        kind: joint-schema
+        name: clef-flash
+        reads:
+          states: all
+        heads: 16
+        rows:
+          repo: Cloudflare/clef-flash
+          revision: 17f0b0ad64efb65d273590632833508766b2aae6
+          file: model-00001-of-00004.safetensors
+          tensor: lm_head.weight
+      note: the same head as clef's at hidden size 4096, with the same two needs --
+        every position's final hidden state and the backbone's output embedding
+        rows, which verdict range-reads from the bf16 `lm_head.weight` because the
+        gguf's copy is quantised. verdict's numpy port is the one caller for a
+        gguf; it matches the author's torch head on a fixture and has NOT been
+        checked against the bf16 backbone on real records
+    turns:
+      source: bartowski/Cloudflare_clef-flash-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   # CARRIED AS A BASE, not as a candidate. qwen3 8b is two generations behind the
   # qwen3.5/3.6/3.8 entries beside it and nobody should pick it off this roster
   # today. it is here because `prism-ml/Ternary-Bonsai-8B` derives from it, and a
@@ -3364,6 +3510,7 @@ models:
       leading_system_max: unlimited
       mid_system: reordered
       mid_developer: ok
+      upstream_differs: [developer, mid_developer, mid_system]
     thinking:
       knob: reasoning_effort
       gate: enable_thinking

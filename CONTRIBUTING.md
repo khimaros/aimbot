@@ -14,6 +14,9 @@ registry/models.yaml            per-model facts. the quant to prefer and why,
                                 the fork or PR a non-mainline rung needs, and
                                 which crispasr backend loads a speech model
 registry/sampling.yaml          the profile names and what each one means
+registry/layouts.yaml           the prompt bytes a decision model is asked in,
+                                by layout name. a model's `readout:` names one;
+                                verdict renders from it and owns the knob names
 registry/licenses.yaml          what each licence lets a reader do, by licence
                                 rather than by model. the string a repo declares
                                 is captured; what it MEANS is the judgement here,

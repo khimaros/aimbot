@@ -10,6 +10,9 @@ read one table. This does the join once, here.
     build-viewer            # write docs/data.json and docs/index.html
     build-viewer --check    # exit 1 if either is out of date
 
+It also writes docs/layouts.json, which the page does not read: it is
+registry/layouts.yaml as json for verdict, which imports it and has no yaml.
+
 What it joins, all by the registry's own keys:
 
     registry/models.yaml            the facts and the four keys to address them
@@ -1592,6 +1595,41 @@ def render(payload):
                          + quote(FAVICON, safe=FAVICON_SAFE)))
 
 
+def readout_word(readout):
+    """A readout as the one word verdict routes on, or None for plain chat.
+
+    `layout:<name>` or `head:<name>`. a head nobody named is the bare `head`,
+    which verdict refuses: left out, it would fall back to chat and read the
+    backbone's letters as the model's answer with nothing to say it went wrong.
+    """
+    name = readout.get("layout") or (readout.get("head") or {}).get("name")
+    if name:
+        return "%s:%s" % (readout["kind"], name)
+    return "head" if readout.get("kind") == "head" else None
+
+
+def layouts_export(table, models):
+    """registry/layouts.yaml as json, each head model's head on the layout it names.
+
+    verdict imports this and has no yaml parser. two joins are added. a head's
+    prompt and the head that reads it are one thing to a client, so the head
+    rides on its layout. and `models` says which model reads through which
+    layout, by the repos its weights load from, because no server says.
+    """
+    layouts = {name: dict(block) for name, block in (table.get("layouts") or {}).items()}
+    mapped = {}
+    for repo, m in models.items():
+        readout = m.get("readout") or {}
+        head = readout.get("head") or {}
+        if head.get("name") in layouts:
+            layouts[head["name"]]["head"] = head
+        word = readout_word(readout)
+        if word:
+            mapped[repo] = {"short": (m.get("name") or {}).get("short"),
+                            "repos": rungs.repo_names(m), "readout": word}
+    return {"version": table.get("version"), "layouts": layouts, "models": mapped}
+
+
 def write(path, text, check):
     current = open(path).read() if os.path.exists(path) else None
     if check:
@@ -1616,10 +1654,15 @@ def main():
     payload = build()
     data = json.dumps(payload, indent=1, sort_keys=True) + "\n"
     page = render(payload)
+    layouts = layouts_export(
+        load_yaml(os.path.join(ROOT, "registry", "layouts.yaml")),
+        load_yaml(os.path.join(ROOT, "registry", "models.yaml")).get("models") or {})
 
     os.makedirs(args.out, exist_ok=True)
     changed = [write(os.path.join(args.out, "data.json"), data, args.check),
                write(os.path.join(args.out, "index.html"), page, args.check),
+               write(os.path.join(args.out, "layouts.json"),
+                     json.dumps(layouts, indent=1, sort_keys=True) + "\n", args.check),
                # github pages runs jekyll over a branch folder unless told not
                # to, and jekyll drops files it does not recognise
                write(os.path.join(args.out, ".nojekyll"), "", args.check)]

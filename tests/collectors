@@ -129,13 +129,19 @@ def validate(models_yaml, *flags, **kw):
     profile that does not resolve would fail them for the wrong reason.
 
     `facts=` supplies model-facts.json, which is empty unless a case is about a
-    check that reads it.
+    check that reads it. `layouts=` replaces layouts.yaml, which is the real one
+    otherwise for the reason sampling.yaml is.
     """
     tmp = tempfile.mkdtemp()
     try:
         with open(os.path.join(tmp, "models.yaml"), "w") as f:
             f.write(models_yaml)
         shutil.copy(os.path.join(ROOT, "registry", "sampling.yaml"), tmp)
+        if kw.get("layouts"):
+            with open(os.path.join(tmp, "layouts.yaml"), "w") as f:
+                f.write(kw["layouts"])
+        else:
+            shutil.copy(os.path.join(ROOT, "registry", "layouts.yaml"), tmp)
         facts = os.path.join(tmp, "facts.json")
         with open(facts, "w") as f:
             json.dump(kw.get("facts") or {}, f)
@@ -7243,6 +7249,143 @@ def a_readout_names_how_the_model_is_read_and_nothing_else():
         code, findings, _ = validate(READOUT_FIXTURE % body)
         errs = " ".join(x["error"] for x in findings)
         eq(why in errs, True, "%r is refused with %r: %s" % (body.strip(), why, errs))
+
+
+HEAD_FIXTURE = ("      kind: head\n      source: card\n"
+                "      head: {repo: Vendor/Decider-GGUF, file: head.npz%s}")
+
+
+@test
+def a_head_says_what_it_reads_so_a_server_can_be_started_for_it():
+    """A head is fed by somebody else's process, so what it eats is a fact.
+
+    llama-tools turns `reads` into an argv and verdict picks its caller from
+    `name`, and neither can do that from a sentence in a note. `states` is which
+    positions' final hidden state the head consumes, and every head says it:
+    whether anything can CALL the head yet is `name`, which verdict refuses the
+    absence of, so `reads` is never left out to mean "not ready".
+    """
+    reads = ", reads: {states: last}"
+    good = (reads,
+            ", name: jev-omni, reads: {states: all}",
+            reads + ", kind: linear, revision: %s, sha256: %s" % ("f0" * 20, "f0" * 32),
+            # a joint head also says how many attention heads it has, which its
+            # weights do not record, and where the output embedding rows are
+            reads + ", kind: joint-schema, heads: 16, rows: {repo: Vendor/Decider, "
+            "revision: %s, file: m.safetensors, tensor: lm_head.weight}" % ("f0" * 20))
+    for extra in good:
+        code, findings, _ = validate(READOUT_FIXTURE % (HEAD_FIXTURE % extra))
+        eq([x["error"] for x in findings if "readout" in x["error"]], [],
+           "%r is clean" % extra)
+    for extra, why in (("", "reads.states"),
+                       (", reads: {}", "reads.states"),
+                       (", reads: {states: first}", "reads.states"),
+                       (", reads: {states: last, pooling: none}",
+                        "unknown head.reads field"),
+                       (", reads: {states: last}, revision: main", "head.revision"),
+                       (", kind: quadratic", "head.kind"),
+                       (", sha256: abc", "head.sha256"),
+                       (", kind: joint-schema, heads: 0", "head.heads"),
+                       (", rows: {repo: Vendor/Decider, file: m.safetensors}",
+                        "head.rows"),
+                       (", name: nowhere", "not in layouts.yaml"),
+                       (", reads: {states: last}, sha: abc", "unknown head field")):
+        code, findings, _ = validate(READOUT_FIXTURE % (HEAD_FIXTURE % extra))
+        errs = " ".join(x["error"] for x in findings)
+        eq(why in errs, True, "%r is refused with %r: %s" % (extra, why, errs))
+
+
+LAYOUTS_FIXTURE = "version: 1\nlayouts:\n  decider-plain:\n%s\n"
+AFFIXES_FIXTURE = ("    affixes: {system_open: '', system_close: '', user_open: 'C:',"
+                   " user_close: ''%s}\n")
+
+
+@test
+def a_layout_is_bytes_the_registry_carries_and_a_name_has_to_resolve():
+    """The prompt a model was trained on is a fact about it, so it lives here.
+
+    verdict imports this table and renders from it, so a block it could not
+    render has to be refused where it is written: a name with no block, a block
+    with no source, and affixes that leave a turn unopened.
+    """
+    layout = "      kind: layout\n      layout: %s\n      source: card"
+    code, findings, _ = validate(READOUT_FIXTURE % (layout % "decider-plain"))
+    eq([x["error"] for x in findings if "layout" in x["error"]], [],
+       "a name the shipped table defines is clean")
+    code, findings, _ = validate(READOUT_FIXTURE % (layout % "nowhere"))
+    eq("not in layouts.yaml" in " ".join(x["error"] for x in findings), True,
+       "a name the table lacks is refused")
+
+    full = AFFIXES_FIXTURE % ", assistant_open: 'A:'"
+    good = "    source: v @ abc\n" + full + "    constants: {state_open: 'S'}"
+    code, findings, _ = validate(READOUT_FIXTURE % (layout % "decider-plain"),
+                                 layouts=LAYOUTS_FIXTURE % good)
+    eq([x["error"] for x in findings if "layout" in x["error"]], [],
+       "a whole block is clean")
+    for body, why in (
+            ("    constants: {}", "source"),
+            ("    source: v\n    constants: {}\n    colour: red", "unknown layout field"),
+            ("    source: v\n" + AFFIXES_FIXTURE % "" + "    constants: {}",
+             "assistant_open"),
+            ("    source: v\n" + full + "    constants: {system_turn: false}",
+             "bare_user_open"),
+            ("    kind: triple\n    source: v\n    constants: {}", "layout kind"),
+            # a joint layout writes its turns itself, in `constants`
+            ("    kind: joint\n    source: v\n" + full + "    constants: {}",
+             "joint layout declares no affixes")):
+        code, findings, _ = validate(READOUT_FIXTURE % (layout % "decider-plain"),
+                                     layouts=LAYOUTS_FIXTURE % body)
+        errs = " ".join(x["error"] for x in findings)
+        eq(why in errs, True, "%r is refused with %r: %s" % (body.strip(), why, errs))
+
+
+@test
+def the_layout_table_is_published_as_json_with_each_head_resolved():
+    """verdict is stdlib only, so the table it imports has to be json.
+
+    The yaml is the source and `docs/layouts.json` is the build of it, with one
+    join done here rather than there: a head model's `readout.head` rides on
+    the layout its `head.name` keys, because the prompt and the head that reads
+    it are one thing to a client and two files in this registry.
+    """
+    mod = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    table = {"version": 1, "layouts": {"plain": {"source": "v", "constants": {}},
+                                       "headed": {"source": "w", "constants": {}}}}
+    head = {"repo": "p/H", "file": "h.npz", "name": "headed", "kind": "linear"}
+    models = {"p/M": {"readout": {"kind": "head", "head": head}},
+              "p/L": {"readout": {"kind": "layout", "layout": "plain"}}}
+    out = mod.layouts_export(table, models)
+    eq(out["version"], 1, "the version travels")
+    eq(out["layouts"]["headed"]["head"], head, "a head rides on the layout it names")
+    eq("head" in out["layouts"]["plain"], False, "and a plain layout carries none")
+    eq(table["layouts"]["headed"], {"source": "w", "constants": {}},
+       "the table handed in is not written to")
+
+    # which model reads through which layout, because no server says: the word
+    # verdict routes on, against the repos the weights load from
+    models["p/M"].update(name={"short": "m one"}, repos=["q/M-GGUF"])
+    models["p/L"].update(name={"short": "l"}, repos=[{"repo": "q/L-GGUF"}])
+    models["p/C"] = {"name": {"short": "c"}, "readout": {"kind": "chat"}}
+    models["p/N"] = {"name": {"short": "n"}, "repos": ["q/N-GGUF"],
+                     "readout": {"kind": "head", "head": {"repo": "p/N", "file": "h"}}}
+    # a head nobody named is IN the table as the bare word: absent, a client
+    # falls back to chat and reads the backbone's letters as if they were the
+    # model's answer, with nothing to say it went wrong
+    eq(mod.layouts_export(table, models)["models"],
+       {"p/M": {"short": "m one", "repos": ["q/M-GGUF"], "readout": "head:headed"},
+        "p/L": {"short": "l", "repos": ["q/L-GGUF"], "readout": "layout:plain"},
+        "p/N": {"short": "n", "repos": ["q/N-GGUF"], "readout": "head"}},
+       "only a chat model is left out")
+
+    shipped = json.load(open(os.path.join(ROOT, "docs", "layouts.json")))
+    eq(shipped["models"]["Cloudflare/clef-flash"]["readout"], "head:clef-flash",
+       "the shipped file maps a model to its readout")
+    eq(shipped["models"]["Cloudflare/clef"]["readout"], "head",
+       "and names a head with no caller as one, so it is refused")
+    eq(shipped["layouts"]["jev-omni"]["head"]["kind"], "linear",
+       "the shipped file carries jev-omni's head")
+    eq(shipped["layouts"]["decider-plain"]["affixes"]["assistant_open"], "\nAnswer: (",
+       "and a whitespace-exact string survives the build")
 
 
 @test

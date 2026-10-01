@@ -331,16 +331,80 @@ def check_base(b, where, keys, f):
         f.add(where, "base.repo is the entry itself")
 
 
-# how a client reads an answer out of the model, which verdict consumes as
-# `meta.llamaswap.readout`. `chat` builds the prompt from the model's own
+# how a client reads an answer out of the model, which verdict imports through
+# docs/layouts.json. `chat` builds the prompt from the model's own
 # template, `layout` renders a named plain layout the weights were trained on
-# (the name is one of verdict's spec/layouts), and `head` is a custom head no
+# (the name is a block in registry/layouts.yaml), and `head` is a custom head no
 # llama-server logit reaches, so it names where the head lives
 READOUT_FIELDS = {"kind", "layout", "source", "temperature", "head", "note"}
 READOUT_KINDS = ("chat", "layout", "head")
 # strongest first. `author-config` is derived by resolve-readout from the config
 # shipped beside the pinned file; the rest are written by hand from the card
 READOUT_SOURCES = ("author-config", "card", "hand")
+# a head is fed by a server somebody else starts, so what it eats is stated as a
+# requirement and never as a flag: llama-tools owns the argv. `name` is which
+# caller-side head this is (the twin of `layout:`, and a key in layouts.yaml), and
+# `reads.states` is which positions' RAW final hidden state it consumes. `reads`
+# is REQUIRED: it is what makes llama-tools serve the backbone as an embedding
+# endpoint, and a head model served any other way answers nothing. whether a
+# caller exists yet is `name`, whose absence verdict refuses, so leaving `reads`
+# out never means "not ready".
+# `kind` is which arithmetic verdict applies, and `sha256` is what lets it fetch
+# the file at all: a revision does not protect a copy already cached. a
+# `joint-schema` head needs two things a linear one does not: `heads`, the
+# attention head count its weights do not record, and `rows`, the pinned tensor
+# the backbone's output embedding rows are range-read from
+HEAD_FIELDS = {"repo", "file", "revision", "sha256", "kind", "name", "reads",
+               "heads", "rows"}
+HEAD_READS_FIELDS = {"states"}
+HEAD_ROWS_FIELDS = {"repo", "revision", "file", "tensor"}
+HEAD_STATES = ("last", "all")
+HEAD_KINDS = ("linear", "joint-schema")
+HUB_REVISION = re.compile(r"^[0-9a-f]{40}$")
+SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+# what a block in registry/layouts.yaml may say. the knob vocabulary under
+# `constants` is verdict's and is refused there by name; what is checked here is
+# the shape verdict imports
+LAYOUT_FIELDS = {"kind", "source", "affixes", "constants", "note"}
+# absent is one question a prompt. `joint` asks every question of a request in
+# one prompt it writes whole, so it declares no affixes and has its own knobs
+LAYOUT_KINDS = ("joint",)
+LAYOUT_AFFIXES = ("system_open", "system_close", "user_open", "user_close",
+                  "assistant_open")
+# the user turn of a layout with no system turn, which is a different opening
+LAYOUT_BARE_AFFIX = "bare_user_open"
+
+
+def check_head(head, where, f):
+    """What a head block may say beyond where the head lives."""
+    unknown = sorted(set(head) - HEAD_FIELDS)
+    if unknown:
+        f.add(where, "unknown head field(s) %s (known: %s)"
+              % (", ".join(unknown), ", ".join(sorted(HEAD_FIELDS))))
+    if "revision" in head and not HUB_REVISION.match(str(head["revision"])):
+        f.add(where, "readout.head.revision %r must be a 40-hex hub commit"
+              % (head["revision"],))
+    if "sha256" in head and not SHA256.match(str(head["sha256"])):
+        f.add(where, "readout.head.sha256 %r must be 64 hex digits" % (head["sha256"],))
+    if "kind" in head and head["kind"] not in HEAD_KINDS:
+        f.add(where, "readout.head.kind %r must be one of %s"
+              % (head["kind"], ", ".join(HEAD_KINDS)))
+    if "heads" in head and not (isinstance(head["heads"], int) and head["heads"] > 0):
+        f.add(where, "readout.head.heads %r must be a positive count" % (head["heads"],))
+    rows = head.get("rows")
+    if "rows" in head and not (isinstance(rows, dict) and set(rows) == HEAD_ROWS_FIELDS
+                               and HUB_REVISION.match(str(rows["revision"]))):
+        f.add(where, "readout.head.rows pins one tensor: {%s}, revision a 40-hex "
+                     "hub commit" % ", ".join(sorted(HEAD_ROWS_FIELDS)))
+    reads = head["reads"] if isinstance(head.get("reads"), dict) else {}
+    unknown = sorted(set(reads) - HEAD_READS_FIELDS)
+    if unknown:
+        f.add(where, "unknown head.reads field(s) %s (known: %s)"
+              % (", ".join(unknown), ", ".join(sorted(HEAD_READS_FIELDS))))
+    if reads.get("states") not in HEAD_STATES:
+        f.add(where, "readout.head.reads.states %r must be one of %s"
+              % (reads.get("states"), ", ".join(HEAD_STATES)))
 
 
 def check_readout(r, where, f):
@@ -367,8 +431,54 @@ def check_readout(r, where, f):
     if (r.get("kind") == "head") != bool(head.get("repo") and head.get("file")):
         f.add(where, "readout.head needs kind: head, and kind: head needs "
                      "head: {repo, file} saying where the head lives")
+    elif head:
+        check_head(head, where, f)
     if not isinstance(r.get("temperature") or {}, dict):
         f.add(where, "readout.temperature is a mapping of answer type to value")
+
+
+def check_layout(name, block, f):
+    """One layout block: where its bytes came from, and whole enough to render."""
+    where = "layouts.yaml/%s" % name
+    block = block if isinstance(block, dict) else {}
+    unknown = sorted(set(block) - LAYOUT_FIELDS)
+    if unknown:
+        f.add(where, "unknown layout field(s) %s (known: %s)"
+              % (", ".join(unknown), ", ".join(sorted(LAYOUT_FIELDS))))
+    if not block.get("source"):
+        f.add(where, "a layout names its source: the author's repo, commit and function")
+    constants = block.get("constants")
+    if not isinstance(constants, dict):
+        f.add(where, "constants is a mapping of knob to value")
+        constants = {}
+    kind = block.get("kind")
+    if "kind" in block and kind not in LAYOUT_KINDS:
+        f.add(where, "layout kind %r must be one of %s, or absent"
+              % (kind, ", ".join(LAYOUT_KINDS)))
+    if kind == "joint" and "affixes" in block:
+        f.add(where, "a joint layout declares no affixes: it writes its turns itself")
+    elif "affixes" in block:
+        want = LAYOUT_AFFIXES + ((LAYOUT_BARE_AFFIX,)
+                                 if constants.get("system_turn") is False else ())
+        missing = [a for a in want if a not in (block["affixes"] or {})]
+        if missing:
+            f.add(where, "declared affixes are all or none; missing %s"
+                  % ", ".join(missing))
+
+
+def check_layouts(models, layouts, f):
+    """Every block is well formed, and every name a model uses has one."""
+    table = (layouts or {}).get("layouts") or {}
+    for name, block in table.items():
+        check_layout(name, block, f)
+    for repo, m in ((models or {}).get("models") or {}).items():
+        r = m.get("readout") if isinstance(m, dict) else None
+        r = r if isinstance(r, dict) else {}
+        head = r.get("head") if isinstance(r.get("head"), dict) else {}
+        for name in (r.get("layout"), head.get("name")):
+            if name and name not in table:
+                f.add(repo, "readout names %r, which is not in layouts.yaml (known: %s)"
+                      % (name, ", ".join(sorted(table))))
 
 
 # a model of another kind that MEASURED as a good decision model, which puts it
@@ -1300,6 +1410,10 @@ def main():
     facts = load(args.facts) if args.facts else capture("model-facts")
     facts = facts or {}
     check_registry(models, sampling, f)
+    # a registry that names no layout needs no table, so a missing file is an
+    # empty one and a name still fails for having nothing to resolve against
+    layouts = os.path.join(args.registry, "layouts.yaml")
+    check_layouts(models, load(layouts) if os.path.exists(layouts) else {}, f)
     # an overlap silently inflates one model and empties another, and neither
     # shows up as a wrong number anywhere downstream, so it fails rather than
     # printing: CONTRIBUTING.md has warned about it since ling 3.0 tiny

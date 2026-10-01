@@ -81,7 +81,20 @@ crispasr -m voxcpm2-q4_k.gguf \
 | `voxcpm2-f16.gguf` | 4.63 GB | F16 weights (full precision) |
 | `voxcpm2-q4_k.gguf` | ~1.5 GB | Q4_K quantized (faster, slightly lower quality) |
 | `voxcpm2-q8_0.gguf` | 2.83 GB | Q8_0 quantized (near-F16 quality) |
+| `voxcpm2-q8_0-locdit-f16.gguf` | 3.03 GB | Q8_0 with the LocDiT diffusion head kept in F16 — fastest on Vulkan GPUs (see below) |
 | `voxcpm2-ref.gguf` | 371 KB | Reference activation dump for numerical validation |
+
+### Which file on a Vulkan GPU?
+
+On Vulkan, the diffusion head (CFM, ~80% of synthesis time at the default 10 steps) is
+compute-bound in small matrix multiplications, and GPU matrix engines run those fastest
+from F16 weights. The 2B text model, on the other hand, is bandwidth-bound and prefers
+q8_0. `voxcpm2-q8_0-locdit-f16.gguf` combines the two. Measured on a T4 under Vulkan:
+CFM per audio step 70.2 → 59.4 ms at 10 steps, and 46.7 ms with
+`CRISPASR_VOXCPM2_INFERENCE_STEPS=8`. Full F16 was slower overall. Built with
+`crispasr-quantize voxcpm2-f16.gguf out.gguf q8_0 --tensor-type "^locdit\.=f16"`; a CPU
+synthesis round-trips through ASR exactly
+([CrispASR#461](https://github.com/CrispStrobe/CrispASR/issues/461)).
 
 ## Numerical Validation
 

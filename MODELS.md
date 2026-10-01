@@ -184,17 +184,17 @@ verdict.
 | 11 | solar open2 250b | Q2_K | 88.9 | 144k | 62% | **57.9** |
 | 12 | ling 3.0 flash | AD-Q6_K | 100.1 | 256k | 62% | **57.2** |
 | 13 | qwen3.5-27b | UD-Q8_K_XL | 33.3 | 256k | 29% | **57.0** |
-| 14 | gemma 4 31b | UD-Q8_K_XL | 32.6 | 256k | 100% | **53.7** |
+| 14 | gemma 4 31b | UD-Q8_K_XL | 32.6 | 256k | 100% | **53.6** |
 | 15 | qwen3.5 122b a10b | UD-Q6_K_XL | 106.0 | 256k | 76% | **53.6** |
 | 16 | mistral medium 3.5 | UD-Q4_K_XL | 70.5 | 132k | 71% | **52.6** |
 | 17 | step 3.7 flash | UD-Q4_K_S | 106.3 | 205k | 76% | **50.9** |
 | 18 | glm-4.5-air | Q6_K | 92.2 | 128k | 24% | **47.4** |
-| 19 | qwen3.5-35b-a3b | UD-Q8_K_XL | 45.3 | 256k | 29% | **47.2** |
+| 19 | qwen3.5-35b-a3b | UD-Q8_K_XL | 45.3 | 256k | 29% | **47.3** |
 | 20 | qwen3.5 397b a17b | UD-IQ2_XXS | 107.0 | 256k | 100% | **46.4** |
 | 21 | k2 horizon mova 36b a4b | Q8_0 | 37.1 | 420k | 33% | **45.9** |
-| 22 | minimax-m2.5 | UD-Q2_K_XL | 80.0 | 148k | 43% | **45.7** |
+| 22 | minimax-m2.5 | UD-Q2_K_XL | 80.0 | 148k | 43% | **45.8** |
 | 23 | gemma 4 26b a4b | UD-Q8_K_XL | 25.7 | 256k | 90% | **45.2** |
-| 24 | gemma 4 12b | UD-Q8_K_XL | 12.7 | 256k | 38% | **44.8** |
+| 24 | gemma 4 12b | UD-Q8_K_XL | 12.7 | 256k | 38% | **44.9** |
 | 25 | qwen3.6 35b a3b | UD-Q8_K_XL | 36.4 | 256k | 90% | **44.7** |
 | 26 | qwen3 coder next | UD-Q8_K_XL | 80.4 | 256k | 71% | **44.7** |
 | 27 | qwen3.5-4b | UD-Q8_K_XL | 5.7 | 256k | 38% | **42.1** |
@@ -202,7 +202,7 @@ verdict.
 | 29 | g9v3 3b | Q8_0 | 3.0 | 128k | 29% | **37.1** |
 | 30 | granite 4.2 30b | Q8_0 | 29.0 | 128k | 71% | **36.1** |
 | 31 | qwen3.5-9b | UD-Q8_K_XL | 12.3 | 256k | 67% | **35.1** |
-| 32 | gemma-4-e4b-it | UD-Q8_K_XL | 8.1 | 128k | 38% | **34.3** |
+| 32 | gemma-4-e4b-it | UD-Q8_K_XL | 8.1 | 128k | 38% | **34.4** |
 | 33 | qwen3.5-2b | UD-Q8_K_XL | 2.7 | 256k | 38% | **34.1** |
 | 34 | k2 horizon 7b | Q8_0 | 8.9 | 512k | 29% | **33.6** |
 | 35 | nemotron 3.5 lightning | Q8_0 | 32.6 | 256k | 67% | **32.1** |
@@ -570,7 +570,7 @@ so picking one here and picking it on screen give the same answer.
 | weighting | top four |
 |---|---|
 | balanced ranking | **qwen3.8 flash next 80.7** > qwen3.8 27b 77.4 > glm-5.3-flash 71.2 > deepseek v4 flash 0731 67.7 |
-| writing code | **qwen3.8 27b 74.5** > qwen3.8 flash next 73.7 > minimax m2.7 68.8 > qwen3.5-27b 66.9 |
+| writing code | **qwen3.8 27b 74.5** > qwen3.8 flash next 73.8 > minimax m2.7 68.8 > qwen3.5-27b 66.9 |
 | agentic and tool use | **glm-5.3-flash 78.7** > qwen3.8 flash next 77.9 > qwen3.8 27b 77.8 > qwen3.6 27b 77.3 |
 | third-party measurement only | **qwen3.8 flash next 82.5** > qwen3.8 27b 77.6 > glm-5.3-flash 72.5 > deepseek v4 flash 0731 68.8 |
 | what people report | **muse glimmer 85.5** > glm-4.5-air 83.6 > qwen3.5 122b a10b 83.1 > qwen3.8 27b 80.5 |
@@ -692,50 +692,50 @@ adjusting them would be extrapolation.
 | deepseek v4 flash 0731 | **67.7** | 44.5 | 69.5 | 0.353 | 1436 | 34.0 | 4.1 | 54 | 100% |
 | minimax m2.7 | **65.9** | 46.1 | 50.9 | 0.275 | 1415 | 47.7 | 2.7 | - | 95% |
 | mimo v2.6 flash | **65.0** | 43.3 | - | 0.505 | 1454 | - | 0.9 | 73 | 62% |
-| qwen3.6 27b | **64.6** | 42.5 | 60.2 | 0.354 | - | 34.1 | 3.5 | 72 | 90% |
+| qwen3.6 27b | **64.6** | 42.5 | 60.2 | 0.354 | - | 34.1 | 3.5 | 73 | 90% |
 | muse glimmer | **63.5** | 44.5 | 51.2 | 0.320 | 1425 | - | 5.3 | - | 86% |
 | inkling small | **61.4** | 45.7 | 50.7 | - | 1405 | - | 2.5 | - | 71% |
 | mimo v2.5 | **58.2** | 38.0 | 55.1 | 0.438 | 1434 | - | 3.1 | - | 86% |
 | solar open2 250b | **57.9** | 44.6 | 41.1 | - | - | - | - | - | 62% |
 | ling 3.0 flash | **57.2** | 41.5 | 54.8 | - | - | - | 1.8 | - | 62% |
-| qwen3.5-27b | **57.0** | - | - | - | 1409 | 58.4 | 2.8 | 66 | 29% |
-| gemma 4 31b | **53.7** | 45.1 | 43.1 | 0.105 | 1453 | 22.2 | 4.6 | 67 | 100% |
+| qwen3.5-27b | **57.0** | - | - | - | 1409 | 58.4 | 2.8 | 65 | 29% |
+| gemma 4 31b | **53.6** | 45.1 | 43.1 | 0.105 | 1453 | 22.2 | 4.6 | 67 | 100% |
 | qwen3.5 122b a10b | **53.6** | 39.3 | 47.0 | - | 1416 | - | 4.8 | 68 | 76% |
 | mistral medium 3.5 | **52.6** | 39.1 | 49.3 | - | 1427 | - | 1.6 | - | 71% |
 | step 3.7 flash | **50.9** | 42.6 | 38.2 | 0.230 | - | - | 1.9 | - | 76% |
 | glm-4.5-air | **47.4** | - | - | - | 1373 | 32.4 | 4.3 | - | 24% |
-| qwen3.5-35b-a3b | **47.2** | - | - | - | 1394 | 30.6 | 2.9 | 54 | 29% |
-| qwen3.5 397b a17b | **46.4** | 35.5 | 40.6 | 0.204 | 1442 | 47.4 | 2.8 | 73 | 100% |
+| qwen3.5-35b-a3b | **47.3** | - | - | - | 1394 | 30.6 | 2.9 | 54 | 29% |
+| qwen3.5 397b a17b | **46.4** | 35.5 | 40.6 | 0.204 | 1442 | 47.4 | 2.8 | 72 | 100% |
 | k2 horizon mova 36b a4b | **45.9** | 39.7 | - | - | - | - | 0.7 | - | 33% |
-| minimax-m2.5 | **45.7** | - | - | 0.216 | 1391 | 43.7 | 2.3 | 45 | 43% |
+| minimax-m2.5 | **45.8** | - | - | 0.216 | 1391 | 43.7 | 2.3 | 45 | 43% |
 | gemma 4 26b a4b | **45.2** | 39.7 | 38.6 | 0.095 | 1437 | - | 3.4 | 52 | 90% |
-| gemma 4 12b | **44.8** | - | 27.1 | - | - | - | 3.7 | 37 | 38% |
+| gemma 4 12b | **44.9** | - | 27.1 | - | - | - | 3.7 | 37 | 38% |
 | qwen3.6 35b a3b | **44.7** | 36.2 | 44.5 | 0.255 | - | 29.8 | 3.8 | 62 | 90% |
 | qwen3 coder next | **44.7** | 35.9 | 37.8 | - | - | 47.3 | 3.0 | - | 71% |
-| qwen3.5-4b | **42.1** | - | 25.7 | - | - | - | 3.3 | 30 | 38% |
-| nemotron 3 super | **38.3** | 35.8 | 38.1 | - | 1361 | - | 1.2 | 50 | 76% |
+| qwen3.5-4b | **42.1** | - | 25.7 | - | - | - | 3.3 | 31 | 38% |
+| nemotron 3 super | **38.3** | 35.8 | 38.1 | - | 1361 | - | 1.2 | 51 | 76% |
 | g9v3 3b | **37.1** | - | 5.9 | - | - | - | - | - | 29% |
 | granite 4.2 30b | **36.1** | 37.5 | 26.3 | - | 1340 | - | - | - | 71% |
-| qwen3.5-9b | **35.1** | 29.3 | 29.0 | - | - | - | 2.7 | 38 | 67% |
-| gemma-4-e4b-it | **34.3** | - | 1.9 | - | - | - | 3.2 | 22 | 38% |
+| qwen3.5-9b | **35.1** | 29.3 | 29.0 | - | - | - | 2.7 | 39 | 67% |
+| gemma-4-e4b-it | **34.4** | - | 1.9 | - | - | - | 3.2 | 23 | 38% |
 | qwen3.5-2b | **34.1** | - | 3.0 | - | - | - | 2.2 | 18 | 38% |
 | k2 horizon 7b | **33.6** | 27.3 | - | - | - | - | - | - | 29% |
-| nemotron 3.5 lightning | **32.1** | 31.8 | 24.1 | - | - | - | 2.0 | 33 | 67% |
+| nemotron 3.5 lightning | **32.1** | 31.8 | 24.1 | - | - | - | 2.0 | 34 | 67% |
 | phi-4 mini | **31.7** | - | 0.4 | - | - | - | 0.8 | - | 33% |
 | nanbeige4.1 3b | **31.6** | - | 1.1 | - | - | - | 0.0 | 30 | 38% |
-| gemma-4-e2b-it | **31.3** | - | 0.4 | - | - | - | 3.1 | 14 | 38% |
+| gemma-4-e2b-it | **31.3** | - | 0.4 | - | - | - | 3.1 | 13 | 38% |
 | ling 3.0 tiny | **31.2** | 24.0 | 27.5 | - | - | - | 0.0 | - | 62% |
 | gpt-oss-20b | **30.6** | 38.9 | 13.9 | - | 1318 | 9.4 | 4.8 | - | 81% |
 | granite 4.1 3b | **30.5** | - | 1.1 | - | - | - | 0.0 | - | 33% |
 | gpt-oss-120b | **29.7** | 34.0 | 26.2 | 0.221 | 1352 | 26.8 | 3.6 | - | 95% |
 | minicpm-v 4.6 | **29.7** | - | 0.0 | - | - | - | - | - | 33% |
-| qwen3.5-0.8b | **27.4** | - | 0.0 | - | - | - | 2.5 | 3 | 38% |
+| qwen3.5-0.8b | **27.4** | - | 0.0 | - | - | - | 2.5 | 2 | 38% |
 | granite 4.2 8b | **26.2** | 31.2 | 18.2 | - | 1288 | - | - | - | 71% |
 | minicpm5 2b | **24.9** | 26.0 | 8.5 | - | - | - | 0.8 | 23 | 67% |
 | granite 4.2 3b | **22.2** | 25.1 | 13.7 | - | 1289 | - | - | - | 71% |
 | lfm2.5 2.6b | **20.3** | 14.2 | 4.5 | - | - | - | 0.8 | 21 | 67% |
 | ministral 3 3b | **16.4** | 15.1 | 0.0 | - | - | - | 1.0 | - | 62% |
-| bonsai 2 27b | **-** | - | - | - | - | - | 2.0 | 75 | 10% |
+| bonsai 2 27b | **-** | - | - | - | - | - | 2.0 | 74 | 10% |
 | bonsai 27b | **-** | - | - | - | - | - | 3.1 | - | 5% |
 | fara 1.5 27b | **-** | - | - | - | - | - | - | - | 5% |
 | gemma 4 12b agentic | **-** | - | - | - | - | - | - | - | 5% |
@@ -751,10 +751,10 @@ adjusting them would be extrapolation.
 | nemotron-3-nano-30b-a3b | **-** | - | - | - | 1314 | - | 0.0 | 33 | 19% |
 | ornith 1.0 35b | **-** | - | - | - | - | - | 0.0 | 48 | 10% |
 | ornith 1.5 35b a3b | **-** | - | - | - | - | - | 1.0 | 54 | 10% |
-| ornith 1.5 9b | **-** | - | - | - | - | - | 2.1 | 42 | 10% |
+| ornith 1.5 9b | **-** | - | - | - | - | - | 2.1 | 43 | 10% |
 | ornith-1.0-9b | **-** | - | - | - | - | - | 2.1 | 20 | 10% |
 | qwen-agentworld 35b a3b | **-** | - | - | - | - | - | - | - | 5% |
-| qwen3-4b-thinking | **-** | - | - | - | - | - | - | 23 | 10% |
+| qwen3-4b-thinking | **-** | - | - | - | - | - | - | 22 | 10% |
 | qwen3-coder-30b-a3b-instruct | **-** | - | - | - | - | 21.9 | 3.8 | - | 14% |
 | qwen3-vl-4b | **-** | - | - | - | - | - | 0.7 | - | 5% |
 | qwen3.5-4b-base | **-** | - | - | - | - | - | - | - | 0% |
@@ -1618,7 +1618,7 @@ here.
 - **use for** on-device chat, phone and edge deployment
 - **avoid for** coding, science / reasoning, agentic / tool use
 - **runs at** UD-Q8_K_XL, 4.9 gib, 3/7 of the weighted factors measured it
-- **evidence** aa.gpqa p20; card.mmlu p18; aa.ifbench p39
+- **evidence** aa.gpqa p20; card.mmlu p17; aa.ifbench p39
 - **confidence in that evidence** medium
 
 #### 39. ling 3.0 tiny
@@ -1835,7 +1835,7 @@ benchmark table instead of a claim.
 - **use for** a 27b that runs on one consumer card, experiments in extreme quantization
 - **avoid for** anything on a stock llama.cpp build, work where the numbers have to be somebody else's
 - **runs at** PQ2_0, 6.7 gib, 2/7 of the weighted factors measured it
-- **evidence** card.aime p86; card.livecodebench p89; card.mmlu p87; vendor-reported only: no third-party suite carries it; no forum mentions in this corpus
+- **evidence** card.aime p86; card.livecodebench p89; card.mmlu p79; vendor-reported only: no third-party suite carries it; no forum mentions in this corpus
 - **confidence in that evidence** low
 
 released two days before this assessment, so no board scores it and no forum
@@ -2164,10 +2164,10 @@ size, and nobody has checked a single number.
 - **use for** agentic coding at 9b, trying the family before committing 35
 - **avoid for** anything where the claim needs to be independently checked, work its 35b sibling is reported failing at
 - **runs at** Q8_0, 9.1 gib, 2/7 of the weighted factors measured it
-- **evidence** card.gpqa 85.4 p70; card.swebench_verified 53.4 p31; card.terminalbench 46 p34; card.swebench_pro 46.5 p23; reddit 5 mentions at 100% approval
+- **evidence** card.gpqa 85.4 p72; card.swebench_verified 53.4 p31; card.terminalbench 46 p34; card.swebench_pro 46.5 p23; reddit 5 mentions at 100% approval
 - **confidence in that evidence** low
 
-card.gpqa 85.4 p70 is the outlier, high in the registry from a model a
+card.gpqa 85.4 p72 is the outlier, high in the registry from a model a
 quarter the size of what it is compared against, on the facet
 analyze-self-report finds cards inflate most. the coding claims are the sober
 ones -- card.swebench_pro p23, card.terminalbench p34 -- and those are the
@@ -3042,7 +3042,7 @@ the way a model is supposed to: AA scored it.
 | qwen3.5-4b-base | Q8_0 | 4.2 | 4.66b / ? | - | - | the static ladder. there is no unsloth repo and no MTP build of a pretrain, so no UD rungs and no drafter -- and a base model has nothing to draft, since nothing here scores one |
 | qwen3 8b | UD-Q8_K_XL, context short of the view | 10.1 | 8.19b / ? | 91,918 | 155 | the dense 8b of the original qwen3 release, carried as the base `prism-ml/Ternary-Bonsai-8B` was built from rather than as something to run -- its own card names it https://huggingface.co/prism-ml/Ternary-Bonsai-8B-gguf. the generations above it are the reason: qwen3.5-9b is the same size class two releases later. |
 | signal 3.8 27b | Q8_0 | 27.1 | 27.78b / ? | 24,252 | 98 | a minimally invasive fine-tune of qwen3.8-27b for token efficiency https://huggingface.co/agentionai/Signal-3.8-27B-GGUF: 57% fewer answer tokens and 52% fewer thinking tokens on the publisher's held-out prompt set, at matched or better quality -- 98.3% against 98.3% on gsm8k with thinking off and 95.0% against 92.5% with it on. the mechanism is stated plainly and is checkable: preambles go from 13% of answers to 0%, markdown headers from 47% to 18%. THE NUMBERS ARE THE PUBLISHER'S AND THEY SAY SO. the card notes the percentages were measured on the FIRST release and that the 2026-09-13 weights "trade a little of that reduction for stability", with the re-measurement still in progress. so the direction is well evidenced and the magnitude is provisional by the publisher's own account. the second claim is the more interesting one for a host: qwen3.8-27b ships an MTP draft head, and a terser model is a more predictable one, so draft acceptance rises from 72% to 94% on structured output at draft 3. that is a speedup on top of the shorter answers and it compounds -- which is also why the sampling block matters here more than usual. the card is unusually direct about it: without min-p "long answers can run away into repetition on some draws", on signal and on the base model alike. |
-| signal 3.8 flash next | AP-IQ4_XS | 84.2 | ? / ? | 13,324 | 25 | the cheaper of the two rungs pinned here, 84.24 gib against the 94.20 gib above it: IQ3_S on the experts' gate and up where that one puts Q4_K, and otherwise the recipe unsloth ships as UD-IQ4_XS over the base weights -- 87.25 gib is the same file with Q8_0 rather than Q6_K on the attention, ssm and embedding tensors, five layers of down projections, and IQ4_XS on one layer of gate and up. what every tier of this ladder is actually made of is on the base entry, and the tier names describe none of them |
+| signal 3.8 flash next | AP-IQ4_XS | 84.2 | ? / ? | 13,540 | 26 | the cheaper of the two rungs pinned here, 84.24 gib against the 94.20 gib above it: IQ3_S on the experts' gate and up where that one puts Q4_K, and otherwise the recipe unsloth ships as UD-IQ4_XS over the base weights -- 87.25 gib is the same file with Q8_0 rather than Q6_K on the attention, ssm and embedding tensors, five layers of down projections, and IQ4_XS on one layer of gate and up. what every tier of this ladder is actually made of is on the base entry, and the tier names describe none of them |
 | mimo v2.6 distill 9b | Q8_0 | 8.9 | 9.41b / ? | 205,179 | 114 | the top of bartowski's quantized rungs at 8.89 gib and 8.52 bpw |
 | ornith 1.0 35b | UD-Q8_K_XL | 35.6 | 35b / ? | 22,390 | 150 | qwen3.5-moe architecture despite the bare 35B in the name, and the vendor publishes no active parameter count, so its speed cannot be estimated. the card https://huggingface.co/unsloth/Ornith-1.0-35B-GGUF announces "a self-improving family of open-source models for agentic coding" and no numbers this corpus can join to. |
 | ornith-1.0-9b | Q8_0 | 8.9 | 9b / ? | 447,694 | 63 | the dense sibling of the 35b, from the same announcement -- "a self-improving family of open-source models for agentic coding" https://huggingface.co/unsloth/Ornith-1.0-9B-GGUF. no third-party suite carries either of them; the hub download count is the only evidence there is. |
@@ -3057,7 +3057,7 @@ the way a model is supposed to: AA scored it.
 | fara 1.5 27b | Q8_0 | 26.7 | 27.36b / ? | 121,353 | 11 | 26.70 gib, plus the mmproj beside it -- the screenshots are the input, so the vision sidecar is not optional for this one |
 | bonsai 27b | Q1_0 | 3.5 | 27.36b / ? | 431,546 | 880 | a qwen3.6-27b derivative, and the unpacked config confirms the shape: 64 layers, 5120 wide, 4 kv heads at head_dim 256, and the same hybrid stack of 48 linear attention layers to 16 full. the gguf repo publishes two rungs and nothing between them: Q1_0 at 1.13 bpw and F16 at 16.00 bpw. |
 | ternary bonsai 27b | Q2_G64 | 7.1 | 27.36b / ? | 633,562 | 1404 | ternary weights https://huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf, which the bits-per-weight retention curve does not model, so any quant-adjusted score for it would be an extrapolation rather than a fit. |
-| bonsai 2 27b | PQ2_0 | 6.7 | 27b / ? | 3,581,027 | 2258 | the same weights in the packing that unpacks cheaper, 6.71 gib against 5.54 gib, and the one prism measured on apple silicon |
+| bonsai 2 27b | PQ2_0 | 6.7 | 27b / ? | 3,766,691 | 2331 | the same weights in the packing that unpacks cheaper, 6.71 gib against 5.54 gib, and the one prism measured on apple silicon |
 | gemma 4 12b coder | Q8_0 | 11.8 | 11.96b / ? | 433,105 | 2915 | five rungs off one 12b dense base, q2_k through q8_0. q8 is 11.80 gib, which the card calls "basically full quality" https://huggingface.co/yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1-GGUF, against "near-lossless" for q6_k at 9.11 gib and "the sweet spot" for q4_k_m at 6.87 gib, so the top rung buys little. early copies misreported the window: every quant was re-patched to the "full 256K context" after shipping at 131k, so a copy from before that reads short |
 | gemma 4 12b agentic | Q8_0 | 11.8 | 11.96b / ? | 709,077 | 1623 | four rungs, q3_k_m through q8_0 -- the author withheld q2_k as failing his own stress test, which is on the card https://huggingface.co/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF and nowhere else. needs --jinja to parse the native tool format, and rep_pen 1.1 to stop the repeated-zeroes failure his pinned discussion attributes to sampler defaults |
 | ternary bonsai 8b | Q2_0_G64, context short of the view | 2.1 | 8.19b / ? | 369,407 | 163 | the 8b rung of the ternary line https://huggingface.co/prism-ml/Ternary-Bonsai-8B-gguf, from qwen3-8b rather than the qwen3.6-27b its 27b siblings derive from. unlike them it DOES publish base weights, which is why this is keyed on the unpacked repo where they are keyed on their gguf. ternary weights, so the bits-per-weight retention curve does not model it and any quant-adjusted score for it is an extrapolation rather than a fit. the template in its gguf header, which is the one llama.cpp loads, closes the reasoning block unconditionally where the 27b gates it on enable_thinking -- this rung ships with no way to turn thinking on, which is why it carries no thinking knob here. |
@@ -3331,7 +3331,7 @@ takes images in, according to its own config
 | 1 | kimi k3 | UD-Q1_0 unsloth, over the box | 434.3 | llama.cpp, vllm | 81% | **90.5** |
 | 2 | qwen3.8 flash next | AP-Q5_K_XL agentionai | 112.5 | llama.cpp, vllm | 67% | **80.7** |
 | 3 | qwen3.8 27b | UD-Q8_K_XL unsloth | 29.3 | gufo, llama.cpp, vllm | 90% | **77.4** |
-| 4 | deepseek v4.1 flash | IQ2_XXS-mixed apetersson, over the box | 157.3 | llama.cpp, vllm | 52% | **73.4** |
+| 4 | deepseek v4.1 flash | IQ2_XXS-mixed apetersson, over the box | 157.3 | llama.cpp, vllm | 52% | **73.6** |
 | 5 | minimax m3 | UD-IQ1_M unsloth, over the box | 119.6 | llama.cpp, vllm | 95% | **71.7** |
 | 6 | glm-5.3-flash | UD-IQ1_M unsloth | 90.9 | llama.cpp, vllm | 86% | **71.2** |
 | 7 | inkling | UD-IQ1_S unsloth, over the box | 251.6 | llama.cpp, vllm | 86% | **69.2** |
@@ -3341,18 +3341,18 @@ takes images in, according to its own config
 | 11 | inkling small | UD-IQ3_XXS unsloth | 91.2 | llama.cpp, vllm | 71% | **61.4** |
 | 12 | mimo v2.5 | UD-Q2_K_XL unsloth | 95.9 | llama.cpp, vllm | 86% | **58.2** |
 | 13 | qwen3.5-27b | UD-Q8_K_XL unsloth | 33.3 | llama.cpp, vllm | 29% | **57.0** |
-| 14 | gemma 4 31b | UD-Q8_K_XL unsloth | 32.6 | llama.cpp, vllm | 100% | **53.7** |
+| 14 | gemma 4 31b | UD-Q8_K_XL unsloth | 32.6 | llama.cpp, vllm | 100% | **53.6** |
 | 15 | qwen3.5 122b a10b | UD-Q6_K_XL unsloth | 106.0 | llama.cpp, vllm | 76% | **53.6** |
 | 16 | mistral medium 3.5 | UD-Q4_K_XL unsloth | 70.5 | llama.cpp, vllm | 71% | **52.6** |
 | 17 | step 3.7 flash | UD-Q4_K_S unsloth | 106.3 | llama.cpp, vllm | 76% | **50.9** |
-| 18 | qwen3.5-35b-a3b | UD-Q8_K_XL unsloth | 45.3 | llama.cpp, vllm | 29% | **47.2** |
+| 18 | qwen3.5-35b-a3b | UD-Q8_K_XL unsloth | 45.3 | llama.cpp, vllm | 29% | **47.3** |
 | 19 | qwen3.5 397b a17b | UD-IQ2_XXS unsloth | 107.0 | llama.cpp, vllm | 100% | **46.4** |
 | 20 | gemma 4 26b a4b | UD-Q8_K_XL unsloth | 25.7 | llama.cpp, vllm | 90% | **45.2** |
-| 21 | gemma 4 12b | UD-Q8_K_XL unsloth | 12.7 | llama.cpp, vllm | 38% | **44.8** |
+| 21 | gemma 4 12b | UD-Q8_K_XL unsloth | 12.7 | llama.cpp, vllm | 38% | **44.9** |
 | 22 | qwen3.6 35b a3b | UD-Q8_K_XL unsloth | 36.4 | llama.cpp, vllm | 90% | **44.7** |
 | 23 | qwen3.5-4b | UD-Q8_K_XL unsloth | 5.7 | llama.cpp, vllm | 38% | **42.1** |
 | 24 | qwen3.5-9b | UD-Q8_K_XL unsloth | 12.3 | llama.cpp, vllm | 67% | **35.1** |
-| 25 | gemma-4-e4b-it | UD-Q8_K_XL unsloth | 8.1 | llama.cpp, vllm | 38% | **34.3** |
+| 25 | gemma-4-e4b-it | UD-Q8_K_XL unsloth | 8.1 | llama.cpp, vllm | 38% | **34.4** |
 | 26 | qwen3.5-2b | UD-Q8_K_XL unsloth | 2.7 | llama.cpp, vllm | 38% | **34.1** |
 | 27 | gemma-4-e2b-it | UD-Q8_K_XL unsloth | 4.9 | llama.cpp, vllm | 38% | **31.3** |
 | 28 | minicpm-v 4.6 | Q8_0 openbmb | 0.8 | llama.cpp, vllm | 33% | **29.7** |
@@ -3409,12 +3409,12 @@ several things
 | 24 | parakeet-tdt-0.6b-v2 | Q8_0 cstr | 0.6 | crispasr | 79% | **48.4** |
 | 25 | omniasr-llm | Q4_K cstr | 1.0 | crispasr | 26% | **48.1** |
 | 26 | distil-whisper-v3.5 | - | - | - | 47% | **45.4** |
-| 27 | gemma 4 12b | UD-Q8_K_XL unsloth | 12.7 | llama.cpp, vllm | 38% | **44.8** |
+| 27 | gemma 4 12b | UD-Q8_K_XL unsloth | 12.7 | llama.cpp, vllm | 38% | **44.9** |
 | 28 | kyutai-stt-2.6b | - | - | crispasr | 47% | **41.9** |
 | 29 | vibevoice-asr | Q8_0 cstr | 8.8 | crispasr | 47% | **39.8** |
 | 30 | canary-1b-v2 | Q8_0 cstr | 1.0 | crispasr | 47% | **38.5** |
 | 31 | funasr | Q4_K cstr | 0.8 | crispasr | 47% | **36.7** |
-| 32 | gemma-4-e4b-it | UD-Q8_K_XL unsloth | 8.1 | llama.cpp, vllm | 38% | **34.3** |
+| 32 | gemma-4-e4b-it | UD-Q8_K_XL unsloth | 8.1 | llama.cpp, vllm | 38% | **34.4** |
 | 33 | parakeet-ctc-1.1b | Q8_0 cstr | 1.1 | crispasr | 47% | **33.4** |
 | 34 | parakeet-ctc-0.6b | Q8_0 cstr | 0.6 | crispasr | 47% | **31.6** |
 | 35 | gemma-4-e2b-it | UD-Q8_K_XL unsloth | 4.9 | llama.cpp, vllm | 38% | **31.3** |
@@ -3545,12 +3545,14 @@ generated. jevbench rates them, and its calibration axis is the only one here
 | 3 | decider-4b | Q8_0 Mapika | 4.2 | llama.cpp | 100% | **51.3** |
 | 4 | standardone-8b | Q8_0 StandardThinking | 8.4 | llama.cpp | 95% | **48.4** |
 | 5 | decider-35b-a3b | Q8_0 mradermacher | 34.4 | llama.cpp | 95% | **44.9** |
-| 6 | gemma 4 12b | UD-Q8_K_XL unsloth | 12.7 | llama.cpp, vllm | 38% | **44.8** |
+| 6 | gemma 4 12b | UD-Q8_K_XL unsloth | 12.7 | llama.cpp, vllm | 38% | **44.9** |
 | 7 | qwen3.5-4b | UD-Q8_K_XL unsloth | 5.7 | llama.cpp, vllm | 38% | **42.1** |
 | 8 | qwen3.5-9b | UD-Q8_K_XL unsloth | 12.3 | llama.cpp, vllm | 67% | **35.1** |
-| 9 | gemma-4-e4b-it | UD-Q8_K_XL unsloth | 8.1 | llama.cpp, vllm | 38% | **34.3** |
+| 9 | gemma-4-e4b-it | UD-Q8_K_XL unsloth | 8.1 | llama.cpp, vllm | 38% | **34.4** |
 | 10 | decider-2b | Q8_0 Mapika | 1.9 | llama.cpp | 100% | **9.6** |
-| 11 | jevk5 4b | Q8_0 alibiserikbay | 4.2 | llama.cpp | 0% | **-** |
+| 11 | clef | Q8_0 abenzerps | 26.6 | llama.cpp | 0% | **-** |
+| 12 | clef-flash | Q8_0 bartowski | 8.9 | llama.cpp | 0% | **-** |
+| 13 | jevk5 4b | Q8_0 alibiserikbay | 4.2 | llama.cpp | 0% | **-** |
 
 ### diarization
 

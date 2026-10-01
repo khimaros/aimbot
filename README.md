@@ -40,6 +40,8 @@ registry/models.yaml      per-model facts, keyed by huggingface base repo. the
                           key is what every capture joins on, so `make lint`
                           rejects an entry keyed on a conversion of itself
 registry/sampling.yaml    the named sampling profiles, and what each one means
+registry/layouts.yaml     the prompt bytes a decision model is asked in, by the
+                          layout name its `readout:` carries
 registry/dashboard.yaml   what the dashboard opens with: the composite weights,
                           the named weightings, the assumed box, the quant
                           ladder's ceiling and floor, the column order
@@ -59,7 +61,8 @@ scripts/viewer.html       the half of the page that needs a dom
 scripts/pageboot.py       boot the built page under node; the e2e test and
                           dashboard-table read the same boot
 scripts/aimbot            query the roster from a terminal, through roster.js
-docs/                     the github pages site: index.html and data.json
+docs/                     the github pages site: index.html and data.json, and
+                          layouts.json, the layout table as json for verdict
 research/                 the collectors and analysis (see research/README.md)
 research/data/            committed point-in-time captures
 research/data/usecase.json       every measurement per model, with a ref each

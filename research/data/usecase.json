@@ -451,6 +451,180 @@
     }
    }
   },
+  "Cloudflare/clef": {
+   "assessed": {
+    "assessed_on": "2026-10-01",
+    "avoid_for": [
+     "llama-server: nothing published applies the joint head to a gguf, and it wants the output embedding matrix as well as every hidden state",
+     "chat through either gguf, which is what both quantizers' cards show and what the vendor's card never does",
+     "reading the card's table as a ranking: it is the vendor's own run of the vendor's own suite"
+    ],
+    "confidence": "low",
+    "evidence": [
+     "the card's decision index and typesafe workflow tables, both run by the vendor",
+     "`joint_schema_model.py` in the base repo, which is the encoder, the head and the only caller",
+     "two third-party gguf repos, neither carrying the head or a decision readout",
+     "no forum prose: a day old"
+    ],
+    "notes": "carried and not served. the weights load on stock llama.cpp as qwen35, and that is the backbone; the readout is a separate six-layer head in the base repo with one torch caller. no independent board has scored it and jevbench has no row, so the only figures are the card's, where its smaller sibling clef-flash is ahead on 18 of 41 benchmarks at a fifth of the median latency.",
+    "one_liner": "a 27b decision model whose answer comes off a transformer head that no gguf of it carries.",
+    "use_for": [
+     "typed decisions over text, images or video through the author's torch script, at bf16",
+     "many questions about one state in one pass, which the head scores jointly"
+    ]
+   },
+   "community": {},
+   "derived": {
+    "best_for": [],
+    "best_languages": [],
+    "weak_for": []
+   },
+   "facets": {
+    "card.gpqa": {
+     "cohort": 34,
+     "group": "card claims",
+     "label": "gpqa",
+     "pct": 16,
+     "raw": 48.0,
+     "ref": {
+      "file": "data/model-cards.json",
+      "id": "Cloudflare/clef",
+      "note": "claimed 48.0, corrected by -1.0",
+      "source": "the model's own card",
+      "url": "https://huggingface.co/Cloudflare/clef"
+     },
+     "unit": "score",
+     "value": 47.0,
+     "vendor_reported": true
+    },
+    "card.mmlu": {
+     "cohort": 21,
+     "group": "card claims",
+     "label": "mmlu",
+     "pct": 83,
+     "raw": 90.3,
+     "ref": {
+      "file": "data/model-cards.json",
+      "id": "Cloudflare/clef",
+      "note": "claimed 90.3, corrected by -1.0",
+      "source": "the model's own card",
+      "url": "https://huggingface.co/Cloudflare/clef"
+     },
+     "unit": "score",
+     "value": 89.3,
+     "vendor_reported": true
+    },
+    "card.mmlu_pro": {
+     "cohort": 24,
+     "group": "card claims",
+     "label": "mmlu pro",
+     "pct": 31,
+     "raw": 65.9,
+     "ref": {
+      "file": "data/model-cards.json",
+      "id": "Cloudflare/clef",
+      "note": "claimed 65.9, corrected by -1.0",
+      "source": "the model's own card",
+      "url": "https://huggingface.co/Cloudflare/clef"
+     },
+     "unit": "score",
+     "value": 64.9,
+     "vendor_reported": true
+    }
+   },
+   "kind": "decision",
+   "languages": [],
+   "name": "clef",
+   "params": {},
+   "tasks": {}
+  },
+  "Cloudflare/clef-flash": {
+   "assessed": {
+    "assessed_on": "2026-10-01",
+    "avoid_for": [
+     "a plain llama-server client: the answer comes off the joint head, which only verdict's port applies to a gguf",
+     "out-of-scope intents and hallucination checks, where the card has it far behind clef",
+     "chat through a gguf, which both quantizers' cards show and the vendor's never does"
+    ],
+    "confidence": "low",
+    "evidence": [
+     "the card's decision index and typesafe workflow tables, both run by the vendor",
+     "`joint_schema_model.py` in the base repo, byte-identical to clef's",
+     "two third-party gguf repos, neither carrying the head or a decision readout",
+     "no forum prose: a day old"
+    ],
+    "notes": "served as an embedding endpoint and read by verdict's port of the joint head, which matches the author's torch head on a fixture and has not been checked against the bf16 backbone. no board row of it is in this repo's captures yet, so the vendor's table is still the only measurement here, and it is uneven rather than uniformly smaller: ahead of clef on the home appliance simulator and cladder, and behind it by thirty points or more on clinc150 and ragtruth. bartowski's ladder is the wider one, built with an imatrix calibrated through the chat template the decision prompt does not use.",
+    "one_liner": "clef at a third of the size and a fifth of the latency, with the same head that no gguf carries.",
+    "use_for": [
+     "the same typed decisions as clef where a 9b backbone is what fits, through verdict on a gguf or the author's torch script",
+     "a first try at the clef readout: the vendor's own table has it ahead of the 27b on 18 of 41 benchmarks"
+    ]
+   },
+   "community": {},
+   "derived": {
+    "best_for": [],
+    "best_languages": [],
+    "weak_for": []
+   },
+   "facets": {
+    "card.gpqa": {
+     "cohort": 34,
+     "group": "card claims",
+     "label": "gpqa",
+     "pct": 19,
+     "raw": 51.0,
+     "ref": {
+      "file": "data/model-cards.json",
+      "id": "Cloudflare/clef-flash",
+      "note": "claimed 51.0, corrected by -1.0",
+      "source": "the model's own card",
+      "url": "https://huggingface.co/Cloudflare/clef-flash"
+     },
+     "unit": "score",
+     "value": 50.0,
+     "vendor_reported": true
+    },
+    "card.mmlu": {
+     "cohort": 21,
+     "group": "card claims",
+     "label": "mmlu",
+     "pct": 88,
+     "raw": 91.8,
+     "ref": {
+      "file": "data/model-cards.json",
+      "id": "Cloudflare/clef-flash",
+      "note": "claimed 91.8, corrected by -1.0",
+      "source": "the model's own card",
+      "url": "https://huggingface.co/Cloudflare/clef-flash"
+     },
+     "unit": "score",
+     "value": 90.8,
+     "vendor_reported": true
+    },
+    "card.mmlu_pro": {
+     "cohort": 24,
+     "group": "card claims",
+     "label": "mmlu pro",
+     "pct": 27,
+     "raw": 65.3,
+     "ref": {
+      "file": "data/model-cards.json",
+      "id": "Cloudflare/clef-flash",
+      "note": "claimed 65.3, corrected by -1.0",
+      "source": "the model's own card",
+      "url": "https://huggingface.co/Cloudflare/clef-flash"
+     },
+     "unit": "score",
+     "value": 64.3,
+     "vendor_reported": true
+    }
+   },
+   "kind": "decision",
+   "languages": [],
+   "name": "clef-flash",
+   "params": {},
+   "tasks": {}
+  },
   "CohereLabs/cohere-transcribe-03-2026": {
    "community": {
     "hackernews": {
@@ -2974,10 +3148,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 5,
+     "pct": 4,
      "raw": 40.1,
      "ref": {
       "file": "data/model-cards.json",
@@ -3025,10 +3199,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 8,
+     "pct": 7,
      "raw": 54.6,
      "ref": {
       "file": "data/model-cards.json",
@@ -3042,10 +3216,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 7,
+     "pct": 6,
      "raw": 37.5,
      "ref": {
       "file": "data/model-cards.json",
@@ -5029,10 +5203,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 61,
+     "pct": 63,
      "raw": 85.2,
      "ref": {
       "file": "data/model-cards.json",
@@ -8945,10 +9119,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 48,
+     "pct": 51,
      "raw": 83.4,
      "ref": {
       "file": "data/model-cards.json",
@@ -9495,10 +9669,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 52,
+     "pct": 54,
      "raw": 83.8,
      "ref": {
       "file": "data/model-cards.json",
@@ -11256,10 +11430,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 11,
+     "pct": 10,
      "raw": 42.7,
      "ref": {
       "file": "data/model-cards.json",
@@ -11307,10 +11481,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 45,
+     "pct": 40,
      "raw": 83.7,
      "ref": {
       "file": "data/model-cards.json",
@@ -11324,10 +11498,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 25,
+     "pct": 23,
      "raw": 61.0,
      "ref": {
       "file": "data/model-cards.json",
@@ -15239,10 +15413,10 @@
      "value": 0
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 2,
+     "pct": 1,
      "raw": 11.9,
      "ref": {
       "file": "data/model-cards.json",
@@ -15290,10 +15464,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 3,
+     "pct": 2,
      "raw": 44.3,
      "ref": {
       "file": "data/model-cards.json",
@@ -15307,7 +15481,7 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
      "pct": 2,
@@ -16106,10 +16280,10 @@
      "value": 0
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 73,
+     "pct": 75,
      "raw": 86.6,
      "ref": {
       "file": "data/model-cards.json",
@@ -16191,10 +16365,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 71,
+     "pct": 64,
      "raw": 86.7,
      "ref": {
       "file": "data/model-cards.json",
@@ -16208,10 +16382,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 73,
+     "pct": 75,
      "raw": 82.2,
      "ref": {
       "file": "data/model-cards.json",
@@ -17156,10 +17330,10 @@
      "value": 0.325757575757576
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 64,
+     "pct": 66,
      "raw": 85.5,
      "ref": {
       "file": "data/model-cards.json",
@@ -17241,10 +17415,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 61,
+     "pct": 55,
      "raw": 85.9,
      "ref": {
       "file": "data/model-cards.json",
@@ -17258,10 +17432,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 73,
+     "pct": 75,
      "raw": 82.2,
      "ref": {
       "file": "data/model-cards.json",
@@ -18330,10 +18504,10 @@
      "value": 0.0378787878787879
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 17,
+     "pct": 22,
      "raw": 51.6,
      "ref": {
       "file": "data/model-cards.json",
@@ -18381,10 +18555,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 13,
+     "pct": 12,
      "raw": 63.1,
      "ref": {
       "file": "data/model-cards.json",
@@ -18398,10 +18572,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 11,
+     "pct": 10,
      "raw": 52.3,
      "ref": {
       "file": "data/model-cards.json",
@@ -19125,10 +19299,10 @@
      "value": 0.265151515151515
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 55,
+     "pct": 57,
      "raw": 84.2,
      "ref": {
       "file": "data/model-cards.json",
@@ -19210,10 +19384,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 55,
+     "pct": 50,
      "raw": 85.2,
      "ref": {
       "file": "data/model-cards.json",
@@ -19227,10 +19401,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 61,
+     "pct": 65,
      "raw": 81.0,
      "ref": {
       "file": "data/model-cards.json",
@@ -20566,10 +20740,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 80,
+     "pct": 81,
      "raw": 88.4,
      "ref": {
       "file": "data/model-cards.json",
@@ -20651,10 +20825,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 82,
+     "pct": 74,
      "raw": 88.5,
      "ref": {
       "file": "data/model-cards.json",
@@ -20668,10 +20842,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 84,
+     "pct": 85,
      "raw": 84.7,
      "ref": {
       "file": "data/model-cards.json",
@@ -21849,10 +22023,10 @@
      "value": 0.181818181818182
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 33,
+     "pct": 37,
      "raw": 76.2,
      "ref": {
       "file": "data/model-cards.json",
@@ -21917,10 +22091,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 24,
+     "pct": 21,
      "raw": 76.1,
      "ref": {
       "file": "data/model-cards.json",
@@ -21934,10 +22108,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 39,
+     "pct": 44,
      "raw": 71.5,
      "ref": {
       "file": "data/model-cards.json",
@@ -22854,10 +23028,10 @@
      "value": 0.242424242424242
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 39,
+     "pct": 43,
      "raw": 81.7,
      "ref": {
       "file": "data/model-cards.json",
@@ -22922,10 +23096,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 34,
+     "pct": 31,
      "raw": 81.2,
      "ref": {
       "file": "data/model-cards.json",
@@ -22939,10 +23113,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 48,
+     "pct": 52,
      "raw": 76.3,
      "ref": {
       "file": "data/model-cards.json",
@@ -24117,10 +24291,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 77,
+     "pct": 78,
      "raw": 87.8,
      "ref": {
       "file": "data/model-cards.json",
@@ -24168,10 +24342,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 97,
+     "pct": 98,
      "raw": 93.5,
      "ref": {
       "file": "data/model-cards.json",
@@ -24185,7 +24359,7 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
      "pct": 98,
@@ -25900,10 +26074,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 67,
+     "pct": 69,
      "raw": 86.0,
      "ref": {
       "file": "data/model-cards.json",
@@ -25951,10 +26125,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 92,
+     "pct": 93,
      "raw": 93.3,
      "ref": {
       "file": "data/model-cards.json",
@@ -25968,10 +26142,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 91,
+     "pct": 92,
      "raw": 85.2,
      "ref": {
       "file": "data/model-cards.json",
@@ -28154,10 +28328,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 84,
+     "pct": 85,
      "raw": 89.2,
      "ref": {
       "file": "data/model-cards.json",
@@ -29761,10 +29935,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 92,
+     "pct": 93,
      "raw": 91.7,
      "ref": {
       "file": "data/model-cards.json",
@@ -41316,10 +41490,10 @@
      "value": 0.267676767676768
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 20,
+     "pct": 25,
      "raw": 53.1,
      "ref": {
       "file": "data/model-cards.json",
@@ -41333,10 +41507,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 43,
+     "pct": 48,
      "raw": 74.1,
      "ref": {
       "file": "data/model-cards.json",
@@ -44545,10 +44719,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 36,
+     "pct": 40,
      "raw": 78.8,
      "ref": {
       "file": "data/model-cards.json",
@@ -44596,10 +44770,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 39,
+     "pct": 36,
      "raw": 83.4,
      "ref": {
       "file": "data/model-cards.json",
@@ -44613,10 +44787,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 52,
+     "pct": 56,
      "raw": 77.2,
      "ref": {
       "file": "data/model-cards.json",
@@ -45588,10 +45762,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 42,
+     "pct": 46,
      "raw": 82.3,
      "ref": {
       "file": "data/model-cards.json",
@@ -45639,10 +45813,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 66,
+     "pct": 60,
      "raw": 86.3,
      "ref": {
       "file": "data/model-cards.json",
@@ -45656,10 +45830,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 80,
+     "pct": 81,
      "raw": 82.6,
      "ref": {
       "file": "data/model-cards.json",
@@ -46970,10 +47144,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 58,
+     "pct": 60,
      "raw": 84.3,
      "ref": {
       "file": "data/model-cards.json",
@@ -47021,10 +47195,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 76,
+     "pct": 69,
      "raw": 88.4,
      "ref": {
       "file": "data/model-cards.json",
@@ -47038,10 +47212,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 91,
+     "pct": 92,
      "raw": 85.2,
      "ref": {
       "file": "data/model-cards.json",
@@ -48270,10 +48444,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 14,
+     "pct": 13,
      "raw": 43.4,
      "ref": {
       "file": "data/model-cards.json",
@@ -48304,10 +48478,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 18,
+     "pct": 17,
      "raw": 67.4,
      "ref": {
       "file": "data/model-cards.json",
@@ -48321,10 +48495,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 20,
+     "pct": 19,
      "raw": 60.0,
      "ref": {
       "file": "data/model-cards.json",
@@ -49104,10 +49278,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 23,
+     "pct": 28,
      "raw": 58.6,
      "ref": {
       "file": "data/model-cards.json",
@@ -49138,10 +49312,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 29,
+     "pct": 26,
      "raw": 76.6,
      "ref": {
       "file": "data/model-cards.json",
@@ -49155,10 +49329,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 30,
+     "pct": 35,
      "raw": 69.4,
      "ref": {
       "file": "data/model-cards.json",
@@ -60556,10 +60730,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 98,
+     "pct": 99,
      "raw": 93.5,
      "ref": {
       "file": "data/model-cards.json",
@@ -62363,10 +62537,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 27,
+     "pct": 31,
      "raw": 75.0,
      "ref": {
       "file": "data/model-cards.json",
@@ -62431,10 +62605,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 16,
+     "pct": 15,
      "raw": 59.5,
      "ref": {
       "file": "data/model-cards.json",
@@ -63107,10 +63281,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 45,
+     "pct": 49,
      "raw": 82.7,
      "ref": {
       "file": "data/model-cards.json",
@@ -63175,10 +63349,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 57,
+     "pct": 60,
      "raw": 79.36,
      "ref": {
       "file": "data/model-cards.json",
@@ -64053,10 +64227,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 30,
+     "pct": 34,
      "raw": 75.44,
      "ref": {
       "file": "data/model-cards.json",
@@ -64104,10 +64278,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 66,
+     "pct": 69,
      "raw": 81.94,
      "ref": {
       "file": "data/model-cards.json",
@@ -70526,10 +70700,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 8,
+     "pct": 7,
      "raw": 40.8,
      "ref": {
       "file": "data/model-cards.json",
@@ -70611,10 +70785,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 50,
+     "pct": 45,
      "raw": 84.7,
      "ref": {
       "file": "data/model-cards.json",
@@ -70628,10 +70802,10 @@
      "vendor_reported": true
     },
     "card.mmlu_pro": {
-     "cohort": 22,
+     "cohort": 24,
      "group": "card claims",
      "label": "mmlu pro",
-     "pct": 34,
+     "pct": 40,
      "raw": 70.8,
      "ref": {
       "file": "data/model-cards.json",
@@ -71934,10 +72108,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 84,
+     "pct": 85,
      "raw": 89.2,
      "ref": {
       "file": "data/model-cards.json",
@@ -72270,10 +72444,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 95,
+     "pct": 96,
      "raw": 92.8,
      "ref": {
       "file": "data/model-cards.json",
@@ -72517,10 +72691,10 @@
    },
    "facets": {
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 70,
+     "pct": 72,
      "raw": 86.4,
      "ref": {
       "file": "data/model-cards.json",
@@ -75904,10 +76078,10 @@
      "vendor_reported": true
     },
     "card.mmlu": {
-     "cohort": 19,
+     "cohort": 21,
      "group": "card claims",
      "label": "mmlu",
-     "pct": 87,
+     "pct": 79,
      "raw": 89.09,
      "ref": {
       "file": "data/model-cards.json",
@@ -83909,10 +84083,10 @@
      "vendor_reported": true
     },
     "card.gpqa": {
-     "cohort": 32,
+     "cohort": 34,
      "group": "card claims",
      "label": "gpqa",
-     "pct": 89,
+     "pct": 90,
      "raw": 91.2,
      "ref": {
       "file": "data/model-cards.json",
@@ -86875,8 +87049,8 @@
    "sha256": "a60f0a999513ecc5"
   },
   "data/model-cards.json": {
-   "modified": "2026-09-30",
-   "sha256": "3a515a6ca0553506"
+   "modified": "2026-10-01",
+   "sha256": "fc889c7e88473722"
   },
   "data/sentiment.json": {
    "modified": "2026-10-01",

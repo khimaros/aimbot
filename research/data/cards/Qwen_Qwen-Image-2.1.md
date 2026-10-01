@@ -155,3 +155,12 @@ pipe.enable_model_cpu_offload()
 ## License
 
 This model is licensed under the [Qwen Research License Agreement](./LICENSE).
+
+
+## Feedback
+
+Having issues with Qwen-Image-2.1?
+Our official feedback form connects you directly with the Qwen Image research team.
+Share your prompts, images, or workflows to help us investigate and improve.
+
+[**Submit Feedback →**](https://alidocs.dingtalk.com/notable/share/form/v01WgZOZA5DaVQPeqLX_dv19yqvsgs3oebp3pcjys_1qX0QQ0?source=link)

@@ -527,6 +527,48 @@
    ],
    "assessed_on": "2026-09-30"
   },
+  "Cloudflare/clef": {
+   "one_liner": "a 27b decision model whose answer comes off a transformer head that no gguf of it carries.",
+   "use_for": [
+    "typed decisions over text, images or video through the author's torch script, at bf16",
+    "many questions about one state in one pass, which the head scores jointly"
+   ],
+   "avoid_for": [
+    "llama-server: nothing published applies the joint head to a gguf, and it wants the output embedding matrix as well as every hidden state",
+    "chat through either gguf, which is what both quantizers' cards show and what the vendor's card never does",
+    "reading the card's table as a ranking: it is the vendor's own run of the vendor's own suite"
+   ],
+   "notes": "carried and not served. the weights load on stock llama.cpp as qwen35, and that is the backbone; the readout is a separate six-layer head in the base repo with one torch caller. no independent board has scored it and jevbench has no row, so the only figures are the card's, where its smaller sibling clef-flash is ahead on 18 of 41 benchmarks at a fifth of the median latency.",
+   "confidence": "low",
+   "evidence": [
+    "the card's decision index and typesafe workflow tables, both run by the vendor",
+    "`joint_schema_model.py` in the base repo, which is the encoder, the head and the only caller",
+    "two third-party gguf repos, neither carrying the head or a decision readout",
+    "no forum prose: a day old"
+   ],
+   "assessed_on": "2026-10-01"
+  },
+  "Cloudflare/clef-flash": {
+   "one_liner": "clef at a third of the size and a fifth of the latency, with the same head that no gguf carries.",
+   "use_for": [
+    "the same typed decisions as clef where a 9b backbone is what fits, through verdict on a gguf or the author's torch script",
+    "a first try at the clef readout: the vendor's own table has it ahead of the 27b on 18 of 41 benchmarks"
+   ],
+   "avoid_for": [
+    "a plain llama-server client: the answer comes off the joint head, which only verdict's port applies to a gguf",
+    "out-of-scope intents and hallucination checks, where the card has it far behind clef",
+    "chat through a gguf, which both quantizers' cards show and the vendor's never does"
+   ],
+   "notes": "served as an embedding endpoint and read by verdict's port of the joint head, which matches the author's torch head on a fixture and has not been checked against the bf16 backbone. no board row of it is in this repo's captures yet, so the vendor's table is still the only measurement here, and it is uneven rather than uniformly smaller: ahead of clef on the home appliance simulator and cladder, and behind it by thirty points or more on clinc150 and ragtruth. bartowski's ladder is the wider one, built with an imatrix calibrated through the chat template the decision prompt does not use.",
+   "confidence": "low",
+   "evidence": [
+    "the card's decision index and typesafe workflow tables, both run by the vendor",
+    "`joint_schema_model.py` in the base repo, byte-identical to clef's",
+    "two third-party gguf repos, neither carrying the head or a decision readout",
+    "no forum prose: a day old"
+   ],
+   "assessed_on": "2026-10-01"
+  },
   "CohereLabs/cohere-transcribe-arabic-07-2026": {
    "one_liner": "cohere's transcriber fine-tuned for arabic, on the same crispasr backend as the original.",
    "use_for": [
