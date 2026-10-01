@@ -396,6 +396,17 @@ pinned in its collector: the site publishes a new board whenever it likes, and a
 sweep that read whatever was newest would move 200 percentiles on somebody else's
 release day.
 
+verdict is the decision board's second opinion. jevbench reads each model in
+bf16 off its author's server; `research/fetch-verdict` captures what the verdict
+client measured running the same 231 public items through the quantized gguf a
+host actually serves. rows join a model by the repo their file came from, never
+by the served id, and a facet reads the headline run only: the model's own
+readout layout, one ordering, no prior correction, long lists refused. the three
+facets (`verdict.accuracy`, `verdict.hard`, and `verdict.calibration` as 1 - the
+hard tier's calibration error) ride at `verdict.*: 0.0` -- one machine and one
+client's way of reading each model -- and the collector pins a verdict commit
+the way the boards pin a revision.
+
 ## how good is the speech roster
 
 three sources score it, and they measure three different things:

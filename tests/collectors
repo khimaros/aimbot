@@ -7559,6 +7559,49 @@ def test_livebench_facets():
     eq(au.livebench_facets(board, {}), {}, "a model with no id carries nothing")
 
 
+@test
+def verdict_joins_by_the_weights_it_measured_at_the_headline_variant():
+    """verdict's rows reach a model through the file they ran, never the served id.
+
+    `decider-4b:Q8_0` served two different files on one day, so the id is not a
+    name for weights; the repo the file came from is. Of the variants verdict
+    runs, the one a facet reads is the headline its README states: the model's
+    own layout, one ordering, no prior correction, long lists refused. Two files
+    of one model at that variant are two runs, and the later one answers.
+    """
+    au = load_script("analyze_usecase", os.path.join(RESEARCH, "analyze-usecase"))
+    head = {"long_lists": "refuse", "order_averaging": 1, "prior_correction": False}
+    metrics = lambda acc: {"accuracy": acc, "accuracy_hard": acc - 0.1, "hard_ece": 0.2}
+    weights = lambda f: {"repo": "pub/W-GGUF", "file": f, "revision": "abcdef0123"}
+    row = lambda layout, acc, f, when, **kw: dict(
+        {"model": "w:Q8_0", "suite": "jevbench-public", "variant": dict(head, layout=layout),
+         "metrics": metrics(acc), "weights": weights(f), "measured_utc": when,
+         "llama_cpp_build": "b11310-f872b5911"}, **kw)
+    capture = {"meta": {"hardware": "strix halo"}, "rows": [
+        row("winnow", 0.80, "w-q4.gguf", "2026-09-30T10:00:00+00:00"),
+        row("winnow", 0.86, "w-q8.gguf", "2026-09-30T12:00:00+00:00"),
+        row("chat", 0.99, "w-q8.gguf", "2026-09-30T13:00:00+00:00"),
+        dict(row("winnow", 0.99, "w-q8.gguf", "2026-09-30T14:00:00+00:00"),
+             variant=dict(head, layout="winnow", order_averaging=2)),
+        dict(row("winnow", 0.99, "w-q8.gguf", "2026-09-30T15:00:00+00:00"), weights=None),
+        dict(row("winnow", 0.99, "w-q8.gguf", "2026-09-30T16:00:00+00:00"), suite="smoke"),
+    ]}
+    model = {"repos": ["pub/W-GGUF"], "readout": {"kind": "layout", "layout": "winnow"}}
+    f = au.verdict_facets(capture, model)
+    eq(sorted(f), ["verdict.accuracy", "verdict.calibration", "verdict.hard"],
+       "accuracy, the hard tier and calibration: %r" % sorted(f))
+    eq(f["verdict.accuracy"]["value"], 0.86, "the later file at the headline variant")
+    eq(round(f["verdict.calibration"]["value"], 3), 0.8, "calibration is 1 - ece, higher better")
+    eq(f["verdict.hard"]["group"], "verdict", "one factor group")
+    eq("w-q8.gguf" in f["verdict.accuracy"]["ref"]["note"], True,
+       "the ref names the file that ran: %r" % f["verdict.accuracy"]["ref"]["note"])
+    chat = dict(model, readout={"kind": "chat"})
+    eq(au.verdict_facets(capture, chat)["verdict.accuracy"]["value"], 0.99,
+       "a model read through its template takes the chat run")
+    eq(au.verdict_facets(capture, {"repos": ["other/X-GGUF"]}), {},
+       "a model none of whose repos ran carries nothing")
+
+
 def main():
     bad = 0
     for fn in cases:

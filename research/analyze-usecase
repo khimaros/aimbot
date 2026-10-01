@@ -48,6 +48,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import rungs  # noqa: E402
 import verdicts  # noqa: E402  reference rendering and the staleness bands
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -173,6 +174,9 @@ SOURCES = {
     "livebench": {"label": "livebench",
                   "file": "data/livebench.json",
                   "url": "https://livebench.ai/"},
+    "verdict": {"label": "verdict, measured here",
+                "file": "data/verdict.json",
+                "url": "https://github.com/khimaros/verdict"},
 }
 
 # what a strong facet implies the model is FOR. only the axes where a high
@@ -613,6 +617,51 @@ def livebench_facets(board, ids):
     return out
 
 
+# the run a verdict facet reads: the headline its README states, at the model's
+# own layout. the other variants are verdict's experiments on how to read a
+# model, and averaging them in would score the experiment rather than the weights
+VERDICT_SUITE = "jevbench-public"
+VERDICT_HEADLINE = {"long_lists": "refuse", "order_averaging": 1, "prior_correction": False}
+VERDICT_AXES = [("accuracy", "accuracy", "public-item accuracy"),
+                ("hard", "accuracy_hard", "hard-tier accuracy")]
+
+
+def verdict_facets(capture, model):
+    """jevbench's public items, run through the gguf this roster serves.
+
+    The board's rows were read off each author's own server in bf16; these are
+    the same items through llama.cpp on a strix halo at the quant a host runs,
+    which is the half of the question the board cannot answer. Joined by the
+    repo the measured file came from, because the served id verdict records is
+    not a name for weights. Calibration is 1 - the hard tier's expected
+    calibration error, so that it ranks higher as better like every facet here.
+    """
+    layout = ((model.get("readout") or {}).get("layout")
+              if (model.get("readout") or {}).get("kind") == "layout" else "chat")
+    repos = set(rungs.repo_names(model))
+    rows = [r for r in (capture or {}).get("rows") or []
+            if r.get("suite") == VERDICT_SUITE and (r.get("weights") or {}).get("repo") in repos
+            and r.get("variant") == dict(VERDICT_HEADLINE, layout=layout)]
+    if not rows:
+        return {}
+    row = max(rows, key=lambda r: r.get("measured_utc") or "")
+    m, w = row.get("metrics") or {}, row["weights"]
+    note = ("%s at %s, llama.cpp %s, %s layout, measured %s"
+            % (w.get("file"), (w.get("revision") or "?")[:7],
+               row.get("llama_cpp_build") or "?", layout,
+               (row.get("measured_utc") or "?")[:10]))
+    out = {}
+    for suffix, key, label in VERDICT_AXES:
+        if m.get(key) is not None:
+            out["verdict.%s" % suffix] = {"value": m[key], "label": label, "unit": "share",
+                                          "group": "verdict", "ref": ref("verdict", None, note)}
+    if m.get("hard_ece") is not None:
+        out["verdict.calibration"] = {
+            "value": 1 - m["hard_ece"], "label": "hard-tier calibration (1 - ece)",
+            "unit": "share", "group": "verdict", "ref": ref("verdict", None, note)}
+    return out
+
+
 def image_facets(board, lm, ids, lm_edit=None, showdown=None):
     """Five numbers over two questions: three sites rating generated pictures,
     and two rating EDITED ones.
@@ -701,6 +750,7 @@ def build(bt, registry):
     jev = load("jevbench").get("systems") or {}
     jev_revision = (load("jevbench").get("meta") or {}).get("revision")
     livebench = load("livebench")
+    measured = load("verdict")
 
     def lm_board(name):
         """One lmarena board's entries, keyed by the name its ids use."""
@@ -725,6 +775,7 @@ def build(bt, registry):
         facets.update(image_facets(pictures, lm_images, ids, lm_edits, showdown))
         facets.update(jev_facets(jev, ids, jev_revision))
         facets.update(livebench_facets(livebench, ids))
+        facets.update(verdict_facets(measured, m))
         rating = bt.lmarena_score(ids)
         if rating is not None:
             facets["lmarena.rating"] = {

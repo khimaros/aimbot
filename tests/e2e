@@ -1171,6 +1171,26 @@ test('a sixth text board arrives without moving the ranking it overlaps', () => 
      'and the description carries the caveat: these are served endpoints');
 });
 
+test('what verdict measured on the served gguf rides beside the board, unweighted', () => {
+  // jevbench's board reads each model in bf16 off its author's server; verdict
+  // runs the public items through the quantized file a host actually serves.
+  // the decision models and the text models that measured as one both carry it
+  ['winnow-12b', 'gemma 4 12b', 'decider-4b'].forEach(short => {
+    const f = model(short).facets;
+    ['verdict.accuracy', 'verdict.hard', 'verdict.calibration'].forEach(k =>
+      ok(f[k] && f[k].value > 0 && f[k].value <= 1, short + ' carries ' + k));
+    ok(/\.gguf at /.test(f['verdict.accuracy'].ref.note),
+       short + ' names the file it ran: ' + f['verdict.accuracy'].ref.note);
+  });
+  // one machine, public items only, one client's reading: zero weight, so the
+  // decision ranking cannot move when the capture lands
+  const w = Object.keys(D.weights).filter(k => k.startsWith('verdict'));
+  eq(w.join(','), 'verdict.*', 'one verdict weighting');
+  eq(D.weights['verdict.*'], 0, 'at zero');
+  const g = D.groups.find(x => x.name === 'verdict');
+  ok(g && g.about.includes('gguf'), 'and the group says what was measured: ' + JSON.stringify(g));
+});
+
 test('audio.cpp and gufo are engines their own catalogs claim', () => {
   RESET();
   // two runtimes the registry never WRITES: each project publishes a catalog of

@@ -35,6 +35,7 @@ date is in each file's provenance below.
 | `data/epoch.json` | 2026-08-17 | epoch.ai benchmarking hub (csv bundle) |
 | `data/livebench.json` | 2026-06-25 | livebench.ai: one pinned board, 23 graded tasks over 7 categories, plus the site's own model map for its open-weights flag |
 | `data/jevbench.json` | 2026-09-26 | benchmarkheaven.com/jev-models: one frozen revision of the System One board, 93 decision models, rerankers and classifiers, four axes each |
+| `data/verdict.json` | 2026-09-30 | github.com/khimaros/verdict at a pinned commit: jevbench's public items, option mass, smoke and agent runs through the gguf a host serves, joined to the registry by the weights each row names |
 | `data/model-facts.json` | 2026-08-17 | derived: hf config.json, safetensors index, chat template |
 | `data/chat-templates/` | 2026-08-17 | the chat templates themselves, verbatim, base repo and gguf header |
 | `data/chat-templates.json` | 2026-08-17 | the index over them: source, size, hash, base/gguf pairing |
