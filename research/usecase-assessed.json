@@ -481,7 +481,7 @@
     "any client that reads llama-server logits: the answer comes off a separate 256-way head",
     "chat: a text-generation request is not the classifier"
    ],
-   "notes": "{jev.sealed} sealed against a public half within a tenth of a point of it -- as clean as this board's contamination check gets. the cost is the serving shape: an embedding server plus an fp32 head the caller applies, which is why it is carried and not served on the roster's host.",
+   "notes": "{jev.sealed} sealed against a public half within a tenth of a point of it -- as clean as this board's contamination check gets. the cost is the serving shape: an embedding server plus an fp32 head the caller applies. verdict applies it on the roster's host and reads {verdict.accuracy} on the public items at q8 with {verdict.calibration} calibration, the best of both on the decision roster.",
    "confidence": "medium",
    "evidence": [
     "{jev.score} -- fourth of 89 ranked systems on jevbench v1.5.0",
@@ -534,11 +534,11 @@
     "many questions about one state in one pass, which the head scores jointly"
    ],
    "avoid_for": [
-    "llama-server: nothing published applies the joint head to a gguf, and it wants the output embedding matrix as well as every hidden state",
+    "a plain llama-server client: the answer comes off the joint head, which only verdict's port applies to a gguf",
     "chat through either gguf, which is what both quantizers' cards show and what the vendor's card never does",
     "reading the card's table as a ranking: it is the vendor's own run of the vendor's own suite"
    ],
-   "notes": "carried and not served. the weights load on stock llama.cpp as qwen35, and that is the backbone; the readout is a separate six-layer head in the base repo with one torch caller. no independent board has scored it and jevbench has no row, so the only figures are the card's, where its smaller sibling clef-flash is ahead on 18 of 41 benchmarks at a fifth of the median latency.",
+   "notes": "readable through verdict's port of the joint head, the same code that reads clef-flash, and not yet run: nothing here has measured it on a gguf, and the port is unchecked against the bf16 backbone. the weights load on stock llama.cpp as qwen35, and that is the backbone; the readout is a separate six-layer head in the base repo. no independent board has scored it and jevbench has no row, so the only figures are the card's, where its smaller sibling clef-flash is ahead on 18 of 41 benchmarks at a fifth of the median latency.",
    "confidence": "low",
    "evidence": [
     "the card's decision index and typesafe workflow tables, both run by the vendor",
@@ -559,15 +559,16 @@
     "out-of-scope intents and hallucination checks, where the card has it far behind clef",
     "chat through a gguf, which both quantizers' cards show and the vendor's never does"
    ],
-   "notes": "served as an embedding endpoint and read by verdict's port of the joint head, which matches the author's torch head on a fixture and has not been checked against the bf16 backbone. no board row of it is in this repo's captures yet, so the vendor's table is still the only measurement here, and it is uneven rather than uniformly smaller: ahead of clef on the home appliance simulator and cladder, and behind it by thirty points or more on clinc150 and ragtruth. bartowski's ladder is the wider one, built with an imatrix calibrated through the chat template the decision prompt does not use.",
+   "notes": "served as an embedding endpoint and read by verdict's port of the joint head: {verdict.accuracy} on jevbench's public items at q8, and {verdict.hard} on the hard tier against {verdict.hard@Qwen/Qwen3.5-9B} for its own base model read as plain chat, so on hard items the head has bought nothing measurable here. the port matches the author's torch head; the gguf's hidden states are unchecked against the bf16 backbone, so that gap is the model's or the quant's and nobody has said which. jevbench's board has no row of it. the vendor's own table is uneven rather than uniformly smaller: ahead of clef on the home appliance simulator and cladder, and behind it by thirty points or more on clinc150 and ragtruth. bartowski's ladder is the wider one, built with an imatrix calibrated through the chat template the decision prompt does not use.",
    "confidence": "low",
    "evidence": [
     "the card's decision index and typesafe workflow tables, both run by the vendor",
     "`joint_schema_model.py` in the base repo, byte-identical to clef's",
     "two third-party gguf repos, neither carrying the head or a decision readout",
+    "{verdict.accuracy} accuracy / {verdict.hard} hard / {verdict.calibration} calibration through verdict at q8",
     "no forum prose: a day old"
    ],
-   "assessed_on": "2026-10-01"
+   "assessed_on": "2026-10-02"
   },
   "CohereLabs/cohere-transcribe-arabic-07-2026": {
    "one_liner": "cohere's transcriber fine-tuned for arabic, on the same crispasr backend as the original.",

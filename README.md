@@ -405,10 +405,14 @@ client measured running the same 231 public items through the quantized gguf a
 host actually serves. rows join a model by the repo their file came from, never
 by the served id, and a facet reads the headline run only: the model's own
 readout layout, one ordering, no prior correction, long lists refused. the three
-facets (`verdict.accuracy`, `verdict.hard`, and `verdict.calibration` as 1 - the
-hard tier's calibration error) ride at `verdict.*: 0.0` -- one machine and one
-client's way of reading each model -- and the collector pins a verdict commit
-the way the boards pin a revision.
+facets are `verdict.accuracy`, `verdict.hard`, and `verdict.calibration` as 1 -
+the hard tier's calibration error. accuracy and calibration weigh what the
+board's two axes do, 0.60 and 0.40, so half of a decision model's score is the
+file a host serves; `verdict.hard` is a slice of accuracy and rides at zero. it
+is asked of decision models only, and it is still one machine and one client's
+way of reading each model. the collector pins a verdict commit the way the
+boards pin a revision; `fetch-verdict --local` reads a verdict checkout beside
+this repo instead, for a sweep that is not committed yet.
 
 ## how good is the speech roster
 

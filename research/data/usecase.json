@@ -455,7 +455,7 @@
    "assessed": {
     "assessed_on": "2026-10-01",
     "avoid_for": [
-     "llama-server: nothing published applies the joint head to a gguf, and it wants the output embedding matrix as well as every hidden state",
+     "a plain llama-server client: the answer comes off the joint head, which only verdict's port applies to a gguf",
      "chat through either gguf, which is what both quantizers' cards show and what the vendor's card never does",
      "reading the card's table as a ranking: it is the vendor's own run of the vendor's own suite"
     ],
@@ -466,7 +466,7 @@
      "two third-party gguf repos, neither carrying the head or a decision readout",
      "no forum prose: a day old"
     ],
-    "notes": "carried and not served. the weights load on stock llama.cpp as qwen35, and that is the backbone; the readout is a separate six-layer head in the base repo with one torch caller. no independent board has scored it and jevbench has no row, so the only figures are the card's, where its smaller sibling clef-flash is ahead on 18 of 41 benchmarks at a fifth of the median latency.",
+    "notes": "readable through verdict's port of the joint head, the same code that reads clef-flash, and not yet run: nothing here has measured it on a gguf, and the port is unchecked against the bf16 backbone. the weights load on stock llama.cpp as qwen35, and that is the backbone; the readout is a separate six-layer head in the base repo. no independent board has scored it and jevbench has no row, so the only figures are the card's, where its smaller sibling clef-flash is ahead on 18 of 41 benchmarks at a fifth of the median latency.",
     "one_liner": "a 27b decision model whose answer comes off a transformer head that no gguf of it carries.",
     "use_for": [
      "typed decisions over text, images or video through the author's torch script, at bf16",
@@ -540,7 +540,7 @@
   },
   "Cloudflare/clef-flash": {
    "assessed": {
-    "assessed_on": "2026-10-01",
+    "assessed_on": "2026-10-02",
     "avoid_for": [
      "a plain llama-server client: the answer comes off the joint head, which only verdict's port applies to a gguf",
      "out-of-scope intents and hallucination checks, where the card has it far behind clef",
@@ -551,9 +551,10 @@
      "the card's decision index and typesafe workflow tables, both run by the vendor",
      "`joint_schema_model.py` in the base repo, byte-identical to clef's",
      "two third-party gguf repos, neither carrying the head or a decision readout",
+     "{verdict.accuracy} accuracy / {verdict.hard} hard / {verdict.calibration} calibration through verdict at q8",
      "no forum prose: a day old"
     ],
-    "notes": "served as an embedding endpoint and read by verdict's port of the joint head, which matches the author's torch head on a fixture and has not been checked against the bf16 backbone. no board row of it is in this repo's captures yet, so the vendor's table is still the only measurement here, and it is uneven rather than uniformly smaller: ahead of clef on the home appliance simulator and cladder, and behind it by thirty points or more on clinc150 and ragtruth. bartowski's ladder is the wider one, built with an imatrix calibrated through the chat template the decision prompt does not use.",
+    "notes": "served as an embedding endpoint and read by verdict's port of the joint head: {verdict.accuracy} on jevbench's public items at q8, and {verdict.hard} on the hard tier against {verdict.hard@Qwen/Qwen3.5-9B} for its own base model read as plain chat, so on hard items the head has bought nothing measurable here. the port matches the author's torch head; the gguf's hidden states are unchecked against the bf16 backbone, so that gap is the model's or the quant's and nobody has said which. jevbench's board has no row of it. the vendor's own table is uneven rather than uniformly smaller: ahead of clef on the home appliance simulator and cladder, and behind it by thirty points or more on clinc150 and ragtruth. bartowski's ladder is the wider one, built with an imatrix calibrated through the chat template the decision prompt does not use.",
     "one_liner": "clef at a third of the size and a fifth of the latency, with the same head that no gguf carries.",
     "use_for": [
      "the same typed decisions as clef where a 9b backbone is what fits, through verdict on a gguf or the author's torch script",
@@ -617,6 +618,48 @@
      "unit": "score",
      "value": 64.3,
      "vendor_reported": true
+    },
+    "verdict.accuracy": {
+     "cohort": 17,
+     "group": "verdict",
+     "label": "public-item accuracy",
+     "pct": 68,
+     "ref": {
+      "file": "data/verdict.json",
+      "note": "Cloudflare_clef-flash-Q8_0.gguf at d7f376e, llama.cpp b11345-a868c3e3c, clef-flash layout, measured 2026-10-01",
+      "source": "verdict, measured here",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     "unit": "share",
+     "value": 0.8225
+    },
+    "verdict.calibration": {
+     "cohort": 17,
+     "group": "verdict",
+     "label": "hard-tier calibration (1 - ece)",
+     "pct": 85,
+     "ref": {
+      "file": "data/verdict.json",
+      "note": "Cloudflare_clef-flash-Q8_0.gguf at d7f376e, llama.cpp b11345-a868c3e3c, clef-flash layout, measured 2026-10-01",
+      "source": "verdict, measured here",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     "unit": "share",
+     "value": 0.886
+    },
+    "verdict.hard": {
+     "cohort": 17,
+     "group": "verdict",
+     "label": "hard-tier accuracy",
+     "pct": 68,
+     "ref": {
+      "file": "data/verdict.json",
+      "note": "Cloudflare_clef-flash-Q8_0.gguf at d7f376e, llama.cpp b11345-a868c3e3c, clef-flash layout, measured 2026-10-01",
+      "source": "verdict, measured here",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     "unit": "share",
+     "value": 0.6396
     }
    },
    "kind": "decision",
@@ -1286,10 +1329,10 @@
      "value": 76.39343257361945
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 83,
+     "pct": 79,
      "ref": {
       "file": "data/verdict.json",
       "note": "gguf/Winnow-12B-Q8_0.gguf at b6ac22b, llama.cpp b11311-f7b384c1e, winnow layout, measured 2026-09-30",
@@ -1300,10 +1343,10 @@
      "value": 0.8571
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 90,
+     "pct": 79,
      "ref": {
       "file": "data/verdict.json",
       "note": "gguf/Winnow-12B-Q8_0.gguf at b6ac22b, llama.cpp b11311-f7b384c1e, winnow layout, measured 2026-09-30",
@@ -1314,10 +1357,10 @@
      "value": 0.8823
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 83,
+     "pct": 79,
      "ref": {
       "file": "data/verdict.json",
       "note": "gguf/Winnow-12B-Q8_0.gguf at b6ac22b, llama.cpp b11311-f7b384c1e, winnow layout, measured 2026-09-30",
@@ -4357,10 +4400,10 @@
      "value": 35.88687401961826
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 43,
+     "pct": 38,
      "ref": {
       "file": "data/verdict.json",
       "note": "decider-2b-v11-Q8_0.gguf at ff2e5e6, llama.cpp b11310-f872b5911, decider-plain layout, measured 2026-09-30",
@@ -4371,10 +4414,10 @@
      "value": 0.7619
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 50,
+     "pct": 44,
      "ref": {
       "file": "data/verdict.json",
       "note": "decider-2b-v11-Q8_0.gguf at ff2e5e6, llama.cpp b11310-f872b5911, decider-plain layout, measured 2026-09-30",
@@ -4385,10 +4428,10 @@
      "value": 0.779
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 50,
+     "pct": 44,
      "ref": {
       "file": "data/verdict.json",
       "note": "decider-2b-v11-Q8_0.gguf at ff2e5e6, llama.cpp b11310-f872b5911, decider-plain layout, measured 2026-09-30",
@@ -4674,10 +4717,10 @@
      "value": 49.79833850993424
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 77,
+     "pct": 74,
      "ref": {
       "file": "data/verdict.json",
       "note": "decider-4b-v2.1-Q8_0.gguf at b79f09d, llama.cpp b11310-f872b5911, decider-plain layout, measured 2026-09-30",
@@ -4688,10 +4731,10 @@
      "value": 0.8312
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 57,
+     "pct": 50,
      "ref": {
       "file": "data/verdict.json",
       "note": "decider-4b-v2.1-Q8_0.gguf at b79f09d, llama.cpp b11310-f872b5911, decider-plain layout, measured 2026-09-30",
@@ -4702,10 +4745,10 @@
      "value": 0.7995
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 77,
+     "pct": 74,
      "ref": {
       "file": "data/verdict.json",
       "note": "decider-4b-v2.1-Q8_0.gguf at b79f09d, llama.cpp b11310-f872b5911, decider-plain layout, measured 2026-09-30",
@@ -15667,7 +15710,7 @@
      "value": 2.47
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
      "pct": 3,
@@ -15681,10 +15724,10 @@
      "value": 0.5671
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 37,
+     "pct": 32,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-0.8B-Q8_0.gguf at cf8a611, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -15695,7 +15738,7 @@
      "value": 0.7694
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
      "pct": 3,
@@ -18726,10 +18769,10 @@
      "value": 2.23
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 17,
+     "pct": 15,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-2B-Q8_0.gguf at e05864f, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -18740,10 +18783,10 @@
      "value": 0.645
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 43,
+     "pct": 38,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-2B-Q8_0.gguf at e05864f, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -18754,10 +18797,10 @@
      "value": 0.7711
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 23,
+     "pct": 21,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-2B-Q8_0.gguf at e05864f, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -22397,10 +22440,10 @@
      "value": 3.28
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 67,
+     "pct": 59,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-4B-Q8_0.gguf at 86835bf, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -22411,10 +22454,10 @@
      "value": 0.7879
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 70,
+     "pct": 62,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-4B-Q8_0.gguf at 86835bf, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -22425,10 +22468,10 @@
      "value": 0.8244
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 63,
+     "pct": 56,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-4B-Q8_0.gguf at 86835bf, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -23520,10 +23563,10 @@
      "value": 0.092134831461
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 67,
+     "pct": 59,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-9B-Q8_0.gguf at 9716a63, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -23534,10 +23577,10 @@
      "value": 0.7879
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 83,
+     "pct": 74,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-9B-Q8_0.gguf at 9716a63, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -23548,10 +23591,10 @@
      "value": 0.8678
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 70,
+     "pct": 62,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-9B-Q8_0.gguf at 9716a63, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -30991,10 +31034,10 @@
      "value": 59.239704849846284
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 50,
+     "pct": 44,
      "ref": {
       "file": "data/verdict.json",
       "note": "StandardOne-8B-Q8_0.gguf at 4eb253d, llama.cpp b11311-f7b384c1e, standardone-native layout, measured 2026-09-30",
@@ -31005,10 +31048,10 @@
      "value": 0.7749
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 77,
+     "pct": 68,
      "ref": {
       "file": "data/verdict.json",
       "note": "StandardOne-8B-Q8_0.gguf at 4eb253d, llama.cpp b11311-f7b384c1e, standardone-native layout, measured 2026-09-30",
@@ -31019,10 +31062,10 @@
      "value": 0.8492
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 43,
+     "pct": 38,
      "ref": {
       "file": "data/verdict.json",
       "note": "StandardOne-8B-Q8_0.gguf at 4eb253d, llama.cpp b11311-f7b384c1e, standardone-native layout, measured 2026-09-30",
@@ -35830,7 +35873,7 @@
      "runtime gemma4, mainline since b8637; the gguf is a third-party conversion carrying the author's head",
      "no forum prose"
     ],
-    "notes": "{jev.sealed} sealed against a public half within a tenth of a point of it -- as clean as this board's contamination check gets. the cost is the serving shape: an embedding server plus an fp32 head the caller applies, which is why it is carried and not served on the roster's host.",
+    "notes": "{jev.sealed} sealed against a public half within a tenth of a point of it -- as clean as this board's contamination check gets. the cost is the serving shape: an embedding server plus an fp32 head the caller applies. verdict applies it on the roster's host and reads {verdict.accuracy} on the public items at q8 with {verdict.calibration} calibration, the best of both on the decision roster.",
     "one_liner": "fourth on jevbench with no sealed-set drop at all, and not something llama-server can answer with on its own.",
     "use_for": [
      "typed decisions through the author's adapter, which applies the trained head to llama.cpp embeddings",
@@ -35934,6 +35977,48 @@
      },
      "unit": "score",
      "value": 70.50021890148207
+    },
+    "verdict.accuracy": {
+     "cohort": 17,
+     "group": "verdict",
+     "label": "public-item accuracy",
+     "pct": 97,
+     "ref": {
+      "file": "data/verdict.json",
+      "note": "Jev-Omni-Q8_0.gguf at f07b38e, llama.cpp b11345-a868c3e3c, jev-omni layout, measured 2026-10-01",
+      "source": "verdict, measured here",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     "unit": "share",
+     "value": 0.8831
+    },
+    "verdict.calibration": {
+     "cohort": 17,
+     "group": "verdict",
+     "label": "hard-tier calibration (1 - ece)",
+     "pct": 97,
+     "ref": {
+      "file": "data/verdict.json",
+      "note": "Jev-Omni-Q8_0.gguf at f07b38e, llama.cpp b11345-a868c3e3c, jev-omni layout, measured 2026-10-01",
+      "source": "verdict, measured here",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     "unit": "share",
+     "value": 0.9065
+    },
+    "verdict.hard": {
+     "cohort": 17,
+     "group": "verdict",
+     "label": "hard-tier accuracy",
+     "pct": 97,
+     "ref": {
+      "file": "data/verdict.json",
+      "note": "Jev-Omni-Q8_0.gguf at f07b38e, llama.cpp b11345-a868c3e3c, jev-omni layout, measured 2026-10-01",
+      "source": "verdict, measured here",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     "unit": "share",
+     "value": 0.7748
     }
    },
    "kind": "decision",
@@ -35969,10 +36054,10 @@
    },
    "facets": {
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 90,
+     "pct": 85,
      "ref": {
       "file": "data/verdict.json",
       "note": "jevk5-4b-v0.2-Q8_0.gguf at ec67b0b, llama.cpp b11310-f872b5911, semif layout, measured 2026-09-30",
@@ -35983,10 +36068,10 @@
      "value": 0.8615
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 97,
+     "pct": 91,
      "ref": {
       "file": "data/verdict.json",
       "note": "jevk5-4b-v0.2-Q8_0.gguf at ec67b0b, llama.cpp b11310-f872b5911, semif layout, measured 2026-09-30",
@@ -35997,10 +36082,10 @@
      "value": 0.9042
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 90,
+     "pct": 85,
      "ref": {
       "file": "data/verdict.json",
       "note": "jevk5-4b-v0.2-Q8_0.gguf at ec67b0b, llama.cpp b11310-f872b5911, semif layout, measured 2026-09-30",
@@ -45066,10 +45151,10 @@
      "value": 79.13125
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 97,
+     "pct": 91,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-12b-it-Q8_0.gguf at fc034cf, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -45080,10 +45165,10 @@
      "value": 0.8701
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 63,
+     "pct": 56,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-12b-it-Q8_0.gguf at fc034cf, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -45094,10 +45179,10 @@
      "value": 0.8063
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 97,
+     "pct": 91,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-12b-it-Q8_0.gguf at fc034cf, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -48743,10 +48828,10 @@
      "value": 88.35375
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 23,
+     "pct": 21,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-E2B-it-Q8_0.gguf at 0314792, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -48757,7 +48842,7 @@
      "value": 0.6753
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
      "pct": 3,
@@ -48771,10 +48856,10 @@
      "value": 0.4636
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 10,
+     "pct": 9,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-E2B-it-Q8_0.gguf at 0314792, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -49555,10 +49640,10 @@
      "value": 90.4925
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 57,
+     "pct": 50,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-E4B-it-Q8_0.gguf at bfc15c3, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -49569,10 +49654,10 @@
      "value": 0.7792
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 23,
+     "pct": 21,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-E4B-it-Q8_0.gguf at bfc15c3, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -49583,10 +49668,10 @@
      "value": 0.6728000000000001
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 57,
+     "pct": 50,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-E4B-it-Q8_0.gguf at bfc15c3, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -51488,10 +51573,10 @@
      "value": 1289.1955592516088
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 30,
+     "pct": 26,
      "ref": {
       "file": "data/verdict.json",
       "note": "granite-4.2-3b-Q8_0.gguf at c40945d, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -51502,10 +51587,10 @@
      "value": 0.6797
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 10,
+     "pct": 9,
      "ref": {
       "file": "data/verdict.json",
       "note": "granite-4.2-3b-Q8_0.gguf at c40945d, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -51516,10 +51601,10 @@
      "value": 0.554
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 17,
+     "pct": 15,
      "ref": {
       "file": "data/verdict.json",
       "note": "granite-4.2-3b-Q8_0.gguf at c40945d, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -68914,10 +68999,10 @@
      "value": 9.384037015615963
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 37,
+     "pct": 32,
      "ref": {
       "file": "data/verdict.json",
       "note": "gpt-oss-20b-Q8_0.gguf at d449b42, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -68928,10 +69013,10 @@
      "value": 0.697
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 30,
+     "pct": 26,
      "ref": {
       "file": "data/verdict.json",
       "note": "gpt-oss-20b-Q8_0.gguf at d449b42, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -68942,10 +69027,10 @@
      "value": 0.6803
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 37,
+     "pct": 32,
      "ref": {
       "file": "data/verdict.json",
       "note": "gpt-oss-20b-Q8_0.gguf at d449b42, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -71015,10 +71100,10 @@
      "value": 0.82
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "public-item accuracy",
-     "pct": 10,
+     "pct": 9,
      "ref": {
       "file": "data/verdict.json",
       "note": "MiniCPM5-2B-Q8_0.gguf at 2079a22, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -71029,10 +71114,10 @@
      "value": 0.6234
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier calibration (1 - ece)",
-     "pct": 17,
+     "pct": 15,
      "ref": {
       "file": "data/verdict.json",
       "note": "MiniCPM5-2B-Q8_0.gguf at 2079a22, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -71043,10 +71128,10 @@
      "value": 0.6654
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "group": "verdict",
      "label": "hard-tier accuracy",
-     "pct": 30,
+     "pct": 26,
      "ref": {
       "file": "data/verdict.json",
       "note": "MiniCPM5-2B-Q8_0.gguf at 2079a22, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -87053,7 +87138,7 @@
    "sha256": "fc889c7e88473722"
   },
   "data/sentiment.json": {
-   "modified": "2026-10-01",
+   "modified": "2026-10-02",
    "sha256": "d6497133f0464ae1"
   },
   "data/swe-rebench.json": {

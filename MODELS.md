@@ -3540,19 +3540,19 @@ generated. jevbench rates them, and its calibration axis is the only one here
 
 | # | model | quant | size (gib) | runs on | evidence | quality |
 |--:|---|---|--:|---|--:|--:|
-| 1 | winnow-12b | Q8_0 EldanRing | 11.8 | llama.cpp | 95% | **84.3** |
-| 2 | jev-omni | Q8_0 ngquocvinh | 11.8 | llama.cpp | 100% | **60.8** |
-| 3 | decider-4b | Q8_0 Mapika | 4.2 | llama.cpp | 100% | **51.3** |
-| 4 | standardone-8b | Q8_0 StandardThinking | 8.4 | llama.cpp | 95% | **48.4** |
-| 5 | decider-35b-a3b | Q8_0 mradermacher | 34.4 | llama.cpp | 95% | **44.9** |
-| 6 | gemma 4 12b | UD-Q8_K_XL unsloth | 12.7 | llama.cpp, vllm | 38% | **44.9** |
-| 7 | qwen3.5-4b | UD-Q8_K_XL unsloth | 5.7 | llama.cpp, vllm | 38% | **42.1** |
-| 8 | qwen3.5-9b | UD-Q8_K_XL unsloth | 12.3 | llama.cpp, vllm | 67% | **35.1** |
-| 9 | gemma-4-e4b-it | UD-Q8_K_XL unsloth | 8.1 | llama.cpp, vllm | 38% | **34.4** |
-| 10 | decider-2b | Q8_0 Mapika | 1.9 | llama.cpp | 100% | **9.6** |
-| 11 | clef | Q8_0 abenzerps | 26.6 | llama.cpp | 0% | **-** |
-| 12 | clef-flash | Q8_0 bartowski | 8.9 | llama.cpp | 0% | **-** |
-| 13 | jevk5 4b | Q8_0 alibiserikbay | 4.2 | llama.cpp | 0% | **-** |
+| 1 | winnow-12b | Q8_0 EldanRing | 11.8 | llama.cpp | 98% | **81.7** |
+| 2 | jev-omni | Q8_0 ngquocvinh | 11.8 | llama.cpp | 100% | **78.5** |
+| 3 | jevk5 4b | Q8_0 alibiserikbay | 4.2 | llama.cpp | 49% | **74.5** |
+| 4 | clef-flash | Q8_0 bartowski | 8.9 | llama.cpp | 49% | **66.3** |
+| 5 | decider-4b | Q8_0 Mapika | 4.2 | llama.cpp | 100% | **57.7** |
+| 6 | standardone-8b | Q8_0 StandardThinking | 8.4 | llama.cpp | 98% | **51.0** |
+| 7 | decider-35b-a3b | Q8_0 mradermacher | 34.4 | llama.cpp | 49% | **46.6** |
+| 8 | gemma 4 12b | UD-Q8_K_XL unsloth | 12.7 | llama.cpp, vllm | 38% | **44.9** |
+| 9 | qwen3.5-4b | UD-Q8_K_XL unsloth | 5.7 | llama.cpp, vllm | 38% | **42.1** |
+| 10 | qwen3.5-9b | UD-Q8_K_XL unsloth | 12.3 | llama.cpp, vllm | 67% | **35.1** |
+| 11 | gemma-4-e4b-it | UD-Q8_K_XL unsloth | 8.1 | llama.cpp, vllm | 38% | **34.4** |
+| 12 | decider-2b | Q8_0 Mapika | 1.9 | llama.cpp | 100% | **24.6** |
+| 13 | clef | Q8_0 abenzerps | 26.6 | llama.cpp | 0% | **-** |
 
 ### diarization
 

@@ -1171,7 +1171,7 @@ test('a sixth text board arrives without moving the ranking it overlaps', () => 
      'and the description carries the caveat: these are served endpoints');
 });
 
-test('what verdict measured on the served gguf rides beside the board, unweighted', () => {
+test('what verdict measured on the served gguf is half of a decision model\'s score', () => {
   // jevbench's board reads each model in bf16 off its author's server; verdict
   // runs the public items through the quantized file a host actually serves.
   // the decision models and the text models that measured as one both carry it
@@ -1182,11 +1182,24 @@ test('what verdict measured on the served gguf rides beside the board, unweighte
     ok(/\.gguf at /.test(f['verdict.accuracy'].ref.note),
        short + ' names the file it ran: ' + f['verdict.accuracy'].ref.note);
   });
-  // one machine, public items only, one client's reading: zero weight, so the
-  // decision ranking cannot move when the capture lands
-  const w = Object.keys(D.weights).filter(k => k.startsWith('verdict'));
-  eq(w.join(','), 'verdict.*', 'one verdict weighting');
-  eq(D.weights['verdict.*'], 0, 'at zero');
+  // the board reads bf16 on the author's server and verdict reads the file a
+  // host serves, so the two halves of the decision score weigh the same, split
+  // the way the board's is. `hard` is a slice of `accuracy` and rides at zero
+  const sum = prefix => Object.keys(D.weights).filter(k => k.startsWith(prefix))
+    .reduce((a, k) => a + D.weights[k], 0);
+  near(sum('verdict.'), sum('jev.'), 1e-9, 'verdict weighs what the board does');
+  eq(D.weights['verdict.accuracy'], D.weights['jev.intelligence'], 'being right');
+  eq(D.weights['verdict.calibration'], D.weights['jev.calibration'], 'knowing it');
+  eq(D.weights['verdict.hard'], 0, 'a slice of the whole is not weighted beside it');
+  // FOR DECISION MODELS: nine text models carry these numbers too, and a factor
+  // asked by kind would put a decision score in every language model's
+  // denominator. it is asked by capability, like the board it re-runs
+  RESET();
+  ok(asked(model('winnow-12b'), 'verdict.accuracy'), 'asked of a decision model');
+  eq(asked(model('gemma 4 12b'), 'verdict.accuracy'), false,
+     'and not of a text model that happens to carry it');
+  eq(asked(model('qwen3.8 27b'), 'verdict.accuracy'), false,
+     'nor of one that does not');
   const g = D.groups.find(x => x.name === 'verdict');
   ok(g && g.about.includes('gguf'), 'and the group says what was measured: ' + JSON.stringify(g));
 });

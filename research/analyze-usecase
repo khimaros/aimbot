@@ -635,9 +635,14 @@ def verdict_facets(capture, model):
     repo the measured file came from, because the served id verdict records is
     not a name for weights. Calibration is 1 - the hard tier's expected
     calibration error, so that it ranks higher as better like every facet here.
+
+    The run read is the one at the model's own layout: the named layout, the
+    head's name, or `chat`. A head nobody named has no run of its own, and its
+    chat run is the backbone read as a language model, so it takes nothing.
     """
-    layout = ((model.get("readout") or {}).get("layout")
-              if (model.get("readout") or {}).get("kind") == "layout" else "chat")
+    readout = model.get("readout") or {}
+    layout = {"layout": readout.get("layout"),
+              "head": (readout.get("head") or {}).get("name")}.get(readout.get("kind"), "chat")
     repos = set(rungs.repo_names(model))
     rows = [r for r in (capture or {}).get("rows") or []
             if r.get("suite") == VERDICT_SUITE and (r.get("weights") or {}).get("repo") in repos

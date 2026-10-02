@@ -19,6 +19,7 @@
   "showdown-t2i": "draws",
   "swerebench": "text",
   "tts-arena": "synthesizes",
+  "verdict": "decides",
   "voicearena": "transcribes"
  },
  "branch": "master",
@@ -1360,7 +1361,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5106",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5115",
    "facets": {},
    "facts": {
     "params_source": "safetensors",
@@ -1566,7 +1567,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8702",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8711",
    "facets": {},
    "facts": {
     "arch": "Qwen3ForCausalLM",
@@ -1796,7 +1797,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10085",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10094",
    "facets": {
     "open-asr.accuracy": {
      "cohort": 34,
@@ -2026,7 +2027,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9298",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9307",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -2369,7 +2370,7 @@
     "Breeze-TTS-2.cpp",
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8327",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8336",
    "facets": {
     "aa-tts.elo": {
      "cohort": 9,
@@ -2661,7 +2662,7 @@
     "assessed_on": "2026-10-01",
     "avoid_for": [
      [
-      "llama-server: nothing published applies the joint head to a gguf, and it wants the output embedding matrix as well as every hidden state"
+      "a plain llama-server client: the answer comes off the joint head, which only verdict's port applies to a gguf"
      ],
      [
       "chat through either gguf, which is what both quantizers' cards show and what the vendor's card never does"
@@ -2686,7 +2687,7 @@
      ]
     ],
     "notes": [
-     "carried and not served. the weights load on stock llama.cpp as qwen35, and that is the backbone; the readout is a separate six-layer head in the base repo with one torch caller. no independent board has scored it and jevbench has no row, so the only figures are the card's, where its smaller sibling clef-flash is ahead on 18 of 41 benchmarks at a fifth of the median latency."
+     "readable through verdict's port of the joint head, the same code that reads clef-flash, and not yet run: nothing here has measured it on a gguf, and the port is unchecked against the bf16 backbone. the weights load on stock llama.cpp as qwen35, and that is the backbone; the readout is a separate six-layer head in the base repo. no independent board has scored it and jevbench has no row, so the only figures are the card's, where its smaller sibling clef-flash is ahead on 18 of 41 benchmarks at a fifth of the median latency."
     ],
     "one_liner": [
      "a 27b decision model whose answer comes off a transformer head that no gguf of it carries."
@@ -3146,7 +3147,7 @@
   },
   {
    "assessed": {
-    "assessed_on": "2026-10-01",
+    "assessed_on": "2026-10-02",
     "avoid_for": [
      [
       "a plain llama-server client: the answer comes off the joint head, which only verdict's port applies to a gguf"
@@ -3170,11 +3171,49 @@
       "two third-party gguf repos, neither carrying the head or a decision readout"
      ],
      [
+      {
+       "key": "verdict.accuracy",
+       "repo": null,
+       "shown": "verdict.accuracy p68"
+      },
+      " accuracy / ",
+      {
+       "key": "verdict.hard",
+       "repo": null,
+       "shown": "verdict.hard p68"
+      },
+      " hard / ",
+      {
+       "key": "verdict.calibration",
+       "repo": null,
+       "shown": "verdict.calibration p85"
+      },
+      " calibration through verdict at q8"
+     ],
+     [
       "no forum prose: a day old"
      ]
     ],
     "notes": [
-     "served as an embedding endpoint and read by verdict's port of the joint head, which matches the author's torch head on a fixture and has not been checked against the bf16 backbone. no board row of it is in this repo's captures yet, so the vendor's table is still the only measurement here, and it is uneven rather than uniformly smaller: ahead of clef on the home appliance simulator and cladder, and behind it by thirty points or more on clinc150 and ragtruth. bartowski's ladder is the wider one, built with an imatrix calibrated through the chat template the decision prompt does not use."
+     "served as an embedding endpoint and read by verdict's port of the joint head: ",
+     {
+      "key": "verdict.accuracy",
+      "repo": null,
+      "shown": "verdict.accuracy p68"
+     },
+     " on jevbench's public items at q8, and ",
+     {
+      "key": "verdict.hard",
+      "repo": null,
+      "shown": "verdict.hard p68"
+     },
+     " on the hard tier against ",
+     {
+      "key": "verdict.hard",
+      "repo": "Qwen/Qwen3.5-9B",
+      "shown": "p62"
+     },
+     " for its own base model read as plain chat, so on hard items the head has bought nothing measurable here. the port matches the author's torch head; the gguf's hidden states are unchecked against the bf16 backbone, so that gap is the model's or the quant's and nobody has said which. jevbench's board has no row of it. the vendor's own table is uneven rather than uniformly smaller: ahead of clef on the home appliance simulator and cladder, and behind it by thirty points or more on clinc150 and ragtruth. bartowski's ladder is the wider one, built with an imatrix calibrated through the chat template the decision prompt does not use."
     ],
     "one_liner": [
      "clef at a third of the size and a fifth of the latency, with the same head that no gguf carries."
@@ -3270,7 +3309,7 @@
    "engines": [
     "llama.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1553",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1562",
    "facets": {
     "card.gpqa": {
      "cohort": 34,
@@ -3313,6 +3352,39 @@
      },
      "value": 64.3,
      "vendor_reported": true
+    },
+    "verdict.accuracy": {
+     "cohort": 17,
+     "pct": 68,
+     "ref": {
+      "file": "data/verdict.json",
+      "note": "Cloudflare_clef-flash-Q8_0.gguf at d7f376e, llama.cpp b11345-a868c3e3c, clef-flash layout, measured 2026-10-01",
+      "source": "verdict, measured here",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     "value": 0.8225
+    },
+    "verdict.calibration": {
+     "cohort": 17,
+     "pct": 85,
+     "ref": {
+      "file": "data/verdict.json",
+      "note": "Cloudflare_clef-flash-Q8_0.gguf at d7f376e, llama.cpp b11345-a868c3e3c, clef-flash layout, measured 2026-10-01",
+      "source": "verdict, measured here",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     "value": 0.886
+    },
+    "verdict.hard": {
+     "cohort": 17,
+     "pct": 68,
+     "ref": {
+      "file": "data/verdict.json",
+      "note": "Cloudflare_clef-flash-Q8_0.gguf at d7f376e, llama.cpp b11345-a868c3e3c, clef-flash layout, measured 2026-10-01",
+      "source": "verdict, measured here",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     "value": 0.6396
     }
    },
    "facts": {
@@ -3915,7 +3987,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7830",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7839",
    "facets": {
     "aa-stt.accuracy": {
      "cohort": 7,
@@ -4298,7 +4370,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7859",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7868",
    "facets": {},
    "facts": {
     "params_source": "safetensors",
@@ -4606,7 +4678,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7719",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7728",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -5079,8 +5151,8 @@
      "value": 76.39343257361945
     },
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 83,
+     "cohort": 17,
+     "pct": 79,
      "ref": {
       "file": "data/verdict.json",
       "note": "gguf/Winnow-12B-Q8_0.gguf at b6ac22b, llama.cpp b11311-f7b384c1e, winnow layout, measured 2026-09-30",
@@ -5090,8 +5162,8 @@
      "value": 0.8571
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 90,
+     "cohort": 17,
+     "pct": 79,
      "ref": {
       "file": "data/verdict.json",
       "note": "gguf/Winnow-12B-Q8_0.gguf at b6ac22b, llama.cpp b11311-f7b384c1e, winnow layout, measured 2026-09-30",
@@ -5101,8 +5173,8 @@
      "value": 0.8823
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 83,
+     "cohort": 17,
+     "pct": 79,
      "ref": {
       "file": "data/verdict.json",
       "note": "gguf/Winnow-12B-Q8_0.gguf at b6ac22b, llama.cpp b11311-f7b384c1e, winnow layout, measured 2026-09-30",
@@ -5368,7 +5440,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10456",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10465",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -5621,7 +5693,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L11018",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L11027",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -5901,7 +5973,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9367",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9376",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -6212,7 +6284,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9400",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9409",
    "facets": {
     "community.hf-discussions": {
      "approval": 100,
@@ -6589,7 +6661,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8488",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8497",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -6882,7 +6954,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7991",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8000",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -7079,7 +7151,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10060",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10069",
    "facets": {
     "open-asr.accuracy": {
      "cohort": 34,
@@ -7239,7 +7311,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9145",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9154",
    "facets": {},
    "facts": {
     "arch": "TadaForCausalLM",
@@ -9208,7 +9280,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8640",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8649",
    "facets": {
     "community.hackernews": {
      "approval": 100,
@@ -9611,7 +9683,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7771",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7780",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -10280,7 +10352,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5174",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5183",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -10905,7 +10977,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4715",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4724",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -11536,7 +11608,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9461",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9470",
    "facets": {},
    "facts": {
     "arch": "Lfm2AudioForConditionalGeneration",
@@ -11800,7 +11872,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9505",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9514",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -12224,8 +12296,8 @@
      "value": 35.88687401961826
     },
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 43,
+     "cohort": 17,
+     "pct": 38,
      "ref": {
       "file": "data/verdict.json",
       "note": "decider-2b-v11-Q8_0.gguf at ff2e5e6, llama.cpp b11310-f872b5911, decider-plain layout, measured 2026-09-30",
@@ -12235,8 +12307,8 @@
      "value": 0.7619
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 50,
+     "cohort": 17,
+     "pct": 44,
      "ref": {
       "file": "data/verdict.json",
       "note": "decider-2b-v11-Q8_0.gguf at ff2e5e6, llama.cpp b11310-f872b5911, decider-plain layout, measured 2026-09-30",
@@ -12246,8 +12318,8 @@
      "value": 0.779
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 50,
+     "cohort": 17,
+     "pct": 44,
      "ref": {
       "file": "data/verdict.json",
       "note": "decider-2b-v11-Q8_0.gguf at ff2e5e6, llama.cpp b11310-f872b5911, decider-plain layout, measured 2026-09-30",
@@ -12983,8 +13055,8 @@
      "value": 49.79833850993424
     },
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 77,
+     "cohort": 17,
+     "pct": 74,
      "ref": {
       "file": "data/verdict.json",
       "note": "decider-4b-v2.1-Q8_0.gguf at b79f09d, llama.cpp b11310-f872b5911, decider-plain layout, measured 2026-09-30",
@@ -12994,8 +13066,8 @@
      "value": 0.8312
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 57,
+     "cohort": 17,
+     "pct": 50,
      "ref": {
       "file": "data/verdict.json",
       "note": "decider-4b-v2.1-Q8_0.gguf at b79f09d, llama.cpp b11310-f872b5911, decider-plain layout, measured 2026-09-30",
@@ -13005,8 +13077,8 @@
      "value": 0.7995
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 77,
+     "cohort": 17,
+     "pct": 74,
      "ref": {
       "file": "data/verdict.json",
       "note": "decider-4b-v2.1-Q8_0.gguf at b79f09d, llama.cpp b11310-f872b5911, decider-plain layout, measured 2026-09-30",
@@ -17103,7 +17175,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7031",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7040",
    "facets": {
     "aa.analyst_agent": {
      "cohort": 6,
@@ -18878,7 +18950,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7261",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7270",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -19740,7 +19812,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4344",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4353",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -20357,7 +20429,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9647",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9656",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -20640,7 +20712,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8798",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8807",
    "facets": {},
    "facts": {
     "arch": "MossTTSLocalModel",
@@ -20988,7 +21060,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8756",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8765",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -21300,7 +21372,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8024",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8033",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -21621,7 +21693,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9686",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9695",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -21940,7 +22012,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8884",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8893",
    "facets": {
     "community.hf-discussions": {
      "approval": 100,
@@ -23118,7 +23190,7 @@
     "gufo",
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5302",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5311",
    "facets": {
     "aa-t2i.elo": {
      "cohort": 10,
@@ -25023,7 +25095,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1629",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1638",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -25906,7 +25978,7 @@
     "audio.cpp",
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10770",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10779",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -26311,7 +26383,7 @@
     "crispasr",
     "gufo"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7889",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7898",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -29695,7 +29767,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4860",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4869",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -29967,7 +30039,7 @@
     "crispasr",
     "gufo"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4894",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4903",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -30274,7 +30346,7 @@
     "crispasr",
     "gufo"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4934",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4943",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -30596,7 +30668,7 @@
     "crispasr",
     "gufo"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4964",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4973",
    "facets": {
     "community.reddit-localllama": {
      "approval": null,
@@ -32275,7 +32347,7 @@
      "value": 2.47
     },
     "verdict.accuracy": {
-     "cohort": 15,
+     "cohort": 17,
      "pct": 3,
      "ref": {
       "file": "data/verdict.json",
@@ -32286,8 +32358,8 @@
      "value": 0.5671
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 37,
+     "cohort": 17,
+     "pct": 32,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-0.8B-Q8_0.gguf at cf8a611, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -32297,7 +32369,7 @@
      "value": 0.7694
     },
     "verdict.hard": {
-     "cohort": 15,
+     "cohort": 17,
      "pct": 3,
      "ref": {
       "file": "data/verdict.json",
@@ -37952,8 +38024,8 @@
      "value": 2.23
     },
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 17,
+     "cohort": 17,
+     "pct": 15,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-2B-Q8_0.gguf at e05864f, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -37963,8 +38035,8 @@
      "value": 0.645
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 43,
+     "cohort": 17,
+     "pct": 38,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-2B-Q8_0.gguf at e05864f, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -37974,8 +38046,8 @@
      "value": 0.7711
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 23,
+     "cohort": 17,
+     "pct": 21,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-2B-Q8_0.gguf at e05864f, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -41667,7 +41739,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6226",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6235",
    "facets": {
     "aa.apex_agents": {
      "cohort": 8,
@@ -44626,8 +44698,8 @@
      "value": 3.28
     },
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 67,
+     "cohort": 17,
+     "pct": 59,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-4B-Q8_0.gguf at 86835bf, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -44637,8 +44709,8 @@
      "value": 0.7879
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 70,
+     "cohort": 17,
+     "pct": 62,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-4B-Q8_0.gguf at 86835bf, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -44648,8 +44720,8 @@
      "value": 0.8244
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 63,
+     "cohort": 17,
+     "pct": 56,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-4B-Q8_0.gguf at 86835bf, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -46001,7 +46073,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1679",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1688",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -46620,8 +46692,8 @@
      "value": 0.092134831461
     },
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 67,
+     "cohort": 17,
+     "pct": 59,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-9B-Q8_0.gguf at 9716a63, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -46631,8 +46703,8 @@
      "value": 0.7879
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 83,
+     "cohort": 17,
+     "pct": 74,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-9B-Q8_0.gguf at 9716a63, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -46642,8 +46714,8 @@
      "value": 0.8678
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 70,
+     "cohort": 17,
+     "pct": 62,
      "ref": {
       "file": "data/verdict.json",
       "note": "Qwen3.5-9B-Q8_0.gguf at 9716a63, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -48069,7 +48141,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1761",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1770",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -50779,7 +50851,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1844",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1853",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -53148,7 +53220,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6909",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6918",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -54444,7 +54516,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1929",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1938",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -57455,7 +57527,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2081",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2090",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -59319,7 +59391,7 @@
     "audio.cpp",
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8446",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8455",
    "facets": {
     "aa-tts.elo": {
      "cohort": 9,
@@ -59818,8 +59890,8 @@
      "value": 59.239704849846284
     },
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 50,
+     "cohort": 17,
+     "pct": 44,
      "ref": {
       "file": "data/verdict.json",
       "note": "StandardOne-8B-Q8_0.gguf at 4eb253d, llama.cpp b11311-f7b384c1e, standardone-native layout, measured 2026-09-30",
@@ -59829,8 +59901,8 @@
      "value": 0.7749
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 77,
+     "cohort": 17,
+     "pct": 68,
      "ref": {
       "file": "data/verdict.json",
       "note": "StandardOne-8B-Q8_0.gguf at 4eb253d, llama.cpp b11311-f7b384c1e, standardone-native layout, measured 2026-09-30",
@@ -59840,8 +59912,8 @@
      "value": 0.8492
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 43,
+     "cohort": 17,
+     "pct": 38,
      "ref": {
       "file": "data/verdict.json",
       "note": "StandardOne-8B-Q8_0.gguf at 4eb253d, llama.cpp b11311-f7b384c1e, standardone-native layout, measured 2026-09-30",
@@ -60283,7 +60355,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8377",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8386",
    "facets": {
     "community.hf-discussions": {
      "approval": 100,
@@ -60770,7 +60842,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2410",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2419",
    "facets": {
     "aa-t2i.elo": {
      "cohort": 10,
@@ -61420,7 +61492,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9586",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9595",
    "facets": {
     "community.hackernews": {
      "approval": 100,
@@ -61753,7 +61825,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9617",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9626",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -62087,7 +62159,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5150",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5159",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -62470,7 +62542,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8105",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8114",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -62997,7 +63069,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2586",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2595",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -64335,7 +64407,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9544",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9553",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -64659,7 +64731,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2652",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2661",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -65630,7 +65702,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2728",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2737",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -66872,7 +66944,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9101",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9110",
    "facets": {
     "aa-tts.elo": {
      "cohort": 9,
@@ -67129,7 +67201,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9725",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9734",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -67421,7 +67493,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2252",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2261",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -67896,7 +67968,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2325",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2334",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -68236,7 +68308,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9429",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9438",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -68516,7 +68588,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4443",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4452",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -69249,7 +69321,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4769",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4778",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -69870,7 +69942,19 @@
       "repo": null,
       "shown": "jev.sealed p75"
      },
-     " sealed against a public half within a tenth of a point of it -- as clean as this board's contamination check gets. the cost is the serving shape: an embedding server plus an fp32 head the caller applies, which is why it is carried and not served on the roster's host."
+     " sealed against a public half within a tenth of a point of it -- as clean as this board's contamination check gets. the cost is the serving shape: an embedding server plus an fp32 head the caller applies. verdict applies it on the roster's host and reads ",
+     {
+      "key": "verdict.accuracy",
+      "repo": null,
+      "shown": "verdict.accuracy p97"
+     },
+     " on the public items at q8 with ",
+     {
+      "key": "verdict.calibration",
+      "repo": null,
+      "shown": "verdict.calibration p97"
+     },
+     " calibration, the best of both on the decision roster."
     ],
     "one_liner": [
      "fourth on jevbench with no sealed-set drop at all, and not something llama-server can answer with on its own."
@@ -70007,6 +70091,39 @@
       "url": "https://benchmarkheaven.com/jev-models"
      },
      "value": 70.50021890148207
+    },
+    "verdict.accuracy": {
+     "cohort": 17,
+     "pct": 97,
+     "ref": {
+      "file": "data/verdict.json",
+      "note": "Jev-Omni-Q8_0.gguf at f07b38e, llama.cpp b11345-a868c3e3c, jev-omni layout, measured 2026-10-01",
+      "source": "verdict, measured here",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     "value": 0.8831
+    },
+    "verdict.calibration": {
+     "cohort": 17,
+     "pct": 97,
+     "ref": {
+      "file": "data/verdict.json",
+      "note": "Jev-Omni-Q8_0.gguf at f07b38e, llama.cpp b11345-a868c3e3c, jev-omni layout, measured 2026-10-01",
+      "source": "verdict, measured here",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     "value": 0.9065
+    },
+    "verdict.hard": {
+     "cohort": 17,
+     "pct": 97,
+     "ref": {
+      "file": "data/verdict.json",
+      "note": "Jev-Omni-Q8_0.gguf at f07b38e, llama.cpp b11345-a868c3e3c, jev-omni layout, measured 2026-10-01",
+      "source": "verdict, measured here",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     "value": 0.7748
     }
    },
    "facts": {
@@ -70336,8 +70453,8 @@
    "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L1391",
    "facets": {
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 90,
+     "cohort": 17,
+     "pct": 85,
      "ref": {
       "file": "data/verdict.json",
       "note": "jevk5-4b-v0.2-Q8_0.gguf at ec67b0b, llama.cpp b11310-f872b5911, semif layout, measured 2026-09-30",
@@ -70347,8 +70464,8 @@
      "value": 0.8615
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 97,
+     "cohort": 17,
+     "pct": 91,
      "ref": {
       "file": "data/verdict.json",
       "note": "jevk5-4b-v0.2-Q8_0.gguf at ec67b0b, llama.cpp b11310-f872b5911, semif layout, measured 2026-09-30",
@@ -70358,8 +70475,8 @@
      "value": 0.9042
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 90,
+     "cohort": 17,
+     "pct": 85,
      "ref": {
       "file": "data/verdict.json",
       "note": "jevk5-4b-v0.2-Q8_0.gguf at ec67b0b, llama.cpp b11310-f872b5911, semif layout, measured 2026-09-30",
@@ -70633,7 +70750,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2834",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2843",
    "facets": {
     "aa-t2i.elo": {
      "cohort": 10,
@@ -71152,7 +71269,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5000",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5009",
    "facets": {
     "aa-t2i.elo": {
      "cohort": 10,
@@ -71575,7 +71692,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5040",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5049",
    "facets": {
     "aa-t2i.elo": {
      "cohort": 10,
@@ -71931,7 +72048,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2535",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2544",
    "facets": {
     "aa-t2i.elo": {
      "cohort": 10,
@@ -72446,7 +72563,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2461",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2470",
    "facets": {
     "aa-t2i.elo": {
      "cohort": 10,
@@ -72735,7 +72852,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2499",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2508",
    "facets": {
     "aa-t2i.elo": {
      "cohort": 10,
@@ -73038,7 +73155,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10651",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10660",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -73479,7 +73596,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9064",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9073",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -76011,7 +76128,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10934",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10943",
    "facets": {},
    "facts": {},
    "gguf_only": null,
@@ -76163,7 +76280,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10954",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10963",
    "facets": {},
    "facts": {},
    "gguf_only": true,
@@ -76296,7 +76413,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10969",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10978",
    "facets": {},
    "facts": {},
    "gguf_only": true,
@@ -76428,7 +76545,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9788",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9797",
    "facets": {},
    "facts": {},
    "gguf_only": true,
@@ -77018,7 +77135,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3250",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3259",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -78978,7 +79095,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6973",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6982",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -80561,7 +80678,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3317",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3326",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -82237,7 +82354,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10199",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10208",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -82432,7 +82549,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9938",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9947",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -82648,7 +82765,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9969",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9978",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -82981,7 +83098,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10850",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10859",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -83241,7 +83358,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9757",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9766",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -83510,7 +83627,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10865",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10874",
    "facets": {},
    "facts": {
     "arch": "M2M100ForConditionalGeneration",
@@ -83861,7 +83978,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3519",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3528",
    "facets": {
     "aa-tts.elo": {
      "cohort": 9,
@@ -84221,7 +84338,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9817",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9826",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -84516,7 +84633,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3547",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3556",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -84988,7 +85105,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3587",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3596",
    "facets": {
     "community.hf-discussions": {
      "approval": 100,
@@ -85818,7 +85935,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3808",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3817",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -87037,7 +87154,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3632",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3641",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -87530,8 +87647,8 @@
      "value": 79.13125
     },
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 97,
+     "cohort": 17,
+     "pct": 91,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-12b-it-Q8_0.gguf at fc034cf, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -87541,8 +87658,8 @@
      "value": 0.8701
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 63,
+     "cohort": 17,
+     "pct": 56,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-12b-it-Q8_0.gguf at fc034cf, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -87552,8 +87669,8 @@
      "value": 0.8063
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 97,
+     "cohort": 17,
+     "pct": 91,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-12b-it-Q8_0.gguf at fc034cf, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -88548,7 +88665,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3698",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3707",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -90374,7 +90491,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3752",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3761",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -92168,7 +92285,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3863",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3872",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -92608,8 +92725,8 @@
      "value": 88.35375
     },
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 23,
+     "cohort": 17,
+     "pct": 21,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-E2B-it-Q8_0.gguf at 0314792, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -92619,7 +92736,7 @@
      "value": 0.6753
     },
     "verdict.calibration": {
-     "cohort": 15,
+     "cohort": 17,
      "pct": 3,
      "ref": {
       "file": "data/verdict.json",
@@ -92630,8 +92747,8 @@
      "value": 0.4636
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 10,
+     "cohort": 17,
+     "pct": 9,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-E2B-it-Q8_0.gguf at 0314792, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -93550,7 +93667,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3933",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3942",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -93982,8 +94099,8 @@
      "value": 90.4925
     },
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 57,
+     "cohort": 17,
+     "pct": 50,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-E4B-it-Q8_0.gguf at bfc15c3, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -93993,8 +94110,8 @@
      "value": 0.7792
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 23,
+     "cohort": 17,
+     "pct": 21,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-E4B-it-Q8_0.gguf at bfc15c3, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -94004,8 +94121,8 @@
      "value": 0.6728000000000001
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 57,
+     "cohort": 17,
+     "pct": 50,
      "ref": {
       "file": "data/verdict.json",
       "note": "gemma-4-E4B-it-Q8_0.gguf at bfc15c3, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -95163,7 +95280,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10887",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10896",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -95454,7 +95571,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10739",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10748",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -95632,7 +95749,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10303",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10312",
    "facets": {},
    "facts": {
     "params_source": "name",
@@ -95960,7 +96077,7 @@
     "TTS.cpp",
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4018",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4027",
    "facets": {
     "aa-tts.elo": {
      "cohort": 9,
@@ -96439,7 +96556,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10165",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10174",
    "facets": {
     "open-asr.accuracy": {
      "cohort": 34,
@@ -96669,7 +96786,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4062",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4071",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -97234,7 +97351,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4175",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4184",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -97910,7 +98027,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4112",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4121",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -98603,7 +98720,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4227",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4236",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -98792,8 +98909,8 @@
      "value": 1289.1955592516088
     },
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 30,
+     "cohort": 17,
+     "pct": 26,
      "ref": {
       "file": "data/verdict.json",
       "note": "granite-4.2-3b-Q8_0.gguf at c40945d, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -98803,8 +98920,8 @@
      "value": 0.6797
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 10,
+     "cohort": 17,
+     "pct": 9,
      "ref": {
       "file": "data/verdict.json",
       "note": "granite-4.2-3b-Q8_0.gguf at c40945d, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -98814,8 +98931,8 @@
      "value": 0.554
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 17,
+     "cohort": 17,
+     "pct": 15,
      "ref": {
       "file": "data/verdict.json",
       "note": "granite-4.2-3b-Q8_0.gguf at c40945d, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -99399,7 +99516,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4282",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4291",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -100045,7 +100162,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10512",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10521",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -100330,7 +100447,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10549",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10558",
    "facets": {
     "community.hf-discussions": {
      "approval": 100,
@@ -100619,7 +100736,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10586",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10595",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -100865,7 +100982,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10618",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10627",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -101219,7 +101336,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4825",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4834",
    "facets": {
     "aa-t2i.elo": {
      "cohort": 10,
@@ -101748,7 +101865,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6297",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6306",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -102961,7 +103078,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7314",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7323",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -103868,7 +103985,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10802",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10811",
    "facets": {},
    "facts": {
     "arch": "Qwen3ASRForConditionalGeneration",
@@ -104073,7 +104190,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10005",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10014",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -105127,7 +105244,7 @@
     "audio.cpp",
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8848",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8857",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -105507,7 +105624,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5233",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5242",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -105870,7 +105987,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5261",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5270",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -106328,7 +106445,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L11003",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L11012",
    "facets": {},
    "facts": {
     "arch": "XLMRobertaForTokenClassification",
@@ -106610,7 +106727,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8673",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8682",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -107018,7 +107135,7 @@
     "audio.cpp",
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8955",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8964",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -107310,7 +107427,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10688",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10697",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -107511,7 +107628,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10224",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10233",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -108010,7 +108127,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5359",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5368",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -109316,7 +109433,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5430",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5439",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -110111,7 +110228,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4396",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4405",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -110787,7 +110904,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9211",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9220",
    "facets": {
     "aa-tts.elo": {
      "cohort": 9,
@@ -111292,7 +111409,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9873",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9882",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -111687,7 +111804,7 @@
     "audio.cpp",
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9903",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9912",
    "facets": {},
    "facts": {
     "arch": "VibeVoiceForASRTraining",
@@ -111962,7 +112079,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9174",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9183",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -112268,7 +112385,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8990",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8999",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -112671,7 +112788,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4490",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4499",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -113446,7 +113563,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6353",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6362",
    "facets": {
     "aa.analyst_agent": {
      "cohort": 6,
@@ -114809,7 +114926,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9259",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9268",
    "facets": {
     "aa-tts.elo": {
      "cohort": 9,
@@ -115117,7 +115234,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7917",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7926",
    "facets": {
     "aa-stt.accuracy": {
      "cohort": 7,
@@ -115516,7 +115633,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5499",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5508",
    "facets": {
     "aa-stt-streaming.accuracy": {
      "cohort": 1,
@@ -116006,7 +116123,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10141",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10150",
    "facets": {
     "aa-stt.accuracy": {
      "cohort": 7,
@@ -116675,7 +116792,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6411",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6420",
    "facets": {
     "aa.analyst_agent": {
      "cohort": 6,
@@ -118456,7 +118573,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8571",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8580",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -118940,7 +119057,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5524",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5533",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -120138,7 +120255,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5589",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5598",
    "facets": {
     "aa.apex_agents": {
      "cohort": 8,
@@ -121677,7 +121794,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6468",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6477",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -122722,7 +122839,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8231",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8240",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -122988,7 +123105,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10117",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10126",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -123313,7 +123430,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7653",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7662",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -123711,7 +123828,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7691",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7700",
    "facets": {
     "aa-stt.accuracy": {
      "cohort": 7,
@@ -124059,7 +124176,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10421",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10430",
    "facets": {
     "aa-tts.elo": {
      "cohort": 9,
@@ -124276,7 +124393,7 @@
    "engines": [
     "transcribe.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10359",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10368",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -124579,7 +124696,7 @@
     "audio.cpp",
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7951",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7960",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -124867,7 +124984,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9334",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9343",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -125133,7 +125250,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10274",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10283",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -125451,7 +125568,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7625",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7634",
    "facets": {
     "aa-stt.accuracy": {
      "cohort": 7,
@@ -125836,7 +125953,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7596",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7605",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -126085,7 +126202,7 @@
    "engines": [
     "transcribe.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10330",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10339",
    "facets": {},
    "facts": {
     "params_source": "name",
@@ -126298,7 +126415,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8205",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8214",
    "facets": {
     "community.hf-discussions": {
      "approval": 50,
@@ -126490,7 +126607,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10027",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10036",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -126699,7 +126816,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8605",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8614",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -126993,7 +127110,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10983",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10992",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -127511,7 +127628,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5669",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5678",
    "facets": {
     "aa.apex_agents": {
      "cohort": 8,
@@ -129193,7 +129310,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5731",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5740",
    "facets": {
     "aa.apex_agents": {
      "cohort": 8,
@@ -129737,8 +129854,8 @@
      "value": 9.384037015615963
     },
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 37,
+     "cohort": 17,
+     "pct": 32,
      "ref": {
       "file": "data/verdict.json",
       "note": "gpt-oss-20b-Q8_0.gguf at d449b42, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -129748,8 +129865,8 @@
      "value": 0.697
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 30,
+     "cohort": 17,
+     "pct": 26,
      "ref": {
       "file": "data/verdict.json",
       "note": "gpt-oss-20b-Q8_0.gguf at d449b42, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -129759,8 +129876,8 @@
      "value": 0.6803
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 37,
+     "cohort": 17,
+     "pct": 32,
      "ref": {
       "file": "data/verdict.json",
       "note": "gpt-oss-20b-Q8_0.gguf at d449b42, llama.cpp b11310-f872b5911, chat layout, measured 2026-09-30",
@@ -130493,7 +130610,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10250",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10259",
    "facets": {
     "aa-stt.accuracy": {
      "cohort": 7,
@@ -131045,7 +131162,7 @@
     "crispasr",
     "whisper.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5788",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5797",
    "facets": {
     "aa-stt.accuracy": {
      "cohort": 7,
@@ -131423,7 +131540,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4541",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4550",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -132175,7 +132292,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4660",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4669",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -132962,7 +133079,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4598",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L4607",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -133409,8 +133526,8 @@
      "value": 0.82
     },
     "verdict.accuracy": {
-     "cohort": 15,
-     "pct": 10,
+     "cohort": 17,
+     "pct": 9,
      "ref": {
       "file": "data/verdict.json",
       "note": "MiniCPM5-2B-Q8_0.gguf at 2079a22, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -133420,8 +133537,8 @@
      "value": 0.6234
     },
     "verdict.calibration": {
-     "cohort": 15,
-     "pct": 17,
+     "cohort": 17,
+     "pct": 15,
      "ref": {
       "file": "data/verdict.json",
       "note": "MiniCPM5-2B-Q8_0.gguf at 2079a22, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -133431,8 +133548,8 @@
      "value": 0.6654
     },
     "verdict.hard": {
-     "cohort": 15,
-     "pct": 30,
+     "cohort": 17,
+     "pct": 26,
      "ref": {
       "file": "data/verdict.json",
       "note": "MiniCPM5-2B-Q8_0.gguf at 2079a22, llama.cpp b11311-f7b384c1e, chat layout, measured 2026-09-30",
@@ -133910,7 +134027,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9025",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9034",
    "facets": {
     "community.hf-discussions": {
      "approval": 100,
@@ -134423,7 +134540,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2862",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2871",
    "facets": {
     "card.swebench_pro": {
      "cohort": 11,
@@ -135413,7 +135530,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2937",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L2946",
    "facets": {
     "card.swebench_pro": {
      "cohort": 11,
@@ -136383,7 +136500,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3084",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3093",
    "facets": {
     "card.deepswe": {
      "cohort": 9,
@@ -137301,7 +137418,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3176",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3185",
    "facets": {
     "card.deepswe": {
      "cohort": 9,
@@ -137996,7 +138113,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3010",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L3019",
    "facets": {
     "card.gpqa": {
      "cohort": 34,
@@ -138522,7 +138639,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8919",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8928",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -138879,7 +138996,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5954",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5963",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -140257,7 +140374,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5824",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5833",
    "facets": {
     "community.hackernews": {
      "approval": 75,
@@ -141576,7 +141693,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5889",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5898",
    "facets": {
     "community.hackernews": {
      "approval": 100,
@@ -142632,7 +142749,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6524",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6533",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -143522,7 +143639,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6662",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6671",
    "facets": {
     "card.aime": {
      "cohort": 18,
@@ -144301,7 +144418,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6597",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6606",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -144809,7 +144926,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7498",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7507",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -145253,7 +145370,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8157",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8166",
    "facets": {
     "community.hf-discussions": {
      "approval": 100,
@@ -145476,7 +145593,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9846",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L9855",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -145745,7 +145862,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10905",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10914",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -146004,7 +146121,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8544",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8553",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -146346,7 +146463,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5074",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5083",
    "facets": {
     "aa-t2i.elo": {
      "cohort": 10,
@@ -146907,7 +147024,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6022",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6031",
    "facets": {
     "aa.apex_agents": {
      "cohort": 8,
@@ -148366,7 +148483,7 @@
     "weak_for": []
    },
    "engines": [],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10388",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10397",
    "facets": {
     "aa-tts.elo": {
      "cohort": 9,
@@ -148594,7 +148711,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8413",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L8422",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -148955,7 +149072,7 @@
    "engines": [
     "stable-diffusion.cpp"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5205",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L5214",
    "facets": {
     "community.hackernews": {
      "approval": null,
@@ -149586,7 +149703,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6776",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6785",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -150651,7 +150768,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6156",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6165",
    "facets": {
     "aa.analyst_agent": {
      "cohort": 6,
@@ -152233,7 +152350,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6089",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6098",
    "facets": {
     "aa.analyst_agent": {
      "cohort": 6,
@@ -153552,7 +153669,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6838",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L6847",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -154147,7 +154264,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7431",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7440",
    "facets": {
     "community.hf-discussions": {
      "approval": 0,
@@ -154507,7 +154624,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7366",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7375",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -155159,7 +155276,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7208",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7217",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -156748,7 +156865,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7156",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7165",
    "facets": {
     "aa.apex_agents": {
      "cohort": 8,
@@ -159024,7 +159141,7 @@
     "llama.cpp",
     "vllm"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7084",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L7093",
    "facets": {
     "aa.critpt": {
      "cohort": 68,
@@ -160553,7 +160670,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10481",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10490",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -160827,7 +160944,7 @@
    "engines": [
     "crispasr"
    ],
-   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10715",
+   "entry_url": "https://github.com/khimaros/aimbot/blob/master/registry/models.yaml#L10724",
    "facets": {
     "community.hf-discussions": {
      "approval": null,
@@ -160922,9 +161039,9 @@
   }
  ],
  "provenance": {
-  "registry/dashboard.yaml": "5d776b368a42",
+  "registry/dashboard.yaml": "28327a41ce22",
   "registry/licenses.yaml": "383a18f59053",
-  "registry/models.yaml": "56cd67c3d8e3",
+  "registry/models.yaml": "668d8b88eccd",
   "registry/sampling.yaml": "e38566d41643",
   "research/data/artificial-analysis-image.json": "abe08162ff62",
   "research/data/artificial-analysis-speech.json": "b4f33f432064",
@@ -160964,8 +161081,8 @@
   "research/data/tbench.json": "e2c3969a875a",
   "research/data/template-probes.json": "b83663e714f8",
   "research/data/tts-arena.json": "dcf8c05d510f",
-  "research/data/usecase.json": "b0bdfd176ac2",
-  "research/data/verdict.json": "e977881061fc",
+  "research/data/usecase.json": "bfb0df077b11",
+  "research/data/verdict.json": "39673717afec",
   "research/data/voicearena.json": "19d0f176c882"
  },
  "repo_url": "https://github.com/khimaros/aimbot",
@@ -162140,7 +162257,9 @@
   "showdown-t2i.adherence": 0.33,
   "swerebench.resolved": 0.1,
   "tts-arena.elo": 0.2,
-  "verdict.*": 0.0,
+  "verdict.accuracy": 0.6,
+  "verdict.calibration": 0.4,
+  "verdict.hard": 0.0,
   "voicearena.*": 0.2
  }
 }

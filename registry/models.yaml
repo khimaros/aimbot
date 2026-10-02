@@ -1530,14 +1530,23 @@ models:
       head:
         repo: Cloudflare/clef
         file: joint_head.safetensors
-        # no `name`: nothing can call this head on a gguf yet, and verdict
-        # refuses a head with none
+        revision: 2f3de3dd85f379784083b0814d997ab627200f0c
+        sha256: a010ac04f078e699988e4049cbea5e62c962393f59fec366640b64e8d69a4953
+        kind: joint-schema
+        name: clef
         reads:
           states: all
+        heads: 16
+        rows:
+          repo: Cloudflare/clef
+          revision: 2f3de3dd85f379784083b0814d997ab627200f0c
+          file: model-00001-of-00012.safetensors
+          tensor: lm_head.weight
       note: the head needs the final hidden state of every position AND the
-        backbone's output embedding matrix, which an embedding server does not hand
-        out. the only caller published is the torch one in `joint_schema_model.py`,
-        so nothing applies this head to a gguf today
+        backbone's output embedding rows, which an embedding server does not hand
+        out, so verdict range-reads them from the bf16 `lm_head.weight`. verdict's
+        port of the head is the one caller for a gguf, the same code that reads
+        clef-flash, and it has NOT been checked against the bf16 backbone
     turns:
       source: abenzerps/Clef-GGUF
       developer: rejected

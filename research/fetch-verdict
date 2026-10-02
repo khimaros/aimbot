@@ -3,7 +3,9 @@
 """Fetch verdict's measured results into data/verdict.json.
 
     fetch-verdict                          # the pinned revision's export
-    fetch-verdict --path FILE              # a local export, for development
+    fetch-verdict --local                  # the verdict checkout beside this one
+    fetch-verdict --local DIR              # a verdict checkout somewhere else
+    fetch-verdict --path FILE              # one export file, for development
 
 verdict is the client that reads decision models through llama-swap on the
 roster's own host, and it publishes what it measured as structured data:
@@ -22,6 +24,11 @@ files on one day -- so rows are joined to the registry downstream by the
 
 the url carries a verdict revision, pinned the way fetch-jevbench pins a board
 revision: a sweep that does not move it re-reads the same run.
+
+`--local` is for the hours between a run finishing and its commit landing. it is
+never the default, because a capture read off a working tree cannot be re-read:
+the export's own `verdict_rev` and `verdict_dirty` are kept so the capture says
+which it was, and the pin should move once verdict commits.
 """
 
 import argparse
@@ -35,9 +42,12 @@ import capture
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = "data/verdict.json"
 SCHEMA = "verdict-export/1"
-# the verdict commit the export is read at; --path reads a local one
+# the verdict commit the export is read at; --local and --path read a file
 REV = "a177fdc2577891f2e8a06e9b16651b65fc0a8022"
-URL = "https://raw.githubusercontent.com/khimaros/verdict/%s/eval/results/export.json"
+EXPORT = "eval/results/export.json"
+URL = "https://raw.githubusercontent.com/khimaros/verdict/%s/" + EXPORT
+# where `--local` looks with no directory given: a checkout beside this repo
+LOCAL = os.path.join(HERE, "..", "..", "verdict")
 
 META = ("schema", "source", "hardware", "suites", "metrics_units",
         "verdict_rev", "verdict_dirty")
@@ -84,13 +94,17 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--path", help="read a local export instead of the pinned url")
+    ap.add_argument("--local", nargs="?", const=LOCAL, metavar="DIR",
+                    help="read the export out of a verdict checkout, by default "
+                         "the one beside this repo")
     ap.add_argument("--rev", default=REV, help="the verdict commit to read")
     ap.add_argument("--refresh", action="store_true")
     ap.add_argument("--allow-shrink", action="store_true")
     args = ap.parse_args()
 
-    if args.path:
-        payload = json.load(open(args.path))
+    path = args.path or (args.local and os.path.join(args.local, EXPORT))
+    if path:
+        payload = json.load(open(path))
     elif args.rev:
         payload = fetch(URL % args.rev, args.refresh)
     else:
@@ -105,8 +119,9 @@ def main():
     if not written:
         sys.exit(capture.refused(args.out, now, before, "rows"))
     weighed = sum(1 for r in got["rows"] if (r.get("weights") or {}).get("file"))
-    print("wrote %s: %d rows, %d naming the weights they measured, at verdict %s"
-          % (args.out, now, weighed, (got["meta"].get("verdict_rev") or "?")[:12]))
+    print("wrote %s: %d rows, %d naming the weights they measured, at verdict %s%s"
+          % (args.out, now, weighed, (got["meta"].get("verdict_rev") or "?")[:12],
+             " with uncommitted changes" if got["meta"].get("verdict_dirty") else ""))
 
 
 if __name__ == "__main__":

@@ -84,11 +84,17 @@ weights:
   jev.intelligence: 0.60
   jev.calibration: 0.40
   # verdict runs jevbench's public items through the gguf a host serves, on
-  # that host -- the quantized half of the question the board cannot answer. it
-  # is one machine, public items only, and one client's way of reading each
-  # model, so it rides at zero: on the model, rankable by a reader who moves
-  # the slider, and never averaged into the board it re-runs
-  verdict.*: 0.0
+  # that host -- the quantized half of the question the board cannot answer,
+  # and the half a reader of this roster actually runs. so it weighs what the
+  # board does, split the same way: half of a decision model's score is the
+  # bf16 weights on the author's server and half is the file on ours. it is
+  # still one machine, public items only, and one client's reading of each
+  # model. `verdict.hard` is a slice of `verdict.accuracy` and rides at zero for
+  # the reason `jev.sealed` does. asked of decision models only: `verdict` is in
+  # resolve-ids' BOARD_NEEDS, so the text models it also ran are not scored on it
+  verdict.accuracy: 0.60
+  verdict.calibration: 0.40
+  verdict.hard: 0.0
 
 # the named weightings the page offers, each a whole answer to "what is
 # quality" rather than a nudge. `base: true` starts from `weights:` above;

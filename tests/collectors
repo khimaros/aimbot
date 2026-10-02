@@ -7207,6 +7207,36 @@ def verdict_keeps_one_row_per_model_suite_and_variant():
 
 
 @test
+def verdict_can_be_read_from_a_checkout_beside_this_one_when_asked():
+    """A sweep verdict has not committed yet is still a sweep worth reading.
+
+    The pinned url is the default and stays it: a capture that names a commit
+    can be re-read. `--local DIR` reads the export out of a verdict checkout
+    instead, for the hours between a run finishing and its commit landing, and
+    the capture keeps `verdict_dirty` so a reader can tell which it was.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        export = os.path.join(tmp, "verdict", "eval", "results")
+        os.makedirs(export)
+        with open(os.path.join(export, "export.json"), "w") as f:
+            json.dump({"schema": "verdict-export/1", "verdict_rev": "06bd",
+                       "verdict_dirty": True,
+                       "rows": [verdict_row("m:Q8_0", "2026-10-01T00:00:00+00:00", 0.8)]}, f)
+        out = os.path.join(tmp, "verdict.json")
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-verdict"), "--local",
+                            os.path.join(tmp, "verdict"), "--out", out],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        eq(r.returncode, 0, "a checkout is read: %s" % r.stdout)
+        got = json.load(open(out))
+        eq(len(got["rows"]), 1, "its row is captured")
+        eq(got["meta"]["verdict_dirty"], True, "and so is the fact the tree was dirty")
+        eq("uncommitted" in r.stdout, True, "which the run says out loud: %s" % r.stdout)
+    finally:
+        shutil.rmtree(tmp)
+
+
+@test
 def verdict_refuses_a_schema_it_was_not_written_for():
     mod = load_script("fetch_verdict", os.path.join(RESEARCH, "fetch-verdict"))
     eq(mod.shape({"schema": "verdict-export/2", "rows": [verdict_row("m", "t", 1)]}),
@@ -7380,8 +7410,8 @@ def the_layout_table_is_published_as_json_with_each_head_resolved():
     shipped = json.load(open(os.path.join(ROOT, "docs", "layouts.json")))
     eq(shipped["models"]["Cloudflare/clef-flash"]["readout"], "head:clef-flash",
        "the shipped file maps a model to its readout")
-    eq(shipped["models"]["Cloudflare/clef"]["readout"], "head",
-       "and names a head with no caller as one, so it is refused")
+    eq(shipped["layouts"]["clef"]["constants"], shipped["layouts"]["clef-flash"]["constants"],
+       "and two models on one author's script share its bytes")
     eq(shipped["layouts"]["jev-omni"]["head"]["kind"], "linear",
        "the shipped file carries jev-omni's head")
     eq(shipped["layouts"]["decider-plain"]["affixes"]["assistant_open"], "\nAnswer: (",
@@ -7741,6 +7771,13 @@ def verdict_joins_by_the_weights_it_measured_at_the_headline_variant():
     chat = dict(model, readout={"kind": "chat"})
     eq(au.verdict_facets(capture, chat)["verdict.accuracy"]["value"], 0.99,
        "a model read through its template takes the chat run")
+    # a head model's run is the one at its head's name. a chat run of it is the
+    # backbone read as a language model, which is a different model's number
+    named = dict(model, readout={"kind": "head", "head": {"name": "winnow"}})
+    eq(au.verdict_facets(capture, named)["verdict.accuracy"]["value"], 0.86,
+       "a head model takes the run at its head's name")
+    eq(au.verdict_facets(capture, dict(model, readout={"kind": "head", "head": {}})), {},
+       "and a head nobody named takes none, least of all the chat run")
     eq(au.verdict_facets(capture, {"repos": ["other/X-GGUF"]}), {},
        "a model none of whose repos ran carries nothing")
 
