@@ -52,17 +52,14 @@ def dashboard_picks(ram=None):
     return {r["repo"]: r["rung"] for r in d["rows"] if r.get("rung")}, d["hardware"]
 
 
-def held_by(rung, facts, hardware):
+def held_by(rung):
     """What keeps a rung from fitting, or None where it fits.
 
-    Two different sentences: the model's own context window is shorter than
-    the view asks for (or unknown), or the box cannot hold the weights and the
-    cache at that context.
+    One sentence: the box cannot hold the weights and the cache at the context
+    the view asks for. A window shorter than the view is not a second one --
+    the page charges a model for the window it has.
     """
-    if rung.get("fits"):
-        return None
-    native = facts.get("context_native") or facts.get("context_gguf")
-    return "context" if not native or native < hardware["minCtx"] else "memory"
+    return None if rung.get("fits") else "memory"
 
 
 def default_repo(m):
@@ -434,34 +431,27 @@ def hub_popularity(cat=None, cards=None):
 def unranked(budget=None):
     """(short, repo, quant, gib, held, facts, model) for every roster model not ranked.
 
-    `held` is None where a rung fits, else what holds it back: "memory" or
-    "context".
+    `held` is None where a rung fits, else "memory".
 
     Two reasons a model is here and they are different questions, so the caller
     splits them: nothing measured it, or nothing that fits measures it. The rung
     is the dashboard's -- its pick where one fits, its smallest where memory
-    holds it back, and its best with no budget where its own window does, since
-    no box fits that and the smallest rung would answer a question nobody asked.
+    holds it back.
     """
     facts = model_facts()
-    picks, hardware = dashboard_picks(budget)
-    best = None
+    picks, _ = dashboard_picks(budget)
     ranked = {r["name"] for r in load(budget, picks)}
     out = []
     for short, key, repo, aa_slug, m in roster():
         if short in ranked:
             continue
         rung, f = picks.get(key) or {}, facts.get(key) or {}
-        held = held_by(rung, f, hardware)
-        if held == "context":
-            best = dashboard_picks(0)[0] if best is None else best
-            rung = best.get(key) or rung
         out.append((short, rung.get("repo") or repo, rung.get("quant"), rung.get("gib"),
-                    held, f, m))
+                    held_by(rung), f, m))
     return out
 
 
-def size_row(short, repo, quant, gib, f, m, pop, held=None):
+def size_row(short, repo, quant, gib, f, m, pop):
     import notes as note_refs
     p = pop.get(repo) or {}
     # the note written about THIS rung, where there is one, and the model's own
@@ -474,8 +464,7 @@ def size_row(short, repo, quant, gib, f, m, pop, held=None):
                             note_refs.load(), model=repo)[0]
     label = quant_label(quant) if quant else "-"
     return "| %s | %s | %s | %s / %s | %s | %s | %s |" % (
-        short, label + (", context short of the view" if held == "context" else ""),
-        "%.1f" % gib if gib else "?",
+        short, label, "%.1f" % gib if gib else "?",
         "%gb" % f["params_total_b"] if f.get("params_total_b") else "?",
         "%gb" % f["params_active_b"] if f.get("params_active_b") else "?",
         format(p.get("downloads") or 0, ",") if p else "-",
@@ -498,7 +487,7 @@ def table_unscored(_rows, budget=None):
     for short, repo, quant, gib, held, f, m in unranked(budget):
         if held == "memory":
             continue
-        print(size_row(short, repo, quant, gib, f, m, pop, held))
+        print(size_row(short, repo, quant, gib, f, m, pop))
 
 
 def table_oversize(_rows, budget=None):

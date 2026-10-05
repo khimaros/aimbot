@@ -1178,28 +1178,25 @@ def models_md_sizes_a_model_at_the_dashboards_best_quant():
     eq(picks, cli, "the document's rungs are the dashboard's, row for row")
     eq(any(not r["fits"] for r in picks.values()) and any(r["fits"] for r in picks.values()),
        True, "and it can tell a pick from a smallest-published fallback")
-    # a rung that does not fit says why, since "the box cannot hold it" and "its
-    # context window is shorter than the view" belong in different tables. hy3
-    # is 83 gib and still does not fit: its cache at the view's context does
-    view = {"minCtx": 131072}
-    eq(bt.held_by({"fits": False}, {"context_native": 262144}, view), "memory",
-       "a long window that does not fit is memory")
-    eq(bt.held_by({"fits": False}, {"context_native": 40960}, view), "context",
-       "a window shorter than the view is context")
-    eq(bt.held_by({"fits": True}, {}, view), None, "and a fit is held by nothing")
+    # a rung that does not fit is held by memory and by nothing else: hy3 is 83
+    # gib and still does not fit, because its cache at the view's context does
+    # not. a window shorter than the view is not a reason, so it is not asked
+    eq(bt.held_by({"fits": False}), "memory", "a rung that does not fit is memory")
+    eq(bt.held_by({"fits": True}), None, "and a fit is held by nothing")
 
 
 @test
-def a_model_held_by_its_context_is_sized_at_its_best_rung():
-    """No box ever fits a window shorter than the view, so the fit has no pick.
+def a_window_shorter_than_the_view_holds_nothing_back():
+    """A short window used to be a second reason a model did not fit.
 
-    The page then falls back to the smallest rung published, which is the right
-    offer for memory and the wrong one here: qwen3 8b read as UD-IQ1_S at 2.1
-    gib when nothing about memory holds it back. And the marker the table puts
-    on those rows was passed as the quant, so no note on the file could match.
+    qwen3 8b declares 40960 against a view of 131072, so the fit had no pick
+    for it on any box and the table sized it at a rung chosen some other way,
+    under a marker of its own. The page charges a model for the window it has
+    now, so the row is the dashboard's pick like every other and says nothing
+    about context.
     """
     bt = load_script("build_tables", os.path.join(RESEARCH, "build-tables"))
-    best, _ = bt.dashboard_picks(0)
+    picks, _ = bt.dashboard_picks()
     here = os.getcwd()
     os.chdir(RESEARCH)
     try:
@@ -1207,13 +1204,14 @@ def a_model_held_by_its_context_is_sized_at_its_best_rung():
     finally:
         os.chdir(here)
     short, repo, quant, gib, held = rows["qwen3 8b"][:5]
-    eq(held, "context", "qwen3 8b is held by its window")
-    eq((repo, quant), (best["Qwen/Qwen3-8B"]["repo"], best["Qwen/Qwen3-8B"]["quant"]),
-       "and sized at the rung it would be read at with no budget")
+    eq(held, None, "qwen3 8b is held by nothing")
+    eq(picks["Qwen/Qwen3-8B"]["fits"], True, "because the page fits it")
+    eq((repo, quant), (picks["Qwen/Qwen3-8B"]["repo"], picks["Qwen/Qwen3-8B"]["quant"]),
+       "and it is sized at the dashboard's pick")
     m = {"repos": [{"repo": "pub/W-GGUF", "files": {"Q8_0": {"note": "the file's own words"}}}]}
-    row = bt.size_row("w", "pub/W-GGUF", "Q8_0", 1.0, {}, m, {}, held="context")
-    eq("the file's own words" in row and "context short of the view" in row, True,
-       "the marked row still carries its file's note: %s" % row)
+    row = bt.size_row("w", "pub/W-GGUF", "Q8_0", 1.0, {}, m, {})
+    eq("the file's own words" in row and "context" not in row, True,
+       "a row carries its file's note and no marker: %s" % row)
 
 
 @test

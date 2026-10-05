@@ -1948,16 +1948,28 @@ test('a model that publishes no context window still fits', () => {
   const bad = sized.filter(m => !fitsBudget(m)).map(m => m.short);
   eq(bad.join(', '), '', 'sized models with no window must fit');
 
-  // and the fit is still doing its job: a window SHORTER than asked for is
-  // still a miss, which is the case the check exists for -- for a TEXT model,
-  // which is the only kind a context budget is a question about. see the case
-  // below for the half of the roster this used to take with it.
+  // a window SHORTER than asked for is not a miss either, by the owner's word:
+  // embeddinggemma is 0.3 gib with a 2048 window and read `does not fit` on a
+  // 128 gib box. the context asked for is what the reader would like held, and
+  // a model that cannot be given that much is charged for the window it has
   const short = D.models.filter(m => m.kind === 'text' && m.facts.context_native
     && m.facts.context_native < minCtx && m.repos.length);
   ok(short.length >= 4, 'enough short-window text models have files to be a real test');
-  ok(short.every(m => !fitsBudget(m)),
-     'a text model whose window is genuinely too short still does not fit: '
-     + short.filter(m => fitsBudget(m)).map(m => m.short));
+  ok(short.every(m => fitsBudget(m)),
+     'a text model is not hidden for a window shorter than the view: '
+     + short.filter(m => !fitsBudget(m)).map(m => m.short));
+  const eg = model('embeddinggemma-300m');
+  ok(activeQuant(eg) && activeQuant(eg).gib < 2, 'and embeddinggemma reads a rung');
+
+  // what the fit still refuses is MEMORY: a model whose window reaches the
+  // view and whose cache at it does not fit beside the smallest rung. hy3 is
+  // the case, and it comes back the moment less context is asked for
+  const hy3 = model('hy3');
+  ok(hy3.facts.context_native >= minCtx, 'hy3 reaches the view');
+  ok(!fitsBudget(hy3), 'and does not fit at it: the cache is what the box lacks');
+  setHardware({minCtx: 8192});
+  ok(fitsBudget(hy3), 'asked for less context, it fits');
+  RESET();
 });
 
 // THE BUG: breeze-tts-2 is 3.2 gib at Q8_0 and read `does not fit` on a box

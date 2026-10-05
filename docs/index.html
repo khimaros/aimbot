@@ -651,34 +651,26 @@ function kvGib(m, ctx) {
 // reported, a factor of 32 of extrapolation between them.
 const trainCtx = m => m.facts.context_trained || m.facts.context_native;
 
-// a model that cannot reach the context is not a fit at it. this reads the
-// EXTENDED window, since that is what llama.cpp serves out of the gguf without
-// a flag; whether the extrapolated part is worth having is the reader's call,
-// and the two columns put both numbers in front of them.
-//
-// a context window is a TEXT model's promise, so the demand is asked of text
-// models and of nothing else. two rounds of the same bug got it here.
+// a window shorter than the context asked for is NOT a reason a model does not
+// fit. `fits vram` is a control about MEMORY, and it took three rounds to stop
+// answering it with a context mismatch.
 //
 // first: a model publishing NO window has not failed to reach one, and `|| 0`
 // said it had, so the whole non-text roster read as `does not fit` on a box
-// with 128gib free. that was fixed by passing an absent window.
+// with 128gib free. second: breeze-tts-2 is 3.2gib at Q8_0 and declares 2048 --
+// the text its encoder takes -- and failed a 131072 demand along with most of
+// the speech roster, so the demand was kept for `kind: text` alone. third, and
+// the owner's ruling: embeddinggemma is a text model of 0.3gib with a 2048
+// window, and it was hidden on that same box. the context asked for is what a
+// reader would like held, not a bar a model has to clear.
 //
-// which left the half the absence was standing in for. breeze-tts-2 is 3.2gib
-// at Q8_0 and declares 2048 -- the text its encoder takes, not a chat context
-// anybody is going to fill -- and failed a 131072 demand on a 128gib box. so
-// did 20 other entries: most of the speech roster, both translators, both
-// punctuators. `fits vram` is a control about MEMORY, and answering it with a
-// context mismatch is the same category error as reading "no quant fits" off
-// zero quants. what makes the rule right for text and wrong here is not
-// whether a number was published, it is whether a reader chooses the context:
-// that is `kind: text`, a model served as a chat or completion endpoint.
-const reaches = m => !minCtx || m.kind !== 'text' || !m.facts.context_native
-  || m.facts.context_native >= minCtx;
-
-// and the cache charged against a model is the one it can hold. asking for
-// 131072 tokens against a 2048-token window bills for a cache that cannot
-// exist, which is the same demand arriving through the arithmetic instead of
-// through the filter.
+// so the one thing that hides a model is the box: the cache at the context
+// asked for, beside the weights, not fitting. and the cache charged against a
+// model is the one it can hold -- asking for 131072 tokens against a
+// 2048-token window bills for a cache that cannot exist. this reads the
+// EXTENDED window, since that is what llama.cpp serves out of the gguf without
+// a flag; whether the extrapolated part is worth having is the reader's call,
+// and the two columns put both numbers in front of them.
 const wantCtx = m => m.facts.context_native
   ? Math.min(minCtx, m.facts.context_native) : minCtx;
 
@@ -753,7 +745,6 @@ function bestOf(m, all) {
   if (!all.length) return null;
   if (!all.some(c => c.gib)) return byQuality(all)[0];
   if (!budget) return byQuality(affordable(m, all, Infinity))[0] || byQuality(all)[0];
-  if (!reaches(m)) return null;
   const room = usable() - kvGib(m, wantCtx(m)) - draftGib(m);
   const fits = affordable(m, all, room);
   return fits.length ? byQuality(fits)[0] : null;
@@ -2645,8 +2636,8 @@ function methodology() {
     + ' layers hold at most their window, and linear-attention layers hold a fixed'
     + ' state. counting every layer as global overstates gemma 4 31b several times'
     + ' over. a model whose native window is shorter than the context asked for is'
-    + ' not a fit at it: getting there means rope scaling, which is the'
-    + ' consumer\'s call.</p>',
+    + ' charged for the window it has and is not hidden for it: only the box'
+    + ' running out of room for the cache does that.</p>',
     src('research/fetch-model-facts', 'research/fetch-model-facts'))
 
   + sec('speed is estimated, not measured',
