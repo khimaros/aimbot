@@ -1484,7 +1484,8 @@ models:
   # layers and four decoder layers over EVERY position's final hidden state, plus
   # the backbone's output embedding rows for each option's tokens. jev-omni's
   # head is one product a caller applies to an embedding; this one is a second
-  # forward pass, and no gguf of clef carries it
+  # forward pass. three of the four gguf repos are the backbone without it;
+  # ggml-org's conversion writes it into the file and says so on its own block
   Cloudflare/clef:
     kind: decision
     name:
@@ -1500,17 +1501,37 @@ models:
       answer is one logit per option softmaxed per question with no temperature
       published. every figure on the card is the bf16 safetensors through that
       script on one H200. the head ships as `joint_head.safetensors` in the base
-      repo only, so a gguf here is the backbone alone, and the card describes no
-      way to read a decision out of text it generates.
+      repo, so a gguf converted before llama.cpp knew the head is the backbone
+      alone, and the card describes no way to read a decision out of text it
+      generates. ggml-org's is the exception, and is read by the server.
     repos:
     - repo: abenzerps/Clef-GGUF
       files:
         Q8_0:
-          note: the top of the only full ladder of it at {gib}, and the rung to take for the
+          note: the top of the first full ladder of it at {gib}, and the rung to take for the
             reason decider's is -- the answer is a distribution and nothing has measured what
             a lower rung costs one. the card {card} shows it answering a chat prompt, which is
             the backbone talking and not the model the vendor benchmarked
+    - bartowski/Cloudflare_clef-GGUF
     - prithivMLmods/clef-GGUF
+    - repo: ggml-org/Clef-GGUF
+      readout:
+        kind: native
+        source: card
+        note: the head is in the file -- the conversion declares its own architecture
+          and writes the joint schema head beside the backbone -- so llama-server
+          answers for it, "a decision model, to be used via `/v1/systemone` API"
+          {card@ggml-org/Clef-GGUF}. text only, and a server loading it serves
+          nothing else
+      # the block below is the backbone repos' header. these three declare
+      # `clef`, an architecture of its own that mainline learned eight months on
+      files:
+        Q4_K_M:
+          runtime: {arch: clef, mainline: true, since: b11371, merged: '2026-10-03'}
+        Q8_0:
+          runtime: {arch: clef, mainline: true, since: b11371, merged: '2026-10-03'}
+        BF16:
+          runtime: {arch: clef, mainline: true, since: b11371, merged: '2026-10-03'}
     runtime:
       arch: qwen35
       mainline: true
@@ -1545,7 +1566,7 @@ models:
       note: the head needs the final hidden state of every position AND the
         backbone's output embedding rows, which an embedding server does not hand
         out, so verdict range-reads them from the bf16 `lm_head.weight`. verdict's
-        port of the head is the one caller for a gguf, the same code that reads
+        port of the head is the one caller for a backbone gguf, the same code that reads
         clef-flash, and it has NOT been checked against the bf16 backbone
     turns:
       source: abenzerps/Clef-GGUF
@@ -1568,8 +1589,8 @@ models:
       clef's smaller sibling on qwen3.5 9b, read the same way: the same
       `joint_schema_model.py`, and a joint schema head of the same shape that
       "scores all options of all questions jointly" {card}. the head is
-      `joint_head.safetensors` in the base repo and in no gguf, so what is said
-      of clef's ggufs holds for these.
+      `joint_head.safetensors` in the base repo and in neither backbone gguf, so
+      what is said of clef's ggufs holds for these, ggml-org's included.
     repos:
     - repo: bartowski/Cloudflare_clef-flash-GGUF
       files:
@@ -1581,6 +1602,21 @@ models:
             activations the decision readout does not produce. Q8_0 is the one rung where
             that cannot matter much
     - prithivMLmods/clef-flash-GGUF
+    - repo: ggml-org/Clef-Flash-GGUF
+      readout:
+        kind: native
+        source: card
+        note: the same conversion as clef's, head in the file, read by llama-server as
+          "a decision model, to be used via `/v1/systemone` API"
+          {card@ggml-org/Clef-Flash-GGUF}
+      # `clef` in the header here too, against the `qwen35` below
+      files:
+        Q4_K_M:
+          runtime: {arch: clef, mainline: true, since: b11371, merged: '2026-10-03'}
+        Q8_0:
+          runtime: {arch: clef, mainline: true, since: b11371, merged: '2026-10-03'}
+        BF16:
+          runtime: {arch: clef, mainline: true, since: b11371, merged: '2026-10-03'}
     runtime:
       arch: qwen35
       mainline: true
@@ -1628,6 +1664,198 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+  # the five llama.cpp reads by itself: #29818 gave llama-server `/v1/systemone`
+  # and a converter that writes each model's decision head and temperatures INTO
+  # the gguf, so `readout:` is `native` and there is no client half to describe.
+  # each is keyed on the weights the conversion was made from
+  convaiinnovations/laya:
+    kind: decision
+    name:
+      short: laya
+      match: \blaya\b
+    notes: >-
+      a 421m modernbert-large encoder with an option-marker decision head, one
+      forward pass a request and no generation at all. the gguf is "a decision
+      model, to be used via `/v1/systemone` API" {card@ggml-org/Laya-GGUF}, with
+      its temperatures in the file's metadata. the whole prompt is evaluated as
+      one batch, so the server's ubatch is the longest request it takes.
+    repos:
+    - ggml-org/Laya-GGUF
+    runtime:
+      arch: modern-bert
+      mainline: true
+      since: b7515
+      merged: '2025-12-23'
+      note: the release above is when mainline learned the encoder, not the decision head. the head
+        and `/v1/systemone` arrived with the pull request the gguf card names {card@ggml-org/Laya-GGUF},
+        first tagged b11361
+    ids:
+      jev: laya
+    modalities:
+      input:
+      - text
+      output: []
+    readout:
+      kind: native
+      source: card
+  SupersonicLabs/Julia-1:
+    kind: decision
+    name:
+      short: julia-1
+      # the language ships a 1.x every few months, so a digit or a dot after the
+      # one is somebody else's julia
+      match: \bjulia[\s-]*1\b(?![.\d])
+    notes: >-
+      a 144m multilingual decision model on mmBERT-small, and the smallest thing
+      on this roster that answers a typed question. its own card rules out the
+      rest: it "cannot be counted on to supply missing facts" {card}. the gguf is
+      "a decision model, to be used via `/v1/systemone` API"
+      {card@ggml-org/Julia-1-GGUF}.
+    repos:
+    - ggml-org/Julia-1-GGUF
+    runtime:
+      arch: modern-bert
+      mainline: true
+      since: b7515
+      merged: '2025-12-23'
+      note: the release above is when mainline learned the encoder, not the decision head. the head
+        and `/v1/systemone` arrived with the pull request the gguf card names {card@ggml-org/Julia-1-GGUF},
+        first tagged b11361
+    ids:
+      jev: ''
+    modalities:
+      input:
+      - text
+      output: []
+    readout:
+      kind: native
+      source: card
+  interfaze-ai/lev:
+    kind: decision
+    name:
+      short: lev
+      # jevbench ranks a `lev-350m` by another author on another base
+      match: \blev\b(?![\s-]*350m)
+    notes: >-
+      a lora on qwen3.5 4b that reads each answer "from the logits it already
+      computed" {card}, published as an adapter and merged by the conversion. the
+      gguf is "a decision model, to be used via `/v1/systemone` API"
+      {card@ggml-org/lev-GGUF}. the `lev-350m` jevbench ranks is franck verrot's
+      on lfm2.5 350m and not this model.
+    repos:
+    - ggml-org/lev-GGUF
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+      note: the release above is when mainline learned the backbone, not the decision head. the head
+        and `/v1/systemone` arrived with the pull request the gguf card names {card@ggml-org/lev-GGUF},
+        first tagged b11361
+    ids:
+      jev: ''
+    modalities:
+      input:
+      - text
+      output: []
+    readout:
+      kind: native
+      source: card
+    turns:
+      source: ggml-org/lev-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  jaredpalmer/kev-4b:
+    kind: decision
+    name:
+      short: kev 4b
+      match: \bkev[\s-]*4b\b
+    notes: >-
+      a lora and a learned pointer head on qwen3.5 4b base, published as an
+      adapter and a `head.pt` and merged by the conversion. the gguf is "a
+      decision model, to be used via `/v1/systemone` API"
+      {card@ggml-org/Kev-4B-GGUF}.
+    repos:
+    - ggml-org/Kev-4B-GGUF
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+      note: the release above is when mainline learned the backbone, not the decision head. the head
+        and `/v1/systemone` arrived with the pull request the gguf card names {card@ggml-org/Kev-4B-GGUF},
+        first tagged b11361
+    ids:
+      jev: kev-4b
+    modalities:
+      input:
+      - text
+      output: []
+    readout:
+      kind: native
+      source: card
+    turns:
+      source: ggml-org/Kev-4B-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  openjev/openjev:
+    kind: decision
+    name:
+      short: openjev
+      # the board's `openjev-sglang`, `openjev-thinking` and `openjev-verdict`
+      # are three other people's systems
+      match: \bopenjev\b(?![\s-]*(?:sglang|thinking|verdict))
+    notes: >-
+      a 27b decision model over text, web pages and screenshots, and the one of
+      the five that takes an image: "One forward pass per question (up to 52
+      options)" {card}. the gguf is "a decision model, to be used via
+      `/v1/systemone` API" {card@ggml-org/OpenJev-GGUF}, with the projector
+      beside it. the weights are cc-by-nc-4.0.
+    repos:
+    - ggml-org/OpenJev-GGUF
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+      note: the release above is when mainline learned the backbone, not the decision head. the head
+        and `/v1/systemone` arrived with the pull request the gguf card names {card@ggml-org/OpenJev-GGUF},
+        first tagged b11361
+    ids:
+      jev: ''
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output: []
+    readout:
+      kind: native
+      source: card
+    turns:
+      source: ggml-org/OpenJev-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, xhigh]
+      default: xhigh
   # CARRIED AS A BASE, not as a candidate. qwen3 8b is two generations behind the
   # qwen3.5/3.6/3.8 entries beside it and nobody should pick it off this roster
   # today. it is here because `prism-ml/Ternary-Bonsai-8B` derives from it, and a
@@ -1995,6 +2223,7 @@ models:
             ist austria's IQ2_XS at {gib@ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF:IQ2_XS} and
             {bpw@ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF:IQ2_XS}. it is also the fastest rung on the
             card's {card} own rtx 5090 table, plain and with the mtp head drafting
+    - agentionai/Qwen3.8-27B-AP-GGUF
     runtime:
       arch: qwen35
       mainline: true
@@ -3262,8 +3491,9 @@ models:
       short: deepseek v4 flash 0731
       # the two short forms have to refuse the 4.1 sibling explicitly: `ds4` and
       # `dsv4` are prefixes of `ds4.1` and `dsv4.1`, so without these every 4.1
-      # mention counted for this model too
-      match: deepseek[\s-]*v?4[\s-]*flash|ds4(?!\.1)[\s-]*f?\b|dsv4(?!\.1|[\s-]*pro)
+      # mention counted for this model too. the vision release below is refused
+      # the same way, for the same reason
+      match: deepseek[\s-]*v?4[\s-]*flash(?![\s-]*vision)|ds4(?!\.1)[\s-]*f?\b|dsv4(?!\.1|[\s-]*pro)
     repos:
     - unsloth/DeepSeek-V4-Flash-0731-GGUF
     - repo: Rednalreden/DeepSeek-V4-Flash-0731-dwarfstar-q2-gguf
@@ -3323,6 +3553,60 @@ models:
       gate: enable_thinking
       gate_default: false
       accepts: [high, max]
+  deepseek-ai/DeepSeek-V4-Flash-Vision-Exp:
+    kind: text
+    name:
+      short: deepseek v4 flash vision exp
+      match: deepseek[\s-]*v?4[\s-]*flash[\s-]*vision
+    repos:
+    - ggml-org/DeepSeek-V4-Flash-Vision-Exp-GGUF
+    runtime:
+      arch: deepseek4
+      mainline: true
+      since: b9840
+      merged: '2026-06-29'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: deepseek-v4-flash-vision-exp
+    speculative:
+      type: draft-dspark
+      n_max: 3
+    sampling:
+      # the card states one set, the one its text agent benchmarks ran at: "the
+      # `max` reasoning effort level with `temperature = 1.0, top_p = 0.95`".
+      # it names no top_k or min_p, so those fall back rather than be invented
+      thinking:
+        source: tuned-here
+        note: the card {card} gives these only as what its text agent benchmarks ran at, not as
+          a recommendation, and the repo's generation_config.json ships top_p 1.0 instead
+        temp: 1.0
+        top_p: 0.95
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - tools
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    turns:
+      source: ggml-org/DeepSeek-V4-Flash-Vision-Exp-GGUF
+      developer: as-user
+      leading_system_max: unlimited
+      mid_system: reordered
+      mid_developer: ok
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: false
+      accepts: [max]
   deepseek-ai/DeepSeek-V4.1-Flash:
     kind: text
     name:
@@ -6307,7 +6591,9 @@ models:
     kind: text
     name:
       short: ling 3.0 flash
-      match: ling[\s-]*3\.0(?![\s-]*tiny)
+      # the VL release is an entry of its own below, so `ling 3.0 flash` has to
+      # refuse it or every mention of the vision model counts here too
+      match: ling[\s-]*3\.0(?![\s-]*tiny|[\s-]*flash[\s-]*vl)
     repos:
     - repo: AtomicChat/Ling-3.0-flash-GGUF
       files:
@@ -6355,6 +6641,62 @@ models:
       leading_system_max: unlimited
       mid_system: ok
       mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  # AtomicChat's AD-* build of this one is left off on purpose: its card calls
+  # the repo "an experimental working preview" that needs a private runtime
+  # patch, where bartowski's ladder was made with a stock release
+  inclusionAI/Ling-3.0-flash-VL:
+    kind: text
+    name:
+      short: ling 3.0 flash vl
+      match: ling[\s-]*3\.0[\s-]*flash[\s-]*vl\b
+    repos:
+    - bartowski/Ling-3.0-flash-VL-GGUF
+    runtime:
+      arch: bailingmoe3
+      mainline: true
+      since: b10470
+      merged: '2026-08-17'
+    ids:
+      aa: ling-3-0-flash-vl
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      # the card gives two temperatures. its benchmark footnote says the defaults
+      # are `temperature=0.6`, and both quickstarts say "Recommended sampling:
+      # `temperature=1.0`, `top_p=0.95`, `top_k=20` (per `generation_config.json`)".
+      # this takes the one the card calls recommended and the repo ships
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: bartowski/Ling-3.0-flash-VL-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
     thinking:
       knob: enable_thinking
       kind: boolean

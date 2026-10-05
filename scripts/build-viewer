@@ -1601,11 +1601,12 @@ def readout_word(readout):
     `layout:<name>` or `head:<name>`. a head nobody named is the bare `head`,
     which verdict refuses: left out, it would fall back to chat and read the
     backbone's letters as the model's answer with nothing to say it went wrong.
+    `native` is the server's own `/v1/systemone`, which takes no name.
     """
     name = readout.get("layout") or (readout.get("head") or {}).get("name")
     if name:
         return "%s:%s" % (readout["kind"], name)
-    return "head" if readout.get("kind") == "head" else None
+    return readout["kind"] if readout.get("kind") in ("head", "native") else None
 
 
 def layouts_export(table, models):
@@ -1614,7 +1615,8 @@ def layouts_export(table, models):
     verdict imports this and has no yaml parser. two joins are added. a head's
     prompt and the head that reads it are one thing to a client, so the head
     rides on its layout. and `models` says which model reads through which
-    layout, by the repos its weights load from, because no server says.
+    layout, by the repos its weights load from, because no server says. where
+    one repo of a model is read another way, `by_repo` says so for that repo.
     """
     layouts = {name: dict(block) for name, block in (table.get("layouts") or {}).items()}
     mapped = {}
@@ -1624,9 +1626,13 @@ def layouts_export(table, models):
         if head.get("name") in layouts:
             layouts[head["name"]]["head"] = head
         word = readout_word(readout)
-        if word:
+        by_repo = {r["repo"]: readout_word(r["readout"]) for r in rungs.repos(m)
+                   if r.get("readout")}
+        if word or by_repo:
             mapped[repo] = {"short": (m.get("name") or {}).get("short"),
                             "repos": rungs.repo_names(m), "readout": word}
+            if by_repo:
+                mapped[repo]["by_repo"] = by_repo
     return {"version": table.get("version"), "layouts": layouts, "models": mapped}
 
 

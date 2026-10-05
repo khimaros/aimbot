@@ -510,7 +510,7 @@ those four keys and knows llama-swap for everything else. a quant it may serve
 is any rung a listed repo publishes, resolved in repo order: it reads each
 repo's `available` ladder out of `docs/data.json`, and skips the rungs marked
 `fork_type`, so `models[].repo` and `repos[].{repo, role, crispasr, speculative,
-available[].{quant, file, fork_type}}` there are a contract with another repo
+readout, available[].{quant, file, fork_type}}` there are a contract with another repo
 rather than page internals.
 
 ## the viewer

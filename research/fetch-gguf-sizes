@@ -163,7 +163,16 @@ def tag_of(path):
         # its own quant, is only where the file lives -- winnow ships its ggufs
         # under `gguf/` -- so the file is tagged by its own name rather than
         # filed with every sibling as a rung called `gguf`
-        if not (QUANT_AT.search(tag) or SIDECAR.search(tag)) and QUANT.search(name):
+        #
+        # bartowski shards into `<model>-<TAG>/`, which does name a quant and is
+        # still not one: the model half is where the files live. a folder that
+        # is quant recipe from the first field on -- smalinin's
+        # `Q2_K_Protected-Q8` -- names an object and stays the key, and so does
+        # one carrying a prefix its files do not (`AP-Q4_K_XL/M-Q4_K_XL.gguf`)
+        named = QUANT.search(name)
+        own = named and SHARD.sub(".gguf", name).lower() == tag.lower() + ".gguf" \
+            and not QUANT_AT.search(tag[:-len(named.group(1))])
+        if named and not SIDECAR.search(tag) and (own or not QUANT_AT.search(tag)):
             tag = tag_of(name)
     else:
         m = QUANT.search(path)

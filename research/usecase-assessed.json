@@ -1066,15 +1066,15 @@
     "agentic / tool use",
     "long context"
    ],
-   "notes": "it sits low on most of what artificial analysis measures -- {aa.intelligence} overall, {aa.tau2} on tool use, {aa.hle} on knowledge -- and {aa.livecodebench} on livecodebench is the only board reading like a coder. that is the expected shape for a 30b a3b completion model, and not a reason to avoid it at the job it was built for: nothing here measures fim.",
-   "confidence": "medium",
+   "notes": "artificial analysis has retired its row for this model and kept one figure, {aa.livecodebench} on livecodebench, which is the only board reading like a coder. the other third-party number is {swerebench.resolved} on real repository bugs, the bottom of that board here. that is the expected shape for a 30b a3b completion model, and not a reason to avoid it at the job it was built for: nothing here measures fim.",
+   "confidence": "low",
    "evidence": [
-    "{aa.intelligence}",
-    "{aa.tau2}",
-    "{aa.speed}",
+    "{aa.livecodebench}",
+    "{swerebench.resolved}",
+    "{community.reddit-localllama}",
     "the only registry entry tuned `fim`"
    ],
-   "assessed_on": "2026-08-17"
+   "assessed_on": "2026-10-04"
   },
   "Qwen/Qwen3-Coder-Next": {
    "one_liner": "resolves real merged pull requests well above what its benchmark indices predict, on a harness built from commits made after its release.",
@@ -1366,7 +1366,7 @@
    "assessed_on": "2026-09-16"
   },
   "Qwen/Qwen3.6-27B": {
-   "one_liner": "the most-discussed local model in the corpus, and the registry's best planner among dense 27b weights.",
+   "one_liner": "among the most-discussed local models in the corpus, and the registry's best planner among dense 27b weights.",
    "use_for": [
     "coding",
     "agentic / tool use",
@@ -1376,12 +1376,12 @@
    "avoid_for": [
     "latency-sensitive work"
    ],
-   "notes": "199 reddit mentions at 85% approval, and the phrase that keeps coming back is daily driver. gbench decision-making {gbench.decision} is unusual for its size. slow decode, {aa.speed}, is the price.",
+   "notes": "{community.reddit-localllama}, and the phrase that keeps coming back is daily driver. gbench decision-making {gbench.decision} is unusual for its size. slow decode, {aa.speed}, is the price.",
    "confidence": "high",
    "evidence": [
     "{aa.scicode}",
     "{gbench.decision:value}",
-    "reddit 199 mentions at 85% approval",
+    "{community.reddit-localllama}",
     "{aa.speed}",
     "gbench kotlin 60%"
    ],
@@ -1922,7 +1922,7 @@
    "assessed_on": "2026-09-08"
   },
   "deepseek-ai/DeepSeek-V4-Flash-0731": {
-   "one_liner": "the registry's strongest all-rounder: top decile on science, coding, long context and physics at once, and the most discussed model after qwen3.6.",
+   "one_liner": "the registry's strongest all-rounder: top decile on science, coding, long context and physics at once, and among the most discussed models here.",
    "use_for": [
     "coding",
     "agentic / tool use",
@@ -1944,6 +1944,24 @@
     "gbench go 82%"
    ],
    "assessed_on": "2026-08-18"
+  },
+  "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp": {
+   "one_liner": "deepseek v4 flash with a vision encoder trained in: livebench puts its agentic coding well above the 0731 release and its plain coding below it.",
+   "use_for": [
+    "agentic / tool use",
+    "vision / ocr"
+   ],
+   "avoid_for": [],
+   "notes": "livebench is the only third party that has scored it, on a cohort of eleven: {livebench.agentic} against {livebench.agentic@deepseek-ai/DeepSeek-V4-Flash-0731}, and {livebench.coding} against {livebench.coding@deepseek-ai/DeepSeek-V4-Flash-0731}. no board here has measured the vision it was released for, so that half rests on the card, whose own text figures are {card.terminalbench} and {card.deepswe}. the vendor calls it experimental, and the only ggufs are llama.cpp's reference conversion, three rungs with no imatrix behind the two small ones.",
+   "confidence": "low",
+   "evidence": [
+    "{livebench.agentic}",
+    "{livebench.coding}",
+    "{livebench.score}",
+    "{card.terminalbench}",
+    "{card.deepswe}"
+   ],
+   "assessed_on": "2026-10-04"
   },
   "deepseek-ai/DeepSeek-V4-Pro-0813": {
    "one_liner": "the flash model's flagship sibling: the same shape of answer, corroborated by five sources instead of one, at ten times the file size.",
@@ -2224,7 +2242,7 @@
     "{gbench.oneshot:value}",
     "{lmarena.rating:value}",
     "{aa.terminalbench}",
-    "hf-discussions 74 mentions at 83% approval"
+    "{community.hf-discussions}"
    ],
    "assessed_on": "2026-08-17"
   },
@@ -2579,6 +2597,107 @@
     "{community.hf-discussions}"
    ],
    "assessed_on": "2026-09-16"
+  },
+  "convaiinnovations/laya": {
+   "one_liner": "a modernbert-sized decision model llama-server answers for by itself, and the bottom of the jevbench cohort here.",
+   "use_for": [
+    "cpu routing and classification where a forward pass of an encoder is the whole budget"
+   ],
+   "avoid_for": [
+    "typed decisions that have to be right: the board ranks every other decision model here above it"
+   ],
+   "notes": "the reason to carry it is how it runs rather than how it scores: no client half, no layout, one request to `/v1/systemone` on a stock build. the board is unkind to it, {jev.score} overall and {jev.sealed} on the sealed half, with {jev.calibration} the one facet off the floor. that row is the author's own runtime, not this gguf, and nothing has measured the conversion.",
+   "confidence": "medium",
+   "evidence": [
+    "{jev.score}",
+    "{jev.sealed}",
+    "{jev.calibration}"
+   ],
+   "assessed_on": "2026-10-05"
+  },
+  "SupersonicLabs/Julia-1": {
+   "one_liner": "the smallest decision model on the roster, measured by nobody but its author.",
+   "use_for": [
+    "routing and classification over options that are spelled out in the request"
+   ],
+   "avoid_for": [
+    "questions that need a fact the state does not carry, which its own card rules out"
+   ],
+   "notes": "no board collected here ranks it and no forum capture mentions it, so this is the card and the conversion: a multilingual encoder with a decision head, read by llama-server at `/v1/systemone`. the card's own figures are typed-decision accuracy on its author's harness and are not carried as facets.",
+   "confidence": "low",
+   "evidence": [
+    "no jevbench row",
+    "no forum prose"
+   ],
+   "assessed_on": "2026-10-05"
+  },
+  "interfaze-ai/lev": {
+   "one_liner": "a qwen3.5 4b adapter that answers typed questions from logits, unranked: the board's lev is another model.",
+   "use_for": [
+    "typed decisions at 4b where the server should do the reading"
+   ],
+   "avoid_for": [],
+   "notes": "jevbench ranks a `lev-350m`, which is a different author's model on a different base, so nothing here scores this one. it is carried because llama.cpp converts and reads it natively, on the same backbone as kev 4b and jevk5 4b, which is the comparison somebody would want run.",
+   "confidence": "low",
+   "evidence": [
+    "no jevbench row for this model",
+    "no forum prose"
+   ],
+   "assessed_on": "2026-10-05"
+  },
+  "jaredpalmer/kev-4b": {
+   "one_liner": "the one natively read decision model the board ranks in its middle, and poorly calibrated for it.",
+   "use_for": [
+    "typed decisions on a stock llama-server with nothing beside it"
+   ],
+   "avoid_for": [
+    "anything that acts on the probability rather than the choice"
+   ],
+   "notes": "{jev.score} on jevbench with {jev.intelligence} intelligence, against decider-4b on a sibling backbone at {jev.score@Mapika/decider-4b}. calibration is where it gives the most away, {jev.calibration} against {jev.calibration@Mapika/decider-4b}. the board ran the author's adapter and head, not this gguf.",
+   "confidence": "medium",
+   "evidence": [
+    "{jev.score}",
+    "{jev.intelligence}",
+    "{jev.calibration}",
+    "{jev.sealed}"
+   ],
+   "assessed_on": "2026-10-05"
+  },
+  "openjev/openjev": {
+   "one_liner": "a 27b decision model that also reads screenshots, non-commercial, and not on the board under its own name.",
+   "use_for": [
+    "typed decisions over a web page or a screenshot, which the other native models cannot take"
+   ],
+   "avoid_for": [
+    "commercial use: the weights are cc-by-nc-4.0"
+   ],
+   "notes": "the three jevbench rows with openjev in the name are other people's systems, so the only figures for this one are its card's. what it adds to the roster is image input behind `/v1/systemone`, with the projector shipped beside the gguf. {community.reddit-localllama}.",
+   "confidence": "low",
+   "evidence": [
+    "{community.reddit-localllama}",
+    "no jevbench row for this model"
+   ],
+   "assessed_on": "2026-10-05"
+  },
+  "inclusionAI/Ling-3.0-flash-VL": {
+   "one_liner": "ling 3.0 flash with a vision tower, and the better of the two on every axis artificial analysis shares between them except speed.",
+   "use_for": [
+    "vision / ocr",
+    "long context",
+    "science / reasoning",
+    "agentic / tool use"
+   ],
+   "avoid_for": [],
+   "notes": "one board has measured it and that board measured the hosted model, not a gguf: {aa.mmmu_pro} is its best facet and the reason to carry it beside the text release, with {aa.lcr} against {aa.lcr@inclusionAI/Ling-3.0-flash} and {aa.non_hallucination} against {aa.non_hallucination@inclusionAI/Ling-3.0-flash}. what it gives up is {aa.speed} against {aa.speed@inclusionAI/Ling-3.0-flash}. nobody in the forum captures has reported running it, so nothing here says how a low rung of it sees.",
+   "confidence": "medium",
+   "evidence": [
+    "{aa.mmmu_pro}",
+    "{aa.lcr}",
+    "{aa.non_hallucination}",
+    "{aa.terminalbench}",
+    "{aa.speed}"
+   ],
+   "assessed_on": "2026-10-04"
   },
   "inclusionAI/Ling-3.0-tiny": {
    "one_liner": "1.3b active in a 7.8gib file: honest about what it does not know, last on the board that times it, and weak at nearly everything else.",
@@ -3137,17 +3256,17 @@
    "assessed_on": "2026-09-16"
   },
   "nvidia/canary-1b-flash": {
-   "one_liner": "beats the canary-1b-v2 this roster carries, and nobody has converted it.",
+   "one_liner": "the canary the open asr board ranked above canary-1b-v2 until it dropped the row, and nobody has converted it.",
    "use_for": [
     "tracking the better canary"
    ],
    "avoid_for": [
     "deployment -- no gguf exists"
    ],
-   "confidence": "medium",
+   "confidence": "low",
    "evidence": [
     "kind speech, audio -> text",
-    "open-asr 4.88 mean WER against canary-1b-v2's 5.71",
+    "the open asr leaderboard had it ahead of canary-1b-v2 and dropped its row in october 2026",
     "cc-by-4.0"
    ],
    "assessed_on": "2026-09-09"
@@ -3186,7 +3305,7 @@
     "kind speech, audio -> text",
     "crispasr backend fastconformer-ctc",
     "no duration model, unlike parakeet-tdt-0.6b-v3",
-    "{open-asr.accuracy}"
+    "the open asr leaderboard dropped its row in october 2026, so no board scores it"
    ],
    "assessed_on": "2026-09-16"
   },
@@ -3830,13 +3949,13 @@
     "long context"
    ],
    "avoid_for": [],
-   "notes": "gbench has played it 7 games over 25 matches, which is why its gscore is marked thin rather than used. 49 reddit mentions at 93% approval is the best reception in the registry. the ranking and the people running it disagree, and the disagreement is worth more than either. a handful on 128gb machines rate it first for coding -- \"significantly better coder than deepseek-v4-flash, keep using deepseek-v4-flash only if speed is the primary concern\" -- against a similar number who found it slow. both can be true: AA measures the unquantized model, the retention curve is transferred from another architecture, and 21b active is more compute per token than anything else that fits. what people report costing them is context and speed rather than quality, roughly 190k against deepseek's 1m, with throughput that drops off brutally as context grows.",
+   "notes": "gbench has played it 7 games over 25 matches, which is why its gscore is marked thin rather than used. its reception is {community.reddit-localllama}. the ranking and the people running it disagree, and the disagreement is worth more than either. a handful on 128gb machines rate it first for coding -- \"significantly better coder than deepseek-v4-flash, keep using deepseek-v4-flash only if speed is the primary concern\" -- against a similar number who found it slow. both can be true: AA measures the unquantized model, the retention curve is transferred from another architecture, and 21b active is more compute per token than anything else that fits. what people report costing them is context and speed rather than quality, roughly 190k against deepseek's 1m, with throughput that drops off brutally as context grows.",
    "confidence": "high",
    "evidence": [
     "{lmarena.rating:value}",
     "{aa.gpqa}",
     "{aa.intelligence:value}",
-    "reddit 49 mentions at 93% approval",
+    "{community.reddit-localllama}",
     "gbench 25 matches, below the 1000 threshold"
    ],
    "assessed_on": "2026-08-18"
@@ -3991,7 +4110,7 @@
     "{gbench.decision}",
     "{aa.scicode}",
     "{epoch.deepswe}",
-    "reddit 88 mentions over 42 threads"
+    "{community.reddit-localllama}"
    ],
    "assessed_on": "2026-09-16"
   },
@@ -4038,7 +4157,7 @@
     "kind speech, audio -> text",
     "crispasr backend glm-asr",
     "no gguf anywhere",
-    "{open-asr.accuracy}"
+    "the open asr leaderboard dropped its row in october 2026, so no board scores it"
    ],
    "assessed_on": "2026-09-16"
   },

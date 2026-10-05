@@ -2,7 +2,8 @@
 
 Which repos a model is published in is membership, and every collector's roster
 is built from it; what a repo is -- the argv role its files load under, the
-crispasr backend that reads that conversion, whether its build can draft --
+crispasr backend that reads that conversion, whether its build can draft, how
+a decision is read out of it where that differs from the model's other repos --
 never varies inside the repo; and what one file is -- a note, the fork that
 loads it, a tag its name does not carry -- is keyed by that file. Which rung to
 run is not a fact: the fit picks it, from every rung each repo publishes.
@@ -11,13 +12,13 @@ run is not a fact: the fit picks it, from every rung each repo publishes.
 """
 
 # what a repo is, the same for every file in it
-REPO_FIELDS = ("role", "crispasr", "speculative")
+REPO_FIELDS = ("role", "crispasr", "speculative", "readout")
 # what one file is. `quant` is the tag, written only where the name carries none
 FILE_FIELDS = ("quant", "note", "runtime")
 
 
 def repos(model):
-    """[{repo, role?, crispasr?, speculative?, files: {tag or file: facts}}]."""
+    """[{repo, role?, crispasr?, speculative?, readout?, files: {tag or file: facts}}]."""
     out = []
     for e in model.get("repos") or []:
         e = {"repo": e} if isinstance(e, str) else e

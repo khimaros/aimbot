@@ -168,6 +168,7 @@ Some stages, such as SFT, have multiple phases with slight changes to the data m
 | RL — Merge | — | — | — | ISO merge on self-attention, RAM on the remaining weights; inputs: Midtraining Stage 4 base + Math, Code, STEM-Code experts. |
 | SFT — Phase 1 | 10000 | 199B | 512K | SFT for better domain coverage, starting from the merged RL checkpoint. |
 | SFT — Phase 2 | 2500 | 50B | 512K | SFT on a high-quality subset of the data used in Phase 1, with learning rate decay. |
+| Anti-doom-loop (FTPO) | 110 | 2.2M | 6K | Final Token Preference Optimization (FTPO). |
 
 ## Release Artifacts
 

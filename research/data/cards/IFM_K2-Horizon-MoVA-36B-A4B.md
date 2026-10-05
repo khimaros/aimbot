@@ -195,11 +195,11 @@ For a partially released group, the available checkpoints and the remaining chec
 > Note:
 > - Released K2-Horizon Hugging Face checkpoints (e.g. [Huggingface](https://huggingface.co/IFM/K2-Horizon-375B-A23B/tree/main)) can be used for inference, evaluation, and downstream fine-tuning (including SFT).
 > Training behavior in the bundled Hugging Face implementation may differ from native xLLM, including the auxiliary load-balancing loss.
-> To continue the original pretraining with xLLM's training behavior, use the native xLLM checkpoint and XLLM runtime.
+> To continue the original pretraining with xLLM's training behavior, use the native xLLM checkpoint and xLLM runtime.
 
 ## Best Practices
 
-1. **Reasoning effort: always `high`.** All reported results use high reasoning effort. Pass `{"chat_template_kwargs": {"reasoning_effort": "high"}}` on every request.
+1. **Reasoning effort: always `high`.** All reported results use high reasoning effort. Pass `{"chat_template_kwargs": {"reasoning_effort": "high"}}` on every request. `medium` and `low` effort settings are not recommended except for research on reasoning efforts.
 2. **Sampling parameters.** `temperature=1.0`, `top_p=0.95`.
 3. **Serving.** Use the validated SGLang recipe above: BF16, TP=2, FlashAttention-3, and the `xllm_source_router_gemm_partitions` override, which preserves the checkpoint's router numerics. Full recipes for every K2-Horizon size, with measured H200 latency and throughput, are in the [SGLang cookbook](https://docs.sglang.io/cookbook/autoregressive/IFM/K2-Horizon) and the [vLLM recipe](https://recipes.vllm.ai/IFM).
 4. **Parsers.** Enable the `k2_horizon` reasoning parser for chat, and add the `k2_horizon` tool-call parser for agent use. Leave both off for plain completion-style generation.

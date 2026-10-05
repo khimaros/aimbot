@@ -64,7 +64,13 @@ PREFIX = "model.diffusion_model."
 # SUBSTRING test over the gguf's tensor names either way: `==` is narrower in
 # sd.cpp than the join is here, so a signature recorded off one can only
 # over-match, and every literal in this table is a full tensor name anyway.
-FIND = re.compile(r'\.find\("([^"]+)"\)|\.name\s*==\s*"([^"]+)"')
+FIND = re.compile(r'\.name\.find\("([^"]+)"\)|\.name\s*==\s*"([^"]+)"')
+# a third test, of ANOTHER tensor: whether the file holds one by this name at
+# all. compared to `end()` in place it is a presence or an absence, which a
+# tensor table answers exactly; kept in a variable it is the first half of a
+# dimension test, which this does not read
+LOOKUP = re.compile(r'tensor_storage_map\.find\("([^"]+)"\)\s*([!=]=)\s*'
+                    r'tensor_storage_map\.end\(\)')
 OUTCOME = re.compile(r"return\s+(VERSION_\w+)|^\s*(\w+)\s*=\s*true;")
 # how much of the file to read for the tensor table. the metadata comes first
 # and a diffusion gguf's is small, so the first window is almost always enough
@@ -91,53 +97,88 @@ def get(url, key, max_age, refresh):
 
 
 def parse_signatures(source):
-    """{signature: outcome} out of the detector, one entry per spelling.
+    """{signature: outcome} out of the detector: the rules with no condition."""
+    return parse_rules(source)[0]
 
-    Accumulate the literals as they are read and attach them to the outcome
-    that follows, which is what makes a two-arm `if` one rule with two spellings
-    rather than one rule with the second spelling. Both of sd.cpp's ways of
-    writing an arm count -- see FIND.
+
+def parse_rules(source):
+    """({signature: outcome}, [conditional rule]) out of the detector.
+
+    A rule is one `if` over the tensor's name and everything inside its braces.
+    The literals of its condition are its signatures -- a two-arm `if` is one
+    rule with two spellings, and both of sd.cpp's ways of writing an arm count,
+    see FIND -- and each outcome inside it is read at the depth it sits at: a
+    return in the rule's own block is what the signature means, and a return
+    under a lookup of a second tensor is the same signature with that lookup as
+    a condition, kept beside it rather than flattened into it.
     """
     start = source.find(FUNCTION)
     if start < 0:
-        return {}
+        return {}, []
     body = source[start:]
     end = body.find("\n}\n")
     body = body[:end] if end > 0 else body
 
-    out, pending, dirty = {}, [], False
+    out, cond, depth = {}, [], 0
+    rule = None
     for line in body.splitlines():
+        line = line.split("//")[0]
+        before, depth = depth, depth + line.count("{") - line.count("}")
         # one group per spelling, and exactly one of them is set per match
         found = [a or b for a, b in FIND.findall(line)]
+        if found and rule is None:
+            rule = {"base": before, "sigs": [], "outer": [], "inner": [],
+                    "dirty": False, "opened": False}
+        if rule is None:
+            continue
+        own = before == rule["base"]
         # a rule this cannot model EXACTLY is dropped rather than approximated.
-        # three shapes qualify: a nested lookup (`tensor_storage_map.find(...)`
-        # then `->second.ne[0] == 128`), any dimension test, and a block that
-        # CAPTURES the tensor for a later one. mage flow is the first two --
-        # its outer condition is qwen image's own signature and the inner test
-        # is what separates them -- so flattening it into two alternatives made
-        # every flux model match mage flow, since they carry `img_in.weight`
-        # too. an AND read as an OR is how a detector table starts claiming
-        # models it would never return.
+        # a dimension test and a lookup kept in a variable are the two shapes:
+        # mage flow is both -- its outer condition is qwen image's own
+        # signature and `img_in->second.ne[0] == 128` is what separates them --
+        # so flattening it into two alternatives made every flux model match
+        # mage flow, since they carry `img_in.weight` too. an AND read as an OR
+        # is how a detector table starts claiming models it would never return.
         #
-        # the third shape is what reading the `==` arms turned up. three blocks
-        # spell their condition that way and then do `input_block_weight =
+        # a block that CAPTURES the tensor is the third. three blocks spell
+        # their condition with `==` and then do `input_block_weight =
         # tensor_storage;` rather than returning: they are not rules, they are
-        # the tensors the post-loop branches measure. their eleven literals were
-        # outliving the loop and attaching to the first `return` after it, which
-        # put `img_in.weight` and `unet.conv_in.weight` on VERSION_WAN2_2_S2V --
-        # a signature every flux and every unet model carries.
-        if ("->second" in line or ".ne[" in line
-                or "tensor_storage_map.find" in line or "= tensor_storage;" in line):
-            dirty = True
-        pending += found
+        # the tensors the post-loop branches measure. a name tested INSIDE
+        # another name's rule is the fourth, since it is a second tensor's rule
+        # and this reads one.
+        lookups = LOOKUP.findall(line)
+        if ("->second" in line or ".ne[" in line or "= tensor_storage;" in line
+                or line.count("tensor_storage_map.find") != len(lookups)
+                or (found and not own)):
+            rule["dirty"] = True
+        if own:
+            rule["sigs"] += found
+        rule["outer" if own else "inner"] += [(n, op == "!=") for n, op in lookups]
         hit = OUTCOME.search(line)
-        if hit and pending:
-            if not dirty:
+        if hit and not rule["dirty"]:
+            tests = rule["outer"] + rule["inner"]
+            # deeper than the rule's own block with no lookup behind it is a
+            # branch on a flag (`if (is_unet) { is_xl = true; }`), which says
+            # nothing about this signature
+            if before > rule["base"] + 1 and not rule["inner"]:
+                tests = None
+            for sig in rule["sigs"] if tests is not None else []:
                 outcome = hit.group(1) or hit.group(2)
-                for sig in pending:
+                if tests:
+                    cond.append({"signature": sig, "outcome": outcome,
+                                 "present": [n for n, there in tests if there],
+                                 "absent": [n for n, there in tests if not there]})
+                else:
                     out.setdefault(sig, outcome)
-            pending, dirty = [], False
-    return out
+        rule["opened"] = rule["opened"] or depth > rule["base"]
+        if depth < before and depth <= rule["base"] + 1:
+            rule["inner"] = []
+        # the rule ends where its braces do, so nothing it read outlives it.
+        # the capture blocks' eleven literals used to, and attached to the first
+        # `return` after the loop -- `unet.conv_in.weight` on VERSION_WAN2_2_S2V
+        if rule["opened"] and depth <= rule["base"]:
+            rule = None
+    return out, cond
 
 
 def tensor_names(reader, repo, filename):
@@ -183,11 +224,20 @@ FLAG_RESOLVE = {
 }
 
 
-def match(names, signatures):
+def tail(name):
+    """A tensor name as a standalone diffusion gguf spells it."""
+    return name[len(PREFIX):] if name.startswith(PREFIX) else name
+
+
+def match(names, signatures, conditional=()):
     """(version, signature) for what these tensors resolve to.
 
     `find` in sd.cpp is a substring test against the prefixed name, so the tail
     of the signature is matched against the tensor as the gguf spells it.
+
+    A conditional rule is tried before the plain reading of its signature,
+    which is the order the detector returns in: the lookup sits in front of the
+    return it guards. Its lookups are whole names, so they are matched whole.
 
     Some families are decided AFTER the tensor loop, from flags rather than from
     one signature, and only the branches that are pure flag logic are modelled
@@ -197,9 +247,15 @@ def match(names, signatures):
     flag is a real answer: `is_flux` means sd.cpp recognises the file as that
     family and will pick a generation within it.
     """
-    hits = [(outcome, sig) for sig, outcome in signatures.items()
-            for tail in [sig[len(PREFIX):] if sig.startswith(PREFIX) else sig]
-            if any(tail in n for n in names)]
+    seen = lambda sig: any(tail(sig) in n for n in names)
+    held = set(names)
+    has = lambda name: name in held or tail(name) in held
+    met = [(c["outcome"], c["signature"]) for c in conditional
+           if seen(c["signature"]) and all(has(n) for n in c["present"])
+           and not any(has(n) for n in c["absent"])]
+    refined = {sig for _, sig in met}
+    hits = met + [(outcome, sig) for sig, outcome in signatures.items()
+                  if sig not in refined and seen(sig)]
     if not hits:
         return None, None
     got = {outcome for outcome, _ in hits}
@@ -310,7 +366,7 @@ def main():
     source = get(args.url, args.cache_key, args.max_age, args.refresh)
     if not source:
         sys.exit("!!! could not read %s" % args.url)
-    signatures = parse_signatures(source)
+    signatures, conditional = parse_rules(source)
     if not signatures:
         sys.exit("!!! no signatures found -- get_sd_version() moved or changed shape")
 
@@ -328,13 +384,14 @@ def main():
         names = tensor_names(reader, weights, name) if name else None
         if not names:
             continue
-        version, sig = match(names, signatures)
+        version, sig = match(names, signatures, conditional)
         models[repo] = {"repo": weights, "tensors": len(names),
                         "version": version, "signature": sig}
         print("  %-46s %-22s %s" % (repo, version or "no signature", sig or ""),
               file=sys.stderr)
 
     payload = {"signatures": dict(sorted(signatures.items())),
+               "conditional": conditional,
                "models": dict(sorted(models.items()))}
     written, now, before = capture.write(
         args.out, payload, lambda p: len(p["signatures"]),

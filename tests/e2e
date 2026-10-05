@@ -1239,7 +1239,7 @@ test('audio.cpp and gufo are engines their own catalogs claim', () => {
   ok(ac.includes('--task tts'), 'and so is the task');
   ok(ac.includes('--model models/OmniVoice'),
      'a snapshot package is a directory: ' + ac);
-  ok(ac.includes('# omnivoice publishes 4 package'),
+  ok(/^# omnivoice publishes \d+ package/m.test(ac),
      'and the other packages are counted, not hidden: ' + ac);
   ok(!ac.includes('hf://'), 'and no hf:// reference reaches a local path');
 
@@ -2304,7 +2304,15 @@ test('a thin score cannot outrank the model that beat it on every shared factor'
 test('evidence reports the weight that was measured, not the count of factors',
   () => {
     RESET();
-    const cheap = model('qwen3.5-27b'), dear = model('g9v3 3b');
+    // found rather than named: which two models share a covered weight moves
+    // with every forum capture, and a pair typed here went stale the sweep one
+    // of them was first discussed
+    const share = m => askedWeight(m) ? coveredWeight(m) / askedWeight(m) : 0;
+    const dear = D.models.find(d => share(d) > 0 && D.models.some(c =>
+      scored(c).have > scored(d).have && Math.abs(share(c) - share(d)) < 1e-9));
+    ok(dear, 'some two models share a covered weight on different factor counts');
+    const cheap = D.models.find(c => scored(c).have > scored(dear).have
+      && Math.abs(share(c) - share(dear)) < 1e-9);
     ok(scored(cheap).have > scored(dear).have,
        'one is measured on more factors than the other');
     near(coveredWeight(cheap) / askedWeight(cheap),

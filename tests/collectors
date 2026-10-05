@@ -336,6 +336,27 @@ def a_directory_is_a_tag_only_where_it_names_a_quant():
 
 
 @test
+def a_shard_folder_named_for_the_model_and_the_quant_is_that_quant():
+    """bartowski shards into `<model>-<TAG>/`, and the model half is not a rung.
+
+    ling 3.0 flash vl's nineteen sharded rungs were keyed by folder name,
+    `Ling-3.0-flash-VL-IQ3_XXS`, beside unsharded siblings keyed `IQ2_M`, so
+    `models-validate --runtime` read eleven quant families mainline has no name
+    for. a folder that is nothing but quant recipe, smalinin's
+    `Q2_K_Protected-Q8`, names an object and stays the key.
+    """
+    got = sizes_of([
+        {"path": "M-3.0-flash-VL-IQ2_M.gguf", "size": 2},
+        {"path": "M-3.0-flash-VL-IQ3_XXS/M-3.0-flash-VL-IQ3_XXS-00001-of-00002.gguf", "size": 3},
+        {"path": "M-3.0-flash-VL-IQ3_XXS/M-3.0-flash-VL-IQ3_XXS-00002-of-00002.gguf", "size": 4},
+        {"path": "Q2_K_Protected-Q8/M-Q2_K_Protected-Q8-00001-of-00002.gguf", "size": 5},
+        {"path": "Q2_K_Protected-Q8/M-Q2_K_Protected-Q8-00002-of-00002.gguf", "size": 6}])
+    eq(got.get("IQ3_XXS"), 7, "the shards group under the quant: %r" % got)
+    eq("M-3.0-flash-VL-IQ3_XXS" in got, False, "the folder is not the key")
+    eq(got.get("Q2_K_Protected-Q8"), 11, "a recipe folder is still an object")
+
+
+@test
 def a_repo_of_nothing_but_drafter_names_is_the_model():
     """`-MTP-` in every filename names the build, not a sidecar beside it.
 
@@ -4689,6 +4710,24 @@ def an_asr_config_declares_audio_however_it_says_it():
         eq(mod.takes_audio(cfg), want, "%s takes audio" % repo)
 
 
+@test
+def a_vision_tower_spelled_as_flat_keys_is_still_an_image_input():
+    """deepseek v4 flash vision exp derived as TEXT ONLY, with an mmproj beside it.
+
+    every other vision model nests its encoder under `vision_config`. this one
+    writes `vision_n_layers`, `vision_dim` and eight more at the top level of
+    the language config, so the check saw no block and lint told the registry to
+    drop `image` from a model whose card is a table of multimodal benchmarks.
+    """
+    mod = load_script("fetch_model_facts",
+                      os.path.join(RESEARCH, "fetch-model-facts"))
+    eq(mod.takes_image({"vision_config": {"hidden_size": 1152}}), True, "a nested tower")
+    eq(mod.takes_image({"vision_n_layers": 32, "vision_dim": 1024}), True, "a flat one")
+    eq(mod.takes_image({"hidden_size": 4096, "vision_config": None}), False, "no tower")
+    eq(mod.takes_image({"vision_feature_layer": -1}), False,
+       "a vision setting with no encoder geometry is not an encoder")
+
+
 BASE_CATALOG = {
     "authors": {"cstr": [
         # a plain string, which is what the hub returns for a single base
@@ -5680,6 +5719,25 @@ def a_rung_pinned_by_filename_is_read_for_its_voices():
        "which falls back to the tag where no file is pinned")
 
 
+@test
+def a_tag_is_not_the_tail_of_a_prefixed_sibling():
+    """`Q2_K` named two files the day unsloth added `UD-Q2_K` beside it.
+
+    the resolver anchors a tag on the END of the stem, which is what tells
+    breeze's `-q8_0.gguf` from `-q8_0-dd2.gguf`, and `ernie-image-turbo-UD-Q2_K`
+    ends in `Q2_K` too. the sizer keys the two as different rungs, so a tag it
+    hands over means the file without the publisher prefix.
+    """
+    mod = load_script_with_research("fetch_gguf_voices", "fetch-gguf-voices")
+    files = ["m-Q2_K.gguf", "m-UD-Q2_K.gguf", "m-q8_0.gguf", "m-q8_0-dd2.gguf",
+             "sub/m-Q2_K.gguf", "README.md"]
+    eq(mod.pick_file(files, "Q2_K")[0], "m-Q2_K.gguf", "the bare tag is the bare file")
+    eq(mod.pick_file(files, "UD-Q2_K")[0], "m-UD-Q2_K.gguf", "and the prefixed tag its own")
+    eq(mod.pick_file(files, "q8_0")[0], "m-q8_0.gguf", "a suffixed sibling still loses")
+    eq(mod.pick_file(["a-Q4_0.gguf", "b-Q4_0.gguf"], "Q4_0")[0], None,
+       "two files that really share a tag are still refused")
+
+
 MILESTONE_AA = {
   "claude-opus-4-5-thinking": {
     "name": "Claude Opus 4.5 (Reasoning)", "slug": "claude-opus-4-5-thinking",
@@ -5884,6 +5942,92 @@ def the_sdcpp_detector_table_reads_an_equality_test_as_well_as_a_find():
        "a block that captures a tensor for later is not a signature, got %r" % sigs)
     eq("VERSION_WAN2_2_S2V" in sigs.values(), False,
        "and no post-loop outcome collects the loop's leftovers, got %r" % sigs)
+
+
+# the two shapes a rule takes when one tensor name is not enough, as upstream
+# writes them: a second lookup ANDed onto the condition, and a second lookup
+# nested under it with a plain return behind
+SDCPP_NESTED = """
+SDVersion ModelLoader::get_sd_version() const {
+    for (auto& [name, tensor_storage] : tensor_storage_map) {
+        if (tensor_storage.name.find("model.diffusion_model.cap_embedder.0.weight") != std::string::npos) {
+            if (tensor_storage_map.find("text_encoders.llm.connector.layers.0.self_attn.q_proj.weight") != tensor_storage_map.end()) {
+                return VERSION_MING_IMAGE;
+            }
+            return VERSION_Z_IMAGE;
+        }
+        if (tensor_storage.name.find("model.diffusion_model.t_block.1.weight") != std::string::npos &&
+            tensor_storage_map.find("model.diffusion_model.x_embedder.proj.weight") != tensor_storage_map.end() &&
+            tensor_storage_map.find("model.diffusion_model.audio_patchify_proj.weight") == tensor_storage_map.end()) {
+            return VERSION_PIXART;
+        }
+        if (tensor_storage.name.find("model.diffusion_model.adaln_single.emb.timestep_embedder.linear_1.bias") != std::string::npos) {
+            // PixArt shares this timestep embedding with LTX-AV.
+            if (tensor_storage_map.find("model.diffusion_model.pos_embed.proj.weight") != tensor_storage_map.end() &&
+                tensor_storage_map.find("model.diffusion_model.audio_patchify_proj.weight") == tensor_storage_map.end()) {
+                return VERSION_PIXART;
+            }
+            return VERSION_LTXAV;
+        }
+        if (tensor_storage.name.find("model.diffusion_model.input_blocks.") != std::string::npos) {
+            is_unet = true;
+            if (has_multiple_encoders) {
+                is_xl = true;
+            }
+        }
+    }
+    return VERSION_COUNT;
+}
+"""
+
+
+@test
+def a_rule_that_asks_a_second_tensor_is_kept_with_its_condition():
+    """z-image turbo and ltx video read as `no signature` the sweep upstream nested them.
+
+    a rule the table could not model exactly was dropped whole, which was right
+    while the second test was a dimension. sd.cpp then put ming image under
+    z-image's signature and pixart under ltx-av's, each behind a lookup of a
+    second tensor NAME, and both carried models fell out of the table. presence
+    of a name is something a tensor table answers exactly, so the rule is kept
+    with the condition on it and the plain return behind it stays the default.
+    """
+    sys.path.insert(0, RESEARCH)
+    try:
+        mod = load_script("sdcpp", os.path.join(RESEARCH, "fetch-sdcpp-support"))
+    finally:
+        sys.path.remove(RESEARCH)
+    sigs, cond = mod.parse_rules(SDCPP_NESTED)
+    cap = "model.diffusion_model.cap_embedder.0.weight"
+    adaln = "model.diffusion_model.adaln_single.emb.timestep_embedder.linear_1.bias"
+    audio = "model.diffusion_model.audio_patchify_proj.weight"
+
+    eq(sigs.get(cap), "VERSION_Z_IMAGE", "the return behind the lookup: %r" % sigs)
+    eq(sigs.get(adaln), "VERSION_LTXAV", "and ltx-av's")
+    eq("model.diffusion_model.t_block.1.weight" in sigs, False,
+       "an ANDed rule has no unconditional reading")
+    eq(sigs.get("model.diffusion_model.input_blocks."), "is_unet",
+       "a branch on a flag is not a condition and does not take the rule")
+    eq({(c["signature"], c["outcome"]) for c in cond},
+       {(cap, "VERSION_MING_IMAGE"), (adaln, "VERSION_PIXART"),
+        ("model.diffusion_model.t_block.1.weight", "VERSION_PIXART")},
+       "three rules carry a condition: %r" % cond)
+    eq(next(c for c in cond if c["signature"] == adaln)["absent"], [audio],
+       "a lookup compared to end() with == is an absence")
+
+    name = lambda *tails: ["blocks.0.w"] + list(tails)
+    eq(mod.match(name("cap_embedder.0.weight"), sigs, cond)[0], "VERSION_Z_IMAGE",
+       "z-image alone")
+    eq(mod.match(name("cap_embedder.0.weight",
+                      "text_encoders.llm.connector.layers.0.self_attn.q_proj.weight"),
+                 sigs, cond)[0], "VERSION_MING_IMAGE", "with the connector it is ming")
+    ltx = "adaln_single.emb.timestep_embedder.linear_1.bias"
+    eq(mod.match(name(ltx, "pos_embed.proj.weight"), sigs, cond)[0], "VERSION_PIXART",
+       "pixart is the one without the audio projection")
+    eq(mod.match(name(ltx, "pos_embed.proj.weight", "audio_patchify_proj.weight"),
+                 sigs, cond)[0], "VERSION_LTXAV", "and ltx-av the one with it")
+    eq(mod.match(name("t_block.1.weight"), sigs, cond)[0], None,
+       "an unmet condition detects nothing")
 
 
 @test
@@ -7281,6 +7425,39 @@ def a_readout_names_how_the_model_is_read_and_nothing_else():
         eq(why in errs, True, "%r is refused with %r: %s" % (body.strip(), why, errs))
 
 
+@test
+def a_gguf_that_carries_its_own_head_is_read_by_the_server():
+    """`native` is the fourth way to read a decision model, and the only one with no client half.
+
+    llama.cpp's `/v1/systemone` answers from a head the converter wrote INTO the
+    gguf, so there is no layout to render and no head to fetch, and saying
+    either is a block describing a different file. clef is why a repo can say
+    it for itself: ggml-org's conversion carries the head and the three
+    backbone ggufs beside it do not, on one model.
+    """
+    code, findings, _ = validate(READOUT_FIXTURE % "      kind: native\n      source: card")
+    eq([x["error"] for x in findings if "readout" in x["error"]], [],
+       "a native block is two fields")
+    for body, why in (("      kind: native\n      source: card\n      layout: decider-plain",
+                       "layout needs"),
+                      ("      kind: native\n      source: card\n"
+                       "      head: {repo: V/D, file: h.npz, reads: {states: last}}",
+                       "head needs")):
+        errs = " ".join(x["error"] for x in validate(READOUT_FIXTURE % body)[1])
+        eq(why in errs, True, "%r is refused with %r: %s" % (body.strip(), why, errs))
+
+    per_repo = READOUT_FIXTURE.replace(
+        "    - {repo: Vendor/Decider-GGUF, files: {Q8_0: {}}}",
+        "    - {repo: Vendor/Decider-GGUF, files: {Q8_0: {}}}\n"
+        "    - {repo: Other/Decider-GGUF, readout: {kind: %s, source: card}}")
+    body = "      kind: chat\n      source: card"
+    errs = " ".join(x["error"] for x in validate(per_repo % ("native", body))[1])
+    eq("readout" in errs or "unknown field" in errs, False,
+       "one repo of a model may be read another way: %s" % errs)
+    errs = " ".join(x["error"] for x in validate(per_repo % ("generate", body))[1])
+    eq("must be one of" in errs, True, "and its block is checked like the model's: %s" % errs)
+
+
 HEAD_FIXTURE = ("      kind: head\n      source: card\n"
                 "      head: {repo: Vendor/Decider-GGUF, file: head.npz%s}")
 
@@ -7406,6 +7583,20 @@ def the_layout_table_is_published_as_json_with_each_head_resolved():
         "p/L": {"short": "l", "repos": ["q/L-GGUF"], "readout": "layout:plain"},
         "p/N": {"short": "n", "repos": ["q/N-GGUF"], "readout": "head"}},
        "only a chat model is left out")
+
+    # a head the gguf carries is the server's to apply, and one repo of a model
+    # may be that while its siblings are not
+    models = {"p/S": {"name": {"short": "s"}, "repos": ["q/S-GGUF"],
+                      "readout": {"kind": "native"}},
+              "p/X": {"name": {"short": "x"},
+                      "repos": ["q/X-GGUF", {"repo": "g/X-GGUF",
+                                             "readout": {"kind": "native"}}],
+                      "readout": {"kind": "layout", "layout": "plain"}}}
+    eq(mod.layouts_export(table, models)["models"],
+       {"p/S": {"short": "s", "repos": ["q/S-GGUF"], "readout": "native"},
+        "p/X": {"short": "x", "repos": ["q/X-GGUF", "g/X-GGUF"],
+                "readout": "layout:plain", "by_repo": {"g/X-GGUF": "native"}}},
+       "the word is `native`, and an override is keyed by the repo that makes it")
 
     shipped = json.load(open(os.path.join(ROOT, "docs", "layouts.json")))
     eq(shipped["models"]["Cloudflare/clef-flash"]["readout"], "head:clef-flash",

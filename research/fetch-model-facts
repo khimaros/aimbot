@@ -256,6 +256,22 @@ def names_audio(cfg):
     return any(isinstance(n, str) and AUDIO_IN_NAME.search(n) for n in names)
 
 
+# an encoder's geometry, not a setting that merely mentions vision: both have to
+# be there, so `vision_feature_layer` on its own derives nothing
+VISION_FLAT_KEYS = ("vision_n_layers", "vision_dim")
+
+
+def takes_image(cfg):
+    """Whether a config carries a vision encoder, however it spells one.
+
+    A nested `vision_config` is the convention. deepseek v4 flash vision writes
+    the tower's geometry flat beside the language model's instead, and reading
+    only the block derived a text-only model with an mmproj beside it.
+    """
+    return bool(cfg.get("vision_config")) or all(
+        cfg.get(k) for k in VISION_FLAT_KEYS)
+
+
 def takes_audio(cfg):
     """Whether this config declares an audio input, however it says it.
 
@@ -408,7 +424,7 @@ def shape_facts(cfg):
         out["experts_active"] = (text.get("num_experts_per_tok")
                                  or text.get("moe_top_k"))
     modes = ["text"]
-    if cfg.get("vision_config"):
+    if takes_image(cfg):
         modes.append("image")
     if cfg.get("video_token_id") is not None:
         modes.append("video")

@@ -1237,7 +1237,7 @@
   {
    "id": "49746765",
    "title": "PrismML Launches Bonsai 2 27B, Its Most Capable Model Yet",
-   "points": 3,
+   "points": 4,
    "num_comments": 1,
    "created_at": "2026-09-17",
    "url": "https://news.ycombinator.com/item?id=49746765",
@@ -1431,6 +1431,75 @@
    ]
   }
  ],
+ "clef": [
+  {
+   "id": "49923692",
+   "title": "Clef: Open-weight decision models, and new RL fine-tuning platform",
+   "points": 633,
+   "num_comments": 217,
+   "created_at": "2026-10-01",
+   "url": "https://news.ycombinator.com/item?id=49923692",
+   "comments": [
+    "To lean into your example: if you want to design travel search, you might envision a system that goes from a user's typed query -> a structured query -> executed against a database of real-time flights -> judging the result for feasibility of the resulting proposals created by those queries.What you can do with LLMs is reverse this: from any numbers of snapshots of flight data, you can create large numbers of plausible user queries, based on your data, that are known to be feasible or infeasible. And now you have a labeled data set to train a model that focuses solely on the query-creation and judgment systems. And you can experiment with whether having a more flexible query protocol leads to higher success rates without sacrificing accuracy, or whether you can generate that last-mile feasibility check as a combination of auditable code checks alongside AI-based judgment.LLMs don't absolve you of having to break down your system architectures into components that have well-defined boundaries (though certainly they can help with that design). They do make those components feasible to solve at scale.",
+    "Agreed on the directions, it might appear to be piece of cake, but the \"practically for free\" part hides the hard bit: realism. Try simulating flight-search data with source, destination, flight numbers, routes, schedules , try a diff it against a real corpus. Even frontier models produce data that looks right at first sight, but breaks on joint distributions (a flight number that never flies that route, layovers that violate minimum connect times). last mile is the daunting task.",
+    "> what are we going to do with all those GPUs when the bubble pops?Your comment here made me laugh, because I think we will finally be able to play Crysis at 10fps.Just kidding, of course. GPU half lives are quite a bit less than standard compute half lives, no?[0] That's what I've been trying to understand regarding data centers focusing as GPU clusters -- seems like the ROI window would have to be very short for the capitalization.[0] https://www.tomshardware.com/pc-components/gpus/datacenter-g...",
+    "Traditional LLMs doing structured output is like trying to fit a square peg in a round hole. It's just not the right tool for the job. They can do structured output, but it's janky.With Jev, structured output is its native format. Jev is just way faster, cheaper, and outright better for a lot of things.Note that while all of this is great, this is nowhere near a sort of \"ChatGPT moment\". It's a cool new thing, and it's way better at certain tasks, which could be big. That's all though.",
+    "What's the hype with Jev? Hasn't Gemini had structured outputs since November 2025? https://ai.google.dev/gemini-api/docs/structured-output",
+    "Yeah I think people were already using either of these as part of traditional software workflows):A) Structured outputs from LLMs (doesn't need fine tuning but can be expensive)B) Classification output from fine-tuned BERT-like or GLiNER models (is calibrated well and has cheap/fast inference)What Jev did is combine the advantages of both A and B into one model/product, and create a really good API.They claim that a key innovation is how they've trained the model using what they call RLCD (RL from calibrated decisions). So it's not just that you can get the outputs (which is easy to add to any LLM) but that the different primitives they expose (Choice, Score, Noul) have each been calibrated. For example, they claim that if you use the Score primitive (which gives you probabilities along a bunch of choices representing a continuum) that's not just using the more general 'Choice' primitive under the hood. It's been calibrated separately.I don't know how many of the Jev-like things we've seen do that. For example Cloudflare offers a Jev-like model with the same API, and which they say was trained with RLCD. But I don't know whether Choice and Score are different under the hood, or whe",
+    "Fair. Though in this case my actual classifier (dino v3 features fed into a very shallow DNN) works surprisingly well and is insanely faster than using an LLM -- so it really was the one shot performance I was hoping for.",
+    "Yeah, they have quality content. We based our new pr-review system on another one of their dev blogshttps://blog.cloudflare.com/ai-code-review/",
+    "I am playing with it now trying to make it play adom ( mostly to avoid issues with timing; using local variants so speed is a consideration ). By itself, it plays in ways you can likely imagine.. not well. Adding big Qwen on top for strategic decisions helps, but makes it fail in unexpected ways. Will be adding smaller non-qwen in the middle. WIP so actual details are changing fast.",
+    "I hear what you're saying. But this is not such a model. The article says that various internal teams had to fine-tune Clef to suit their specific needs. They're even rolling out a RL training product line for it.",
+    "The biggest upside to using a zero-shot classification model is that it's actually zero-shot, i.e., you don't need to construct task-specific training sets.If it needs to be fine-tuned, then why not fine-tune smaller and cheaper models that are only as big as the task requires?",
+    "Unrelated to the subject matter, but something that I never fail to appreciate is just how well-written the majority of Cloudflare's posts are. (There was an article on Merkle Tree Certificates which was phenomenal.) There is real skill in creating an informative work which condenses complex technical subject matter into something that a technically-inclined non-expert can understand."
+   ]
+  },
+  {
+   "id": "7224882",
+   "title": "Clef \u2013 stop using passwords",
+   "points": 114,
+   "num_comments": 96,
+   "created_at": "2014-02-12",
+   "url": "https://news.ycombinator.com/item?id=7224882",
+   "comments": [
+    "Well, sit tight. There's a new version of the Neo that supports U2F (https://sites.google.com/site/oauthgoog/gnubby) coming out Real Soon Now (https://www.yubico.com/products/yubikey-hardware/yubikey-neo...) -- sometime in 2014 is all I've heard.",
+    "Lastpass used to work like that for me. Now it causes me about as much hassle as it saves me. It does not do a wonderful job of handling multiple accounts on single sites; I frequently find multiple entries in the vault for single accounts, only one of which has the correct password (and usually the username is missing), and there are a number of sites whose presentation seems to baffle Lastpass, either in the login screen or in form-filling.Also, Lastpass doesn't seem to offer to do as much for me anymore. Maybe I screwed something up in my config, but I don't see an AutoLogin option anymore.So I'm just about ready to abandon Lastpass if anything else comes along that gives me a user experience like Lastpass used to give me. I don't know whether Clef is that service, but I'm at least glad that someone is exploring the space.",
+    "Authy's app works with Google Authenticator-compatible sites. Authy also has its own two-factor system, but you're not required to use it.",
+    "> It does help with the authenticating password over insecure connectionI'm not sure you understand what SRP is; it's built to be used over insecure connections.> It doesn't solve the problem of securely storing passwords; the value that is stored can be brute forced to get password and is equivalent to cleartext password for any SRP using site.I don't think you understand what SRP is; if you could do this, then public key crypto has a much larger problem then passwords and you should be worried about TLS as well.",
+    "While this is cool, I don't think I can replace GA with this because GA is the one implemented by the services I use, yeah? I can only use this for services that implement this.",
+    "I dont see how that matters. You still need a password + one file (on the phone). SSH keys with passphrase are two factors as well in my book. In fact, I would say that not having to transmit the weakest part (the mnemonic password/pin) over the wire is a plus.",
+    "May I suggest you try the Authy[1] app for your phone. Its much prettier than GA, has a PIN screen lock, and can save your encrypted credentials in case you lose your phone. Plus, if you run OS X it will sync to your computer's clipboard via Bluetooth.[1] https://www.authy.com/",
+    "Plus the notion of \"which of my ten passwords did I use for 'xyz.com?\", you end up exposing your other nine passwords to 'xyz.com. Not as bad as using the same password everywhere, but still. I wouldn't want to accidentally give my bank password to, say, a crappy online forum.",
+    "Hardware integration is needed for this and mobile payments to be less frustrating and fast. Apple/Google/Samsung are the ones in control.",
+    "At least some mobile operators have \"SMS archive\" option, that can be enabled and accessible from self-service site. It requires some time to set up, but attacker with sufficient time, knowledge and patience may pull the attack relatively easily. No need for NSA-grade adversary.(Even worse, until relatively recently they had used numeric passwords (those had to be set from a phone, using DTMF tone dial). This had changed only 3 or maybe 4 years ago. Wonder whenever that change was 2FA-related. :) )So I'm uncertain whenever SMS is more secure.",
+    "BTW, what about the security implication of this password-test-runs? Users are essentially giving their \"other\" passwords to the site, right?Obviously a benevolent site will NOT save/process those failed passwords, it may even take care to have them NOT stored in any logs...An malevolent site on the other hand may even trick you into providing it some of your other passwords to it......cache invalidation, naming things and secure authentication for a broad public",
+    "Wasn't there news recently about popular games picking up stuff from the phone that they are not supposed to?If I keep my passwords / certs on my phone, anything that hacks my phone gets access to those, no?"
+   ]
+  },
+  {
+   "id": "10366904",
+   "title": "Clef's company handbook",
+   "points": 99,
+   "num_comments": 81,
+   "created_at": "2015-10-10",
+   "url": "https://news.ycombinator.com/item?id=10366904",
+   "comments": [
+    ">I imagine because really talented folks are tend to be confidentIt sounds like you make the same mistake as everyone else, thinking there is some connection between confidence and technical skill.Appearing confident is completely unrelated to programming ability. confidence is a skill one needs to learn separately.",
+    "Its not weird to be completely, categorically opposed to remote work when you've found, e.g., that remote work usually doesn't work well in your environment and that, even where it does, allowing some people to work remotely and not others impacts overall morale in a way which offsets the advantages from the limited circumstances where remote work is useful.Wanting diversity doesn't mean having unlimited willingess to sacrifice quality of work to get it.",
+    "I just think it is super weird to be completely, categorically opposed to remote work when a primary goal is diversity. It is a severe constraint on hiring, and you want super flexible hiring to maximize diversity.",
+    "I work at Pivotal Labs also. I don't even find it that disruptive to interview candidates on our projects bc I'm still working on what I'd be doing that day. It's certainly less disruptive than marching our entire team one after another into a conference room where they grill the candidate for an hour at a time, which is what most employers do.",
+    "There are super good points here. WAY too much value is put on \"confidence\". I imagine because really talented folks are tend to be confident confidence is preferred because talent is harder to gauge. That's a shame.\"Culture Fit\" is a really problematic state of mind. I totally agree that it locks in on a 'type' and reduces diversity. It's a dangerous, ego-maniacal, and lazy way to hire.",
+    "> I'm on the autism spectrum.Me too. I find nervousness is generally a positive indicator for empathy.> If you're looking for a more effusive, gregarious \"personableness\"I'm generally not. In general I look less at how someone interviews and more at choices they've made. How people behave in an hour isn't as interesting to me as how they've behaved over the past years.",
+    "Perhaps I've just been lucky, but I've been working in the US for the last 15 years, and the policy at all 4 of the companies I've worked for has been: \"if you're sick, don't come in\".None of the companies I've worked for has set a limit on the number of days you could be sick for, nor encouraged anyone who didn't feel healthy to come in to work. I appreciate that some companies may do that, but I've never really understood how that works, given that illness is (mostly) not something you can control.",
+    "> If you tell your boss \"I am going to take tomorrow off\", and they say, \"Actually, you're scheduled for an interview, can you please come in? But take Thursday or Friday off by all means\", you're going to still go to work, right? Informing, in practice, is identical to requesting ...In my experience, \"you must ask for permission\" is substantially different from \"you don't have to ask, but your decision may be overruled\". It sounds like your experience is different.Perhaps the differences I see can be put into another context. Think about the action \"eating off someone else's plate\", rather than \"working from home\". Do you see the gap between informing and requesting in that circumstance? The difference seems huge to me.",
+    "If you tell your boss \"I am going to take tomorrow off\", and they say, \"Actually, you're scheduled for an interview, can you please come in? But take Thursday or Friday off by all means\", you're going to still go to work, right? Informing, in practice, is identical to requesting, and this is really just a language thing that makes it clear that you (a) should inform somebody you'll be gone and (b) you can take any day off except maybe 5% of days have critical meetings or whatever.It seems reasonable to think this is codified this way because the alternative language of informing doesn't imply suggestion (b), but sure, it could also be due to the founders being control freaks.",
+    "> Your perception of his company's diversity does not change the validity of his point about having a less diverse pool to hire from.It changes how seriously I would take his advice.If someone says \"I did X, and without X it would be very hard to do Y.\", you would assume that they actually did Y. If you later find out that they didn't do Y, and further that the people they're advising to change their behavior and start doing X are better at Y than they were.. it's a sign you might feel free to ignore their advice.",
+    ">Making it difficult to fire ineffective people, or doing so slowly, is one of the best ways to ruin an organization. The friction that exists around firing in many countries seems to be part of why they have less effective business innovation and investment.It has nothing to do with innovation and investment and everything to do with managers' desire to maintain their dominance over their employees.>Meanwhile, poor performers stir dissatisfaction among other employees, especially effective ones. This makes it harder to start new companies and grow.Not half as much as authoritarian managers do, and easy-to-fire policies guarantees authoritarian managers.>It's preferable for both employee and employer have the right of free association.Only if it were an equal relationship. Which it patently is not.>As organizations tend to grow larger, they tend to accumulate less effective people over timeYou know what kind of organizations do that the most? The ones that know that they can dispose of their employees at a moment's notice for any reason, without reason.Organizations that can't fire indiscriminately tend to be a bit more careful about hiring. Which is good for job security, which in",
+    "> It's not all that hard to spot and interview forI'd argue that it's a lot harder than you think - you might be able to spot what you recognize as empathy, which is likely specific to a particular culture or personality type. Even at that, under the pressure and power imbalance of an interview, your hypothetical empathetic person might be trying their best to appear calm and focus on responding intelligently.For instance: I'm on the autism spectrum. In an interview, my empathy might be masked by a general nervousness around newly met people, or by unintentional gaffes of body language. I could very easily see myself showing up as a false negative on your empathy test in an interview.Another case: a highly qualified candidate from a high-context culture, who might be inclined to demonstrate deference or politeness as a form of building accord with their interviewer. If you're looking for a more effusive, gregarious \"personableness\", this might too show up as a false negative."
+   ]
+  }
+ ],
+ "clef-flash": [],
  "cohere-transcribe-03-2026": [
   {
    "id": "47988777",
@@ -1442,9 +1511,11 @@
    "comments": []
   }
  ],
+ "cohere-transcribe-arabic-07-2026": [],
  "cosyvoice3-tts": [],
  "data2vec-audio": [],
  "decider-2b": [],
+ "decider-35b-a3b": [],
  "decider-4b": [],
  "deepseek v4 flash 0731": [
   {
@@ -2187,6 +2258,28 @@
    ]
   },
   {
+   "id": "49934620",
+   "title": "One month coding with GLM 5.3 Flash",
+   "points": 228,
+   "num_comments": 180,
+   "created_at": "2026-10-02",
+   "url": "https://news.ycombinator.com/item?id=49934620",
+   "comments": [
+    "They are acting like they have infinite money (huge annual losses [1], [2], [3]) and infinite hardware (aiming to build a large number of data centres with a lot of GPU hardware [1], [3], [4]) even if that isn't the case.[1] https://www.morningstar.com/stocks/anthropics-leaked-financi...[2] https://www.wheresyoured.at/anthropics-profitability-swindle...[3] https://fortune.com/2026/06/16/openai-financials-leaked-loss...[4] https://www.forbes.com/sites/paulocarvao/2025/12/06/why-open...",
+    "I don't know. It would surprise me. For long agentic work you shouldn't need that many streams for the KV cache to become larger than the (active) parameters. At 128 streams the model weights would be neglectable. I am using a 22GB model file, i.e. I have 10GB for context, which isn't even the max that the model supports.",
+    "I'm a little confused, because it feels like this doesn't actually talk much about what it was like coding for a month with GLM 5.3 Flash.The \"hurdles\" section was about cost and inference provider instability, neither of which has anything to do with whether or not the model was effective at the tasks.Then we get to \"It wasn't all bad\", which... you haven't really described anything bad (or at all, really) about the model's performance.I clicked through to the article because I've started using GLM 5.3 Flash myself (after being exclusively on Opus 5 and prior versions for the past year and a half or so), and I'm curious what other people's experiences have been actually using the model and having it perform tasks. But I feel like I didn't really learn anything from this article.",
+    "Batching is extremely powerful for optimizing power use. Your card is spending the vast majority of it's energy use fetching weights from it's memory, and it only gets to use each weight once. Running that same model on a bigger machine with lots of batching gets to amortize the cost of loading a weight across all the parallel requests. N=128 is literally about 50 times more energy-efficient than N=1.",
+    "It's still in process so we're not getting tokens out of it yet. Targetting a Gowin 138K (the Tang Retro Console 138K board). This is moving from a Xilinx part that's about 2x that size so we have to trade some time for space. Estimated to be in the 7tok/sec when it's all said and done. Not super fast, but this isn't a super fast (clockrate) FPGA. And at 138K LUTs it's pretty small for this kind of task (but it is the largest FPGA that I've got, and the boards are quite affordable at $129 which includes 8GB of DDR3 - which is another reason it's kind'a of slow, DDR3 is kind'a slow)",
+    "And usage will grow accordingly, as usual.My car engine is a miracle of efficiency compared to the stuff we had a hundred years ago, but overall cars pollute more than back then",
+    "> my house uses an average of 1300kWh per month.And the average European house uses like 3000kwh.... per year. We're already wasting insane amount of energy, adding 2-10% more is definitely huge",
+    "Sure, and I love to see people actually giving a shit and getting engaged locally. There are many things I see - tweets and video from protests - that make me think people should take that energy to more direct issues.",
+    "On a blend of about 300 agentic/coding tasks, for GLM-5.3 Flash, low was about 1.3M tok/ans, medium was ~2M tok/ans, and xhigh/max was 4.8M tok/ans. This was dominated by output tokens btw (only about a 2X input token spread, but closers to a 5X spread for output tokens from low to xhigh).These differ by model and set of tasks, but for GLM-5.3 Flash, the best $/pass was medium effort. Max did get about 5% higher scores, but at >2X the $/pass.",
+    "Whil training used a lot of energy, it is quite difficult to comprehend how that measures up in global terms.The last numbers I saw for training a frontier model used as much energy as four fully fueled up Boeing Pegasus (of which there are 113)The Erin Brokovich data center site describes the use as something like the lifetime use of 5-6 cars, which sounds like a lot when you're filling the tank, but hardly anything when you think about how many cars there are.",
+    ">With the talk of AI data centers' impact on the world,The global impact of data centers is negligible. There are measurable local impacts. It remains a small percentage of global electricity use. Electricity is less than a quarter of world energy use (increasing that percentage is one of the best things we can do because long term renewables win).There are local demands for data centers. Infrastructure strain, from new builds etc.A lot of that is dependent on the local situation, for instance water use in any area that performs regular irrigation will have additional use of water, but the relative quantities lean heavily towards irrigation.",
+    "> why bother trying to make training and inference efficient when you can just throw hardware/money at the problem.Sure, for certain bleeding edge research path-finding, any optimization is premature but that's tiny compared to deployed end-user product scale. The biggest constraints frontier cloud model providers face are: 1. Getting enough of the hardware they want, 2. Capital, 3. Talent (and #3 is a largely a function of #2 & #1).Given the raw economics, it would be foolish to not have efficiency teams fast-following their deployments as closely as possible. We're seeing direct and indirect evidence of significant efficiency improvements across all the frontier providers and the rate seems to be increasing. The coming OAI & ANT IPOs hinge on demonstrating they can serve many use cases beyond software dev profitably at what they are willing to pay, which is generally less than software dev. The trend is clearly \"the higher volume the use case, the less they're willing to pay\"."
+   ]
+  },
+  {
    "id": "49450353",
    "title": "GLM-5.3-Flash Intelligence, Performance and Price Analysis",
    "points": 139,
@@ -2207,28 +2300,6 @@
     "> If you're not even familiar with how LLMs work, perhaps you should restrain yourself from confidently talking about this topic until you educate yourself. You're only spreading misinformation.I am very familiar with how LLMs work, and I am telling you that there is no consensus that they cannot achieve AGI in the machine learning community. Some people think so (such as Yann LeCun), others disagree. We just don't know yet.> That for sure would be a very convenient definition, especially for all those AI labs trying to convince investors that they achieved AGI. Unfortunately everyone knows, that knowing the right answer isn't the same as knowing where that answer came from.AGI is defined by capabilities, not methods.",
     "> [citation definitely needed]If you're not even familiar with how LLMs work, perhaps you should restrain yourself from confidently talking about this topic until you educate yourself. You're only spreading misinformation.> AGI is defined by the practical outcomes, not by the way the outcomes are achievedThat for sure would be a very convenient definition, especially for all those AI labs trying to convince investors that they achieved AGI. Unfortunately everyone knows, that knowing the right answer isn't the same as knowing where that answer came from."
    ]
-  },
-  {
-   "id": "49857656",
-   "title": "Turning GLM-5.3-Flash into a Jev-like decision model",
-   "points": 137,
-   "num_comments": 59,
-   "created_at": "2026-09-26",
-   "url": "https://news.ycombinator.com/item?id=49857656",
-   "comments": [
-    "Yeah, I\u2019m similarly not sure how to square away claims of \u201ctrained 100% exclusively on synthetic data\u201d with the fairly obvious fact that it\u2019s derived from an open model, almost all of which are trained on a mix of scraped and data and distilled traces.",
-    "Qwen3-Next-80B-A3B can already run on a 16GB M1 MacBook at around 3\u20135 tok/s using aggressive memory management. Could a Jev-style controller push that to 100 tok/s on an M1?",
-    "20k tok/sec prefill on B200/B300 isn't particularly noteworthy for medium-sized models like GLM-5.3-Flash, vLLM and SGLang achieve it on a reasonable number of models, especially at NVFP4.50k tok/sec is pretty impressive though.But... when you were doing your measurements, were you using the same random book excerpt? If you were potentially getting even partial cache hits for your 50k tok/sec measurement, it would taint the benchmark: pretty much any inference provider running any LLM would be able to hit those numbers.",
-    "> basically everyone asks for a JSON schema for the tool call and uses that to validate and re-prompt the LLM until it emits something with a valid schema.Basically no one is doing that since 2024, have you been living under the rock? Read about constrained decoding.> I have had failures when I want a field to be specifically formatted Markdown or something.And Jev has an advantage here because it can\u2019t generate anything?",
-    "> and re-prompt the LLM until it emits something with a valid schema.Well, that's essential what happens, but on the \"backend\" side still, so it's significantly more efficient. Also, model providers can play with e.g. how likely are they to accept a valid/invalid character, so for example the first token may only be [, { or \".As for what's not in the schema, that's an orthogonal question.",
-    "Sure but I still don\u2019t see any reason to think it\u2019s not based on an open weight model. They don\u2019t even make that claim as far as I know.",
-    "I think the truth is sort of halfway between yall.Hallucinations in tool call results _do still exist_, but basically everyone asks for a JSON schema for the tool call and uses that to validate and re-prompt the LLM until it emits something with a valid schema.That all goes out the window when a string field has a \u201chidden\u201d schema in that only particular strings are valid, but that restriction isn\u2019t in the JSON schema. I have had failures when I want a field to be specifically formatted Markdown or something.We\u2019ll probably see something that handles this better in the future like jsonnet or Cue or dhall that has some execution capabilities so you can write a custom validator beyond what JSON schema supports.",
-    "Whether Jev is something architecturally different from an LLM (bidirectional vs auto-regressive? different type of parallel readout head?) remains to be seen, or guessed, but LLMs are certainly fungible and are competing on price - they leapfrog each other from release to release, but overall they are all progressing in unison.When it comes to the high volume market of business automation, it seems that ultra-low cost, rather than expensive frontier intelligence, is exactly what you want, and low latency is also nice to have for customer-facing applications like customer service chatbots.",
-    "I have run tests with qwen 3.8 and gemma 4 in a way similar to this post (based on an open source project that also does this with gemma4).Getting competitive accuracy with Jev is fairly easy, if by accuracy you mean that the highest weighted answer is the right one. GLM 5.3 is complete overkill, much smaller llms will doWhat Jev brings to the table, beyond speed, is that the reported probabilities match actual likelyhoods. If you present three options, with A and B equally likely and C impossible, jev will approximately answer with 0.5, 0.5, 0. Stock LLMs don't",
-    "It seems people are just guessing at the architecture behind Jev. Obviously the functionality itself is easy to replicate, but why Jev seems to be making such a splash (beyond the doh! factor of it's huge applicability) is the ultra-low cost and speed, which may be due to architecture.The Laya model compared in TFA shows one way Jev may be getting it's speed and low cost - by using a BERT-like bidirectional model rather than an auto-regressive one (LLM).",
-    "The post claims comparable quality at comparable latency (the difference in the latter only stemming from serving region).Hence my note about the risk of cost being the only moat.",
-    "You are talking about the content of the response, while krial is talking about deviations in the structure of the response. The point is the number of possible states an output can take, so the next step can ingest it and it can be part of a robust pipeline."
-   ]
   }
  ],
  "glm-asr": [
@@ -2246,25 +2317,27 @@
    ]
   },
   {
-   "id": "49807688",
-   "title": "LLM Ass Bench",
-   "points": 169,
-   "num_comments": 46,
-   "created_at": "2026-09-22",
-   "url": "https://news.ycombinator.com/item?id=49807688",
+   "id": "49933476",
+   "title": "Decision models like Jev don't beat LLM-as-a-judge or traditional classifiers",
+   "points": 28,
+   "num_comments": 8,
+   "created_at": "2026-10-02",
+   "url": "https://news.ycombinator.com/item?id=49933476",
    "comments": [
-    "I'm impressed that Luna got as far as it did on max reasoning. Don't get me wrong, that's one weird looking ass, but even the top GPT model a year ago probably would have done worse based on my experience (with asking it to create meshes in general, not modeling asses... yeah, that's the ticket). Then again, I'm also not, because I've found it to be a great deal at its relatively low price point when the reasoning is set to high.",
-    "i almost wrote a extension to block mentions of pelican bench because i find those so utterly useless. now, Assbench, on the other hand, i could get behind",
-    "still awkward when a page full of thong-covered asses pops up on my extra monitor in my open-seating arrangement office that im required to attend 4 times a week (no of course im not salty or anything)"
+    "BART is quite an old model for this kind of test, and probably not a good very good choice for much these days. I'm working on replicating their benchmark on my own NLI model that targets zero-shot guardrail applications. I don't think it'll beat much larger models, but should give a better baseline for what a crossencoder can do.https://huggingface.co/dleemiller/crossingguard-nli-l",
+    "The key properties for using such models for conditional-branching decisions in agentic stacks (and related) is that they should be well-calibrated (under the definition chosen for the task) and informative (e.g., always predicting the mean might be \"well-calibrated\" in a theoretical sense for some chosen quantities of interest, but isn't particularly useful in practice).The tricky thing with the neural networks is that the output logits are in effect a highly lossy compression of the epistemic (reducible) uncertainty, so even if the target calibration quantity is well-specified, it can be difficult to obtain in practice. A side-effect of this is that estimates in the high probability regions are not particularly stable under even modest co-variate shifts, which is a real problem if the estimates are being used for decision-making in a multi-step search graph that can lead to branches that are unlike what the model/estimator saw at training/calibration (if not altogether out-of-distribution). Here are a couple papers that describe how to approach those challenges:[1] Similarity-Distance-Magnitude Activations. In Findings of the Association for Computational Linguistics: ACL 2026, p",
+    "Shouldn't LLMs intuitively be better with a high number of available options? This article only does simple prompts with only options to block or not block.What is openai doing for their decisions API, a finetuned luna?",
+    "That was a pretty simple task they gave it, and sure you can use BERT with sequence classification for simple classification tasks.In our benchmarks, Jev did a LOT better at multi-step reasoning tasks than any open decision model we have tested so far, and it was also better than GLiDE which was specifically designed for that kind of task. And also better than Luna. On accuracy and also confidence calibration but also time and cost.https://hard-decisions.anth.us/models/",
+    "duh, this is not news. (general, fast and cheap) before decision models, you could pick only 2.LLM as judges - generalized, but too slow. If you had to make millions of classifications a day, this will be the wrong approach. you won't/shouldn't use LLM to classify spam/no spam. hot dog/or something.traditional classifiers, very specific 1 trick pony, super fast and cheap once built. If you need to make tons and tons of classifications, this would be the approach. but if you wanted a classifier right now for a novel problem, you need an expert to curate data, train and deploy.decision models/jev - are generic, you can throw them at most generic classification problems, and they are good enough. it's a fine balance between general, fast and cheap. you get all 3"
    ]
   },
   {
-   "id": "48758131",
-   "title": "LLM as a Web Server",
-   "points": 4,
-   "num_comments": 2,
-   "created_at": "2026-07-02",
-   "url": "https://news.ycombinator.com/item?id=48758131",
+   "id": "35958841",
+   "title": "Denny Zhou: some LLM's are tuned to work better upon \u201clet's think step by step\u201d",
+   "points": 2,
+   "num_comments": 1,
+   "created_at": "2023-05-16",
+   "url": "https://news.ycombinator.com/item?id=35958841",
    "comments": []
   }
  ],
@@ -2601,6 +2674,8 @@
  "jev-omni": [],
  "jevk5 4b": [],
  "k2 horizon 3.7b": [],
+ "k2 horizon 7b": [],
+ "k2 horizon mova 36b a4b": [],
  "kimi k3": [],
  "kokoro-v1": [],
  "krea-2-raw": [],
@@ -2800,7 +2875,30 @@
    "comments": []
   }
  ],
- "lid-176": [],
+ "lid-176": [
+  {
+   "id": "32341582",
+   "title": "Defying the Supreme Court",
+   "points": 14,
+   "num_comments": 37,
+   "created_at": "2022-08-04",
+   "url": "https://news.ycombinator.com/item?id=32341582",
+   "comments": [
+    "Have you read the guidelines recently?https://news.ycombinator.com/newsguidelines.htmlOn-Topic: Anything that good hackers would find interesting. That includes more than hacking and startups. If you had to reduce it to a sentence, the answer might be: anything that gratifies one's intellectual curiosity.Off-Topic: Most stories about politics, or crime, or sports, unless they're evidence of some interesting new phenomenon. Videos of pratfalls or disasters, or cute animal pictures. If they'd cover it on TV news, it's probably off-topic.",
+    "> In this ruling, which has impacted so many, the court did not take away a right. The court stated that it had taken away the power of the people and created a law where none existed.This ignores the fact that the previous status quo was that not that the court had taken away the power, but that the court had recognized that a inalienable right existed based on the 14th amendment, and as such was not something that the states had power to legislate. This is not the creation of a law, but an interpretation of it. See Roe at p33 [1]Given that we as a society have for 50 years believed that we had such an INALIENABLE right, that a court of any regard can take such a right away is pure nonsense.I guess the easiest question to ask of you is do you \"OrangeMonkey\" believe in an inalienable right to privacy, whether it's enumerated explicitly or not in the constitution. Because this all falls on that singular point regardless of the outcome on Roe / Dobbs. As a male, Dobbs doesn't directly affect me in its impact of whether I can have an abortion. But it affects my understanding of what the state can or cannot do with respect to my private actions. See Roe at para 77 [2] and especially pa",
+    ">> Texas will claim jurisdiction since in its eyes a citizen was murdered.>But this just isn't how it works, right? \"Claiming\" jurisdiction I mean.yes, that's exactly what might happen.https://www.npr.org/2022/07/15/1111383520/texas-abortion-law...",
+    "> The suspect would instead be extradited to New Mexico to face charges there.Only because the two states have the same law regarding murder.More comparable would be the prosecution of internationally-travelled kiddy-diddlers. Though the laws in the foreign country may have allowed such behaviour, itis illegal in the US and the prosecution will be in the US. The diddler is not extradited to the permissive country.",
+    "The thing that kills me, is that our legal system has turned into a chilling effect factory, because laws will be on the books, but prosecutors will often cherry pick or drop cases to avoid having an explicit counter precedent established. Nevermind that precedent is roughly equivalent to a longer term executive order in nature.At some point, our system has started to look more like a system mutated through jurisprudence, rather than through sane collective action via legislation, which seems to be held up by the political machinations of special interest groups/the two main political parties, and less accessible/approachable by most constituents apparently; which leaves these types of judiciary precedent golf games to be the seemingly more accessible form of legal landscape change.We're looking more like a country ruled by judges than by anything resembling some sort of sense in terms of how we architected the Government.I'm not even sure I could pinpoint where the specific hangup is, or suggest a reasonable change without several years to really absorb the structural aspects of the system, and painstakingly listing out the inputs/outputs.",
+    "Previously the court ruled that this was a right that belonged to the people.The Supreme Court ruled that they were wrong and are now allowing Gov actors at the State level to control a right previously held by people.",
+    "This all makes sense. On the flip side I'd imagine that there are some abortion clinic operators who are already strategizing with legal foundations to deliberately bring an ideal test case as soon as possible in order to establish a favorable precedent.",
+    "> Texas will claim jurisdiction since in its eyes a citizen was murdered.But this just isn't how it works, right? \"Claiming\" jurisdiction I mean. Take your previous example but instead imagine the woman from Texas took a trip with her husband to New Mexico and paid a hitman to murder him during the trip. The suspected hitman would most certainly be arrested on a layover in Texas (or any other state) but that state wouldn't have jurisdiction to prosecute for a murder that happened in New Mexico. The suspect would instead be extradited to New Mexico to face charges there.> Would you be willing to risk arrest if you were a doctor in New Mexico and a Texas resident comes to you for an abortion? Even the threat of arrest has consequences on peoples\u2019 actions.I certainly agree there and definitely cannot speak to the risk assessment that abortion providers might unfortunately be contending with but I can't imagine that this will remain a question for long. Federal courts definitely do not like legal ambiguities between states.",
+    "I agree that the system is in need of reforms. I\u2019m nit insightful enough to know what those reforms should be but I definitely agree that things are amiss.",
+    "I\u2019d like to understand why this post was flagged ? If it\u2019s not appropriate content for Hacker News , I\u2019m happy to remove it.",
+    "While I think your view of what will happen is exaggerated, I think the overall situation shows the reality of how much division there is between states and parties.",
+    "Crossing state lines with marijuana elevates your offense to the Federal level, regardless of the legality situation in the source and destination states.Federally, marijuana transport across state lines is still trafficking in illegal narcotics. That the States don't help enforce it doesn't change a thing.Not a lawyer, just read books, mind."
+   ]
+  }
+ ],
  "ling 3.0 flash": [
   {
    "id": "49101228",
@@ -3581,6 +3679,7 @@
    ]
   }
  ],
+ "multitalker-parakeet-streaming-0.6b-v1": [],
  "muse glimmer": [
   {
    "id": "49241679",
@@ -3959,46 +4058,37 @@
    ]
   },
   {
-   "id": "19899782",
-   "title": "Audit suggests Google favors a small number of major news outlets",
-   "points": 455,
-   "num_comments": 383,
-   "created_at": "2019-05-13",
-   "url": "https://news.ycombinator.com/item?id=19899782",
+   "id": "46635309",
+   "title": "LLM Structured Outputs Handbook",
+   "points": 377,
+   "num_comments": 64,
+   "created_at": "2026-01-15",
+   "url": "https://news.ycombinator.com/item?id=46635309",
    "comments": [
-    "The issue with the \"american inventors\" query is a well known issue in information retrieval called \"compound intrusion.\" The phrase \"american inventors\" occurs most often in web documents as a substring of \"african american inventors\" and unless you specifically exclude that from the results, it tends to dominate, producing the list of people you see there. If you search for \"US inventors\" you get a more reasonable list, because \"US\" isn't a substring of \"african american.\"",
-    "Again, you're trying to conflate getting things wrong or inadequately accounting for bias or expectations with 'peddling conspiracy theories' or 'delivering fake news'. These things are not the same and that's one of the key distinctions between real news organizations and ones that aren't.",
-    "They're not the same thing but sometimes they do still peddle conspiracy theories that turn out to be false. Many are susceptible to delivering fake news as if it was real due to a conflict of interest related to their funding model.It is useful to make a distinction between news organizations and non-news organizations but it is not useful to apply any sort of value judgement of either based on that fact alone.",
-    "It's not the responsibility of search engines to engage willful ignorance with a plurality of perspectives or debunk fringe political nutbaggery that stands opposed to the precepts of civilized society, but I'm glad they mostly do.",
-    "Boiling down credibility to outright lies is far too simplistic.The 'big boys' have more than enough bias, and tricks up their sleeve to bend the story to their liking.",
-    "> If Google detects more engagement towards \"Yes\" and flatearther conspiracy websites, should their search engine prioritize results that say the Earth is flat?Yes.Realize however that this is entirely hypothetical, as there is enormously more round earth information with extremely popular sites like wikipedia.org, nav.gov, etc.My faith in democracy is strong that I believe this will always be the case, so long as the earth remains round.",
-    "I am told I am annonyingly centrist. While not 'extremist' in the casual sense, I very much see a hard bias to the left that often seem unfettered by the facts by NPR. BBC seems to have its own agenda, however not quite 'left' by american standards. Read any recent Brexit coverage to see the worrying doublespeak that seems to be de rigour today nevertheless. Before you ask, I honestly am unaware of any news org without bias, although many have enough writers and/or a soft hand to obscure systemic detection by casual readers. Everyone who works hard to publish something, by proxy seems to have an agenda beyond factual reporting. If they well-meaning or not seems almost a bygone conclusion. Information has never been more weaponized.",
-    "That's not evidence of anything, it's just an outline of someone's screwball opinion. Just like 'NASA is a hoax-making organization (Moon stuff)' does not contain any evidence but simply outlines, in shorthand, a screwball opinion.",
-    "Err...that's the exact basis of the original google search algorithm, and what made it so good. You should read up on it, you might learn something.",
-    "I'd like to think it is a bug, but I wasn't born yesterday. You were caught. The behavior is consistent.Another interesting search is American inventors. Out of the first 16 featured with photos, only one (Thomas Edison at #5) is not black. It mostly continues that theme for all 56 featured, not even getting to the Wright brothers. It's been that way for a while, as seen in this article from 2.5 years ago: http://www.unz.com/isteve/great-moments-in-google-american-i...Another interesting search is for the_donald. It is pretty clear that the subreddit should appear first, probably followed by the old.reddit.com version. Right now it is fourth, mixed in with a lot of far-left hate and conspiracies. The second link is a conspiracy claiming that /r/The_Donald is run by Russians!!! It was even worse last week, being totally missing from the search results -- but that was starting to become a news story, so it got \"fixed\" to be subtle.You have a bit of a PR crisis forming here. The idea to abandon Google is spreading. Once lost, trust is hard to regain.",
-    "> and most of Google's current users favor a small number of major outlets.With what level of certainty do we actually know this? Sounds like an assumption to me.",
-    "> The smaller sites are linked to more often but Google doesn't want you to see them for political reasons.Google has never claimed to order search results by the number of links to them. Otherwise the Flash installer (or whatnot) would be at the top of every search results page. :)"
+    "Perhaps. Would you mind elaborating on what you're envisioning?In both cases (auto-regressive vs diffusive), you still have some process that's being followed, and the exact steps in the process are important to the result. If you constraint at each step then you get the equivalent of something like projected gradient descent (as an analogy) and aren't guaranteed the same solution. If you constrain as a post-processing phase then (a) diffusion wasn't required for the initial generation, and (b) that's still unlikely to converge to the same distribution (for similar reasons -- using my example of ellipsis errors, if you corrected that particular mistake in post then the closest valid messages to the initial generation are likely too short and thus still incorrect).",
+    "To use constrained decoding like this, you really need to use an open weight model or can this be done using OpenAI, Claude, Gemini...etc?",
+    "My point is that if you're capable of doing constrained generation and want to try once and the constrain on failure, since that has the same output distribution as doing constrained generation in the first place, you'd be better off just doing constrained generation always (max of 1 LLM call for the class of errors fixed by this).There's only a different distribution with 2+ initial attempts before falling back to constrained, at least if I haven't screwed up any math.",
+    "There's no advantage wrt output quality, but it can be more economical in some high-error regimes, with less LLM calls used in resampling (max 2 for most errors).",
+    "For my use case (https://www.grokvocab.com/), I get proper JSON output without much effort. I am using Langchain4J (https://github.com/langchain4j/langchain4j) which automatically maps the output JSON to my POJO. I just prompt the model to return the output as JSON.",
+    "There's no difference in the output distribution between always doing constrained generation and only doing it on the failures though. What's the advantage?",
+    "> strongly believe that structured outputs are one of the most underrated features in LLM enginesStructured output is really the whole foundation of lots of our hopes and dreams. The JSONSchemaBench paper is fairly preoccupied with performance, but where it talks about quality/compliance, the \"LM only\" scores in the tables are pretty bad. This post highlights the on-going difficulty and confusion around doing a simple, necessary, and very routine task well.Massaging small inputs into structured formats isn't really the point. It's about all the nontrivial cases central to MCP, tool-use, local or custom APIs. My favorite example of this is every tool-use tutorial that's pretending that \"ping\" accepts 2 arguments, but, it's actually more like 20 arguments with subtle gotchas. Do the tool-use demos that correctly work with 2 arguments actually work with 20? How many more retries might that take, and what does this change about the hardware and models we need for \"basic\" stuff?If you had a JSON schema correctly and completely describing legal input for say ffmpeg, then the size and complexity of it would be approaching that of kubernetes schemas (where JSONBench compliance is only at .",
+    "This is going to be task-dependent, as well as limited by your (the implementer's) ability and comfort with structuring the task in solid multi-shot prompts that cover a large distribution of expected inputs, which will also help increase the ability for the model to successfully handle less common or edge case inputs-- the ones the would most typically require human-level reasoning. It can be useful to supplement this with a \"tool\" use for RAG lookup against a more extensive store of examples, or any time the full reference material isn't practical to dump into context. This requires thoughtful chunking.It also requires testing. Don't think of it as a magic machine that should be able to do anything, think of it like a new employee smart enough and with enough background knowledge to do the task, if given proper job documentation. Test whether few-shot or many shot prompting works better: there's growing information about use cases where one or the other confers an advantage but so much of this is task dependent.Consider your tolerance for errors and plan some escalation method: Hallucinations occur in part because models \"have to\" give an answer. Make sure that any critical cases",
+    "You can't do it as part of whatever's calling it because this changes the sampler. The grammar constraints what tokens the sampler is allowed to consider, only passing tokens that are valid by the grammar.",
+    "Generating code that when ran generates JSON works well if you design builder functions thoughtfully. Takes fewer tokens too.",
+    "Curious what tech stack is behind this docs/cookbook page. Doesn't look like standard MkDocs/GitBook, but maybe I'm wrong.Would love to know.",
+    "Definitely. A lot of what is missing in many discussions is the absolutely essential need to have evals.The only way to \u201cknow\u201d what is the best (or better) approach is to have a significant number of test cases that you can measure performance against.At the moment, for a lot of people, state of the art is \u201clet\u2019s try a different prompt and see if the answer on my one example is better\u201d"
    ]
   }
  ],
  "ovis-image-7b": [],
  "paraformer": [
   {
-   "id": "44485755",
-   "title": "Free AI Hiring Demo \u2013 Paraform",
-   "points": 2,
-   "num_comments": 1,
-   "created_at": "2025-07-07",
-   "url": "https://news.ycombinator.com/item?id=44485755",
-   "comments": []
-  },
-  {
-   "id": "16491246",
-   "title": "Show HN: Automatic parallelism for C++ code",
-   "points": 2,
+   "id": "11224853",
+   "title": "Laraformer \u2013 Lets you introduce a transformer layer for your data with ease",
+   "points": 1,
    "num_comments": 0,
-   "created_at": "2018-03-01",
-   "url": "https://news.ycombinator.com/item?id=16491246",
+   "created_at": "2016-03-04",
+   "url": "https://news.ycombinator.com/item?id=11224853",
    "comments": []
   }
  ],
@@ -4074,6 +4164,19 @@
     "In my opinion, attempting to perform live dictation is a solution that is looking for a problem. For example, the way I'm writing this comment is: I hold down a keyboard shortcut on my keyboard, and then I just say stuff. And I can say a really long thing. I don't need to see what it's typing out. I don't need to stream the speech-to-text transcription. When the full thing is ingested, I can then release my keys, and within a second it's going to just paste the entire thing into this comment box. And also, technical terms are going to be just fine with Whisper. For example, Here's a JSON file.(this was transcribed using whisper.cpp with no edits. took less than a second on a 5090)",
     "https://github.com/lxe/yapyap/tree/parakeet-nemoIt's been a while, so I don't know if it's going to work because of the Nemo toolkit ASR numpy dependency issues.I use it for Linux using whisper CPP and it works great",
     "Cool use of ONNX! Fluid Inference also have great implementations of Parakeet v2/v3 in CoreML for Apple devices and OpenVINO for Intel:https://github.com/FluidInference/FluidAudiohttps://github.com/FluidInference/eddy-audio"
+   ]
+  }
+ ],
+ "parakeet-unified-en-0.6b": [
+  {
+   "id": "47684648",
+   "title": "Parakeet-unified-en-0.6B: Unified ASR model for offline and streaming inference",
+   "points": 1,
+   "num_comments": 1,
+   "created_at": "2026-04-08",
+   "url": "https://news.ycombinator.com/item?id=47684648",
+   "comments": [
+    "New Nvidia Parakeet release does both offline and streaming. English only and outperforms v2 error rate in offline mode while being very competitive with v2 in high latency streaming mode."
    ]
   }
  ],
@@ -4213,7 +4316,7 @@
   {
    "id": "49775499",
    "title": "Qwen Image 2.1",
-   "points": 739,
+   "points": 740,
    "num_comments": 199,
    "created_at": "2026-09-20",
    "url": "https://news.ycombinator.com/item?id=49775499",
@@ -4697,13 +4800,15 @@
    "comments": []
   },
   {
-   "id": "49767445",
-   "title": "Same Intel X7 358H with Qwen3.5-9B: Xiaomi Book Pro 14 vs. MSI Prestige 14",
+   "id": "49934603",
+   "title": "PewDiePie uncensors Qwen3.5-9B with Heretic",
    "points": 2,
-   "num_comments": 0,
-   "created_at": "2026-09-19",
-   "url": "https://news.ycombinator.com/item?id=49767445",
-   "comments": []
+   "num_comments": 1,
+   "created_at": "2026-10-02",
+   "url": "https://news.ycombinator.com/item?id=49934603",
+   "comments": [
+    "Basically, Pewdiepie hits dead ends trying to distill \u201cAjax\u201d from OpenAI's models, which is what got him banned twice, and his response was that OpenAI took everyone's data first, so why not me too."
+   ]
   }
  ],
  "qwen3.6 27b": [
@@ -5176,7 +5281,17 @@
   }
  ],
  "tiny aya global": [],
- "titanet-large": [],
+ "titanet-large": [
+  {
+   "id": "27031317",
+   "title": "Saturn Probe Data Reveal Impressive Depth of Titan\u2019s Largest Sea",
+   "points": 3,
+   "num_comments": 0,
+   "created_at": "2021-05-03",
+   "url": "https://news.ycombinator.com/item?id=27031317",
+   "comments": []
+  }
+ ],
  "vibevoice-1.5b": [
   {
    "id": "45021136",
@@ -5321,7 +5436,7 @@
   {
    "id": "49800574",
    "title": "Show HN: JevBench, a reproducible benchmark for typed decision models",
-   "points": 153,
+   "points": 154,
    "num_comments": 39,
    "created_at": "2026-09-22",
    "url": "https://news.ycombinator.com/item?id=49800574",

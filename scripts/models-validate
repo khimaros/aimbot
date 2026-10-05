@@ -335,9 +335,13 @@ def check_base(b, where, keys, f):
 # docs/layouts.json. `chat` builds the prompt from the model's own
 # template, `layout` renders a named plain layout the weights were trained on
 # (the name is a block in registry/layouts.yaml), and `head` is a custom head no
-# llama-server logit reaches, so it names where the head lives
+# llama-server logit reaches, so it names where the head lives. `native` is a
+# head the converter wrote into the gguf, which llama-server applies itself
+# behind `/v1/systemone`: nothing is left for a client to render or fetch, so
+# the block names neither a layout nor a head. a repo may carry its own block
+# where its files are read differently from the model's others
 READOUT_FIELDS = {"kind", "layout", "source", "temperature", "head", "note"}
-READOUT_KINDS = ("chat", "layout", "head")
+READOUT_KINDS = ("chat", "layout", "head", "native")
 # strongest first. `author-config` is derived by resolve-readout from the config
 # shipped beside the pinned file; the rest are written by hand from the card
 READOUT_SOURCES = ("author-config", "card", "hand")
@@ -538,6 +542,7 @@ def check_repos(m, where, f):
         if r.get("speculative") not in (None, False):
             f.add(where, "%s: speculative on a repo is only ever `false`" % r["repo"])
         check_crispasr(r.get("crispasr"), "%s/%s" % (where, r["repo"]), f)
+        check_readout(r.get("readout"), "%s/%s" % (where, r["repo"]), f)
         for key, facts in r["files"].items():
             check_runtime(facts.get("runtime"), "%s/%s" % (r["repo"], key), f)
 

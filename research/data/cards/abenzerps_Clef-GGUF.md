@@ -21,6 +21,8 @@ GGUF quantizations of [Cloudflare/clef](https://huggingface.co/Cloudflare/clef),
 
 | Quantization | File | Size | Notes |
 | --- | --- | ---: | --- |
+| FP8 | [clef-fp8.safetensors](clef-fp8.safetensors) | 28.5 GB | 8-bit floating point (vision projector in pure BF16) |
+| NVFP4 | [clef-NVFP4.safetensors](clef-NVFP4.safetensors) | 18.6 GB | NVIDIA Blackwell native 4-bit microscaling format |
 | IQ1_M | [clef-IQ1_M.gguf](clef-IQ1_M.gguf) | 7.63 GB | Ultra-low-memory option |
 | IQ2_M | [clef-IQ2_M.gguf](clef-IQ2_M.gguf) | 10.0 GB | Smallest recommended option |
 | Q2_K | [clef-Q2_K.gguf](clef-Q2_K.gguf) | 10.7 GB | Maximum-compression K-quant |

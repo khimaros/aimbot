@@ -20,6 +20,7 @@ carries a 150k-token vocabulary inline, the read widens rather than giving up.
 import argparse
 import json
 import os
+import re
 import struct
 import sys
 import urllib.request
@@ -43,6 +44,9 @@ VOICE_KEYS = (".voices", "spk_names")
 # the header is at the front, so start small and widen only for the files that
 # inline a vocabulary. three tries covers every model on this roster.
 WINDOWS = (1 << 20, 8 << 20, 64 << 20)
+# the prefixes fetch-gguf-sizes keeps as part of a tag, at the end of what is
+# left of a stem once the tag is taken off it
+PUBLISHER_PREFIX = re.compile(r"(?:^|-)(?:UD|AD)-$", re.I)
 
 
 class Header:
@@ -157,19 +161,29 @@ def resolve_filename(repo, quant, file=None):
     except Exception as e:
         print("!!! %s: %s" % (repo, e), file=sys.stderr)
         return None
+    hit, hits = pick_file(files, quant)
+    if not hit:
+        print("!!! %s:%s matches %d file(s): %s"
+              % (repo, quant, len(hits), ", ".join(hits) or "none"), file=sys.stderr)
+    return hit
+
+
+def pick_file(files, quant):
+    """(the one root gguf `quant` names or None, every candidate it weighed)."""
     # the tag names the END of the stem. a substring match is what the sizes
     # collector's fallback does and it is too loose here: breeze publishes
     # `-q8_0.gguf` beside `-q8_0-dd2.gguf` and `-q8_0-dd4.gguf`, which are
     # different files, so `q8_0` matched three and the ref was refused
     root = [f for f in files if f.endswith(".gguf") and "/" not in f]
-    hits = [f for f in root if f.lower().endswith(quant.lower() + ".gguf")]
+    tail = quant.lower() + ".gguf"
+    hits = [f for f in root if f.lower().endswith(tail)]
+    # a publisher prefix is part of the tag the sizer keys a file by, so a bare
+    # tag does not mean the file that wears one
+    bare = [f for f in hits if not PUBLISHER_PREFIX.search(f[:-len(tail)])]
+    hits = bare if len(hits) > 1 and bare else hits
     if not hits:
         hits = [f for f in root if quant.lower() in f.lower()]
-    if len(hits) != 1:
-        print("!!! %s:%s matches %d file(s): %s"
-              % (repo, quant, len(hits), ", ".join(hits) or "none"), file=sys.stderr)
-        return None
-    return hits[0]
+    return (hits[0] if len(hits) == 1 else None), hits
 
 
 def main():

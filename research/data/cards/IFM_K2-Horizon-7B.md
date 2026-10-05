@@ -45,6 +45,31 @@ The chart at the top of this card shows K2-Horizon-7B against selected reference
 
 Scores in %. Bold marks the best score in each row. BrowseComp: our model uses the Discard-all@95k context-length protocol proposed in the DeepSeek-V3.2 technical report; comparison models may use different harnesses.
 
+## Anti-doom-loop training
+
+Small reasoning models occasionally fall into degenerate repetition ("doom loops") on long generations and keep generating until they hit the output limit. After post-training, the 3.7B and 7B models receive a short anti-doom-loop stage: Final Token Preference Optimization (FTPO), a LoRA preference update on pairs mined from the model's own looping outputs, merged back into the weights. Runaway generations are almost entirely removed, standard benchmarks stay flat or improve slightly, and the largest gains are on agentic tasks, where a single runaway call can stall a whole episode.
+
+| Benchmark | 3.7B before | 3.7B after | 7B before | 7B after |
+|---|---:|---:|---:|---:|
+| AIME 2025 | 87.0 | 89.2 (+2.2) | 91.9 | 90.3 (-1.6) |
+| AIME 2026 | 89.5 | 90.8 (+1.4) | 90.1 | 90.2 (+0.1) |
+| HMMT Feb 2025 | 83.1 | 87.5 (+4.4) | 84.2 | 87.7 (+3.5) |
+| HMMT Feb 2026 | 69.3 | 75.2 (+5.9) | 73.3 | 77.8 (+4.5) |
+| GPQA Diamond | 65.4 | 68.9 (+3.5) | 77.1 | 75.6 (-1.5) |
+| HLE (text) | 13.8 | 14.0 (+0.3) | 18.6 | 19.5 (+0.8) |
+| IFEval (loose) | 85.2 | 83.6 (-1.7) | 88.7 | 86.9 (-1.8) |
+| IFBench (loose) | 47.3 | 47.7 (+0.3) | 52.0 | 50.7 (-1.3) |
+| LiveCodeBench v6 | 60.9 | 64.5 (+3.6) | 71.5 | 72.7 (+1.2) |
+| OJBench | 20.5 | 21.6 (+1.1) | 29.0 | 29.4 (+0.4) |
+| SciCode | 21.6 | 25.8 | 31.6 | 33.6 (+2.0) |
+| SWE-bench Verified | 67.6 | 65.6 (-2.0) | 69.2 | 72.4 (+3.2) |
+| Terminal-Bench 2.1 | 25.1 | 39.7 (+14.6) | 39.7 | 44.6 (+4.9) |
+| BFCL v4 | 51.0 | 64.6 (+13.7) | 62.3 | 67.0 (+4.6) |
+
+**Output length.** On single-turn benchmarks mean output length falls while the median is essentially unchanged, because what FTPO removes is the runaway tail. For example, IFEval mean tokens drop from 8.7k to 2.3k (3.7B) and 5.2k to 3.2k (7B), and LiveCodeBench drops from 26.8k to 16.8k and 19.9k to 15.6k. The share of samples that hit the output limit falls from up to 4% (HLE) to under 0.3% on most benchmarks.
+
+Settings: accuracy in %, "before" is the post-trained checkpoint the anti-doom stage starts from and "after" is the released checkpoint, both evaluated with identical settings. Output budgets are 500k tokens for AIME, HMMT Feb 2025, IFEval, IFBench, LiveCodeBench and OJBench, and 256k for HMMT Feb 2026, GPQA Diamond and HLE. GPQA Diamond uses top_p=1 and 5 repeats; SciCode uses 3 repeats. SWE-bench Verified (mini-swe-agent) and Terminal-Bench 2.1 (terminus-2, 3 repeats) run at 256k context; BFCL v4 runs at temperature 0.01.
+
 ## Quickstart
 
 ### Serving
@@ -68,7 +93,7 @@ SGLang, this is the recipe validated in the [SGLang K2 Horizon cookbook](https:/
 ```shell
 sglang serve \
   --model-path IFM/K2-Horizon-7B \
-  --revision 30d38fecf8a609873ae73a617f5c714286e1f565 \
+  --revision 85d46bbaf6ecd844a8ef61991f6e492d4faf4179 \
   --tp 1 \
   --dtype bfloat16 \
   --attention-backend fa3 \
@@ -146,12 +171,13 @@ Some stages, such as SFT, have multiple phases with slight changes to the data m
 | RL — Merge | — | — | — | ISO merge on self-attention and shared experts, RAM on the remaining weights; inputs: Midtraining Stage 4 base + Math, Code stage 2, Search, Tool-use experts. |
 | SFT — Phase 1 | 10000 | 199B | 512K | SFT for better domain coverage, starting from the merged RL checkpoint. |
 | SFT — Phase 2 | 2500 | 50B | 512K | SFT on a high-quality subset of the data used in Phase 1, with learning rate decay. |
+| Anti-doom-loop (FTPO) | 85 | 1.5M | 6K | Final Token Preference Optimization (FTPO). |
 
 ## Release Artifacts
 
 The tables below list the release artifacts for **K2-Horizon-7B**, their availability, and the expected release dates for remaining items.
 
-**Last updated:** 2026-09-28
+**Last updated:** 2026-10-01
 
 **Status:**
 
@@ -203,16 +229,17 @@ For a partially released group, the available checkpoints and the remaining chec
 | SFT Phase 1 Final Checkpoint | `sft_1_10000` | Available | N/A |
 | SFT Phase 2 Intermediate Checkpoints | `sft_2_*` | Available | N/A |
 | SFT Phase 2 Final Checkpoint | `sft_2_2500` | Available | N/A |
+| Anti Doom Loop Checkpoint | `anti_doom_loop_verified` | Available | N/A |
 
 > [!IMPORTANT]
 > Note:
 > - Released K2-Horizon Hugging Face checkpoints (e.g. [Huggingface](https://huggingface.co/IFM/K2-Horizon-375B-A23B/tree/main)) can be used for inference, evaluation, and downstream fine-tuning (including SFT).
 > Training behavior in the bundled Hugging Face implementation may differ from native xLLM, including the auxiliary load-balancing loss.
-> To continue the original pretraining with xLLM's training behavior, use the native xLLM checkpoint and XLLM runtime.
+> To continue the original pretraining with xLLM's training behavior, use the native xLLM checkpoint and xLLM runtime.
 
 ## Best Practices
 
-1. **Reasoning effort: always `high`.** All reported results use high reasoning effort. Pass `{"chat_template_kwargs": {"reasoning_effort": "high"}}` on every request; `medium` and `low` trade accuracy for speed and are not recommended for evaluation.
+1. **Reasoning effort: always `high`.** All reported results use high reasoning effort. Pass `{"chat_template_kwargs": {"reasoning_effort": "high"}}` on every request; `medium` and `low` trade accuracy for speed and are not recommended for evaluation. `medium` and `low` effort settings are not recommended except for research on reasoning efforts.
 2. **Sampling parameters.** `temperature=1.0`, `top_p=0.95`.
 3. **Output length.** Allow at least 32,768 output tokens so reasoning is never cut off. Truncated reasoning is a failed response, not a shorter one.
 4. **Serving.** Use the validated SGLang recipe above: BF16, TP=1, FlashAttention-3. Full recipes for every K2-Horizon size, with measured H200 latency and throughput, are in the [SGLang cookbook](https://docs.sglang.io/cookbook/autoregressive/IFM/K2-Horizon).
