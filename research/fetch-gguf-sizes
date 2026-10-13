@@ -55,7 +55,12 @@ TREE = "https://huggingface.co/api/models/%s/tree/main?recursive=true"
 # fall to the filename fallback below, which keeps them apart, and the registry
 # pins `file:` beside `quant:` the way it does for every other repo that names
 # its rungs after objects rather than types.
-QUANT = re.compile(r"(?:^|-)((?:UD-|AD-)?(?:IQ|Q|BF|F|MXFP|NVFP|TQ)\d[A-Za-z0-9_]*?)"
+#
+# atomic chat's `AD-<ffn_down>-<ffn_up>` is one tag with a `-` inside it, and
+# read as a prefixed tag it keys by its second half: `AD-Q4_K-IQ4_XS` and
+# `AD-Q5_K-IQ4_XS` are two rungs and neither is an IQ4_XS.
+TYPE = r"(?:IQ|Q|BF|F|MXFP|NVFP|TQ)\d[A-Za-z0-9_]*?"
+QUANT = re.compile(r"(?:^|-)(AD-%s-%s|(?:UD-|AD-)?%s)" % (TYPE, TYPE, TYPE) +
                    r"(?:(?:\.gguf)?-\d{5}-of-\d{5})?\.gguf$", re.I)
 # the same suffix, for a name the tag regex could not read at all. stripping it
 # was reachable only THROUGH a successful tag match, so a pack whose stem names
@@ -90,6 +95,20 @@ def is_sidecar(path):
         return False
     q = QUANT_AT.search(path)
     return m.start() < q.start() if q else True
+
+
+def sidecar_marker(path):
+    """The drafter a file is, or None.
+
+    A folder named for one BELOW the root settles it whatever the filename
+    says: spiritfather's `Q4_K_M/MTP/` holds a graft pair named `-Q4_K_M-MTP-`,
+    marker after the quant, that replaces one trunk shard and adds a head. A
+    folder at the root is already its own key.
+    """
+    nested = [d.lower() for d in path.split("/")[1:-1] if SIDECAR.fullmatch(d)]
+    if nested:
+        return nested[0]
+    return SIDECAR.search(path).group(1).lower() if is_sidecar(path) else None
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -172,8 +191,16 @@ def tag_of(path):
         named = QUANT.search(name)
         own = named and SHARD.sub(".gguf", name).lower() == tag.lower() + ".gguf" \
             and not QUANT_AT.search(tag[:-len(named.group(1))])
-        if named and not SIDECAR.search(tag) and (own or not QUANT_AT.search(tag)):
+        plain = not SIDECAR.search(tag) and not QUANT_AT.search(tag)
+        if named and not SIDECAR.search(tag) and (own or plain):
             tag = tag_of(name)
+        # the same folder over names that say a quant the pattern cannot read:
+        # nerkyor's `GGUF/` holds eight builds named `-Q2LynnStyle-MTP` and the
+        # like, and filed under the folder they were one rung. a name with no
+        # quant in it at all is what a folder key is for -- cstr's
+        # `diff-harness-ref/`, an `imatrix/` -- and so is a shard set
+        elif not named and plain and QUANT_AT.search(name) and not SHARD.search(name):
+            tag = name
     else:
         m = QUANT.search(path)
         # uppercased so `s2-pro-q8_0.gguf` and `Model-Q8_0.gguf` are one
@@ -182,10 +209,9 @@ def tag_of(path):
         tag = m.group(1).upper() if m else SHARD.sub(".gguf", path)
     if "mmproj" in path.lower():
         return "mmproj:" + tag if not tag.startswith("mmproj:") else tag
-    if is_sidecar(path):
-        marker = SIDECAR.search(path).group(1).lower()
-        if not tag.lower().startswith(marker):
-            return "%s:%s" % (marker, tag)
+    marker = sidecar_marker(path)
+    if marker and not tag.lower().startswith(marker):
+        return "%s:%s" % (marker, tag)
     return tag
 
 

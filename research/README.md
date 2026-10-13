@@ -235,7 +235,7 @@ header exceeds that. it goes through `httpcache --immutable` rather than a
 `--max-age` window, because a file at a given revision is the same bytes forever
 and a conditional request each is a cost with no possible answer but "no". a
 rung already in the capture is then skipped without any request, which makes the
-http bodies disposable -- `rm research/.cache/gtensors-*` costs a re-download
+http bodies disposable -- `make clean` removes them, at the cost of a re-download
 only of whatever is asked for again.
 
 whisper.cpp is the one repo this reads nothing from. it publishes 33 ggml `.bin`

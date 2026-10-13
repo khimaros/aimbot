@@ -84,17 +84,24 @@ METRICS = {
 # `AP-Q4_K_XL` is a DIRECTORY in that repo, and dropping the prefix to `Q4_K_XL`
 # leaves a rung name that joins to nothing the sizes collector measured. this
 # was hardcoded to UD- and AD- and so silently mis-tagged every agention row
-QUANT_CELL = re.compile(r"((?:[A-Z]{2}-)?(?:I?Q\d+(?:_[A-Z0-9]+)*|BF16|F16|FP8|"
-                        r"[MN]XFP\d+|NVFP\d+))", re.I)
+#
+# atomic chat's `AD-<ffn_down>-<ffn_up>` names two types and is one tag: cut at
+# the first, `AD-Q5_K-IQ4_XS` and `AD-Q5_K-Q4_K` are the same rung twice
+KQUANT = r"I?Q\d+(?:_[A-Z0-9]+)*"
+QUANT_CELL = re.compile(r"(AD-%s-%s|(?:[A-Z]{2}-)?(?:%s|BF16|F16|FP8|"
+                        r"[MN]XFP\d+|NVFP\d+))" % (KQUANT, KQUANT, KQUANT), re.I)
 NUM = re.compile(r"-?\d+(?:\.\d+)?")
 SIZE = re.compile(r"(\d+(?:\.\d+)?)\s*(gib|gb)", re.I)
+# a cell that links its rung to a folder is that rung: left as markdown it is
+# not a whole tag, and a column of some pinned type beside it reads as the ladder
+LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 
 
 def rows_of(text):
-    """Markdown tables as lists of cell lists."""
+    """Markdown tables as lists of cell lists, links reduced to their text."""
     tables, cur = [], []
     for line in (text or "").split("\n"):
-        s = line.strip()
+        s = LINK.sub(r"\1", line.strip())
         if s.startswith("|") and s.count("|") >= 3:
             cells = [c.strip() for c in s.strip("|").split("|")]
             if all(set(c) <= set("-: ") for c in cells):

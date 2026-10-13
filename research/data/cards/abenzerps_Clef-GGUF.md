@@ -13,6 +13,8 @@ tags:
 - cloudflare
 ---
 
+[![🤗 Model Requests](https://img.shields.io/badge/%F0%9F%A4%97_Model_Requests-Submit_Here-f59e0b?style=for-the-badge&labelColor=1f2937)](https://abenzerps.com/request-a-model/)
+
 # Clef GGUF
 
 GGUF quantizations of [Cloudflare/clef](https://huggingface.co/Cloudflare/clef), a 27B multimodal decision model post-trained from Qwen3.8-27B. For image or video input, use the included multimodal projector (`clef-mmproj-BF16.gguf`).

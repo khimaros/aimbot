@@ -11,61 +11,18 @@ tags:
   - local-inference
   - vision
   - gguf
+  - decision-model
 ---
 
-# Winnow-12B — GGUF
+# Winnow-12B
 
-**Local Jev-style decisions, chat, and vision. Q8 tested with 64K context and vision on a 16 GB RTX 5070 Ti.**
+Winnow-12B is an EldanRing fine-tune of [Gemma 4 12B IT](https://huggingface.co/google/gemma-4-12B-it) for local typed decisions, chat, and image input. Give it a shared state and questions with known answer options; the [Winnow server](https://github.com/EldanRing/winnow-inference) scores those options through `/v1/systemone` without generating an explanation. Ordinary chat uses `/v1/chat/completions` from the same loaded model.
 
-Winnow-12B fine-tunes [Gemma 4 12B IT](https://huggingface.co/google/gemma-4-12B-it)
-for typed decisions. Its [llama.cpp-based inference server](https://github.com/EldanRing/winnow-inference)
-provides `/v1/systemone` and ordinary `/v1/chat/completions` from the same loaded model.
+The GGUF downloads contain the merged fine-tune. No separate adapter or base-model download is needed.
 
-- **Typed decisions:** ask `noul`, `choice`, and `score` questions against shared state.
-- **Shared computation:** prefill the state once, fork question branches, and read answer-token logits without generating answer text.
-- **Chat and vision:** regular chat, streaming, and image inputs through the same server.
-- **Two GGUF model downloads:** BF16 (16-bit floating point) and Q8_0 (8-bit quantized), both ready for llama.cpp. Neither needs conversion or a separate LoRA adapter.
-
-[Inference code](https://github.com/EldanRing/winnow-inference) ·
-[Quickstart](docs/QUICKSTART.md) ·
-[Full benchmark report](docs/BENCHMARKS.md) ·
-[Artifact manifest](release-manifest.json)
-
-## GGUF downloads
-
-**Choose one model file.** Both versions run directly in the
-[Winnow llama.cpp-based server](https://github.com/EldanRing/winnow-inference).
-The optional vision projector is listed separately below.
-
-| Download | Precision and use | File size |
-|---|---|---:|
-| [Winnow-12B-Q8_0.gguf](https://huggingface.co/EldanRing/Winnow-12B/resolve/main/gguf/Winnow-12B-Q8_0.gguf?download=true) | **Q8_0, 8-bit quantized. Recommended for the tested 16 GB RTX 5070 Ti setup.** | 12.67 GB / 11.80 GiB |
-| [Winnow-12B-BF16.gguf](https://huggingface.co/EldanRing/Winnow-12B/resolve/main/gguf/Winnow-12B-BF16.gguf?download=true) | **BF16, 16-bit floating point.** Larger-memory systems or CPU/GPU offload. | 23.83 GB / 22.20 GiB |
-
-BF16 weights alone exceed 16 GB VRAM; the 5070 Ti full-offload measurements below
-apply to **Q8_0**. Text-only use needs just the chosen model GGUF. Vision needs
-that model plus `mmproj-Winnow-12B.gguf`.
-
-### Optional vision projector
-
-[**Download mmproj-Winnow-12B.gguf**](https://huggingface.co/EldanRing/Winnow-12B/resolve/main/gguf/mmproj-Winnow-12B.gguf?download=true) — **175 MB / 0.163 GiB**.
-
-This is the **F16 vision projector**, not another model or quantization choice.
-Use it alongside either **BF16** or **Q8_0** for image inputs; skip it for text-only
-use. The same projector works with both model downloads above.
-
-This repository distributes **GGUF model weights only**. No safetensors shards
-or conversion step are required. See [Quickstart](docs/QUICKSTART.md) for exact
-download and launch commands, and [SHA256SUMS](SHA256SUMS) for file checksums.
+[Quickstart](https://github.com/EldanRing/winnow-inference/blob/main/docs/QUICKSTART.md) · [API reference](https://github.com/EldanRing/winnow-inference/blob/main/docs/API.md) · [Benchmarks](docs/BENCHMARKS.md)
 
 ## Decision quality
-
-![Winnow BF16 and Q8 versus Jev, Kev and Laya on the frozen public decision benchmarks](docs/assets/02-decision-quality.png)
-
-Both Winnow variants below were evaluated in the same RTX PRO 5000 Blackwell
-campaign. Jev was evaluated through OpenRouter on the same frozen inputs and
-scoring rules. Both BF16 and Q8 were served as GGUF models. The released
-GGUF files are listed above; evaluation hashes are in the benchmark report.
 
 | Model | JevBench public subset, 231 items | Kev-v9 clean, 1,046 items |
 |---|---:|---:|
@@ -73,101 +30,74 @@ GGUF files are listed above; evaluation hashes are in the benchmark report.
 | **Winnow-12B Q8** | **85.71%** | **81.55%** |
 | Jev 1.13, hosted via OpenRouter | 85.71% | 87.00% |
 
-**Winnow Q8 matches Jev on this JevBench public subset: 198 of 231 correct.**
-This is a result on that subset, not a claim of universal parity.
-JevBench here means **public-subset accuracy**, not the official composite
-leaderboard score. The [complete report](docs/BENCHMARKS.md) includes competitor
-comparisons, all measured suites, calibration, hardware and evaluation scope.
+Winnow Q8 and Jev each answered **198 of 231** JevBench questions correctly on these frozen inputs. JevBench reports public-subset accuracy rather than the composite leaderboard score. These panels were used during development. The BF16 results use an earlier GGUF export; see [export provenance](release-manifest.json) and the [evaluation report](docs/BENCHMARKS.md).
 
-## RTX 5070 Ti: 64K context with vision
+![Winnow BF16 and Q8 versus Jev, Kev and Laya on the frozen public decision benchmarks](docs/assets/02-decision-quality.png)
 
-![Winnow Q8 64K context and vision measurements on the RTX 5070 Ti](docs/assets/01-5070ti-capability.png)
+## Downloads
 
-The released Q8 model and matching projector were tested with full GPU offload,
-Q8 KV cache, four decision branches, one chat slot, and exclusive memory scheduling.
+Choose one target model. Add the matching projector for image input.
+
+| File | Use | Size |
+|---|---|---:|
+| [Winnow-12B-Q8_0.gguf](https://huggingface.co/EldanRing/Winnow-12B/resolve/main/gguf/Winnow-12B-Q8_0.gguf?download=true) | Q8_0; tested with 64K context and vision | 12.67 GB / 11.80 GiB |
+| [Winnow-12B-BF16.gguf](https://huggingface.co/EldanRing/Winnow-12B/resolve/main/gguf/Winnow-12B-BF16.gguf?download=true) | BF16; larger-memory systems or CPU/GPU offload | 23.83 GB / 22.20 GiB |
+| [Winnow-12B-NVFP4.gguf](https://huggingface.co/EldanRing/Winnow-12B/resolve/main/gguf/Winnow-12B-NVFP4.gguf?download=true) | Smaller Linux/CUDA 8K text and vision presets | 8.16 GB / 7.60 GiB |
+| [mmproj-Winnow-12B.gguf](https://huggingface.co/EldanRing/Winnow-12B/resolve/main/gguf/mmproj-Winnow-12B.gguf?download=true) | F16 vision projector for any of the three targets | 175 MB / 0.163 GiB |
+
+Use the exact target filename or a [Winnow preset](docs/RUNTIME-PROFILES.md). [Checksums](https://huggingface.co/EldanRing/Winnow-12B/blob/main/SHA256SUMS) identify every file.
+
+## Running the model
+
+The [quickstart](https://github.com/EldanRing/winnow-inference/blob/main/docs/QUICKSTART.md) covers installation, downloads, and launch commands. Direct decisions support `noul` (yes/no), `choice` (named options), and `score` (ordered levels). Multiple questions share a state prefill and can reuse a cached prefix.
+
+**F16 is the default and recommended target K/V cache.** Cache precision is separate from the GGUF weight format; use `--cache q8_0` for an explicit Q8 override. The pinned MTP assistant uses the target's shared K/V cache.
+
+### Q8 context and vision
+
+The measured RTX 5070 Ti 16 GB profile used Q8 weights, Q8 KV, full GPU offload, the matching projector, and exclusive memory scheduling.
 
 | Measurement | Result |
 |---|---:|
 | Configured context capacity | 65,536 positions |
 | Verified shared prefix with an image | 65,022 positions, including 1,024 image positions |
-| Peak device VRAM during the 64K smoke | 15.01 GiB, including the desktop |
-| Peak process-tree system RAM during loading and smoke | 12.25 GiB PSS |
+| Observed peak device VRAM | 15.01 GiB |
 | Four questions at near-full context, cold | 25.00 s |
-| Same four-question request, cached median of three repeats | 143.0 ms |
+| Same request, cached median of three repeats | 143.0 ms |
 | Short-prompt generation, median of three 512-token runs | 55.5 tokens/s |
-| Long vision prompt prefill, 62,435 positions | 2,893.9 tokens/s |
-| Generation following that long prompt, 512 tokens | 46.9 tokens/s |
-| Time to first token on that cold long prompt | 21.75 s |
 
-These are separate capacity and timing probes, not a single simultaneous workload.
-The host had 96 GB system RAM; the observed PSS is not a minimum installed-RAM
-recommendation. Full hardware, repetition counts, and timing definitions are in
-the [report](docs/BENCHMARKS.md).
+Context includes formatting, images, questions, and output. Chat and decisions take turns using their K/V contexts in this profile; switching can evict the cached prefix. See [full timing definitions](docs/BENCHMARKS.md) for the separate capacity and generation measurements. BF16 weights alone exceed 16 GB VRAM.
 
-64K includes prompt formatting, image positions, questions, and generated output.
-In the tested exclusive profile, chat and decision requests share the weights
-but take turns using their KV contexts; switching can evict a cached prefix.
+### NVFP4 tradeoffs
 
-## GGUF packaging
+On a matched direct-text workload, Q8 versus NVFP4 used **13,529 versus 9,229 MiB** peak device memory and served **3.43 versus 4.98 decisions/s**. The RTX 5070 Ti test used four concurrent requests, 4K decision/16K chat context, Q8 KV, and no vision or MTP. Startup was excluded; this is native decision throughput, not generation speed or sustained service capacity.
 
-Each model GGUF contains its language weights, tokenizer, and chat template.
-BF16 and Q8_0 are exports of the same merged fine-tune; they are alternative
-model files, not parts to combine. The F16 projector supplies vision support.
-The remaining root configuration/tokenizer files are reference assets; llama.cpp
-loads the GGUF directly. No separate LoRA adapter is needed.
+| Historical matched direct panel | Q8 GGUF | NVFP4 GGUF |
+|---|---:|---:|
+| Jev public, 231 decisions | 198/231 (85.71%) | 193/231 (83.55%) |
+| Kev-clean, 1,046 decisions | 852/1,046 (81.45%) | 814/1,046 (77.82%) |
+| Typed teacher agreement, 2,000 decisions / 400 groups | 1,398/2,000 (69.90%) | 1,412/2,000 (70.60%) |
 
-## Training
+NVFP4 reduced memory use and improved measured throughput while losing verified-label accuracy on Jev and Kev. Typed measures synthetic teacher agreement. This historical native-T1 comparison used previously observed panels; its Q8 Kev count differs from the separate release campaign above. GGUF results do not transfer to HF/vLLM NVFP4 backends.
 
-Winnow is a **LoRA fine-tune**, released after merging the learned update into
-the base model. It is not a full-parameter training run.
+### Adaptive reasoning and MTP
 
-| Setting | Value |
-|---|---|
-| Base | `google/gemma-4-12B-it` |
-| Base revision | `707f0a3b8a3c7ad586ed01e27eafbad8a27dd0f7` |
-| LoRA rank / alpha | 32 / 64 |
-| LoRA dropout | 0 |
-| Adapted projections | `q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj` |
-| Export | Adapter merged into BF16 weights, then exported as BF16 GGUF and Q8_0 GGUF |
+Direct decisions are the default. Adaptive reasoning generates context before scoring a question again. In the Q8 confirmation, source-equal accuracy/consensus agreement changed **62.50% → 64.06%**, with a paired 95% change interval of **−2.34 to +5.47 pp**. NLL worsened, and mean CLI latency rose from **198 to 743 ms**.
 
-**The training dataset is private and is not released.** It contains curated
-typed-decision examples: synthetic scenarios, teacher-supervised examples, and
-labeled semantic tasks. Task coverage includes routing, policy and rule application, evidence
-selection, workflow decisions, ordinal judgments, entailment, paraphrase, and
-answerability. Contrastive examples vary
-facts that should change an answer. An initial decision fine-tune was followed by a 26,000-example refinement
-mixture that included replay of earlier examples. This release was selected
-after 19,200 refinement examples had been processed; these are training
-presentations, not a claim of that many unique new examples. Refinement used
-BF16 LoRA, an effective batch size of 8, and an 8,192-token training cap. The
-objective combined gold-label cross-entropy with teacher-distribution
-cross-entropy only when the teacher agreed with the gold label.
+MTP separately drafts ordinary chat tokens using the matching [12B assistant](https://huggingface.co/EldanRing/Winnow-12B/resolve/main/gguf/Gemma-4-12B-IT-Assistant-BF16.gguf?download=true). Direct serving needs only the target. Linux/CUDA presets cover Q8 text and NVFP4 vision with MTP at 8K; the Q8 direct 64K vision profile runs without MTP.
 
-Training and validation were split; the public benchmark report documents the separate evaluation scope and any known
-development exposure. No claim is made about excluding public benchmarks from
-the base model's pretraining data.
+See [reasoning evaluations](docs/REASONING.md), [runtime profiles](docs/RUNTIME-PROFILES.md), and [assistant attribution](docs/assistants/README.md) for settings and commands.
 
-## Probabilities and scope
+## Training and limitations
 
-The decision server normalizes logits over the supplied answer options. Its
-entropy-based confidence summarizes concentration within that distribution;
-it is not a guaranteed probability of correctness. Reported default decision
-temperature is 1.0, without a separately fitted calibration map.
+Winnow is a rank-32, alpha-64 LoRA fine-tune with zero dropout, merged into the base model before GGUF export. It adapts the attention and MLP projections. The base revision is `707f0a3b8a3c7ad586ed01e27eafbad8a27dd0f7`.
 
-Chat and image input are functional in the release runtime. A complete paired
-general-chat quality comparison against the unfine-tuned base was not completed;
-this release does not claim identical chat quality. Near-full-context retrieval
-checks establish capacity and operation, not general 64K reasoning quality.
-Audio/video capability is not evaluated by this release.
+The private training data combines synthetic scenarios, teacher-supervised examples, and labeled semantic tasks, including routing, rule application, evidence selection, ordinal judgments, entailment, and answerability. Training and validation were split. The training data and pipeline are private.
+
+Candidate probabilities are normalized over the supplied options. Confidence describes concentration among those options, not a guarantee of correctness. The reported default decision temperature is 1.0.
 
 ## Credits and license
 
-Winnow-12B is an independent fine-tune by EldanRing of Google DeepMind's
-[Gemma 4 12B IT](https://huggingface.co/google/gemma-4-12B-it), released under
-[Apache 2.0](https://ai.google.dev/gemma/docs/gemma_4_license).
-See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Winnow-12B is an independent fine-tune by EldanRing of Google DeepMind's [Gemma 4 12B IT](https://huggingface.co/google/gemma-4-12B-it), released under [Apache 2.0](https://ai.google.dev/gemma/docs/gemma_4_license). See [LICENSE](https://huggingface.co/EldanRing/Winnow-12B/blob/main/LICENSE) and [NOTICE](https://huggingface.co/EldanRing/Winnow-12B/blob/main/NOTICE).
 
-The separate inference repository builds on
-[llama.cpp](https://github.com/ggml-org/llama.cpp) by Georgi Gerganov and contributors
-and preserves its MIT license. Jev-style refers to the typed-decision interface;
-Winnow is not affiliated with or endorsed by TypeSafe, Google, or llama.cpp.
+The separate inference code builds on [llama.cpp](https://github.com/ggml-org/llama.cpp) by Georgi Gerganov and contributors and preserves its MIT license. Jev-style refers to the typed-decision interface; Winnow is not affiliated with or endorsed by TypeSafe, Google, or llama.cpp.

@@ -3,7 +3,7 @@ license: apache-2.0
 base_model: google/gemma-4-12B-it
 library_name: transformers
 model_name: Jev-Omni
-tags: [text-classification, multimodal, merged]
+tags: [text-classification, multimodal, merged, decision-model]
 ---
 # Jev-Omni
 

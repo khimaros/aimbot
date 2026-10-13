@@ -81,20 +81,44 @@ crispasr -m voxcpm2-q4_k.gguf \
 | `voxcpm2-f16.gguf` | 4.63 GB | F16 weights (full precision) |
 | `voxcpm2-q4_k.gguf` | ~1.5 GB | Q4_K quantized (faster, slightly lower quality) |
 | `voxcpm2-q8_0.gguf` | 2.83 GB | Q8_0 quantized (near-F16 quality) |
-| `voxcpm2-q8_0-locdit-f16.gguf` | 3.03 GB | Q8_0 with the LocDiT diffusion head kept in F16 — fastest on Vulkan GPUs (see below) |
+| `voxcpm2-q8_0-locdit-f16.gguf` | 3.03 GB | Q8_0 with the LocDiT diffusion head kept in F16 — experimental mixed-precision Vulkan recipe (see below) |
 | `voxcpm2-ref.gguf` | 371 KB | Reference activation dump for numerical validation |
 
 ### Which file on a Vulkan GPU?
 
-On Vulkan, the diffusion head (CFM, ~80% of synthesis time at the default 10 steps) is
-compute-bound in small matrix multiplications, and GPU matrix engines run those fastest
-from F16 weights. The 2B text model, on the other hand, is bandwidth-bound and prefers
-q8_0. `voxcpm2-q8_0-locdit-f16.gguf` combines the two. Measured on a T4 under Vulkan:
-CFM per audio step 70.2 → 59.4 ms at 10 steps, and 46.7 ms with
-`CRISPASR_VOXCPM2_INFERENCE_STEPS=8`. Full F16 was slower overall. Built with
-`crispasr-quantize voxcpm2-f16.gguf out.gguf q8_0 --tensor-type "^locdit\.=f16"`; a CPU
-synthesis round-trips through ASR exactly
-([CrispASR#461](https://github.com/CrispStrobe/CrispASR/issues/461)).
+Historical T4 Vulkan component measurements found CFM per audio step of 70.2 ms
+for Q8_0 versus 59.4 ms for the mixed recipe at ten steps. An eight-step run
+measured 46.7 ms. These component timings do **not** establish speech quality or
+an accepted end-to-end speedup. The mixed file was built with
+`crispasr-quantize voxcpm2-f16.gguf out.gguf q8_0 --tensor-type "^locdit\.=f16"`.
+A previous CPU synthesis roundtrip is not GPU acceptance.
+
+**Validation update, 2026-10-09:** matched real T4 tests at ten steps and seed 2
+produced repeated tokens in the **Nemotron ASR transcripts** of the short test
+sentence for both Q8_0 and the mixed recipe. Six of sixteen exact primary ASR
+cases passed. This rejected gate is not proof that synthesized audio audibly
+stutters: a later fixed-audio comparison found **both Parakeet and Qwen3
+transcribe every one of 22 original Python/native CPU/GPU controls exactly**
+across three resampling paths, while Nemotron retains errors. Resampling alone
+does not resolve the discrepancy. The completed original NVIDIA float32 and
+native F16 comparison reads **all 22 VoxCPM2 controls correctly**; native Q4
+reads only 8/22. Original and F16 normalized words agree on all 26 tested clips,
+and fresh/reused sessions agree. The repeated tokens are therefore attributable
+to the native Nemotron Q4 recognizer on these fixed controls. Critical RNNT
+precision guards are being tested before changing that quant or its defaults.
+The published Q4 primary gate remains rejected while that recognizer is
+repaired. This diagnosis does not certify eight steps, Intel B390 performance,
+or complete original/native waveform parity. Defaults remain ten steps.
+
+[Original NVIDIA/F16/Q4 inputs, features, encoder states and complete transcripts](https://huggingface.co/cstr/crispasr-regression-fixtures/blob/10e579dedf52a16a159cbc5d35e17f8bffa77190/tts-asr/nemotron-reference-20261009/proof.zip)
+(SHA256 `7762f2a73d8ae7dad05d667fbf0bca393a0b3b7ad622b1b1f09473fa8f5d0463`).
+
+[All 234 fixed-audio transcripts, recognizer pins and resampling controls](https://huggingface.co/cstr/crispasr-regression-fixtures/blob/0b434ca1ea6c34c9b462be4d3e689ba1713381e9/tts-asr/frontdoor-diagnostic-20261009/proof.zip)
+(SHA256 `3dd2f988e327dd30bf3ae608edc7611e52aedf3a8374a3ea6e2f288342110b98`).
+
+[Immutable raw PCM, transcripts, backend traces and recipe evidence](https://huggingface.co/cstr/crispasr-regression-fixtures/blob/449ed355010eddb8dcedef6c2ab0fa62431ebeb7/voxcpm2/path-diagnostic-20261009-v6/proof.zip)
+(SHA256 `f52e5fbc49a0654bdcd13da6660c8e0841fbe87e80eb0cc158d74801339a5abc`).
+See [CrispASR #461](https://github.com/CrispStrobe/CrispASR/issues/461) for hardware follow-up.
 
 ## Numerical Validation
 
@@ -104,7 +128,7 @@ The `voxcpm2-ref.gguf` file contains intermediate activation tensors captured fr
 crispasr-diff voxcpm2-tts voxcpm2-f16.gguf voxcpm2-ref.gguf samples/jfk.wav
 ```
 
-Current status: **12 pass, 0 fail** across all transformer stages (TSLM, RALM, LocEnc, LocDiT, projections).
+Historical F16 transformer-stage check: **12 pass, 0 fail** (TSLM, RALM, LocEnc, LocDiT, projections). This stage check does not certify complete generated speech, the current mixed quant, or every GPU backend.
 
 Captured stages: `text_input_ids`, `locenc_in`, `locenc_out`, `enc_to_lm`, `tslm_layer_0_out`, `tslm_layer_27_out`, `tslm_prefill_out`, `ralm_prefill_out`, `lm_to_dit_hidden`, `res_to_dit_hidden`, `cfm_step0_z`, `cfm_step0_result`, `stop_logits_step0`.
 

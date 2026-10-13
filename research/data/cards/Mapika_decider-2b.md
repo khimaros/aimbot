@@ -384,6 +384,10 @@ Per-task accuracy / ECE on the held-out datasets of the rebuilt set, v8 against 
 | **macro / micro** | 0.703 / 0.711 | 0.706 / 0.711 |
 | macro over the subsets not trained on | 0.658 | 0.645 |
 
+On all 9,815 MNLI validation_matched items, decider-2b v11 (revision `533964d`) scores **0.864** (entailment 0.844, neutral
+0.853, contradiction 0.894), level with the multinli subset above. An independent run on 120 other validation_matched items
+measured 0.792 ([discussion #4](https://huggingface.co/Mapika/decider-2b/discussions/4)).
+
 **Calibration of v11 on our own sets** (10-bin top-label ECE on stored temperature-1 logits, read at the served temperatures;
 heldout_jb: held-out generated families, test_teacher2: held-out document questions, guard: knowledge guard, cal_human:
 human-labelled validation rows):

@@ -162,6 +162,8 @@ python openjev/helper/shim.py --host 127.0.0.1 --port 3000
 
 Then `POST /v1/systemone` as in the example at the top. Full serving guide, every flag and the security notes for exposing the port: [`serve/SERVE.md`](serve/SERVE.md).
 
+No GPU of your own? Runpod has a step-by-step guide for serving the FP8 build on Runpod Serverless with one 80 GB H100: [How to deploy OpenJev on Runpod Serverless](https://www.runpod.io/blog/how-to-deploy-openjev-on-runpod-serverless).
+
 The request and response shapes follow the hosted Jev API, so a client written for it can be pointed at your own server.
 
 Tip for agent builders: treat `DONE` as the model's opinion and confirm completion in your own loop (a success message, a changed URL, a saved record) before you stop.

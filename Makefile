@@ -22,6 +22,7 @@ help:
 	@echo "to run the whole research sweep, run 'make sweep'"
 	@echo "to see what a sweep left for a human, run 'make sweep-report'"
 	@echo "to check everything before committing, run 'make precommit'"
+	@echo "to drop scratch nothing will ask for again, run 'make clean'"
 .PHONY: help
 
 # every script here is `#!/usr/bin/env python3`, so which interpreter runs is
@@ -161,3 +162,13 @@ sweep-report:
 
 precommit: lint test-e2e
 .PHONY: precommit
+
+# scratch only. the gguf headers fetch-gguf-tensors downloaded are most of
+# research/.cache and are never read twice: a rung already in the capture is
+# skipped without a request, so nothing here is fetched again until a NEW rung
+# is asked for. every other cache body is what an etag revalidates against,
+# and removing those turns the next sweep's 304s back into downloads
+clean:
+	find research/.cache -maxdepth 1 -name 'gtensors-*' -delete 2>/dev/null || true
+	find . -name __pycache__ -not -path './.venv/*' -prune -exec rm -rf {} +
+.PHONY: clean

@@ -8,6 +8,7 @@ tags:
 - clef
 - cloudflare
 - systemone
+- decision-model
 - qwen3.8
 - post-train
 - image-text-to-typed-output
@@ -88,6 +89,32 @@ with torch.inference_mode():
 for question, question_logits in zip(encoded.questions, logits):
     probabilities = question_logits.float().softmax(-1).tolist()
     print(question.question_id, dict(zip(question.option_ids, probabilities)))
+```
+
+### SGLang
+
+Clef can be served with SGLang. See the [SGLang cookbook](https://docs.sglang.io/cookbook/autoregressive/Cloudflare/clef#hw=h200&variant=clef&quant=bf16&strategy=balanced&nodes=single) for
+launch commands on H200, B200, and B300. On a single H200:
+
+```bash
+docker run --gpus all \
+  --shm-size 32g \
+  -p 30000:30000 \
+  -v ~/.cache/huggingface:/root/.cache/huggingface \
+  --ipc=host \
+  lmsysorg/sglang:dev-clef \
+  sglang serve \
+    --model-path Cloudflare/clef \
+    --host 0.0.0.0 \
+    --port 30000
+```
+
+The server answers Jev/SystemOne requests at `/v1/systemone`:
+
+```bash
+curl http://localhost:30000/v1/systemone \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"Cloudflare/clef","state":"My Stripe integration keeps failing. Please help ASAP.","questions":{"urgency":{"type":"noul","instructions":"Does this message express urgency?"}}}'
 ```
 
 ### Jev / SystemOne API

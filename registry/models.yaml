@@ -166,6 +166,7 @@ models:
       `k2-horizon` architecture yet.
     repos:
     - IFM/K2-Horizon-MoVA-36B-A4B-GGUF
+    - bartowski/K2-Horizon-MoVA-36B-A4B-GGUF
     ids:
       aa: k2-horizon-mova-36b-a4b
       gbench: ''
@@ -881,6 +882,51 @@ models:
       leading_system_max: unlimited
       mid_system: ok
       mid_developer: dropped
+  microsoft/AesCode-32B:
+    kind: text
+    name:
+      short: aescode 32b
+      match: aes[\s-]*code[\s-]*32b
+    notes: >-
+      a single-purpose model: it "generates information-rich visual artifacts such as
+      slides, posters, and dashboards as HTML/CSS" {card}, optionally from a reference image
+      for layout and style. it "starts from **Qwen3-VL-32B-Instruct**" and its scores are the
+      authors' own, over 300 infographic prompts at temperature 0.8 and top-p 0.95, which is
+      hotter than the generation config the profile below carries.
+    repos:
+    - bartowski/AesCode-32B-GGUF
+    runtime:
+      arch: qwen3vl
+      mainline: true
+      since: b6887
+      merged: '2025-10-30'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      instruct:
+        source: generation-config
+        temp: 0.7
+        top_p: 0.8
+        top_k: 20
+        tuned: [instruct, code]
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: bartowski/AesCode-32B-GGUF
+      developer: dropped
+      leading_system_max: 1
+      mid_system: dropped
+      mid_developer: dropped
   Qwen/Qwen3-VL-4B-Instruct:
     kind: text
     name:
@@ -1302,10 +1348,10 @@ models:
         gguf/Winnow-12B-Q8_0.gguf:
           quant: Q8_0
     runtime:
-      arch: gemma4
+      arch: gemma4-assistant
       mainline: true
-      since: b8637
-      merged: '2026-04-02'
+      since: b9549
+      merged: '2026-06-07'
     ids:
       jev: winnow-12b
     modalities:
@@ -2167,7 +2213,8 @@ models:
     kind: text
     name:
       short: qwen3.8 27b
-      match: qwen\s*-?3\.8[\s-]*27b|qwen3\.8-27b
+      # nerkyor's coder390 finetune is named `Qwen3.8-27B-Coder390-...`
+      match: qwen\s*-?3\.8[\s-]*27b(?![\s-]*coder)
     repos:
     - repo: unsloth/Qwen3.8-27B-GGUF
       files:
@@ -2320,7 +2367,10 @@ models:
     kind: text
     name:
       short: qwen3.8 flash next
-      match: qwen\s*-?3\.8[\s-]*flash[\s-]*next|qwen3\.8-flash-next
+      # the two decensored entries below are named `Huihui-Qwen3.8-Flash-Next-abliterated`
+      # and `Qwen3.8-Flash-Next-heretic-2`, and without the lookahead every mention of
+      # either counts for this model too
+      match: (?:qwen\s*-?3\.8[\s-]*flash[\s-]*next|qwen3\.8-flash-next)(?![\s-]*(?:abliterated|heretic))
     quant_sweep:
       url: https://unsloth.ai/docs/models/qwen3.8-next
       source: unsloth
@@ -2329,9 +2379,6 @@ models:
       note: ten rungs of mean kl divergence and top-1 agreement against bf16, published on
         unsloth's docs site rather than on the card. the rows are the page's own search index,
         so the layout above is declared rather than read off a header
-    #speculative:
-    #  type: draft-mtp
-    #  n_max: 3
     repos:
     - repo: unsloth/Qwen3.8-Flash-Next-GGUF
       files:
@@ -2399,6 +2446,7 @@ models:
             point of task average. none of these reads against the unsloth sweep above, kl
             divergence and top-1 agreement rather than a benchmark. the mmproj is separate, and
             card sizes are decimal gb'
+    - ggml-org/Qwen3.8-Flash-Next-GGUF
     runtime:
       arch: qwen4exp
       mainline: true
@@ -2411,6 +2459,15 @@ models:
       swerebench: ''
       epoch: ''
       livebench: qwen3.8-flash-next
+    speculative:
+      type: draft-mtp
+      n_max: 3
+      since: b11330
+      note: the draft length llama.cpp PR 29761 was measured at, 1.55x decode at 0.640
+        acceptance over 24 speed-bench prompts on a dgx spark at IQ4_XS. the head is the
+        self-contained `mtp-` file at the root of the unsloth repo. the `shared-` files under
+        `MTP/` carry no token embedding, which the mainline loader requires, and a prompt
+        with an image drafts from b11588
     sampling:
       thinking:
         source: quant-card
@@ -2443,19 +2500,17 @@ models:
         thinking: 'off'
     notes: 'the vendor''s 125b and the hub''s 180b are one model counted two ways, and the
       card {card} spells out which: "125B with 6B activated, plus 51B n-gram embedding and
-      4B MTP". the mtp layer does not survive conversion into the main files -- llama.cpp''s
-      converter drops it, and their headers carry no nextn tensor and no nextn key. two heads have
-      been exported on their own since. dzannotti/Qwen3.8-Flash-Next-MTP-GGUF is a Q4_K_M `-md`
-      file that can also be spliced into unsloth''s UD-Q4_K_XL as a fifth shard; it needs the
-      draft-head graph its repo ships as a patch, taken from a llama.cpp PR that was closed
+      4B MTP". the mtp layer is not in the main files, whose headers carry no nextn tensor
+      and no nextn key; it loads beside them as a head. mainline llama.cpp builds the draft
+      graph for qwen4exp from b11330, PR 29761, and two publishers ship a head it reads:
+      ggml-org/Qwen3.8-Flash-Next-GGUF at Q4_0, Q8_0 and BF16, and unsloth, whose Q8_0 at
+      the repo root has the same 34 tensors as ggml-org''s. unsloth''s six files under `MTP/`
+      came first -- "MTP is now available for 1.3-1.7x Faster inference in Unsloth"
+      {card@unsloth/Qwen3.8-Flash-Next-GGUF} -- for PR 28243, and their readme measures a net
+      loss at eight concurrent streams. dzannotti/Qwen3.8-Flash-Next-MTP-GGUF is an earlier
+      Q4_K_M head for a patch its repo ships, taken from a llama.cpp PR that was closed
       unmerged, and its readme measures 20.3 to 35.8 t/s on code on a strix halo under ROCm.
-      unsloth followed -- "MTP is now available for 1.3-1.7x Faster inference in Unsloth"
-      {card@unsloth/Qwen3.8-Flash-Next-GGUF} -- with six files under `MTP/` in its own repo, whose
-      `shared-` heads borrow the token embedding and output projection from the loaded model;
-      they need PR 28243, built on PR 27836, both open, and their readme measures a net loss at
-      eight concurrent streams. mainline has no mtp graph for qwen4exp, so no drafter is
-      declared on this entry: the page would promise a speedup a stock build cannot deliver,
-      and would charge every head file in `MTP/` as though one were loaded. vision arrived after
+      vision arrived after
       the release rather than with it: unsloth published mmproj-F16 on 2026-08-27 and the repo
       was text-only for its first three days. qwen4exp support landed in llama.cpp on the same
       day, so a build older than that loads none of these files.'
@@ -2480,6 +2535,208 @@ models:
       accepts: [low, medium, xhigh]
       default: xhigh
       aliases: {high: xhigh}
+  huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated:
+    kind: text
+    name:
+      short: qwen3.8 flash next abliterated
+      match: qwen\s*-?3\.8[\s-]*flash[\s-]*next[\s-]*abliterated
+    notes: >-
+      qwen3.8-flash-next with its refusal direction ablated, by a method its own card
+      calls "a crude, proof-of-concept implementation to remove refusals" {card}. the
+      card publishes no evaluation of any kind, so how much capability the edit cost is
+      unmeasured: every score on this roster belongs to the base model and none carries
+      over. the architecture is untouched -- the same 180b the hub counts for the base,
+      51b of it the n-gram table -- and so is everything about serving it, which the
+      base entry describes. the chat template is qwen's own byte for byte, which is
+      why the turn handling here differs from the base entry, pinned to unsloth's
+      rewrite of it. the sampling is the base model's: the shipped generation config
+      repeats its thinking set and the card gives none.
+    repos:
+    - repo: mradermacher/Huihui-Qwen3.8-Flash-Next-abliterated-GGUF
+      files:
+        Huihui-Qwen3.8-Flash-Next-abliterated.IQ4_XS.gguf:
+          quant: IQ4_XS
+          note: 'the largest of the five rungs that are one loadable file, {gib} at {bpw}. these
+            are "static quants" {card}, made without an imatrix, and the type name is the recipe:
+            the experts are IQ4_XS where unsloth''s UD-IQ4_XS over the base weights puts IQ3_S,
+            which is most of the step from that file''s
+            {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS}. the n-gram table is IQ4_NL as it is
+            there. Q4_K_S and everything above it ship as `.part1of3` byte splits rather than
+            gguf shards, so llama.cpp cannot fetch or open them until they are concatenated by
+            hand, and this registry sizes none of them. no file carries an mtp head: all five
+            have the 1224 tensors unsloth''s main files do. the imatrix ladder is a separate
+            repo, mradermacher/Huihui-Qwen3.8-Flash-Next-abliterated-i1-GGUF, split the same
+            way from Q4 up'
+        Huihui-Qwen3.8-Flash-Next-abliterated.Q2_K.gguf:
+          quant: Q2_K
+          note: 'the floor of the ladder, {gib} at {bpw} rather than anything near two bits: 52%
+            of the weights are Q4_0, the n-gram table among them, since its 160-column rows take
+            only block-32 types and Q4_0 is the one such type in the file'
+    runtime:
+      arch: qwen4exp
+      mainline: true
+      since: b10660
+      merged: '2026-08-27'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: generation-config
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+        thinking: xhigh
+      instruct:
+        source: tuned-here
+        note: "the base entry's instruct set, carried over: the card {card} documents no samplers and the shipped generation config holds only the thinking set"
+        temp: 0.7
+        top_p: 0.8
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - code
+        - tools
+        thinking: 'off'
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: mradermacher/Huihui-Qwen3.8-Flash-Next-abliterated-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, xhigh]
+      default: xhigh
+  trohrbaugh/Qwen3.8-Flash-Next-heretic-2:
+    kind: text
+    base:
+      repo: Qwen/Qwen3.8-Flash-Next
+      relation: finetune
+      note: >-
+        the card opens "This is a decensored version of" qwen3.8-flash-next {card} and
+        links it, but its metadata declares no base_model, so the hub has nothing
+        to join and this is written by hand
+    name:
+      short: qwen3.8 flash next heretic 2
+      match: qwen\s*-?3\.8[\s-]*flash[\s-]*next[\s-]*heretic(?:[\s-]*2)?
+    notes: >-
+      qwen3.8-flash-next decensored with a custom fork of heretic, one ablation
+      direction per layer, and the better evidenced of the two decensored entries here:
+      the card {card} reports 0 of 100 refusals against the base model's 99 and a kl
+      divergence of 0.0818 from it, and ships the parameters and a `reproduce/` folder
+      to check both. those are the author's figures, and
+      they measure refusal and drift rather than capability. the rest of the card is
+      qwen's, carried over whole, so every benchmark score on it is the base model's
+      and none was re-run on these weights. the samplers are qwen's for the same
+      reason. the architecture, the 51b n-gram table and the chat template are
+      untouched, the last byte for byte, which is why the turn handling here differs
+      from the base entry, pinned to unsloth's rewrite of it. no drafter is declared,
+      for the reason the base entry gives: mainline has no mtp graph for qwen4exp.
+    repos:
+    - repo: spiritfather/Qwen3.8-Flash-Next-heretic-2-GGUF
+      files:
+        Q4_K_M:
+          note: 'the smallest of four rungs, {gib} at {bpw}, which is above every rung of the
+            base model''s unsloth ladder short of UD-Q5_K_XL. the tag names the experts'' gate and
+            up projections only: "everything else is pinned to Q8_0" {card}, the n-gram table
+            included, and the 640-column down projections take Q5_0 and Q8_0 by layer. the card
+            measures why, a plain Q4_K_M recipe at kl divergence 0.177 against this one''s 0.036,
+            both read against the repo''s own Q8_0 rather than bf16. these are static quants and the
+            imatrix ladder is spiritfather/Qwen3.8-Flash-Next-heretic-2-i1-GGUF. each quant folder
+            also holds an `MTP/` pair, a rewritten first shard and a head shard that graft qwen''s
+            draft head onto the trunk, and `mtp/` at the root holds the head alone at
+            {gib@mtp}. neither is part of the rung sized here, and neither does anything on
+            a stock build: the head needs llama.cpp PR 27836, still open, and "A build without the
+            PR simply ignores the head tensors". the card''s speedups, 28.6 to 49.9 t/s on code at
+            this rung, are on that PR''s build on an M3 ultra under metal'
+    runtime:
+      arch: qwen4exp
+      mainline: true
+      since: b10660
+      merged: '2026-08-27'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+        thinking: xhigh
+      instruct:
+        source: vendor-card
+        temp: 0.7
+        top_p: 0.8
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - code
+        - tools
+        thinking: 'off'
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: spiritfather/Qwen3.8-Flash-Next-heretic-2-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, xhigh]
+      default: xhigh
   # agentionai's own fine-tunes of the two qwen3.8 entries above, and the reason
   # `publishers.txt` already called them "AP-* ladders of qwen3.8, plus its own
   # Signal fine-tunes" before either was carried. both are self-distillation on
@@ -2487,6 +2744,204 @@ models:
   # no external data and claim no new knowledge -- what they change is how many
   # tokens the answer costs, which is a property no benchmark on this roster
   # measures and the reason both entries lean on the publisher's own numbers.
+  ConwayResearch/Underdog-Saluki-27B-1.0:
+    kind: text
+    # the release is one gguf and two projectors: there are no unquantized
+    # weights to key it on
+    gguf_only: true
+    name:
+      short: underdog saluki 27b
+      match: (?:underdog[\s-]*)?saluki(?:[\s-]*27b)?
+    notes: >-
+      qwen3.8-27b at about two bits, "tuned to keep tool calling intact" {card}, built on
+      ist austria's gsq-rco quant of it. the card's tool-calling figure is 88 of 120 bfcl v4
+      tasks against 84 for the full model, on its own harness, and its limitations list says
+      it "Keeps about 82 to 85% of the full model's competition math score". the main file
+      is text only and vision is one of two mmproj files beside it. kujira's repo is the
+      same file with qwen3.8-27b's mtp head grafted on, and its card
+      {card@Kujira/Underdog-Saluki-27B-1.0-MTP-GGUF} measures 41.2 against 66.2 tok/s on an
+      rtx 3080 with the head drafting.
+    repos:
+    - repo: Kujira/Underdog-Saluki-27B-1.0-MTP-GGUF
+      files:
+        Underdog-Saluki-27B-1.0-IQ2-mix-MTP.gguf:
+          quant: IQ2_XXS
+          note: '{gib} at {bpw}. the name says `IQ2-mix` and the tensor table agrees that it
+            is a mix: IQ2_XXS is the largest share at about a third, with eleven other types
+            from IQ1_S up to Q8_0 beside it'
+    - repo: ConwayResearch/Underdog-Saluki-27B-1.0
+      # the vendor's file has no nextn head; kujira's graft is the one that drafts
+      speculative: false
+      files:
+        Underdog-Saluki-27B-1.0-IQ2-mix.gguf:
+          quant: IQ2_XXS
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    speculative:
+      type: draft-mtp
+      n_max: 2
+      note: the draft length kujira's card runs {card@Kujira/Underdog-Saluki-27B-1.0-MTP-GGUF}
+    sampling:
+      thinking:
+        source: tuned-here
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        note: the card's row for "General use, reasoning, instructions" {card}, written
+          as a sentence in a table cell rather than as flags
+        tuned: [instruct, chat, reason, tools]
+      tool-use:
+        source: tuned-here
+        temp: 0.0
+        note: the card's row for "Fast, direct tool calls" {card}, thinking off and
+          temperature 0, which is also what its tool-calling benchmark ran at
+        tuned: [tools]
+        thinking: 'off'
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    turns:
+      source: Kujira/Underdog-Saluki-27B-1.0-MTP-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, xhigh]
+      default: xhigh
+  FINAL-Bench/Darwin-27B-RSI:
+    kind: text
+    name:
+      short: darwin 27b rsi
+      match: darwin[\s-]*27b[\s-]*rsi
+    notes: >-
+      darwin-27b-opus after a round of training on its own solutions: "Qwen3.5 family, 27B
+      dense" {card}, with gpqa diamond going from 72.85 to 78.09 in the publisher's own
+      single-sample protocol. the card's limitations say the gains "were measured on
+      graduate-level science; other domains may change less". the gguf repo is one Q4_K_M
+      file and no projector.
+    repos:
+    - FINAL-Bench/Darwin-27B-RSI-GGUF
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        tuned: [instruct, chat, reason]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: FINAL-Bench/Darwin-27B-RSI-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  nerkyor/Qwen3.8-27B-Coder390-EfficientThink-Opus5.5-GPT6Astra-Grok4.7-DSV4Pro-K3-SFT-RLOO-MTP-DFlash2:
+    kind: text
+    name:
+      short: coder390 efficientthink 27b
+      match: coder[\s-]*390
+    notes: >-
+      qwen3.8-27b post-trained twice over, sft and simpo and then several rounds of sft and
+      rloo, "built to fix the original model's habit of failing to stop"
+      {card@nerkyor/Qwen3.8-27B-Coder390-EfficientThink-Opus5.5-GPT6Astra-Grok4.7-DSV4Pro-K3-SFT-RLOO-GGUF-NInfer}.
+      the publisher's own full-suite figures are 178 of 198 on gpqa, 445 of 500 on mmlu and
+      90 of 100 on livecodebench against 177, 444 and 83 for the original at fp8. the
+      intermediate base it starts from is named uncensored. every gguf carries its mtp head
+      inside the file, and the `.ninfer` packages beside them are for another runtime.
+    repos:
+    - repo: nerkyor/Qwen3.8-27B-Coder390-EfficientThink-Opus5.5-GPT6Astra-Grok4.7-DSV4Pro-K3-SFT-RLOO-GGUF-NInfer
+      # the three `-Q8MTP` builds end in a token that reads as one tag, so they
+      # are named here to be sized apart. `quant:` is the largest type by share
+      # of each file's tensors, since the publisher's names are recipes of its own
+      files:
+        Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q8MTP.gguf:
+          quant: IQ3_S
+        Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-Q8MTP.gguf:
+          quant: Q4_K
+        Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.gguf:
+          quant: Q4_K
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    speculative:
+      type: draft-mtp
+      n_max: 4
+      note: the draft length the card's own llama.cpp check ran at
+        {card@nerkyor/Qwen3.8-27B-Coder390-EfficientThink-Opus5.5-GPT6Astra-Grok4.7-DSV4Pro-K3-SFT-RLOO-GGUF-NInfer}
+    sampling:
+      thinking:
+        source: tuned-here
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        note: the generation config the weights ship, which sits under `BF16/` where the
+          resolver does not look, and the set the card's speed runs name
+        tuned: [instruct, chat, reason, code]
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: nerkyor/Qwen3.8-27B-Coder390-EfficientThink-Opus5.5-GPT6Astra-Grok4.7-DSV4Pro-K3-SFT-RLOO-GGUF-NInfer
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, xhigh]
+      default: xhigh
   agentionai/Signal-3.8-27B:
     kind: text
     name:
@@ -3841,7 +4296,7 @@ models:
     kind: text
     name:
       short: embeddinggemma-300m
-      match: embedding[\s-]*gemma
+      match: embedding[\s-]*gemma(?![\s-]*2\b)
     notes: >-
       an embedding model {card}: no chat template, no generative benchmark, and
       nothing here scores it. carried so a consumer reading this registry for a retrieval slot
@@ -3877,6 +4332,69 @@ models:
       - text
       output:
       - embeddings
+  google/embeddinggemma-2:
+    kind: text
+    name:
+      short: embeddinggemma-2
+      match: embedding[\s-]*gemma[\s-]*2\b
+    notes: >-
+      the multimodal successor to embeddinggemma-300m {card}: text, images, video
+      and audio into one 768-d space, truncatable to 512, 256 or 128. the card counts
+      "740M total parameters, combining a 270M parameter text model with modular
+      vision (170M) and audio (300M) encoders", and the ggufs split along that line:
+      the rung is the text model and both encoders sit in the mmproj beside it, so a
+      text-only retrieval slot loads the rung alone. text inputs take a task prefix
+      (`task: search result | query: ...`, `title: none | text: ...`) and media takes
+      none. the config and the gguf header both declare 262,144 positions; the window
+      to plan for is the card's "8,192 tokens", shared by every modality in one
+      input. no generative benchmark applies and nothing here scores it.
+    repos:
+    - repo: unsloth/embeddinggemma-2-GGUF
+      files:
+        F16:
+          note: 'the card {card} rules this type out: "Run inference in `bfloat16` or `float32`.
+            Do not use `float16`", because the activation range overflows it and the model
+            "returns NaN or silently degraded embeddings rather than raising an error". BF16 is
+            the same {gib} and the one to pull at full precision'
+    - ggml-org/embeddinggemma-2-GGUF
+    runtime:
+      arch: gemma-embedding2
+      mainline: true
+      since: b11452
+      merged: '2026-10-06'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      instruct:
+        source: tuned-here
+        note: "an embedding model has no samplers to recommend and its card {card} documents none; these are sampling.yaml's fallbacks, present so the entry validates"
+        temp: 0.8
+        top_p: 0.9
+        top_k: 40
+        min_p: 0.1
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - base
+    modalities:
+      input:
+      - text
+      - image
+      - audio
+      - video
+      output:
+      - embeddings
+    turns:
+      source: unsloth/embeddinggemma-2-GGUF
+      developer: as-system
+      leading_system_max: unlimited
+      mid_system: reordered
+      mid_developer: ok
   google/functiongemma-270m-it:
     kind: text
     name:
@@ -4888,6 +5406,60 @@ models:
       knob: enable_thinking
       kind: boolean
       default: false
+  openbmb/MiniCPM-V-4.7-35B-A3B:
+    kind: text
+    name:
+      short: minicpm-v 4.7 35b a3b
+      match: minicpm[\s-]*v[\s-]*4\.7
+    notes: >-
+      "the first MoE model in the MiniCPM-V series" {card}, single-image, multi-image and
+      video understanding on a 35b mixture of experts with 3b active. the vendor's gguf repo
+      ships a dspark drafter and two projectors beside the rungs. atomic chat's ladder of the
+      same weights publishes kl divergence and top-1 agreement per file, and its card says
+      what a stock build needs: "older builds run text only and get image positions wrong"
+      {card@AtomicChat/MiniCPM-V-4.7-35B-A3B-GGUF}, before llama.cpp PR 29416.
+    repos:
+    - openbmb/MiniCPM-V-4.7-35B-A3B-gguf
+    - AtomicChat/MiniCPM-V-4.7-35B-A3B-GGUF
+    runtime:
+      arch: qwen35moe
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    speculative:
+      type: draft-dspark
+      n_max: 3
+    sampling:
+      thinking:
+        source: generation-config
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        tuned: [instruct, chat, reason]
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: openbmb/MiniCPM-V-4.7-35B-A3B-gguf
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   openbmb/MiniCPM5-2B:
     kind: text
     name:
@@ -5005,6 +5577,51 @@ models:
     thinking:
       knob: enable_thinking
       kind: boolean
+  LiquidAI/LFM2.5-24B-A2B:
+    kind: text
+    name:
+      short: lfm2.5 24b a2b
+      match: lfm[\s-]*2\.5[\s-]*24b
+    notes: >-
+      "a 24B-parameter reasoning model with only 2B active parameters" {card}, text only,
+      and one that "Always thinks before it answers". the agentic claim is the vendor's:
+      48.09 on liveclaw against 38.19 for qwen3.6-35b-a3b. the vendor's gguf repo carries a
+      QAD-Q4_0 rung, quantization-aware rather than converted after the fact. unsloth's
+      ladder is titled Preview and its card still reads `[TBD]` where the generation
+      parameters go.
+    repos:
+    - LiquidAI/LFM2.5-24B-A2B-GGUF
+    - unsloth/LFM2.5-24B-A2B-Preview-GGUF
+    runtime:
+      arch: lfm2moe
+      mainline: true
+      since: b6709
+      merged: '2025-10-07'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 0.1
+        top_k: 50
+        repeat_penalty: 1.05
+        tuned: [instruct, chat, reason, tools]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: LiquidAI/LFM2.5-24B-A2B-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
   LiquidAI/LFM2.5-2.6B:
     kind: text
     name:
@@ -5668,6 +6285,7 @@ models:
         Q4_K_XL:
           note: the vendor's own conversion, {gib}, and its most downloaded gguf; the
             repo ships its dflash drafter beside the weights {card@meta-models/Muse-Glimmer-30B-GGUF}
+    - ggml-org/Muse-Glimmer-30B-GGUF
     runtime:
       arch: muse-glimmer
       mainline: true
@@ -7074,6 +7692,21 @@ models:
         F16:
           note: the reference build at {gib}, which is what the ternary rungs are measured
             against rather than something to serve
+    - repo: CaryPalmer/Ternary-Bonsai-2-27B-262k-GGUF
+      files:
+        Ternary-Bonsai-2-27B-PTQ1_0-mtp-procreations.gguf:
+          quant: PTQ1_0
+          note: 'prism''s PTQ1_0 rung with a draft head grafted on, {gib} against
+            {gib@prism-ml/Ternary-Bonsai-2-27B-gguf:Ternary-Bonsai-2-27B-PTQ1_0.gguf}: "the same
+            weights, nothing re-quantized, with its MTP draft head grafted back on" {card}. the
+            262k in the repo name is the serving stack published beside it, a tiered kv cache
+            and lookup drafting in "the patched llama.cpp (PrismML fork + 53 patches)", and
+            the card''s speeds are that stack''s on an rtx 4070'
+          runtime:
+            mainline: false
+            fork: https://github.com/PrismML-Eng/llama.cpp
+            note: the same ternary type as prism's own rung, which a stock build rejects by
+              name; the card's launcher runs prism's fork with patches of its own on top
     runtime:
       arch: qwen35
       mainline: true
@@ -7325,7 +7958,9 @@ models:
     kind: text
     name:
       short: deepseek v4 pro 0813
-      match: deepseek[\s-]*v?4[\s-]*pro|dsv4[\s-]*pro
+      # nerkyor's coder390 names its teachers in the repo id, `-DSV4Pro-K3-`, and
+      # without the lookahead that qwen3.8 27b finetune counts as this model
+      match: deepseek[\s-]*v?4[\s-]*pro|dsv4[\s-]*pro(?![\s-]*k3)
     repos:
     - repo: unsloth/DeepSeek-V4-Pro-0813-GGUF
       files:
@@ -7461,10 +8096,12 @@ models:
             {gib@UD-Q3_K_XL}. the tag is mostly IQ2_XS and IQ3_XXS, with Q2_K at 2%. no released
             llama.cpp loads it: the card says to use its llama.cpp PR {card} or unsloth''s desktop
             app'
+    - peasantsmith/GLM-5.3-Flash-Maya-GGUF
     runtime:
-      arch: glm5next
-      mainline: false
-      near: glm5-next
+      arch: glm5-next
+      mainline: true
+      since: b11279
+      merged: '2026-09-30'
       tracking: https://github.com/ggml-org/llama.cpp/pull/27754
       note: unmerged, and three PRs are open for the same architecture. 27754 is the one tracked because
         it is the one unsloth's card tells a reader to build to run these files; 27773 is the one

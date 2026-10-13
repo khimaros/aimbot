@@ -1,6 +1,6 @@
 ---
 license: apache-2.0
-pipeline_tag: zero-shot-classification
+pipeline_tag: image-text-to-text
 tags:
 - gguf
 - quantized

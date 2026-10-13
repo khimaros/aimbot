@@ -14,7 +14,7 @@ tags:
 
 # Qwen3.8-27B · Agention Precision GGUF
 
-[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/LaurentZuijdwijk)
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/agentionai)
 [![View results on Fieldwork Ledger](https://share.fieldworkledger.com/jWO2-ae4HyoC6GIqZucsaA/badge.svg)](https://share.fieldworkledger.com/jWO2-ae4HyoC6GIqZucsaA)
 
 **Same size. Same speed. Closer to the model Qwen trained than any other quant**
@@ -213,4 +213,4 @@ More tiers follow as they clear the same bar.
 
 These quants are released freely. If they save you VRAM or make Qwen more useful, you
 can buy me  a coffee or some GPU time and sponsor continued quantization and benchmarking on
-[GitHub](https://github.com/sponsors/LaurentZuijdwijk). AgentionAi is a one person team and can use your help.
+[GitHub](https://github.com/sponsors/agentionai). AgentionAi is a one person team and can use your help.

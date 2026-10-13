@@ -3,6 +3,7 @@ quantized_by: bartowski
 pipeline_tag: image-text-to-text
 license: apache-2.0
 base_model: Cloudflare/clef-flash
+base_model_relation: quantized
 tags:
 - clef
 - cloudflare
@@ -14,106 +15,81 @@ tags:
 - structured-output
 - classification
 - custom-code
-base_model_relation: quantized
 ---
 
-## Llamacpp imatrix Quantizations of clef-flash by Cloudflare
+## Llamacpp Static Quantizations of clef-flash by Cloudflare
 
-Using <a href="https://github.com/ggml-org/llama.cpp/">llama.cpp</a> release <a href="https://github.com/ggml-org/llama.cpp/releases/tag/b11279">b11279</a> for quantization.
+Using <a href="https://github.com/ggml-org/llama.cpp/">llama.cpp</a> release <a href="https://github.com/ggml-org/llama.cpp/releases/tag/b11430">b11430</a> for quantization.
 
 Original model: https://huggingface.co/Cloudflare/clef-flash
 
 **Model details:**
 - Parameter count: 9B (source checkpoint)
 - Input support: text, image (with mmproj file) - [details](#multimodal)
+- Decision model: yes (clef) - [details](#decision-model)
 - Speculative decoding: no
-- imatrix: yes - [details](#imatrix)
+- imatrix: no (not possible for a decision model) - [details](#decision-model)
 
 [How to run](#how-to-run)
 
-## Prompt format
+## Decision model
+
+This is a decision model: it reads a state (text or JSON) together with a schema of typed questions, and returns a probability for every allowed option of every question in a single forward pass. It does not generate text. There is no chat, no completion endpoint and no prompt format to follow.
+
+llama.cpp serves it through the `/v1/systemone` endpoint of `llama-server` (the [TypeSafe System One API](https://docs.typesafe.ai/api)); the request and response shapes are documented in the [llama-server README](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md). For example:
 
 ```
-<|im_start|>system
-{system_prompt}<|im_end|>
-<|im_start|>user
-{prompt}<|im_end|>
-<|im_start|>assistant
-<think>
+curl http://127.0.0.1:8080/v1/systemone \
+    -H "Content-Type: application/json" \
+    -d '{
+        "state": "Customer message: I was charged twice for my order last week and nobody has replied.",
+        "questions": {
+            "route": {
+                "type": "choice",
+                "instructions": "Which team should handle this?",
+                "criteria": {"billing": null, "shipping": null, "technical": null}
+            },
+            "angry": {
+                "type": "noul",
+                "instructions": "Is the customer angry?"
+            },
+            "urgency": {
+                "type": "score",
+                "instructions": "How urgent is this?",
+                "criteria": ["can wait", "this week", "today", "right now"]
+            }
+        }
+    }'
 ```
 
-<details><summary>Prompt format with tool definitions</summary>
+**Decision head.** The decision head (the tensors that turn the backbone's final hidden states into answers) is stored at Q8_0 in every quantized file here. It is a small part of the model, it is the part that produces the answers, and nothing below can measure what quantizing it would cost.
 
-```
-<|im_start|>system
-# Tools
+**No imatrix.** An importance matrix cannot be computed for this model: llama.cpp's imatrix tool calibrates on the token probabilities a model produces as it generates text, and a decision model produces none, so there is nothing to calibrate against. Every quantized file here is therefore a static quant, made without an imatrix. The files below 4 bits per weight (Q3_K_L, Q3_K_M, IQ3_M, Q3_K_S and Q2_K) will lose noticeably more quality than an imatrix quant of the same size usually does — prefer Q4_K_M or larger. The formats that cannot be made at all without an imatrix (IQ1, IQ2, IQ3_XS, IQ3_XXS and Q2_K_S) are not offered. Perplexity and KL-divergence cannot be measured for the same reason, so the descriptions in the file table are the usual guidance for each format, not measurements of this model.
 
-You have access to the following functions:
-
-<tools>
-{"type": "function", "function": {"name": "get_stock_price", "description": "Get the current stock price", "parameters": {"type": "object", "properties": {"symbol": {"type": "string", "description": "The stock symbol, e.g. AAPL, GOOG"}}, "required": ["symbol"]}}}
-</tools>
-
-If you choose to call a function ONLY reply in the following format with NO suffix:
-
-<tool_call>
-<function=example_function_name>
-<parameter=example_parameter_1>
-value_1
-</parameter>
-<parameter=example_parameter_2>
-This is the value for the second parameter
-that can span
-multiple lines
-</parameter>
-</function>
-</tool_call>
-
-<IMPORTANT>
-Reminder:
-- Function calls MUST follow the specified format: an inner <function=...></function> block must be nested within <tool_call></tool_call> XML tags
-- Required parameters MUST be specified
-- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after
-- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls
-</IMPORTANT>
-
-{system_prompt}<|im_end|>
-<|im_start|>user
-{prompt}<|im_end|>
-<|im_start|>assistant
-<think>
-```
-
-</details>
-
-**Don't know which to choose?** Grab [Q4_K_M](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q4_K_M.gguf) (5.84GB) - usually a good mix of size and performance. Download instructions available [here](#downloading-using-the-hugging-face-cli)
+**Don't know which to choose?** Grab [Q4_K_M](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q4_K_M.gguf) (6.04GB) - usually a good mix of size and performance. Download instructions available [here](#downloading-using-the-hugging-face-cli)
 
 ## Available files:
 
 | Filename | Quant type | File Size | Split | Description |
 | -------- | ---------- | --------- | ----- | ----------- |
-| [Cloudflare_clef-flash-bf16.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-bf16.gguf) | bf16 | 17.92GB | false | Full BF16 weights. |
-| [Cloudflare_clef-flash-Q8_0.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q8_0.gguf) | Q8_0 | 9.55GB | false | Extremely high quality, generally unneeded but max available quant. |
-| [Cloudflare_clef-flash-Q6_K_L.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q6_K_L.gguf) | Q6_K_L | 8.11GB | false | The large size of Q6_K, about halfway to Q8_0 in size. Very high quality, near perfect, *recommended*. |
-| [Cloudflare_clef-flash-Q6_K.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q6_K.gguf) | Q6_K | 7.79GB | false | Very high quality, near perfect, *recommended*. |
-| [Cloudflare_clef-flash-Q6_K_S.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q6_K_S.gguf) | Q6_K_S | 7.51GB | false | Very high quality, near perfect, a little smaller than Q6_K with almost all of the model at Q6_K precision, *recommended*. |
-| [Cloudflare_clef-flash-Q5_K_M.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q5_K_M.gguf) | Q5_K_M | 6.88GB | false | High quality, *recommended*. |
-| [Cloudflare_clef-flash-Q5_K_S.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q5_K_S.gguf) | Q5_K_S | 6.50GB | false | High quality, *recommended*. |
-| [Cloudflare_clef-flash-Q4_K_L.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q4_K_L.gguf) | Q4_K_L | 6.20GB | false | The large size of Q4_K, between Q4_K_M and Q5_K_S: more of the most sensitive weights kept at higher precision, *recommended*. |
-| [Cloudflare_clef-flash-Q4_1.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q4_1.gguf) | Q4_1 | 5.94GB | false | Legacy format, similar performance to Q4_K_S but with improved tokens/watt on Apple silicon. |
-| [Cloudflare_clef-flash-Q4_K_M.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q4_K_M.gguf) | Q4_K_M | 5.84GB | false | Good quality, default size for most use cases, *recommended*. |
-| [Cloudflare_clef-flash-IQ4_NL.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-IQ4_NL.gguf) | IQ4_NL | 5.83GB | false | Similar to IQ4_XS, but slightly larger. |
-| [Cloudflare_clef-flash-Q4_K_S.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q4_K_S.gguf) | Q4_K_S | 5.48GB | false | Slightly lower quality with more space savings, *recommended*. |
-| [Cloudflare_clef-flash-Q4_0.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q4_0.gguf) | Q4_0 | 5.48GB | false | Legacy format, kept for compatibility with older tools. |
-| [Cloudflare_clef-flash-IQ4_XS.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-IQ4_XS.gguf) | IQ4_XS | 5.23GB | false | Decent quality, smaller than Q4_K_S with similar performance, *recommended*. |
-| [Cloudflare_clef-flash-IQ3_M.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-IQ3_M.gguf) | IQ3_M | 4.85GB | false | Medium-low quality, new method with decent performance comparable to Q3_K_M. |
-| [Cloudflare_clef-flash-Q3_K_L.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q3_K_L.gguf) | Q3_K_L | 4.66GB | false | Lower quality but usable, good for low RAM availability. |
-| [Cloudflare_clef-flash-Q3_K_M.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q3_K_M.gguf) | Q3_K_M | 4.48GB | false | Low quality. |
-| [Cloudflare_clef-flash-IQ3_XS.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-IQ3_XS.gguf) | IQ3_XS | 4.27GB | false | Lower quality, new method with decent performance, slightly better than Q3_K_S. |
-| [Cloudflare_clef-flash-Q3_K_S.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q3_K_S.gguf) | Q3_K_S | 4.26GB | false | Low quality, *not* recommended. |
-| [Cloudflare_clef-flash-IQ3_XXS.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-IQ3_XXS.gguf) | IQ3_XXS | 4.14GB | false | Lower quality, new method with decent performance, comparable to Q3 quants. |
-| [Cloudflare_clef-flash-Q2_K.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q2_K.gguf) | Q2_K | 3.64GB | false | Very low quality but surprisingly usable. |
-| [Cloudflare_clef-flash-IQ2_M.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-IQ2_M.gguf) | IQ2_M | 3.54GB | false | Relatively low quality, uses SOTA techniques to be surprisingly usable. |
+| [Cloudflare_clef-flash-bf16.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-bf16.gguf) | bf16 | 18.16GB | false | Full BF16 weights. |
+| [Cloudflare_clef-flash-Q8_0.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q8_0.gguf) | Q8_0 | 9.68GB | false | Extremely high quality, generally unneeded but max available quant. |
+| [Cloudflare_clef-flash-Q6_K_L.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q6_K_L.gguf) | Q6_K_L | 8.32GB | false | Uses Q8_0 for embed and output weights. Very high quality, near perfect, *recommended*. |
+| [Cloudflare_clef-flash-Q6_K.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q6_K.gguf) | Q6_K | 7.83GB | false | Very high quality, near perfect, *recommended*. |
+| [Cloudflare_clef-flash-Q5_K_M.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q5_K_M.gguf) | Q5_K_M | 6.98GB | false | High quality, *recommended*. |
+| [Cloudflare_clef-flash-Q4_K_L.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q4_K_L.gguf) | Q4_K_L | 6.80GB | false | Uses Q8_0 for embed and output weights. Good quality, *recommended*. |
+| [Cloudflare_clef-flash-Q5_K_S.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q5_K_S.gguf) | Q5_K_S | 6.66GB | false | High quality, *recommended*. |
+| [Cloudflare_clef-flash-Q4_1.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q4_1.gguf) | Q4_1 | 6.07GB | false | Legacy format, similar performance to Q4_K_S but with improved tokens/watt on Apple silicon. |
+| [Cloudflare_clef-flash-Q4_K_M.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q4_K_M.gguf) | Q4_K_M | 6.04GB | false | Good quality, default size for most use cases, *recommended*. |
+| [Cloudflare_clef-flash-Q4_K_S.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q4_K_S.gguf) | Q4_K_S | 5.73GB | false | Slightly lower quality with more space savings, *recommended*. |
+| [Cloudflare_clef-flash-IQ4_NL.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-IQ4_NL.gguf) | IQ4_NL | 5.63GB | false | Similar to IQ4_XS, but slightly larger. |
+| [Cloudflare_clef-flash-Q4_0.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q4_0.gguf) | Q4_0 | 5.60GB | false | Legacy format, kept for compatibility with older tools. |
+| [Cloudflare_clef-flash-IQ4_XS.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-IQ4_XS.gguf) | IQ4_XS | 5.40GB | false | Decent quality, smaller than Q4_K_S with similar performance, *recommended*. |
+| [Cloudflare_clef-flash-Q3_K_L.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q3_K_L.gguf) | Q3_K_L | 5.24GB | false | Lower quality but usable, good for low RAM availability. Made without an imatrix: expect a larger quality loss than usual at this size. |
+| [Cloudflare_clef-flash-Q3_K_M.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q3_K_M.gguf) | Q3_K_M | 5.05GB | false | Low quality. Made without an imatrix: expect a larger quality loss than usual at this size. |
+| [Cloudflare_clef-flash-IQ3_M.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-IQ3_M.gguf) | IQ3_M | 4.85GB | false | Medium-low quality, new method with decent performance comparable to Q3_K_M. Made without an imatrix: expect a larger quality loss than usual at this size. |
+| [Cloudflare_clef-flash-Q3_K_S.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q3_K_S.gguf) | Q3_K_S | 4.80GB | false | Low quality, *not* recommended. Made without an imatrix: expect a larger quality loss than usual at this size. |
+| [Cloudflare_clef-flash-Q2_K.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-Q2_K.gguf) | Q2_K | 4.19GB | false | Very low quality but surprisingly usable. Made without an imatrix: expect a larger quality loss than usual at this size. |
 
 Download a specific file:
 
@@ -149,11 +125,9 @@ curl -LsSf https://llama.app/install.sh | sh
 llama-server -hf bartowski/Cloudflare_clef-flash-GGUF:Q4_K_M
 ```
 
-llama-server includes a built-in chat web UI, served at http://localhost:8080 by default.
+llama-server exposes this model on the `/v1/systemone` endpoint only — there is no chat web UI for it. See [Decision model](#decision-model) above for a request example.
 
-These quants were made with llama.cpp release b11279 - if this model's architecture is newly supported, you'll need that release or newer to run them.
-
-They also work in: [LM Studio](https://lmstudio.ai/) · [koboldcpp](https://github.com/LostRuins/koboldcpp) · [ramalama](https://github.com/containers/ramalama) · [Jan AI](https://www.jan.ai/) · [Text Generation Web UI](https://github.com/oobabooga/text-generation-webui) · [LoLLMs](https://github.com/ParisNeo/lollms) · [Atomic Chat](https://atomic.chat/)
+These quants were made with llama.cpp release b11430 - if this model's architecture is newly supported, you'll need that release or newer to run them.
 
 ## Multimodal
 
@@ -161,218 +135,9 @@ This model supports image input. Alongside the quants, this repo includes the mu
 
 llama.cpp downloads the mmproj automatically when using `-hf` as shown above; if you're loading files manually, pass it with `--mmproj`.
 
-## Per-tensor layouts
+## Embed/output weights
 
-Some of these files were built with a layout computed for this model instead of llama.cpp's standard one-size-fits-all rules. A Q4_K_M is still mostly Q4_K; the extra precision goes to the weights this particular model is most sensitive to. The S, M or L in a name says how much of the model stays at the base precision: about 90 % for S, 70 % for M and 50 % for L. An `_L` name is simply the large size of its family. Q4_K_L is to Q4_K_M what Q4_K_M is to Q4_K_S; Q6_K_S, Q6_K and Q6_K_L are the small, medium and large sizes of Q6_K, with Q6_K_L about halfway to Q8_0. In earlier releases an `_L` name meant the embedding and output weights were kept at Q8_0; in these files it means the larger size of the base type. There is no size target, so each file's bits per weight is reported rather than promised.
-
-The layout each of these files was built with is published in the [`layouts/`](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/tree/main/layouts) folder: `<file>.tensor-types.txt` is the exact `--tensor-type-file` given to `llama-quantize`, and `<file>.layout.json` records how it was computed, including the generator version, the llama.cpp release and the commit, so any of them can be rebuilt. The code that computed them is public at [`quantization-config`](https://github.com/bartowski1182/quantization-config); its tag `key-3bf8b43e20a68f0b` is the exact snapshot these files record. The method is described in [this write-up](https://huggingface.co/blog/bartowski/per-tensor-layout-maps-for-gguf-quantization).
-
-Checked on [bartowski/MiMo-V2.6-Distill-Qwen-9B-GGUF](https://huggingface.co/bartowski/MiMo-V2.6-Distill-Qwen-9B-GGUF) (same architecture and tensor shapes) before any of these files were released: Q4_K_M reached 0.87×, Q3_K_M 0.86× and IQ2_M 0.83× the KL divergence of the standard layout at the same file size.
-
-<details>
-<summary>Layout details</summary>
-
-Files built from a computed layout:
-
-| Quant | Size | Body bits/weight | File bits/weight | Body kept at base type |
-| ----- | ---- | ---------------- | ---------------- | ---------------------- |
-| Q6_K_L | 8.11GB | 7.40 | 7.24 | 50 % |
-| Q6_K | 7.79GB | 7.04 | 6.96 | 70 % |
-| Q6_K_S | 7.51GB | 6.71 | 6.71 | 90 % |
-| Q5_K_M | 6.88GB | 6.14 | 6.14 | 70 % |
-| Q5_K_S | 6.50GB | 5.70 | 5.80 | 90 % |
-| Q4_K_L | 6.20GB | 5.50 | 5.54 | 50 % |
-| Q4_K_M | 5.84GB | 5.09 | 5.22 | 70 % |
-| IQ4_NL | 5.83GB | 5.07 | 5.20 | 70 % |
-| Q4_K_S | 5.48GB | 4.67 | 4.90 | 90 % |
-| IQ4_XS | 5.23GB | 4.41 | 4.67 | 90 % |
-| IQ3_M | 4.85GB | 4.24 | 4.33 | 50 % |
-| Q3_K_L | 4.66GB | 4.02 | 4.16 | 50 % |
-| Q3_K_M | 4.48GB | 3.81 | 4.00 | 70 % |
-| IQ3_XS | 4.27GB | 3.57 | 3.81 | 90 % |
-| Q3_K_S | 4.26GB | 3.56 | 3.81 | 90 % |
-| IQ3_XXS | 4.14GB | 3.42 | 3.70 | 70 % |
-| Q2_K | 3.64GB | 3.00 | 3.26 | 70 % |
-| IQ2_M | 3.54GB | 2.88 | 3.16 | 70 % |
-
-Checked on [bartowski/MiMo-V2.6-Distill-Qwen-9B-GGUF](https://huggingface.co/bartowski/MiMo-V2.6-Distill-Qwen-9B-GGUF), which shares this model's architecture and tensor shapes: the computed layout against the standard one, measured by KL divergence against the unquantized model. The ratio compares each computed file with the standard ladder read at that file's own size, so it can differ from the two KLD columns when the two files differ in size.
-
-| Quant | Computed layout KLD | Standard layout KLD | Ratio at equal size | Size vs standard file |
-| ----- | ------------------- | ------------------- | ------------------- | --------------------- |
-| Q4_K_M | 0.0303 ± 0.0014 | 0.0319 ± 0.0014 | 0.87× | −1.2 % |
-| Q3_K_M | 0.1291 ± 0.0027 | 0.1037 ± 0.0025 | 0.86× | −8.9 % |
-| IQ2_M | 0.2711 ± 0.0037 | 0.2698 ± 0.0035 | 0.83× | −6.2 % |
-
-How it works: the base type is a floor for every body tensor and a fixed share of the body bytes stays at it (90 % for S, 70 % for M, 50 % for L); the remaining bytes go where a cross-model sensitivity prior, measured by KL divergence against the unquantized model, says they buy the most quality. The embedding and output tensors are sized by their share of the file: a small table is kept at Q8_0, a large one follows the file's bitrate. A K-quant and the IQ quant with the same base bitrate (Q3_K_S and IQ3_XS, Q3_K_M and IQ3_S, Q3_K_L and IQ3_M) come out at about the same size; the IQ file is the GPU-oriented twin.
-
-</details>
-
-## imatrix
-
-All quants made using imatrix option, with a calibration corpus rendered through this model's own chat template. The corpus pairs plain prose with tool-calling and reasoning conversations ([corpus source data](https://gist.github.com/bartowski1182/e26453c0404e24eb317543ec5360f87a)), encoded exactly as this model sees them at inference and processed with `--parse-special`, so chat-format special tokens contribute to the importance matrix. The corpus rendered for this model is included in this repo: [Cloudflare_clef-flash-calibration-v6.txt](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-calibration-v6.txt). The imatrix is available here: [Cloudflare_clef-flash-imatrix.gguf](https://huggingface.co/bartowski/Cloudflare_clef-flash-GGUF/blob/main/Cloudflare_clef-flash-imatrix.gguf).
-
-<details>
-<summary>Calibration render details</summary>
-
-```json
-{
-  "recipe": "calibration-v6",
-  "encoder": "chat_template",
-  "library_versions": {
-    "transformers": "5.9.0",
-    "tokenizers": "0.22.2",
-    "tiktoken": "0.14.0",
-    "blobfile": "3.3.0",
-    "huggingface_hub": "1.31.0"
-  },
-  "chunk_size": 512,
-  "prose_chunks": 214,
-  "tool_chunks": 336,
-  "total_chunks": 550,
-  "n_conversations": 137,
-  "conversation_token_lengths": [
-    566,
-    1629,
-    916,
-    1404,
-    1147,
-    1366,
-    2568,
-    666,
-    1229,
-    1234,
-    1069,
-    2098,
-    883,
-    978,
-    2402,
-    1275,
-    1122,
-    988,
-    739,
-    720,
-    1364,
-    1060,
-    1409,
-    1204,
-    1720,
-    1500,
-    1052,
-    724,
-    974,
-    1505,
-    1571,
-    842,
-    1270,
-    1039,
-    1018,
-    1714,
-    1653,
-    1177,
-    479,
-    1912,
-    1413,
-    1128,
-    1400,
-    1772,
-    1963,
-    1317,
-    1611,
-    783,
-    2443,
-    1104,
-    2639,
-    789,
-    1026,
-    753,
-    905,
-    700,
-    2315,
-    760,
-    1150,
-    1089,
-    1233,
-    1173,
-    928,
-    1024,
-    970,
-    1425,
-    915,
-    1554,
-    1837,
-    843,
-    323,
-    1124,
-    3003,
-    2838,
-    711,
-    764,
-    1034,
-    797,
-    1300,
-    1084,
-    1153,
-    797,
-    1073,
-    1073,
-    1293,
-    1548,
-    1405,
-    1391,
-    875,
-    660,
-    2472,
-    640,
-    1163,
-    1677,
-    1949,
-    1205,
-    645,
-    1358,
-    1126,
-    1731,
-    1700,
-    1717,
-    819,
-    772,
-    1039,
-    2858,
-    742,
-    598,
-    765,
-    1263,
-    1054,
-    1372,
-    770,
-    350,
-    319,
-    2323,
-    735,
-    1141,
-    1832,
-    1730,
-    2365,
-    2375,
-    693,
-    982,
-    842,
-    852,
-    1241,
-    1001,
-    844,
-    1359,
-    832,
-    712,
-    1423,
-    1029,
-    919,
-    1318,
-    1481
-  ]
-}
-```
-
-</details>
+Some of these quants (Q3_K_XL, Q4_K_L etc) are the standard quantization method with the embeddings and output weights quantized to Q8_0 instead of what they would normally default to.
 
 ## ARM/AVX information
 
@@ -409,6 +174,6 @@ These I-quants can also be used on CPU, but will be slower than their K-quant eq
 
 ## Credits
 
-Thank you kalomaze and Dampf for assistance in creating the imatrix calibration dataset.
+Thank you ZeroWw for the inspiration to experiment with embed/output.
 
 Want to support my work? Visit my ko-fi page here: https://ko-fi.com/bartowski

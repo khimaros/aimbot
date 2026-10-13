@@ -339,6 +339,11 @@ micro) and Jev 1.13.0 (0.760 / 0.773) are in Bespoke's report.
 | **macro / micro** | 0.757 / 0.765 | 0.773 / 0.781 | 0.756 / 0.765 |
 | macro over the subsets not trained on | 0.731 | 0.751 | 0.728 |
 
+The multinli subset (299 items) is easier than MNLI as a whole. On all 9,815 MNLI validation_matched items, decider-4b
+(revision `eb5fbdf`) scores **0.904** (entailment 0.928, neutral 0.830, contradiction 0.950); on the 299 suite items it
+scores 0.933. An independent run on 120 other validation_matched items measured 0.842
+([discussion #3](https://huggingface.co/Mapika/decider-4b/discussions/3)).
+
 v2.1 is at v1's level on this suite and 1.6 points under v2 (macro). The largest differences to v2 are PAWS (0.764 against 0.832),
 SummEval relevance (0.396 against 0.463) and VitaminC (0.743 against 0.778).
 

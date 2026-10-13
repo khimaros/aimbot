@@ -2160,6 +2160,26 @@
    ],
    "assessed_on": "2026-08-17"
   },
+  "google/embeddinggemma-2": {
+   "one_liner": "a multimodal embedding model: text, images, video and audio into one vector space, with the text half loadable alone.",
+   "use_for": [
+    "retrieval / rag embeddings",
+    "code search",
+    "cross-modal search over images, audio and video"
+   ],
+   "avoid_for": [
+    "generation of any kind",
+    "float16 inference"
+   ],
+   "notes": "released 2026-10-06 and scored by nobody but its own card, which puts it level with embeddinggemma-300m on multilingual text and ahead on code. the card also says 128-d truncation costs the multimodal half far more than the text half.",
+   "confidence": "low",
+   "evidence": [
+    "modalities text, image, audio, video -> embeddings",
+    "the card's own tables, full-precision checkpoint only",
+    "no facet carried by any source"
+   ],
+   "assessed_on": "2026-10-06"
+  },
   "google/functiongemma-270m-it": {
    "one_liner": "a 270m model tuned for one job: turning a request into a function call.",
    "use_for": [
@@ -2362,6 +2382,28 @@
     "card: comparable quality to larger models at 82m parameters"
    ],
    "assessed_on": "2026-08-17"
+  },
+  "huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated": {
+   "one_liner": "qwen3.8-flash-next with refusals ablated: the same 180b to serve, and no measurement of what the edit cost.",
+   "use_for": [
+    "work the base model declines, on a host that already holds the base model's footprint",
+    "comparing against the base model directly, since the two share an architecture and a chat template"
+   ],
+   "avoid_for": [
+    "anything where the base model's scores are being relied on, since none was re-measured after the edit",
+    "public-facing use, which the card itself advises against",
+    "a host that needs Q4 or better from this publisher without concatenating split files by hand"
+   ],
+   "notes": "the whole of the evidence is two cards and the files. huihui's card describes the method as crude and proof-of-concept and reports no benchmark, refusal rate or comparison against the base model, so the open question for any abliteration, how much reasoning went with the refusals, has no answer here. the base model's scores are the nearest thing to a prior and they are a prior only. no board scores it. what is measured is the conversion: mradermacher's five single-file rungs are static quants with the 1224 tensors of the base model's main files, no mtp head, and qwen's own template in the header rather than unsloth's rewrite, which is why the turn handling differs from the base entry. the rungs from Q4_K_S up are raw byte splits, so the ladder a stock llama.cpp can pull tops out at IQ4_XS.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: method described as crude and proof-of-concept, with no evaluation published",
+    "hub base_model declares Qwen/Qwen3.8-Flash-Next",
+    "gguf headers: 1224 tensors per file, chat template byte-identical to Qwen/Qwen3.8-Flash-Next",
+    "repo listing: Q4_K_S and above are .partNofM splits"
+   ],
+   "assessed_on": "2026-10-10"
   },
   "ibm-granite/granite-4.0-1b-speech": {
    "one_liner": "the older granite number and the better transcriber: 4.91 WER against the 3.3-2b's 5.36.",
@@ -2905,6 +2947,124 @@
     "{community.reddit-localllama}"
    ],
    "assessed_on": "2026-08-17"
+  },
+  "ConwayResearch/Underdog-Saluki-27B-1.0": {
+   "one_liner": "qwen3.8-27b in one file under 8 gb, with tool calling as the thing its publisher protected.",
+   "use_for": [
+    "tool-calling agents on a card that cannot hold a 4-bit rung of the base model",
+    "a small companion beside a larger model, with the grafted head drafting"
+   ],
+   "avoid_for": [
+    "competition-level math, where the card puts it at 82 to 85% of the full model",
+    "letter-level instruction puzzles, which the card names as its weakest area"
+   ],
+   "notes": "every figure is the publisher's, on a 120-task subset of bfcl v4 it calls underdog bench, and the card itself says a few tasks of any gap is run-to-run variation. it reports more tool-call passes than the full-size model on that set and fewer points on mbpp+, musr and both aime years, so the quant is tuned toward one behaviour and pays for it elsewhere. vision is a separate projector. kujira's file is the vendor's with the base model's mtp head grafted on, unbenchmarked beyond speed on one machine.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: 88 of 120 tool-calling tasks against 84 for the full model, own harness",
+    "card: limitations list names math retention, letter-level puzzles and parallel-call formatting slips",
+    "kujira card: main weights byte-identical, 15 mtp tensors added, speed measured on one rtx 3080"
+   ],
+   "assessed_on": "2026-10-13"
+  },
+  "FINAL-Bench/Darwin-27B-RSI": {
+   "one_liner": "a 27b thinking model trained on its own solutions, measured by its publisher on graduate science questions.",
+   "use_for": [
+    "science reasoning with a generous token budget, which is where the gain was measured"
+   ],
+   "avoid_for": [
+    "latency-sensitive use, since the card warns of long reasoning",
+    "anything needing a rung other than Q4_K_M, the only gguf published"
+   ],
+   "notes": "the whole case is one card: gpqa diamond up 5.24 points over its parent under the publisher's protocol, with the card saying other domains may change less. no board scores it and nobody else has re-run the comparison. the parent is itself a merge family rather than a vendor release, so the base model's public scores are a loose prior at best.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: gpqa diamond 72.85 to 78.09, single sample, publisher's protocol",
+    "card: gains measured on graduate-level science only",
+    "repo listing: one Q4_K_M file"
+   ],
+   "assessed_on": "2026-10-13"
+  },
+  "LiquidAI/LFM2.5-24B-A2B": {
+   "one_liner": "liquid's largest: a 24b mixture of experts with 2b active that always reasons before answering.",
+   "use_for": [
+    "agentic and tool-use work on modest hardware, the vendor's stated target",
+    "fast decode where a 30b-class model is too slow, at 2.45b active parameters"
+   ],
+   "avoid_for": [
+    "image or audio input, since it is text only",
+    "prompts past 131k tokens"
+   ],
+   "notes": "on the hub in gguf form since 2026-10-09 and scored by nobody but the vendor so far. the headline claim is liveclaw 48.09 against 38.19 for qwen3.6-35b-a3b, on the vendor's own runs. the recommended sampling is unusually cold, temperature 0.1 with a repeat penalty, and thinking cannot be turned off. the vendor ships a quantization-aware Q4_0 beside the converted rungs; unsloth's ladder is labelled a preview.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: 24.0b total, 2.45b active, 131,072 context, text only",
+    "card: liveclaw 48.09 against 38.19, vendor's evaluation",
+    "generation config: temperature 0.1, top_k 50, repetition_penalty 1.05"
+   ],
+   "assessed_on": "2026-10-13"
+  },
+  "microsoft/AesCode-32B": {
+   "one_liner": "a qwen3-vl 32b finetune for one job: infographics, slides and dashboards as html and css.",
+   "use_for": [
+    "generating editable visual documents as html, optionally from a reference image"
+   ],
+   "avoid_for": [
+    "general chat or coding, which it was not trained or measured for",
+    "short outputs under a tight token cap, since its scores assume up to 12,000 output tokens"
+   ],
+   "notes": "a research release with a narrow evaluation: 300 infographic prompts scored by the authors' rule checks and a visual checklist. nothing measures it as a general vision-language model, and the base model's scores do not transfer to a checkpoint trained with task-specific rewards.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: starts from qwen3-vl-32b-instruct, cold-start sft then gdpo",
+    "card: scores over 300 infographic samples, three rollouts each",
+    "hub base_model declares Qwen/Qwen3-VL-32B-Instruct"
+   ],
+   "assessed_on": "2026-10-13"
+  },
+  "nerkyor/Qwen3.8-27B-Coder390-EfficientThink-Opus5.5-GPT6Astra-Grok4.7-DSV4Pro-K3-SFT-RLOO-MTP-DFlash2": {
+   "one_liner": "qwen3.8-27b retrained to stop reasoning once it has an answer, with the draft head inside every gguf.",
+   "use_for": [
+    "coding and long-reasoning work where the base model runs to its token cap without answering",
+    "drafted decode on a single card, since no separate head file is needed"
+   ],
+   "avoid_for": [
+    "anything where the base model's refusals are wanted, since its intermediate base is an uncensored finetune",
+    "reading its scores against a public board, since the protocol is the publisher's own"
+   ],
+   "notes": "the publisher reports its own full-suite runs: level with the original on gpqa and mmlu and seven points up on livecodebench, with the lower-bit rungs scoring within a few questions of Q8_0. the ladder is unusual, three mixed recipes named after an app plus Q6_K and Q8_0, each in two variants that differ only in the precision of the built-in head. the `.ninfer` packages in the same repo are for a different runtime and are not what this entry sizes.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: gpqa 178/198, mmlu 445/500, lcb 90/100 against 177, 444 and 83 for the original, publisher's protocol",
+    "card: lineage runs through an sft and simpo base named uncensored",
+    "repo listing: eight ggufs under GGUF/, each with a built-in mtp head"
+   ],
+   "assessed_on": "2026-10-13"
+  },
+  "openbmb/MiniCPM-V-4.7-35B-A3B": {
+   "one_liner": "openbmb's first mixture-of-experts vision model: image and video understanding at 3b active.",
+   "use_for": [
+    "image, multi-image and video questions on a single consumer card",
+    "a vision model with a published per-file quality table, from atomic chat's ladder"
+   ],
+   "avoid_for": [
+    "a llama.cpp build from before its image support landed, which runs it text only",
+    "relying on the vendor's on-device figures off a phone, since they come with its own runtime"
+   ],
+   "notes": "on the hub in gguf form since 2026-10-06 with no independent score yet. the vendor's claims are comparative ones against qwen3.6-35b-a3b on its own evaluation, and its headline efficiency number is from a scheduling technique in its own llama.cpp fork rather than from a stock build. what is independently checkable is the quantization: atomic chat publishes kl divergence and top-1 agreement for twelve files.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: first moe model in the minicpm-v series, 35b with 3b active",
+    "atomic chat card: kl divergence 0.00516 at Q8_0 through 0.34928 at its smallest file",
+    "atomic chat card: image support needs llama.cpp PR 29416"
+   ],
+   "assessed_on": "2026-10-13"
   },
   "microsoft/Fara1.5-27B": {
    "one_liner": "a browser agent that sees only screenshots: it is unranked here because the three suites it reports are carried by no source in this corpus.",
@@ -4006,6 +4166,29 @@
     "no gbench entry"
    ],
    "assessed_on": "2026-09-16"
+  },
+  "trohrbaugh/Qwen3.8-Flash-Next-heretic-2": {
+   "one_liner": "qwen3.8-flash-next decensored with heretic: the author measures no refusals and little drift, and nobody has measured capability.",
+   "use_for": [
+    "work the base model declines, where the author's own count is 0 of 100 refusals against 99",
+    "a host with room for a Q4_K_M that keeps everything but the experts at Q8_0",
+    "comparing against the base model directly, since the two share an architecture and a chat template"
+   ],
+   "avoid_for": [
+    "reading the benchmark table on its card as this model's -- it is qwen's card carried over, and the scores are the base model's",
+    "a host sized for the base model's smaller rungs, since this ladder starts above 130 gib",
+    "expecting the shipped mtp head to speed up a stock build, which ignores it"
+   ],
+   "notes": "better evidenced than the huihui abliteration of the same model, on the one axis an abliteration can be checked cheaply: the card gives refusals before and after and a kl divergence from the base model of 0.0818, with the parameters and a reproduce folder beside them. both figures are the author's, and a low divergence is a reason to expect the base model's behaviour elsewhere rather than a measurement of it. no board scores it, and the card's benchmark table belongs to the base model. the gguf card points at caliperbench, a creative-writing benchmark this corpus does not collect. what is measured here is the conversion: four static rungs from Q4_K_M to Q8_0 whose tag names only the experts' gate and up projections, with the rest pinned high, and the publisher's own perplexity and divergence table against its Q8_0. the mtp head is shipped two ways and needs an open llama.cpp PR either way.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: 0/100 refusals against the base model's 99/100, kl divergence 0.0818, author-reported",
+    "card: benchmark table is Qwen/Qwen3.8-Flash-Next's own, carried over",
+    "gguf card: Q4_K_M kl divergence 0.036 against the repo's Q8_0, a plain recipe 0.177",
+    "gguf headers: chat template byte-identical to Qwen/Qwen3.8-Flash-Next"
+   ],
+   "assessed_on": "2026-10-10"
   },
   "upstage/Solar-Open2-250B": {
    "one_liner": "an office-and-document moe whose strongest measured axis is declining to make things up, with physics close behind.",

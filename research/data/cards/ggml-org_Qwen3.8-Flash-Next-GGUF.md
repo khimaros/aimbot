@@ -1,0 +1,34 @@
+---
+license: other
+pipeline_tag: image-text-to-text
+tags:
+- gguf
+- quantized
+base_model:
+- Qwen/Qwen3.8-Flash-Next
+---
+
+# Qwen3.8-Flash-Next
+
+Run with https://llama.app
+
+```bash
+llama serve -hf ggml-org/Qwen3.8-Flash-Next-GGUF
+```
+
+### Source models
+- https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+
+### Notes
+- `Q8_0` and `IQ4_NL`: all routed experts use the base quantization type.
+- `Q2_K`: routed gate/up experts at Q2_K, routed down experts at IQ4_NL.
+- Small non-expert tensors (embeddings, PLE embeddings, attention, shared experts) are kept at Q8_0, the PLE embedding is at Q4_0.
+- Includes a Q8_0 mmproj for the vision encoder and MTP sidecars (Q8_0 / Q4_0) for speculative decoding.
+- The `Q2_K` routed gate/up expert tensors are calibrated with the imatrix from https://huggingface.co/AesSedai/Qwen3.8-Flash-Next-GGUF
+
+### TODOs
+
+- add info
+
+> [!IMPORTANT]
+> This model is automatically converted using https://github.com/ggml-org/convert

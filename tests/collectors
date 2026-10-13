@@ -336,6 +336,73 @@ def a_directory_is_a_tag_only_where_it_names_a_quant():
 
 
 @test
+def a_drafter_folder_inside_a_quant_folder_is_not_part_of_the_rung():
+    """spiritfather keeps a graft pair under `<QUANT>/MTP/`, beside the trunk.
+
+    the pair is a rewritten first shard and a head shard, named `-Q4_K_M-MTP-`
+    with the marker after the quant, which reads as a model that embeds its
+    head. it is neither: it replaces one trunk shard and adds one, so summed
+    into the rung it made heretic-2's Q4_K_M 2.6 gib larger than the five
+    files a stock build loads, and gave the tensor reader a head mainline
+    ignores.
+    """
+    got = sizes_of([
+        {"path": "Q4_K_M/M-Q4_K_M-00001-of-00002.gguf", "size": 1},
+        {"path": "Q4_K_M/M-Q4_K_M-00002-of-00002.gguf", "size": 40},
+        {"path": "Q4_K_M/MTP/M-Q4_K_M-MTP-00001-of-00003.gguf", "size": 1},
+        {"path": "Q4_K_M/MTP/M-Q4_K_M-MTP-00003-of-00003.gguf", "size": 3},
+        {"path": "mtp/mtp-M-Q8_0.gguf", "size": 4},
+        {"path": "Hy3-Q2_K_XL-mtp.gguf", "size": 94}])
+    eq(got.get("Q4_K_M"), 41, "the rung is the trunk alone: %r" % got)
+    eq(got.get("mtp:Q4_K_M"), 4, "and the pair is a sidecar to it")
+    eq(got.get("mtp"), 4, "a drafter folder at the root is still one key")
+    eq(got.get("Hy3-Q2_K_XL-mtp.gguf"), 94,
+       "and a root file with the marker after the quant is the model")
+
+
+@test
+def a_two_type_ladder_name_is_one_tag():
+    """atomic chat names a rung for both of its large tensor groups.
+
+    `AD-<ffn_down>-<ffn_up>`, collapsed to one type where the two agree. read
+    as a tag wearing a prefix, `AD-Q4_K-IQ4_XS` and `AD-Q5_K-IQ4_XS` were both
+    `IQ4_XS`: minicpm-v 4.7's twelve files made eleven keys, one of them 38.7
+    gib of two files, and every other rung was labelled with its smaller half.
+    """
+    got = sizes_of([
+        {"path": "M-AD-Q4_K-IQ4_XS.gguf", "size": 20},
+        {"path": "M-AD-Q5_K-IQ4_XS.gguf", "size": 21},
+        {"path": "M-AD-Q6_K.gguf", "size": 29},
+        {"path": "M-UD-IQ4_XS.gguf", "size": 18}])
+    eq(got.get("AD-Q4_K-IQ4_XS"), 20, "both halves are the tag: %r" % got)
+    eq(got.get("AD-Q5_K-IQ4_XS"), 21, "and two rungs stay two")
+    eq(got.get("AD-Q6_K"), 29, "the collapsed form is unchanged")
+    eq(got.get("UD-IQ4_XS"), 18, "and so is another publisher's ladder")
+
+
+@test
+def a_folder_of_unrelated_files_is_not_one_rung():
+    """nerkyor keeps eight builds under `GGUF/`, named for recipes of its own.
+
+    `Q2LynnStyle-MTP` names no type the tag pattern reads, so each file took
+    the folder's name and five builds of a 27b model summed into one 95 gib
+    rung called `GGUF`. a folder that names neither a quant nor a drafter is
+    where files live, whether or not their names parse, unless they are shards
+    of one set.
+    """
+    got = sizes_of([
+        {"path": "GGUF/M-Q2LynnStyle-MTP.gguf", "size": 13},
+        {"path": "GGUF/M-Q3LynnStyle-MTP.gguf", "size": 17},
+        {"path": "gguf/M-Q8_0.gguf", "size": 29},
+        {"path": "pack/M-mixed-00001-of-00002.gguf", "size": 3},
+        {"path": "pack/M-mixed-00002-of-00002.gguf", "size": 4}])
+    eq(got.get("M-Q2LynnStyle-MTP.gguf"), 13, "each file is its own key: %r" % got)
+    eq(got.get("M-Q3LynnStyle-MTP.gguf"), 17, "and stays apart from its sibling")
+    eq(got.get("Q8_0"), 29, "a file that names its quant is unchanged")
+    eq(got.get("pack"), 7, "and a shard set in a folder is still the folder")
+
+
+@test
 def a_shard_folder_named_for_the_model_and_the_quant_is_that_quant():
     """bartowski shards into `<model>-<TAG>/`, and the model half is not a rung.
 
@@ -7027,6 +7094,48 @@ def a_sweep_names_its_rungs_and_not_the_recipe_they_are_built_from():
     eq([p[2] for p in points], ["IQ2_S", "Q3_K", "MXFP4"],
        "each point wears the file's own tag: %r" % points)
     eq(metric, "perplexity", "and the metric is still the ppl column")
+
+
+@test
+def a_rung_that_is_a_link_is_still_the_rung():
+    """spiritfather links each rung to its folder and pins one type on the table.
+
+    `[Q4_K_M](.../tree/main/Q4_K_M)` is not a whole tag until the link is read
+    as its text, and the table has a `PLE` column that is `Q8_0` on every row.
+    that column was the only one of whole tags, so all four points of
+    heretic-2's curve came away named Q8_0 and three were drawn at another
+    rung's size.
+    """
+    mod = load_script_with_research("fetch_quant_sweeps", "fetch-quant-sweeps")
+    tables = mod.rows_of("\n".join([
+        "| Quant | Size | Mixture | PLE | PPL |",
+        "|:--|--:|:--|:--|:--|",
+        "| [Q4_K_M](https://hub/r/tree/main/Q4_K_M) | 130.8 GiB | Q8_0 / Q4_K | Q8_0 | 3.635 |",
+        "| [Q6_K](https://hub/r/tree/main/Q6_K) | 157.1 GiB | Q8_0 / Q6_K | Q8_0 | 3.619 |",
+        "| [Q8_0](https://hub/r/tree/main/Q8_0) | 175.3 GiB | Q8_0 / Q8_0 | Q8_0 | 3.616 |"]))
+    points, _, _ = mod.sweep_from(tables[0], 177)
+    eq([p[2] for p in points], ["Q4_K_M", "Q6_K", "Q8_0"],
+       "each point wears the linked rung's tag: %r" % points)
+
+
+@test
+def a_two_type_rung_in_a_sweep_table_keeps_both_halves():
+    """atomic chat's table names rungs `AD-<ffn_down>-<ffn_up>`, in backticks.
+
+    cut at the first type, `AD-Q5_K-IQ4_XS` and `AD-Q5_K-Q4_K` were both
+    `AD-Q5_K`, so minicpm-v 4.7's curve had two pairs of points with one name
+    and the page drew each against the other's bpw.
+    """
+    mod = load_script_with_research("fetch_quant_sweeps", "fetch-quant-sweeps")
+    tables = mod.rows_of("\n".join([
+        "| File | Size | KL divergence | top-1 |",
+        "|---|---:|---:|---:|",
+        "| `AD-Q6_K` | 29.1 GB | 0.00605 | 97.18% |",
+        "| `AD-Q5_K-Q4_K` | 22.1 GB | 0.01501 | 95.47% |",
+        "| `AD-Q5_K-IQ4_XS` | 21.5 GB | 0.01584 | 95.41% |"]))
+    points, _, _ = mod.sweep_from(tables[0], 35)
+    eq([p[2] for p in points], ["AD-Q5_K-IQ4_XS", "AD-Q5_K-Q4_K", "AD-Q6_K"],
+       "each point wears its whole tag: %r" % points)
 
 
 @test
