@@ -1106,6 +1106,9 @@ const COLUMNS = [
   {k: 'repo', t: 'repo', num: false, get: m => m.repo,
    help: 'the huggingface repo. every join in this registry is keyed on it',
    cell: m => `<td class="dim">${esc(m.repo)}</td>`},
+  {k: 'updated', t: 'updated', num: false, get: m => m.updated || '',
+   help: 'the newest day the captures hold for this model: the last change to its weights or to a gguf repo carried here, or the day its assessment was written. not when the page was built',
+   cell: m => `<td class="dim">${m.updated || '-'}</td>`},
 ];
 
 // the tier a licence nobody has classified lands in. spelled in

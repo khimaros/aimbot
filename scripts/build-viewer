@@ -1421,6 +1421,7 @@ def build_model(repo, model, ctx):
         # and neither is a function of anything a reader sets. what the page
         # owns is the arithmetic that moves when they move a slider
         "license": license_of(repo, ctx["cards"], ctx["licenses"]),
+        "updated": updated_on(repo, model, card, use, ctx["hub_days"]),
     }
     return rec
 
@@ -1437,6 +1438,28 @@ def facet_meta(models):
             for drop in ("label", "group", "unit"):
                 f.pop(drop, None)
     return meta
+
+
+def hub_days(catalog):
+    """{repo: day} of each repo's last change on the hub, where the catalog saw one."""
+    rows = list(catalog.get("trending") or [])
+    for listed in (catalog.get("authors") or {}).values():
+        rows += listed
+    return {r["id"]: r["lastModified"][:10] for r in rows if r.get("lastModified")}
+
+
+def updated_on(repo, model, card, use, days):
+    """The newest day any capture holds for this model, or None.
+
+    A capture is content-addressed and records no fetch time, so this is read
+    off what was captured rather than off when: the hub's last change to the
+    weights or to a gguf repo carried here, and the day the judgement was
+    written. A build on another day says the same thing.
+    """
+    seen = [days.get(r) for r in [repo] + rungs.repo_names(model)]
+    seen.append(((card.get("hub") or {}).get("lastModified") or "")[:10])
+    seen.append((use.get("assessed") or {}).get("assessed_on"))
+    return max([d for d in seen if d], default=None)
 
 
 def provenance():
@@ -1467,6 +1490,7 @@ def build():
            "probes": load_json("template-probes"),
            "usecase": load_json("usecase"), "cards": load_json("model-cards"),
            "known_quants": set(support.get("quants") or []),
+           "hub_days": hub_days(load_json("hf-catalog")),
            "licenses": license_table(),
            "lines": registry_lines(reg_path)}
     registry = load_yaml(reg_path).get("models") or {}
@@ -1519,6 +1543,8 @@ def build():
         # copy the page could disagree with
         "licenses": ctx["licenses"]["tiers"],
         "provenance": provenance(),
+        # the newest of the models' own days, which is what the top bar prints
+        "updated": max([m["updated"] for m in models if m.get("updated")], default=None),
         "models": models,
     }
 

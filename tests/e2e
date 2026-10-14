@@ -2114,6 +2114,33 @@ test('the diarization roster says which weights are a whole diarizer', () => {
      'and it claims no shape: a speaker timeline is not text out');
 });
 
+test('the page says when it last changed, and so does every model', () => {
+  RESET();
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  ok(DAY.test(D.updated), 'the payload carries a day: ' + D.updated);
+  const dated = D.models.filter(m => m.updated);
+  ok(dated.length > D.models.length * 0.9, 'nearly every model has one ('
+     + dated.length + ' of ' + D.models.length + ')');
+  dated.forEach(m => ok(DAY.test(m.updated) && m.updated <= D.updated,
+    m.short + ': ' + m.updated + ' is a day no later than the page\'s'));
+  ok(dated.some(m => m.updated === D.updated), 'the page\'s day is some model\'s');
+  // never earlier than the judgement written about it, which is one of the
+  // dates it is taken from
+  dated.forEach(m => (m.assessed || {}).assessed_on
+    && ok(m.updated >= m.assessed.assessed_on, m.short + ' predates its own assessment'));
+
+  eq(html('#updated'), ' (updated ' + D.updated + ')', 'the top bar says it');
+  const flash = model('qwen3.8 flash next');
+  ok(tabOverview(flash).includes(flash.updated), 'and the detail page says the model\'s');
+
+  // a column a reader can sort by, off until asked for so MODELS.md does not move
+  ok(COLUMNS.some(c => c.k === 'updated'), 'there is a column');
+  ok(DEFAULT_HIDDEN.includes('updated'), 'and it starts hidden');
+  hidden.delete('updated');
+  drawTable();
+  ok(html('#rows').includes(flash.updated), 'shown, it prints the day');
+});
+
 test('boots against the real data.json and draws every row', () => {
   eq(D.models.length, REGISTRY_MODELS, 'models in the payload');
   const rows = (html('#rows').match(/<tr data-repo=/g) || []).length;

@@ -274,7 +274,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
 </style>
 <main>
   <header>
-    <h1>aimbot <span>&middot; model registry</span></h1>
+    <h1>aimbot <span>&middot; model registry<span id="updated"></span></span></h1>
     <nav id="nav"></nav>
   </header>
 
@@ -1335,6 +1335,7 @@ function tabOverview(m) {
           ['downloads', hub.downloads ? fmt.format(hub.downloads) : ''],
           ['likes', hub.likes],
           ['first published', (hub.createdAt || '').slice(0, 10)],
+          ['updated', m.updated],
           ['modalities', esc((m.modalities.input || []).join(',') + ' -> ' + (m.modalities.output || []).join(','))],
           // the speakers the file being read ships. per QUANT, so this follows
           // the row you clicked: two conversions of one checkpoint answer
@@ -2626,6 +2627,7 @@ const turnWord = v => !v ? '' : `<span class="${
 // --- wiring ------------------------------------------------------------------
 
 function drawChrome() {
+  document.querySelector('#updated').innerHTML = D.updated ? ` (updated ${D.updated})` : '';
   document.querySelector('#nav').innerHTML = '<a href="#methodology" id="doc-link">methodology</a>'
     + [
     ['the repo', D.repo_url],
