@@ -1067,7 +1067,8 @@ models:
       note: >-
         182 of 231 (0.788) on jevbench's public items and 0.622 on the hard tier,
         read through its own chat template with no debiasing -- verdict's
-        `eval/results/jevbench/qwen3.5-4b_Q8_0`, measured on kairos 2026-09-30
+        `eval/results/jevbench/qwen3.5-4b_Q8_0` {url@https://github.com/khimaros/verdict},
+        measured on kairos 2026-09-30
         as `qwen3.5-4b:Q8_0`. over the 0.75 overall and 0.55 hard bar a text
         model has to clear to count as a decision model here
   # CARRIED AS A BASE, for the same reason qwen3 8b beside it is. this is the
@@ -1082,12 +1083,13 @@ models:
       match: qwen\s*-?3\.5[\s-]*\b4b[\s-]*base\b
     notes: >-
       the qwen3.5 4b pretrain: same 32 layers, same 8-fulls-24-linear attention
-      geometry and the same 262144 context as the qwen3.5-4b above it, with no
-      post-training under it. it is here as a base rather than as a candidate --
+      geometry and the same 262144 context as the qwen3.5-4b above it {card}, with
+      no post-training under it. it is here as a base rather than as a candidate --
       nobody should serve a raw pretrain off this roster today -- and it is the
       base `Mapika/decider-4b` names, the way qwen3 8b below is there for ternary
       bonsai. the hub calls it image-text-to-text and mradermacher's conversion
-      agrees, but the tower ships in a separate `mmproj-Q8_0` file: every rung of
+      agrees, but the tower ships in a separate `mmproj-Q8_0` file
+      {card@mradermacher/Qwen3.5-4B-Base-GGUF}: every rung of
       the main ladder is text weights alone, which is why its `modalities` are
       checked against a config that carries a vision block and not against a file
       a consumer would have to pair up.
@@ -1097,7 +1099,7 @@ models:
         # keyed by filename for the same reason the decider's file is
         Qwen3.5-4B-Base.Q8_0.gguf:
           quant: Q8_0
-          note: the static ladder. there is no unsloth repo and no MTP build of a
+          note: the static ladder {card}. there is no unsloth repo and no MTP build of a
             pretrain, so no UD rungs and no drafter -- and a base model has nothing to
             draft, since nothing here scores one
     runtime:
@@ -1308,10 +1310,10 @@ models:
       temperature:
         overall: 1.08
       note: >-
-        the card's prompt is the plain `Context:` layout with an `Answer k: (` slot, and
-        the base repo's `decider_config.json` gives 1.08 and no per-type temperatures. that
+        the card's prompt is the plain `Context:` layout with an `Answer k: (` slot {card},
+        and the base repo's `decider_config.json` gives 1.08 and no per-type temperatures. that
         config also says `schema_first_trained`: training mixed both orders, and decider's
-        own server stays state-first unless a config asks for `schema_first`, so the plain
+        own server {url@https://github.com/Mapika/decider} stays state-first unless a config asks for `schema_first`, so the plain
         layout is still the one it is served in
     turns:
       source: mradermacher/decider-35b-a3b-GGUF
@@ -1372,10 +1374,11 @@ models:
       source: hand
       temperature:
         overall: 1.0
-      note: stock llama.cpp loads the gguf directly; the author's fork adds the
-        `/v1/systemone` endpoint and shared-prefix branching over the same weights.
+      note: stock llama.cpp loads the gguf directly; the author's fork serves
+        `/v1/systemone` with shared-prefix branching over the same weights {card}.
         the layout keeps the gemma chat template and fills each turn with winnow's
         own JSON-quoted wording, per winnow-inference's `native/protocol.h` at 77d1458
+        {url@https://github.com/EldanRing/winnow-inference/blob/77d1458/native/protocol.h}
   akhilaaa3/Jev-Omni:
     kind: decision
     name:
@@ -1427,8 +1430,9 @@ models:
           states: last
       note: the 256-way head reads one vector, the last token's unnormalized hidden
         state. the author's `jev_omni_gguf_decide.py` serves the gguf with `--embedding
-        --pooling none --embd-normalize -1` and takes the last row itself, which is
-        the author's launch and more than the head requires
+        --pooling none --embd-normalize -1` and takes the last row itself
+        {card@ngquocvinh/Jev-Omni-GGUF}, which is the author's launch and more than
+        the head requires
   alibiserikbay/JevK5:
     kind: decision
     name:
@@ -1475,7 +1479,8 @@ models:
         overall: 1.532
         knockout: 0.77
       note: the one-pass JSON prompt comes from SemIf (SemIf-OpenJev's `core.py`
-        `direct_messages`) and is read off `/completion` token probabilities; these
+        `direct_messages`) and is read off `/completion` token probabilities
+        {card@alibiserikbay/JevK5-GGUF}; these
         are the v0.2 file's temperatures, and `knockout` applies only to questions
         with more than 16 options
   StandardThinking/StandardOne-8B:
@@ -1518,15 +1523,15 @@ models:
         noul: 0.85
         score: 0.7
       note: >-
-        the card's recommended `native` wording from `jev-adapter` (`State:` /
+        the card's `native` wording from `jev-adapter` (`State:` /
         `Question:` / `Options:` headers, options as `A. name: description`) inside
-        the chat template with no system turn
+        the chat template with no system turn {card}
   # the head is a network of its own rather than a matrix: two evidence-routing
   # layers and four decoder layers over EVERY position's final hidden state, plus
   # the backbone's output embedding rows for each option's tokens. jev-omni's
   # head is one product a caller applies to an embedding; this one is a second
-  # forward pass. three of the four gguf repos are the backbone without it;
-  # ggml-org's conversion writes it into the file and says so on its own block
+  # forward pass. two of the four gguf repos are the backbone without it;
+  # ggml-org's and bartowski's b11430 conversions write it into the file
   Cloudflare/clef:
     kind: decision
     name:
@@ -1544,7 +1549,8 @@ models:
       script on one H200. the head ships as `joint_head.safetensors` in the base
       repo, so a gguf converted before llama.cpp knew the head is the backbone
       alone, and the card describes no way to read a decision out of text it
-      generates. ggml-org's is the exception, and is read by the server.
+      generates. ggml-org's and bartowski's declare the `clef` architecture with the
+      head inside {card@bartowski/Cloudflare_clef-GGUF}, and are read by the server.
     repos:
     - repo: abenzerps/Clef-GGUF
       files:
@@ -1604,10 +1610,11 @@ models:
           revision: 2f3de3dd85f379784083b0814d997ab627200f0c
           file: model-00001-of-00012.safetensors
           tensor: lm_head.weight
-      note: the head needs the final hidden state of every position AND the
+      note: the head needs the final hidden state of every position {card} AND the
         backbone's output embedding rows, which an embedding server does not hand
         out, so verdict range-reads them from the bf16 `lm_head.weight`. verdict's
-        port of the head is the one caller for a backbone gguf, the same code that reads
+        port of the head {url@https://github.com/khimaros/verdict} is the one caller
+        for a backbone gguf, the same code that reads
         clef-flash, and it has NOT been checked against the bf16 backbone
     turns:
       source: abenzerps/Clef-GGUF
@@ -1630,18 +1637,17 @@ models:
       clef's smaller sibling on qwen3.5 9b, read the same way: the same
       `joint_schema_model.py`, and a joint schema head of the same shape that
       "scores all options of all questions jointly" {card}. the head is
-      `joint_head.safetensors` in the base repo and in neither backbone gguf, so
-      what is said of clef's ggufs holds for these, ggml-org's included.
+      `joint_head.safetensors` in the base repo, and what is said of clef's ggufs
+      holds for these: prithivMLmods' is the backbone alone, while ggml-org's and
+      bartowski's carry the head and are served as a decision model.
     repos:
     - repo: bartowski/Cloudflare_clef-flash-GGUF
       files:
         Q8_0:
-          note: the rung to take at {gib}, for the reason clef's is. every rung below it was
-            built with an imatrix "rendered through this model's own chat template"
-            {card}, and the vendor's script never sends that template -- it writes its own
-            `STATE:` / `SCHEMA FIELDS:` prompt -- so the importance weights were measured on
-            activations the decision readout does not produce. Q8_0 is the one rung where
-            that cannot matter much
+          note: the rung to take at {gib}, for the reason clef's is. the decision head "is
+            stored at Q8_0 in every quantized file here" {card}, and every rung is a static
+            quant, since an importance matrix "cannot be computed for this model" {card}, so
+            the rungs below Q8_0 quantize the backbone with no calibration at all
     - prithivMLmods/clef-flash-GGUF
     - repo: ggml-org/Clef-Flash-GGUF
       readout:
@@ -1689,11 +1695,11 @@ models:
           revision: 17f0b0ad64efb65d273590632833508766b2aae6
           file: model-00001-of-00004.safetensors
           tensor: lm_head.weight
-      note: the same head as clef's at hidden size 4096, with the same two needs --
+      note: the same head as clef's {card} at hidden size 4096, with the same two needs --
         every position's final hidden state and the backbone's output embedding
         rows, which verdict range-reads from the bf16 `lm_head.weight` because the
-        gguf's copy is quantised. verdict's numpy port is the one caller for a
-        gguf; it matches the author's torch head on a fixture and has NOT been
+        gguf's copy is quantised. verdict's numpy port {url@https://github.com/khimaros/verdict}
+        is the one caller for a backbone gguf; it matches the author's torch head on a fixture and has NOT been
         checked against the bf16 backbone on real records
     turns:
       source: bartowski/Cloudflare_clef-flash-GGUF
@@ -2033,7 +2039,8 @@ models:
       note: >-
         182 of 231 (0.788) on jevbench's public items and 0.631 on the hard tier,
         read through its own chat template with no debiasing -- verdict's
-        `eval/results/jevbench/qwen3.5-9b_Q8_0`, measured on kairos 2026-09-30
+        `eval/results/jevbench/qwen3.5-9b_Q8_0` {url@https://github.com/khimaros/verdict},
+        measured on kairos 2026-09-30
         as `qwen3.5-9b:Q8_0`. over the 0.75 overall and 0.55 hard bar a text
         model has to clear to count as a decision model here
   Qwen/Qwen3.6-27B:
@@ -2459,7 +2466,8 @@ models:
       n_max: 3
       since: b11330
       note: the draft length llama.cpp PR 29761 was measured at, 1.55x decode at 0.640
-        acceptance over 24 speed-bench prompts on a dgx spark at IQ4_XS. the head is the
+        acceptance over 24 speed-bench prompts on a dgx spark at IQ4_XS
+        {url@https://github.com/ggml-org/llama.cpp/pull/29761}. the head is the
         self-contained `mtp-` file at the root of the unsloth repo. the `shared-` files under
         `MTP/` carry no token embedding, which the mainline loader requires, and a prompt
         with an image drafts from b11588
@@ -2652,8 +2660,10 @@ models:
       and none was re-run on these weights. the samplers are qwen's for the same
       reason. the architecture, the 51b n-gram table and the chat template are
       untouched, the last byte for byte, which is why the turn handling here differs
-      from the base entry, pinned to unsloth's rewrite of it. no drafter is declared,
-      for the reason the base entry gives: mainline has no mtp graph for qwen4exp.
+      from the base entry, pinned to unsloth's rewrite of it. no drafter is declared:
+      mainline drafts the base model with mtp, and this repo publishes an `mtp/` head and
+      `MTP/` builds of its own, but nothing here has checked those against the loader the
+      base entry's head was measured on.
     repos:
     - repo: spiritfather/Qwen3.8-Flash-Next-heretic-2-GGUF
       files:
@@ -2917,6 +2927,7 @@ models:
         top_k: 20
         note: the generation config the weights ship, which sits under `BF16/` where the
           resolver does not look, and the set the card's speed runs name
+          {card@nerkyor/Qwen3.8-27B-Coder390-EfficientThink-Opus5.5-GPT6Astra-Grok4.7-DSV4Pro-K3-SFT-RLOO-GGUF-NInfer}
         tuned: [instruct, chat, reason, code]
     modalities:
       input:
@@ -3428,10 +3439,9 @@ models:
       tensor table read out of the two ggufs is right, and the notes on the rungs quote
       it.
 
-      the scores are the vendor's and they are agentic ones, deepswe and terminal
-      bench and osworld, because nothing on this roster has scored a model that is
-      days old. ggml-org converted it the next day and is the only publisher of a
-      gguf, which is why the two rungs below are its two files.
+      the card's scores are agentic ones, deepswe and terminal bench and osworld,
+      and gbench has since played it as well. ggml-org converted it the next day,
+      and AesSedai and TrevorJS have published ladders of their own since.
     repos:
     - repo: ggml-org/MiMo-V2.6-Flash-RL-GGUF
       files:
@@ -3791,9 +3801,10 @@ models:
     - repo: peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF-MTP
       files:
         UD-Q4_K_XL:
-          note: 'tiel-coder is not a fine-tune but these weights: "Ornith-1.5-35B-A3B re-quantized
-            dynamically with our own imatrix and carrying the Sharp chat template inside the GGUF"
-            {card@peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF-MTP}. the template differs from the
+          note: 'tiel-coder is not a fine-tune but these weights requantized against the publisher''s
+            own imatrix, the tiers cut with "per-tensor Dynamic recipes layered on top of this matrix,
+            and they carry the Sharp template" {card@peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF-MTP}
+            inside the gguf. the template differs from the
             vendor''s, so the turns derived for this entry describe the vendor file and not this
             one. every tier carries a trained mtp head; {gib} is the tier the card benchmarks'
     runtime:
@@ -4013,7 +4024,8 @@ models:
       files:
         DeepSeek-V4-Flash-0731-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-imatrix.gguf:
           quant: IQ2_XXS-mixed
-          note: one {gib} file tuned for a 128gb box. the filename is the recipe -- routed
+          note: one {gib} file built with the dwarfstar (`ds4`) toolchain, and the card says it
+            runs only under that runtime. the filename is the recipe -- routed
             experts at iq2_xxs with their down projections at q2_k, and attention, shared
             experts and the output kept at q8 {card@Rednalreden/DeepSeek-V4-Flash-0731-dwarfstar-q2-gguf}
     runtime:
@@ -4677,9 +4689,10 @@ models:
     decides:
       source: verdict
       note: >-
-        200 of 231 (0.866) on jevbench's public items and 0.757 on the hard tier,
+        201 of 231 (0.870) on jevbench's public items and 0.766 on the hard tier,
         read through its own chat template with no debiasing -- verdict's
-        `eval/results/jevbench/gemma-4-12b-it_Q8_0`, measured on kairos
+        `eval/results/jevbench-single-bos/gemma-4-12b-it_Q8_0`
+        {url@https://github.com/khimaros/verdict}, measured on kairos
         2026-09-30 as `gemma-4-12b-it:Q8_0`. over the 0.75 overall and 0.55 hard
         bar a text model has to clear to count as a decision model here
   google/gemma-4-26B-A4B-it:
@@ -4999,7 +5012,8 @@ models:
       note: >-
         180 of 231 (0.779) on jevbench's public items and 0.586 on the hard tier,
         read through its own chat template with no debiasing -- verdict's
-        `eval/results/jevbench/gemma-4-e4b-it_Q8_0`, measured on kairos
+        `eval/results/jevbench-single-bos/gemma-4-e4b-it_Q8_0`
+        {url@https://github.com/khimaros/verdict}, measured on kairos
         2026-09-30 as `gemma-4-e4b-it:Q8_0`. over the 0.75 overall and 0.55
         hard bar a text model has to clear to count as a decision model here
   hexgrad/Kokoro-82M:
@@ -7144,8 +7158,8 @@ models:
     - repo: stepfun-ai/Step-3.7-Flash-GGUF
       files:
         IQ4_XS:
-          note: stepfun's own conversion at {gib}, the largest of its rungs that fits a 128gb box
-            beside a cache; the repo also ships an mtp head and a vision projector {card@stepfun-ai/Step-3.7-Flash-GGUF}
+          note: stepfun's own conversion at {gib}, imatrix-calibrated and the step under Q4_K_S
+            at {gib@Q4_K_S}; the repo also ships an mtp head and a vision projector {card@stepfun-ai/Step-3.7-Flash-GGUF}
     runtime:
       arch: step35
       mainline: true
@@ -8433,7 +8447,7 @@ models:
       series: image and video reach the backbone through a vision tower unsloth ships as a
       {gib@unsloth/GLM-5.3-Flash-GGUF:mmproj:F16} mmproj beside the rungs. the shape is what the architecture gap is about -- 11
       of its 45 layers are full attention and the other 34 are linear, which is what makes a
-      1m context affordable and is also why no mainline llama.cpp loads it.
+      1m context affordable and is the `glm5-next` architecture mainline llama.cpp had to add.
 
       `reasoning_effort` reads as two levels rather than the card's three. the template branches
       on `low` and `high` and folds every other value, `max` included, into one render, so `max`
@@ -8446,20 +8460,19 @@ models:
         UD-Q2_K_XL:
           note: '{gib} of weights, plus the mmproj for the vision half. the ladder bottoms out at
             {gib@UD-IQ1_S}, UD-IQ1_M sits at {gib@UD-IQ1_M}, and the next rung up is
-            {gib@UD-Q3_K_XL}. the tag is mostly IQ2_XS and IQ3_XXS, with Q2_K at 2%. no released
-            llama.cpp loads it: the card says to use its llama.cpp PR {card} or unsloth''s desktop
-            app'
+            {gib@UD-Q3_K_XL}. the tag is mostly IQ2_XS and IQ3_XXS, with Q2_K at 2%. the card
+            predates mainline carrying the architecture and still points at its llama.cpp PR
+            {card} or unsloth''s desktop app'
     - peasantsmith/GLM-5.3-Flash-Maya-GGUF
     runtime:
       arch: glm5-next
       mainline: true
       since: b11279
       merged: '2026-09-30'
-      tracking: https://github.com/ggml-org/llama.cpp/pull/27754
-      note: unmerged, and three PRs are open for the same architecture. 27754 is the one tracked because
-        it is the one unsloth's card tells a reader to build to run these files; 27773 is the one
-        under review, and mtp is a fourth PR behind both. the header says `glm5next` and means it
-        -- this is not a converter reusing an older arch string
+      note: three PRs implemented the architecture before mainline took one; unsloth's card still
+        names 27754 {card@unsloth/GLM-5.3-Flash-GGUF}, the one it told a reader to build, and mtp
+        was a fourth PR behind them. the
+        header says `glm5next` and means it -- this is not a converter reusing an older arch string
     ids:
       aa: glm-5-3-flash
       gbench: z.ai/glm-5.3-flash
@@ -11746,10 +11759,11 @@ models:
       match: multi[\s-]*talker[\s-]*parakeet
     notes: >-
       streaming transcription that follows overlapping speakers by injecting a
-      speaker kernel at the pre-encode layer, which "requires deploying one
-      model instance per speaker" {card}. handy-computer's ggufs are bundles
-      that carry nvidia's 4-speaker streaming sortformer beside it, so one file
-      diarizes and transcribes.
+      speaker kernel at the pre-encode layer, so "you need to deploy one model
+      instance per speaker" {card}. handy-computer's bundle ggufs carry nvidia's
+      4-speaker streaming sortformer beside it
+      {card@handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf}, so one
+      file diarizes and transcribes.
     repos:
     - repo: handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf
       role: model
@@ -11899,10 +11913,10 @@ models:
       short: granite-speech-3.3
       match: granite[\s-]*speech[\s-]*3\.3
     notes: >-
-      the 3.3 generation of ibm's speech line, and the oldest of the four granite
+      the 3.3 generation of ibm's speech line, and the oldest of the granite
       transcribers crispasr carries. the card {card} documents only the
       transformers path, "supported natively in `transformers` from the `main`
-      branch". the 4.1 entries below supersede it;
+      branch". the 4.1 entries below are its successors;
       it is here because the backend is distinct and a roster that lists what
       runs should say so.
     crispasr:

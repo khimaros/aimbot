@@ -635,6 +635,37 @@ def normalize(text, repo, quant, data, model=None, entry=None):
     return re.sub(r"[ \t]{2,}", " ", folded).strip(), why
 
 
+# a sentence saying the stock llama.cpp cannot load a model. its one right
+# answer is the `runtime:` block, which resolve-runtime re-derives every sweep
+# from llama.cpp's own history -- and prose is not re-derived, so once mainline
+# merged an architecture the sentence was simply wrong and went on being read
+NOT_MAINLINE = re.compile(
+    r"no (?:released |mainline |stock )?llama\.cpp(?: release)? (?:loads|can load|carries)"
+    r"|not (?:in )?mainline"
+    r"|mainline (?:cannot|does not|carries no|has no) (?:load|such|entry|[a-z0-9_-]+ "
+    r"architecture)|until (?:an |the )?(?:architecture )?pr merges", re.I)
+
+
+def runtime_contradiction(text, entry):
+    """[why] -- a claim that mainline cannot load a model its runtime says it does."""
+    rt = (entry or {}).get("runtime") or {}
+    if not rt.get("mainline"):
+        return []
+    hit = NOT_MAINLINE.search(text or "")
+    if not hit:
+        return []
+    # a claim naming some OTHER architecture is about that one: deepseek v4.1
+    # flash's packs declare `deepseek41`, which mainline truly lacks, while the
+    # entry's own `deepseek4` loads. the claim is about the architecture named
+    # nearest before it in its sentence, whatever the sentence goes on to name
+    start = text.rfind(". ", 0, hit.start()) + 1
+    named = re.findall(r"`([a-z0-9_.-]+)`", text[start:hit.start()])
+    if named and named[-1] != rt.get("arch"):
+        return []
+    return ["says %r, and the runtime block has mainline loading `%s` since %s"
+            % (hit.group().strip(), rt.get("arch"), rt.get("since") or "a release")]
+
+
 def check_structure(text, repo, quant, data, pin=None, model=None, entry=None):
     """[why] -- claims about the pin, against the pin.
 
@@ -646,8 +677,8 @@ def check_structure(text, repo, quant, data, pin=None, model=None, entry=None):
     is where the claim was found: FireRedPunc says "the pin names its file" in
     its `notes:`, and the file it means is a `repos:` key two fields down.
     """
-    out = []
     text = text or ""
+    out = runtime_contradiction(text, entry)
     if NAMES_FILE.search(text):
         named = [pin.get("file")] if pin else [
             k for _, k, _ in rungs.files(entry or {}) if rungs.is_filename(k)]

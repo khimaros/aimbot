@@ -4651,6 +4651,66 @@ def every_collector_starts_from_the_capture_it_has():
            "%s writes through capture.write, not a bare json.dump" % name)
 
 
+@test
+def prose_saying_mainline_cannot_load_a_model_it_can_is_caught():
+    """GLM-5.3-Flash's notes, rung note, runtime note and verdict all said no
+    llama.cpp release loads it, three weeks after the runtime block -- derived
+    every sweep -- recorded mainline loading it since b11279. K2 Horizon's
+    verdicts said the same a sweep after its merge. Nothing compared the two,
+    so the prose went on saying it. A claim the runtime block contradicts is
+    flagged on every surface that makes one; one it agrees with is not."""
+    sys.path.insert(0, RESEARCH)
+    import notes
+    import prose
+    merged = {"runtime": {"arch": "glm5-next", "mainline": True, "since": "b11279"}}
+    pending = {"runtime": {"arch": "deepseek41", "mainline": False}}
+    said = "the first natively multimodal glm, and no released llama.cpp loads it."
+    eq(bool(notes.runtime_contradiction(said, merged)), True, "a stale claim is caught")
+    eq(notes.runtime_contradiction(said, pending), [], "a true one is not")
+    eq(notes.runtime_contradiction("loads on mainline since b11279.", merged), [],
+       "and neither is a sentence that agrees with the runtime")
+    eq(notes.runtime_contradiction(
+        "four packs declare `deepseek41`, which mainline has no entry for at all.",
+        {"runtime": {"arch": "deepseek4", "mainline": True, "since": "b9840"}}), [],
+       "nor one about a different architecture than the one the runtime names")
+    eq(notes.runtime_contradiction(
+        "four of the five packs declare `deepseek41`, which mainline has no entry for at "
+        "all -- and the fifth declares `deepseek4`, which mainline has carried since b9840.",
+        {"runtime": {"arch": "deepseek4", "mainline": True, "since": "b9840"}}), [],
+       "even when the same sentence goes on to name the one that loads")
+    block = prose.Block("usecase", "usecase:fix/Glm", {"one_liner": said}, "fix/Glm", None)
+    found = prose.check(block, models={"fix/Glm": {"facets": {}}},
+                        registry={"fix/Glm": merged})
+    eq(any("mainline" in why for _, why in found), True,
+       "a verdict is held to the runtime too: %r" % found)
+
+
+@test
+def a_verdict_is_held_to_the_reader_box_rule_too():
+    """GLM-5.3-Flash's verdict said UD-Q2_K_XL "is 101.3 gib of weights against
+    a 105 gib budget, so ... the page runs UD-IQ1_M instead": a size typed from
+    one capture and a budget that is one reader's slider setting. Registry notes
+    were refused both; verdicts were checked for neither."""
+    sys.path.insert(0, RESEARCH)
+    import prose
+    said = "UD-Q2_K_XL is 101.3 gib of weights against a 105 gib budget."
+    block = prose.Block("usecase", "usecase:fix/Glm", {"notes": said}, "fix/Glm", None)
+    found = [why for _, why in prose.check(block, models={"fix/Glm": {"facets": {}}},
+                                           registry={"fix/Glm": {}})]
+    eq(any("types" in w and "gib" in w for w in found), True, "the typed size: %r" % found)
+    boxed = prose.Block("usecase", "usecase:fix/Glm",
+                        {"one_liner": "the strongest model a 128gb box can hold."}, "fix/Glm", None)
+    found = [why for _, why in prose.check(boxed, models={"fix/Glm": {"facets": {}}},
+                                           registry={"fix/Glm": {}})]
+    eq(any("reader's box" in w for w in found), True, "and a typed box: %r" % found)
+    # the words alone are advice rather than a measurement, and go stale with nothing
+    plain = prose.Block("usecase", "usecase:fix/Glm",
+                        {"use_for": "transcription on a tight memory budget"}, "fix/Glm", None)
+    found = [why for _, why in prose.check(plain, models={"fix/Glm": {"facets": {}}},
+                                           registry={"fix/Glm": {}})]
+    eq([w for w in found if "reader's box" in w], [], "a verdict may still say budget")
+
+
 RENAMED_REGISTRY = """version: 1
 models:
   Fixture/Widget-ASR-0.6B:

@@ -234,12 +234,21 @@ def _walk_notes(node, repo, path, out, subject=None, entry=None):
             _walk_notes(item, repo, where, out, at, entry)
 
 
+_REGISTRY = {}
+
+
+def registry_models():
+    """{repo: entry} off the registry, read once per run."""
+    if "models" not in _REGISTRY:
+        import yaml
+        with open(REGISTRY) as f:
+            _REGISTRY["models"] = (yaml.safe_load(f) or {}).get("models") or {}
+    return _REGISTRY["models"]
+
+
 def _registry_blocks():
-    import yaml
-    with open(REGISTRY) as f:
-        models = (yaml.safe_load(f) or {}).get("models") or {}
     out = []
-    for repo, model in sorted(models.items()):
+    for repo, model in sorted(registry_models().items()):
         _walk_notes(model, repo, [], out, entry=model)
     return out
 
@@ -500,16 +509,47 @@ def facts_for(block, models=None):
     return ((models.get(block.grounded) or {}).get("facets")) or {}
 
 
-def check(block, models=None, note_data=None):
+def reader_box(text):
+    """[why] -- a typed file size, or a typed size of the reader's memory.
+
+    Half the rule registry notes are held to: a size typed from one capture goes
+    stale, and a box named in gb is one reader's slider. The bare words `fits`
+    and `budget` are not refused here as they are in a note, because a verdict
+    is advice -- "transcription on a tight memory budget" names no box and has
+    nothing to go stale.
+    """
+    import notes
+    out = []
+    bare = notes.REF.sub("", text or "")
+    typed = sorted({m.group().strip() for m in notes.TYPED.finditer(bare)})
+    if typed:
+        out.append("types %s instead of referencing it" % ", ".join(typed))
+    fits = re.search(notes.CAPACITY, bare, re.I)
+    if fits:
+        out.append("asserts %r, which is the reader's box rather than this file -- "
+                   "the page recomputes it from their own settings" % fits.group().strip())
+    return out
+
+
+def check(block, models=None, note_data=None, registry=None):
     """[(field, why)] for one block, on whichever vocabulary grounds it.
 
     The style checks run over every surface and the grounding checks run over
     the one that has a grounding. Which vocabulary applies is a property of the
-    SURFACE and never of who wrote the words.
+    SURFACE and never of who wrote the words. A verdict is held to its model's
+    registry entry as well as its facets, for the one claim both can make: GLM
+    5.3 Flash's said no llama.cpp loads it long after mainline did.
     """
     facts = facts_for(block, models)
     out = [(name, why) for name, text in sorted(block.fields.items())
            for why in check_text(text, facts)]
+    if block.surface == "usecase" and block.grounded:
+        import notes
+        if registry is None:
+            registry = registry_models()
+        entry = registry.get(block.grounded)
+        out += [(name, why) for name, text in sorted(block.fields.items())
+                for why in notes.runtime_contradiction(text, entry) + reader_box(text)]
     if block.surface == "registry-note":
         import notes
         data = note_data if note_data is not None else notes.load()
