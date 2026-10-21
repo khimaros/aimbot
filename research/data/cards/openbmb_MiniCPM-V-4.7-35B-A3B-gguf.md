@@ -1,12 +1,19 @@
 ---
 license: apache-2.0
 pipeline_tag: image-text-to-text
+library_name: llama.cpp
 tags:
+- gguf
+- llama.cpp
+- quantized
+- imatrix
+- dspark
+- speculative-decoding
+- moe
 - minicpm-v
 - multimodal
 - On-Device Model
 - lightweight
-library_name: transformers
 base_model: openbmb/MiniCPM-V-4.7-35B-A3B
 base_model_relation: quantized
 ---
@@ -16,12 +23,12 @@ base_model_relation: quantized
 
 # MiniCPM-V 4.7
 
-[On-device results](#on-device-capability-and-efficiency) · [Evaluation](#evaluation) · [Examples](#examples) · [Usage](#usages) · [Model weights](#model-weights)
+[GitHub](https://github.com/openbmb/MiniCPM-V) · [On-device results](#on-device-capability-and-efficiency) · [Evaluation](#evaluation) · [Examples](#examples) · [Usage](#usages) · [Model weights](#model-weights) · [DSpark-gguf](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-DSpark-gguf)
 
 **MiniCPM-V 4.7** is the latest model in the MiniCPM-V series, available in a **35B-A3B** variant, with **35B-A3B being the first MoE model in the MiniCPM-V series**. It builds on the family's single-image, multi-image, and video understanding capabilities, combining stronger foundation capabilities with efficient visual encoding and on-device inference. Notable features of MiniCPM-V 4.7 include:
 
 - 📱 **The First Open-Source MoE Model with Lossless, Smooth On-Device Inference.**
-  With our [**Lookahead Expert Scheduling (LES)**](https://github.com/tc-mb/llama.cpp-omni/blob/master/docs/les/lookahead-expert-scheduling.md) technique introduced alongside MiniCPM-V 4.7, combined with fine-grained layer-wise quantization and DSpark speculative sampling integration, MiniCPM-V 4.7 35B-A3B becomes the **first open-source MoE model to run smoothly on-device without compromising performance**, achieving a decoding speed of **13+ tokens/s on iPhone 17 Pro Max**.
+  With our [**Lookahead Expert Scheduling (LES)**](https://github.com/OpenBMB/llama.cpp-omni) technique introduced alongside MiniCPM-V 4.7, combined with fine-grained layer-wise quantization and DSpark speculative sampling integration, MiniCPM-V 4.7 35B-A3B becomes the **first open-source MoE model to run smoothly on-device without compromising performance**, achieving a decoding speed of **13+ tokens/s with just 3 GB of memory on iPhone 17 Pro Max**.
 - 🔥 **A New Pareto Frontier in Performance and Efficiency.**
   As model capabilities continue to advance, inference efficiency has become an important measure of a model's value. On resource-constrained devices, delivering the strongest possible capabilities within a limited resource budget calls for higher capability density. The **35B-A3B** variant of MiniCPM-V 4.7 advances the performance–efficiency Pareto frontier for MLLMs. In Instruct mode, 35B-A3B **achieves a higher overall score in less inference time than Qwen3.6 35B-A3B**.
 - 🚀 **Efficient Architecture.**
@@ -29,7 +36,7 @@ base_model_relation: quantized
 - 💻 **Broad Platform and Chip Support.**
   MiniCPM-V 4.7 supports **iOS, Android, and HarmonyOS**, together with open-source on-device deployment support. It also provides **day-0 support for chip platforms from Rockchip, Houmo, Intel, AMD, and Arm**, extending deployment options across mobile and local computing devices.
 - 🛠️ **Developer Friendly.**
-  MiniCPM-V 4.7 supports [inference frameworks](https://github.com/OpenBMB/MiniCPM-o/blob/main/docs/deployment_en.md#supported-inference-and-training-frameworks-and-api) including SGLang, vLLM, llama.cpp, and Ollama, along with [fine-tuning frameworks](https://github.com/OpenBMB/MiniCPM-o/blob/main/docs/deployment_en.md#supported-inference-and-training-frameworks-and-api) including SWIFT and LLaMA-Factory. It provides GGUF, BNB, AWQ, and GPTQ quantized variants and adds **FP8 quantization support**. We also release **Self-Replay Fine-Tuning**, a fine-tuning approach that helps developers extend model capabilities at low cost while reducing forgetting of existing capabilities, making further customization easier.
+  MiniCPM-V 4.7 supports [inference frameworks](https://github.com/OpenBMB/MiniCPM-o/blob/main/docs/deployment_en.md#supported-inference-and-training-frameworks-and-api) including SGLang, vLLM, llama.cpp, and Ollama, along with [fine-tuning frameworks](https://github.com/OpenBMB/MiniCPM-o/blob/main/docs/deployment_en.md#supported-inference-and-training-frameworks-and-api) including SWIFT and LLaMA-Factory. It provides GGUF, BNB, AWQ, and GPTQ quantized variants and adds **FP8 quantization support**. We also release [**Self-Replay Fine-Tuning (SRFT)**](https://openbmb.cn/en/blog/self-replay-fine-tuning), a fine-tuning approach that helps developers extend model capabilities at low cost while reducing forgetting of existing capabilities, making further customization easier.
 
 ## Get started
 
@@ -53,7 +60,7 @@ Another approach is to restrict the pool of available experts. For example, fixi
 
 MiniCPM-V 4.7 35B-A3B addresses this challenge through three complementary techniques:
 
-- [**Lookahead Expert Scheduling (LES)**](https://github.com/tc-mb/llama.cpp-omni/blob/master/docs/les/lookahead-expert-scheduling.md) uses cross-layer routing prediction to preload experts likely to be needed by the next layer. Among the experts selected by the actual router, it prioritizes those successfully prefetched and overlaps their computation with loading the remaining required experts. Predictions guide only prefetching and scheduling; computation still follows the model's original token-level routing, and required experts missed by the prediction are loaded and evaluated as usual.
+- [**Lookahead Expert Scheduling (LES)**](https://github.com/OpenBMB/llama.cpp-omni) uses cross-layer routing prediction to preload experts likely to be needed by the next layer. Among the experts selected by the actual router, it prioritizes those successfully prefetched and overlaps their computation with loading the remaining required experts. Predictions guide only prefetching and scheduling; computation still follows the model's original token-level routing, and required experts missed by the prediction are loaded and evaluated as usual.
 - **Fine-grained layer-wise quantization** reduces the storage footprint and memory traffic of expert weights while preserving model capability, making expert loading better suited to on-device memory and bandwidth constraints.
 - **DSpark speculative sampling integration** incorporates speculative sampling into the on-device inference process, working with expert scheduling and quantization to improve decoding efficiency.
 
@@ -173,7 +180,19 @@ inputs = processor.apply_chat_template(
     enable_thinking=False,
 ).to(model.device)
 
-generated_ids = model.generate(**inputs, downsample_mode=downsample_mode, max_new_tokens=512)
+generated_ids = model.generate(
+    **inputs,
+    downsample_mode=downsample_mode,
+    max_new_tokens=512,
+    # recommended instruct-mode sampling parameters
+    do_sample=True,
+    temperature=0.7,
+    top_p=0.95,
+    top_k=100,
+    min_p=0.0,
+    presence_penalty=0,
+    repetition_penalty=1.03,
+)
 generated_ids_trimmed = [
     out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
 ]
@@ -209,7 +228,19 @@ inputs = processor.apply_chat_template(
     enable_thinking=False,
 ).to(model.device)
 
-generated_ids = model.generate(**inputs, downsample_mode=downsample_mode, max_new_tokens=2048)
+generated_ids = model.generate(
+    **inputs,
+    downsample_mode=downsample_mode,
+    max_new_tokens=2048,
+    # recommended instruct-mode sampling parameters
+    do_sample=True,
+    temperature=0.7,
+    top_p=0.95,
+    top_k=100,
+    min_p=0.0,
+    presence_penalty=0,
+    repetition_penalty=1.03,
+)
 generated_ids_trimmed = [
     out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
 ]
@@ -289,6 +320,10 @@ curl -s http://localhost:8000/v1/chat/completions -H 'Content-Type: application/
 }'
 ```
 
+##### Recommended Sampling Parameters <!-- omit in toc -->
+
+We recommend using the following set of sampling parameters for generation in instruct mode: `temperature=0.7`, `top_p=0.95`, `top_k=100`, `min_p=0.0`, `presence_penalty=0`, `repetition_penalty=1.03`.
+
 </details>
 
 #### Speculative decoding (DSpark) <!-- omit in toc -->
@@ -301,7 +336,7 @@ Speculative decoding (DSpark): we also release [MiniCPM-V-4.7-35B-A3B-DSpark](ht
 
 #### Inference with OpenVINO™
 
-[OpenVINO™](https://docs.openvino.ai) is an open-source toolkit for optimizing and deploying AI inference on Intel CPU/GPU/NPU platforms. OpenVINO provides day-0 support for MiniCPM-V-4.7 on Intel platforms with high-performance inference. See the [OpenVINO™ Toolkit](https://github.com/openvinotoolkit) to get started. You can install and run the example with this notebook (link TBD).
+[OpenVINO™](https://docs.openvino.ai) is an open-source toolkit for optimizing and deploying AI inference on Intel CPU/GPU/NPU platforms. OpenVINO provides day-0 support for MiniCPM-V-4.7 on Intel platforms with high-performance inference. See the [OpenVINO™ Toolkit](https://github.com/openvinotoolkit) to get started. You can install and run the example with [this notebook](https://github.com/openvinotoolkit/openvino_notebooks/tree/latest/notebooks/minicpm-v-4.7).
 
 #### On-Device Deployment
 
@@ -337,24 +372,60 @@ For supported inference and training frameworks, see [Supported Inference and Tr
 
 We would like to thank the following projects:
 
-* [Qwen3.6](https://huggingface.co/collections/Qwen/qwen36) for providing the language backbone
+* [Qwen3.5](https://huggingface.co/collections/Qwen/qwen35) and [Qwen3.6](https://huggingface.co/collections/Qwen/qwen36) for providing the language backbone
 * [SigLIP2](https://github.com/google-research/big_vision/blob/main/big_vision/configs/proj/image_text/README_siglip2.md) for providing the vision understanding module
 * [Transformers](https://github.com/huggingface/transformers)
 
 </details>
 
-## Model Weights
+### Model Weights
 
-MiniCPM-V 4.7 is available in the following variants:
+MiniCPM-V 4.7 is available in **35B-A3B and 1B** variants. Each model is paired with its **DSpark speculative decoding heads**, available in **BF16 and GGUF**.
 
-| Model | Description | Download |
-|:---|:---|:---:|
-| MiniCPM-V 4.7 35B-A3B | The first open-source MoE model to run smoothly on-device without compromising performance, raising the bar for on-device performance. | [🤗](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B) &nbsp;&nbsp; [<img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" width="20px"></img>](https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B) |
-| MiniCPM-V 4.7 35B-A3B FP8 | FP8 quantized version with lower GPU memory usage. | [🤗](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-FP8) &nbsp;&nbsp; [<img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" width="20px"></img>](https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B-FP8) |
-| MiniCPM-V 4.7 35B-A3B int4 | int4 quantized version with lower GPU memory usage. | [🤗](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-int4) &nbsp;&nbsp; [<img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" width="20px"></img>](https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B-int4) |
-| MiniCPM-V 4.7 35B-A3B AWQ | AWQ (W4A16) quantized version with lower GPU memory usage. | [🤗](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-AWQ) &nbsp;&nbsp; [<img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" width="20px"></img>](https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B-AWQ) |
-| MiniCPM-V 4.7 35B-A3B GPTQ | GPTQ (W4A16) quantized version with lower GPU memory usage. | [🤗](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-GPTQ) &nbsp;&nbsp; [<img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" width="20px"></img>](https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B-GPTQ) |
-| MiniCPM-V 4.7 35B-A3B GGUF | GGUF version with lower memory usage for CPU inference. | [🤗](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-gguf) &nbsp;&nbsp; [<img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" width="20px"></img>](https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B-gguf) |
-| MiniCPM-V 4.7 35B-A3B DSpark | DSpark draft model for speculative decoding. | [🤗](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-DSpark) &nbsp;&nbsp; [<img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" width="20px"></img>](https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B-DSpark) |
+<table width="840" style="display:table;width:100%;max-width:840px;table-layout:fixed">
+  <thead>
+    <tr>
+      <th width="18%" align="left" style="width:18%">Model</th>
+      <th width="32%" align="left" style="width:32%">Description</th>
+      <th width="27%" align="left" style="width:27%">Model weights</th>
+      <th width="23%" align="left" style="width:23%">DSpark heads</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="white-space:nowrap">MiniCPM&#8209;V&nbsp;4.7<br><strong>35B-A3B</strong></td>
+      <td width="260" style="width:260px;white-space:normal;overflow-wrap:break-word">The first open-source MoE model<br>to run smoothly on-device without<br>compromising performance, raising<br>the bar for on-device performance.</td>
+      <td style="white-space:nowrap">
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>BF16</strong><br>
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-FP8">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B-FP8" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>FP8</strong><br>
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-int4">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B-int4" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>int4</strong><br>
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-AWQ">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B-AWQ" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>AWQ</strong><br>
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-GPTQ">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B-GPTQ" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>GPTQ</strong><br>
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-gguf">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B-gguf" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>GGUF</strong>
+      </td>
+      <td style="white-space:nowrap">
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-DSpark">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B-DSpark" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>BF16</strong><br>
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-DSpark-gguf">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-35B-A3B-DSpark-gguf" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>GGUF</strong>
+      </td>
+    </tr>
+    <tr>
+      <td style="white-space:nowrap">MiniCPM&#8209;V&nbsp;4.7<br><strong>1B</strong></td>
+      <td width="260" style="width:260px;white-space:normal;overflow-wrap:break-word">Combines stronger capabilities<br>with extremely high efficiency,<br>advancing the performance–efficiency<br>Pareto frontier for multimodal<br>large language models.</td>
+      <td style="white-space:nowrap">
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-1B">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-1B" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>BF16</strong><br>
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-1B-int4">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-1B-int4" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>int4</strong><br>
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-1B-AWQ">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-1B-AWQ" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>AWQ</strong><br>
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-1B-GPTQ">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-1B-GPTQ" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>GPTQ</strong><br>
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-1B-gguf">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-1B-gguf" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>GGUF</strong>
+      </td>
+      <td style="white-space:nowrap">
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-1B-DSpark">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-1B-DSpark" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>BF16</strong><br>
+        <a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-1B-DSpark-gguf">🤗</a>&nbsp;&nbsp;<a href="https://modelscope.cn/models/OpenBMB/MiniCPM-V-4.7-1B-DSpark-gguf" style="display:inline-block;vertical-align:middle"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-o/main/assets/modelscope_logo.png" alt="ModelScope" width="20" height="20" style="display:inline-block;vertical-align:middle;margin:0"></a>&nbsp;<strong>GGUF</strong>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+The 1B int4 variant uses bitsandbytes; AWQ and GPTQ use W4A16 quantization. Quantized variants reduce memory usage; GGUF weights support CPU inference.
 
 Also available on [Ollama](https://ollama.com/openbmb/minicpm-v4.7).

@@ -60,14 +60,12 @@ models:
             {gib} of a 3.7b model
     runtime:
       arch: k2-horizon
-      mainline: false
-      fork: MBZUAI-IFM/llama.cpp
-      tracking: https://github.com/ggml-org/llama.cpp/issues/28361
-      note: 'mainline cannot load it, and the issue says so in the words the loader uses: "unknown
-        model architecture: ''k2-horizon''". the vendor has since published its own llama.cpp fork
-        carrying the architecture, which its 7b and 36b gguf cards name while "PR to llama.cpp is
-        in progress" {card@IFM/K2-Horizon-7B-GGUF}. the roster carries it because it is the highest-scoring
-        model of its size anybody has measured'
+      mainline: true
+      since: b11454
+      merged: '2026-10-06'
+      note: the vendor shipped its own llama.cpp fork first, and its cards now say "Mainline support
+        merged in release" b11454 {card@IFM/K2-Horizon-7B-GGUF}. the roster carries it because it
+        is the highest-scoring model of its size anybody has measured
     ids:
       aa: k2-4b-ph1
       gbench: ''
@@ -113,8 +111,7 @@ models:
     notes: >-
       "the medium dense member of the K2-Horizon family: a 7B-core decoder-only
       model" {card}, where the core is what the name counts -- the gguf header
-      counts about 9b in all. the same `k2-horizon` architecture as the 3.7b, so
-      the same answer on loading it: not mainline, the vendor's fork.
+      counts about 9b in all. the same `k2-horizon` architecture as the 3.7b.
     repos:
     - IFM/K2-Horizon-7B-GGUF
     ids:
@@ -126,9 +123,9 @@ models:
       livebench: ''
     runtime:
       arch: k2-horizon
-      mainline: false
-      fork: MBZUAI-IFM/llama.cpp
-      tracking: https://github.com/ggml-org/llama.cpp/issues/28361
+      mainline: true
+      since: b11454
+      merged: '2026-10-06'
     sampling:
       thinking:
         source: quant-card
@@ -161,9 +158,7 @@ models:
     notes: >-
       "a Mixture-of-Experts model with Mixture-of-Values attention (MoVA) that
       stores 36B parameters and runs 4B per token", with "512K context" {card}.
-      the card's validated serving is bf16 on sglang or vllm over two h200s; the
-      ggufs need the vendor's llama.cpp fork, since mainline carries no
-      `k2-horizon` architecture yet.
+      the card's validated serving is bf16 on sglang or vllm over two h200s.
     repos:
     - IFM/K2-Horizon-MoVA-36B-A4B-GGUF
     - bartowski/K2-Horizon-MoVA-36B-A4B-GGUF
@@ -176,9 +171,9 @@ models:
       livebench: ''
     runtime:
       arch: k2-horizon
-      mainline: false
-      fork: MBZUAI-IFM/llama.cpp
-      tracking: https://github.com/ggml-org/llama.cpp/issues/28361
+      mainline: true
+      since: b11454
+      merged: '2026-10-06'
     sampling:
       thinking:
         source: quant-card
@@ -1223,10 +1218,10 @@ models:
       layout: decider-plain
       source: author-config
       temperature:
-        overall: 1.099
-        choice: 1.11
-        noul: 1.56
-        score: 1.287
+        overall: 2.173
+        choice: 2.098
+        noul: 0.05
+        score: 3.152
   Mapika/decider-2b:
     kind: decision
     name:
@@ -1270,10 +1265,10 @@ models:
       layout: decider-plain
       source: author-config
       temperature:
-        overall: 1.145
-        choice: 1.164
-        noul: 1.624
-        score: 1.124
+        overall: 2.515
+        choice: 2.465
+        noul: 0.05
+        score: 2.833
   Mapika/decider-35b-a3b:
     kind: decision
     name:
@@ -3866,6 +3861,69 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+  ornith-ai/Ornith-1.5-122B:
+    kind: text
+    name:
+      short: ornith 1.5 122b
+      match: ornith[\s-]*1\.5[\s-]*122b
+    notes: >-
+      the middle of the 1.5 family, a 122b mixture of experts "designed for efficient
+      single-GPU deployment" {card}, and released with ggufs from the vendor and from
+      unsloth on the same day. every benchmark is the vendor's own, and the card says its
+      terminal-bench runs needed a modified qwen chat template. the card gives two sampling
+      sets, the general one below and temperature 0.6 with no presence penalty for "precise
+      coding tasks".
+    repos:
+    - ornith-ai/Ornith-1.5-122B-GGUF
+    - unsloth/Ornith-1.5-122B-GGUF
+    runtime:
+      arch: qwen35moe
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        tuned: [instruct, chat, reason, tools]
+      tool-use:
+        source: quant-card
+        temp: 0.6
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned: [code, tools]
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: ornith-ai/Ornith-1.5-122B-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   ornith-ai/Ornith-1.5-397B:
     kind: text
     name:
@@ -4066,7 +4124,8 @@ models:
     kind: text
     name:
       short: deepseek v4.1 flash
-      match: deepseek[\s-]*v?4\.1|dsv?4\.1
+      # the 1017 point release is its own entry below
+      match: (?:deepseek[\s-]*v?4\.1|dsv?4\.1)(?![\s-]*(?:flash[\s-]*|f[\s-]*)?1017)
     notes: 'released 2026-09-10, and measured by its own card {card} alone -- "All base
       models are evaluated in our internal framework". a 552b causal encoder-decoder -- 8b
       active in prefill, 16b in decode -- beside a 196b engram lookup table the backbone count leaves out, so the
@@ -4112,7 +4171,10 @@ models:
             carried as the pin while it was the only complete pack on the hub; it is the smallest
             now, and {gib@vcruz305/DeepSeek-V4.1-Flash-GGUF:Q2_K} is the smallest that keeps the
             engram. AMAImedia mirrors vcruz305''s shards beside the original safetensors and is not
-            a second source of anything'
+            a second source of anything. the quality discount on this rung is read at {bpw} and
+            sees only bits, so it cannot charge for the missing tables: the card says a runtime
+            "must obtain them from the source revision", which makes the file part of a model
+            rather than a whole one'
     - repo: vcruz305/DeepSeek-V4.1-Flash-GGUF
       files:
         Q2_K:
@@ -4264,11 +4326,125 @@ models:
       gate: enable_thinking
       gate_default: false
       accepts: [max]
+  deepseek-ai/DeepSeek-V4.1-Flash-1017:
+    kind: text
+    name:
+      short: deepseek v4.1 flash 1017
+      match: deepseek[\s-]*v?4\.1[\s-]*flash[\s-]*1017|dsv?4\.1[\s-]*f?[\s-]*1017
+    notes: >-
+      released 2026-10-17, and the card {card} calls it one that "is a minor update to"
+      v4.1 flash: the same architecture, the same engram tables and the same missing jinja
+      template, with `encoding/` again the vendor's prompt format. the gains are the
+      vendor's own table against the release it replaces -- terminal-bench 4.0 42.3 against
+      31.2, hle without tools 42.6 against 36.8 -- and it says the update also shortens
+      output. no llama.cpp release loads it: every gguf here needs PR 28696 or unsloth's
+      build of it, and the smallest rung is {gib@unsloth/DeepSeek-V4.1-Flash-1017-GGUF:UD-IQ1_S}.
+      the conversions built for other engines are not carried -- lucebox's ROCMFP files for
+      an R9700 beside a Ryzen AI Max, the DwarfStar packs from nazeshinjite and elvezjp, and
+      peasantsmith's Maya packs for Project Maya.
+    repos:
+    - unsloth/DeepSeek-V4.1-Flash-1017-GGUF
+    - mrfakename/DeepSeek-V4.1-Flash-1017-GGUF
+    - prometheusAIR/DeepSeek-V4.1-Flash-1017-GGUF
+    ids:
+      aa: deepseek-v4-1-flash-1017
+      gbench: deepseek/deepseek-v4.1-flash-1017
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    runtime:
+      arch: deepseek41
+      mainline: false
+      tracking: https://github.com/ggml-org/llama.cpp/pull/28696
+      note: unsloth's card says "please use our llama.cpp PR" or its desktop app to run its files
+        {card@unsloth/DeepSeek-V4.1-Flash-1017-GGUF}, and the other two cards name PR 28696 itself
+    speculative:
+      type: draft-dspark
+      n_max: 3
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 1.0
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    turns:
+      source: unsloth/DeepSeek-V4.1-Flash-1017-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, high, max]
+      default: high
+  fishaudio/drama-3:
+    kind: speech
+    audiocpp: fish_drama3
+    name:
+      short: fish drama 3
+      match: (?:fish[\s-]*audio[\s-]*)?drama[\s-]*3\b
+    notes: >-
+      fish audio's text-to-speech model "built for multi-character scenes and long-form
+      content" {card}, on a 35b mixture-of-experts text backbone with 3b active. the vendor
+      serves it on sglang-omni and vllm-omni. the gguf is jmica's, which audio.cpp's catalog
+      names as its package and marks experimental, and its card calls them "Experimental
+      native audio.cpp conversions" {card@Jmica/Drama-3-GGUF}.
+    repos:
+    - repo: Jmica/Drama-3-GGUF
+      # four builds share the Q4_K_S tag, differing in the backbone, routers and
+      # embedding precision, so each is named to be sized apart
+      files:
+        drama-3-backbone-8bit-experts-Q4_K_S.gguf:
+          quant: Q4_K_S
+        drama-3-backbone-4bit-experts-Q4_K_S.gguf:
+          quant: Q4_K_S
+        drama-3-backbone-8bit-F32-routers-experts-Q4_K_S.gguf:
+          quant: Q4_K_S
+        drama-3-backbone-8bit-F32-routers-BF16-embed-head-experts-Q4_K_S.gguf:
+          quant: Q4_K_S
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    turns:
+      source: fishaudio/drama-3
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   fishaudio/s2-pro:
     kind: speech
+    audiocpp: fish_audio
     name:
       short: fish-s2-pro
       match: \bs2[\s-]*pro\b|fish[\s-]*audio[\s-]*s2
+    notes: >-
+      fish audio's multilingual text-to-speech model with "fine-grained inline control
+      of prosody and emotion" {card}: free-form bracketed tags in the text steer
+      delivery word by word, and it clones a voice from a short reference. the card says
+      it was trained on over 10m hours across 80+ languages, with japanese, english and
+      chinese in its top tier, on a dual-autoregressive design of a 4b slow model and a
+      400m fast model. the weights are under the fish audio research license, research
+      and non-commercial use only. the tracked gguf is rodrigomt's build for the
+      community s2.cpp engine, which its card calls "Not production-ready"
+      {card@rodrigomt/s2-pro-gguf}.
     repos:
     - rodrigomt/s2-pro-gguf
     ids:
@@ -4828,6 +5004,7 @@ models:
         hard bar a text model has to clear to count as a decision model here
   hexgrad/Kokoro-82M:
     kind: speech
+    audiocpp: kokoro_tts
     name:
       short: kokoro-v1
       match: kokoro
@@ -5587,11 +5764,10 @@ models:
       and one that "Always thinks before it answers". the agentic claim is the vendor's:
       48.09 on liveclaw against 38.19 for qwen3.6-35b-a3b. the vendor's gguf repo carries a
       QAD-Q4_0 rung, quantization-aware rather than converted after the fact. unsloth's
-      ladder is titled Preview and its card still reads `[TBD]` where the generation
-      parameters go.
+      ladder is the released one; its earlier `-Preview-` repo is no longer carried.
     repos:
     - LiquidAI/LFM2.5-24B-A2B-GGUF
-    - unsloth/LFM2.5-24B-A2B-Preview-GGUF
+    - unsloth/LFM2.5-24B-A2B-GGUF
     runtime:
       arch: lfm2moe
       mainline: true
@@ -5803,6 +5979,7 @@ models:
       - audio
   Qwen/Qwen3-TTS-12Hz-1.7B-Base:
     kind: speech
+    audiocpp: qwen3_tts
     name:
       short: qwen3-tts-1.7b-base
       match: qwen3[\s.-]*tts[\s-]*(?:12hz[\s-]*)?1\.7b[\s-]*base
@@ -5843,6 +6020,7 @@ models:
       - audio
   Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice:
     kind: speech
+    audiocpp: qwen3_tts
     name:
       short: qwen3-tts-1.7b-customvoice
       match: qwen3[\s.-]*tts[\s-]*(?:12hz[\s-]*)?1\.7b[\s-]*custom
@@ -5873,6 +6051,7 @@ models:
       - audio
   Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign:
     kind: speech
+    audiocpp: qwen3_tts
     name:
       short: qwen3-tts-1.7b-voicedesign
       match: qwen3[\s.-]*tts[\s-]*(?:12hz[\s-]*)?(?:1\.7b[\s-]*)?voice[\s-]*design
@@ -6409,9 +6588,19 @@ models:
       default: true
   mistralai/Voxtral-Mini-4B-Realtime-2602:
     kind: speech
+    audiocpp: voxtral_realtime
     name:
       short: voxtral-mini-4b-realtime-2602
       match: voxtral[\s-]*mini[\s-]*4b|voxtral[\s-]*realtime
+    notes: >-
+      mistral's streaming transcription model, which its card calls a "multilingual,
+      realtime speech-transcription model" {card} for 13 languages, built from a 3.4b
+      language model and a causal audio encoder trained from scratch. the transcription
+      delay is configurable, and the card claims that at 480ms "it matches the
+      performance of leading offline open-source transcription models" {card}. the
+      weights are apache 2.0. two gguf repos are tracked: andrijdavid's for voxtral.cpp
+      and cstr's crispasr conversions, which recommend q4_k
+      {card@cstr/voxtral-mini-4b-realtime-GGUF}.
     repos:
     - repo: andrijdavid/Voxtral-Mini-4B-Realtime-2602-GGUF
       role: model
@@ -7434,6 +7623,118 @@ models:
       gate_default: true
       accepts: [low, high, max]
       default: max
+  nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16:
+    kind: text
+    name:
+      short: nemotron 3.5 bolt 74b a9b
+      match: nemotron[\s-]*3\.5[\s-]*bolt|3\.5[\s-]*bolt[\s-]*74b
+    notes: >-
+      "designed to run everyday agentic tasks locally" {card}: a 74b mixture of experts with
+      9b active, cut down from nemotron 3.5 super vl by an architecture search that fixes the
+      expert top-k at 9, "down from 22 in the parent model", and then retrained. the bf16
+      repo is for post-training. nvidia's own gguf, first below, "uses a native 2-bit
+      quantization". images come through a vision encoder shipped as
+      an mmproj beside the weights.
+    repos:
+    - repo: nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-GGUF
+      files:
+        NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB.gguf:
+          quant: IQ2_XXS
+          note: nvidia's own file at {gib} and {bpw}, named for a memory size rather than
+            its type; IQ2_XXS is 92% of its weights, with NVFP4 and Q8_0 beside it
+    - unsloth/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-GGUF
+    - AtomicChat/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-GGUF
+    runtime:
+      arch: nemotron_h_moe
+      mainline: true
+      since: b7418
+      merged: '2025-12-16'
+    ids:
+      aa: nemotron-3-5-bolt-74b-a9b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    speculative:
+      type: draft-dflash
+      n_max: 7
+      note: the "7 speculative tokens in the supplied vLLM recipes" {card}, with the LiLiCorr
+        drafter that unsloth ships beside its rungs as a dflash gguf
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        tuned: [instruct, chat, reason, tools]
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    turns:
+      source: nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16:
+    kind: text
+    name:
+      short: nemotron 3.5 super vl
+      match: nemotron[\s-]*3\.5[\s-]*super|3\.5[\s-]*super[\s-]*vl
+    notes: >-
+      the 3.5 generation of nemotron super and now "a vision-language model for reasoning,
+      coding, tool use, document understanding, and video understanding" {card}: 120b with
+      12b active and a context of up to 1m tokens. the language backbone "is initialized from
+      Nemotron 3 Super Base", the entry above, then distilled from nemotron 3 ultra. the mtp
+      head is native, and ggml-org ships it as separate files beside its rungs. the card
+      recommends temperature 0.6 for vision rather than the 1.0 below.
+    repos:
+    - ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF
+    - unsloth/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF
+    runtime:
+      arch: dflash
+      mainline: true
+      since: b9831
+      merged: '2026-06-28'
+    ids:
+      aa: nemotron-3-5-super-vl
+      gbench: nvidia/nemotron-3.5-super-vl
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    speculative:
+      type: draft-mtp
+      n_max: 3
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    turns:
+      source: ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16:
     kind: text
     name:
@@ -7757,6 +8058,58 @@ models:
       gate_default: true
       accepts: [low, medium, xhigh]
       default: xhigh
+  tencent/Hy-Memory-30B-A3B:
+    kind: text
+    name:
+      short: hy-memory 30b a3b
+      match: hy[\s-]*memory(?:[\s-]*30b)?
+    notes: >-
+      a single-purpose model: "a compact long-term-memory writer model" {card} that replaces
+      the general-purpose llm on the write path of an external memory framework -- mem0,
+      memos and tencent's own hy-memory -- deciding what to store. the card's own comparison
+      puts it at 55.49 averaged over four harnesses against 54.62 for claude opus 5, on fixed
+      20% subsamples with everything but the writer held fixed. its usage example runs at
+      temperature 0 with thinking off.
+    repos:
+    - repo: tencent/Hy-Memory-30B-A3B-GGUF
+      files:
+        hy3a3b-memrl1009-step250-Q4_K_M-imat.gguf:
+          quant: Q4_K_M
+        hy3a3b-memrl1009-step250-Q6_K-imat.gguf:
+          quant: Q6_K
+    runtime:
+      arch: hy_v3
+      mainline: true
+      since: b9993
+      merged: '2026-07-14'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      deterministic:
+        source: tuned-here
+        temp: 0.0
+        note: the temperature the card's usage example passes in code {card}; it states no
+          sampler as advice, and the writer's job is a storage decision rather than prose
+        tuned: [instruct]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: tencent/Hy-Memory-30B-A3B-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: reordered
+      mid_developer: dropped
+    thinking:
+      knob: reasoning_effort
+      accepts: [low, high]
   tencent/Hy3:
     kind: text
     # the card: reasoning_effort "no_think" (default, direct response), "low",
@@ -8583,6 +8936,7 @@ models:
   # fact, and it is in the notes rather than in this vocabulary.
   nvidia/parakeet-tdt-0.6b-v3:
     kind: speech
+    audiocpp: parakeet_tdt
     name:
       short: parakeet-tdt-0.6b-v3
       match: parakeet[\s-]*(?:tdt[\s-]*)?0\.6b[\s-]*v3
@@ -8596,7 +8950,7 @@ models:
     - repo: cstr/parakeet-tdt-0.6b-v3-GGUF
       role: model
     ids:
-      aa-stt: ''
+      aa-stt: Parakeet TDT 0.6B V3, Togetherai
       aa-stt-streaming: ''
       aa-tts: ''
       tts-arena: ''
@@ -8817,6 +9171,7 @@ models:
       default: false
   CohereLabs/cohere-transcribe-03-2026:
     kind: speech
+    audiocpp: cohere_asr
     name:
       short: cohere-transcribe-03-2026
       match: cohere[\s-]*transcribe(?![\s-]*arabic)
@@ -8876,6 +9231,7 @@ models:
       - text
   Qwen/Qwen3-ASR-1.7B:
     kind: speech
+    audiocpp: qwen3_asr
     name:
       short: qwen3-asr-1.7b
       match: qwen3[\s.-]*asr[\s-]*1\.7b\b(?![\s-]*ja)
@@ -8938,6 +9294,7 @@ models:
       - text
   nvidia/nemotron-3.5-asr-streaming-0.6b:
     kind: speech
+    audiocpp: nemotron_asr
     name:
       short: nemotron-3.5-asr-streaming-0.6b
       match: nemotron[\s-]*3\.5[\s-]*asr
@@ -8978,6 +9335,7 @@ models:
       - text
   FunAudioLLM/SenseVoiceSmall:
     kind: speech
+    audiocpp: sense_asr
     name:
       short: sensevoice-small
       match: sense[\s-]*voice
@@ -9011,6 +9369,7 @@ models:
       - text
   OpenMOSS-Team/MOSS-Transcribe-Diarize:
     kind: speech
+    audiocpp: moss_transcribe_diarize
     name:
       short: moss-transcribe-diarize
       match: moss[\s-]*transcribe[\s-]*diarize
@@ -9218,6 +9577,7 @@ models:
       diarize: embedder
   nvidia/Nemotron-3-Diarization:
     kind: diarize
+    audiocpp: nemotron_3_diar
     name:
       short: nemotron-3-diar
       match: nemotron[\s-]*3[\s-]*diar
@@ -9314,9 +9674,20 @@ models:
   # been bitten by once with qwen3-tts's two namespaces.
   BreezeBlue/Breeze-TTS-2:
     kind: speech
+    audiocpp: breeze_tts
     name:
       short: breeze-tts-2
       match: breeze[\s-]*tts
+    notes: >-
+      breezeblue's bilingual english and chinese text-to-speech model, described as "an
+      open-weight text-to-speech model built for real-time interaction" {card}, with
+      voice cloning from a reference clip and its exact transcript, voice design from a
+      written description, and inline vocal events such as laughs and sighs. the weights
+      and any self-hosted output are "for research and non-commercial use only" {card};
+      only the inference code is apache 2.0. the tracked gguf is a crispasr conversion
+      that leaves the codec out and pulls the qwen3-tts 12hz tokenizer as a companion,
+      and its card says hosting the files as a service counts as commercial use
+      {card@cstr/breeze-tts-2-GGUF}.
     engine:
     - Breeze-TTS-2.cpp
     repos:
@@ -9364,9 +9735,16 @@ models:
   # rather than a benchmark, and it is the only number this repo has.
   Supertone/supertonic-3:
     kind: speech
+    audiocpp: supertonic
     name:
       short: supertonic-3
       match: supertonic
+    notes: >-
+      supertone's on-device text-to-speech model, about 99M parameters of ONNX assets
+      covering 31 languages; the card says version 3 "improves reading stability, and
+      reduces repeat/skip failures" {card}. the open weights ship fixed preset voices,
+      and custom voice styles come from supertone's paid voice builder. it accepts
+      simple expression tags such as `<laugh>`. the model is under OpenRAIL-M.
     modalities:
       input:
       - text
@@ -9433,9 +9811,10 @@ models:
       - audio
   ResembleAI/chatterbox:
     kind: speech
+    audiocpp: chatterbox
     name:
       short: chatterbox
-      match: chatterbox
+      match: chatterbox(?![\s-]*turbo)
     notes: >-
       artificial analysis rates it on the TTS board, beside several other
       synthesis models on this roster. 23 languages with separate arabic, german
@@ -9475,6 +9854,7 @@ models:
       - audio
   FunAudioLLM/Fun-CosyVoice3-0.5B-2512:
     kind: speech
+    audiocpp: cosyvoice3
     name:
       short: cosyvoice3-tts
       match: cosy[\s-]*voice[\s-]*3
@@ -9629,7 +10009,7 @@ models:
     kind: speech
     name:
       short: indextts
-      match: index[\s-]*tts
+      match: index[\s-]*tts(?![\s-]*2)
     notes: >-
       bilibili's index-tts {card}, chinese and english, tuned for cloning a
       supplied voice. the only rungs cstr published are Q4_K and Q8_0 -- there is no F16
@@ -9660,6 +10040,7 @@ models:
       - audio
   kugelaudio/kugelaudio-0-open:
     kind: speech
+    audiocpp: kugelaudio
     name:
       short: kugelaudio
       match: kugel[\s-]*audio
@@ -9691,7 +10072,7 @@ models:
     kind: speech
     name:
       short: miotts
-      match: \bmio[\s-]*tts
+      match: \bmio[\s-]*tts(?![\s-]*1\.7b)
     notes: >-
       a japanese-and-english 0.6b, the smallest autoregressive model here. the
       card {card} says it is "built on top of the efficient neural audio codec",
@@ -9743,9 +10124,10 @@ models:
       mid_developer: ok
   OpenMOSS-Team/MOSS-TTS-v1.5:
     kind: speech
+    audiocpp: moss_tts_v15
     name:
       short: moss-tts
-      match: moss[\s-]*tts\b(?![\s-]*local)
+      match: moss[\s-]*tts\b(?![\s-]*(?:local|nano))
     notes: >-
       the openmoss synthesis model, cloning from a reference clip and covering
       what the card {card} counts as "**31 languages**". it is the sibling of the moss-transcribe-diarize already in the ASR
@@ -9785,6 +10167,7 @@ models:
       mid_developer: ok
   OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5:
     kind: speech
+    audiocpp: moss_tts_local
     name:
       short: moss-tts-local
       match: moss[\s-]*tts[\s-]*local
@@ -9835,6 +10218,7 @@ models:
       default: true
   k2-fsa/OmniVoice:
     kind: speech
+    audiocpp: omnivoice
     name:
       short: omnivoice
       match: omni[\s-]*voice
@@ -9873,7 +10257,7 @@ models:
     kind: speech
     name:
       short: outetts
-      match: oute[\s-]*tts
+      match: (?<!llama[\s-])oute[\s-]*tts
     notes: >-
       english, clones from a clip, and the only NON-COMMERCIAL licence in this
       roster -- CC-BY-NC-SA-4.0, where everything else here is apache, MIT,
@@ -9942,6 +10326,7 @@ models:
       - audio
   kyutai/pocket-tts:
     kind: speech
+    audiocpp: pocket_tts
     name:
       short: pocket-tts
       match: pocket[\s-]*tts
@@ -10012,9 +10397,10 @@ models:
       - audio
   openbmb/VoxCPM2:
     kind: speech
+    audiocpp: voxcpm2
     name:
       short: voxcpm2-tts
-      match: vox[\s-]*cpm
+      match: vox[\s-]*cpm(?![\s-]*(?:1|0\.5))
     notes: >-
       openbmb's synthesis model at 30 languages with cloning, driven the way the
       card {card} describes -- "Put the voice description in parentheses at the
@@ -10198,6 +10584,7 @@ models:
       - audio
   microsoft/VibeVoice-1.5B:
     kind: speech
+    audiocpp: vibevoice
     name:
       short: vibevoice-1.5b
       match: vibe[\s-]*voice[\s-]*1\.5b
@@ -10246,6 +10633,7 @@ models:
   # rather than the model. publishers.txt separates the two cases now.
   mistralai/Voxtral-4B-TTS-2603:
     kind: speech
+    audiocpp: voxtral_tts
     name:
       short: voxtral-tts
       match: voxtral[\s-]*(?:4b[\s-]*)?tts
@@ -10306,7 +10694,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
-      open-asr: AutoArk-AI/ARK-ASR-3B
+      open-asr: Edge0/ARK-ASR-3B
     modalities:
       input:
       - text
@@ -10387,6 +10775,7 @@ models:
       - text
   FunAudioLLM/Fun-ASR-Nano-2512:
     kind: speech
+    audiocpp: fun_asr_nano
     name:
       short: funasr
       match: fun[\s-]*asr[\s-]*nano\b
@@ -10416,6 +10805,7 @@ models:
       - text
   ai-sage/GigaAM-v3:
     kind: speech
+    audiocpp: gigaam_asr
     name:
       short: gigaam
       match: giga[\s-]*am\b
@@ -10448,6 +10838,7 @@ models:
       - text
   LiquidAI/LFM2.5-Audio-1.5B:
     kind: speech
+    audiocpp: lfm2_audio
     name:
       short: lfm2-audio
       match: lfm[\s-]*2(?:\.5)?[\s-]*audio(?![\s-]*(?:1\.5b[\s-]*)?jp\b)
@@ -10492,6 +10883,7 @@ models:
       mid_developer: ok
   LiquidAI/LFM2.5-Audio-1.5B-JP:
     kind: speech
+    audiocpp: lfm2_audio
     name:
       short: lfm2-audio-jp
       match: lfm[\s-]*2(?:\.5)?[\s-]*audio[\s-]*(?:1\.5b[\s-]*)?jp\b
@@ -10604,6 +10996,7 @@ models:
       - text
   UsefulSensors/moonshine-streaming-tiny:
     kind: speech
+    audiocpp: moonshine_asr
     name:
       short: moonshine-streaming
       match: moonshine[\s-]*streaming
@@ -10860,9 +11253,10 @@ models:
       - text
   microsoft/VibeVoice-ASR:
     kind: speech
+    audiocpp: vibevoice_asr
     name:
       short: vibevoice-asr
-      match: vibe[\s-]*voice[\s-]*asr\b(?![\s-]*bitnet)
+      match: vibe[\s-]*voice[\s-]*asr\b(?![\s-]*(?:bitnet|streaming))
     notes: >-
       the transcription half of the vibevoice family whose two synthesis rungs
       are in the roster above: same name, opposite direction, separate weights.
@@ -10890,6 +11284,7 @@ models:
       - text
   microsoft/VibeVoice-ASR-BitNet:
     kind: speech
+    audiocpp: vibeasr
     name:
       short: vibevoice-bitnet
       match: vibe[\s-]*voice[\s-]*(?:asr[\s-]*)?bitnet
@@ -11089,7 +11484,7 @@ models:
       aa-tts: ''
       tts-arena: ''
       voicearena: ''
-      open-asr: AutoArk-AI/ARK-ASR-0.6B
+      open-asr: Edge0/ARK-ASR-0.6B
     modalities:
       input:
       - text
@@ -11408,6 +11803,7 @@ models:
       mid_developer: ok
   nvidia/magpie_tts_multilingual_357m:
     kind: speech
+    audiocpp: magpie_tts
     name:
       short: magpie-tts-357m
       match: magpie[\s-]*tts
@@ -11638,6 +12034,7 @@ models:
       mid_developer: dropped
   bosonai/higgs-audio-v3-stt:
     kind: speech
+    audiocpp: higgs_audio_stt
     name:
       short: higgs-stt
       match: higgs[\s-]*audio[\s-]*(?:v3[\s-]*)?stt|higgs[\s-]*stt
@@ -11757,6 +12154,7 @@ models:
       mid_developer: ok
   Qwen/Qwen3-ASR-0.6B:
     kind: speech
+    audiocpp: qwen3_asr
     name:
       short: qwen3-asr-0.6b
       match: qwen3[\s.-]*asr[\s-]*0\.6b
@@ -11892,6 +12290,7 @@ models:
         backend: madlad
   sarulab-speech/sidon-v0.1:
     kind: speech
+    audiocpp: sidon
     name:
       short: sidon
       match: \bsidon\b
@@ -12020,3 +12419,1569 @@ models:
       role: model
     crispasr:
       post: punctuation
+  # audio.cpp's families, drafted by `research/scaffold --audiocpp-mode` from its
+  # catalog and research/audiocpp-keys.txt. `audiocpp:` is the `--family` each
+  # loads as; most families ship only in audio.cpp's shared repo, which no entry
+  # lists because it holds every family's files at once
+  ACE-Step/Ace-Step1.5:
+    kind: sound
+    name:
+      short: ace-step
+    notes: >-
+      ace-step 1.5 is an open music generation model from ace studio and stepfun, which
+      its card calls "a highly efficient open-source music foundation model" {card}. a
+      language model acts as planner, writing the song blueprint, lyrics and captions
+      that guide a diffusion transformer, and the card lists editing routes such as
+      "cover generation, repainting, and vocal-to-BGM conversion" {card}. the weights
+      are MIT and the card says generated music may be used commercially. the tracked
+      gguf repo adds the larger XL DiT builds for audio.cpp, and its card calls the
+      q8dit files "a preview" {card@CaptainArni/audio.cpp-gguf} outside audio.cpp's path
+      tests.
+    audiocpp: ace_step
+    repos:
+    - CaptainArni/audio.cpp-gguf
+  JusperLee/Apollo:
+    kind: audio
+    name:
+      short: apollo
+    notes: >-
+      a music restoration model for "MP3-compressed music" {card}, from tsinghua and
+      tencent ai lab. it splits the spectrogram into sub-bands and was trained as a GAN
+      on musdb18-hq and moisesdb with simulated mp3 bitrates from 24 to 128 kbps. the
+      card's results section holds only figures, and the weights are cc-by-sa 4.0.
+    audiocpp: apollo
+  MIT/ast-finetuned-audioset-10-10-0.4593:
+    kind: detect
+    name:
+      short: ast audioset
+    notes: >-
+      MIT's audio spectrogram transformer fine-tuned on audioset, for tagging clips with
+      audioset's 527 sound classes. it is a vision transformer run over a spectrogram,
+      equivalent to vit "but applied on audio" {card}. the card is a stub by hugging
+      face, since the original team "did not write a model card for this model" {card},
+      so it has no limitations section.
+    audiocpp: ast_audioset
+  Audio8/Audio8-ASR-0.1B:
+    kind: speech
+    name:
+      short: audio8-asr-0.1b
+    notes: >-
+      autoark's speech recognizer, "a compact autoregressive ASR model" {card} that
+      pairs the qwen3-asr audio encoder with an 8-layer qwen-style decoder of about 0.1b
+      parameters, covering chinese, english, french, german, japanese, korean and
+      cantonese. the card positions it as "one of the smallest usable performance ASR
+      models" {card} and adds decode-time hotword boosting, and its default examples
+      "truncate audio at 30 seconds" {card}. the weights are cc-by-nc-4.0, and
+      audio.cpp's catalog says its gguf conversion is local-only with no public
+      redistribution approved.
+    audiocpp: audio8_asr
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+    turns:
+      source: Audio8/Audio8-ASR-0.1B
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: Edge0/Audio8-ASR-0.1B
+  Audio8/Audio8-TTS-Preview-0.6B:
+    kind: speech
+    name:
+      short: audio8 tts preview 0.6b
+    notes: >-
+      audio8's 0.6b multilingual text-to-speech model with zero-shot voice cloning,
+      released as a preview: "Language coverage is intentionally limited" {card}, with
+      11 recommended languages from cantonese to spanish. it uses a dualar layout
+      modelled on fish audio s2 pro and bundles its own 44.1 khz codec. the gguf is a
+      q8_0 conversion for audio.cpp with "No new training"
+      {card@js-byte/Audio8-TTS-Preview-0.6b-GGUF}, and that card warns that noisy or
+      mismatched reference clips reduce stability.
+    audiocpp: audio8_tts
+    repos:
+    - js-byte/Audio8-TTS-Preview-0.6b-GGUF
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  nvidia/audio-flamingo-3:
+    kind: speech
+    name:
+      short: audio flamingo 3
+    notes: >-
+      NVIDIA's large audio-language model, an AF-whisper encoder feeding a Qwen2.5-7B
+      decoder, for questions, captions and transcription over speech, sounds and music,
+      with up to 10 minutes of audio input. the card states "This model is for
+      non-commercial research purposes only." {card} the audio.cpp GGUF repo packages it
+      beside audio flamingo next, both under the NVIDIA OneWay noncommercial license
+      {card@audio-cpp/Audio-Flamingo-GGUF}.
+    audiocpp: audio_flamingo
+    repos:
+    - audio-cpp/Audio-Flamingo-GGUF
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+    modalities:
+      input:
+      - audio
+      output:
+      - text
+  haoheliu/audiosr_basic:
+    kind: audio
+    name:
+      short: audiosr
+    notes: >-
+      the basic checkpoint of audiosr, which audio.cpp's catalog
+      {url@https://github.com/0xShug0/audio.cpp/blob/main/model_specs/audiosr.json}
+      describes as latent-diffusion audio super-resolution from an input waveform. the
+      hub card {card} is empty apart from an apache-2.0 licence field. audio.cpp packages it as one f32
+      gguf and marks the family experimental.
+    audiocpp: audiosr
+  tencent/AuK:
+    kind: speech
+    name:
+      short: auk
+    notes: >-
+      tencent's speech generation and editing model, "a 1.5B foundation model for speech
+      generation and editing" {card}, driven by a single natural-language instruction
+      for tts, cloning, word and lyric edits, emotion and timbre changes, enhancement
+      and separation. this repo holds the base model; the distilled auk-flash is a
+      separate repo. audio.cpp's gguf bundles both with a qwen2.5-omni-3b component and
+      a vae, and its card warns that "The quantized component combinations have not
+      received the same 16-task parity validation"
+      {card@audio-cpp/AuK-Base-and-Flash-GGUF}.
+    audiocpp: auk
+    repos:
+    - audio-cpp/AuK-Base-and-Flash-GGUF
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+    modalities:
+      input:
+      - audio
+      - text
+      output:
+      - audio
+  nvidia/canary-180m-flash:
+    kind: speech
+    name:
+      short: canary 180m flash
+    notes: >-
+      nvidia's 182m-parameter canary flash model for speech recognition in english,
+      german, french and spanish, and for translation between english and the other
+      three. the card describes a fastconformer encoder with a transformer decoder,
+      punctuation and capitalisation on request, and "an experimental feature for
+      word-level and segment-level timestamps" {card}; for long audio it recommends
+      chunked inference. it is CC-BY-4.0, and the card says it "is available for
+      commercial use" {card}.
+    audiocpp: canary_asr
+    modalities:
+      input:
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+  mispeech/ced-base:
+    kind: detect
+    name:
+      short: ced audio tagging
+    notes: >-
+      the base size of CED, "simple ViT-Transformer-based models for audio tagging"
+      {card} over the 527 audioset classes, trained by consistent ensemble distillation.
+      the card sets it against AST: 64 mel bins and non-overlapping patches give 248
+      patches for 10 seconds of audio instead of 1212, and variable-length input avoids
+      padding short clips. audio.cpp's family defaults to the tiny model, with base as
+      the largest package.
+    audiocpp: ced
+  ResembleAI/chatterbox-turbo:
+    kind: speech
+    name:
+      short: chatterbox turbo
+    notes: >-
+      resemble ai's english TTS, which the card calls "our most efficient model yet"
+      {card}: a "streamlined 350M parameter architecture" {card} with the
+      speech-token-to-mel decoder distilled from 10 steps to one and native
+      paralinguistic tags such as `[laugh]`. the card says it was "built primarily for
+      low-latency voice agents" {card}, and every output carries resemble's perth
+      watermark. audio.cpp's catalog lists the family as testing, with a built-in voice.
+    audiocpp: chatterbox_turbo
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  nvidia/stt_en_citrinet_256_ls:
+    kind: speech
+    name:
+      short: citrinet asr
+    notes: >-
+      nvidia's smallest citrinet ctc model, around 10m parameters, trained on
+      "Librispeech 960 hours of English speech" {card}. it "transcribes speech in lower
+      case English alphabet along with spaces and apostrophes" {card}, so there is no
+      punctuation or casing, and the card expects weaker results on accented speech and
+      technical terms.
+    audiocpp: citrinet_asr
+    modalities:
+      input:
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+  netease-youdao/Confucius4-R2T2:
+    kind: speech
+    name:
+      short: confucius4-r2t2
+    notes: >-
+      a real-time asr from netease youdao, fine-tuned from qwen3-asr 1.7b with longest
+      stable prefix decoding so that it works in "append-only output mode" {card} and
+      never revises committed text. the card claims "only 200 to 600 milliseconds
+      average latency" {card} and is tuned for chinese and english. two ggufs are
+      tracked: davidxifeng's q8_0 and f16, which refuse 4- and 5-bit quants at load
+      time, and nairod785's q4_k_m built with an "asymmetric per-tensor quantization
+      recipe" {card@Nairod785/Confucius4-R2T2-Q4_K_M-GGUF}. the weights carry netease
+      youdao's own model use license.
+    audiocpp: confucius4_r2t2
+    repos:
+    - davidxifeng/Confucius4-R2T2-gguf
+    - Nairod785/Confucius4-R2T2-Q4_K_M-GGUF
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  netease-youdao/Confucius4-TTS:
+    kind: speech
+    name:
+      short: confucius4-tts
+    notes: >-
+      NetEase youdao's LLM-based text-to-speech model for multilingual and cross-lingual
+      voice cloning in 14 languages, under the tagline "One voice. Any language."
+      {card}. cloning needs only a reference clip: "No reference transcript required"
+      {card}. audio.cpp's catalog describes T2S semantic generation, S2A flow matching
+      and a BigVGAN vocoder, and marks its port experimental.
+    audiocpp: confucius4_tts
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    turns:
+      source: netease-youdao/Confucius4-TTS
+      developer: as-system
+      leading_system_max: 1
+      mid_system: dropped
+      mid_developer: dropped
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  YJX-Xiaomi/ControlFoley:
+    kind: sound
+    name:
+      short: controlfoley
+    notes: >-
+      xiaomi's foley model, "a unified and controllable multimodal video-to-audio (V2A)
+      generation framework" {card} that generates sound synchronised to a video, steered
+      by a text prompt, a reference clip for timbre, or both, and can also generate
+      audio from text alone. the card claims it keeps following the text when the text
+      conflicts with the video, and introduces its own vggsound-tvc benchmark to test
+      that. the code is apache 2.0 but the weights are CC BY-NC 4.0.
+    audiocpp: controlfoley
+  nyralabs/CrisperWhisper2.0_large:
+    kind: speech
+    name:
+      short: crisperwhisper 2.0
+    notes: >-
+      nyra labs' whisper-based transcriber that makes verbatim versus clean output a
+      per-call choice: verbatim keeps fillers, repetitions, cut-offs and vocal events,
+      intended returns the formatted clean version. the card bills it as "The most
+      accurate verbatim speech recognition you can run in production" {card} and adds
+      word-level timestamps and a mode that inserts real disfluencies into a trusted
+      transcript. it ships under a "non-commercial research license" {card}.
+    audiocpp: crisperwhisper
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+  dots-studio/dots.tts-soar:
+    kind: speech
+    name:
+      short: dots.tts
+    notes: >-
+      a 2B fully continuous autoregressive text-to-speech model, a Qwen2.5-1.5B backbone
+      with a flow-matching head over a 48 khz audio VAE; this is the post-trained
+      release the card names the "recommended default for production zero-shot voice
+      cloning" {card}. its limitations section says "Singing and unified speech + sound
+      generation are not covered." {card} and reports higher word error on arabic,
+      hindi, turkish and vietnamese. audio.cpp packages it with its MeanFlow and edit
+      siblings.
+    audiocpp: dots_tts
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    turns:
+      source: dots-studio/dots.tts-soar
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  ResembleAI/Dramabox:
+    kind: speech
+    name:
+      short: dramabox
+    notes: >-
+      resemble ai's expressive english tts, an ic-lora fine-tune of lightricks' ltx-2.3
+      audio-only diffusion model conditioned on gemma 3 12b text embeddings. the card
+      calls it "a prompt-driven TTS" {card}: spoken words go in double quotes and stage
+      directions such as sighs or pauses go outside them, and an optional voice
+      reference of about 10 seconds clones a timbre. the reference code watermarks every
+      output with resemble perth by default, and the weights fall under the ltx-2
+      community license.
+    audiocpp: dramabox
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  jordand/echo-tts-base:
+    kind: speech
+    name:
+      short: echo-tts
+    notes: >-
+      "Echo-TTS is a diffusion-based text-to-speech model." {card} its weights are
+      CC-BY-NC-SA-4.0, and the card lists restricted uses such as mimicking a real
+      person's voice without consent. audio.cpp's catalog describes english zero-shot
+      cloning from a 2.8B diffusion transformer decoded by fish S1-DAC, generating a
+      fixed 29.72 s window, and marks the port experimental. the GGUF is dignome's,
+      whose card says "This work is not affiliated or endorsed by the original author"
+      {card@dignome/Echo-TTS}.
+    audiocpp: echo_tts
+    repos:
+    - dignome/Echo-TTS
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+    modalities:
+      input:
+      - audio
+      - text
+      output:
+      - audio
+  SWivid/Habibi-TTS:
+    kind: speech
+    name:
+      short: habibi-tts
+    notes: >-
+      "A suite of specialized and unified dialectal Arabic TTS models" {card} finetuned
+      from f5-tts: one unified model and seven dialect-specific ones. per the card, "The
+      unified, SAU, and UAE models are licensed under CC-BY-NC-SA-4.0" {card}, and the
+      other five dialects are apache 2.0. audio.cpp packages all of them under its
+      f5_tts family.
+    audiocpp: f5_tts
+    modalities:
+      input:
+      - audio
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  FireRedTeam/FireRedAudio:
+    kind: speech
+    name:
+      short: fireredaudio
+    notes: >-
+      a general-purpose audio language model on a shared 9B LLM, with a separate audio
+      encoder for understanding and a RedAE pathway for generation. the card's pitch is
+      "One model to listen, understand, reason, speak, and edit." {card}: ASR, audio
+      understanding, zero-shot and instruct TTS, speech editing and timestamped
+      grounding over recordings up to an hour. its limitations section says "Everything
+      but ASR is Chinese/English only." {card} audio.cpp's catalog marks its port
+      experimental.
+    audiocpp: firered_audio
+    modalities:
+      input:
+      - audio
+      - text
+      output:
+      - audio
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+      open-asr: ''
+  FireRedTeam/FireRedVAD:
+    kind: detect
+    name:
+      short: firered vad
+    notes: >-
+      fireredteam's DFSMN-based detector from the fireredasr2s release, offering "Voice
+      Activity Detection (VAD) and Audio Event Detection (AED)" {card}: streaming and
+      non-streaming VAD, and non-streaming AED for speech, singing and music. the card
+      claims "97.57% F1 on FLEURS-VAD-102" {card}, a test set the authors assembled and
+      say they will release. it expects 16khz 16-bit mono PCM. audio.cpp's catalog
+      packages the offline and stream-VAD checkpoints and marks the family experimental.
+    audiocpp: firered_vad
+  FireRedTeam/FireRedTTS3:
+    kind: speech
+    name:
+      short: fireredtts3
+    notes: >-
+      fireredteam's speech generation and editing system in two variants: a base model
+      for zero-shot voice cloning across "24 languages" {card} and 21 chinese dialects,
+      and an instruct model for voice design from a description and for semantic and
+      acoustic speech editing. the card reports the best average WER/CER on the
+      multilingual test sets it chose, and advises a reference clip in the target
+      language or dialect because the output inherits its speaking style. its default
+      text normalisation covers only chinese and english unless an external llm endpoint
+      is configured.
+    audiocpp: fireredtts3
+    modalities:
+      input:
+      - audio
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  zai-org/GLM-TTS:
+    kind: speech
+    name:
+      short: glm-tts
+    notes: >-
+      z.ai's two-stage TTS: a llama-based model generates speech tokens and a
+      flow-matching model turns them into mel-spectrograms, with a multi-reward RL stage
+      for emotion. the card claims voice cloning "with just 3-10 seconds of prompt
+      audio" {card}, "Phoneme-level Control" {card} for polyphones, and says it is
+      "Optimized for Chinese and English mixed text" {card}. the gguf audio.cpp's
+      catalog packages is a community mixed q8_0/f16 file from mirek190's repo.
+    audiocpp: glm_tts
+    modalities:
+      input:
+      - audio
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  ibm-granite/granite-speech-5.0-470m-turboctc:
+    kind: speech
+    name:
+      short: granite speech 5.0 470m turboctc
+    notes: >-
+      IBM's english transcriber, "a compact 470 million parameter English ASR model"
+      {card} made of 16 conformer blocks with a CTC head, decoded "non-autoregressively
+      with greedy decoding" {card}. it was trained on about 60,000 hours of public
+      english audio and targets "low-latency/high-throughput English speech-to-text
+      transcription" {card}.
+    audiocpp: granite5asr
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ibm-granite/granite-speech-5.0-470m-turboctc
+  HeartMuLa/HeartMuLa-oss-3B:
+    kind: sound
+    name:
+      short: heartmula
+    notes: >-
+      the 3B model of a family its paper titles "A Family of Open Sourced Music
+      Foundation Models" {card}, released beside a codec and a transcriptor under
+      apache-2.0. the card itself is mostly links. audio.cpp's catalog describes
+      complete songs generated from text, lyrics and style tags, with controllable song
+      structure and multilingual lyrics.
+    audiocpp: heartmula
+  syvai/hviske-v5.3:
+    kind: speech
+    name:
+      short: hviske asr
+    notes: >-
+      syv.ai's danish speech recognizer: "A 2B-parameter Conformer encoder-decoder ASR
+      model, optimized for Danish read-aloud and conversational speech." {card} it is
+      fine-tuned from hviske-v5.1 on the CoRal v3 train splits and compared on the CoRal
+      v3 test sets against other danish models and commercial APIs. the weights are
+      CC-BY-NC-4.0.
+    audiocpp: hviske_asr
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+  syvai/hviske-v6:
+    kind: speech
+    name:
+      short: hviske v6
+    notes: >-
+      syv.ai's hviske v6 is "a 1.24B-parameter Danish ASR model" {card}: a
+      whisper-large-v3-turbo encoder with rotary positions joined to a qwen3-0.6b
+      decoder. the card reports the best mean WER on the danish asr leaderboard at
+      submission, and lets the caller choose casing and punctuation through input
+      tokens. it is danish only and offline, with "No timestamps, no diarization, no
+      streaming" {card}. the weights are CC BY-NC 4.0.
+    audiocpp: hviske_asr_v6
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+  IndexTeam/Index-Echo-S2TT-2B:
+    kind: speech
+    name:
+      short: index-echo-s2tt
+    notes: >-
+      bilibili index team's speech translation model: it takes chinese audio or video
+      and writes bilingual subtitles with sentence timestamps, translated into english,
+      japanese or spanish. the card describes a qwen3-omni audio encoder feeding an
+      index-translate 2b decoder, and warns that "Greedy decoding may repeat on
+      out-of-distribution inputs" {card}. the tracked gguf repo is audio.cpp's own port,
+      which supports "S2TT only" {card@audio-cpp/Index-Echo-S2TT-GGUF} and labels its 2b
+      q4_k file experimental.
+    audiocpp: index_echo
+    repos:
+    - audio-cpp/Index-Echo-S2TT-GGUF
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  IndexTeam/IndexTTS-2:
+    kind: speech
+    name:
+      short: indextts2
+    notes: >-
+      index team's second zero-shot TTS, titled "A Breakthrough in Emotionally
+      Expressive and Duration-Controlled Auto-Regressive Zero-Shot Text-to-Speech"
+      {card}; the card itself is links and citations. audio.cpp's catalog describes
+      voice cloning with emotion and speaker decoupled, emotion set from text or
+      reference audio, and explicit duration control, for chinese and english. the
+      catalog also packages a v2.5 variant that adds japanese, spanish and arabic. the
+      hub metadata carries no licence field.
+    audiocpp: index_tts2
+    modalities:
+      input:
+      - audio
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  owensong/Inflect-Micro-v2:
+    kind: speech
+    name:
+      short: inflect micro v2
+    notes: >-
+      owensong's english VITS-family model, "Complete local text-to-waveform speech
+      synthesis under 10M parameters." {card}, with 24khz mono output. its limitations
+      section is direct: "English only, with one fixed male voice. This is not zero-shot
+      voice cloning." {card}. the card's comparisons rest on a small community
+      preference study and learned predictors, which it says "do not replace controlled
+      human MOS" {card}. audio.cpp runs it natively with an external eSpeak-ng
+      phonemizer.
+    audiocpp: inflect_v2
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  Aratako/Irodori-TTS-v4.1-Small:
+    kind: speech
+    name:
+      short: irodori-tts
+    notes: >-
+      a japanese text-to-speech model, a minor update to v4-small "with an improved
+      duration predictor" {card}; only that predictor was retrained, so voice cloning,
+      voice design and emoji-based style control carry over unchanged. the card says it
+      supports "Japanese text input only" {card} and suggests "Approximately 30 seconds
+      or more" {card} of clean reference speech for cloning. it reports automatic kana
+      and character error benchmarks, and states that no large-scale human evaluation
+      was run.
+    audiocpp: irodori_tts
+    modalities:
+      input:
+      - audio
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  KittenML/kitten-tts-mini-0.8:
+    kind: speech
+    name:
+      short: kitten tts mini 0.8
+    notes: >-
+      kittenml's english text-to-speech model, "an open-source realistic text-to-speech
+      model with 80 million parameters" {card} on the styletts 2 architecture, with
+      eight built-in voices. the card is a quick-start and carries no evaluation.
+      audio.cpp runs it natively with eSpeak-ng phonemization and lists the family as
+      community-supported.
+    audiocpp: kitten_tts
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  KittenML/kitten-tts-2:
+    kind: speech
+    name:
+      short: kitten tts 2
+    notes: >-
+      kittenml's second kitten tts, "A 1.7B speech language model with in-context voice
+      cloning" {card}, whose ternary transformer weights pack losslessly to about a
+      quarter of their bf16 size. it ships 47 voices, nine of them named after a
+      language and used to reach that language, plus beta emotion, vocal-event and
+      emphasis tags. the stellon labs community license ends the free commercial grant
+      once revenue or funding passes USD $1,000,000. the tracked gguf is dignome's
+      audio.cpp export, which recommends q8 and says "Q4 is experimental"
+      {card@dignome/kitten_tts2}.
+    audiocpp: kitten_tts2
+    repos:
+    - dignome/kitten_tts2
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  Banafo/Kroko-ASR:
+    kind: speech
+    name:
+      short: kroko community asr
+    notes: >-
+      banafo's zipformer speech recognizer, built on sherpa-onnx, sold in two tiers:
+      free community models under CC-BY-SA and commercial models offering "Premium
+      accuracy and robustness" {card}. the community models are pitched as "Low-latency,
+      lightweight models." {card} for hobby, research and free-tier use. audio.cpp's
+      catalog marks its port community-contributed, with offline and stateful streaming
+      decoding, hotwords and word timestamps, one package per language.
+    audiocpp: kroko_asr
+    modalities:
+      input:
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+  Quark-Vision/Live-Avatar:
+    kind: video
+    name:
+      short: liveavatar
+    notes: >-
+      alibaba quark's LoRA on wan2.2-s2v-14b for "real-time, streaming, infinite-length
+      interactive avatar video generation" {card} from a reference image, speech audio
+      and an optional text prompt. the card's 20 fps figure is on five H800 GPUs with
+      4-step sampling, single-GPU offline inference is still on its todo list, and it
+      calls the project "a research preview" {card}. the gguf is audio.cpp's package
+      with the official adapter merged, where "All three files are required."
+      {card@audio-cpp/LiveAvatar-GGUF}, and the catalog marks it experimental.
+    audiocpp: liveavatar
+    repos:
+    - audio-cpp/LiveAvatar-GGUF
+    modalities:
+      input:
+      - image
+      - audio
+      output:
+      - video
+  maya-research/maya1:
+    kind: speech
+    name:
+      short: maya1
+    notes: >-
+      maya research's 3.3b open-weight english tts, which its card describes as
+      combining "natural-language voice descriptions with inline expressive controls"
+      {card}: a written description sets the voice and tags such as laugh, sigh or
+      whisper placed in the text add local delivery, so no reference recording is
+      needed. audio comes out through the SNAC codec at 24 khz. the card advises
+      generating long narration in passages and checking voice continuity, and the
+      release is apache 2.0.
+    audiocpp: maya1
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    turns:
+      source: maya-research/maya1
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    ids:
+      aa-tts: maya-1
+      tts-arena: ''
+  ASLP-lab/MeanVC2:
+    kind: audio
+    name:
+      short: meanvc2
+    notes: >-
+      aslp-lab's streaming voice conversion model, a "low-latency streaming zero-shot
+      voice conversion (VC) system" {card} built on conditional flow matching, at "Only
+      18M parameters" {card}. it converts a source recording to the voice of a target
+      reference without retraining. the repo ships a 120ms-chunk checkpoint "recommended
+      for quality" {card} and a 40ms one for lower latency, and audio.cpp's catalog
+      packages only the 120ms/40ms path. the card asks users to "obtain proper consent"
+      {card} from the people whose voices are used.
+    audiocpp: meanvc2
+  KimberleyJSN/melbandroformer:
+    kind: audio
+    name:
+      short: mel-band roformer
+    notes: >-
+      a mel-band RoFormer music source-separation checkpoint. audio.cpp's catalog
+      {url@https://github.com/0xShug0/audio.cpp/blob/main/model_specs/mel_band_roformer.json}
+      describes it as splitting a mixed track into stems such as vocals, drums and
+      accompaniment, using mel-scaled overlapping frequency bands and RoFormer
+      attention. the repo's own card {card} carries only an MIT licence tag.
+    audiocpp: mel_band_roformer
+  mispeech/midashenglm-gen:
+    kind: sound
+    name:
+      short: midashenglm-gen
+    notes: >-
+      an audio scene generator: a fine-tuned Qwen3-1.7B with a per-token flow-matching
+      head that "generates coherent 16 kHz audio scenes" {card} blending speech, music,
+      sound effects and ambience. prompts are structured captions with tagged fields for
+      the scene, transcript, speaker, effects, music and environment. it is apache-2.0
+      with added use restrictions, and audio.cpp's catalog marks its port experimental.
+    audiocpp: midashenglm_gen
+  MiniMaxAI/MiniMax-H3:
+    kind: sound
+    name:
+      short: minimax-h3
+    notes: >-
+      minimax's open-weight audio and video generator, which its card calls "a
+      general-purpose, omni-modal generative system" {card}: it makes clips of 4 to 15
+      seconds with 32 khz stereo audio, from text and frames in one checkpoint or from
+      reference images, video and audio in another. the hosted context-ir prompt stage,
+      which the card says is "critical to the quality of the final output" {card}, is
+      not part of the release. audio.cpp's catalog drives its text-to-audio/video
+      pipeline for speech, music and sound effects and marks it experimental. the
+      weights are under the minimax h3 community license, with an application form
+      linked for the USA, EU, UK and south korea.
+    audiocpp: minimax_h3
+  MiniMaxAI/MiniMax-Music3:
+    kind: sound
+    name:
+      short: minimax music 3
+    notes: >-
+      minimax's text-to-music model, conditioned on lyrics and a music description, that
+      generates "structurally coherent songs with expressive vocals" {card} up to five
+      minutes long as 32khz stereo. it pairs an 8b global llm initialised from qwen3-8b
+      with a 0.6b local llm and a flow-matching synthesis stage, and the card cautions
+      that requested tempo, key and structure "may not always match every requested
+      detail exactly" {card}. the gguf is audio.cpp's own package, marked experimental,
+      and follows the upstream "MiniMax-Music3 COMMUNITY LICENSE"
+      {card@audio-cpp/MiniMax-Music3-GGUF}.
+    audiocpp: minimax_music3
+    repos:
+    - audio-cpp/MiniMax-Music3-GGUF
+  Aratako/MioCodec-25Hz-44.1kHz-v2:
+    kind: audio
+    name:
+      short: miocodec
+    notes: >-
+      a neural audio codec that encodes 44.1 khz audio into a 25 hz token stream and
+      decodes it back, an "upsampled, high-fidelity version" {card} of the 24 khz
+      MioCodec. the content branch was frozen during fine-tuning, so "the discrete
+      tokens generated by this model are identical to those from `MioCodec-25Hz-24kHz`"
+      {card}, and a TTS model trained on those tokens can swap in this decoder. it also
+      does zero-shot voice conversion by pairing one clip's content tokens with another
+      speaker's global embedding.
+    audiocpp: miocodec
+  MahmoudAshraf/mms-300m-1130-forced-aligner:
+    kind: detect
+    name:
+      short: meta mms-300m forced aligner
+    notes: >-
+      meta's MMS-300M wav2vec2 checkpoint trained for forced alignment, converted from
+      torchaudio to transformers; it aligns an exact transcript to audio and returns
+      word timestamps. the card's companion package claims to "use much less memory than
+      TorchAudio forced alignment API" {card}. the weights are CC-BY-NC-4.0. audio.cpp's
+      catalog notes that the checkpoint covers 1,130 languages but its port normalizes
+      only dutch and english latin script natively, takes caller-supplied ASCII
+      romanization otherwise, and has no approved public GGUF redistribution.
+    audiocpp: mms_forced_aligner
+  OpenMOSS-Team/MOSS-TTS-Nano:
+    kind: speech
+    name:
+      short: moss-tts-nano
+    notes: >-
+      a 0.1B-parameter multilingual text-to-speech model from MOSI.AI and the OpenMOSS
+      team, an autoregressive audio tokenizer plus LLM pipeline built for "realtime
+      speech generation" {card}. it outputs 48 khz stereo, covers 20 languages, and
+      clones a voice zero-shot from a reference clip, chunking long text. the card
+      frames its quality target as "good enough quality for realtime products" {card}.
+    audiocpp: moss_tts_nano
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  OpenMOSS-Team/MOSS-TTSD-v1.0:
+    kind: speech
+    name:
+      short: moss-ttsd
+    notes: >-
+      the dialogue member of the openmoss MOSS-TTS family, an 8b model that its card
+      calls "a long-form spoken dialogue generation model" {card} for podcasts,
+      audiobooks, commentary and dubbing, with zero-shot cloning per speaker from short
+      references. the card lists 20 languages, while audio.cpp's catalog lists english
+      and chinese. the tracked gguf is christopherthompson81's audio.cpp package, which
+      keeps the q4_k heads at f16 because a plain q4_k stops after the first turn, and
+      whose card warns "Speaker identity drifts across turns"
+      {card@christopherthompson81/MOSS-TTSD-GGUF} in the reference implementation too.
+    audiocpp: moss_ttsd
+    repos:
+    - christopherthompson81/MOSS-TTSD-GGUF
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    turns:
+      source: OpenMOSS-Team/MOSS-TTSD-v1.0
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+  OpenMOSS-Team/MOSS-VoiceGenerator:
+    kind: speech
+    name:
+      short: moss-voicegenerator
+    notes: >-
+      the voice design member of the moss-tts family, a 1.7b model that "creates speaker
+      timbres directly from free-form text, without reference audio" {card}. the voice
+      description and the text to speak are tokenized together, and the card claims
+      "High-quality synthesis in Chinese and English" {card}. it can also act as a
+      voice-design front end that supplies reference voices to other tts models.
+    audiocpp: moss_voicegen
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    turns:
+      source: OpenMOSS-Team/MOSS-VoiceGenerator
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  alibabasglab/MossFormer2_SS_16K:
+    kind: audio
+    name:
+      short: mossformer2 separation
+    notes: >-
+      "The MossFormer2_SS_16K model weights for 16 kHz speech separation" {card} from
+      alibaba's clearervoice-studio, which "separates mixed-speaker speeches into
+      individual speaker's speech" {card}. this is the checkpoint audio.cpp's
+      mossformer2 family converts.
+    audiocpp: mossformer2
+  MuScriptor/muscriptor-small:
+    kind: detect
+    name:
+      short: muscriptor
+    notes: >-
+      an audio-to-symbolic music transcription model. audio.cpp's catalog
+      {url@https://github.com/0xShug0/audio.cpp/blob/main/model_specs/muscriptor.json}
+      describes it converting music audio into note events or midi files, with
+      instrument constraints, beam search and streaming output. the hub {card} lists the
+      licence as cc-by-nc-4.0, which rules out commercial use. no card body was
+      collected, so this note rests on the catalog.
+    audiocpp: muscriptor
+  neuphonic/neutts-2e:
+    kind: speech
+    name:
+      short: neutts 2e
+    notes: >-
+      neuphonic's english text-to-speech model, in the repo audio.cpp's neutts family
+      packages. the repo {card} is gated and its card could not be read, so this follows
+      audio.cpp's catalog
+      {url@https://github.com/0xShug0/audio.cpp/blob/main/model_specs/neutts.json}: a qwen3-style autoregressive speech-token backbone, neucodec
+      waveform decoding, built-in speaker prompts and emotion-token control.
+    audiocpp: neutts
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  abr-ai/niagara-38m-batch.en:
+    kind: speech
+    name:
+      short: niagara asr
+    notes: >-
+      applied brain research's small english recognizer, a state space model with
+      attention trained on about 50k hours, headlined "38M parameters. 9.36% average
+      WER." {card} on the open asr leaderboard's english sets. this is the non-streaming
+      batch variant, and the card says the posted model "transcribes audio to lower case
+      english with no punctuation" {card}; a streaming version with punctuation is sold
+      under commercial license. the weights are under abr's own open license, linked
+      from the card. audio.cpp packages both the 19m and 38m batch models.
+    audiocpp: niagara_asr
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: abr-ai/niagara-38m-batch.en
+  davidscripka/openwakeword:
+    kind: detect
+    name:
+      short: openwakeword
+    notes: >-
+      the official pre-trained models for the openwakeword wake word and phrase
+      detection library. the card puts all of them under a non-commercial share-alike
+      licence "due to the inclusion of datasets with unknown or restrictive licensing"
+      {card}. audio.cpp carries one converted classifier, for the alexa wake word, and
+      marks the family experimental.
+    audiocpp: open_wake_word
+  OuteAI/Llama-OuteTTS-1.0-1B:
+    kind: speech
+    name:
+      short: llama-outetts 1.0
+    notes: >-
+      OuteAI's 1B text-to-speech model on a llama 3.2 base, with one-shot voice cloning
+      from about ten seconds of reference audio and 23 languages at varying proficiency.
+      the card insists on its sampling settings, including a repetition penalty over a
+      64-token recent window, and warns that "Mixing languages in a single prompt may
+      lead to mistakes." {card} the weights are CC-BY-NC-SA-4.0 on top of the llama 3.2
+      community licence.
+    audiocpp: outetts
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    turns:
+      source: OuteAI/Llama-OuteTTS-1.0-1B
+      developer: dropped
+      leading_system_max: 1
+      mid_system: dropped
+      mid_developer: dropped
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  espnet/owsm_v4_medium_1B:
+    kind: speech
+    name:
+      short: owsm
+    notes: >-
+      the 1b medium model of espnet's OWSM v4, an open reproduction of whisper-style
+      training, trained on "320k hours of public speech data" {card}. it handles
+      language identification, recognition, translation and utterance-level timestamps,
+      and the card says v4 "significantly outperforms OWSM v3.1 in LID and multilingual
+      ASR" {card}. audio.cpp's owsm family defaults to the 102m base model, with this
+      medium model as an optional package.
+    audiocpp: owsm
+    modalities:
+      input:
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+  espnet/owsm_ctc_v4_1B:
+    kind: speech
+    name:
+      short: owsm-ctc
+    notes: >-
+      espnet's OWSM-CTC v4, "a novel encoder-only speech foundation model based on
+      hierarchical multi-task self-conditioned CTC" {card} that does multilingual
+      recognition, speech translation and language identification in one
+      non-autoregressive pass. it was "trained for three epochs on 320k hours of public
+      audio data" {card}, with the data, code and training logs released. the card notes
+      that a CTC-only model like this one has no timestamps. the licence is cc-by-4.0.
+    audiocpp: owsm_ctc
+    modalities:
+      input:
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: espnet/owsm_ctc_v4_1B
+  nvidia/personaplex-7b-v1:
+    kind: speech
+    name:
+      short: personaplex
+    notes: >-
+      nvidia's full-duplex conversational model, which audio.cpp's catalog
+      {url@https://github.com/0xShug0/audio.cpp/blob/main/model_specs/personaplex.json}
+      describes as moshi-style speech-to-speech with mimi audio tokenization, packaged speaker and
+      persona prompts, streaming audio input, text generation and generated assistant
+      speech. the hub {card} lists it as an english finetune of kyutai's moshiko, gated,
+      under the nvidia open model license.
+    audiocpp: personaplex
+    modalities:
+      input:
+      - audio
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  rhasspy/piper-voices:
+    kind: speech
+    name:
+      short: piper tts
+    notes: >-
+      the voice collection for piper, which the card introduces as voices for the piper
+      "text to speech system" {card}: small vits models, one per speaker and language,
+      phonemised with espeak-ng, with the hub metadata listing 35 languages under MIT.
+      audio.cpp's catalog packages only the english lessac medium voice, marked
+      community, plus an rk3588 npu decoder build.
+    audiocpp: piper_tts
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  syvai/plapre-3:
+    kind: speech
+    name:
+      short: plapre 3
+    notes: >-
+      syvai's "Danish multi-task text-to-speech" {card}, a 335m llama-architecture model
+      over the kanade 25hz codec; v3 is plapre-nano-v2 further trained with GRPO to
+      speak more intelligibly, as a drop-in replacement. it generates with cloning,
+      context, pace and pronunciation controls, and can edit words inside an existing
+      recording. the card says to "Run in fp32" {card} because lower precision adds
+      end-of-utterance artifacts, while audio.cpp's default package is bf16. the licence
+      is cc-by-4.0.
+    audiocpp: plapre
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  Qwen/Qwen3-ForcedAligner-0.6B:
+    kind: detect
+    name:
+      short: qwen3 forced aligner
+    notes: >-
+      qwen's non-autoregressive forced aligner from the Qwen3-ASR release: given speech
+      and its transcript, it returns word- or character-level timestamps. the card says
+      it "supports timestamp prediction for arbitrary units within up to 5 minutes of
+      speech in 11 languages" {card} and that "its timestamp accuracy surpasses E2E
+      based forced-alignment models" {card}. the Qwen3-ASR toolkit uses it to add
+      timestamps to transcripts.
+    audiocpp: qwen3_forced_aligner
+  nvidia/RE-USE:
+    kind: audio
+    name:
+      short: re-use
+    notes: >-
+      nvidia's universal speech enhancement model, a 9.6m-parameter bidirectional mamba
+      network that restores degraded speech while keeping its content and speaker. the
+      card lists noise, reverberation, clipping, codec artifacts and packet loss among
+      the degradations, accepts 8 to 48 khz input, and says "This model is for research
+      and development only." {card}. the audio.cpp conversion ships f32 only, because
+      "F16 and Q8 were rejected" {card@audio-cpp/RE-USE-GGUF} for waveform drift without
+      a speed gain.
+    audiocpp: reuse
+    repos:
+    - audio-cpp/RE-USE-GGUF
+  lj1995/VoiceConversionWebUI:
+    kind: audio
+    name:
+      short: rvc
+    notes: >-
+      retrieval-based voice conversion (RVC), the repo behind the voice conversion
+      webui; its card {card} carries only an mit licence field. audio.cpp's catalog
+      {url@https://github.com/0xShug0/audio.cpp/blob/main/model_specs/rvc.json} packages it
+      for offline use with native hubert content features, RMVPE pitch extraction,
+      optional IVF retrieval blending, packaged v1/v2 voices and support for
+      user-supplied RVC checkpoints. the catalog marks the family experimental.
+    audiocpp: rvc
+  facebook/sam-audio-large:
+    kind: audio
+    name:
+      short: sam audio
+    notes: >-
+      the large size of meta's prompt-conditioned audio separator. the audio.cpp GGUF
+      card says it isolates a sound "described by text, a masked image or video, or
+      positive and negative time spans" {card@audio-cpp/SAM-Audio-GGUF}, returning a
+      target and a residual track. that card's parity and performance tables were
+      "measured with watermarking enabled" {card@audio-cpp/SAM-Audio-GGUF}, while the
+      final audio.cpp port returns audio without the watermark.
+    audiocpp: sam_audio
+    repos:
+    - audio-cpp/SAM-Audio-GGUF
+  ampixa/sanoTTS:
+    kind: speech
+    name:
+      short: sanotts nano
+    notes: >-
+      ampixa's sanotts is a family of tiny distilled tts voices, "294k to 2.27M
+      parameters" {card}, distilled from piper/vits or kokoro teachers and phonemised
+      with espeak-ng, aimed at microcontrollers and the browser. the card lists 11
+      voices across 6 languages, some not yet exported, and claims the best naturalness
+      among open models up to 15m parameters on its own 24-sentence set while saying
+      piper and kokoro stay ahead. audio.cpp's catalog lists fourteen languages across
+      the two lineages and marks the family community. the whole stack is GPL-3.0
+      because it builds on espeak-ng and piper.
+    audiocpp: sanotts
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  Plachta/Seed-VC:
+    kind: audio
+    name:
+      short: seed-vc
+    notes: >-
+      plachta's seed-vc is a zero-shot voice conversion model: given a source recording
+      and a reference clip, it transfers the reference speaker's timbre and style, for
+      speech or for singing. audio.cpp's catalog lists it as supported for voice and
+      singing voice conversion, language agnostic, packaged from the mlx-community
+      seedvc-mlx conversion. its hub card carries nothing beyond the gpl-3.0 licence
+      {card}.
+    audiocpp: seed_vc
+  m-a-p/SheetSage2:
+    kind: detect
+    name:
+      short: sheetsage2
+    notes: >-
+      m-a-p's music transcription model, "Music audio to editable scores" {card}:
+      adapters on the mert-v2-fullsong backbone that write melody, chords, beats, key
+      and structure as abc and midi. the audio.cpp gguf merges the backbone in and stays
+      at fp32, since "Q8 is not safe for preserving transcription parity"
+      {card@audio-cpp/SheetSage2-GGUF}. both are cc-by-nc-4.0.
+    audiocpp: sheetsage2
+    repos:
+    - audio-cpp/SheetSage2-GGUF
+  pipecat-ai/smart-turn-v3:
+    kind: detect
+    name:
+      short: smart turn v3.2
+    notes: >-
+      pipecat's turn-taking model, a semantic VAD "that tells you whether a speaker has
+      finished their turn by analysing the raw waveform, not the transcript" {card}. it
+      pairs a whisper tiny encoder with a shallow classifier, 8m parameters in all.
+      audio.cpp packages the v3.2 checkpoint.
+    audiocpp: smart_turn
+  ekwek/Soprano-1.1-80M:
+    kind: speech
+    name:
+      short: soprano
+    notes: >-
+      ekwek's soprano 1.1 is an 80m-parameter english-only text-to-speech model: a small
+      qwen3-style causal lm emits per-frame features and a vocos-style decoder turns
+      them into 32 khz audio. the card lists streaming and automatic text splitting for
+      long input, and says it was "trained on only 1,000 hours of audio" {card}, so
+      uncommon words may be mispronounced. it has no voice cloning. the gguf is
+      walkingcat's community package for audio.cpp.
+    audiocpp: soprano_tts
+    repos:
+    - WalkingCat/Soprano-1.1-80M-GGUF
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  samuel-vitorino/sopro-v2-turbo:
+    kind: speech
+    name:
+      short: sopro v2 turbo
+    notes: >-
+      samuel vitorino's "lightweight voice-cloning text-to-speech model family" {card};
+      this repo is the 120m sopro-v2-turbo, cloning "from 5-20 seconds of reference
+      audio" {card} in english, european portuguese, french and german, with a streaming
+      path. the card warns that "Mixed-language text is a weak spot" {card} and that the
+      streaming path is not bit-exact with offline. the repo also hosts the f16 gguf
+      that audio.cpp's catalog packages as community-supported.
+    audiocpp: sopro_tts
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  nvidia/diar_sortformer_4spk-v1:
+    kind: diarize
+    name:
+      short: sortformer diarization
+    notes: >-
+      nvidia's "novel end-to-end neural model for speaker diarization" {card} that
+      resolves speaker permutation by arrival order, with four sigmoid outputs per
+      frame, so it labels at most four speakers. the card states its limits plainly:
+      "The model operates in a non-streaming mode (offline mode)." {card}, performance
+      degrades with five or more speakers, and training was primarily english. it now
+      opens with a pointer to nemotron-3-diarization as the newer eight-speaker version.
+      the licence is cc-by-nc-4.0.
+    audiocpp: sortformer_diar
+  nvidia/diar_streaming_sortformer_4spk-v2.1:
+    kind: diarize
+    name:
+      short: sortformer diarization v2.1
+    notes: >-
+      the streaming version of nvidia's sortformer diarizer, a 117m fast-conformer model
+      with an arrival-order speaker cache, so each speaker keeps one label as audio
+      streams in. the card states "It can detect a maximum of 4 speakers" {card} and
+      that the training data was "primarily in English" {card}. audio.cpp lists it as a
+      community family with local packages only, because the checkpoint's nvidia open
+      model license has not been cleared for redistribution.
+    audiocpp: sortformer_diar_v2
+  stabilityai/stable-audio-3-medium:
+    kind: sound
+    name:
+      short: stable audio 3
+    notes: >-
+      stability ai's stable audio 3 medium, a generative audio model for text-to-music
+      and sound effects; audio.cpp's catalog
+      {url@https://github.com/0xShug0/audio.cpp/blob/main/model_specs/stable_audio.json}
+      adds audio-to-audio editing, inpainting, continuation and lora personalization.
+      the hub {card} lists stability's stable-audio-community licence, and the upstream
+      weights are gated, so no card body was collected for it.
+    audiocpp: stable_audio
+  Aratako/MioTTS-1.7B:
+    kind: speech
+    name:
+      short: miotts 1.7b
+    notes: >-
+      the 1.7b member of aratako's miotts family, a "lightweight, high-speed
+      Text-to-Speech (TTS) model based on an LLM architecture" {card} initialised from
+      qwen3-1.7b-base. it speaks english and japanese only, trained on about 100k hours
+      of the two, and clones a voice zero-shot from a short reference clip through the
+      25hz miocodec. this size is apache 2.0, while several smaller and larger family
+      members carry falcon or LFM licences instead.
+    audiocpp: miotts
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    turns:
+      source: Aratako/MioTTS-1.7B
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  myshell-ai/OpenVoiceV2:
+    kind: audio
+    name:
+      short: tone color vc
+    notes: >-
+      myshell's openvoice v2, a voice cloning system the card says can "accurately clone
+      the reference tone color" {card} and speak in multiple languages, with melotts
+      doing the base synthesis. since april 2024 it is "released under MIT License. Free
+      for commercial use." {card}. audio.cpp's catalog packages only the tone color
+      converter, as standalone voice conversion from a reference recording, and marks it
+      experimental.
+    audiocpp: tone_color_vc
+  woongzip1/universr-audio:
+    kind: audio
+    name:
+      short: universr
+    notes: >-
+      a "Vocoder-free audio super-resolution model" {card} that upsamples 8, 12, 16 or
+      24 khz audio to 48 khz with flow matching in the complex STFT domain, trained on
+      speech, music and sound effects. this is the general-audio checkpoint, which the
+      card calls the "recommended model" {card}; a speech-only sibling exists. the
+      weights are CC-BY-4.0.
+    audiocpp: universr
+  amphion/Vevo2:
+    kind: speech
+    name:
+      short: vevo2
+    notes: >-
+      amphion's "unified and controllable framework for speech and singing voice
+      generation" {card}: zero-shot TTS, text-to-singing, voice and singing conversion,
+      editing and humming-to-singing, built from prosody and content-style tokenizers, a
+      Qwen2.5-0.5B autoregressive model, a flow-matching transformer and a vocoder. it
+      was trained on about 101k hours of speech and 7,000 hours of internal singing
+      data. the weights are CC-BY-NC-ND-4.0, and audio.cpp's catalog lists english and
+      chinese.
+    audiocpp: vevo2
+    modalities:
+      input:
+      - audio
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  microsoft/VibeVoice-ASR-Streaming-1.5B:
+    kind: speech
+    name:
+      short: vibevoice asr streaming
+    notes: >-
+      microsoft's "unified streaming ASR model" {card} that attributes speakers as it
+      transcribes, accepts custom hotwords such as names and technical terms, and covers
+      ten languages. the card defers evaluation to a technical report. the gguf is
+      christopherthompson81's audio.cpp build, whose card says the 1.5b runs through
+      "the same audio.cpp loader as the 7B"
+      {card@christopherthompson81/VibeVoice-ASR-Streaming-1.5B-GGUF} and that its
+      four-clip WER check only separates "works and is in the right class"
+      {card@christopherthompson81/VibeVoice-ASR-Streaming-1.5B-GGUF} from broken.
+    audiocpp: vibevoice_asr_streaming
+    repos:
+    - audio-cpp/VibeVoice-ASR-Streaming-7B-GGUF
+    - christopherthompson81/VibeVoice-ASR-Streaming-1.5B-GGUF
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+    turns:
+      source: microsoft/VibeVoice-ASR-Streaming-1.5B
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+  pnnbao-ump/VieNeu-TTS-v3-Turbo:
+    kind: speech
+    name:
+      short: vieneu-tts v3 turbo
+    notes: >-
+      a vietnamese text-to-speech model with english code-switching, 48 khz output, 23
+      preset voices and voice cloning from a 3-8 s clip, which the card says was
+      "trained from scratch" {card} on about 10,000 hours of english and vietnamese
+      speech. it is apache-2.0, preset voices included. the community GGUF repo calls
+      itself "a GGUF quantization of the original"
+      {card@phuocnguyen90/VieNeu-TTS-v3-Turbo-GGUF} but tags cc-by-nc-4.0 in its front
+      matter.
+    audiocpp: vieneu_v3_turbo
+    repos:
+    - phuocnguyen90/VieNeu-TTS-v3-Turbo-GGUF
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  openbmb/VoxCPM-0.5B:
+    kind: speech
+    name:
+      short: voxcpm 0.5b
+    notes: >-
+      openbmb's "tokenizer-free Text-to-Speech (TTS) system" {card} on a minicpm-4 0.5b
+      backbone, generating continuous speech representations rather than discrete
+      tokens, with zero-shot cloning from a short reference and streaming output. the
+      card notes it "is trained primarily on Chinese and English data" {card}. this is
+      the checkpoint audio.cpp's voxcpm1 family converts, at 16 khz.
+    audiocpp: voxcpm1
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+  Cactus-Compute/whistle:
+    kind: speech
+    name:
+      short: whistle asr
+    notes: >-
+      cactus compute's "speech-to-text model for mobiles, wearables, robots, smart home,
+      automotive and microcontrollers" {card}, shipped as a single file for the
+      vendor's needle engine. it transcribes english, german, french, spanish,
+      italian, dutch and polish with word timestamps and keyword biasing, and the card
+      warns that "music especially, can still come out as text" {card}. audio.cpp's
+      catalog packages an f32 gguf with a GGML encoder and a host decoder, and marks it
+      experimental.
+    audiocpp: whistle_asr
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+  coqui/XTTS-v2:
+    kind: speech
+    name:
+      short: xtts v2
+    notes: >-
+      coqui's voice generation model that can "clone voices into different languages by
+      using just a quick 6-second audio clip" {card}, covering 17 languages and
+      accepting multiple speaker references with interpolation between them. it is
+      licensed under the "Coqui Public Model License" {card}. the gguf is onicubag's,
+      which audio.cpp's catalog uses as its package and lists as community-supported.
+    audiocpp: xtts_v2
+    repos:
+    - onicubag/xTTSv2-GGUF
+    ids:
+      aa-tts: xtts-v2
+      tts-arena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+  m-a-p/YuE2-3B:
+    kind: sound
+    name:
+      short: yue2
+    notes: >-
+      m-a-p's 3B music model that turns lyrics and a style prompt into a complete song
+      with vocals and accompaniment, planned through an editable symbolic score. its
+      card claims "frontier song quality competitive with Suno v5/v6" {card}, resting on
+      a best-of-8 result on the authors' WildSongBench. the weights are CC-BY-NC-4.0.
+    audiocpp: yue2
+    repos:
+    - audio-cpp/Yue2-3B-GGUF
+  k2-fsa/ZipVoice:
+    kind: speech
+    name:
+      short: zipvoice
+    notes: >-
+      k2-fsa's zipvoice repo holds checkpoints for two non-autoregressive flow-matching
+      tts models in english and chinese: zipvoice for zero-shot single-speaker cloning
+      and zipvoice-dialog for spoken dialogue. the tracked gguf is davidxifeng's
+      community audio.cpp package of the 8-step zipvoice-distill checkpoint, which
+      bundles the vocos 24 khz vocoder and recommends q8_0. that card labels the weights
+      apache 2.0, but the upstream card says the pretrained model is "licensed under the
+      CC-BY-NC due to constraints from its training data" {card}.
+    audiocpp: zipvoice
+    repos:
+    - davidxifeng/zipvoice-gguf
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+    modalities:
+      input:
+      - audio
+      - text
+      output:
+      - audio

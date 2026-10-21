@@ -268,6 +268,15 @@ def main():
         print("  %d task(s) in no category: %s" % (len(loose), ", ".join(loose)),
               file=sys.stderr)
 
+    # only from a capture of the same cutoff: another cutoff is another question
+    # set, and a score on it is not a score on this board
+    prev = capture.previous(path)
+    same = (prev.get("meta") or {}).get("cutoff") == payload["meta"].get("cutoff")
+    payload["models"], kept = capture.carry(prev.get("models") if same else {},
+                                            payload["models"])
+    if kept:
+        print(capture.carried(kept))
+
     def count(p):
         return len(p.get("models") or {})
 

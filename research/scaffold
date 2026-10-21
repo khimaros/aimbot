@@ -207,9 +207,122 @@ def draft(backend, spec, bases, sizes):
     return header + lines, todo
 
 
+AUDIOCPP = os.path.join(HERE, "data", "audiocpp.json")
+AUDIOCPP_KEYS = os.path.join(HERE, "audiocpp-keys.txt")
+# the repo audio.cpp republishes most families into. it holds every family at
+# once, so it is not a repo of any one model and is never drafted as one
+AUDIOCPP_SHARED = "audio-cpp/audio.cpp-gguf"
+# what a loader task takes in and gives back, for the speech families. the
+# other kinds carry no modalities block (see UNSHAPED_KINDS in models-validate)
+TASK_IN = {"tts": "text", "design": "text", "asr": "audio", "clone": "audio",
+           "vc": "audio", "s2s": "audio", "edit": "audio"}
+TASK_OUT = {"asr": "text", "tts": "audio", "design": "audio", "clone": "audio",
+            "vc": "audio", "s2s": "audio", "edit": "audio"}
+
+
+def audiocpp_keys(path):
+    """{family: (key or None, reason, kind override)} from audiocpp-keys.txt."""
+    out = {}
+    for line in open(path):
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        fam, key, *rest = line.split(None, 2)
+        rest = (rest or [""])[0]
+        kind = next((w[5:] for w in rest.split() if w.startswith("kind=")), None)
+        out[fam] = (None if key == "-" else key, rest, kind)
+    return out
+
+
+def audiocpp_kind(rec):
+    """The registry kind an audio.cpp family is, from its category and tasks."""
+    tasks, cat = set(rec.get("tasks") or []), rec.get("category")
+    if "diar" in tasks:
+        return "diarize"
+    if cat in ("tts", "asr", "community"):
+        return "speech"
+    if cat == "audio_generation" or tasks & {"music", "sfx"}:
+        return "sound"
+    if cat == "voice_conversion" or tasks & {"sep", "s2s", "vc", "svc"}:
+        return "audio"
+    return "detect"
+
+
+def shared_repos(catalog):
+    """Repos more than one family downloads from, which are repos of no one model.
+
+    audio.cpp's own `audio-cpp/audio.cpp-gguf` is the large case and a
+    contributor's `mirek190/audio.cpp` the small one: listed under an entry,
+    either puts every family's files on that entry's ladder.
+    """
+    seen = {}
+    for fam, rec in catalog.items():
+        for p in rec.get("packages") or []:
+            if p.get("repo"):
+                seen.setdefault(p["repo"], set()).add(fam)
+    return {r for r, fams in seen.items() if len(fams) > 1} | {AUDIOCPP_SHARED}
+
+
+def draft_audiocpp(fam, rec, key, kind, shared=()):
+    """One registry entry for an audio.cpp family, as yaml lines."""
+    tasks = rec.get("tasks") or []
+    own = [p["repo"] for p in rec.get("packages") or []
+           if p.get("format") == "gguf" and p.get("repo")
+           and p["repo"] != key and p["repo"] not in shared]
+    lines = ["  # scaffolded from audio.cpp --family %s (%s, %s)"
+             % (fam, rec.get("status"), rec.get("category")),
+             "  %s:" % key, "    kind: %s" % kind, "    name:",
+             "      short: %s" % (rec.get("display_name") or fam).lower(),
+             "    audiocpp: %s" % fam]
+    if own:
+        lines.append("    repos:")
+        lines.extend("    - %s" % r for r in dict.fromkeys(own))
+    if kind == "speech":
+        ins = sorted({TASK_IN[t] for t in tasks if t in TASK_IN}) or ["text"]
+        outs = sorted({TASK_OUT[t] for t in tasks if t in TASK_OUT}) or ["audio"]
+        lines += ["    modalities:", "      input:"] + ["      - %s" % x for x in ins]
+        lines += ["      output:"] + ["      - %s" % x for x in outs]
+    return lines
+
+
+def scaffold_audiocpp(args, models):
+    """Draft an entry per audio.cpp family the registry does not carry."""
+    catalog = (json.load(open(args.audiocpp)) or {}).get("families") or {}
+    keys = audiocpp_keys(args.audiocpp_keys)
+    shared = shared_repos(catalog)
+    named = {m.get("audiocpp") for m in models.values()}
+    drafted = existing = skipped = 0
+    for fam, rec in sorted(catalog.items()):
+        if fam in named:
+            continue
+        if fam not in keys:
+            print("  # TODO %s: no line in %s says which checkpoint it is"
+                  % (fam, os.path.basename(args.audiocpp_keys)))
+            continue
+        key, why, kind = keys[fam]
+        if not key:
+            skipped += 1
+            continue
+        if key in models:
+            print("  # `%s` is %s, already carried as `%s`: add `audiocpp: %s` there"
+                  % (fam, key, (models[key].get("name") or {}).get("short"), fam))
+            existing += 1
+            continue
+        print("\n".join(draft_audiocpp(fam, rec, key, kind or audiocpp_kind(rec), shared)))
+        print()
+        drafted += 1
+    print("# %d audio.cpp famil(ies) drafted, %d belong to entries already carried, "
+          "%d have no checkpoint to key on" % (drafted, existing, skipped), file=sys.stderr)
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--audiocpp-mode", dest="audiocpp_mode", action="store_true",
+                    help="draft audio.cpp families instead of crispasr backends")
+    ap.add_argument("--audiocpp", default=AUDIOCPP)
+    ap.add_argument("--audiocpp-keys", default=AUDIOCPP_KEYS)
     ap.add_argument("--crispasr", default=CRISPASR)
     ap.add_argument("--sizes", default=SIZES)
     ap.add_argument("--registry", default=REGISTRY)
@@ -221,6 +334,8 @@ def main():
 
     import yaml
     models = (yaml.safe_load(open(args.registry)) or {}).get("models") or {}
+    if args.audiocpp_mode:
+        return scaffold_audiocpp(args, models)
     backends = (json.load(open(args.crispasr)) or {}).get("backends") or {}
     sizes = json.load(open(args.sizes)) if os.path.exists(args.sizes) else {}
     carried = carried_backends(models)

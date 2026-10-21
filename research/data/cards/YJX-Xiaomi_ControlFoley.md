@@ -1,0 +1,403 @@
+---
+license: cc-by-nc-4.0
+language:
+- en
+pipeline_tag: text-to-audio
+tags:
+- text-video-to-audio
+- text-controlled-video-to-audio
+- audio-controlled-video-to-audio
+- audio-generation
+library_name: diffusers
+---
+
+<!-- ## **ControlFoley** -->
+
+<div align="center">
+
+# ControlFoley: Unified and Controllable Video-to-Audio Generation with Cross-Modal Conflict Handling
+
+<p align="center"><strong>Accepted by ACM MM 2026.</strong></p>
+
+<p align="center">
+  <a href="https://arxiv.org/abs/2604.15086" style="text-decoration:none"><img src="https://img.shields.io/badge/arXiv-2506.21448-b31b1b.svg?logo=arxiv&logoColor=white" alt="arXiv"/></a>
+  &nbsp;
+  <a href="https://registry.comfy.org/publishers/yjx-research/nodes/ComfyUI-ControlFoley" style="text-decoration:none"><img src="https://img.shields.io/badge/ComfyUI-Official-blue?logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODQiIGhlaWdodD0iODQiIHZpZXdCb3g9IjAgMCA4NCA4NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9Ijg0IiBoZWlnaHQ9Ijg0IiBmaWxsPSIjMTcyREQ3IiBzdHlsZT0iZmlsbDojMTcyREQ3O2ZpbGw6Y29sb3IoZGlzcGxheS1wMyAwLjA5MDIgMC4xNzY1IDAuODQzMSk7ZmlsbC1vcGFjaXR5OjE7Ii8+CjxwYXRoIGQ9Ik0yOC41ODk5IDY5LjI3MjdDMjcuMzI0MiA2OS4yNzI3IDI2LjMwMyA2OC44MDIzIDI1LjYzNyA2Ny45MTI4QzI0Ljk1MjQgNjYuOTk4OSAyNC43NzQgNjUuNzIzIDI1LjE0NzEgNjQuNDEzM0wyNi42NDU1IDU5LjE1MThDMjYuNzY1IDU4LjczMjkgMjYuNjgxOCA1OC4yODIxIDI2LjQyMTIgNTcuOTMzNkMyNi4xNjA2IDU3LjU4NTggMjUuNzUyOSA1Ny4zODEgMjUuMzE5OCA1Ny4zODFIMjEuMDExNkMxOS43NDUzIDU3LjM4MSAxOC43MjQgNTYuOTExMiAxOC4wNTgzIDU2LjAyMThDMTcuMzczOCA1NS4xMDcyIDE3LjE5NTMgNTMuODMxNCAxNy41Njg3IDUyLjUyMTZMMjIuNzE2MyAzNC41Mjg2TDIzLjI4NDcgMzIuNTUxN0MyNC4wNDg3IDI5Ljg2OSAyNi44MzQ5IDI3LjY4ODggMjkuNDk2NiAyNy42ODg4SDM0LjY1MTdDMzUuMjY2OCAyNy42ODg4IDM1LjgwNzkgMjcuMjc4NyAzNS45NzczIDI2LjY4MzVMMzcuNjgyMSAyMC42OTg3QzM4LjQ0NTMgMTguMDE4NyA0MS4yMzE2IDE1LjgzODUgNDMuODkzMyAxNS44Mzg1TDU0LjkxODEgMTUuODE4OUw2Mi45ODkxIDE1LjgxODJDNjQuMjU1MSAxNS44MTgyIDY1LjI3NjMgMTYuMjg4IDY1Ljk0MiAxNy4xNzc0QzY2LjYyNjUgMTguMDkxMyA2Ni44MDUgMTkuMzY3MiA2Ni40MzE5IDIwLjY3NjlMNjQuMTI0IDI4Ljc4MDNDNjMuMzYxMSAzMS40NTk1IDYwLjU3NDggMzMuNjM5MSA1Ny45MTMxIDMzLjYzOTFMNDYuODYzNyAzMy42NjAxSDQxLjcxMDRDNDEuMDk1OSAzMy42NjAxIDQwLjU1NTUgMzQuMDY5NSA0MC4zODUxIDM0LjY2NDFMMzYuMDg4MyA0OS42NzIyQzM1Ljk2ODEgNTAuMDkxOSAzNi4wNTEzIDUwLjU0NDEgMzYuMzEyNiA1MC44OTI1QzM2LjU3MzIgNTEuMjQwMyAzNi45ODA5IDUxLjQ0NSAzNy40MTM2IDUxLjQ0NUw0NC43MTUyIDUxLjQzMDhINTIuNzYyMkM1NC4wMjgyIDUxLjQzMDggNTUuMDQ5NCA1MS45MDA2IDU1LjcxNTEgNTIuNzkwMUM1Ni4zOTk2IDUzLjcwNDYgNTYuNTc4MSA1NC45ODA1IDU2LjIwNDcgNTYuMjkwMkw1My44OTY5IDY0LjM5MjNDNTMuMTMzOSA2Ny4wNzIyIDUwLjM0NzYgNjkuMjUxNyA0Ny42ODYgNjkuMjUxN0wzNi42MzY5IDY5LjI3MjdIMjguNTg5OVoiIGZpbGw9IiNGMEZGNDEiIHN0eWxlPSJmaWxsOiNGMEZGNDE7ZmlsbDpjb2xvcihkaXNwbGF5LXAzIDAuOTQxMiAxLjAwMDAgMC4yNTQ5KTtmaWxsLW9wYWNpdHk6MTsiLz4KPC9zdmc+Cg==" alt="ComfyUI"/></a>
+  &nbsp;
+  <a href="https://github.com/xiaomi-research/controlfoley" style="text-decoration:none"><img src="https://img.shields.io/badge/GitHub-Code-blue?logo=Github" alt="GitHub"/></a>
+  &nbsp;
+  <a href="https://yjx-research.github.io/ControlFoley_web_page/" style="text-decoration:none"><img src="https://img.shields.io/badge/Project Page-Project-blue?logo=googledocs&logoColor=white" alt="Project Page"/></a>
+  &nbsp;
+  <a href="https://yjx-research.github.io/ControlFoley/" style="text-decoration:none"><img src="https://img.shields.io/badge/Demo Page-Demo-blue?logo=youtube&logoColor=white" alt="Demo Page"/></a>
+  &nbsp;
+  <a href="https://huggingface.co/YJX-Xiaomi/ControlFoley" style="text-decoration:none"><img src="https://img.shields.io/badge/HuggingFace-Models-orange?logo=huggingface" alt="Hugging Face"/></a>
+  &nbsp;
+  <a href="https://huggingface.co/spaces/YJX-Xiaomi/controlfoley" style="text-decoration:none"><img src="https://img.shields.io/badge/HuggingFace-Space-0ea5e9?logo=huggingface" alt="Hugging Face Space"/></a>
+  &nbsp;
+  <a href="https://github.com/0xShug0/audio.cpp#supported-models" style="text-decoration:none"><img src="https://img.shields.io/badge/audio.cpp-C%2B%2B%20%7C%20GGUF-4b5563?logo=cplusplus&logoColor=white" alt="audio.cpp C++ and GGUF"/></a>
+  &nbsp;
+  <a href="https://clawhub.ai/yjx-research/controlfoley-audio-generator" style="text-decoration:none"><img src="https://img.shields.io/badge/%F0%9F%A6%9E%20ClawHub-Skill-red" alt="ClawHub Skill"/></a>
+</p>
+
+</div>
+
+<p align="center">
+If you find this project useful, please consider giving a star ⭐️~
+</p>
+
+
+<div align="center">
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+### 👥 **Authors**
+
+<div>
+    <!-- Row 1: 6 authors -->
+    <div style="margin-bottom: 2px;">
+        Jianxuan Yang<sup>1*†</sup>,&nbsp;
+        Xinyue Guo<sup>1*</sup>,&nbsp;
+        Zhi Cheng<sup>1,2</sup>,&nbsp;
+        Kai Wang<sup>1,2</sup>,&nbsp;
+        Lipan Zhang<sup>1</sup>,&nbsp;
+        Jinjie Hu<sup>1</sup>
+    </div>
+    <!-- Row 2: 7 authors -->
+    <div>
+        Qiang Ji<sup>1</sup>,&nbsp;
+        Yihua Cao<sup>1</sup>,&nbsp;
+        Yihao Meng<sup>1,2</sup>,&nbsp;
+        Zhaoyue Cui<sup>1,2</sup>,&nbsp;
+        Mengmei Liu<sup>1</sup>,&nbsp;
+        Meng Meng<sup>1</sup>,&nbsp;
+        Jian Luan<sup>1</sup>
+    </div>
+</div>
+<!-- Affiliations -->
+<div>
+    <sup>1</sup>MiLM Plus, Xiaomi Inc. &nbsp;&nbsp; <sup>2</sup>Wuhan University
+    <br>
+    *Equal contribution &nbsp;&nbsp; †Corresponding author
+</div>
+</div>
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+
+## 📺 **Intro Video**
+
+https://github.com/user-attachments/assets/59056500-1711-40a9-9689-5d751767cbdc
+
+For more results of our model, visit [Project Page](https://yjx-research.github.io/ControlFoley_web_page/). For comparison with other methods, visit [Demo Page](https://yjx-research.github.io/ControlFoley/).
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 📰 **News**
+
+- [2026-04] Technical report released on [arXiv](https://arxiv.org/abs/2604.15086).
+- [2026-04] [Project page](https://yjx-research.github.io/ControlFoley_web_page/) is now live.
+- [2026-04] [Inference code](https://github.com/xiaomi-research/controlfoley) and [pretrained models](https://huggingface.co/YJX-Xiaomi/ControlFoley) are released.
+- [2026-04] Online demo is available on [Project Inference Interface](https://yjx-research.github.io/ControlFoley_web_page/#try-gen), let's try now!
+- [2026-04] Skill [ControlFoley Audio Generator](https://clawhub.ai/yjx-research/controlfoley-audio-generator) is released on ClawHub!
+- [2026-07] ControlFoley has been accepted to ACM MM 2026.
+- [2026-07] Official ControlFoley-maintained [ComfyUI nodes and full-task workflows](https://github.com/YJX-Research/comfyui-controlfoley-official) for V2A, TV2A, TC-V2A, AC-V2A, and T2A are released.
+- [2026-08] The official interactive [Hugging Face Space](https://huggingface.co/spaces/YJX-Xiaomi/controlfoley) is now live with refreshed examples covering V2A, TV2A, TC-V2A, AC-V2A, and T2A.
+- [2026-08] [audio.cpp](https://github.com/0xShug0/audio.cpp) v0.7 adds ControlFoley support, providing native C++ inference and GGUF model packages.
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 🔄 **Updates**
+
+- [x] Release technical report on arXiv.
+- [x] Launch project page.
+- [x] Release inference code and pretrained models.
+- [x] Launch online inference demo (available on project page).
+- [x] Release skill.
+- [x] Release official ControlFoley-maintained ComfyUI nodes and full-task workflows.
+- [x] Launch the official Hugging Face Space with full-task examples.
+- [x] Community integration: native C++ inference and GGUF support through audio.cpp.
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 🤝 **Community Contributions**
+
+<strong>🤗 Official ControlFoley Space on Hugging Face</strong> - The interactive demo was originally created by [@apolinario](https://github.com/apolinario) from Hugging Face and is now maintained by the ControlFoley team:
+
+- [Hugging Face Space: YJX-Xiaomi/controlfoley](https://huggingface.co/spaces/YJX-Xiaomi/controlfoley) - Try V2A, TV2A, TC-V2A, AC-V2A, and T2A directly in the browser.
+
+<strong>⚙️ audio.cpp Integration</strong> - [audio.cpp](https://github.com/0xShug0/audio.cpp), maintained by [@0xShug0](https://github.com/0xShug0), added ControlFoley in release 0.7 with native C++ inference and GGUF support:
+
+- [GitHub: 0xShug0/audio.cpp](https://github.com/0xShug0/audio.cpp) - Run ControlFoley through the portable C++ inference framework.
+- [Hugging Face: ControlFoley-GGUF](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/ControlFoley-GGUF) - Download the converted GGUF model package.
+
+<img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/comfyui.svg" width="18" alt="ComfyUI" style="display:inline-block;vertical-align:middle;margin:0 6px 0 0;" /><strong>Official ComfyUI Integration</strong> - The ControlFoley team officially publishes and maintains ComfyUI custom nodes and full-task workflows for V2A, TV2A, TC-V2A, AC-V2A, and T2A:
+
+- [Comfy Registry: ControlFoley Official](https://registry.comfy.org/publishers/yjx-research/nodes/ComfyUI-ControlFoley) - Install ControlFoley directly from Comfy Registry / ComfyUI Manager.
+- [GitHub: YJX-Research/comfyui-controlfoley-official](https://github.com/YJX-Research/comfyui-controlfoley-official) - Source code, workflows, examples, and documentation. If this integration is useful, please consider starring both the ComfyUI repository and this ControlFoley repository.
+
+
+We welcome community workflows, integrations, tutorials, and deployment recipes that help more users build with ControlFoley.
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 🎧 **Overview**
+
+ControlFoley is a unified and controllable multimodal video-to-audio (V2A) generation framework that enables precise control over generated audio using video, text, and reference audio.
+
+Unlike existing methods that rely on a single modality or struggle under conflicting inputs, ControlFoley is designed to handle complex multimodal interactions and maintain strong controllability even when modalities are inconsistent.
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 🎨 **Tease Figure**
+
+<div align="center">
+    <img src="assets/tease.png" width="100%">
+    <p style="margin-top: 8px; text-align: center; font-style: italic;">
+        Left: Overview of the ControlFoley framework with three multimodal conditioning modes for controllable video-synchronized audio generation. Right: Performance radar chart of Video-to-Audio models.
+    </p>
+</div>
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 🚀 **Capabilities**
+
+ControlFoley supports a wide range of applications:
+
+- 🎬 <strong>Text-Video-to-Audio Generation (TV2A)</strong><br>
+  Video-content-adaptive dubbing and synchronized sound effect generation under text guidance.
+
+- 📝 <strong>Text-Controlled Video-to-Audio (TC-V2A)</strong><br>
+  Audio generation under video–text conflicts, with semantics consistent with text prompts and temporally synchronized with video contents.
+
+- 🎧 <strong>Audio-Controlled Video-to-Audio (AC-V2A)</strong><br>
+  Audio generation conditioned on reference audio, with timbre consistent with the reference audio and temporally synchronized with video contents.
+
+- 📝 <strong>Text-to-Audio Generation (T2A)</strong><br>
+  Generate audio directly from text prompts as an additional capability of the unified framework.
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 🧠 **Key Innovations**
+
+<div align="center">
+    <img src="assets/controlfoley.png" width="100%">
+</div>
+
+- <strong>Joint Visual Encoding for Robust Multimodal Control:</strong>
+  Combines CLIP and CAV-MAE-ST representations to capture both vision-language and audio-visual correlations, improving robustness under modality conflict.
+
+- <strong>Timbre-Focused Reference Audio Control:</strong>
+  Extracts global timbre representations while suppressing temporal cues, enabling precise acoustic style control without affecting synchronization.
+
+- <strong>Modality-Robust Training with Unified Alignment:</strong>
+  Introduces all-modality dropout and a unified REPA objective to improve robustness across diverse modality combinations.
+
+- <strong>VGGSound-TVC Benchmark:</strong>
+  A new benchmark for evaluating textual controllability under visual-text semantic conflicts.
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 🧪 **VGGSound-TVC Benchmark**
+
+We propose VGGSound-TVC to evaluate text controllability under varying levels of visual-text conflict. In this dataset, textual descriptions of videos are reconstructed in accordance with the rules described below.
+
+- L0 → No conflict, where the textual description is consistent with the video content.
+- L1_subject →  A mild semantic conflict introduced at the subject level, where the action description remains unchanged while the sounding subject is replaced.
+- L1_action → A mild semantic conflict introduced at the action level, where the subject remains unchanged while the action description is modified.
+- L2 → A moderate semantic conflict in which the textual description belongs to a different semantic category while still maintaining a similar temporal structure or acoustic rhythm.
+- L3 → Strong conflict, where the textual description is randomly substituted.
+
+This enables systematic analysis of modality dominance and controllability under increasing inconsistency. Example samples from VGGSound-TVC are as follows.
+<div align="center">
+    <img src="assets/benchmark.png" width="100%">
+</div>
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 📊 **Performance**
+
+ControlFoley achieves strong performance across multiple V2A tasks, demonstrating both high generation quality and robust controllability.
+
+🎬 <strong>TV2A</strong>
+
+ControlFoley achieves state-of-the-art performance across multiple benchmarks, including VGGSound-Test, Kling-Audio-Eval, and MovieGen-Audio-Bench.
+
+- Highest CLAP scores (better semantic alignment)
+- Lowest DeSync (better temporal synchronization)
+- Best overall IS (better audio quality)—Up to 27% relative improvement (22.08 vs. 17.36 on VGGSound).
+
+<div align="center">
+    <img src="assets/result1.png" width="80%">
+</div>
+
+📝 <strong>TC-V2A</strong>
+
+ControlFoley demonstrates strong textual controllability under increasing visual-text conflict.
+
+- Maintains high CLAP (text alignment) across conflict levels  
+- Effectively reduces IB under conflict (less reliance on visual bias)  
+- Achieves better balance between controllability and generation quality  
+
+<div align="center">
+    <img src="assets/result2.png" width="80%">
+</div>
+
+🎧 <strong>AC-V2A</strong>
+
+ControlFoley achieves the best performance across all evaluation metrics on the Greatest Hits dataset and the AC-VAS dataset.
+
+- Better timbre similarity (Resemblyzer、MFCC、CosSim_PaSST)
+- Better synchronization (DeSync)  
+  
+Notably, it outperforms CondFoleyGen, a specialized in-domain baseline, demonstrating strong generalization ability.
+
+<div align="center">
+    <img src="assets/result3.png" width="50%">
+</div>
+
+##
+ControlFoley also demonstrates competitive or superior performance compared to strong proprietary systems such as Kling-Foley, highlighting its effectiveness as an open and controllable solution.
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 🛠 **Quick Start**
+
+### 🔑 **Prerequisites**
+
+- Python 3.10+
+- PyTorch 2.5.1+
+- CUDA 11.8+
+- FFmpeg (conda install -c conda-forge ffmpeg)
+
+### 🧱 **Installation**
+
+```bash
+# Clone the repository
+git clone https://github.com/xiaomi-research/controlfoley
+cd controlfoley
+
+# Create conda environment
+conda create -n controlfoley python=3.10.16
+conda activate controlfoley
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Download pretrained weights
+pip install huggingface-hub==0.26.2
+huggingface-cli download YJX-Xiaomi/ControlFoley --resume-download --local-dir model_weights --local-dir-use-symlinks False
+```
+
+Or you can download the weights from [here](https://huggingface.co/YJX-Xiaomi/ControlFoley/tree/main/) and put them in the `model_weights` folder.
+
+### 🎨 **Inference**
+
+```
+python demo.py [OPTIONS]
+
+Options:
+  --video            TEXT       Path to the input video file. (default: None)
+  --audio            TEXT       Path to the input reference audio file. (default: None)
+  --prompt           TEXT       Textual prompt for audio generation. (default: None)
+  --negative_prompt  TEXT       Negative textual prompt for audio generation. (default: None)
+  --duration         FLOAT      Duration of the generated audio in seconds. (default: 8.0)
+  --output           TEXT       Output directory for generated audio files. (default: ./output)
+```
+
+### 📌 **Supported Tasks**
+
+| Task   | video      | audio      | prompt   |
+|--------|------------|------------|----------|
+| TV2A   | required   | None       | required |
+| TC-V2A | required   | None       | required |
+| AC-V2A | required   | required   | optional |
+| V2A    | required   | None       | None     |
+| T2A    | None       | None       | required |
+
+### 📋 **Usage Examples**
+
+Ready-to-use inputs and generated outputs for all supported tasks are available in [`examples/`](examples/). You can preview the results directly or reuse the inputs with the commands below.
+
+- TV2A
+
+```bash
+python demo.py --video "examples/tv2a/tv2a_video_input.mp4" --prompt "skateboarding" --duration 8.0 --output "./output"
+```
+
+- TC-V2A
+
+```bash
+python demo.py --video "examples/tc_v2a/tcv2a_video_input.mp4" --prompt "thunder strike" --duration 6.0 --output "./output"
+```
+
+- AC-V2A
+
+```bash
+python demo.py --video "examples/ac_v2a/acv2a_video_input.mp4" --audio "examples/ac_v2a/acv2a_reference.wav" --duration 5.0 --output "./output"
+```
+
+- V2A
+
+```bash
+python demo.py --video "examples/v2a/v2a_video_input.mp4" --duration 6.0 --output "./output"
+```
+
+- T2A
+
+```bash
+python demo.py --prompt "A bird sings melodically in a forest." --duration 10.0 --output "./output"
+```
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 📝 **Citation**
+
+If you find this repository useful, please consider citing our paper:
+
+```bibtex
+@misc{yang2026controlfoleyunifiedcontrollablevideotoaudio,
+  title={ControlFoley: Unified and Controllable Video-to-Audio Generation with Cross-Modal Conflict Handling}, 
+  author={Jianxuan Yang and Xinyue Guo and Zhi Cheng and Kai Wang and Lipan Zhang and Jinjie Hu and Qiang Ji and Yihua Cao and Yihao Meng and Zhaoyue Cui and Mengmei Liu and Meng Meng and Jian Luan},
+  year={2026},
+  eprint={2604.15086},
+  archivePrefix={arXiv},
+  primaryClass={cs.MM},
+  url={https://arxiv.org/abs/2604.15086}, 
+}
+```
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 🔒 **License**
+
+This repository is licensed under the [Apache License 2.0](./LICENSE) and the [model weights](https://huggingface.co/YJX-Xiaomi/ControlFoley/tree/main/) are licensed under the [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/).
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 🙏 **Acknowledgments**
+
+This project uses the following datasets:<br>
+VGGSound, Kling-Audio-Eval, The Greatest Hits (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" style="color:#007bff; text-decoration:none;">CC BY 4.0</a>),
+and MovieGen-Audio-Bench (<a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" style="color:#dc3545; text-decoration:none;">CC BY-NC 4.0</a>).<br>
+All resources are used for <strong>academic and non-commercial demonstration purposes only</strong>.
+
+Demo media credits: audio from Pixabay; video from Pexels and Jimeng AI-generated content.
+
+This project is inspired by the following works:<br>
+[stable-audio-tools](https://github.com/Stability-AI/stable-audio-tools), [MMAudio](https://github.com/hkchengrex/MMAudio), [Make-An-Audio 2](https://github.com/bytedance/Make-An-Audio-2), [Synchformer](https://github.com/v-iashin/Synchformer), and [audiocraft](https://github.com/facebookresearch/audiocraft).<br>
+Thanks for their contributions.
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+## 📞 **Contact**
+
+If you have any questions or suggestions, please feel free to contact us at yangjianxuan@xiaomi.com.
+
+<hr style="border: none; border-top: 3px solid #333; margin: 16px 0;">
+
+<div align="center">
+
+2026 ControlFoley Project. All Rights Reserved.
+
+</div>
+

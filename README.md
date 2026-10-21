@@ -318,7 +318,7 @@ readable CATALOG, and for those the registry writes nothing at all:
 
 | engine | its catalog | what the join is | roster models it claims |
 | --- | --- | --- | --- |
-| `audio.cpp` | `model_specs/*.json`, ~100 families | the repo a package downloads from | 7 |
+| `audio.cpp` | `model_specs/*.json`, ~120 families | the entry's `audiocpp` family, else the repo a package downloads from | 119 |
 | `gufo` | `docs/models/*`, one guide per model | the repo each guide's hugging face links name | 7 |
 
 so no entry anywhere says `engine: audio.cpp`, `models-validate` rejects one
@@ -352,6 +352,18 @@ recommends the 1.7b, so handing its default package to the 0.6b entry would
 print a command for a model three times the size of its own row. the other
 packages are counted in a comment rather than guessed at.
 
+**the packages audio.cpp would install are rungs, and only audio.cpp loads
+them.** 67 entries ship only inside audio.cpp's shared repo, so until the
+packages were sized the page knew which one to install and not what it weighed.
+`fetch-audiocpp` sums each package's files off the hub's listing, and a package
+is offered as a rung of the entry it is a checkpoint of -- by the repo it came
+from, or by the checkpoint its target directory or id names -- so qwen3_tts's
+five checkpoints do not lend each other sizes. an `orig` or `native` package is
+labelled by the dtype its own file is in, read off its tensor table or the hub's
+safetensors index. under the audio.cpp runtime the fit weighs these and nothing
+else: a file pinned from a repo no package downloads from is one audio.cpp does
+not read.
+
 the gufo command points at **the path `hf download` reports for the bytes it
 fetched**, not at a directory this page picked. gufo's own guides fetch into
 `models/<family>` with `--local-dir` and then point there, which is two choices to
@@ -372,6 +384,33 @@ engine nothing pinned:
     ./research/fetch-audiocpp --report    # which checkpoints it downloads, and the
                                           # 92 families nothing here shares a repo with
     ./research/fetch-gufo-support --report # each guide, and which of its files are here
+
+**most audio.cpp families are named rather than joined.** 70 of its 124
+families download only from audio.cpp's shared `audio-cpp/audio.cpp-gguf`,
+and a repo every family uses names none of them, so an entry for one of those
+writes `audiocpp: <family>` -- the `--family` argument, checked against the
+catalog by `models-validate` the way `crispasr.backend` is checked against
+crispasr's. a named family wins over the repo join. no entry lists the shared
+repo itself, because every family's files would then sit on that entry's
+ladder; those entries have no sized rung, and the fit passes them rather than
+guessing a size.
+
+which checkpoint a family IS is a human decision, kept in
+`research/audiocpp-keys.txt` beside `decided.txt`, and `./research/scaffold
+--audiocpp-mode` drafts an entry for every family it keys that the registry
+does not carry yet. eight families have no checkpoint on the hub to key on and
+are listed there with the reason.
+
+the families that are neither speech nor diarization get three kinds of their
+own, unshaped for the reason `post` is -- a music model declared text in /
+audio out would sit in the speech-synthesis filter and be offered the tts
+boards:
+
+```
+sound    music and sound-effect generation            ace-step, yue2, stable audio 3
+audio    audio in, other audio out                     separation, enhancement, voice conversion, codecs
+detect   audio in, a label out                         vad, wake words, end of turn, tagging, alignment, notes
+```
 
 ## a sixth text board, at zero weight
 
@@ -1035,6 +1074,11 @@ is the only thing that knows which reference produced which figure; matching
 the rendered words afterwards would be a second implementation of the
 substitution, and could not attribute `{aa.lcr@other/Repo}` at all, since a
 comparison against another model prints bare on purpose.
+
+a score from a board that has since stopped listing the model says so in its
+`[src]` panel, with the date it was first missed. the board's last published
+number is kept rather than dropped: artificial analysis retiring every older
+model at once would otherwise have unscored all of them.
 
 the table itself is deep-linked too, and without being asked: from the first
 thing the reader changes, the url's fragment carries what is on screen -- the

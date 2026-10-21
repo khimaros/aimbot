@@ -21,6 +21,1827 @@
  ],
  "version": 1,
  "assessed": {
+  "ACE-Step/Ace-Step1.5": {
+   "one_liner": "an open text-to-music and lyrics-to-song model with editing routes, MIT licensed.",
+   "use_for": [
+    "music generation from a text prompt",
+    "songs with sung lyrics",
+    "editing existing tracks (cover, repaint, continuation)"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "speech recognition"
+   ],
+   "notes": "no benchmark in the registry measures it, so the card's speed and quality claims are untested here. audio.cpp's catalog lists it as supported for music and edit across 50+ languages. the gguf maintainer found that a fully q8_0 build returns a different song from the same seed because the planner lm degrades, so keep the planner at bf16 (the q8dit builds) when quantising.",
+   "confidence": "low",
+   "evidence": [
+    "kind sound",
+    "card: text2music with cover, repaint and vocal-to-bgm editing",
+    "card: generated music usable commercially, MIT weights",
+    "audio.cpp family ace_step, tasks music, edit"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "Aratako/MioTTS-1.7B": {
+   "one_liner": "a small llm-based english and japanese tts with zero-shot voice cloning, apache 2.0.",
+   "use_for": [
+    "english or japanese speech synthesis",
+    "voice cloning from a short reference clip"
+   ],
+   "avoid_for": [
+    "other languages",
+    "speech recognition"
+   ],
+   "notes": "no leaderboard in the registry has scored it, so quality rests on the card's own samples. audio.cpp lists the family as supported for tts and clone in en and ja. the card asks users not to clone real people's voices without consent.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: english and japanese, about 100k hours, zero-shot cloning",
+    "audio.cpp family miotts, tasks tts, clone"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "BreezeBlue/Breeze-TTS-2": {
+   "one_liner": "a bilingual english and chinese tts with cloning, voice design and inline vocal events, rated {aa-tts.elo}; the weights are non-commercial.",
+   "use_for": [
+    "english or chinese speech synthesis",
+    "voice design from a text description",
+    "voice cloning from a clip and its transcript"
+   ],
+   "avoid_for": [
+    "commercial self-hosting",
+    "languages beyond english and chinese",
+    "speech recognition"
+   ],
+   "notes": "artificial analysis rates it {aa-tts.elo}, near the top of the synthesis board, and the card claims the top open-weight spot there. the licence is the catch: the breezeblue research and non-commercial license covers the weights, quantised derivatives and self-hosted outputs, and a paid api subscription does not extend to them. audio.cpp lists it as supported for tts, clone and design in offline and streaming modes. cloning wants clean reference audio with its exact transcript.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: voice clone, voice design and voice direction in english and chinese",
+    "card: weights and self-hosted outputs research and non-commercial only",
+    "audio.cpp family breeze_tts, tasks tts, clone, design",
+    "{aa-tts.elo}"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "FireRedTeam/FireRedTTS3": {
+   "one_liner": "a multilingual tts in base and instruct variants covering cloning, voice design and speech editing, experimental in audio.cpp.",
+   "use_for": [
+    "multilingual voice cloning",
+    "voice design from a description",
+    "editing words or pace in existing speech"
+   ],
+   "avoid_for": [
+    "speech recognition",
+    "dependable use through audio.cpp while it is experimental"
+   ],
+   "notes": "no leaderboard in the registry has scored it; the card's wer and similarity wins are on test sets it chose. audio.cpp marks the family experimental and offline only, and its catalog lists the 24 languages plus 21 chinese dialects. text normalisation beyond chinese and english needs an external llm endpoint in the upstream code, and cloning works best with a reference in the target language.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio, text -> audio",
+    "card: 24 languages and 21 chinese dialects, voice design and speech editing",
+    "audio.cpp family fireredtts3, tasks tts, clone, design, status experimental"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "IndexTeam/Index-Echo-S2TT-2B": {
+   "one_liner": "a chinese speech-to-subtitle translator that writes timestamped chinese transcripts with english, japanese or spanish translations.",
+   "use_for": [
+    "chinese video subtitling",
+    "chinese to english, japanese or spanish speech translation"
+   ],
+   "avoid_for": [
+    "general multilingual transcription",
+    "speech synthesis",
+    "realtime streaming"
+   ],
+   "notes": "no leaderboard in the registry scores it; the card's comparison is on an in-house video set. the released interface only translates out of chinese, even though the text family covers far more languages. audio.cpp marks the family experimental, and its port's maintainer advises q8_0 or original precision when transcript quality matters and checking subtitles for repeats before trusting them.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text, audio -> text",
+    "card: chinese to english, japanese or spanish with sentence timestamps",
+    "audio.cpp family index_echo, tasks asr, status experimental"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "KittenML/kitten-tts-2": {
+   "one_liner": "a 1.7b ternary-weight multilingual tts with 47 preset voices, emotion tags and cloning, experimental in audio.cpp.",
+   "use_for": [
+    "english speech synthesis with preset voices",
+    "voice cloning from a short reference clip"
+   ],
+   "avoid_for": [
+    "companies past the licence's revenue cap",
+    "speech recognition"
+   ],
+   "notes": "nothing in the registry measures it. non-english output goes through nine language-named voices and the text normaliser is tuned for english, so write numbers as words in other languages. the card marks the expression controls as beta. audio.cpp lists the family as experimental, and the gguf maintainer reports that long chunked speech can drop words. the stellon labs community license ends the free commercial grant past USD $1,000,000 in revenue or funding.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: 1.7b speech lm, 47 voices, ten languages, cloning",
+    "card: stellon labs community license with a revenue cap",
+    "audio.cpp family kitten_tts2, tasks tts, clone, status experimental"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "MiniMaxAI/MiniMax-H3": {
+   "one_liner": "a large joint audio and video generator; in audio.cpp it is an experimental route to speech, music and sound effects.",
+   "use_for": [
+    "short clips with synchronised audio and video",
+    "sound effects or music tied to a scene"
+   ],
+   "avoid_for": [
+    "plain text to speech",
+    "audio longer than 15 seconds",
+    "speech recognition"
+   ],
+   "notes": "no benchmark in the registry covers it. the open release lacks the hosted prompt-refinement stage that the card says matters most for output quality, and ships full attention only. audio.cpp marks the family experimental. the licence is a custom community agreement, so check its terms and the regional application form before use.",
+   "confidence": "low",
+   "evidence": [
+    "kind sound",
+    "card: text, frame or reference input to 4-15 second video with stereo audio",
+    "audio.cpp family minimax_h3, tasks tts, music, sfx, status experimental"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "OpenMOSS-Team/MOSS-TTSD-v1.0": {
+   "one_liner": "an 8b multi-speaker dialogue tts that speaks a speaker-tagged script in one take, with per-speaker cloning.",
+   "use_for": [
+    "two-speaker podcast or dialogue audio",
+    "voice cloning per speaker from short references"
+   ],
+   "avoid_for": [
+    "short single-voice prompts",
+    "speech recognition"
+   ],
+   "notes": "nothing in the registry measures it. the gguf maintainer measured speaker pitch drifting toward the other speaker by the second turn in both the reference code and audio.cpp, so check identity on longer dialogues. audio.cpp marks the family experimental and community-contributed, with english and chinese listed. use the q4_k package with f16 heads or higher; a plain q4_k cuts the dialogue short.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: long-form multi-speaker dialogue with zero-shot cloning",
+    "card: speaker identity drifts across turns",
+    "audio.cpp family moss_ttsd, tasks tts, clone, status experimental"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "Plachta/Seed-VC": {
+   "one_liner": "a zero-shot voice and singing voice converter that restyles a recording to sound like a reference speaker.",
+   "use_for": [
+    "voice conversion from a reference clip",
+    "singing voice conversion"
+   ],
+   "avoid_for": [
+    "text to speech",
+    "speech recognition"
+   ],
+   "notes": "the hub card is empty apart from its licence, so this rests on audio.cpp's catalog, which marks it supported for vc and svc. nothing in the registry measures it. gpl-3.0 carries copyleft terms that matter when shipping it inside other software.",
+   "confidence": "low",
+   "evidence": [
+    "kind audio",
+    "audio.cpp family seed_vc, tasks vc, svc",
+    "card: gpl-3.0 licence, no description"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "ResembleAI/Dramabox": {
+   "one_liner": "an english prompt-driven expressive tts where a scene description sets voice, emotion and nonverbal sounds, with optional cloning.",
+   "use_for": [
+    "expressive english character dialogue",
+    "voice cloning from a 10 second clip"
+   ],
+   "avoid_for": [
+    "languages other than english",
+    "speech recognition"
+   ],
+   "notes": "nothing in the registry has scored it. prompts need the card's format: spoken words inside double quotes and directions outside, since words like sigh inside quotes get read aloud. audio.cpp lists the family as experimental and english only. the reference code watermarks every output unless disabled, and the ltx-2 community license sets the terms of use.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: ic-lora fine-tune of ltx-2.3 audio, prompt controls delivery",
+    "audio.cpp family dramabox, tasks tts, clone, status experimental"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "YJX-Xiaomi/ControlFoley": {
+   "one_liner": "a video-to-audio foley generator that adds synchronised sound to a clip, steered by text or a reference sound; the weights are non-commercial.",
+   "use_for": [
+    "sound effects synchronised to video",
+    "text-to-audio sound effects"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "commercial projects"
+   ],
+   "notes": "nothing in the registry measures it; the card's wins are on vggsound, kling-audio-eval, moviegen-audio-bench and its own text-video conflict benchmark. audio.cpp's catalog lists only the sfx task, marked experimental. the weights are CC BY-NC 4.0.",
+   "confidence": "low",
+   "evidence": [
+    "kind sound",
+    "card: video, text and reference-audio conditioned foley generation",
+    "card: weights cc by-nc 4.0",
+    "audio.cpp family controlfoley, tasks sfx, status experimental"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "ampixa/sanoTTS": {
+   "one_liner": "a family of tiny distilled tts voices, under 2.3m parameters each, built for microcontrollers and the browser.",
+   "use_for": [
+    "english speech synthesis on very small devices",
+    "offline speech synthesis in the browser"
+   ],
+   "avoid_for": [
+    "natural-sounding narration",
+    "voice cloning",
+    "speech recognition"
+   ],
+   "notes": "nothing in the registry measures it; the card's naturalness comparison is self-run and puts piper and kokoro clearly ahead. language coverage differs between sources: the card lists 6 languages with some voices not yet exported, while audio.cpp's catalog lists fourteen, so check the specific voice. the default audio.cpp package is the 294k heart-nano voice, the lowest-scoring english voice in the card's own table. GPL-3.0 applies to the whole stack.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: 294k to 2.27m parameter voices distilled from piper and kokoro",
+    "audio.cpp family sanotts, tasks tts, status community"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "ekwek/Soprano-1.1-80M": {
+   "one_liner": "an 80m english-only tts with streaming output, small and fast but trained on little data and without cloning.",
+   "use_for": [
+    "english speech synthesis on small hardware",
+    "low-latency streaming speech"
+   ],
+   "avoid_for": [
+    "voice cloning",
+    "languages other than english",
+    "text full of numbers or rare words"
+   ],
+   "notes": "nothing in the registry measures it. the card says it mispronounces uncommon words and sometimes numbers, and suggests writing numbers out and keeping sentences between 2 and 15 seconds. audio.cpp lists it as a community family with offline and streaming modes. the 1.1 release claims fewer hallucinations than the first soprano.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: 80m parameters, english only, no voice cloning, 1,000 hours of training audio",
+    "audio.cpp family soprano_tts, tasks tts, status community"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "k2-fsa/ZipVoice": {
+   "one_liner": "a small flow-matching english and chinese tts for zero-shot voice cloning, with non-commercial weights.",
+   "use_for": [
+    "voice cloning from a reference clip and transcript",
+    "english, chinese or mixed speech synthesis"
+   ],
+   "avoid_for": [
+    "commercial use",
+    "other languages",
+    "speech recognition"
+   ],
+   "notes": "nothing in the registry measures it. the audio.cpp package is the distilled checkpoint, listed as a community family with offline and streaming modes. its licence line disagrees with upstream: the conversion says apache 2.0, while k2-fsa says the pretrained weights are cc-by-nc because of the emilia training data, so treat them as non-commercial. cloning needs an exact transcript of the reference.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio, text -> audio",
+    "card: non-autoregressive zero-shot tts with flow matching, en and zh",
+    "card: pretrained weights cc-by-nc due to emilia data",
+    "audio.cpp family zipvoice, tasks tts, clone, status community"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "maya-research/maya1": {
+   "one_liner": "a 3b english tts that designs a voice from a written description and takes inline emotion tags, rated {aa-tts.elo}.",
+   "use_for": [
+    "english character voices from a text description",
+    "expressive narration with laughs, sighs and whispers"
+   ],
+   "avoid_for": [
+    "cloning a specific speaker from a recording",
+    "non-english speech",
+    "speech recognition"
+   ],
+   "notes": "artificial analysis rates it {aa-tts.elo}, in the middle of its synthesis board. audio.cpp lists it as supported for tts and design, english only. the card says the expressive tags behave differently depending on text, description, placement and sampling, so audition before relying on them, and long passages need checking for voice drift. apache 2.0 permits commercial use.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: 3.3b, voice design from a natural-language description, inline emotion tags",
+    "audio.cpp family maya1, tasks tts, design",
+    "{aa-tts.elo}"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "nvidia/canary-180m-flash": {
+   "one_liner": "a 182m nvidia transcriber and translator for english, german, french and spanish, cc-by-4.0.",
+   "use_for": [
+    "english, german, french or spanish transcription",
+    "speech translation to and from english"
+   ],
+   "avoid_for": [
+    "other languages",
+    "speech synthesis",
+    "streaming transcription"
+   ],
+   "notes": "no leaderboard in the registry carries it, though the card reports its own open asr leaderboard results. audio.cpp lists it as supported for asr, offline only, in the four languages. the card calls timestamps experimental and recommends chunked inference for long files.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: 182m parameters, asr in 4 languages and translation between english and de/fr/es",
+    "audio.cpp family canary_asr, tasks asr"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "nvidia/parakeet-tdt-0.6b-v3": {
+   "one_liner": "a 600m transducer asr for 25 european languages with automatic language detection and timestamps, built for throughput.",
+   "use_for": [
+    "fast batch transcription in european languages",
+    "transcripts with word-level timestamps"
+   ],
+   "avoid_for": [
+    "languages outside its 25 european ones",
+    "speech translation",
+    "speech synthesis"
+   ],
+   "notes": "{open-asr.accuracy} and {aa-stt.accuracy}, mid-pack on both boards, so it is the pick for throughput and european coverage more than for the lowest error rate. it detects the language itself and takes no prompt. audio.cpp lists it as a community family; its catalog notes the checkpoint uses full bidirectional attention, so streaming there is buffered rather than native.",
+   "confidence": "medium",
+   "evidence": [
+    "kind speech, text, audio -> text",
+    "card: 600m, 25 european languages, automatic language detection, timestamps",
+    "audio.cpp family parakeet_tdt, tasks asr, status community",
+    "{open-asr.accuracy}",
+    "{aa-stt.accuracy}"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "rhasspy/piper-voices": {
+   "one_liner": "the piper voice collection: small vits voices per speaker and language, with audio.cpp packaging one english voice.",
+   "use_for": [
+    "lightweight offline speech synthesis",
+    "multilingual synthesis through piper itself"
+   ],
+   "avoid_for": [
+    "expressive or emotional narration",
+    "voice cloning",
+    "speech recognition"
+   ],
+   "notes": "nothing in the registry measures it, and the hub card says little beyond the language list. through audio.cpp only the en-us lessac medium voice is packaged, as a community family; other languages need piper itself.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: voices for the piper tts system, 35 languages in metadata",
+    "audio.cpp family piper_tts, tasks tts, status community"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "syvai/hviske-v6": {
+   "one_liner": "a danish-only speech recogniser that its card reports as best on the danish asr leaderboard; the weights are non-commercial.",
+   "use_for": [
+    "danish transcription",
+    "danish transcripts with chosen casing and punctuation"
+   ],
+   "avoid_for": [
+    "any other language",
+    "timestamps, diarization or streaming",
+    "commercial use"
+   ],
+   "notes": "no board in the registry carries it; the card's leaderboard claim is self-reported with the leaderboard harness. by the card's own account its weak spot is conversational and dialect speech, since most training data is parliamentary standard danish. audio.cpp lists it as supported, offline, danish only. the weights are CC BY-NC 4.0.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text, audio -> text",
+    "card: 1.24b danish asr, whisper encoder with a qwen3 decoder",
+    "card: weakest on conversational and dialect speech",
+    "audio.cpp family hviske_asr_v6, tasks asr"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "ASLP-lab/MeanVC2": {
+   "one_liner": "a small streaming zero-shot voice conversion model that moves a recording into the voice of a reference clip.",
+   "use_for": [
+    "streaming voice conversion",
+    "voice conversion to an unseen speaker from a reference clip"
+   ],
+   "avoid_for": [
+    "text to speech",
+    "speech recognition"
+   ],
+   "notes": "the card claims low end-to-end latency at small chunk sizes and says it holds up under low-quality reference audio, but those are the authors' own figures and no suite here scores it. audio.cpp packages one checkpoint for the 120ms/40ms path. the card asks for consent from anyone whose voice is converted or used as a reference.",
+   "confidence": "low",
+   "evidence": [
+    "kind audio, audio -> audio",
+    "card: low-latency streaming zero-shot voice conversion",
+    "audio.cpp family meanvc2, tasks vc"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "Audio8/Audio8-ASR-0.1B": {
+   "one_liner": "a compact multilingual transcriber with a 0.1b decoder, under a non-commercial licence.",
+   "use_for": [
+    "short-form speech to text",
+    "transcription in chinese, english, cantonese, japanese, korean, french or german"
+   ],
+   "avoid_for": [
+    "commercial use",
+    "long recordings without chunking",
+    "speech synthesis"
+   ],
+   "notes": "the open asr leaderboard gives it {open-asr.accuracy}. the checkpoint is cc-by-nc-4.0, and audio.cpp's catalog lists it as community-supported with a gguf conversion that is local-only, so there is no public gguf to fetch. the card's examples truncate audio at 30 seconds, and its hotword boosting can over-bias decoding when the boost is set high.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: compact multilingual asr with a 0.1b language-model component",
+    "audio.cpp family audio8_asr, tasks asr",
+    "{open-asr.accuracy}"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "Cactus-Compute/whistle": {
+   "one_liner": "a very small on-device transcriber for seven european languages, experimental in audio.cpp.",
+   "use_for": [
+    "on-device speech to text",
+    "transcription in english, german, french, spanish, italian, dutch or polish",
+    "word timestamps"
+   ],
+   "avoid_for": [
+    "languages outside its seven",
+    "always-on microphones without a vad in front",
+    "speech synthesis"
+   ],
+   "notes": "the card says silence and steady noise return an empty transcript but music can still come out as text, so it recommends a voice activity detector ahead of an always-on microphone. its benchmark chart is the vendor's own and no third-party suite here scores it. the vendor's runtime is the needle engine with its .cact container; audio.cpp packages an f32 gguf with a host-side decoder and marks the family experimental.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: on-device speech to text with word timestamps and keyword biasing",
+    "audio.cpp family whistle_asr, tasks asr"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "FireRedTeam/FireRedVAD": {
+   "one_liner": "a small DFSMN voice activity detector with offline and streaming checkpoints.",
+   "use_for": [
+    "voice activity detection",
+    "trimming silence before transcription",
+    "streaming speech detection"
+   ],
+   "avoid_for": [
+    "speech recognition",
+    "speaker diarization"
+   ],
+   "notes": "the card reports beating silero-vad, ten-vad, funasr-vad and webrtc-vad on a 102-language set the authors built from fleurs and have not yet published, so the comparison is theirs alone. audio.cpp packages the offline and stream vad checkpoints but not the aed one that separates singing and music, and marks the family experimental. input is 16khz mono.",
+   "confidence": "low",
+   "evidence": [
+    "kind detect",
+    "card: streaming and non-streaming vad plus non-streaming audio event detection",
+    "audio.cpp family firered_vad, tasks vad"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "IndexTeam/IndexTTS-2": {
+   "one_liner": "a zero-shot voice-cloning tts with separate emotion control and explicit duration control, for chinese and english.",
+   "use_for": [
+    "voice cloning from a reference clip",
+    "emotion-controlled chinese or english speech",
+    "speech fitted to a fixed duration, such as dubbing"
+   ],
+   "avoid_for": [
+    "speech recognition",
+    "languages beyond chinese and english on the v2 checkpoint"
+   ],
+   "notes": "the card is links and a citation, so the feature list comes from the paper title and audio.cpp's catalog: emotion and speaker are decoupled, emotion can come from text or a reference clip, and duration can be set. the catalog also packages a v2.5 variant that adds japanese, spanish and arabic. the hub metadata records no licence, so check the upstream repo before commercial use. no third-party suite here scores it.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio + text -> audio",
+    "card: emotionally expressive, duration-controlled autoregressive zero-shot tts",
+    "audio.cpp family index_tts2, tasks tts, clone"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "KittenML/kitten-tts-mini-0.8": {
+   "one_liner": "a small english tts with eight built-in voices and no cloning.",
+   "use_for": [
+    "english speech synthesis",
+    "lightweight local narration"
+   ],
+   "avoid_for": [
+    "voice cloning from a reference clip",
+    "non-english speech",
+    "speech recognition"
+   ],
+   "notes": "the card is a short quick-start: a styletts 2 model with eight named voices and no evaluation, and no third-party suite here scores it. audio.cpp's port phonemizes with eSpeak-ng and lists the family as community-supported.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: realistic open-source tts at 80 million parameters",
+    "audio.cpp family kitten_tts, tasks tts"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "MiniMaxAI/MiniMax-Music3": {
+   "one_liner": "a text-to-music model that writes complete songs with sung vocals from lyrics and a style description.",
+   "use_for": [
+    "music generation",
+    "full songs with sung lyrics"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "streaming or realtime generation",
+    "commercial use without reading the community licence"
+   ],
+   "notes": "the card warns that tempo, key, instrumentation and structure may not match every requested detail, and upstream inference is cuda-only and non-streaming. audio.cpp's package is experimental, and its card says five-minute runs are tuned for completion rather than realtime throughput. the gguf follows the minimax-music3 community licence, which the package card says to review before commercial deployment.",
+   "confidence": "low",
+   "evidence": [
+    "kind sound, text -> audio",
+    "card: complete songs up to five minutes from lyrics and a music description",
+    "audio.cpp family minimax_music3, tasks music"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "OpenMOSS-Team/MOSS-Transcribe-Diarize": {
+   "one_liner": "a whisper-encoder, qwen3-decoder transcriber that emits speaker labels and timestamps in the same decode.",
+   "use_for": [
+    "multi-speaker transcription with speaker labels",
+    "long-form meeting or interview transcripts",
+    "multilingual speech to text"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "pipelines that add a separate diarization pass on top of it"
+   ],
+   "notes": "the open asr leaderboard gives it {open-asr.accuracy}, which scores words only; nothing here scores its speaker attribution. because it labels speakers while decoding, asking a server for a generic diarization pass overwrites its own labels. a prospective commercial user on the hub has asked the authors to list the training corpora, and the sources here do not answer that. audio.cpp lists the family as supported.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: end-to-end long-form multi-speaker transcription, diarization and timestamps",
+    "audio.cpp family moss_transcribe_diarize, tasks asr",
+    "{open-asr.accuracy}",
+    "{community.hf-discussions}"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "Quark-Vision/Live-Avatar": {
+   "one_liner": "an audio-driven talking-avatar video generator: a lora on wan2.2 s2v 14b that animates a reference image to speech.",
+   "use_for": [
+    "talking-head video from a portrait and speech",
+    "avatar video for a voice agent"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "music or sound effect generation"
+   ],
+   "notes": "the card's real-time figures come from a five-gpu H800 pipeline, single-gpu offline inference is still on its todo list, and it calls the project a research preview. audio.cpp's package merges the lora into the 14b denoiser at nvfp4, needs all three files, and is marked experimental; its own 720p run took minutes for a few seconds of video with weight streaming on. audio.cpp files it under the sfx task, though the output is video.",
+   "confidence": "low",
+   "evidence": [
+    "kind video, image + audio -> video",
+    "card: streaming audio-driven avatar video from a 14b diffusion model",
+    "audio.cpp family liveavatar, tasks sfx"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "ResembleAI/chatterbox-turbo": {
+   "one_liner": "resemble ai's distilled english tts with paralinguistic tags, built for low-latency voice agents.",
+   "use_for": [
+    "english speech synthesis",
+    "voice agents",
+    "speech with tags such as [laugh] or [cough]"
+   ],
+   "avoid_for": [
+    "non-english speech",
+    "speech recognition"
+   ],
+   "notes": "the card adds native paralinguistic tags and a distilled one-step mel decoder. audio.cpp describes its port as a 2-step meanflow decoder with a built-in voice, while the upstream example clones from a reference clip, so check which path a runtime exposes. every output carries resemble's perth watermark. audio.cpp marks the family testing, and no third-party suite here scores turbo itself.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: 350m turbo with native paralinguistic tags and a one-step decoder",
+    "audio.cpp family chatterbox_turbo, tasks tts"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "abr-ai/niagara-38m-batch.en": {
+   "one_liner": "a 38m state-space english transcriber, the batch variant released for leaderboard comparison.",
+   "use_for": [
+    "english batch transcription",
+    "small-footprint speech to text"
+   ],
+   "avoid_for": [
+    "non-english speech",
+    "transcripts that need punctuation or casing",
+    "live streaming, which abr sells separately"
+   ],
+   "notes": "the open asr leaderboard gives it {open-asr.accuracy}, low in that cohort for a model this small. output is lowercase english with no punctuation. this is the non-causal batch model; the streaming variant with punctuation is commercial. the licence is abr's own open licence, linked from the card, so read it before shipping.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: 38m-parameter ssm with attention, trained on about 50k hours",
+    "audio.cpp family niagara_asr, tasks asr",
+    "{open-asr.accuracy}"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "coqui/XTTS-v2": {
+   "one_liner": "coqui's multilingual voice-cloning tts from a six-second clip: wide reach, rated low by current listener boards.",
+   "use_for": [
+    "voice cloning from a short reference clip",
+    "multilingual speech synthesis",
+    "cross-language voice cloning"
+   ],
+   "avoid_for": [
+    "commercial use without reading the coqui public model license",
+    "speech recognition"
+   ],
+   "notes": "artificial analysis rates it {aa-tts.elo}, near the bottom of that board. its draw is coverage: 17 languages and cross-language cloning from a short reference. the licence is the coqui public model license. audio.cpp's catalog runs it from onicubag's gguf and lists the family as community-supported.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: voice cloning into 17 languages from a 6-second clip",
+    "audio.cpp family xtts_v2, tasks tts",
+    "{aa-tts.elo}"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "espnet/owsm_ctc_v4_1B": {
+   "one_liner": "espnet's fully open, non-autoregressive ctc model for multilingual asr, speech translation and language id.",
+   "use_for": [
+    "multilingual speech to text",
+    "speech translation",
+    "language identification"
+   ],
+   "avoid_for": [
+    "timestamped transcripts",
+    "speech synthesis"
+   ],
+   "notes": "the open asr leaderboard gives it {open-asr.accuracy} on english. its case is openness and coverage: training data, code and logs are public, and audio.cpp lists a very long language set. as a ctc-only model it returns no segment timestamps from long-form decoding. it was trained on fixed 30-second 16khz windows, and longer audio goes through buffered decoding.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: encoder-only self-conditioned ctc for asr, speech translation and language id",
+    "audio.cpp family owsm_ctc, tasks asr",
+    "{open-asr.accuracy}"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "haoheliu/audiosr_basic": {
+   "one_liner": "a latent-diffusion audio super-resolution model that upsamples an input waveform.",
+   "use_for": [
+    "audio super-resolution",
+    "restoring bandwidth to low-sample-rate recordings"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "speech recognition"
+   ],
+   "notes": "the hub card carries only an apache-2.0 licence field, so this rests on audio.cpp's catalog, which packages the basic checkpoint as a single f32 gguf and marks the family experimental. nothing in this roster measures it.",
+   "confidence": "low",
+   "evidence": [
+    "kind audio, audio -> audio",
+    "audio.cpp family audiosr, tasks s2s"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "lj1995/VoiceConversionWebUI": {
+   "one_liner": "retrieval-based voice conversion, with packaged voices and support for user-trained rvc checkpoints.",
+   "use_for": [
+    "voice conversion with a trained rvc voice model",
+    "running community rvc checkpoints"
+   ],
+   "avoid_for": [
+    "text to speech",
+    "speech recognition"
+   ],
+   "notes": "the hub card carries only an mit licence field, so this rests on audio.cpp's catalog: hubert content features, rmvpe pitch extraction, optional ivf retrieval blending, packaged v1 and v2 voices, and loading of user-supplied rvc checkpoints. the family is marked experimental and nothing here measures it.",
+   "confidence": "low",
+   "evidence": [
+    "kind audio, audio -> audio",
+    "audio.cpp family rvc, tasks vc"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "microsoft/VibeVoice-ASR-Streaming-1.5B": {
+   "one_liner": "microsoft's streaming speaker-attributed transcriber with hotwords, the 1.5b sibling of a 7b model.",
+   "use_for": [
+    "streaming speech to text",
+    "speaker-attributed transcription",
+    "transcription with custom hotwords"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "languages outside its ten"
+   ],
+   "notes": "the card is brief and defers results to a technical report. the gguf card's own check is four librispeech clips, which it says separates working from broken and nothing finer, and on its like-for-like q4_k rows the 7b leads. audio.cpp's family covers both sizes and is marked supported, with the 7b as the default package. no third-party suite here scores it.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: streaming transcription of who said what, with hotwords, in 10 languages",
+    "audio.cpp family vibevoice_asr_streaming, tasks asr"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "myshell-ai/OpenVoiceV2": {
+   "one_liner": "openvoice v2's tone color converter, packaged by audio.cpp as standalone voice conversion from a reference recording.",
+   "use_for": [
+    "voice conversion to a reference speaker",
+    "re-voicing the output of another tts"
+   ],
+   "avoid_for": [
+    "text to speech on its own",
+    "speech recognition"
+   ],
+   "notes": "upstream, openvoice pairs this converter with melotts for synthesis; audio.cpp ships only the converter, so the speech has to come from somewhere else. the card claims accurate tone color cloning and style control, which nothing here measures. it has been mit-licensed for commercial use since april 2024, per the card. the family is experimental in audio.cpp.",
+   "confidence": "low",
+   "evidence": [
+    "kind audio, audio -> audio",
+    "card: accurate tone color cloning, mit licence with free commercial use",
+    "audio.cpp family tone_color_vc, tasks vc"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "nvidia/Nemotron-3-Diarization": {
+   "one_liner": "nvidia's streaming end-to-end diarizer for up to eight speakers, the successor to sortformer 4spk.",
+   "use_for": [
+    "speaker diarization of meetings",
+    "streaming diarization",
+    "far-field multi-speaker audio"
+   ],
+   "avoid_for": [
+    "recordings with more than eight speakers",
+    "speech recognition on its own"
+   ],
+   "notes": "it emits per-speaker activity directly, numbered by order of first appearance, so there is no clusterer and no speaker count to set. the card's gains over the previous sortformer are largest on far-field meeting sets and small on two-speaker telephone audio, on the publisher's own harness. hub discussion reads favourably {community.hf-discussions}. the registry entry calls it english-trained while audio.cpp's catalog says multilingual, so test non-english audio first. the licence is openmdw-1.1.",
+   "confidence": "low",
+   "evidence": [
+    "kind diarize",
+    "card: streaming sortformer emitting speaker activity for up to eight speakers",
+    "audio.cpp family nemotron_3_diar, tasks diar",
+    "{community.hf-discussions}"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "nvidia/diar_sortformer_4spk-v1": {
+   "one_liner": "nvidia's first sortformer: offline end-to-end diarization for up to four speakers, superseded by nemotron-3-diarization.",
+   "use_for": [
+    "offline speaker diarization of up to four speakers",
+    "english calls and conversations"
+   ],
+   "avoid_for": [
+    "recordings with five or more speakers",
+    "commercial use",
+    "streaming diarization"
+   ],
+   "notes": "the card itself points to nemotron-3-diarization as the newer model with eight speakers and better accuracy. it is offline only, trained mainly on english, and the card ties the longest recording it can take to gpu memory. the licence is cc-by-nc-4.0. audio.cpp lists the family as supported.",
+   "confidence": "low",
+   "evidence": [
+    "kind diarize",
+    "card: end-to-end diarization resolving speaker order by arrival time, up to 4 speakers",
+    "audio.cpp family sortformer_diar, tasks diar"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "nvidia/personaplex-7b-v1": {
+   "one_liner": "nvidia's moshi-style full-duplex speech-to-speech conversational model with persona prompts.",
+   "use_for": [
+    "full-duplex voice conversation",
+    "english spoken assistants with a set persona"
+   ],
+   "avoid_for": [
+    "standalone text to speech",
+    "speech recognition",
+    "non-english conversation"
+   ],
+   "notes": "there is no card on disk, so this rests on audio.cpp's catalog and the hub metadata: an english finetune of kyutai's moshiko, gated on the hub, under the nvidia open model license. the catalog lists it as supported, with streaming audio in and text plus generated speech out. nothing here measures it.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> audio",
+    "audio.cpp family personaplex, tasks s2s"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "owensong/Inflect-Micro-v2": {
+   "one_liner": "a tiny english vits tts with one fixed male voice.",
+   "use_for": [
+    "english speech synthesis with a single fixed voice",
+    "very small local tts"
+   ],
+   "avoid_for": [
+    "voice cloning from a reference clip",
+    "non-english speech",
+    "medical, legal or accessibility-critical speech"
+   ],
+   "notes": "the card's evaluation is the author's own: a small blind community preference study and learned predictors, which it says do not replace controlled human mos. numbers, abbreviations and uncommon names depend on the eSpeak-ng frontend. audio.cpp lists the family as community-supported.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: complete text-to-waveform synthesis under 10m parameters, one fixed english voice",
+    "audio.cpp family inflect_v2, tasks tts"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "samuel-vitorino/sopro-v2-turbo": {
+   "one_liner": "a 120m zero-shot voice-cloning tts for english, european portuguese, french and german, built to stream.",
+   "use_for": [
+    "voice cloning from a reference clip",
+    "streaming speech synthesis",
+    "european portuguese speech"
+   ],
+   "avoid_for": [
+    "mixed-language sentences",
+    "text full of numbers and symbols without a normalizer",
+    "speech recognition"
+   ],
+   "notes": "the card lists its weak spots: a minimal text frontend, mispronounced foreign words inside a sentence, and a streaming path that is not bit-exact with offline. there is no watermark. the quality claims are the author's own and no suite here scores it. audio.cpp lists the family as community-supported.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: 120m zero-shot cloning from 5-20 s of reference audio, with streaming",
+    "audio.cpp family sopro_tts, tasks tts, clone"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "syvai/plapre-3": {
+   "one_liner": "a danish tts with cloning, pace, pronunciation and in-place editing, rl-tuned for intelligibility.",
+   "use_for": [
+    "danish speech synthesis",
+    "voice cloning in danish",
+    "editing words in an existing danish recording"
+   ],
+   "avoid_for": [
+    "non-danish speech",
+    "cloning a fine-grained speaker identity"
+   ],
+   "notes": "the card reports intelligibility gains over v2 on a small held-out set, including on a recognizer that was not part of the reward, and says naturalness was judged by an english-trained predictor rather than danish listeners. edit, context, pace and pronunciation were not re-evaluated after rl. it asks for fp32 inference while audio.cpp's default package is bf16, and audio.cpp's streaming emits whole text chunks rather than codec frames. the licence is cc-by-4.0.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: danish multi-task tts, plapre-nano-v2 further trained with grpo",
+    "audio.cpp family plapre, tasks tts, clone"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "zai-org/GLM-TTS": {
+   "one_liner": "z.ai's llm-plus-flow-matching tts for chinese and english, with zero-shot cloning and rl-tuned emotion.",
+   "use_for": [
+    "chinese or mixed chinese-english speech synthesis",
+    "voice cloning from a short reference clip",
+    "pronunciation control through phoneme input"
+   ],
+   "avoid_for": [
+    "languages beyond chinese and english",
+    "speech recognition"
+   ],
+   "notes": "the card's seed-tts-eval table is the vendor's own and covers error rate and speaker similarity; no third-party suite here scores it. audio.cpp's package is a community mixed q8_0/f16 gguf from mirek190's repo rather than a vendor release, and the family is listed as community-supported. the licence is mit.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio + text -> audio",
+    "card: zero-shot cloning from 3-10 s of prompt audio, grpo-tuned emotion",
+    "audio.cpp family glm_tts, tasks tts, clone"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "Aratako/Irodori-TTS-v4.1-Small": {
+   "one_liner": "a japanese-only text-to-speech model with voice cloning, caption-based voice design and emoji style control; v4.1 swaps in a retrained duration predictor.",
+   "use_for": [
+    "japanese speech synthesis",
+    "voice cloning from a reference clip",
+    "voice design from a text caption"
+   ],
+   "avoid_for": [
+    "non-japanese text",
+    "speech recognition"
+   ],
+   "notes": "the card scopes it to japanese text input and recommends about 30 seconds of clean reference speech for cloning, since a single short clip scored lower on speaker similarity than v3. it reports automatic reading-error benchmarks only and says no human MOS or similarity study was run. audio.cpp lists the family as supported, offline and streaming. the weights are MIT, and the card adds ethical restrictions against impersonation and deceptive deepfakes.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text + audio -> audio",
+    "card: japanese text input only",
+    "card: only the duration predictor was retrained from v4",
+    "audio.cpp family irodori_tts, tasks tts, clone, design"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "Audio8/Audio8-TTS-Preview-0.6B": {
+   "one_liner": "a 0.6b multilingual text-to-speech preview with zero-shot voice cloning across 11 languages, on a dualar design borrowed from fish audio.",
+   "use_for": [
+    "multilingual speech synthesis",
+    "voice cloning from a reference clip"
+   ],
+   "avoid_for": [
+    "languages outside its 11",
+    "speech recognition"
+   ],
+   "notes": "it is a preview: the card says language coverage is intentionally limited and points users at its 11 listed languages. cloning needs a reference transcript that matches the clip, and the gguf card warns that noisy or mismatched references reduce stability. audio.cpp lists it as a community family with streaming, through the js-byte q8_0 gguf. apache 2.0. there are no measured scores yet.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: preview release with intentionally limited language coverage",
+    "card: zero-shot cloning needs a matching reference transcript",
+    "audio.cpp family audio8_tts, tasks tts, clone"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "CohereLabs/cohere-transcribe-03-2026": {
+   "one_liner": "cohere's 2b conformer-encoder transcriber for 14 languages, at {open-asr.accuracy} on the open asr board.",
+   "use_for": [
+    "speech to text",
+    "multilingual batch transcription",
+    "transcripts for diarization pipelines"
+   ],
+   "avoid_for": [
+    "languages outside its 14",
+    "speech synthesis",
+    "realtime streaming"
+   ],
+   "notes": "{open-asr.accuracy} on the open asr leaderboard and {aa-stt.accuracy} on artificial analysis; voice arena has it at {voicearena.us-english} on us english and {voicearena.arabic} on arabic, so accuracy varies a lot by language. the gguf card warns that the tokenizer holds language tokens for 183 languages while the model supports 14, and a code outside the list decodes fluently in the wrong language with no error, so pin the language. audio.cpp runs it offline only. apache 2.0.",
+   "confidence": "medium",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: 14 supported languages; out-of-list codes fail silently",
+    "audio.cpp family cohere_asr, tasks asr",
+    "{open-asr.accuracy}",
+    "{aa-stt.accuracy}",
+    "{voicearena.us-english}",
+    "{voicearena.arabic}"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "FunAudioLLM/SenseVoiceSmall": {
+   "one_liner": "a small non-autoregressive asr that emits transcript, language id, emotion and audio-event tags in one pass, strongest on chinese and cantonese.",
+   "use_for": [
+    "fast speech to text",
+    "chinese and cantonese transcription",
+    "audio event tags alongside transcripts"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "work that needs beam search or prompting"
+   ],
+   "notes": "the card claims 70 ms for 10 seconds of audio, 15 times faster than whisper-large, and an edge over whisper on chinese and cantonese; no leaderboard score here checks that. the weights are under the funasr model license rather than an open licence, which the gguf card reads as commercial use allowed with attribution. audio.cpp carries it as a community family, offline and streaming.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: non-autoregressive, 15x faster than whisper-large",
+    "card: language, emotion and audio-event tags",
+    "audio.cpp family sense_asr, tasks asr"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "JusperLee/Apollo": {
+   "one_liner": "a music restoration model that repairs mp3 compression artefacts at 44.1 khz.",
+   "use_for": [
+    "restoring low-bitrate mp3 music",
+    "codec artefact removal"
+   ],
+   "avoid_for": [
+    "speech denoising",
+    "music generation"
+   ],
+   "notes": "the card trains and evaluates it on musdb18-hq and moisesdb with simulated mp3 compression from 24 to 128 kbps, so it targets codec damage in music. its results section is a placeholder with images, so there is no number to read. audio.cpp lists it as supported with a single f32 gguf. the licence is cc-by-sa 4.0, which carries share-alike terms to derivative works.",
+   "confidence": "low",
+   "evidence": [
+    "kind audio, audio -> audio",
+    "card: restores mp3-compressed music, trained as a GAN",
+    "audio.cpp family apollo, tasks s2s"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "MIT/ast-finetuned-audioset-10-10-0.4593": {
+   "one_liner": "the audio spectrogram transformer fine-tuned on audioset, a vit-style tagger for 527 sound classes.",
+   "use_for": [
+    "sound event classification",
+    "audio tagging"
+   ],
+   "avoid_for": [
+    "speech recognition",
+    "speaker identification"
+   ],
+   "notes": "the card was written by hugging face rather than the authors and says little beyond the architecture and a state-of-the-art claim on audio classification benchmarks. it labels whole clips against audioset's ontology. audio.cpp lists it as supported with one f32 gguf. bsd-3-clause.",
+   "confidence": "low",
+   "evidence": [
+    "kind detect, audio -> labels",
+    "card: vit applied to spectrograms, fine-tuned on audioset",
+    "audio.cpp family ast_audioset, tasks classify"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "MuScriptor/muscriptor-small": {
+   "one_liner": "an audio-to-midi music transcription model that turns recordings into symbolic note events.",
+   "use_for": [
+    "music transcription to midi",
+    "note event extraction"
+   ],
+   "avoid_for": [
+    "speech recognition",
+    "commercial use"
+   ],
+   "notes": "no model card was collected, so this rests on audio.cpp's catalog, which describes instrument constraints, sampling, beam search and chunked or streaming decoding, and lists the family as supported. the hub licence is cc-by-nc-4.0, so it is for non-commercial work. there are no measured scores.",
+   "confidence": "low",
+   "evidence": [
+    "kind detect, audio -> midi",
+    "audio.cpp family muscriptor, tasks midi",
+    "hub licence cc-by-nc-4.0"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "OpenMOSS-Team/MOSS-VoiceGenerator": {
+   "one_liner": "a voice design model that builds a speaker from a written description and speaks the text in it, in chinese and english.",
+   "use_for": [
+    "voice design from a text description",
+    "character voices for dubbing or games"
+   ],
+   "avoid_for": [
+    "cloning a specific voice from a recording",
+    "languages other than chinese and english"
+   ],
+   "notes": "it takes no reference audio: the description and the text are tokenized together, so the voice is only as specific as the prompt. the card recommends unusual sampling, audio temperature 1.5 with top-p 0.6, and claims human-like naturalness with no benchmark here to check it. audio.cpp lists it as a community family, offline only, with one bf16 gguf. apache 2.0.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: creates timbres from free-form text without reference audio",
+    "card: chinese and english",
+    "audio.cpp family moss_voicegen, tasks design"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "Qwen/Qwen3-ASR-1.7B": {
+   "one_liner": "qwen's 1.7b asr, a whisper-style encoder in front of qwen3, covering 30 languages and 22 chinese dialects at {open-asr.accuracy} on the open asr board.",
+   "use_for": [
+    "multilingual speech to text",
+    "chinese dialect transcription",
+    "singing and speech over music"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "old q4_k files with a 4-bit audio encoder"
+   ],
+   "notes": "{open-asr.accuracy} on the open asr leaderboard; voice arena puts it at {voicearena.us-english} on us english and {voicearena.romanian} on romanian. the card claims state of the art among open models and lists speech, singing voice and songs with background music as inputs. the crispasr gguf card records that an earlier q4_k file could return an empty transcript until its audio encoder was kept at q8_0, so prefer q8_0 or the rebaked q4_k. audio.cpp supports it offline and streaming. apache 2.0.",
+   "confidence": "medium",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: 30 languages and 22 chinese dialects",
+    "audio.cpp family qwen3_asr, tasks asr",
+    "{open-asr.accuracy}",
+    "{voicearena.us-english}",
+    "{voicearena.romanian}"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "davidscripka/openwakeword": {
+   "one_liner": "pre-trained wake-word models for the openwakeword library; audio.cpp ships one classifier and marks the family experimental.",
+   "use_for": [
+    "wake word detection",
+    "keyword spotting on an audio stream"
+   ],
+   "avoid_for": [
+    "commercial products",
+    "speech recognition"
+   ],
+   "notes": "the card is two sentences: these are the official pre-trained models, licensed cc-by-nc-sa-4.0 because some training data has unknown or restrictive licensing. audio.cpp's catalog lists the family as experimental and english only, with a single alexa wake-word package. no accuracy figures are given.",
+   "confidence": "low",
+   "evidence": [
+    "kind detect",
+    "card: non-commercial licence because of training data",
+    "audio.cpp family open_wake_word, tasks wake_word, status experimental"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "espnet/owsm_v4_medium_1B": {
+   "one_liner": "espnet's fully open whisper-style 1b speech model for multilingual asr, speech translation and language id, trained on public data.",
+   "use_for": [
+    "multilingual speech to text",
+    "speech translation",
+    "language identification"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "text generation"
+   ],
+   "notes": "its draw is openness: the card says the code, weights and training logs are released and the 320k hours of public training data are published. it decodes 30 second windows, with a separate long-form call for longer recordings. audio.cpp's owsm family defaults to the 102m base model; the 1b medium is an optional package. cc-by-4.0. there is no leaderboard score here.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: trained on 320k hours of public speech data",
+    "card: asr, speech translation, language id, timestamps",
+    "audio.cpp family owsm, tasks asr"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "ibm-granite/granite-speech-5.0-470m-turboctc": {
+   "one_liner": "ibm's 470m english-only conformer ctc transcriber, built for speed, at {open-asr.accuracy} on the open asr board.",
+   "use_for": [
+    "english speech to text",
+    "high-throughput transcription"
+   ],
+   "avoid_for": [
+    "non-english speech",
+    "speech translation"
+   ],
+   "notes": "{open-asr.accuracy} on the open asr leaderboard. the card pitches it at low-latency, high-throughput english transcription; decoding is greedy ctc, so there is no prompt to bias it with. it was trained on about 60,000 hours of public english audio. audio.cpp supports it offline and streaming. apache 2.0.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: english only, ctc with greedy decoding",
+    "audio.cpp family granite5asr, tasks asr",
+    "{open-asr.accuracy}"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "m-a-p/SheetSage2": {
+   "one_liner": "music recordings to lead sheets: melody, chords, beats, key and structure, emitted by audio.cpp as an abc score.",
+   "use_for": [
+    "lead-sheet transcription from songs",
+    "chord and melody extraction"
+   ],
+   "avoid_for": [
+    "commercial use",
+    "speech recognition"
+   ],
+   "notes": "the gguf card merges the mert-v2 backbone and lora adapters into one fp32 file and warns that a q8_0 build changed chords and melody notes on a tested song, so only the original-precision file is shipped. it validated token and abc parity against python on two songs. cc-by-nc-4.0 for both upstream and the conversion. audio.cpp lists it as supported, offline.",
+   "confidence": "low",
+   "evidence": [
+    "kind detect, audio -> score",
+    "card: melody, chords, beats, key and structure to abc or midi",
+    "card: q8 broke transcription parity",
+    "audio.cpp family sheetsage2, tasks midi"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "mispeech/ced-base": {
+   "one_liner": "an 86m vit audio tagger for 527 audioset classes, distilled from an ensemble; the largest of a four-size family.",
+   "use_for": [
+    "sound event classification",
+    "audio tagging on variable-length clips"
+   ],
+   "avoid_for": [
+    "speech recognition",
+    "speaker identification"
+   ],
+   "notes": "the card claims state-of-the-art audioset results and, against AST, far fewer patches per 10 second clip plus support for clips shorter than 10 seconds without padding. its mAP figures are its own. audio.cpp's ced family defaults to the 5.5m tiny model, with base as the largest optional package. apache 2.0.",
+   "confidence": "low",
+   "evidence": [
+    "kind detect, audio -> labels",
+    "card: consistent ensemble distillation, variable-length input",
+    "audio.cpp family ced, tasks classify"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "netease-youdao/Confucius4-R2T2": {
+   "one_liner": "netease youdao's streaming fine-tune of qwen3-asr 1.7b that only appends text, never revising emitted words, tuned for chinese and english.",
+   "use_for": [
+    "live captioning",
+    "streaming speech to text for agents"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "4-bit quants other than the tuned q4_k_m"
+   ],
+   "notes": "the card claims 200 to 600 ms average latency with accuracy close to offline, chunks from 80 ms to 2 s, and context and hotword prompts. the weights are under the netease youdao model use license rather than an open licence, so read it before deploying. the davidxifeng gguf rejects anything below q8_0 because lower quants decoded to empty text; the nairod785 q4_k_m uses a per-tensor recipe to get around that. audio.cpp carries it as a community family, offline and streaming. no leaderboard score here.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: append-only streaming with 80 ms to 2 s chunks",
+    "card: optimized for chinese and english",
+    "audio.cpp family confucius4_r2t2, tasks asr"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "nvidia/RE-USE": {
+   "one_liner": "nvidia's 9.6m universal speech enhancement model that restores degraded speech at its input sample rate.",
+   "use_for": [
+    "speech restoration and denoising",
+    "cleaning speech before transcription"
+   ],
+   "avoid_for": [
+    "commercial use",
+    "music restoration"
+   ],
+   "notes": "the card claims it handles additive noise, reverberation, clipping, bandwidth limits, codec artifacts and packet loss on 8 to 48 khz input, across languages. it is under nvidia's one-way noncommercial license and the card says research and development only. the audio.cpp gguf card ships f32 only, after f16 and q8 showed waveform drift without a speed gain, and notes that chunking long recordings changes the output. audio.cpp lists it as supported.",
+   "confidence": "low",
+   "evidence": [
+    "kind audio, audio -> audio",
+    "card: research and development only, noncommercial licence",
+    "card: 8 to 48 khz input, sample rate preserved",
+    "audio.cpp family reuse, tasks s2s"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "nvidia/diar_streaming_sortformer_4spk-v2.1": {
+   "one_liner": "nvidia's streaming end-to-end speaker diarizer for up to four speakers, with labels kept in arrival order.",
+   "use_for": [
+    "speaker diarization",
+    "streaming who-spoke-when for meetings and calls"
+   ],
+   "avoid_for": [
+    "recordings with five or more speakers",
+    "transcription on its own"
+   ],
+   "notes": "the card says it detects at most 4 speakers and degrades with 5 or more, was trained mainly on english, and may degrade on non-english, noisy or very long audio. audio.cpp's catalog has no downloadable package: the checkpoint is under the nvidia open model license and local-use only until redistribution is approved, so the weights have to be fetched and converted locally. the card reports DER on dihard, callhome, ami and other sets; there is no cross-model score here.",
+   "confidence": "low",
+   "evidence": [
+    "kind diarize, audio -> speaker segments",
+    "card: max 4 speakers, primarily english training data",
+    "audio.cpp family sortformer_diar_v2, tasks diar, local packages only"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "nvidia/stt_en_citrinet_256_ls": {
+   "one_liner": "a 10m-parameter english ctc transcriber trained only on librispeech, emitting lowercase text without punctuation.",
+   "use_for": [
+    "english speech to text",
+    "a minimal asr baseline"
+   ],
+   "avoid_for": [
+    "accented or technical speech",
+    "punctuated transcripts"
+   ],
+   "notes": "it is trained on 960 hours of librispeech read speech, and the card warns it may degrade on technical terms, vernacular and accented speech. output is lowercase letters, spaces and apostrophes only. the card's own librispeech wer is its only number; there is no leaderboard score here. audio.cpp lists it as supported, offline, with a q8_0 gguf. cc-by-4.0.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: librispeech-only training, lowercase output",
+    "audio.cpp family citrinet_asr, tasks asr"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "pipecat-ai/smart-turn-v3": {
+   "one_liner": "a semantic voice activity model that judges from the waveform whether a speaker has finished their turn.",
+   "use_for": [
+    "turn-end detection in voice agents",
+    "deciding when to reply in a conversation"
+   ],
+   "avoid_for": [
+    "speech recognition",
+    "speaker diarization"
+   ],
+   "notes": "it is an 8m model, a whisper tiny encoder with a small classifier head, and the card points to a blog post and github for usage and results. audio.cpp packages the v3.2 checkpoint and lists the family as supported, offline, with automatic language handling. bsd-2-clause. there is no measured score here.",
+   "confidence": "low",
+   "evidence": [
+    "kind detect, audio -> turn label",
+    "card: whisper tiny encoder, 8m params",
+    "audio.cpp family smart_turn, tasks turn"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "stabilityai/stable-audio-3-medium": {
+   "one_liner": "stability ai's medium text-to-audio model for music and sound effects, with audio-to-audio editing in audio.cpp.",
+   "use_for": [
+    "music generation",
+    "sound effect generation",
+    "audio inpainting and continuation"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "uses outside the stable audio community licence"
+   ],
+   "notes": "no card was collected, so this rests on audio.cpp's catalog: text-to-music, sound effects, editing, inpainting, continuation, variable-length output and lora personalization, with english prompts. the hub lists the licence as stable-audio-community and the upstream safetensors are gated, while audio.cpp's own q8_0 and f16 ggufs are not. there are no measured scores.",
+   "confidence": "low",
+   "evidence": [
+    "kind sound, text -> audio",
+    "audio.cpp family stable_audio, tasks music, sfx, edit",
+    "hub licence stable-audio-community"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "tencent/AuK": {
+   "one_liner": "tencent's 1.5b instruction-driven model for speech generation and editing: tts, cloning, content and paralinguistic edits, enhancement and separation.",
+   "use_for": [
+    "voice cloning from a reference clip",
+    "editing words or emotion in recorded speech",
+    "voices described in an instruction"
+   ],
+   "avoid_for": [
+    "speech recognition",
+    "quantized runs where parity matters"
+   ],
+   "notes": "every task goes through one natural-language instruction, so results depend on phrasing; the upstream cookbook carries templates. audio.cpp marks the family experimental and runs the generator together with a qwen2.5-omni-3b component and a vae. its gguf card validated 16 tasks against python at fp32, says the quantized combinations have not had the same check, and notes that waveform parity does not show whether an edit followed its instruction. mit.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text + audio -> audio",
+    "card: zero-shot and instruct tts, editing, enhancement, separation",
+    "audio.cpp family auk, tasks tts, clone, edit, status experimental"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "Aratako/MioCodec-25Hz-44.1kHz-v2": {
+   "one_liner": "a lightweight speech codec: 44.1 khz audio to 25 hz tokens and back, with zero-shot voice conversion.",
+   "use_for": [
+    "speech tokenization for spoken language models",
+    "zero-shot voice conversion"
+   ],
+   "avoid_for": [
+    "text to speech on its own",
+    "speech recognition"
+   ],
+   "notes": "a component more than an end product: it encodes and decodes, and its voice conversion recombines one clip's content tokens with another speaker's embedding. its tokens match the 24 khz MioCodec, so the card pitches it as a drop-in decoder upgrade for TTS models trained on those tokens. nothing here has measured its reconstruction quality.",
+   "confidence": "low",
+   "evidence": [
+    "kind audio",
+    "card: tokens identical to MioCodec-25Hz-24kHz, decoder upsampled to 44.1 khz",
+    "audio.cpp family miocodec, tasks vc, s2s"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "Banafo/Kroko-ASR": {
+   "one_liner": "a small streaming zipformer transcriber; the free community models are the open tier of a commercial product.",
+   "use_for": [
+    "low-latency streaming transcription",
+    "single-language asr on small hardware"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "mixed-language audio in one model"
+   ],
+   "notes": "each community package covers one language, so pick the package for the language being transcribed. the card reserves its best accuracy for the paid models, and the community weights are CC-BY-SA, a share-alike licence. audio.cpp lists the port as community status, with streaming, hotwords and word timestamps. nothing here has measured it.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: free CC-BY-SA community models beside commercial ones",
+    "audio.cpp family kroko_asr, tasks asr"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "FireRedTeam/FireRedAudio": {
+   "one_liner": "a 9b audio language model that both transcribes and generates speech, with generation limited to chinese and english.",
+   "use_for": [
+    "chinese or english voice cloning and voice design",
+    "speech editing",
+    "questions over long recordings"
+   ],
+   "avoid_for": [
+    "speech generation outside chinese and english",
+    "music generation"
+   ],
+   "notes": "one checkpoint covers understanding and generation, which is the appeal and also the cost: it is a large model for any single one of those jobs. tts, editing and voice design need the separate RedAE decoder in the reference code. audio.cpp's port is experimental. no board has measured it here.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio, text -> audio, text",
+    "card: one shared backbone for asr, understanding, tts and editing",
+    "card: everything but asr is chinese/english only",
+    "audio.cpp family firered_audio, tasks asr, tts, clone, design, edit"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "HeartMuLa/HeartMuLa-oss-3B": {
+   "one_liner": "an apache-licensed 3b music model for full songs from lyrics and style tags.",
+   "use_for": [
+    "song generation from lyrics",
+    "music with vocals"
+   ],
+   "avoid_for": [
+    "speech synthesis",
+    "sound effects"
+   ],
+   "notes": "the card is mostly links, so the capability claims come from audio.cpp's catalog: complete songs with controllable structure and lyrics in several languages (the card tags chinese, english, japanese, korean and spanish). nothing here has measured output quality.",
+   "confidence": "low",
+   "evidence": [
+    "kind sound",
+    "card: one of a family of open music foundation models, apache-2.0",
+    "audio.cpp family heartmula, tasks music"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "KimberleyJSN/melbandroformer": {
+   "one_liner": "a music stem separator for pulling vocals or accompaniment out of a mixed track.",
+   "use_for": [
+    "vocal isolation",
+    "music stem separation"
+   ],
+   "avoid_for": [
+    "speech recognition",
+    "music generation"
+   ],
+   "notes": "the repo has no card text beyond an MIT tag, so what it does comes from audio.cpp's catalog, which supports it for separation only. which stems this checkpoint yields is not stated in the sources; check the output before relying on it.",
+   "confidence": "low",
+   "evidence": [
+    "kind audio",
+    "card: no description, mit licence only",
+    "audio.cpp family mel_band_roformer, tasks sep"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "MahmoudAshraf/mms-300m-1130-forced-aligner": {
+   "one_liner": "a ctc forced aligner: given audio and its exact transcript, it returns word timestamps.",
+   "use_for": [
+    "word timestamps for a known transcript",
+    "subtitle timing"
+   ],
+   "avoid_for": [
+    "transcription without a transcript",
+    "commercial use"
+   ],
+   "notes": "it does not transcribe; it times text you already have. the checkpoint is non-commercial. in audio.cpp only english and dutch get native text normalization, other languages need caller-supplied ascii romanization, and the gguf packages are marked unsupported for download because redistribution is not approved.",
+   "confidence": "low",
+   "evidence": [
+    "kind detect",
+    "card: mms-300m checkpoint converted for forced alignment",
+    "audio.cpp family mms_forced_aligner, tasks align"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "OpenMOSS-Team/MOSS-TTS-Nano": {
+   "one_liner": "a 0.1b multilingual tts with zero-shot cloning, built for low latency over top quality.",
+   "use_for": [
+    "realtime multilingual speech synthesis",
+    "voice cloning from a reference clip"
+   ],
+   "avoid_for": [
+    "speech recognition",
+    "studio-grade narration"
+   ],
+   "notes": "the card positions it on footprint and latency and describes its quality as sufficient for realtime products rather than best in class. audio.cpp supports it offline and streaming across 19 languages. no board has scored it here.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: 0.1b parameters, realtime streaming, 20 languages",
+    "audio.cpp family moss_tts_nano, tasks tts, clone"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "OuteAI/Llama-OuteTTS-1.0-1B": {
+   "one_liner": "a 1b llama-based tts with one-shot cloning in 23 languages, sensitive to its sampler setup.",
+   "use_for": [
+    "multilingual speech synthesis",
+    "voice cloning from a short clip"
+   ],
+   "avoid_for": [
+    "commercial use",
+    "mixed-language prompts"
+   ],
+   "notes": "the card is explicit that sampling matters: temperature 0.4 and a repetition penalty over a 64-token recent window, which the outetts library sets up and any other runtime has to reproduce. quality varies by language with training data, twelve being high-data. the licence is non-commercial share-alike, and audio.cpp lists its port as community status.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: repetition penalty must use a 64-token recent window",
+    "audio.cpp family outetts, tasks tts, clone"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "Qwen/Qwen3-ForcedAligner-0.6B": {
+   "one_liner": "a timestamp aligner for 11 languages that times a known transcript against up to five minutes of speech.",
+   "use_for": [
+    "word or character timestamps for a known transcript",
+    "adding timestamps to qwen3-asr output"
+   ],
+   "avoid_for": [
+    "transcription on its own",
+    "recordings over five minutes in one pass"
+   ],
+   "notes": "it needs the text already, so pair it with a transcriber. the five-minute window means long recordings have to be split. apache-2.0, and audio.cpp supports it. no board here measures alignment.",
+   "confidence": "low",
+   "evidence": [
+    "kind detect",
+    "card: timestamps for up to 5 minutes of speech in 11 languages",
+    "audio.cpp family qwen3_forced_aligner, tasks align"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "Supertone/supertonic-3": {
+   "one_liner": "a 99m on-device tts in 31 languages with preset voices; custom voices go through a paid service.",
+   "use_for": [
+    "fast local speech synthesis",
+    "multilingual narration with preset voices"
+   ],
+   "avoid_for": [
+    "voice cloning from your own clip",
+    "relying on expression tags"
+   ],
+   "notes": "the open package has preset voices only; custom voice styles come from supertone's voice builder. community discussion ({community.hf-discussions}, {community.reddit-localllama}) centres on language requests, voice building and the expression tags, which the maintainers acknowledged as a known limitation of this release. the licence is openrail-m.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: 31 languages, about 99m parameters, onnx runtime",
+    "audio.cpp family supertonic, tasks tts",
+    "{community.hf-discussions}",
+    "{community.reddit-localllama}"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "amphion/Vevo2": {
+   "one_liner": "one framework for speech and singing: tts, singing synthesis, voice conversion and editing in english and chinese.",
+   "use_for": [
+    "singing voice synthesis or conversion",
+    "speech or singing editing",
+    "voice conversion"
+   ],
+   "avoid_for": [
+    "commercial use",
+    "languages beyond english and chinese"
+   ],
+   "notes": "the breadth is the reason to pick it: few models here both sing and speak from one stack. the non-commercial no-derivatives licence restricts both use and redistribution of fine-tunes. audio.cpp supports it. nothing here has measured it.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio, text -> audio",
+    "card: unified speech and singing generation, conversion and editing",
+    "audio.cpp family vevo2, tasks tts, music, vc, edit, svc, s2s"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "dots-studio/dots.tts-soar": {
+   "one_liner": "a 2b continuous-latent multilingual tts whose post-trained release targets zero-shot voice cloning.",
+   "use_for": [
+    "zero-shot voice cloning",
+    "multilingual speech synthesis"
+   ],
+   "avoid_for": [
+    "singing",
+    "low-resource languages where intelligibility matters"
+   ],
+   "notes": "the card's benchmarks are its own and lead on speaker similarity more than word error. cloning works best with a reference clip plus its exact transcript. a sibling meanflow release trades quality for few-step speed, and audio.cpp packages it along with an edit variant. its chat template drops a developer message and accepts unlimited leading system messages.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: soar is the recommended default for zero-shot cloning",
+    "card: higher wer on arabic, hindi, turkish, vietnamese",
+    "audio.cpp family dots_tts, tasks tts, clone"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "facebook/sam-audio-large": {
+   "one_liner": "meta's prompted audio separator: describe a sound in text, mark it in time or in a masked image, and it pulls that sound out.",
+   "use_for": [
+    "isolating a described sound from a recording",
+    "text-prompted speech or instrument extraction"
+   ],
+   "avoid_for": [
+    "speech recognition",
+    "audio generation"
+   ],
+   "notes": "large is the biggest of the three sizes in the audio.cpp package, which also ships small and base. the port leaves out automatic span prediction and candidate ranking, so time prompts are supplied by hand. the gguf card's published numbers were measured with the watermark on. there is no own card on disk; claims come from the gguf card.",
+   "confidence": "low",
+   "evidence": [
+    "kind audio",
+    "card (audio-cpp/sam-audio-gguf): separation prompted by text, masked image or video, or time spans",
+    "audio.cpp family sam_audio, tasks s2s"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "jordand/echo-tts-base": {
+   "one_liner": "an english zero-shot voice-cloning tts on a 2.8b diffusion transformer, generating a fixed window of about 30 seconds.",
+   "use_for": [
+    "english voice cloning from a reference clip",
+    "short english clips"
+   ],
+   "avoid_for": [
+    "commercial use",
+    "non-english speech",
+    "long-form narration without chunking"
+   ],
+   "notes": "output length is fixed by the generation window, so longer text has to be split. the weights are non-commercial share-alike, the audio.cpp port is experimental and the gguf is a third-party conversion. no measured facet.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio, text -> audio",
+    "card: diffusion-based tts for research and non-commercial use",
+    "audio.cpp family echo_tts, tasks tts, clone"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "m-a-p/YuE2-3B": {
+   "one_liner": "a 3b song generator with an editable score, claiming parity with suno on its own benchmark.",
+   "use_for": [
+    "full songs from lyrics and a style prompt",
+    "cover songs",
+    "editing melody and chords through a score"
+   ],
+   "avoid_for": [
+    "commercial music",
+    "speech synthesis"
+   ],
+   "notes": "the headline result is best-of-8 on the authors' own wildsongbench, so single-shot output will vary. audio.cpp lists english for its port while the card tags chinese and english. non-commercial weights. no independent measurement here.",
+   "confidence": "low",
+   "evidence": [
+    "kind sound",
+    "card: songs with vocals from lyrics and a style prompt, symbolic planning",
+    "audio.cpp family yue2, tasks music"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "mispeech/midashenglm-gen": {
+   "one_liner": "generates mixed 16 khz audio scenes, speech with music, effects and ambience, from a structured caption.",
+   "use_for": [
+    "sound design from text",
+    "mixed audio scenes with speech"
+   ],
+   "avoid_for": [
+    "high-fidelity music",
+    "clean single-speaker tts"
+   ],
+   "notes": "input is the card's tagged multi-view caption, with a placeholder token for absent parts. 16 khz mono output caps fidelity. audio.cpp lists it experimental and tags it cuda. the licence is apache-2.0 with added use restrictions, including military use.",
+   "confidence": "low",
+   "evidence": [
+    "kind sound",
+    "card: 16 khz scenes blending speech, music, effects and ambience",
+    "audio.cpp family midashenglm_gen, tasks music"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "netease-youdao/Confucius4-TTS": {
+   "one_liner": "a 14-language cloning tts that keeps one voice across languages without needing the reference transcript.",
+   "use_for": [
+    "cross-lingual voice cloning",
+    "multilingual speech synthesis"
+   ],
+   "avoid_for": [
+    "languages outside its 14",
+    "speech recognition"
+   ],
+   "notes": "the pitch is cross-lingual transfer: clone from a clip in one language, speak another. audio.cpp's port is experimental, offline and streaming, in a single original-dtype package. no board has scored it here.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: 14 languages, cloning without a reference transcript",
+    "audio.cpp family confucius4_tts, tasks tts, clone"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "nvidia/audio-flamingo-3": {
+   "one_liner": "nvidia's 7b audio-language model for questions, captions and transcripts over speech, sound and music.",
+   "use_for": [
+    "audio question answering",
+    "audio captioning",
+    "english transcription"
+   ],
+   "avoid_for": [
+    "commercial use",
+    "speech synthesis"
+   ],
+   "notes": "audio.cpp lists it under asr, english only, and its package defaults to audio flamingo next rather than af3. the gguf card notes next writes timestamps as text, not structured output. non-commercial licence. no transcription board has scored it here.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: audio-language model over speech, sounds and music, non-commercial research",
+    "audio.cpp family audio_flamingo, tasks asr"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "nvidia/nemotron-3.5-asr-streaming-0.6b": {
+   "one_liner": "a 600m streaming transcriber for 40 locales whose chunk size trades latency for accuracy at runtime.",
+   "use_for": [
+    "low-latency streaming transcription",
+    "multilingual voice agents",
+    "batch transcription with punctuation"
+   ],
+   "avoid_for": [
+    "the eight adaptation-ready locales without fine-tuning",
+    "speech synthesis"
+   ],
+   "notes": "the open asr leaderboard puts it at {open-asr.accuracy}. chunk size runs from 80ms to 1120ms with no retraining, and accuracy improves as the chunk grows. automatic language detection appends a locale tag that has to be stripped or kept on purpose. the card says it is ready for commercial use under openmdw-1.1.",
+   "confidence": "medium",
+   "evidence": [
+    "kind speech, audio, text -> text",
+    "card: configurable chunk sizes from 80ms to 1120ms",
+    "{open-asr.accuracy}",
+    "audio.cpp family nemotron_asr, tasks asr"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "nyralabs/CrisperWhisper2.0_large": {
+   "one_liner": "a whisper-based transcriber that keeps disfluencies when asked, with word-level timing.",
+   "use_for": [
+    "verbatim transcription with fillers and false starts",
+    "word-timed transcripts",
+    "clinical or dataset speech annotation"
+   ],
+   "avoid_for": [
+    "commercial use",
+    "speech synthesis"
+   ],
+   "notes": "the verbatim/intended switch and the verbatimize mode, which inserts real disfluencies into a trusted transcript, are what separate it from plain whisper. the benchmark it leads is the vendor's own. audio.cpp supports it for asr and alignment. non-commercial licence.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio, text -> text",
+    "card: verbatim and intended modes, word-level timestamps",
+    "audio.cpp family crisperwhisper, tasks asr, align"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "pnnbao-ump/VieNeu-TTS-v3-Turbo": {
+   "one_liner": "a 48 khz vietnamese tts with english code-switching, preset voices and short-clip cloning.",
+   "use_for": [
+    "vietnamese speech synthesis",
+    "vietnamese-english code-switched speech",
+    "voice cloning from a 3-8 second clip"
+   ],
+   "avoid_for": [
+    "other languages",
+    "speech recognition"
+   ],
+   "notes": "audio.cpp's port takes sea-g2p phonemes rather than raw text, so a phonemizer sits in front of it. the community gguf repo tags cc-by-nc-4.0 while the upstream is apache-2.0, and audio.cpp's default package pulls from the upstream repo. the card marks emotion cues experimental.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: trained from scratch on about 10,000 hours of english and vietnamese speech",
+    "audio.cpp family vieneu_v3_turbo, tasks tts, clone"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "syvai/hviske-v5.3": {
+   "one_liner": "a 2b danish transcriber tuned on coral v3 for read-aloud and conversational danish.",
+   "use_for": [
+    "danish transcription"
+   ],
+   "avoid_for": [
+    "commercial use",
+    "non-danish transcription"
+   ],
+   "notes": "its comparisons are on coral v3, the corpus it was tuned on, so expect less margin on other danish audio. audio.cpp exposes cohere asr language prompts for other languages, but the fine-tune targets danish. non-commercial licence.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio, text -> text",
+    "card: optimized for danish read-aloud and conversational speech",
+    "audio.cpp family hviske_asr, tasks asr"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "woongzip1/universr-audio": {
+   "one_liner": "a flow-matching super-resolution model that upsamples low-rate speech, music or effects to 48 khz.",
+   "use_for": [
+    "restoring bandwidth to low-sample-rate audio",
+    "upsampling 8 khz speech"
+   ],
+   "avoid_for": [
+    "noise removal",
+    "speech recognition"
+   ],
+   "notes": "it adds high frequencies; the card does not claim noise removal. audio.cpp supports it, without a docs page yet, and ships the general and speech checkpoints at f32. cc-by-4.0.",
+   "confidence": "low",
+   "evidence": [
+    "kind audio",
+    "card: upsamples 8-24 khz audio to 48 khz, trained on speech, music and effects",
+    "audio.cpp family universr, tasks s2s"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "openbmb/VoxCPM-0.5B": {
+   "one_liner": "a 0.5b tokenizer-free chinese and english tts with zero-shot cloning and streaming output, apache 2.0.",
+   "use_for": [
+    "chinese or english speech synthesis",
+    "voice cloning from a short clip and its transcript"
+   ],
+   "avoid_for": [
+    "other languages",
+    "production use without testing, by the card's own advice",
+    "speech recognition"
+   ],
+   "notes": "nothing in the registry measures it; the card's zero-shot results are its own table. it is trained primarily on chinese and english, and the card says other languages may come out unpredictable. audio.cpp packages this 0.5b checkpoint at 16 khz as its voxcpm1 family, supported for tts and clone with streaming.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: tokenizer-free diffusion autoregressive tts on minicpm-4",
+    "card: trained primarily on chinese and english",
+    "audio.cpp family voxcpm1, tasks tts, clone"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "neuphonic/neutts-2e": {
+   "one_liner": "neuphonic's english tts with built-in speakers and emotion tokens; the repo is gated.",
+   "use_for": [
+    "english speech synthesis",
+    "streaming speech output"
+   ],
+   "avoid_for": [
+    "languages other than english",
+    "voice cloning through audio.cpp",
+    "speech recognition"
+   ],
+   "notes": "the repo is gated, so there is no card on disk and nothing in the registry measures it. this rests on audio.cpp's catalog, which describes a qwen3-style speech-token backbone with neucodec decoding, built-in speaker prompts and emotion-token control, supported for tts in offline and streaming modes. the hub lists its licence only as other, so read the terms before use.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "audio.cpp family neutts, tasks tts",
+    "gated repo, licence other, no card on disk"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "alibabasglab/MossFormer2_SS_16K": {
+   "one_liner": "a 16 khz speech separation model that splits a recording of several overlapping speakers into one track per speaker.",
+   "use_for": [
+    "separating overlapping speakers",
+    "preprocessing mixed speech before transcription"
+   ],
+   "avoid_for": [
+    "denoising a single speaker",
+    "speech synthesis",
+    "speech recognition on its own"
+   ],
+   "notes": "nothing in the registry measures it, and the card is three sentences. it is the separation checkpoint from alibaba's clearervoice-studio, at 16 khz, which audio.cpp packages as its mossformer2 family in f32 and f16. apache 2.0.",
+   "confidence": "low",
+   "evidence": [
+    "kind audio",
+    "card: separates mixed-speaker speech into individual speakers",
+    "audio.cpp family mossformer2, tasks sep"
+   ],
+   "assessed_on": "2026-10-21"
+  },
+  "SWivid/Habibi-TTS": {
+   "one_liner": "dialectal arabic tts finetuned from f5-tts, as one unified model and seven dialect-specific ones.",
+   "use_for": [
+    "arabic speech synthesis in a chosen dialect",
+    "voice cloning from a reference clip"
+   ],
+   "avoid_for": [
+    "languages other than arabic",
+    "commercial use of the unified, saudi or emirati models",
+    "speech recognition"
+   ],
+   "notes": "nothing in the registry measures it. the licence differs by model: the card puts the unified, saudi and emirati models under cc-by-nc-sa-4.0 because of their training data, and the algerian, egyptian, iraqi, moroccan and modern standard arabic ones under apache 2.0. audio.cpp packages all of them, with the vocos vocoder, as its f5_tts family.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, text -> audio",
+    "card: unified and specialized dialectal arabic models, base f5-tts",
+    "card: licence split between cc-by-nc-sa-4.0 and apache 2.0 by model",
+    "audio.cpp family f5_tts, packages from trklou/audio.cpp"
+   ],
+   "assessed_on": "2026-10-21"
+  },
   "ATH-MaaS/Ovis-Image-7B": {
    "one_liner": "alibaba's ovis image model, the newest family sd.cpp gained a dedicated signature for.",
    "use_for": [
@@ -2239,7 +4060,7 @@
     "{aa.ifbench}",
     "{aa.hle}",
     "{aa.critpt}",
-    "reddit 40 mentions at 92% approval"
+    "reddit 42 mentions at 92% approval"
    ],
    "assessed_on": "2026-08-17"
   },
@@ -2947,6 +4768,119 @@
     "{community.reddit-localllama}"
    ],
    "assessed_on": "2026-08-17"
+  },
+  "deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+   "one_liner": "deepseek's october update of v4.1 flash: the same 763b of weights, better on the vendor's own agentic table, and loadable by no llama.cpp release.",
+   "use_for": [
+    "agentic and coding work on hardware that can hold or stream a 217 gib file, through a build of PR 28696",
+    "anything v4.1 flash was used for, since the architecture and format are unchanged"
+   ],
+   "avoid_for": [
+    "a stock llama.cpp build, which refuses the architecture",
+    "a 128 gib box serving it resident, since the smallest rung is larger than that"
+   ],
+   "notes": "a point release the card calls a minor update, with vendor-reported gains over the release it replaces on every row of its table and the claim of shorter outputs. nothing independent has scored it yet. the conversions split by engine as v4.1's did: unsloth, mrfakename and prometheusair need the llama.cpp PR, while lucebox, dwarfstar and maya builds need their own runtimes and are not carried.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: terminal-bench 4.0 42.3 against 31.2, hle without tools 42.6 against 36.8, vendor's evaluation",
+    "unsloth card: run with its llama.cpp PR or unsloth desktop",
+    "repo listing: smallest unsloth rung UD-IQ1_S at 217 gib"
+   ],
+   "assessed_on": "2026-10-20"
+  },
+  "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16": {
+   "one_liner": "nemotron 3.5 super vl cut to 74b with 9b active and shipped by nvidia as a native 2-bit gguf for a 24 gb budget.",
+   "use_for": [
+    "local agentic work with vision on a 24 gb card, through nvidia's own 2-bit file",
+    "a fast mixture of experts at 9b active when a larger box is available, from unsloth's ladder"
+   ],
+   "avoid_for": [
+    "video input, which its config does not declare",
+    "reading nvidia's accuracy chart as independent evidence"
+   ],
+   "notes": "nvidia built it from super vl by an architecture search over expert counts and widths and then recovered it with 120b tokens of training, so it is a derived model rather than a quant of the parent. the 24gb file is mostly IQ2_XXS by its tensor table. drafting uses a dflash drafter that unsloth ships beside its rungs.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: 74b total, 9b active, expert top-k cut from 22 to 9",
+    "gguf headers: the 24gb file is 92% IQ2_XXS at 2.38 bits per weight",
+    "card: dflash drafter with 7 speculative tokens in the vllm recipes"
+   ],
+   "assessed_on": "2026-10-20"
+  },
+  "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16": {
+   "one_liner": "nemotron super's 3.5 generation, now with vision: 120b with 12b active, a 1m context and a native mtp head.",
+   "use_for": [
+    "reasoning, coding and document understanding with images on a 128 gib box at a 4-bit rung",
+    "drafted decode with the mtp heads ggml-org ships beside the rungs"
+   ],
+   "avoid_for": [
+    "video input through these files, which the config does not declare",
+    "vision prompts at the text sampling settings, since the card recommends a lower temperature for vision"
+   ],
+   "notes": "the backbone starts from the nemotron 3 super base already on this roster and is distilled from nemotron 3 ultra, then trained on long context and software engineering. every score in the card is nvidia's. ggml-org's Q4_0 at about 67 gib is the reference conversion and unsloth's ladder runs from about 43 gib.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: 120b total, 12b active, up to 1m tokens, native mtp",
+    "card: backbone initialized from nemotron 3 super base",
+    "repo listing: ggml-org ships three mtp heads beside its rungs"
+   ],
+   "assessed_on": "2026-10-20"
+  },
+  "ornith-ai/Ornith-1.5-122B": {
+   "one_liner": "the 122b member of the ornith 1.5 family, released with vendor and unsloth ggufs on the same day.",
+   "use_for": [
+    "agentic coding on one large card or a 128 gib box at a 4-bit rung",
+    "a reasoning model sized between the family's 35b and 397b"
+   ],
+   "avoid_for": [
+    "relying on its terminal-bench figures, which the card says needed a modified chat template"
+   ],
+   "notes": "released today, so the evidence is the vendor's own benchmark table and nothing else. the card publishes two sampling sets, a general one with a presence penalty and a colder one for precise coding, and both are carried.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: two recommended sampling sets",
+    "card: terminal-bench runs used a modified qwen chat template"
+   ],
+   "assessed_on": "2026-10-20"
+  },
+  "tencent/Hy-Memory-30B-A3B": {
+   "one_liner": "a 30b mixture of experts trained for one job: writing the memories an agent framework stores.",
+   "use_for": [
+    "the memory-writing step inside mem0, memos or tencent's hy-memory, in place of a general model"
+   ],
+   "avoid_for": [
+    "general chat or coding, which it was not trained or measured for"
+   ],
+   "notes": "the case is the card's own: the best average across four memory harnesses, narrowly ahead of claude opus 5, on 20% subsamples with everything but the writer held fixed. it runs at temperature 0 with thinking off in the card's example.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: 55.49 average against 54.62 for claude opus 5 over four harnesses",
+    "card: usage at temperature 0, reasoning effort no_think"
+   ],
+   "assessed_on": "2026-10-20"
+  },
+  "fishaudio/drama-3": {
+   "one_liner": "fish audio's multi-speaker text-to-speech on a 35b mixture of experts, carried for its audio.cpp conversion.",
+   "use_for": [
+    "multi-character and long-form narration, which the vendor built it for",
+    "running locally through audio.cpp from jmica's gguf"
+   ],
+   "avoid_for": [
+    "anything needing a stable runtime, since audio.cpp marks the family experimental"
+   ],
+   "notes": "the vendor serves it on sglang-omni and vllm-omni. the only gguf is jmica's, which audio.cpp's catalog names as its package, in six builds that vary the expert and backbone precision. no speech board scores it yet.",
+   "confidence": "low",
+   "evidence": [
+    "no facet carried by any source",
+    "card: 35b parameters with 3b active, up to 16 speakers per text",
+    "audio.cpp catalog: fish_drama3, status experimental, package from Jmica/Drama-3-GGUF"
+   ],
+   "assessed_on": "2026-10-20"
   },
   "ConwayResearch/Underdog-Saluki-27B-1.0": {
    "one_liner": "qwen3.8-27b in one file under 8 gb, with tool calling as the thing its publisher protected.",

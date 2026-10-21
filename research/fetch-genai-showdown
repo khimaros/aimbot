@@ -223,12 +223,18 @@ def main():
         payload = json.load(open(args.out))
     except (IOError, ValueError):
         payload = {"version": 1, "boards": {}}
+    kept = 0
     for name, b in boards.items():
         if b:
             # `source` is where the rows in the file came from, so it moves with
             # them: a run where nothing read must not relabel the capture it left
             payload["source"] = args.base
+            old = (payload.get("boards") or {}).get(name) or {}
+            b["models"], n = capture.carry(old.get("models"), b["models"])
+            kept += n
             payload.setdefault("boards", {})[name] = b
+    if kept:
+        print(capture.carried(kept))
     payload["boards"] = dict(sorted((payload.get("boards") or {}).items()))
 
     written, now, before = capture.write(args.out, payload, count,

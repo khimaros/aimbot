@@ -30,6 +30,8 @@ import re
 import subprocess
 import sys
 
+import capture
+
 DATASET = "harborframework/terminal-bench-2-leaderboard"
 TREE = "https://huggingface.co/api/datasets/%s/tree/main/%s"
 RAW = "https://huggingface.co/datasets/%s/resolve/main/%s"
@@ -167,6 +169,9 @@ def main():
     ap.add_argument("--result-max-age", type=int, default=RESULT_MAX_AGE,
                     help="the same for a published job's own files, which never change")
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even though the capture would hold fewer submissions, "
+                         "which is what moving to a new version usually does")
     args = ap.parse_args()
 
     tree = fetch_json(TREE % (DATASET, ROOT % args.version), "tb-tree-" + args.version,
@@ -184,6 +189,14 @@ def main():
         subs[name] = s
         print("  %-52s %2d jobs %4d trials  acc %.3f"
               % (name[:52], s["jobs"], s["trials"], s["accuracy"]), file=sys.stderr)
+
+    if not subs:
+        raise SystemExit("no submission for terminal-bench %s had results" % args.version)
+    # only from a capture of the same version: another version is another task
+    # set, and its submissions are not scores on this one
+    prev = capture.previous(args.out)
+    same = (prev.get("_provenance") or {}).get("version") == args.version
+    subs, gone = capture.carry(prev.get("submissions") if same else {}, subs)
 
     # per-task difficulty over every trial in the capture, which is the
     # denominator any per-task claim needs: a task nobody passes correlates with
@@ -208,11 +221,14 @@ def main():
         "tasks": dict(sorted(tasks.items())),
         "submissions": subs,
     }
-    with open(args.out, "w") as f:
-        json.dump(out, f, indent=1, sort_keys=True)
+    written, now, before = capture.write(args.out, out, lambda p: len(p["submissions"]),
+                                         allow_shrink=args.allow_shrink, sort_keys=True)
+    if not written:
+        raise SystemExit(capture.refused(args.out, now, before, "submissions"))
     print("wrote %s: %d submissions, %d tasks, %d trials"
-          % (args.out, len(subs), len(tasks),
-             sum(s["trials"] for s in subs.values())))
+          % (args.out, now, len(tasks), sum(s["trials"] for s in subs.values())))
+    if gone:
+        print(capture.carried(gone, "submissions"))
 
 
 if __name__ == "__main__":

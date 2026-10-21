@@ -242,6 +242,7 @@ QUANT_EVIDENCE = [
       # generations are listed so a model scored on either does not stop a build
       "epoch.frontiermath", "epoch.frontiermath_tier_4",
       "epoch.frontiermath_tiers_1_3_v2", "epoch.frontiermath_tier_4_v2",
+      "epoch.frontiermath_erdos",
       # the conceptual reasoning index's two halves. dtbench is multiple choice
       # over newcomb-like decision problems; lmca is expert-rated argumentative
       # prose on philosophy, decision theory and AI risk. neither writes code or
@@ -1095,6 +1096,10 @@ def repo_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
                 a["types"] = t["types"]
                 if sized(t["types"]):
                     a["real_bpw"] = t["bpw"]
+                    # the bits of the weights a token is computed with, where
+                    # the file also carries lookup rows; see fetch-gguf-tensors
+                    if t.get("core_bpw"):
+                        a["core_bpw"], a["lookup"] = t["core_bpw"], t["lookup"]
             # the speakers this FILE ships, read out of its own header: two
             # conversions of one checkpoint answer differently, cstr's qwen3-tts
             # carrying nine names where ours carries none
@@ -1137,6 +1142,15 @@ def with_bpw(rows, params_b):
 # checkpoint's BASE repo, never a gguf, and nothing here tracks its support
 # matrix. it is offered for text models because that is where the claim holds,
 # and the page's snippet says which repo it would serve.
+def listed(catalog):
+    """An engine catalog without the rows its source stopped publishing.
+
+    The collectors keep those, marked, because what an engine once shipped is
+    still a fact -- but it is not a reason to say the engine loads a model now.
+    """
+    return {k: v for k, v in (catalog or {}).items() if not (v or {}).get("delisted")}
+
+
 def engines_for(model, loaded=()):
     """Every runtime that can load this model, derived plus written.
 
@@ -1160,7 +1174,7 @@ def engines_for(model, loaded=()):
 # command naming the wrong file is worse than one saying `auto`.
 def crispasr_block(model, backends):
     """The registry's crispasr fact, plus the repos the catalog names for it."""
-    block = dict(model.get("crispasr") or {})
+    block, backends = dict(model.get("crispasr") or {}), listed(backends)
     names = {block.get("backend")} | {(r.get("crispasr") or {}).get("backend")
                                       for r in rungs.repos(model)}
     repos = []
@@ -1221,12 +1235,22 @@ def package_path(pk):
     return "%s/%s" % (home, files[0].split("/")[-1])
 
 
-def audiocpp_block(repo, model, catalog):
-    """The audio.cpp family that downloads these weights, and what to run."""
-    hits = engine_match({f: {p["repo"] for p in (rec.get("packages") or [])
-                             if p.get("repo")}
-                         for f, rec in (catalog or {}).items()},
-                        repo, model)
+def audiocpp_block(repo, model, catalog, tensors=None):
+    """The audio.cpp family that downloads these weights, and what to run.
+
+    A family the entry names wins over the repo join, because most families
+    ship only in audio.cpp's shared repo, where the join names all of them. The
+    repos it still matched are kept, so the package picked is the one
+    downloaded from this entry's own weights where the family ships one.
+    """
+    catalog = listed(catalog)
+    weights = {f: {p["repo"] for p in (rec.get("packages") or []) if p.get("repo")}
+               for f, rec in catalog.items()}
+    named = model.get("audiocpp")
+    if named in weights:
+        hits = engine_match({named: weights[named]}, repo, model) or [(named, [])]
+    else:
+        hits = engine_match(weights, repo, model)
     if len(hits) != 1:
         return None
     name, matched = hits[0]
@@ -1238,7 +1262,8 @@ def audiocpp_block(repo, model, catalog):
     # one would print a command for a model three times the size of the row
     # above it. where the match came in through a pinned quant repo the family
     # publishes no package of that repo, and the default is the only honest answer
-    here = [p for p in packages if p.get("repo") in matched] or packages
+    mine = checkpoint_packages(repo, packages, matched)
+    here = [p for p in packages if p.get("repo") in matched] or mine or packages
     want = (rec.get("ui") or {}).get("recommended_package")
     pk = (next((p for p in here if p.get("id") == want), None)
           or next((p for p in here if p.get("default")), None)
@@ -1260,13 +1285,140 @@ def audiocpp_block(repo, model, catalog):
     native = next((p for p in packages if p.get("repo") == repo), None)
     if native:
         out["native"] = {"repo": repo, "format": native.get("format")}
+    # the same packages the command chooses between, as the rungs the fit
+    # weighs. popped by build_model, which puts them beside the registry's
+    out["rows"] = audiocpp_rows(rec, mine, tensors)
     return out
+
+
+def merge_rows(rows, packages):
+    """The registry's rows with audio.cpp's package rows folded in.
+
+    A package from a repo the entry already pins joins that row -- kitten-tts-2
+    pins dignome's repo, the sizes capture has nothing for it, and dropping the
+    packages left the entry with no sized rung -- and carries its audio.cpp-only
+    mark on the rung, since the row's other rungs are the registry's.
+    """
+    by_repo = {r["repo"]: r for r in rows}
+    out = list(rows)
+    for pr in packages:
+        row = by_repo.get(pr["repo"])
+        if row is None:
+            out.append(pr)
+            continue
+        have = {a["quant"] for a in row.get("available") or []}
+        row.setdefault("available", []).extend(
+            dict(a, engines_only=pr["engines_only"]) for a in pr["available"]
+            if a["quant"] not in have)
+    return out
+
+
+def checkpoint_of(p):
+    """The checkpoint a package is of, normalised: its target directory, which
+    audio.cpp names after the checkpoint, without the `-GGUF` it appends."""
+    name = p.get("target_directory") or (p.get("repo") or "").split("/")[-1]
+    return re.sub(r"[^a-z0-9]", "", re.sub(r"[-_]gguf$", "", name, flags=re.I).lower())
+
+
+def package_stem(p):
+    """A package's id without its precision, normalised -- the checkpoint the id
+    spells where the target directory does not: `dots_tts_soar_q8_0` ships in
+    `DotTTS-SOAR-GGUF`."""
+    stem = re.sub(r"_%s$" % re.escape((p.get("precision") or "").lower()), "",
+                  (p.get("id") or "").lower())
+    return re.sub(r"[^a-z0-9]", "", stem)
+
+
+def checkpoint_packages(repo, packages, matched):
+    """The packages that are THIS entry's checkpoint, or [] where none can say.
+
+    One family can hold several: qwen3_tts carries five, and taking all of its
+    packages put the base model's sizes on the customvoice row. A package is
+    this checkpoint when it downloads from a repo the entry matched, or when
+    its target directory is named for the entry; a family of one checkpoint is
+    that checkpoint whatever it is called.
+    """
+    me = checkpoint_of({"repo": repo})
+    out = [p for p in packages if p.get("repo") in matched or checkpoint_of(p) == me
+           or package_stem(p) == me]
+    # a name one side extends is the same checkpoint where nothing matched
+    # exactly: fireredtts3 ships as -base and -instruct, moss-ttsd-v1.0 as moss-ttsd
+    if not out:
+        out = [p for p in packages if checkpoint_of(p).startswith(me)
+               or (checkpoint_of(p) and me.startswith(checkpoint_of(p)))]
+    if not out and len({checkpoint_of(p) for p in packages}) == 1:
+        out = list(packages)
+    return out
+
+
+# what a package's format says about the box it runs on. `rknn` is a rockchip
+# npu export and `unsupported` is the catalog saying the package does not load
+AUDIOCPP_RUNG_FORMATS = ("gguf", "safetensors")
+# audio.cpp's long spellings of three types, and its two words for "whatever
+# dtype the checkpoint shipped in", which name no type until the file is read
+PRECISION_TYPE = {"bfloat16": "BF16", "float16": "F16", "float32": "F32"}
+OWN_DTYPE = ("orig", "native")
+
+
+def package_label(p, tensors):
+    """The type a package's rung is labelled by, or None where nothing says.
+
+    An `orig` or `native` package is the checkpoint's own dtype: the hub's
+    safetensors index says which for a snapshot, and the file's tensor table
+    for a gguf -- the type most of its weights are in.
+    """
+    prec = (p.get("precision") or "").lower()
+    if prec not in OWN_DTYPE:
+        return PRECISION_TYPE.get(prec, prec.upper()) or None
+    if p.get("dtype"):
+        return p["dtype"].upper()
+    types = ((tensors or {}).get("%s:%s" % (p["repo"], p["id"])) or {}).get("types")
+    top = max(types, key=types.get) if types else None
+    # a type the tensor reader has no name for -- bitnet.cpp's i2_s reads as
+    # `type36` -- is no label a reader can pick a rung by
+    return top if top and is_quant_name(top) else None
+
+
+def audiocpp_rows(family, packages, tensors=None):
+    """The packages audio.cpp would install, as rows of rungs only it loads.
+
+    67 entries ship only inside audio.cpp's shared repo and pin nothing of
+    their own, so the page knew which package to install and not what it
+    weighs, and the memory filter passed them rather than guess. A package is
+    labelled by the precision the catalog gives it, and it is a rung ONLY
+    audio.cpp loads: llama.cpp does not read audio.cpp's conversion of a speech
+    model because it sits on the same row.
+    """
+    rows = {}
+    for p in packages:
+        if (p.get("format") not in AUDIOCPP_RUNG_FORMATS or p.get("kind") == "unsupported"
+                or not p.get("bytes") or not p.get("repo")):
+            continue
+        quant = package_label(p, tensors)
+        if not quant:
+            continue
+        row = rows.setdefault(p["repo"], {"repo": p["repo"], "url": HF + p["repo"],
+                                          "engines_only": ["audio.cpp"], "available": []})
+        if any(a["quant"] == quant for a in row["available"]):
+            continue
+        a = {"quant": quant, "package": p["id"],
+             "gib": round(p["bytes"] / GIB, 2), "bytes": p["bytes"]}
+        t = (tensors or {}).get("%s:%s" % (p["repo"], p["id"]))
+        if t:
+            a["types"] = t["types"]
+            if sized(t["types"]):
+                a["real_bpw"] = t["bpw"]
+        row["available"].append(a)
+    for row in rows.values():
+        row["available"].sort(key=lambda a: a["gib"])
+    return [rows[r] for r in sorted(rows)]
 
 
 def gufo_block(repo, model, guides):
     """The gufo guide that loads these weights, and how it starts the server."""
+    guides = listed(guides)
     hits = engine_match({s: {w.get("repo") for w in (rec.get("weights") or [])}
-                         for s, rec in (guides or {}).items()},
+                         for s, rec in guides.items()},
                         repo, model)
     if len(hits) != 1:
         return None
@@ -1352,8 +1504,15 @@ def build_model(repo, model, ctx):
     rows, _ = repo_rows(model, ctx["sizes"], ctx["known_quants"],
                         ctx["voices"], ctx.setdefault("unnamed", []),
                         ctx["tensors"], repo)
+    ac = audiocpp_block(repo, model, ctx["audiocpp"], ctx["tensors"])
+    if ac:
+        # a pinned file no package downloads from is one audio.cpp does not read
+        own = {r["repo"] for r in ac["rows"]} | set(ac.get("matched") or [])
+        for row in rows:
+            if row["repo"] not in own:
+                row["engines_not"] = ["audio.cpp"]
+        rows = merge_rows(rows, ac.pop("rows"))
     rows = with_bpw(rows, facts.get("params_total_b"))
-    ac = audiocpp_block(repo, model, ctx["audiocpp"])
     gufo = gufo_block(repo, model, ctx["gufo"])
     if gufo:
         gufo["rungs"] = gufo_rungs(gufo, rows)

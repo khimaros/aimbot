@@ -222,8 +222,13 @@ def load(name):
         return {}
 
 
-def ref(source, model_id=None, note=None):
-    """Where a number came from: the source, its file, and a url to read it at."""
+def ref(source, model_id=None, note=None, row=None):
+    """Where a number came from: the source, its file, and a url to read it at.
+
+    `row` is the board row the number was read from, so a score its board has
+    stopped listing says since when -- the collectors keep those at their last
+    published value rather than dropping them.
+    """
     s = SOURCES[source]
     out = {"source": s["label"], "file": s["file"]}
     if s.get("model_url") and model_id:
@@ -234,6 +239,8 @@ def ref(source, model_id=None, note=None):
         out["id"] = model_id
     if note:
         out["note"] = note
+    if (row or {}).get("delisted"):
+        out["delisted"] = row["delisted"]
     return out
 
 
@@ -277,7 +284,7 @@ def aa_facets(entry, aa_id):
         if v is None:
             continue
         out[key] = {"value": v, "label": label, "unit": unit,
-                    "group": "artificial analysis", "ref": ref("aa", aa_id)}
+                    "group": "artificial analysis", "ref": ref("aa", aa_id, row=entry)}
     return out
 
 
@@ -294,12 +301,12 @@ def gbench_facets(row, gid, bt):
         note = "only %d matches played" % (row.get("total_matches") or 0) if thin else None
         out[key] = {"value": sub["gscore"], "label": label, "unit": "gscore",
                     "group": "gbench", "games": sub.get("games_played"),
-                    "low_confidence": bool(thin), "ref": ref("gbench", gid, note)}
+                    "low_confidence": bool(thin), "ref": ref("gbench", gid, note, row)}
     for lang, c in (row.get("by_language") or {}).items():
         if (c.get("total") or 0) < LANG_MIN_GAMES or c.get("success_rate") is None:
             continue
         langs.append({"lang": lang, "rate": c["success_rate"], "games": c["total"],
-                      "matches": c.get("matches"), "ref": ref("gbench", gid)})
+                      "matches": c.get("matches"), "ref": ref("gbench", gid, row=row)})
     langs.sort(key=lambda x: -x["rate"])
     # the per-language rates are facets too, so a reader who writes rust can
     # weight rust. they are kept out of `USE_FOR` -- being good at kotlin is
@@ -342,7 +349,7 @@ def epoch_facets(epoch, epoch_id):
             out["epoch." + name] = {
                 "value": v, "label": "%s (%s)" % (name.replace("_", " "), metric.lower()),
                 "unit": "share" if v <= 1 else "score", "group": "epoch",
-                "ref": ref("epoch", epoch_id, row.get("Source"))}
+                "ref": ref("epoch", epoch_id, row.get("Source"), row)}
             break
     return out
 
@@ -449,7 +456,7 @@ def speech_facets(speech, arena, voicearena, ids, open_asr=None):
             "unit": "share", "group": "open asr leaderboard",
             "ref": ref("open-asr", ids.get("open-asr"),
                        "100 - %.2f mean WER over %d datasets"
-                       % (oasr.get("wer") or 0, len(oasr.get("datasets") or {})))}
+                       % (oasr.get("wer") or 0, len(oasr.get("datasets") or {})), oasr)}
 
     stt = (speech.get("speech-to-text") or {}).get(ids.get("aa-stt")) or {}
     v = accuracy(stt.get("aaWerIndex"))
@@ -458,7 +465,7 @@ def speech_facets(speech, arena, voicearena, ids, open_asr=None):
             "value": v, "label": "transcription accuracy", "unit": "share",
             "group": "artificial analysis speech",
             "ref": ref("aa-stt", ids.get("aa-stt"),
-                                          "100 - aaWerIndex, a word error rate")}
+                                          "100 - aaWerIndex, a word error rate", stt)}
 
     live = ((speech.get("speech-to-text-streaming") or {})
             .get(ids.get("aa-stt-streaming")) or {})
@@ -469,14 +476,14 @@ def speech_facets(speech, arena, voicearena, ids, open_asr=None):
             "group": "artificial analysis speech",
             "ref": ref("aa-stt-streaming",
                                           ids.get("aa-stt-streaming"),
-                                          "100 - aaWerStreamingIndex")}
+                                          "100 - aaWerStreamingIndex", live)}
 
     tts = (speech.get("text-to-speech") or {}).get(ids.get("aa-tts")) or {}
     if tts.get("qualityElo") is not None:
         out["aa-tts.elo"] = {
             "value": tts["qualityElo"], "label": "synthesis quality", "unit": "elo",
             "group": "artificial analysis speech",
-            "ref": ref("aa-tts", ids.get("aa-tts"))}
+            "ref": ref("aa-tts", ids.get("aa-tts"), row=tts)}
 
     ta = arena.get(ids.get("tts-arena")) or {}
     if ta.get("elo") is not None:
@@ -486,7 +493,8 @@ def speech_facets(speech, arena, voicearena, ids, open_asr=None):
             "value": ta["elo"], "label": "synthesis preference", "unit": "elo",
             "group": "tts arena", "votes": ta.get("totalVotes"),
             "ref": ref("tts-arena", ids.get("tts-arena"),
-                       "%s votes, +-%s" % (ta.get("totalVotes"), ta.get("uncertainty")))}
+                       "%s votes, +-%s" % (ta.get("totalVotes"), ta.get("uncertainty")),
+                       ta)}
 
     # one facet per language, the way gbench already gets one per language: the
     # whole reason to carry voice arena is that the slices disagree, and an
@@ -502,7 +510,8 @@ def speech_facets(speech, arena, voicearena, ids, open_asr=None):
             "label": "accuracy, %s" % lang.lower(), "unit": "share",
             "group": "voice arena languages", "samples": whole.get("samples"),
             "ref": ref("voicearena", ids.get("voicearena"),
-                       "100 - corpusErrorPct over %s samples" % whole.get("samples"))}
+                       "100 - corpusErrorPct over %s samples" % whole.get("samples"),
+                       va)}
     return out
 
 
@@ -553,7 +562,7 @@ def jev_facets(board, ids, revision=None):
             continue
         out["jev.%s" % suffix] = {
             "value": v, "label": label, "unit": unit, "group": "jevbench",
-            "ref": ref("jev", ids.get("jev"), note)}
+            "ref": ref("jev", ids.get("jev"), note, row)}
     return out
 
 
@@ -613,7 +622,7 @@ def livebench_facets(board, ids):
                        "%s, cutoff %s, %d of its 7 categories"
                        % (ids.get("livebench"),
                           (board.get("meta") or {}).get("cutoff") or "?",
-                          len(cats)))}
+                          len(cats)), row)}
     return out
 
 
@@ -696,7 +705,7 @@ def image_facets(board, lm, ids, lm_edit=None, showdown=None):
             "ref": ref("aa-t2i", ids.get("aa-t2i"),
                        "%s appearances, %s to %s" % (row.get("appearances"),
                                                      row.get("ciLower"),
-                                                     row.get("ciUpper")))}
+                                                     row.get("ciUpper")), row)}
 
     edit = lm_edit.get(ids.get("lmarena-edit")) or {}
     if edit.get("rating") is not None:
@@ -710,7 +719,7 @@ def image_facets(board, lm, ids, lm_edit=None, showdown=None):
             "unit": "elo", "group": "lmarena images", "votes": edit.get("votes"),
             "ref": ref("lmarena-edit", ids.get("lmarena-edit"),
                        "rank %s of the editing board, %s votes"
-                       % (edit.get("rank"), edit.get("votes")))}
+                       % (edit.get("rank"), edit.get("votes")), edit)}
 
     entry = lm.get(ids.get("lmarena-t2i")) or {}
     if entry.get("rating") is not None:
@@ -722,7 +731,7 @@ def image_facets(board, lm, ids, lm_edit=None, showdown=None):
             "unit": "elo", "group": "lmarena images", "votes": entry.get("votes"),
             "ref": ref("lmarena-t2i", ids.get("lmarena-t2i"),
                        "rank %s of the board, %s votes"
-                       % (entry.get("rank"), entry.get("votes")))}
+                       % (entry.get("rank"), entry.get("votes")), entry)}
 
     # a share rather than the raw count, because the two competitions run
     # different numbers of prompts and three generators were retired part way
@@ -739,7 +748,7 @@ def image_facets(board, lm, ids, lm_edit=None, showdown=None):
             "group": "genai showdown", "prompts": got.get("scored"),
             "ref": ref(source, ids.get(source),
                        "%s of %s prompts passed over %s generations"
-                       % (got.get("passed"), got.get("scored"), got.get("attempts")))}
+                       % (got.get("passed"), got.get("scored"), got.get("attempts")), got)}
     return out
 
 

@@ -149,7 +149,10 @@ def main():
     rows = parse(text)
     if not rows:
         sys.exit("!!! no rows parsed from %s" % args.url)
-    doc = {"version": 1, "source": args.url, "models": rows}
+    carried, kept = capture.carry(capture.previous(args.out).get("models"), rows)
+    if kept:
+        print(capture.carried(kept))
+    doc = {"version": 1, "source": args.url, "models": dict(sorted(carried.items()))}
     written, now, before = capture.write(
         args.out, doc, count=lambda d: len((d or {}).get("models") or {}),
         allow_shrink=args.allow_shrink, label="models")

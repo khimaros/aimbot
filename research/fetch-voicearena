@@ -140,10 +140,13 @@ def main():
     if not models:
         sys.exit("!!! no models in %d row(s) -- the columns changed" % len(rows))
 
-    written, now, before = capture.write(args.out, models, len,
+    carried, kept = capture.carry(capture.previous(args.out), models)
+    written, now, before = capture.write(args.out, dict(sorted(carried.items())), len,
                                          allow_shrink=args.allow_shrink)
     if not written:
         sys.exit(capture.refused(args.out, now, before, "models"))
+    if kept:
+        print(capture.carried(kept))
     langs = sorted({lang for m in models.values() for lang in m["languages"]})
     print("wrote %s: %d models (%d open weights) over %d languages -- %s"
           % (args.out, now, sum(1 for m in models.values() if m["openSource"]),

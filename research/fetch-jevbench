@@ -141,6 +141,9 @@ def main():
     if not rows:
         sys.exit("!!! no systems in the board -- the endpoint changed shape")
 
+    got["systems"], kept = capture.carry(capture.previous(args.out).get("systems"), rows)
+    if kept:
+        print(capture.carried(kept, "systems"))
     written, now, before = capture.write(args.out, got, lambda p: len(p["systems"]),
                                          allow_shrink=args.allow_shrink)
     if not written:

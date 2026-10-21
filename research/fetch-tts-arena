@@ -80,13 +80,17 @@ def main():
     if not rows:
         sys.exit("!!! no models in the leaderboard -- the endpoint changed shape")
 
-    written, now, before = capture.write(args.out, rows, len,
+    listed = rows
+    rows, kept = capture.carry(capture.previous(args.out), rows)
+    written, now, before = capture.write(args.out, dict(sorted(rows.items())), len,
                                          allow_shrink=args.allow_shrink)
     if not written:
         sys.exit(capture.refused(args.out, now, before, "models"))
-    op = sum(1 for r in rows.values() if r.get("open"))
+    op = sum(1 for r in listed.values() if r.get("open"))
     print("wrote %s: %d models (%d open weights, %d votes total)"
-          % (args.out, now, op, sum(r.get("totalVotes") or 0 for r in rows.values())))
+          % (args.out, now, op, sum(r.get("totalVotes") or 0 for r in listed.values())))
+    if kept:
+        print(capture.carried(kept))
 
 
 if __name__ == "__main__":

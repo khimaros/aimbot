@@ -13,6 +13,7 @@ Repos come from the registry's repos, components and drafters.
 
 import argparse
 import collections
+import datetime
 import json
 import os
 import re
@@ -308,10 +309,38 @@ def drafters(m):
     return [b for b in [sp] + list(sp.get("alternatives") or []) if b.get("repo")]
 
 
+def merge_sizes(before, now, attempted, gone_before, on=None):
+    """(sizes, delisted): this run's sizes, and every file it stopped seeing.
+
+    The sizes capture is what the page offers for download, so a file no longer
+    published must leave it -- but what it weighed is still a fact, and it goes
+    to the delisted capture with the date it was first missed. A repo whose
+    listing FAILED is not a repo that stopped publishing: it keeps its sizes as
+    they were. A repo the roster no longer names is set aside whole.
+    """
+    on = on or datetime.date.today().isoformat()
+    sizes = dict(now)
+    gone = {r: dict(t) for r, t in (gone_before or {}).items()}
+    for repo, tags in before.items():
+        if repo in attempted and repo not in now:
+            sizes[repo] = tags
+            continue
+        listed = now.get(repo) or {}
+        for tag, n in tags.items():
+            if tag not in listed:
+                gone.setdefault(repo, {}).setdefault(tag, {"bytes": n, "delisted": on})
+    for repo, tags in sizes.items():
+        for tag in tags:
+            (gone.get(repo) or {}).pop(tag, None)
+    return sizes, {r: dict(sorted(t.items())) for r, t in sorted(gone.items()) if t}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--registry", default=REGISTRY)
     ap.add_argument("--out", default="data/gguf-sizes.json")
+    ap.add_argument("--delisted", default="data/gguf-sizes-delisted.json",
+                    help="where files the hub stopped publishing are kept, with their sizes")
     ap.add_argument("--max-age", type=int, default=MAX_AGE,
                     help="skip revalidation entirely below this age; 0 always revalidates")
     ap.add_argument("--refresh", action="store_true")
@@ -321,7 +350,8 @@ def main():
     args = ap.parse_args()
 
     out, pinned, heads = {}, pinned_files(args.registry), drafter_repos(args.registry)
-    for repo in roster(args.registry):
+    attempted = roster(args.registry)
+    for repo in attempted:
         q = quants(repo, args.max_age, args.refresh, pinned.get(repo, ()), repo in heads)
         if q is None:
             print("  %-52s unavailable" % repo, file=sys.stderr)
@@ -329,6 +359,12 @@ def main():
         out[repo] = {k: v for k, v in sorted(q.items(), key=lambda kv: kv[1])}
         print("  %-52s %d quants" % (repo, len(q)), file=sys.stderr)
 
+    out, gone = merge_sizes(capture.previous(args.out), out, set(attempted),
+                            capture.previous(args.delisted))
+    if gone:
+        capture.write(args.delisted, gone, lambda g: sum(len(t) for t in g.values()))
+        print("  %d file(s) no longer published, kept in %s"
+              % (sum(len(t) for t in gone.values()), args.delisted))
     written, now, before = capture.write(args.out, out, len, args.allow_shrink,
                                          "repos")
     print("%s %s: %d repos" % ("wrote" if written else "did NOT write",

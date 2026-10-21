@@ -1,5 +1,7 @@
 ---
-license: cc-by-4.0
+license: other
+license_name: nvidia-open-model-license
+license_link: https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/
 base_model: nvidia/parakeet-unified-en-0.6b
 base_model_relation: quantized
 library_name: transcribe.cpp
@@ -49,7 +51,7 @@ Validated against the NeMo reference at transcribe.cpp commit
 [42528dd](https://github.com/handy-computer/transcribe.cpp/tree/42528dd)
 on 2026-05-10.
 
-English speech-to-text with punctuation and capitalization. A 0.6B-parameter FastConformer encoder with an RNN-T transducer decoder, trained as a 'unified' streaming/offline model. This port runs the model in both offline and buffered streaming modes.
+English speech-to-text with punctuation and capitalization. A FastConformer encoder with an RNN-T transducer decoder, trained as a 'unified' streaming/offline model. This port runs the model in both offline and buffered streaming modes.
 
 
 ## Downloads
@@ -98,8 +100,12 @@ numbers, numerical validation, and reproduction steps.
 
 ## License
 
-Inherited from the base model: **CC-BY-4.0**. See the
+Inherited from the base model: **NVIDIA Open Model License**. See the
 [upstream model card](https://huggingface.co/nvidia/parakeet-unified-en-0.6b) for full terms.
+This repository includes the license text
+([`LICENSE`](https://huggingface.co/handy-computer/parakeet-unified-en-0.6b-gguf/blob/main/LICENSE)) and a
+[`NOTICE`](https://huggingface.co/handy-computer/parakeet-unified-en-0.6b-gguf/blob/main/NOTICE) recording
+how these files were derived from the original.
 
 ---
 

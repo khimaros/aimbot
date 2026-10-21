@@ -27,7 +27,7 @@ base_model:
 > Multiple precision and quantization variants are available, including `BF16`, `Q8_0`, `Q6_K`, `Q5_K_M`, `Q5_0`, and `Q4_K_M`. All GGUF files include tokenizer metadata and a llama.cpp-compatible chat template.
 
 > [!WARNING] 
-> **💡 Important Deployment Notes:** These models require a version of `llama.cpp` containing K2 Horizon architecture support. PR to llama.cpp is in progress. MBZUAI-IFM fork of llama.cpp is in https://github.com/MBZUAI-IFM/llama.cpp/tree/model/K2Horizon
+> **💡 Important Deployment Notes:** These models require a version of `llama.cpp` containing K2 Horizon architecture support. Mainline support merged in release [b11454](https://github.com/ggml-org/llama.cpp/releases?page=5#release-b11454).
 
 
 

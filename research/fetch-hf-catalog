@@ -36,6 +36,7 @@ import sys
 import time
 import urllib.parse
 
+import capture
 import rungs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -151,6 +152,23 @@ def read_list(path):
     return [n for n in names if n and not n.startswith("[")]
 
 
+def merge_authors(before, now, tracked):
+    """{author: repos}: this run's, followed by every repo `before` held.
+
+    A publisher's listing is capped by --pages and sorted by last change, so a
+    repo missing from this run is past the cap, not gone -- and `base_model` is
+    only readable for a repo this capture holds. A page that answered nothing
+    keeps the publisher whole. `tracked` is re-judged on every row, kept ones
+    included, because it is a fact about today's registry.
+    """
+    out = {}
+    for a in list(now) + [a for a in before if a not in now]:
+        rows, _ = capture.carry(before.get(a) or [], now.get(a) or [],
+                                key=lambda r: r.get("id"), mark=False)
+        out[a] = [dict(r, tracked=(r.get("id") or "").lower() in tracked) for r in rows]
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -209,9 +227,15 @@ def main():
               " (capped at --pages)" if len(rows) == args.pages * PER_PAGE else ""),
               file=sys.stderr)
 
+    # trending is replaced: its order IS the fact, and yesterday's is not today's
+    authors = merge_authors(capture.previous(args.out).get("authors") or {}, authors,
+                            tracked)
     out = {"sort": args.sort, "trending": trending, "authors": authors}
-    with open(args.out, "w") as f:
-        json.dump(out, f, indent=1, sort_keys=True)
+    written, now, before = capture.write(args.out, out,
+                                         lambda p: sum(len(v) for v in p["authors"].values()),
+                                         sort_keys=True, label="author repos")
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "author repos"))
     total = len(trending) + sum(len(v) for v in authors.values())
     print("wrote %s: %d trending + %d author repos across %d publishers"
           % (args.out, len(trending), total - len(trending), len(authors)))

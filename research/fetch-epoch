@@ -36,6 +36,8 @@ import subprocess
 import sys
 import zipfile
 
+import capture
+
 ZIP = "https://epoch.ai/data/benchmark_data.zip"
 
 ECI_FILE = "epoch_capabilities_index/eci_scores.csv"
@@ -143,9 +145,25 @@ def eci_rows(eci, meta):
     return out
 
 
+def carry(before, now):
+    """(capture, n): `now` keeping every result and index row `before` had.
+
+    A benchmark epoch stops shipping keeps its results, and a model version a
+    benchmark or the index drops keeps its row. The ECI fit is per benchmark
+    and recomputed whole, so it is not carried.
+    """
+    benchmarks, kept = capture.carry_groups(before.get("benchmarks"), now["benchmarks"],
+                                            "results", key=lambda r: r.get(MODEL))
+    eci, n = capture.carry(before.get("eci"), now["eci"],
+                           key=lambda r: (r.get(MODEL), r.get("Model name")))
+    return dict(now, benchmarks=benchmarks, eci=eci), kept + n
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--url", default=ZIP)
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even though the zip holds fewer results than before")
     ap.add_argument("--out", default="data/epoch.json")
     # the zip carries an etag, so a repeat run revalidates to 304
     ap.add_argument("--max-age", type=int, default=0)
@@ -195,8 +213,16 @@ def main():
             "results": clean(rows, cols),
         }
 
-    with open(args.out, "w") as f:
-        json.dump(out, f, indent=1, sort_keys=True)
+    if not out["benchmarks"]:
+        sys.exit("no benchmark in the zip -- it has been restructured again")
+    out, gone = carry(capture.previous(args.out), out)
+    written, now, before = capture.write(
+        args.out, out, lambda p: sum(len(b["results"]) for b in p["benchmarks"].values()),
+        allow_shrink=args.allow_shrink, label="results", sort_keys=True)
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "results"))
+    if gone:
+        print(capture.carried(gone, "results"))
 
     scored = sum(1 for r in out["eci"] if r.get("ECI Score"))
     internal = sum(1 for b in out["benchmarks"].values() if b["source"] == "epoch")

@@ -30,6 +30,8 @@ import os
 import subprocess
 import sys
 
+import capture
+
 URL = "https://swe-rebench.com/"
 
 
@@ -44,6 +46,8 @@ def main():
     ap.add_argument("--url", default=URL)
     ap.add_argument("--max-age", type=int, default=6 * 3600)
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even though the capture would hold fewer models")
     args = ap.parse_args()
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -76,15 +80,20 @@ def main():
     if not models:
         sys.exit("no model records found -- the page structure probably changed")
 
+    langs = sorted({g for m in models.values() for g in m["range_stats"]})
+    carried, gone = capture.carry(capture.previous(args.out).get("models"), models)
     out = {"_provenance": {
         "source": args.url,
         "note": "zero-sample windows dropped; see fetch-swerebench",
-        "windows_kept": kept, "windows_dropped": dropped}, "models": models}
-    with open(args.out, "w") as f:
-        json.dump(out, f, indent=1, sort_keys=True)
-    langs = sorted({g for m in models.values() for g in m["range_stats"]})
+        "windows_kept": kept, "windows_dropped": dropped}, "models": carried}
+    written, now, before = capture.write(args.out, out, lambda p: len(p["models"]),
+                                         allow_shrink=args.allow_shrink, sort_keys=True)
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "models"))
     print("wrote %s: %d models, %d windows (%d empty dropped), groups: %s"
-          % (args.out, len(models), kept, dropped, ", ".join(langs)))
+          % (args.out, now, kept, dropped, ", ".join(langs)))
+    if gone:
+        print(capture.carried(gone))
 
 
 if __name__ == "__main__":

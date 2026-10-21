@@ -164,6 +164,26 @@ def shape(models, docs, server):
             "models": out}
 
 
+def merge(before, now, unread, server_read):
+    """`now` keeping every guide, command and subcommand `before` had.
+
+    A guide the index no longer lists is one gufo dropped: kept, marked, and
+    claimed through by nothing. A guide that did not download keeps the serve
+    command it had, and a server doc that did not keeps its subcommands -- an
+    unread page is not a page that went blank.
+    """
+    before = before or {}
+    old = before.get("models") or {}
+    for slug in unread:
+        if slug in now["models"] and (old.get(slug) or {}).get("serve"):
+            now["models"][slug]["serve"] = old[slug]["serve"]
+    models, _ = capture.carry(old, now["models"])
+    meta = dict(now["meta"])
+    if not server_read:
+        meta["subcommands"] = (before.get("meta") or {}).get("subcommands") or meta["subcommands"]
+    return {"meta": meta, "models": models}
+
+
 def load_registry(path):
     try:
         import yaml
@@ -243,7 +263,7 @@ def main():
             missing.append(slug)
     server = get(RAW + SERVER, "gufo-server", args.max_age, args.refresh)
 
-    payload = shape(models, docs, server)
+    payload = merge(capture.previous(path), shape(models, docs, server), missing, bool(server))
     if missing:
         print("  %d guide(s) unread: %s" % (len(missing), ", ".join(missing)),
               file=sys.stderr)

@@ -238,6 +238,18 @@ rung already in the capture is then skipped without any request, which makes the
 http bodies disposable -- `make clean` removes them, at the cost of a re-download
 only of whatever is asked for again.
 
+a rung that carries a lookup table also records `core_bpw` and `lookup`: the
+bits of every other tensor, and the table's share of the elements. deepseek
+v4.1 flash's engram rows, the per-layer embeddings of gemma 4's e models and
+qwen3.8 flash next's n-gram table are read one row per token rather than
+multiplied, so their precision is not what the fitted retention curve was drawn
+over, and 26-50% of the elements is too much to average in. the page reads the
+fitted curve and ranks a ladder at `core_bpw`; a sweep measured on the model
+itself keeps the whole-file figure, since that is the axis its points were put
+on. the field arrived after most rungs were read, so a repo whose model gains a
+table needs `--reread --repo R`, which re-reads named repos through the same
+cache; the roster's twenty such repos were re-read when it was added.
+
 whisper.cpp is the one repo this reads nothing from. it publishes 33 ggml `.bin`
 weights and not a single gguf; the sizer counts them on purpose, since a
 `.gguf`-only filter dropped the repo outright, but ggml is a different container

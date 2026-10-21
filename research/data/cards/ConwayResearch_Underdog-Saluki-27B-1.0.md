@@ -64,6 +64,19 @@ llama-server -m Underdog-Saluki-27B-1.0-IQ2-mix.gguf --mmproj mmproj-Underdog-Sa
 | General use, reasoning, instructions | thinking on (default), temperature 0.6, top_p 0.95, top_k 20 |
 | Fast, direct tool calls | thinking off with `"chat_template_kwargs": {"enable_thinking": false}`, temperature 0 |
 
+## Ollama
+
+Download the GGUF, then create a local Ollama model from it:
+
+```bash
+hf download ConwayResearch/Underdog-Saluki-27B-1.0 Underdog-Saluki-27B-1.0-IQ2-mix.gguf --local-dir .
+echo "FROM ./Underdog-Saluki-27B-1.0-IQ2-mix.gguf" > Modelfile
+ollama create saluki -f Modelfile
+ollama run saluki
+```
+
+Tested with Ollama 0.40.4 on Apple silicon: chat, thinking and tool calling work.
+
 ## Benchmarks
 
 Saluki ran in stock llama.cpp. Where we ran the full-size Qwen3.8-27B ourselves, it used the same harness and settings.

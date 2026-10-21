@@ -2,11 +2,11 @@
  "repos": {
   "Mapika/decider-4b-GGUF": {
    "decider_config.json": {
-    "temperature": 1.099,
+    "temperature": 2.173,
     "temperature_by_type": {
-     "choice": 1.11,
-     "noul": 1.56,
-     "score": 1.287
+     "choice": 2.098,
+     "noul": 0.05,
+     "score": 3.152
     },
     "neutralize_none": false,
     "version": "4b-v2.1",
@@ -19,16 +19,46 @@
     "isolated_levels": true,
     "release_date": "2026-09-24",
     "requires": "decider-ai>=1.4.0 for temperature_by_type; older versions serve every answer at temperature",
-    "stage": "decider-4b v1 + LoRA rank 64 (alpha 128) on attention and MLP, LR 1e-4, 2 epochs (1,518 steps of 65,536 tokens) over v2's 29,325-row mix in the plain state-first layout (generated decision families with code-computed answers, Qwen3.6-27B-written document questions kept when two independent answers agreed, human-labelled public sets, replay of v1's mixture v2), with the replay rows trained toward v1's own answer distribution (KL to v1) instead of their labels, merged into the bf16 weights; no RL stage; temperature fitted by NLL on 61 in-task regression tasks (the 67 in-task tasks without banking77, clinc_oos, mmlu, arc, winogrande, hellaswag); temperature_by_type fitted with decider.calibrate.fit_by_type on the same regression rows plus our own validation rows (choice, noul and score answers)"
+    "stage": "decider-4b v1 + LoRA rank 64 (alpha 128) on attention and MLP, LR 1e-4, 2 epochs (1,518 steps of 65,536 tokens) over v2's 29,325-row mix in the plain state-first layout (generated decision families with code-computed answers, Qwen3.6-27B-written document questions kept when two independent answers agreed, human-labelled public sets, replay of v1's mixture v2), with the replay rows trained toward v1's own answer distribution (KL to v1) instead of their labels, merged into the bf16 weights; no RL stage; temperature fitted by NLL on 61 in-task regression tasks (the 67 in-task tasks without banking77, clinc_oos, mmlu, arc, winogrande, hellaswag); temperature_by_type fitted with decider.calibrate.fit_by_type on the same regression rows plus our own validation rows (choice, noul and score answers)",
+    "parent_temperature": 1.099,
+    "parent_temperature_by_type": {
+     "choice": 1.11,
+     "noul": 1.56,
+     "score": 1.287
+    },
+    "temperature_fit": {
+     "rows": {
+      "choice": 1307,
+      "noul": 228,
+      "score": 65
+     },
+     "nll": {
+      "choice": {
+       "T=1": 0.7488,
+       "fitted": 0.5396
+      },
+      "noul": {
+       "T=1": 0.4073,
+       "fitted": 0.2428
+      },
+      "score": {
+       "T=1": 1.3384,
+       "fitted": 0.7943
+      }
+     },
+     "sets": "jbmax_v2 val_jb/val_teacher/cal_human/guard, 400 each"
+    },
+    "noul_temperature_note": "Noul T 0.05 for JevBench's 0.2-0.8 band rule; calibrated Noul probabilities: noul T fitted on own rows = 2.795",
+    "images": true
    }
   },
   "Mapika/decider-2b-GGUF": {
    "decider_config.json": {
-    "temperature": 1.145,
+    "temperature": 2.515,
     "temperature_by_type": {
-     "choice": 1.164,
-     "noul": 1.624,
-     "score": 1.124
+     "choice": 2.465,
+     "noul": 0.05,
+     "score": 2.833
     },
     "neutralize_none": false,
     "version": "2b-v11",
@@ -42,7 +72,37 @@
     "release_date": "2026-09-24",
     "requires": "decider-ai>=1.4.0 for temperature_by_type; older versions serve every answer at temperature",
     "parent": "decider-2b v10 (Mapika/decider-2b, tag v10)",
-    "stage": "decider-2b v10 + LoRA rank 64 (alpha 128) on attention and MLP, LR 1e-4, 2 epochs (1,676 steps of 65,536 tokens) over 42,749 rows in the plain state-first layout (the same hard-decision rows as decider-4b v2.1 plus a broad replay of the public decision mixture), with the replay rows trained toward v10's own answer distribution (KL to v10) instead of their labels, merged into the bf16 weights; no new RL stage; temperature fitted by NLL on 61 in-task regression tasks; temperature_by_type fitted with decider.calibrate.fit_by_type on the same regression rows plus our own validation rows"
+    "stage": "decider-2b v10 + LoRA rank 64 (alpha 128) on attention and MLP, LR 1e-4, 2 epochs (1,676 steps of 65,536 tokens) over 42,749 rows in the plain state-first layout (the same hard-decision rows as decider-4b v2.1 plus a broad replay of the public decision mixture), with the replay rows trained toward v10's own answer distribution (KL to v10) instead of their labels, merged into the bf16 weights; no new RL stage; temperature fitted by NLL on 61 in-task regression tasks; temperature_by_type fitted with decider.calibrate.fit_by_type on the same regression rows plus our own validation rows",
+    "parent_temperature": 1.145,
+    "parent_temperature_by_type": {
+     "choice": 1.164,
+     "noul": 1.624,
+     "score": 1.124
+    },
+    "temperature_fit": {
+     "rows": {
+      "choice": 1307,
+      "noul": 228,
+      "score": 65
+     },
+     "nll": {
+      "choice": {
+       "T=1": 1.1451,
+       "fitted": 0.7635
+      },
+      "noul": {
+       "T=1": 0.6056,
+       "fitted": 0.3636
+      },
+      "score": {
+       "T=1": 1.265,
+       "fitted": 0.8234
+      }
+     },
+     "sets": "jbmax_v2 val_jb/val_teacher/cal_human/guard, 400 each"
+    },
+    "noul_temperature_note": "Noul T 0.05 for JevBench's 0.2-0.8 band rule; calibrated Noul probabilities: noul T fitted on own rows = 3.185",
+    "images": true
    }
   }
  }

@@ -908,6 +908,8 @@ function showTip(el) {
   tip.innerHTML = `<div class="meta">${bits}</div>`
     + (r.quote ? `<q>${esc(r.quote)}</q>` : '')
     + (r.note ? `<div class="meta">${esc(r.note)}</div>` : '')
+    + (r.delisted ? `<div class="meta">no longer listed by the board since ${esc(r.delisted)};`
+                    + ' this is the score it last published</div>' : '')
     + (r.title ? `<div class="meta">${esc(r.title)}</div>` : '');
   const box = el.getBoundingClientRect();
   tip.style.display = 'block';
@@ -1823,7 +1825,7 @@ function typeChips(types) {
 function discountBlock(m, q) {
   if (!q) return '';
   const c = curveFor(m, q);
-  const kept = retention(rungBpw(q) || 16, m, q);
+  const kept = retention(rungBpw(q) ? retentionBpw(m, q) : 16, m, q);
   const scored = readQuant(m);
   const rows = [];
   // the bits this page judges the rung by, which is the tensor table where that
@@ -1833,7 +1835,11 @@ function discountBlock(m, q) {
   const shown = !bits ? '' : `at ${num(bits, 2)} bits per weight`
     + (bits === q.bpw ? '' : ` <span class="faint">by its tensor table, which is`
       + ` what the ceiling and the retention read; the file over the parameter`
-      + ` count says ${num(q.bpw, 2)}</span>`);
+      + ` count says ${num(q.bpw, 2)}</span>`)
+    + (bits && retentionBpw(m, q) !== bits
+      ? ` <span class="faint">-- the curve is read at ${num(retentionBpw(m, q), 2)}, the`
+        + ` weights without the ${pctOf(q.lookup || 0)} of lookup rows a token`
+        + ` reads one row of</span>` : '');
   rows.push(['rung', `${esc(q.quant)}${shown ? ` ${shown}` : ''}`
     + ' <span class="dim">-- ' + (!activeQuant(m)
       ? 'nothing here fits your budget, so the table ranks its smallest rung'

@@ -45,6 +45,7 @@ import os
 import subprocess
 import sys
 
+import capture
 import rungs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -179,8 +180,16 @@ def main():
                 print("  %-46s %-5s %-22s %6d bytes" % (repo, kind, source, size),
                       file=sys.stderr)
 
-    with open(args.out, "w") as f:
-        json.dump(index, f, indent=1, sort_keys=True)
+    # a repo whose template did not arrive keeps its entry, and the .jinja it
+    # names is still on disk: the probes the registry's `turns:` come from read
+    # it, and a failed fetch is not a template that went away
+    index, kept = capture.carry(capture.previous(args.out), index, mark=False)
+    written, now, before = capture.write(args.out, index, len, sort_keys=True,
+                                         label="templates")
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "templates"))
+    if kept:
+        print("  %d template(s) not fetched this run, kept as indexed" % kept)
     n_gguf = sum(1 for e in index.values() if e["kind"] == "gguf")
     print("wrote %s: %d templates (%d base, %d gguf), %d gguf repos patched theirs"
           % (args.out, len(index), len(index) - n_gguf, n_gguf, len(set(patched))))

@@ -12,6 +12,7 @@ tags:
   - multimodal
   - reinforcement-learning
   - design
+  - arxiv:2610.18860
 ---
 
 # AesCode-32B
@@ -35,7 +36,9 @@ AesCode-32B starts from **Qwen3-VL-32B-Instruct** and is trained with cold-start
 followed by GDPO across seven reward channels. It is the larger released checkpoint and
 leads the aggregate benchmark results.
 
-- 📄 Paper: *AesCode: Aesthetic Code Generation with Decoupled Cross-Modal Rewards*
+- 📄 Paper: [arXiv:2610.18860](https://arxiv.org/abs/2610.18860)
+- 🤗 Paper page: https://huggingface.co/papers/2610.18860
+- 🌐 Project page: https://microsoft.github.io/AesCode/
 - 💻 Code: https://github.com/microsoft/AesCode
 - 🤗 Companion model: [`microsoft/AesCode-8B`](https://huggingface.co/microsoft/AesCode-8B)
 
@@ -167,10 +170,11 @@ https://github.com/microsoft/AesCode.
 ## Citation
 
 ```bibtex
-@inproceedings{aescode,
-  title     = {AesCode: Aesthetic Code Generation with Decoupled Cross-Modal Rewards},
-  booktitle = {Under review},
-  year      = {2027}
+@article{gao2026aescode,
+  title   = {AesCode: Aesthetic Code Generation with Decoupled Cross-Modal Rewards},
+  author  = {Gao, Xin and Yang, Yifan and Li, Xin and Wang, Pan and Li, Yan and Tian, Muzhao and Cheng, Mingxi and Liu, Bei and Qiu, Kai and Dai, Qi and Chen, Dong and Dong, Yue and Tassiulas, Leandros and Ying, Rex and Li, Ji and Luo, Chong},
+  journal = {arXiv preprint arXiv:2610.18860},
+  year    = {2026}
 }
 ```
 

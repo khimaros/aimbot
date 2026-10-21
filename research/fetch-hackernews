@@ -62,6 +62,31 @@ def clean(s):
     return re.sub(r"\s+", " ", html.unescape(re.sub("<[^>]+>", "", s or ""))).strip()
 
 
+def merge(before, now):
+    """`now` keeping every query, story and comment `before` captured.
+
+    Each query keeps its top few stories and each story its first dozen long
+    comments, so this is a sample, and a story missing from this run has left
+    the sample rather than the site. A failed query answers `[]`, which keeps
+    what the query had. One story stays in one place: a story the fresh run
+    files under another query is not carried under its old one, or its
+    mentions would count twice.
+    """
+    placed = {s["id"] for stories in now.values() for s in stories}
+    out = {}
+    for q in list(now) + [q for q in before if q not in now]:
+        old = {s["id"]: s for s in before.get(q) or []}
+        rows = []
+        for s in now.get(q) or []:
+            was = old.get(s["id"]) or {}
+            comments, _ = capture.carry(was.get("comments") or [], s.get("comments") or [],
+                                        key=lambda c: c, mark=False)
+            rows.append(dict(capture.fill(was, s), comments=comments))
+        rows += [s for sid, s in old.items() if sid not in placed]
+        out[q] = rows
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--stories", type=int, default=6,
@@ -120,12 +145,13 @@ def main():
         print("  %-28s %d stories%s" % (q, len(stories),
                                         ", %d already had" % dupes if dupes else ""))
 
+    out = merge(capture.previous(args.out), out)
     written, now, before = capture.write(args.out, out, len, args.allow_shrink,
                                          "queries")
     if not written:
         sys.exit(capture.refused(args.out, now, before, "queries"))
     print("wrote %s: %d queries, %d unique stories"
-          % (args.out, len(out), len(seen)))
+          % (args.out, len(out), len({s["id"] for v in out.values() for s in v})))
 
 
 if __name__ == "__main__":

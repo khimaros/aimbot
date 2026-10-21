@@ -47,7 +47,7 @@ tags:
 <!-- CARD_EN_START -->
 # Qwen3.8-27B-Coder390-EfficientThink-Opus5.5-GPT6Astra-Grok4.7-DSV4Pro-K3-SFT-RLOO-MTP-DFlash2
 
-A model post-trained with several rounds of SFT and RLOO on top of [Qwen3.8-27B-EfficientThink-SFT-SimPO-DFlash2](https://huggingface.co/nerkyor/Qwen3.8-27B-EfficientThink-Uncensored-K3-Opus5-Grok4.6-GPT5.6Sol-SFT-SimPO-DFlash2), which is itself the official [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) post-trained with SFT and SimPO. It is built to fix the original model's habit of failing to stop: it already has an answer, yet keeps re-deriving until it hits the 94K cap with no final answer. This repository provides five safetensors tiers, **BF16**, **static FP8 Block128**, **NVFP4 W4A16**, **NVFP4 W4A4**, and **NVFP4 W4A4-W8A8** (mixed precision), all fully multimodal (text + image/video) with the official BF16 MTP bundled; all load in SGLang without patches, and the FP8 package is also smoke-tested on vLLM. It also has **NInfer W4A4 / W4A4-W8A8** (`NVFP4-NInfer/`), **INT8 W8A8** (`INT8/W8A8/`), **INT8 W8A16** (`INT8/W8A16/`, text + image), **INT4 W4A16** (`INT4/W4A16/`, text + image, vLLM), and **GGUF Q2 / Q3 / Q4 LynnStyle (plus Q8 MTP versions), Q6_K, and Q8_0** (`GGUF/`, `GGUF-NInfer/`, built-in MTP).
+A model post-trained with several rounds of SFT and RLOO on top of [Qwen3.8-27B-EfficientThink-SFT-SimPO-DFlash2](https://huggingface.co/nerkyor/Qwen3.8-27B-EfficientThink-Uncensored-K3-Opus5-Grok4.6-GPT5.6Sol-SFT-SimPO-DFlash2), which is itself the official [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) post-trained with SFT and SimPO. It is built to fix the original model's habit of failing to stop: it already has an answer, yet keeps re-deriving until it hits the 94K cap with no final answer. This repository provides five safetensors tiers, **BF16**, **static FP8 Block128**, **NVFP4 W4A16**, **NVFP4 W4A4**, and **NVFP4 W4A4-W8A8** (mixed precision), all fully multimodal (text + image/video) with the official BF16 MTP bundled; all load in SGLang without patches, and the FP8 package is also smoke-tested on vLLM. It also has **NInfer W4A4 / W4A4-W8A8** (`NVFP4-NInfer/`), **INT4 W4A16** (`INT4/W4A16/`, text + image, vLLM), **INT8 W8A8** (`INT8/W8A8/`), **INT8 W8A16** (`INT8/W8A16/`, text + image), and **GGUF Q2 / Q3 / Q4 LynnStyle (plus Q8 MTP versions), Q6_K, and Q8_0** (`GGUF/`, `GGUF-NInfer/`, built-in MTP).
 
 - **Far fewer 94K truncations**: under the same protocol, 4 → 1 on GPQA and 13 → 3 on LCB.
 - **No regression on any suite**: GPQA **178/198**, MMLU **450/500**, LCB **90/100** (static FP8), vs. 177 / 444 / 83 for the original FP8.
@@ -211,6 +211,20 @@ Buckets are "correct / problems in bucket", half-open on the left.
 
 </details>
 
+### INT4 W4A16: scores, 94K truncations, and empty answers
+
+**Protocol**: one RTX PRO 6000, vLLM 0.28, C8, 100K context, 94,208 generation cap, client not timed, reasoning effort xhigh, **MTP speculation with 3 draft tokens** (built-in head), `--reasoning-parser qwen3`; full GPQA 198 / MMLU 500 / LCB 100; empty answers count as wrong, truncations that still answer correctly count as correct, and every failure stays in the denominator. The run was paused on 2026-10-09 and resumed with the same server settings; finished problems were kept.
+
+A 94K truncation means the generation cap was hit. LCB empty answers are the number of problems for which no runnable code could be extracted. Bold means better than the original Qwen3.8 27B (FP8); its numbers are in the all-tier table above.
+
+| Suite | Precision | Score | Reasoning P50 / P70 / P90 | 94K trunc. | Empty |
+|---|---|---:|---|---:|---:|
+| GPQA | INT4 W4A16 | 177/198 | **3,136** / **8,115** / **27,856** | **1** | **1** |
+| MMLU | INT4 W4A16 | **446/500** | **176** / **322** / **1,098** | **0** | 0 |
+| LCB | INT4 W4A16 | **87/100** | **4,494** / **19,046** / **36,053** | **2** | **2** |
+
+Reasoning lengths come from `usage.reasoning_tokens` returned by vLLM. GPQA: 1 truncation (problem 79), 1 empty answer (problem 79). MMLU has no truncations and no empty answers. LCB: 2 truncations (problem atcoder:arc182_e:6, atcoder:arc195_d:54), 2 empty answers (problem atcoder:arc182_e:6, atcoder:arc195_d:54). By difficulty, LCB is hard 37/46, medium 27/31, and easy 23/23. Mean MTP accept length over the run (vLLM log, 3 draft tokens): 2.81.
+
 ### INT8 W8A8: scores, 94K truncations, and empty answers
 
 **Protocol**: one RTX PRO 6000, vLLM 0.28, C8, 100K context, 94,208 generation cap, client not timed, **no speculation**, reasoning effort xhigh; full GPQA 198 / MMLU 500 / LCB 100; empty answers count as wrong, truncations that still answer correctly count as correct, and every failure stays in the denominator. INT8 W8A8 loads only in vLLM.
@@ -243,20 +257,6 @@ Reasoning lengths come from `usage.reasoning_tokens` returned by vLLM. GPQA: 1 t
 
 Same-protocol TPS / concurrency tables will be added after the speed harness finishes; smoke decode was ~119 tok/s wall with MTP+vision on a short prompt.
 
-### INT4 W4A16: scores, 94K truncations, and empty answers
-
-**Protocol**: one RTX PRO 6000, vLLM 0.28, C8, 100K context, 94,208 generation cap, client not timed, reasoning effort xhigh, **MTP speculation with 3 draft tokens** (built-in head), `--reasoning-parser qwen3`; full GPQA 198 / MMLU 500 / LCB 100; empty answers count as wrong, truncations that still answer correctly count as correct, and every failure stays in the denominator. The run was paused on 2026-10-09 and resumed with the same server settings; finished problems were kept.
-
-A 94K truncation means the generation cap was hit. LCB empty answers are the number of problems for which no runnable code could be extracted. Bold means better than the original Qwen3.8 27B (FP8); its numbers are in the all-tier table above.
-
-| Suite | Precision | Score | Reasoning P50 / P70 / P90 | 94K trunc. | Empty |
-|---|---|---:|---|---:|---:|
-| GPQA | INT4 W4A16 | 177/198 | **3,136** / **8,115** / **27,856** | **1** | **1** |
-| MMLU | INT4 W4A16 | **446/500** | **176** / **322** / **1,098** | **0** | 0 |
-| LCB | INT4 W4A16 | **87/100** | **4,494** / **19,046** / **36,053** | **2** | **2** |
-
-Reasoning lengths come from `usage.reasoning_tokens` returned by vLLM. GPQA: 1 truncation (problem 79), 1 empty answer (problem 79). MMLU has no truncations and no empty answers. LCB: 2 truncations (problem atcoder:arc182_e:6, atcoder:arc195_d:54), 2 empty answers (problem atcoder:arc182_e:6, atcoder:arc195_d:54). By difficulty, LCB is hard 37/46, medium 27/31, and easy 23/23. Mean MTP accept length over the run (vLLM log, 3 draft tokens): 2.81.
-
 ### GGUF Q2 / Q3 / Q4 LynnStyle: scores, reasoning length, 94K truncations, and empty answers
 
 **Protocol**: one RTX PRO 6000, llama.cpp (`llama-server`), C4, about 100K context per slot, 94,208 generation cap, client not timed, thinking on; full GPQA 198 / MMLU 500 / LCB 100; empty answers count as wrong, truncations that still answer correctly count as correct, and every failure stays in the denominator. Scored before the built-in MTP head was attached (external Q8 MTP draft); same quantized weights. The matching `.ninfer` packages under `GGUF-NInfer/` are converted from the same GGUFs; the full triad was run only on the GGUF.
@@ -268,6 +268,9 @@ A 94K truncation means the generation cap was hit. LCB empty answers are the num
 | GPQA | GGUF Q2 LynnStyle | 177/198 | **2,989.5** / **8,923.8** / **27,156.1** | **3** | **0** |
 | MMLU | GGUF Q2 LynnStyle | 433/500 | **181** / **326.3** / **1,020.5** | 1 | 0 |
 | LCB | GGUF Q2 LynnStyle | **90/100** | **5,656.5** / **17,835.8** / **40,067.3** | **1** | **1** |
+| GPQA | GGUF Q3 LynnStyle-16G | 172/198 | **3,811** / **11,404** / **31,418** | **2** | **2** |
+| MMLU | GGUF Q3 LynnStyle-16G | 427/500 | **190** / **361** / 1,665 | **0** | 0 |
+| LCB | GGUF Q3 LynnStyle-16G | **90/100** | **6,520** / **21,586** / **43,184** | **3** | **3** |
 | GPQA | GGUF Q3 LynnStyle | 173/198 | **3,125.5** / **7,265.2** / **24,343.1** | **1** | **1** |
 | MMLU | GGUF Q3 LynnStyle | **449/500** | **148** / **279.3** / **923.4** | **0** | 0 |
 | LCB | GGUF Q3 LynnStyle | **92/100** | **4,421** / **14,232.2** / **34,946** | **1** | **1** |
@@ -315,11 +318,11 @@ GPQA: 2 truncations, 0 empty. MMLU: 0 / 0. LCB: 3 truncations, 3 empty (length w
 LCB is scored on llama.cpp: the LCB harness gets non-JSON replies from NInfer — a harness issue, not model quality.
 
 
-## Run this model in Lynn desktop Agent (V0.87.1)
+## Run this model in Lynn desktop Agent (V0.87.3)
 
 [Lynn](https://github.com/MerkyorLynn/Lynn) is an open-source desktop AI Agent (GUI + standalone CLI): chat, search, file edits, coding, and realtime voice in one app, or as a headless worker for other tools and CI. **Free. Quick Start needs no configuration and no API key.**
 
-Current defaults (V0.87.1):
+Current defaults (V0.87.3):
 
 | Role | Stack |
 |---|---|
@@ -331,11 +334,11 @@ Hardware guidance: Apple Silicon uses unified memory; NVIDIA uses the largest si
 
 Tool arguments (places, dates, leagues, tickers, currency pairs, and so on) are filled by the model rather than guessed from the whole user sentence. Desktop features such as long-term memory and writing Diff ship with Lynn; see the release notes for the full changelog.
 
-- [V0.87.1 release notes](https://github.com/MerkyorLynn/Lynn/releases/tag/v0.87.1)
+- [V0.87.3 release notes](https://github.com/MerkyorLynn/Lynn/releases/tag/v0.87.3)
 - [China download page (recommended)](https://download.merkyorlynn.com/download.html)
-- macOS Apple Silicon: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.1-macOS-arm64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.1/Lynn-0.87.1-macOS-arm64.dmg)
-- macOS Intel: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.1-macOS-x64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.1/Lynn-0.87.1-macOS-x64.dmg)
-- Windows: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.1-Windows-Setup.exe) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.1/Lynn-0.87.1-Windows-Setup.exe)
+- macOS Apple Silicon: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-macOS-arm64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-macOS-arm64.dmg)
+- macOS Intel: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-macOS-x64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-macOS-x64.dmg)
+- Windows: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-Windows-Setup.exe) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-Windows-Setup.exe)
 
 In Lynn: **Settings → Models → Local Qwen3.8-27B → pick Q2 / Q3 → Install & start**. Local tiers load only the Q2 / Q3 LynnStyle-MTP files under this repo’s `GGUF/` directory. NInfer / NVFP4 and other formats stay outside Lynn’s one-click install — use their own engines.
 
@@ -350,9 +353,9 @@ In Lynn: **Settings → Models → Local Qwen3.8-27B → pick Q2 / Q3 → Instal
 | NVFP4 W4A4-W8A8 | `NVFP4/W4A4-W8A8/` | Fully multimodal, language-model MLP layers in NVFP4 W4A4 and attention / linear-attention projections in FP8 W8A8, official BF16 MTP bundled, DFlash2 draft included, no patches needed in SGLang | 23,769,634,648 (≈22.1 GiB, excluding the draft) | 6.84 | 172 / 442 / 88 |
 | NInfer W4A4 | `NVFP4-NInfer/W4A4/` | Official NInfer package (`.ninfer`), W4A4 text path with a Q8 MTP head, the DFlash2 draft, the proposal head, and the vision component built in (image input with `--vision`); loadable only by the official NInfer engine (`Neroued/ninfer`) | 23,773,675,264 (≈22.1 GiB) | 6.76 | 177 / 449 / 89 |
 | NInfer W4A4-W8A8 | `NVFP4-NInfer/W4A4-W8A8/` | Official NInfer mixed-precision package (`.ninfer`), W4A4-W8A8 text path with a Q8 MTP head, the DFlash2 draft, the proposal head, and the vision component built in (image input with `--vision`); loadable only by the official NInfer engine (`Neroued/ninfer`) | 23,773,675,264 (≈22.1 GiB) | 6.76 | 177 / 444 / 92 |
+| INT4 W4A16 | `INT4/W4A16/` | Text + image (`Qwen3_5ForConditionalGeneration`): GPTQ INT4 weights (symmetric, group size 128) with BF16 activations in compressed-tensors format; built-in BF16 MTP head (`model_mtp.safetensors`) for vLLM speculative decoding; BF16 vision tower (`model_visual.safetensors`); no DFlash2 draft; tested on vLLM | 19,437,985,972 (≈18.1 GiB) | 5.25 | 177 / 446 / 87 |
 | INT8 W8A8 | `INT8/W8A8/` | Text + image (`Qwen3_5ForConditionalGeneration`; the BF16 vision tower is a separate file, `model_visual.safetensors`, added 2026-10-09): SmoothQuant per-channel INT8 weights + per-token dynamic INT8 activations in compressed-tensors format; does not include the DFlash2 draft; MTP comes as a separate BF16 draft folder (`INT8/W8A8/MTP-BF16/`) for vLLM speculative decoding; loadable only by vLLM | 30,422,466,299 (≈28.3 GiB) | 8.77 | 175 / 450 / 91 |
 | INT8 W8A16 | `INT8/W8A16/` | Text + image (`Qwen3_5ForConditionalGeneration`): GPTQ symmetric per-channel INT8 weights + BF16 activations (compressed-tensors pack-quantized); BF16 vision tower `model_visual.safetensors`; MTP as separate BF16 draft folder `INT8/W8A16/MTP-BF16/`; no DFlash2 draft; loadable only by vLLM | 30,370,996,824 (≈28.3 GiB including vision; MTP draft extra) | 8.76 | 170 / 449 / 94 |
-| INT4 W4A16 | `INT4/W4A16/` | Text + image (`Qwen3_5ForConditionalGeneration`): GPTQ INT4 weights (symmetric, group size 128) with BF16 activations in compressed-tensors format; built-in BF16 MTP head (`model_mtp.safetensors`) for vLLM speculative decoding; BF16 vision tower (`model_visual.safetensors`); no DFlash2 draft; tested on vLLM | 19,437,985,972 (≈18.1 GiB) | 5.25 | 177 / 446 / 87 |
 | GGUF Q3 LynnStyle | `GGUF/` | Mixed-precision LynnStyle GGUF (`Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-MTP.gguf`): lowest type Q3; **built-in Q4 MTP**; vision external | 17,303,770,432 (~16.1 GiB) | 5.07 | 173 / 449 / 92 |
 | GGUF Q3 LynnStyle · NInfer | `GGUF-NInfer/` | NInfer from Q3 LynnStyle GGUF; built-in Q4_K MTP and vision; NInfer-all and ninfer-fusion-kvmem | 17,596,369,920 (~16.4 GiB) | 5.07 | 173 / 449 / 92 |
 | GGUF Q3 LynnStyle · Q8MTP | `GGUF/` | The same Q3 LynnStyle GGUF with only the built-in MTP head re-encoded as Q8_0 (`Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-Q8MTP.gguf`); every other tensor is byte-identical to the original; an alternative with a Q8_0 MTP head (the original's Q4_0 MTP head is supported by llama.cpp); llama.cpp vision via the mmproj in `GGUF/` | 17,516,107,072 (~16.3 GiB) | 5.13 | 173 / 449 / 92 |
@@ -361,6 +364,8 @@ In Lynn: **Settings → Models → Local Qwen3.8-27B → pick Q2 / Q3 → Instal
 | GGUF Q4 LynnStyle · NInfer | `GGUF-NInfer/` | NInfer from Q4 LynnStyle GGUF; built-in Q4_K MTP and vision; NInfer-all and ninfer-fusion-kvmem | 19,913,006,080 (~18.5 GiB) | 5.74 | 175 / 448 / 89 |
 | GGUF Q4 LynnStyle · Q8MTP | `GGUF/` | The same Q4 LynnStyle GGUF with only the built-in MTP head re-encoded as Q8_0 (`Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.gguf`); every other tensor is byte-identical to the original; an alternative with a Q8_0 MTP head (the original's Q4_0 MTP head is supported by llama.cpp); llama.cpp vision via the mmproj in `GGUF/` | 19,832,743,232 (~18.5 GiB) | 5.81 | 175 / 448 / 89 |
 | GGUF Q4 LynnStyle · Q8MTP · NInfer | `GGUF-NInfer/` | NInfer package from the Q8MTP GGUF above (`Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.ninfer`), built-in Q8_0 MTP head and vision, model id `qwen3.8-27b-coder390-Q4LynnStyle-Q8Mtp`; body weights identical to the original Q4 LynnStyle package, scores carried over | 20,125,342,720 (~18.7 GiB) | 5.81 | 175 / 448 / 89 |
+| GGUF Q3 LynnStyle-16G | `GGUF/` | Our lowest Q3 tier, for 16 GB VRAM (`Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf`): lowest type IQ3_XXS, no Q6 / Q8 in the body; importance-matrix correction + GSQ-RCO (same-byte refinements, size unchanged); **built-in Q4_K MTP**; llama.cpp vision via the mmproj in `GGUF/`; scored with llama.cpp + DFlash2 external draft | 13,276,009,920 (~12.4 GiB) | 3.89 | 172 / 427 / 90 |
+| GGUF Q3 LynnStyle-16G · NInfer | `GGUF-NInfer/` | NInfer package from the same Q3 LynnStyle-16G weights: built-in **Q4_K MTP** + built-in **Q8 vision** (add `--vision`; no mmproj) | 13,765,136,896 (~12.8 GiB) | 3.89 | same scores (GGUF triad) |
 | GGUF Q2 LynnStyle | `GGUF/` | Mixed-precision LynnStyle GGUF (`Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-MTP.gguf`): lowest type Q2; **built-in Q4 MTP**; vision external | 13,276,009,792 (~12.4 GiB) | 3.89 | 177 / 433 / 90 |
 | GGUF Q2 LynnStyle · NInfer | `GGUF-NInfer/` | NInfer from Q2 LynnStyle GGUF; built-in Q4_K MTP and vision; NInfer-all and ninfer-fusion-kvmem | 13,568,617,472 (~12.6 GiB) | 3.89 | 177 / 433 / 90 |
 | GGUF Q2 LynnStyle · Q8MTP | `GGUF/` | The same Q2 LynnStyle GGUF with only the built-in MTP head re-encoded as Q8_0 (`Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q8MTP.gguf`); every other tensor is byte-identical to the original; an alternative with a Q8_0 MTP head (the original's Q4_0 MTP head is supported by llama.cpp); llama.cpp vision via the mmproj in `GGUF/` | 13,488,346,432 (~12.6 GiB) | 3.95 | 177 / 433 / 90 |
@@ -394,8 +399,8 @@ BPW for the two GGUF Q8_0 packages is the single file's bytes × 8 ÷ the text +
 - Speed figures for BF16 and static FP8 were measured on the static FP8 package (BF16 was not benchmarked separately and shares the same figures); the three NVFP4 tiers were each benchmarked on their own package.
 - NVFP4 scores were measured on a single GPU at C8; see "NVFP4 tiers" above for the protocol.
 - NInfer tier scores are carried over from the 2026-10-05 triad on the same text path (single GPU, C8, official NInfer, no speculation); see the NInfer tiers section above. NInfer speeds were measured separately on the new packages; see "NInfer tiers" under Best-TPS and concurrency recommendations below.
-- INT8 W8A8 scores are a full triad measured on a single GPU at C8 with vLLM and no speculation; see the INT8 W8A8 section above for the protocol. Its speeds come from a quick benchmark; see "INT8 W8A8" under Best-TPS and concurrency recommendations below.
 - INT4 W4A16 scores are a full triad measured on a single GPU at C8 with vLLM 0.28 and MTP (3 draft tokens, built-in head); see the INT4 W4A16 section above for the protocol, and "INT4 W4A16" under Best-TPS and concurrency recommendations below for speeds.
+- INT8 W8A8 scores are a full triad measured on a single GPU at C8 with vLLM and no speculation; see the INT8 W8A8 section above for the protocol. Its speeds come from a quick benchmark; see "INT8 W8A8" under Best-TPS and concurrency recommendations below.
 - GGUF Q6_K scores are a full triad measured on a single GPU at C4 with llama.cpp; see the GGUF Q6_K section above for the protocol. Its speeds come from a quick benchmark; see "GGUF Q6_K" under Best-TPS and concurrency recommendations below.
 - GGUF Q8_0 scores are a full triad measured on a single GPU at C4 with llama.cpp; see the GGUF Q8_0 section above for the protocol. For speeds see "GGUF Q8_0" below (NInfer C8 MTP 486.3; llama.cpp C4 MTP 190.8).
 - The two NInfer tiers are under `NVFP4-NInfer/W4A4/` and `NVFP4-NInfer/W4A4-W8A8/`, INT8 W8A8 is under `INT8/W8A8/`, INT4 W4A16 is under `INT4/W4A16/`, and GGUF Q2 / Q3 / Q4 LynnStyle (plus their Q8 MTP versions), Q6_K, and Q8_0 are under `GGUF/` and `GGUF-NInfer/`.
@@ -563,6 +568,18 @@ Setup: one RTX PRO 6000 Blackwell; official NInfer with the same context flags a
 - **Best setting**: for both tiers and all three modes, aggregate throughput peaks at C8. NInfer W4A4 tops out with DFlash2 · C8 (975.9 tok/s) and NInfer W4A4-W8A8 with DFlash2 · C8 (804.9 tok/s); with MTP only, C8 gives 678.3 and 663.9 tok/s respectively.
 - **C8 versus NVFP4 W4A4 (SGLang)**: NInfer W4A4 reaches 306.8 vs 316.8 with no speculation, 678.3 vs 355.5 with MTP, and 975.9 vs 689.8 tok/s with DFlash2. The engines and context settings differ, so treat this as a rough comparison.
 
+### INT4 W4A16
+
+Setup: one NVIDIA RTX PRO 6000 Blackwell (96 GB); vLLM 0.28 with `--max-model-len 102400`, `--max-num-seqs 8`, and `--gpu-memory-utilization 0.85`; MTP row uses the built-in head with `--speculative-config '{"method":"mtp","num_speculative_tokens":3}'`. 1024 generation cap, thinking on, sampling temperature 1.0, top_p 0.95, top_k 20; each level sends 2 × concurrency requests over the same 8 prompts (same script as the INT8 `MTP-BF16/` table). Numbers are aggregate tok/s (all output tokens ÷ wall-clock time); the last column is the median per-request decode speed at C1.
+
+| Speculation | C1 | C2 | C4 | C8 | C1 per request |
+|---|---:|---:|---:|---:|---:|
+| No speculation | 67.3 | 110.1 | 197.4 | 350.0 | 68.4 |
+| MTP (3 draft tokens) | 121.2 | 193.2 | 347.5 | 500.1 | 135.2 |
+
+- **Accept length** (mean tokens per step, including the verified token): 2.77–2.92 across C1–C8 in this table; 2.81 averaged over the full eval run.
+- The INT4 scores above were measured with MTP (3 draft tokens).
+
 ### INT8 W8A8
 
 Setup: one RTX PRO 6000 Blackwell; vLLM 0.28 with `--max-model-len 102400` and `--max-num-seqs 8`; 512 generation cap, thinking on (xhigh), sampling temperature 1.0, top_p 0.95, top_k 20; each level sends only as many requests as its concurrency (1 at C1, 2 at C2, 4 at C4, 8 at C8). This is a quick benchmark with few requests and short outputs, so the numbers are not directly comparable with the tiers above. Numbers are aggregate tok/s (all output tokens ÷ wall-clock time). Both rows were measured on a separate, unreleased comparison build with MTP (the same INT8 text weights plus one BF16 MTP layer); with no speculation the MTP layer is not used. This package does not include MTP; a separate MTP draft folder is now provided (see below).
@@ -587,18 +604,6 @@ Setup: one NVIDIA RTX PRO 6000 Blackwell (96 GB); vLLM 0.28 with `--max-model-le
 - **Accept length** (mean tokens per step, including the verified token): 2.74–2.90 across C1–C8.
 - With this draft, 3 draft tokens is faster at every level on this machine: 65.9 tok/s at C1 against 31.1 with no speculation, and 389.8 tok/s at C8 against 127.0.
 - The INT8 scores above were measured without speculation; the draft folder does not change any INT8 weight file.
-
-### INT4 W4A16
-
-Setup: one NVIDIA RTX PRO 6000 Blackwell (96 GB); vLLM 0.28 with `--max-model-len 102400`, `--max-num-seqs 8`, and `--gpu-memory-utilization 0.85`; MTP row uses the built-in head with `--speculative-config '{"method":"mtp","num_speculative_tokens":3}'`. 1024 generation cap, thinking on, sampling temperature 1.0, top_p 0.95, top_k 20; each level sends 2 × concurrency requests over the same 8 prompts (same script as the INT8 `MTP-BF16/` table). Numbers are aggregate tok/s (all output tokens ÷ wall-clock time); the last column is the median per-request decode speed at C1.
-
-| Speculation | C1 | C2 | C4 | C8 | C1 per request |
-|---|---:|---:|---:|---:|---:|
-| No speculation | 67.3 | 110.1 | 197.4 | 350.0 | 68.4 |
-| MTP (3 draft tokens) | 121.2 | 193.2 | 347.5 | 500.1 | 135.2 |
-
-- **Accept length** (mean tokens per step, including the verified token): 2.77–2.92 across C1–C8 in this table; 2.81 averaged over the full eval run.
-- The INT4 scores above were measured with MTP (3 draft tokens).
 
 ### GGUF Q6_K
 
@@ -842,6 +847,33 @@ curl http://127.0.0.1:19931/v1/chat/completions \
 
 Health check: `curl -sf http://127.0.0.1:19931/health`. The chat endpoint is `POST /v1/chat/completions`; the request `model` must match `--model-id`.
 
+**vLLM · INT4 W4A16 · MTP (built-in head) · text and images**
+
+```bash
+VLLM_USE_FLASHINFER_SAMPLER=0 \
+vllm serve ./INT4/W4A16 \
+  --trust-remote-code --dtype bfloat16 \
+  --max-model-len 102400 --served-model-name qwen3.8-27b-coder390-int4-w4a16 \
+  --gpu-memory-utilization 0.85 --max-num-seqs 8 \
+  --reasoning-parser qwen3 \
+  --speculative-config '{"method":"mtp","num_speculative_tokens":3}'
+```
+
+Images go as OpenAI-style `image_url` parts with the same server; no extra flag is needed:
+
+```bash
+curl -s http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{
+  "model": "qwen3.8-27b-coder390-int4-w4a16",
+  "messages": [{"role": "user", "content": [
+    {"type": "image_url", "image_url": {"url": "https://example.com/chart.png"}},
+    {"type": "text", "text": "Describe this image."}
+  ]}],
+  "max_tokens": 2048
+}'
+```
+
+Remove `--speculative-config` to run without speculation. Tested on vLLM 0.28 (`VLLM_USE_FLASHINFER_SAMPLER=0` matches the tested setup); SGLang and NInfer were not tested with this package. `--reasoning-parser qwen3` returns the reasoning separately.
+
 **vLLM · INT8 W8A8 (no speculation)**
 
 ```bash
@@ -849,7 +881,7 @@ VLLM_DISABLED_KERNELS=CutlassInt8ScaledMMLinearKernel \
 VLLM_USE_FLASHINFER_SAMPLER=0 \
 vllm serve ./INT8/W8A8 \
   --trust-remote-code --dtype bfloat16 \
-  --max-model-len 102400 --served-model-name int8 \
+  --max-model-len 102400 --served-model-name qwen3.8-27b-coder390-int8-w8a8 \
   --gpu-memory-utilization 0.85 --max-num-seqs 8 \
   --reasoning-parser qwen3
 ```
@@ -863,68 +895,13 @@ VLLM_DISABLED_KERNELS=CutlassInt8ScaledMMLinearKernel \
 VLLM_USE_FLASHINFER_SAMPLER=0 \
 vllm serve ./INT8/W8A8 \
   --trust-remote-code --dtype bfloat16 \
-  --max-model-len 102400 --served-model-name int8 \
+  --max-model-len 102400 --served-model-name qwen3.8-27b-coder390-int8-w8a8 \
   --gpu-memory-utilization 0.85 --max-num-seqs 8 \
   --reasoning-parser qwen3 \
   --speculative-config '{"method":"mtp","model":"./INT8/W8A8/MTP-BF16","num_speculative_tokens":3}'
 ```
 
 On an RTX PRO 6000 Blackwell, set `VLLM_DISABLED_KERNELS=CutlassInt8ScaledMMLinearKernel` and `VLLM_USE_FLASHINFER_SAMPLER=0`, as in the command above. Both rows of the new table used those two settings.
-
-**vLLM · INT4 W4A16 · MTP (built-in head) · text and images**
-
-```bash
-VLLM_USE_FLASHINFER_SAMPLER=0 \
-vllm serve ./INT4/W4A16 \
-  --trust-remote-code --dtype bfloat16 \
-  --max-model-len 102400 --served-model-name int4 \
-  --gpu-memory-utilization 0.85 --max-num-seqs 8 \
-  --reasoning-parser qwen3 \
-  --speculative-config '{"method":"mtp","num_speculative_tokens":3}'
-```
-
-Images go as OpenAI-style `image_url` parts with the same server; no extra flag is needed:
-
-```bash
-curl -s http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{
-  "model": "int4",
-  "messages": [{"role": "user", "content": [
-    {"type": "image_url", "image_url": {"url": "https://example.com/chart.png"}},
-    {"type": "text", "text": "Describe this image."}
-  ]}],
-  "max_tokens": 2048
-}'
-```
-
-Remove `--speculative-config` to run without speculation. Tested on vLLM 0.28 (`VLLM_USE_FLASHINFER_SAMPLER=0` matches the tested setup); SGLang and NInfer were not tested with this package. `--reasoning-parser qwen3` returns the reasoning separately.
-
-**GGUF / GGUF-NInfer**
-
-Load the `.ninfer` with NInfer-all (the `master` branch of `iamwavecut/ninfer-all`): the package keeps the GGUF quantization blocks, which other NInfer builds cannot read. llama.cpp needs an upstream build that supports `--spec-type draft-mtp`. NInfer's `--kv-capacity` is one KV pool shared by all requests; llama.cpp's `-c 409600 -np 4` splits the context evenly across 4 slots, so each request gets at most 102,400 tokens, enough for a single request to reach 94K. The chat endpoint is `POST /v1/chat/completions`; for NInfer the request `model` must match `--model-id`. Vision: `GGUF/mmproj-Qwen3.8-27B-Q8_0.gguf` for llama.cpp `--mmproj` (629,247,008 bytes, sha256 `cae9799dc9196449b0d83f716e64af89d5cf65147510462e5a629a2aa23adb32`). Each `.ninfer` package carries the vision component; add `--vision` to `ninfer-serve` to accept images (see NInfer · vision below).
-
-**16 GB VRAM / single-stream pick:** for 16 GB cards and single-user use, `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q4MTP.ninfer` is the friendlier choice. It is the smallest NInfer package in this repo (13,568,617,472 bytes, about 12.6 GiB), has a built-in Q4_K MTP head and built-in vision (add `--vision`; no mmproj needed), and runs on both the official NInfer-all `master` and the community fork ninfer-fusion-kvmem. No 16 GB card was tested; this recommendation is by size. Start at 32K context and lower it if memory runs short.
-
-```bash
-ninfer-serve ./GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q4MTP.ninfer \
-  --model-id qwen3.8-27b-coder390-Q2LynnStyle-Mtp \
-  --max-context 32768 --kv-capacity 32768 --kv-dtype rk8v4 \
-  --max-concurrency 1 --spec mtp --draft-tokens 4 --vision
-```
-
-**Community fork ninfer-fusion-kvmem:** the Q2 / Q3 / Q4 LynnStyle NInfer packages (`GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q4MTP.ninfer`, `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-Q4MTP.ninfer`, `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q4MTP.ninfer`) carry a built-in MTP head re-encoded as Q4_K and load and run MTP on both the official NInfer-all `master` and the community fork ninfer-fusion-kvmem (tested 2026-10-11). The `.gguf` files in `GGUF/` keep a Q4_0 MTP head, which llama.cpp supports. The Q8 MTP versions remain available as an alternative (same weights, only the MTP head re-encoded as Q8_0): `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q8MTP.gguf`, `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-Q8MTP.gguf` and `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.gguf` for llama.cpp, and `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q8MTP.ninfer`, `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-Q8MTP.ninfer` and `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.ninfer` for NInfer (model ids `qwen3.8-27b-coder390-Q2LynnStyle-Q8Mtp`, `qwen3.8-27b-coder390-Q3LynnStyle-Q8Mtp`, `qwen3.8-27b-coder390-Q4LynnStyle-Q8Mtp`).
-
-**MTP and DFlash2**: every package under `GGUF/` and `GGUF-NInfer/` has a built-in MTP head (Q2 / Q3 / Q4 LynnStyle use built-in **Q4** MTP: Q4_0 in the `.gguf`, Q4_K in the `-Q4MTP.ninfer`; their `-Q8MTP` versions use a Q8_0 MTP head). To enable it, add `--spec mtp --draft-tokens N` for NInfer or `--spec-type draft-mtp --spec-draft-n-max N` for llama.cpp; leave these out to run without speculation. DFlash2 is an external draft model and is not in these GGUF / NInfer packages; this repository does not ship a DFlash2 draft for GGUF / GGUF-NInfer. For DFlash2, use the `DFlash2-FP8/` draft that ships with the BF16 / FP8 / NVFP4 tiers in this repository (SGLang `--speculative-algorithm DFLASH`) or the `.ninfer` packages under `NVFP4-NInfer/` (`--spec dflash2`). MTP and DFlash2 are mutually exclusive: a server runs one or the other, never both.
-
-#### GGUF · NInfer
-
-**NInfer · GGUF Q2 LynnStyle · MTP (draft 4, recommended concurrency 8)**
-
-```bash
-ninfer-serve ./GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q4MTP.ninfer \
-  --model-id qwen3.8-27b-coder390-Q2LynnStyle-Mtp \
-  --max-context 102400 --kv-capacity 819200 --kv-dtype rk8v4 \
-  --max-concurrency 8 --spec mtp --draft-tokens 4
-```
 
 **vLLM · INT8 W8A16 (no speculation)**
 
@@ -947,6 +924,46 @@ vllm serve ./INT8/W8A16 \
   --speculative-config '{"method":"mtp","model":"./INT8/W8A16/MTP-BF16","num_speculative_tokens":3}'
 ```
 
+**GGUF / GGUF-NInfer**
+
+Load the `.ninfer` with NInfer-all (the `master` branch of `iamwavecut/ninfer-all`): the package keeps the GGUF quantization blocks, which other NInfer builds cannot read. llama.cpp needs an upstream build that supports `--spec-type draft-mtp`. NInfer's `--kv-capacity` is one KV pool shared by all requests; llama.cpp's `-c 409600 -np 4` splits the context evenly across 4 slots, so each request gets at most 102,400 tokens, enough for a single request to reach 94K. The chat endpoint is `POST /v1/chat/completions`; for NInfer the request `model` must match `--model-id`. Vision: `GGUF/mmproj-Qwen3.8-27B-Q8_0.gguf` for llama.cpp `--mmproj` (629,247,008 bytes, sha256 `cae9799dc9196449b0d83f716e64af89d5cf65147510462e5a629a2aa23adb32`). Each `.ninfer` package carries the vision component; add `--vision` to `ninfer-serve` to accept images (see NInfer · vision below).
+
+**16 GB VRAM / single-stream pick:** for 16 GB cards and single-user use, `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q4MTP.ninfer` is the friendlier choice. It is the smallest NInfer package in this repo (13,568,617,472 bytes, about 12.6 GiB), has a built-in Q4_K MTP head and built-in vision (add `--vision`; no mmproj needed), and runs on both the official NInfer-all `master` and the community fork ninfer-fusion-kvmem. No 16 GB card was tested; this recommendation is by size. Start at 32K context and lower it if memory runs short.
+
+```bash
+ninfer-serve ./GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q4MTP.ninfer \
+  --model-id qwen3.8-27b-coder390-Q2LynnStyle-Mtp \
+  --max-context 32768 --kv-capacity 32768 --kv-dtype rk8v4 \
+  --max-concurrency 1 --spec mtp --draft-tokens 4 --vision
+```
+
+**Community fork ninfer-fusion-kvmem:** the Q2 / Q3 / Q4 LynnStyle NInfer packages (`GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q4MTP.ninfer`, `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-Q4MTP.ninfer`, `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q4MTP.ninfer`) carry a built-in MTP head re-encoded as Q4_K and load and run MTP on both the official NInfer-all `master` and the community fork ninfer-fusion-kvmem (tested 2026-10-11). The `.gguf` files in `GGUF/` keep a Q4_0 MTP head, which llama.cpp supports. The Q8 MTP versions remain available as an alternative (same weights, only the MTP head re-encoded as Q8_0): `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q8MTP.gguf`, `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-Q8MTP.gguf` and `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.gguf` for llama.cpp, and `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q8MTP.ninfer`, `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-Q8MTP.ninfer` and `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.ninfer` for NInfer (model ids `qwen3.8-27b-coder390-Q2LynnStyle-Q8Mtp`, `qwen3.8-27b-coder390-Q3LynnStyle-Q8Mtp`, `qwen3.8-27b-coder390-Q4LynnStyle-Q8Mtp`).
+
+**MTP and DFlash2**: every package under `GGUF/` and `GGUF-NInfer/` has a built-in MTP head (Q2 / Q3 / Q4 LynnStyle use built-in **Q4** MTP: Q4_0 in the `.gguf`, Q4_K in the `-Q4MTP.ninfer`; their `-Q8MTP` versions use a Q8_0 MTP head). To enable it, add `--spec mtp --draft-tokens N` for NInfer or `--spec-type draft-mtp --spec-draft-n-max N` for llama.cpp; leave these out to run without speculation. DFlash2 is an external draft model and is not in these GGUF / NInfer packages; this repository does not ship a DFlash2 draft for GGUF / GGUF-NInfer. For DFlash2, use the `DFlash2-FP8/` draft that ships with the BF16 / FP8 / NVFP4 tiers in this repository (SGLang `--speculative-algorithm DFLASH`) or the `.ninfer` packages under `NVFP4-NInfer/` (`--spec dflash2`). MTP and DFlash2 are mutually exclusive: a server runs one or the other, never both.
+
+#### GGUF · NInfer
+
+**NInfer · GGUF Q3 LynnStyle-16G · MTP + vision (draft 4, recommended concurrency 8)**
+
+```bash
+ninfer-serve ./GGUF-NInfer/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.ninfer \
+  --host 127.0.0.1 --port 8080 --device 0 \
+  --model-id qwen3.8-27b-coder390-q3lynnstyle16g-mtp \
+  --max-context 102400 --kv-capacity 819200 --max-concurrency 8 \
+  --kv-dtype rk8v4 \
+  --spec mtp --draft-tokens 4 --vision
+```
+
+For 16 GB VRAM / single-stream, start with `--max-context 32768 --kv-capacity 32768 --max-concurrency 1` and raise if memory allows. Vision is built into this `.ninfer` (Q8 tower); add `--vision`. GGUF for this tier stays text-only (use `--mmproj` on llama.cpp).
+
+**NInfer · GGUF Q2 LynnStyle · MTP (draft 4, recommended concurrency 8)**
+
+```bash
+ninfer-serve ./GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q4MTP.ninfer \
+  --model-id qwen3.8-27b-coder390-Q2LynnStyle-Mtp \
+  --max-context 102400 --kv-capacity 819200 --kv-dtype rk8v4 \
+  --max-concurrency 8 --spec mtp --draft-tokens 4
+```
 
 **NInfer · GGUF Q3 LynnStyle · MTP (draft 4, recommended concurrency 8)**
 
@@ -1122,6 +1139,19 @@ llama-server -m ./GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-MTP.gguf 
 ```
 
 To use another GGUF tier, only change `-m` to `...-Q3LynnStyle-MTP.gguf`, `...-Q4LynnStyle-MTP.gguf`, `...-Q6_K-MTP.gguf`, or `...-Q8_0-MTP.gguf` (and the `--alias`, e.g. `qwen3.8-27b-coder390-q6k-mtp`, `qwen3.8-27b-coder390-q8-mtp`). MTP is fused inside the GGUF (`blk.64`); do not attach an external draft; the log should show `creating MTP draft context against the target model`. For image input add `--mmproj ./GGUF/mmproj-Qwen3.8-27B-Q8_0.gguf`.
+
+**llama.cpp · GGUF Q3 LynnStyle-16G · MTP (16 GB VRAM)**
+
+```bash
+llama-server -m ./GGUF/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf \
+  -c 32768 -np 1 -ngl 99 --jinja \
+  --temp 1.0 --top-p 0.95 --top-k 20 \
+  --host 127.0.0.1 --port 8080 \
+  --alias qwen3.8-27b-coder390-q3lynnstyle16g-mtp \
+  --spec-type draft-mtp --spec-draft-n-max 4
+```
+
+Not yet tested on a 16 GB card; the command above uses one slot at 32K context, raise `-c` / `-np` if memory allows. MTP is fused inside the GGUF (Q4_K, `blk.64`); do not attach an external draft. For image input add `--mmproj ./GGUF/mmproj-Qwen3.8-27B-Q8_0.gguf`. The three-suite scores for this tier were measured with llama.cpp + DFlash2 external draft (C4, 100K context, 94,208 generation cap, no timeout, xhigh). Speeds on one RTX PRO 6000 Blackwell: llama.cpp fused MTP 4096-cap long C1/C2/C4 = 31.9/46.6/78.1 tok/s (accept 0.597); NInfer 512-cap short C1/C2/C4/C8 = 33.5/44.7/77.4/127.0 tok/s (accept 0.488). Protocols differ.
 
 **llama.cpp · vision (image input)**
 
@@ -1360,8 +1390,9 @@ Score, benchmark, smoke-test (static FP8 and BF16), and calibration records. `ev
 (cd NVFP4/W4A4-W8A8 && sha256sum -c SHA256SUMS && cd DFlash2-FP8 && sha256sum -c SHA256SUMS)
 (cd NVFP4-NInfer/W4A4 && sha256sum -c SHA256SUMS)
 (cd NVFP4-NInfer/W4A4-W8A8 && sha256sum -c SHA256SUMS)
-(cd INT8/W8A8 && sha256sum -c SHA256SUMS && cd MTP-BF16 && sha256sum -c SHA256SUMS)
 (cd INT4/W4A16 && sha256sum -c SHA256SUMS)
+(cd INT8/W8A8 && sha256sum -c SHA256SUMS && cd MTP-BF16 && sha256sum -c SHA256SUMS)
+(cd INT8/W8A16 && sha256sum -c SHA256SUMS && cd MTP-BF16 && sha256sum -c SHA256SUMS)
 (cd GGUF && sha256sum -c SHA256SUMS)
 (cd GGUF-NInfer && sha256sum -c SHA256SUMS)
 (cd evaluation && sha256sum -c SHA256SUMS)
@@ -1420,74 +1451,6 @@ ninfer ./NVFP4-NInfer/W4A4/Qwen3.8-27B-Coder390-W4A4-MTP-DFlash2-NInferV2-NOT-FO
 | `NVFP4-NInfer/W4A4-W8A8/vision-bf16.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
 | `NVFP4-NInfer/W4A4-W8A8/SHA256SUMS` | 606 | `78a23ee97290b0d82b7d2a8fb163a2dab4479592568d36bd093ab82ad8747549` |
 
-## INT8 W8A8 notes
-
-- Text and image (since 2026-10-09): the architecture is `Qwen3_5ForConditionalGeneration` (64 text layers, linear and full attention alternating 3:1). The BF16 vision tower from the BF16 tier is a separate file (`model_visual.safetensors`, 333 tensors, 921,497,224 bytes), with `preprocessor_config.json` / `video_preprocessor_config.json`; it is excluded from quantization. The 8 INT8 weight files are unchanged. The package has no embedded MTP head (use `MTP-BF16/`) and no DFlash2 draft. Checked on one RTX PRO 6000 on 2026-10-09 (vLLM 0.28, Cutlass INT8 kernel disabled, `MTP-BF16/` with 3 draft tokens): the image prompt was answered correctly, text output was normal, accept length 3.21, single-request decode 86 tok/s.
-- Quantization: SmoothQuant + INT8 W8A8. Weights are quantized to INT8 per output channel, and activations are quantized to INT8 per token at runtime; the SmoothQuant pre-scale is folded into the weights, so no inference-engine patch is needed. Quantization metadata uses the compressed-tensors (`int-quantized`) format.
-- Layer layout: MLP gate/up/down, full-attention q/k/v/o, and linear-attention `in_proj_qkv` / `in_proj_z` / `out_proj` make up 400 INT8 Linear layers; linear-attention `in_proj_a` / `in_proj_b` and `lm_head`, 97 in total, stay BF16; linear-attention control branches such as `A_log`, `dt_bias`, `norm`, and `conv1d` also stay BF16.
-- Calibration and error: 512 calibration samples; held-out NLL rises from 0.50535 (BF16) to 0.52812, a perplexity ratio of 1.023 (measured before the pre-scale was folded into the weights).
-- Loading: validated only on vLLM 0.28; not for SGLang or NInfer. `VLLM_LOAD.json` records the load requirements. On RTX PRO 6000 Blackwell the Cutlass INT8 kernel must be disabled; see Commands above.
-- MTP draft: `INT8/W8A8/MTP-BF16/` holds the BF16 MTP tensors only. Checked on one RTX PRO 6000 on 2026-10-09 (vLLM 0.28, Cutlass INT8 kernel disabled, `num_speculative_tokens=3`): mean accept length 2.74–2.90.
-
-### `INT8/W8A8/` (19 files, 30,422,466,299 bytes)
-
-| File | Bytes | SHA256 |
-|---|---:|---|
-| `INT8/W8A8/VLLM_LOAD.json` | 329 | `b1101c2ef1d53e76f132686a15079068fc76ad2ae139514817e088c6223adf7b` |
-| `INT8/W8A8/chat_template.jinja` | 8,952 | `c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041` |
-| `INT8/W8A8/config.json` | 25,572 | `66e645bdd0e52dc70fbb7058ada49e937fefd799ac5d8ffddf04a933bb487e17` |
-| `INT8/W8A8/generation_config.json` | 214 | `a4cef85934ea1fdcb207944dbc6eee70dbbf16806874428556ae33023336c0a4` |
-| `INT8/W8A8/model-00001-of-00008.safetensors` | 3,978,325,744 | `f8f7ecb52576f50108d2a9335074e5621dd5a0c2b5ee92b830929c8acc34900a` |
-| `INT8/W8A8/model-00002-of-00008.safetensors` | 3,990,728,496 | `73c182d4362ca9351329eb9c812aa44f627631d1d1866868a326010dc8387a45` |
-| `INT8/W8A8/model-00003-of-00008.safetensors` | 3,927,632,952 | `59510687bfca9272147d8153b0d3cc55a2672a03c7326d7099d78a313cc4f102` |
-| `INT8/W8A8/model-00004-of-00008.safetensors` | 3,995,896,560 | `fd9c32e4a11dec2dbf42dfb4e5da653bbbc01cd075ff60e593869022138e2efd` |
-| `INT8/W8A8/model-00005-of-00008.safetensors` | 3,922,465,008 | `7478173acc5b54c80329756cf2bb81b5b804a0fa107217fbba5d0cb3353c3f77` |
-| `INT8/W8A8/model-00006-of-00008.safetensors` | 3,984,366,360 | `cd53edb6084ec639667f2bdb997f7822db1eb758a15a06818fddcac603642127` |
-| `INT8/W8A8/model-00007-of-00008.safetensors` | 3,138,579,112 | `997de745c52a87d54f684a461dd831f59d80e6b0c4c43e7ad75bd148cc87fdd5` |
-| `INT8/W8A8/model-00008-of-00008.safetensors` | 2,542,796,896 | `6866cf8adcccc4cc6a00e74bc025f1a774fb52103b70f2674d0288272951a733` |
-| `INT8/W8A8/model.safetensors.index.json` | 150,000 | `1eb8ea02681331fd897e247681411f1fad4e7cf421e6e133cdec7459e22f1ca7` |
-| `INT8/W8A8/model_visual.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
-| `INT8/W8A8/preprocessor_config.json` | 390 | `27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516` |
-| `INT8/W8A8/tokenizer.json` | 19,989,325 | `06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523` |
-| `INT8/W8A8/tokenizer_config.json` | 1,075 | `91a08f825d370d085d692e04cf117cdd7faad7bf18e996f1e6031b6dab03db72` |
-| `INT8/W8A8/video_preprocessor_config.json` | 385 | `7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13` |
-| `INT8/W8A8/SHA256SUMS` | 1,705 | `f4c471a136a48766aa0d591f726155161be39530953dd67f497c488d9933efa4` |
-
-### `INT8/W8A8/MTP-BF16/` (3 files, 849,403,270 bytes)
-
-`INT8/W8A8/MTP-BF16/SHA256SUMS` covers the first 2 files below; its own SHA256 is `313b058349deba83f05adb44b79f2f76ae668337834086f8dbcfacba131bf403`.
-
-| File | Bytes | SHA256 |
-|---|---:|---|
-| `INT8/W8A8/MTP-BF16/config.json` | 2,681 | `7204cab1eb08579205ea9d8bbb556c396210d68693797df4333660b7bed6a41f` |
-| `INT8/W8A8/MTP-BF16/mtp-bf16.safetensors` | 849,400,424 | `90fa0e3eed5a647c035c6df9ecabc416c0f8d573ff84ac12485b085f00a7cdf2` |
-| `INT8/W8A8/MTP-BF16/SHA256SUMS` | 165 | `313b058349deba83f05adb44b79f2f76ae668337834086f8dbcfacba131bf403` |
-
-### `INT8/W8A16/` (main package + MTP-BF16 draft)
-
-`INT8/W8A16/SHA256SUMS` covers the root files below; MTP hashes are in `INT8/W8A16/MTP-BF16/SHA256SUMS`.
-
-| Path | Bytes | SHA256 |
-|---|---:|---|
-| `INT8/W8A16/VLLM_LOAD.json` | 619 | `45ad2233d5117157ae36998ccad835fecf26c6f312ac2d76b4ce18dc5dfd333c` |
-| `INT8/W8A16/chat_template.jinja` | 8,952 | `c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041` |
-| `INT8/W8A16/config.json` | 5,141 | `4a4b2681cf80f9d73d83731f9bb2f94c031ffe7ad8260a5117ca351160a01b8e` |
-| `INT8/W8A16/generation_config.json` | 214 | `df6f86c3fdce573ecdb55cec35f502ddda70e70abe78288a78164aef120232e7` |
-| `INT8/W8A16/model-00001-of-00002.safetensors` | 19,970,729,024 | `56df395c6e33c29e937f976ba6f1eab27301993d8a045343d1b678aedbd1f1b3` |
-| `INT8/W8A16/model-00002-of-00002.safetensors` | 9,478,770,576 | `004c9641a2f2bc9d6906afeb5e73491d3679bedcb0e0e5f8747466f8066e5381` |
-| `INT8/W8A16/model.safetensors.index.json` | 216,956 | `0e066c91725741c46c0fc90d9ea310dc19e1106cb62133d4e5b4db6b46a5e84f` |
-| `INT8/W8A16/model_visual.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
-| `INT8/W8A16/preprocessor_config.json` | 390 | `27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516` |
-| `INT8/W8A16/recipe.yaml` | 969 | `34751e1269751f9e7d3b60e570bc8dacccbdeaab464ea36d06fee0ff8ba0637c` |
-| `INT8/W8A16/tokenizer.json` | 19,989,325 | `06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523` |
-| `INT8/W8A16/tokenizer_config.json` | 1,075 | `91a08f825d370d085d692e04cf117cdd7faad7bf18e996f1e6031b6dab03db72` |
-| `INT8/W8A16/video_preprocessor_config.json` | 385 | `7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13` |
-| `INT8/W8A16/MTP-BF16/config.json` | 2,681 | `7204cab1eb08579205ea9d8bbb556c396210d68693797df4333660b7bed6a41f` |
-| `INT8/W8A16/MTP-BF16/mtp-bf16.safetensors` | 849,400,392 | `1d8268aa85ace093a561e3e7b63b9d390dac1cd55a90cd55b5ec509c3c9da9fe` |
-| `INT8/W8A16/SHA256SUMS` | 1,179 | `ed0d4854507c5bacccf2bceb82092aa4a041705d083f0ebb6013ce51f917e0a7` |
-| `INT8/W8A16/MTP-BF16/SHA256SUMS` | 165 | `913083df00735f5895bbc7411d0884f3ddad8d35f6a742186bfa9df14c88c790` |
-
-
 ## INT4 W4A16 notes
 
 - Text and image: the architecture is `Qwen3_5ForConditionalGeneration` (64 text layers, linear and full attention alternating 3:1). The BF16 vision tower is a separate file (`model_visual.safetensors`, 333 tensors, 921,497,224 bytes, the same file as in `INT8/W8A8/`), with `preprocessor_config.json` / `video_preprocessor_config.json`. The built-in MTP head is BF16 (`model_mtp.safetensors`, 15 tensors). No DFlash2 draft.
@@ -1514,6 +1477,73 @@ ninfer ./NVFP4-NInfer/W4A4/Qwen3.8-27B-Coder390-W4A4-MTP-DFlash2-NInferV2-NOT-FO
 | `INT4/W4A16/tokenizer_config.json` | 1,075 | `91a08f825d370d085d692e04cf117cdd7faad7bf18e996f1e6031b6dab03db72` |
 | `INT4/W4A16/video_preprocessor_config.json` | 385 | `7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13` |
 | `INT4/W4A16/SHA256SUMS` | 1,153 | `744e89c9524117579510637c5b194f893cc9cd013b7fcd5029d2fe073a4b3dd2` |
+
+## INT8 W8A8 notes
+
+- Text and image (since 2026-10-09): the architecture is `Qwen3_5ForConditionalGeneration` (64 text layers, linear and full attention alternating 3:1). The BF16 vision tower from the BF16 tier is a separate file (`model_visual.safetensors`, 333 tensors, 921,497,224 bytes), with `preprocessor_config.json` / `video_preprocessor_config.json`; it is excluded from quantization. The 8 INT8 weight files are unchanged. The package has no embedded MTP head (use `MTP-BF16/`) and no DFlash2 draft. Checked on one RTX PRO 6000 on 2026-10-09 (vLLM 0.28, Cutlass INT8 kernel disabled, `MTP-BF16/` with 3 draft tokens): the image prompt was answered correctly, text output was normal, accept length 3.21, single-request decode 86 tok/s.
+- Quantization: SmoothQuant + INT8 W8A8. Weights are quantized to INT8 per output channel, and activations are quantized to INT8 per token at runtime; the SmoothQuant pre-scale is folded into the weights, so no inference-engine patch is needed. Quantization metadata uses the compressed-tensors (`int-quantized`) format.
+- Layer layout: MLP gate/up/down, full-attention q/k/v/o, and linear-attention `in_proj_qkv` / `in_proj_z` / `out_proj` make up 400 INT8 Linear layers; linear-attention `in_proj_a` / `in_proj_b` and `lm_head`, 97 in total, stay BF16; linear-attention control branches such as `A_log`, `dt_bias`, `norm`, and `conv1d` also stay BF16.
+- Calibration and error: 512 calibration samples; held-out NLL rises from 0.50535 (BF16) to 0.52812, a perplexity ratio of 1.023 (measured before the pre-scale was folded into the weights).
+- Loading: validated only on vLLM 0.28; not for SGLang or NInfer. `VLLM_LOAD.json` records the load requirements. On RTX PRO 6000 Blackwell the Cutlass INT8 kernel must be disabled; see Commands above.
+- MTP draft: `INT8/W8A8/MTP-BF16/` holds the BF16 MTP tensors only. Checked on one RTX PRO 6000 on 2026-10-09 (vLLM 0.28, Cutlass INT8 kernel disabled, `num_speculative_tokens=3`): mean accept length 2.74–2.90.
+
+### `INT8/W8A8/` (19 files, 30,422,466,299 bytes)
+
+| File | Bytes | SHA256 |
+|---|---:|---|
+| `INT8/W8A8/VLLM_LOAD.json` | 329 | `b1101c2ef1d53e76f132686a15079068fc76ad2ae139514817e088c6223adf7b` |
+| `INT8/W8A8/chat_template.jinja` | 8,952 | `c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041` |
+| `INT8/W8A8/config.json` | 25,592 | `478564df2dc7566492e2794b68c976491a8d6e98a604e2e307da4535ea3029eb` |
+| `INT8/W8A8/generation_config.json` | 214 | `a4cef85934ea1fdcb207944dbc6eee70dbbf16806874428556ae33023336c0a4` |
+| `INT8/W8A8/model-00001-of-00008.safetensors` | 3,978,325,744 | `f8f7ecb52576f50108d2a9335074e5621dd5a0c2b5ee92b830929c8acc34900a` |
+| `INT8/W8A8/model-00002-of-00008.safetensors` | 3,990,728,496 | `73c182d4362ca9351329eb9c812aa44f627631d1d1866868a326010dc8387a45` |
+| `INT8/W8A8/model-00003-of-00008.safetensors` | 3,927,632,952 | `59510687bfca9272147d8153b0d3cc55a2672a03c7326d7099d78a313cc4f102` |
+| `INT8/W8A8/model-00004-of-00008.safetensors` | 3,995,896,560 | `fd9c32e4a11dec2dbf42dfb4e5da653bbbc01cd075ff60e593869022138e2efd` |
+| `INT8/W8A8/model-00005-of-00008.safetensors` | 3,922,465,008 | `7478173acc5b54c80329756cf2bb81b5b804a0fa107217fbba5d0cb3353c3f77` |
+| `INT8/W8A8/model-00006-of-00008.safetensors` | 3,984,366,360 | `cd53edb6084ec639667f2bdb997f7822db1eb758a15a06818fddcac603642127` |
+| `INT8/W8A8/model-00007-of-00008.safetensors` | 3,138,579,112 | `997de745c52a87d54f684a461dd831f59d80e6b0c4c43e7ad75bd148cc87fdd5` |
+| `INT8/W8A8/model-00008-of-00008.safetensors` | 2,542,796,896 | `6866cf8adcccc4cc6a00e74bc025f1a774fb52103b70f2674d0288272951a733` |
+| `INT8/W8A8/model.safetensors.index.json` | 150,000 | `1eb8ea02681331fd897e247681411f1fad4e7cf421e6e133cdec7459e22f1ca7` |
+| `INT8/W8A8/model_visual.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
+| `INT8/W8A8/preprocessor_config.json` | 390 | `27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516` |
+| `INT8/W8A8/tokenizer.json` | 19,989,325 | `06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523` |
+| `INT8/W8A8/tokenizer_config.json` | 1,075 | `91a08f825d370d085d692e04cf117cdd7faad7bf18e996f1e6031b6dab03db72` |
+| `INT8/W8A8/video_preprocessor_config.json` | 385 | `7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13` |
+| `INT8/W8A8/SHA256SUMS` | 1,705 | `f88bd3ed9476945cdb814e91fea5f18d2dc2b58c64cb187b5d23bfa364d28ebc` |
+
+### `INT8/W8A8/MTP-BF16/` (3 files, 849,403,270 bytes)
+
+`INT8/W8A8/MTP-BF16/SHA256SUMS` covers the first 2 files below; its own SHA256 is `313b058349deba83f05adb44b79f2f76ae668337834086f8dbcfacba131bf403`.
+
+| File | Bytes | SHA256 |
+|---|---:|---|
+| `INT8/W8A8/MTP-BF16/config.json` | 2,681 | `7204cab1eb08579205ea9d8bbb556c396210d68693797df4333660b7bed6a41f` |
+| `INT8/W8A8/MTP-BF16/mtp-bf16.safetensors` | 849,400,424 | `90fa0e3eed5a647c035c6df9ecabc416c0f8d573ff84ac12485b085f00a7cdf2` |
+| `INT8/W8A8/MTP-BF16/SHA256SUMS` | 165 | `313b058349deba83f05adb44b79f2f76ae668337834086f8dbcfacba131bf403` |
+
+### `INT8/W8A16/` (main package + MTP-BF16 draft)
+
+`INT8/W8A16/SHA256SUMS` covers the root files below; MTP hashes are in `INT8/W8A16/MTP-BF16/SHA256SUMS`.
+
+| Path | Bytes | SHA256 |
+|---|---:|---|
+| `INT8/W8A16/VLLM_LOAD.json` | 619 | `45ad2233d5117157ae36998ccad835fecf26c6f312ac2d76b4ce18dc5dfd333c` |
+| `INT8/W8A16/chat_template.jinja` | 8,952 | `c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041` |
+| `INT8/W8A16/config.json` | 5,141 | `4a4b2681cf80f9d73d83731f9bb2f94c031ffe7ad8260a5117ca351160a01b8e` |
+| `INT8/W8A16/generation_config.json` | 214 | `df6f86c3fdce573ecdb55cec35f502ddda70e70abe78288a78164aef120232e7` |
+| `INT8/W8A16/model-00001-of-00002.safetensors` | 19,970,729,024 | `56df395c6e33c29e937f976ba6f1eab27301993d8a045343d1b678aedbd1f1b3` |
+| `INT8/W8A16/model-00002-of-00002.safetensors` | 9,478,770,576 | `004c9641a2f2bc9d6906afeb5e73491d3679bedcb0e0e5f8747466f8066e5381` |
+| `INT8/W8A16/model.safetensors.index.json` | 215,980 | `a1891443d49799ef92c47e4a00e2300b30e594eea7bd1bd608bd6023f4c40eea` |
+| `INT8/W8A16/model_visual.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
+| `INT8/W8A16/preprocessor_config.json` | 390 | `27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516` |
+| `INT8/W8A16/recipe.yaml` | 969 | `34751e1269751f9e7d3b60e570bc8dacccbdeaab464ea36d06fee0ff8ba0637c` |
+| `INT8/W8A16/tokenizer.json` | 19,989,325 | `06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523` |
+| `INT8/W8A16/tokenizer_config.json` | 1,075 | `91a08f825d370d085d692e04cf117cdd7faad7bf18e996f1e6031b6dab03db72` |
+| `INT8/W8A16/video_preprocessor_config.json` | 385 | `7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13` |
+| `INT8/W8A16/MTP-BF16/config.json` | 2,681 | `7204cab1eb08579205ea9d8bbb556c396210d68693797df4333660b7bed6a41f` |
+| `INT8/W8A16/MTP-BF16/mtp-bf16.safetensors` | 849,400,392 | `1d8268aa85ace093a561e3e7b63b9d390dac1cd55a90cd55b5ec509c3c9da9fe` |
+| `INT8/W8A16/SHA256SUMS` | 1,179 | `cfac30661e10381caf020d719661342f879f44c057f93cefcca3e14a6f12e09c` |
+| `INT8/W8A16/MTP-BF16/SHA256SUMS` | 165 | `913083df00735f5895bbc7411d0884f3ddad8d35f6a742186bfa9df14c88c790` |
 
 ## GGUF Q2 LynnStyle notes
 
@@ -1558,6 +1588,8 @@ ninfer ./NVFP4-NInfer/W4A4/Qwen3.8-27B-Coder390-W4A4-MTP-DFlash2-NInferV2-NOT-FO
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-MTP.gguf` | 17,303,770,432 | `9985b3d41fc7dc0bb5d493f7523d4515504912a3a7fc830f66e0fd2f90f9fd95` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-MTP.gguf` | 19,620,406,592 | `56c7c605a59764d9f0bb645d4eb335f1574af2c9e74020386139597df0e872f5` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-MTP.gguf` | 13,276,009,792 | `cad973b3b7cc0d86bd39968209268318a746673c12c9536e5c37408baa7b5e6e` |
+| `GGUF/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf` | 13,276,009,920 | `3872d17684a1b71d38fd36eb5ace047ac61bab11799926455de933fe0b3e60e1` |
+| `GGUF-NInfer/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.ninfer` | 13,765,136,896 | `d9459f94883dde338cbd6ac07059bc92b4842fdba904a30a8cc00969f7dfb423` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q8MTP.gguf` | 13,488,346,432 | `62fd6cf6079dfb02b3e3aab68e39b4cdc6a471a51a82b56c9a76068e961d8a4a` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-Q8MTP.gguf` | 17,516,107,072 | `2c74a65df9d229bfba2eb3a878a25b84d4035d1be4061c9a665af213d98cae58` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.gguf` | 19,832,743,232 | `5e2a1784298f696cb38f063962da0ad4acd1fd020c6e7c6e520df54acf8f57eb` |
@@ -1580,7 +1612,7 @@ ninfer ./NVFP4-NInfer/W4A4/Qwen3.8-27B-Coder390-W4A4-MTP-DFlash2-NInferV2-NOT-FO
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q8_0-MTP.ninfer` | 29,361,802,240 | `8ace439259c8ade2b7dacee8aca92df62d7cc93d6c7d40ac026be797bb02a9c5` |
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q6_K-MTP.ninfer` | 23,379,962,880 | `60d7b3f4f79304e1ab1e22c161cdace29e7f8f9b8350755e4eab45e2d5e0d168` |
 | `GGUF-NInfer/vision-bf16.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
-| `GGUF-NInfer/SHA256SUMS` | 1,082 | `7cb6f58402c7fc14b7740487407c285232a54989e3ad1ebf25892c597944af38` |
+| `GGUF-NInfer/SHA256SUMS` | 1,088 | `786409f76d95820fd18251d55d35ca8c36526412c0d8581645fdd24a73955d4a` |
 
 ### imatrix (published in the GGUF-NInfer repo)
 
@@ -1618,7 +1650,7 @@ Thanks to the Qwen team for the base model and the official FP8 scheme; to Opus5
 
 ![GGUF](assets/coder390-gguf-zh.png)
 
-在 [Qwen3.8-27B-EfficientThink-SFT-SimPO-DFlash2](https://huggingface.co/nerkyor/Qwen3.8-27B-EfficientThink-Uncensored-K3-Opus5-Grok4.6-GPT5.6Sol-SFT-SimPO-DFlash2)(官方 [Qwen3.8-27B](https://modelscope.cn/models/Qwen/Qwen3.8-27B) 经 SFT + SimPO 后训练得到的模型)基础上继续做多轮 SFT 与 RLOO 后训练,专治原版「已有答案却停不下来、写满 94K 也不给最终答案」的问题。本仓库提供 **BF16**、**静态 FP8 Block128**、**NVFP4 W4A16**、**NVFP4 W4A4**、**NVFP4 W4A4-W8A8**(混合精度)五个 safetensors 档,均为完整多模态(文本 + 图像/视频)、内置官方 BF16 MTP,SGLang 免补丁加载(FP8 包另经 vLLM 冒烟验证);另有 **NInfer W4A4 / W4A4-W8A8**(`NVFP4-NInfer/`)、**INT8 W8A8**(`INT8/W8A8/`,文本 + 图像)、**INT4 W4A16**(`INT4/W4A16/`,文本 + 图像,vLLM)以及 **GGUF Q2 / Q3 / Q4 LynnStyle(另有 Q8 MTP 版)、Q6_K、Q8_0**(`GGUF/`、`GGUF-NInfer/`,内置 MTP)。
+在 [Qwen3.8-27B-EfficientThink-SFT-SimPO-DFlash2](https://huggingface.co/nerkyor/Qwen3.8-27B-EfficientThink-Uncensored-K3-Opus5-Grok4.6-GPT5.6Sol-SFT-SimPO-DFlash2)(官方 [Qwen3.8-27B](https://modelscope.cn/models/Qwen/Qwen3.8-27B) 经 SFT + SimPO 后训练得到的模型)基础上继续做多轮 SFT 与 RLOO 后训练,专治原版「已有答案却停不下来、写满 94K 也不给最终答案」的问题。本仓库提供 **BF16**、**静态 FP8 Block128**、**NVFP4 W4A16**、**NVFP4 W4A4**、**NVFP4 W4A4-W8A8**(混合精度)五个 safetensors 档,均为完整多模态(文本 + 图像/视频)、内置官方 BF16 MTP,SGLang 免补丁加载(FP8 包另经 vLLM 冒烟验证);另有 **NInfer W4A4 / W4A4-W8A8**(`NVFP4-NInfer/`)、**INT4 W4A16**(`INT4/W4A16/`,文本 + 图像,vLLM)、**INT8 W8A8**(`INT8/W8A8/`,文本 + 图像)、**INT8 W8A16**(`INT8/W8A16/`,文本 + 图像)以及 **GGUF Q2 / Q3 / Q4 LynnStyle(另有 Q8 MTP 版)、Q6_K、Q8_0**(`GGUF/`、`GGUF-NInfer/`,内置 MTP)。
 
 - **94K 截断大幅减少**:同口径下 GPQA 从 4 降到 1,LCB 从 13 降到 3。
 - **三项全面不低于原版**:GPQA **178/198**、MMLU **450/500**、LCB **90/100**(静态 FP8),原版 FP8 为 177 / 444 / 83。
@@ -1782,6 +1814,20 @@ NInfer W4A4 的 LCB 空答 2 条是第 11、15 题,均为截断后没有代码;G
 
 </details>
 
+### INT4 W4A16:分数、94K 截断与空答
+
+**口径**:单张 RTX PRO 6000,vLLM 0.28,C8,上下文 100K,生成上限 94,208,客户端不计超时,思考强度 xhigh,**开 MTP 投机(内置头,3 个草稿 token)**,`--reasoning-parser qwen3`;GPQA 198 / MMLU 500 / LCB 100 全量;空答算错,截断但答对算对,所有失败都留在分母里。测评在 2026-10-09 暂停过,之后用同样的服务参数继续,已完成的题保留。
+
+94K 截断指触到生成上限。LCB 空答指提取不到可运行代码的题数。加粗表示优于原版 Qwen3.8 27B(FP8),其数据见上面的全档表。
+
+| 测评 | 精度 | 分数 | 思考长度 P50 / P70 / P90 | 94K 截断 | 空答 |
+|---|---|---:|---|---:|---:|
+| GPQA | INT4 W4A16 | 177/198 | **3,136** / **8,115** / **27,856** | **1** | **1** |
+| MMLU | INT4 W4A16 | **446/500** | **176** / **322** / **1,098** | **0** | 0 |
+| LCB | INT4 W4A16 | **87/100** | **4,494** / **19,046** / **36,053** | **2** | **2** |
+
+思考长度取自 vLLM 返回的 `usage.reasoning_tokens`。GPQA:截断 1 题(第 79 题),空答 1 题(第 79 题)。MMLU 没有截断,也没有空答。LCB:截断 2 题(第 atcoder:arc182_e:6, atcoder:arc195_d:54 题),空答 2 题(第 atcoder:arc182_e:6, atcoder:arc195_d:54 题)。LCB 按难度:难 37/46,中 27/31,易 23/23。整轮测评的 MTP 平均接受长度(vLLM 日志,3 个草稿 token):2.81。
+
 ### INT8 W8A8:分数、94K 截断与空答
 
 **口径**:单张 RTX PRO 6000,vLLM 0.28,C8,上下文 100K,生成上限 94,208,客户端不计超时,**不开投机**,思考档位 xhigh;GPQA 198、MMLU 500、LCB 100 全量;空答记错,截断但答对记对,失败样本全部留在分母里。INT8 W8A8 只能用 vLLM 加载。
@@ -1798,19 +1844,21 @@ NInfer W4A4 的 LCB 空答 2 条是第 11、15 题,均为截断后没有代码;G
 
 GPQA 的 1 条截断是第 127 题,pred 为空,同时记为空答。LCB 的 2 条截断是第 7、53 题:第 7 题截断后留下的代码运行出错,判错;第 53 题虽然截断,代码仍判对;LCB 没有空答。MMLU 无截断、无空答。LCB 按难度为 hard 38/46、medium 30/31、easy 23/23。
 
-### INT4 W4A16:分数、94K 截断与空答
+### INT8 W8A16:分数、94K 截断与空答
 
-**口径**:单张 RTX PRO 6000,vLLM 0.28,C8,上下文 100K,生成上限 94,208,客户端不计超时,思考强度 xhigh,**开 MTP 投机(内置头,3 个草稿 token)**,`--reasoning-parser qwen3`;GPQA 198 / MMLU 500 / LCB 100 全量;空答算错,截断但答对算对,所有失败都留在分母里。测评在 2026-10-09 暂停过,之后用同样的服务参数继续,已完成的题保留。
+**口径**:单张 RTX PRO 6000,vLLM 0.28,C8,上下文 100K,生成上限 94,208,客户端不计超时,思考强度 xhigh,**开 MTP 投机(3 个草稿 token,外挂草稿 `INT8/W8A16/MTP-BF16/`)**,`--reasoning-parser qwen3`;GPQA 198 / MMLU 500 / LCB 100 全量;空答算错,截断但答对算对,所有失败都留在分母里。INT8 W8A16 只能用 vLLM 加载(pack-quantized GPTQ W8A16)。视觉与 MTP 在同一套环境上做过冒烟测试(MTP 平均接受长度 3.31;开、关思考时图片 OCR 都正确)。
 
 94K 截断指触到生成上限。LCB 空答指提取不到可运行代码的题数。加粗表示优于原版 Qwen3.8 27B(FP8),其数据见上面的全档表。
 
 | 测评 | 精度 | 分数 | 思考长度 P50 / P70 / P90 | 94K 截断 | 空答 |
 |---|---|---:|---|---:|---:|
-| GPQA | INT4 W4A16 | 177/198 | **3,136** / **8,115** / **27,856** | **1** | **1** |
-| MMLU | INT4 W4A16 | **446/500** | **176** / **322** / **1,098** | **0** | 0 |
-| LCB | INT4 W4A16 | **87/100** | **4,494** / **19,046** / **36,053** | **2** | **2** |
+| GPQA | INT8 W8A16 | 170/198 | **3,203** / **7,999** / **27,188** | **1** | **1** |
+| MMLU | INT8 W8A16 | **449/500** | **162** / **287** / **876** | **0** | 0 |
+| LCB | INT8 W8A16 | **94/100** | **5,422** / **17,884** / **39,584** | **1** | **1** |
 
-思考长度取自 vLLM 返回的 `usage.reasoning_tokens`。GPQA:截断 1 题(第 79 题),空答 1 题(第 79 题)。MMLU 没有截断,也没有空答。LCB:截断 2 题(第 atcoder:arc182_e:6, atcoder:arc195_d:54 题),空答 2 题(第 atcoder:arc182_e:6, atcoder:arc195_d:54 题)。LCB 按难度:难 37/46,中 27/31,易 23/23。整轮测评的 MTP 平均接受长度(vLLM 日志,3 个草稿 token):2.81。
+思考长度取自 vLLM 返回的 `usage.reasoning_tokens`。GPQA:截断 1 题(第 79 题),空答 1 题(第 79 题)。MMLU 没有截断,也没有空答。LCB:截断 1 题(atcoder:arc195_d:54),空答 1 题(atcoder:arc195_d:54)。LCB 按难度:易 23/23,中 31/31,难 40/46。
+
+同口径的 TPS / 并发表等速度测试跑完后补上;冒烟测试中短提示词开 MTP + 视觉的 decode 约 119 tok/s(墙钟)。
 
 ### GGUF Q2 / Q3 / Q4 LynnStyle:分数、思考长度、94K 截断与空答
 
@@ -1823,6 +1871,9 @@ GPQA 的 1 条截断是第 127 题,pred 为空,同时记为空答。LCB 的 2 �
 | GPQA | GGUF Q2 LynnStyle | 177/198 | **2,989.5** / **8,923.8** / **27,156.1** | **3** | **0** |
 | MMLU | GGUF Q2 LynnStyle | 433/500 | **181** / **326.3** / **1,020.5** | 1 | 0 |
 | LCB | GGUF Q2 LynnStyle | **90/100** | **5,656.5** / **17,835.8** / **40,067.3** | **1** | **1** |
+| GPQA | GGUF Q3 LynnStyle-16G | 172/198 | **3,811** / **11,404** / **31,418** | **2** | **2** |
+| MMLU | GGUF Q3 LynnStyle-16G | 427/500 | **190** / **361** / 1,665 | **0** | 0 |
+| LCB | GGUF Q3 LynnStyle-16G | **90/100** | **6,520** / **21,586** / **43,184** | **3** | **3** |
 | GPQA | GGUF Q3 LynnStyle | 173/198 | **3,125.5** / **7,265.2** / **24,343.1** | **1** | **1** |
 | MMLU | GGUF Q3 LynnStyle | **449/500** | **148** / **279.3** / **923.4** | **0** | 0 |
 | LCB | GGUF Q3 LynnStyle | **92/100** | **4,421** / **14,232.2** / **34,946** | **1** | **1** |
@@ -1870,11 +1921,11 @@ GPQA 截断 2、空答 0。MMLU 无截断、无空答。LCB 截断 3、空答 3(
 LCB 以 llama.cpp 的结果为准:LCB 测评脚本请求 NInfer 时收到的回复不是合法 JSON,这是测评脚本与接口的兼容问题,不是模型质量问题。
 
 
-## 用 Lynn 桌面 Agent 跑本模型（V0.87.1）
+## 用 Lynn 桌面 Agent 跑本模型（V0.87.3）
 
 [Lynn](https://github.com/MerkyorLynn/Lynn) 是开源桌面 AI Agent（GUI + 独立 CLI）：对话、搜资料、改文件、写代码、实时语音都能在同一套界面里完成，也可以当其他工具或 CI 的无头 worker。**全部免费，Quick Start 无需配置、无需 API Key。**
 
-当前默认能力（V0.87.1）：
+当前默认能力（V0.87.3）：
 
 | 用途 | 方案 |
 |---|---|
@@ -1886,11 +1937,11 @@ LCB 以 llama.cpp 的结果为准:LCB 测评脚本请求 NInfer 时收到的回�
 
 工具参数由模型自己填写（地点、日期、联赛、行情代码、货币对等），不再从整句问题硬猜实体。长期记忆与写作 Diff 等桌面能力随 Lynn 提供；完整说明与更新见发布页。
 
-- [V0.87.1 发布说明](https://github.com/MerkyorLynn/Lynn/releases/tag/v0.87.1)
+- [V0.87.3 发布说明](https://github.com/MerkyorLynn/Lynn/releases/tag/v0.87.3)
 - [国内下载页（推荐）](https://download.merkyorlynn.com/download.html)
-- macOS Apple Silicon：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.1-macOS-arm64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.1/Lynn-0.87.1-macOS-arm64.dmg)
-- macOS Intel：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.1-macOS-x64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.1/Lynn-0.87.1-macOS-x64.dmg)
-- Windows：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.1-Windows-Setup.exe) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.1/Lynn-0.87.1-Windows-Setup.exe)
+- macOS Apple Silicon：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-macOS-arm64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-macOS-arm64.dmg)
+- macOS Intel：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-macOS-x64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-macOS-x64.dmg)
+- Windows：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-Windows-Setup.exe) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-Windows-Setup.exe)
 
 在 Lynn 里：**设置 → 模型 → 本地 Qwen3.8-27B → 选 Q2 / Q3 → 安装并启动**。本地档位只加载本仓库 `GGUF/` 下的 Q2 / Q3 LynnStyle-MTP 文件；NInfer / NVFP4 等其他格式请用对应引擎自行部署，不走 Lynn 一键安装。
 
@@ -1905,8 +1956,9 @@ LCB 以 llama.cpp 的结果为准:LCB 测评脚本请求 NInfer 时收到的回�
 | NVFP4 W4A4-W8A8 | `NVFP4/W4A4-W8A8/` | 完整多模态,语言模型 MLP 为 NVFP4 W4A4、注意力与线性注意力投影为 FP8 W8A8,内置官方 BF16 MTP,含 DFlash2 草稿,SGLang 免补丁 | 23,769,634,648(约 22.1 GiB,不含草稿) | 6.84 | 172 / 442 / 88 |
 | NInfer W4A4 | `NVFP4-NInfer/W4A4/` | 官方 NInfer 包(`.ninfer`),W4A4 文本路径,包内含 Q8 MTP、DFlash2 草稿、proposal head 与视觉部分(加 `--vision` 可输入图片);仅官方 NInfer 引擎(`Neroued/ninfer`)可加载 | 23,773,675,264(约 22.1 GiB) | 6.76 | 177 / 449 / 89 |
 | NInfer W4A4-W8A8 | `NVFP4-NInfer/W4A4-W8A8/` | 官方 NInfer 混合精度包(`.ninfer`),W4A4-W8A8 文本路径,包内含 Q8 MTP、DFlash2 草稿、proposal head 与视觉部分(加 `--vision` 可输入图片);仅官方 NInfer 引擎(`Neroued/ninfer`)可加载 | 23,773,675,264(约 22.1 GiB) | 6.76 | 177 / 444 / 92 |
-| INT8 W8A8 | `INT8/W8A8/` | 文本 + 图像(`Qwen3_5ForConditionalGeneration`;BF16 视觉塔单独存为 `model_visual.safetensors`,2026-10-09 加入),SmoothQuant 按通道 INT8 权重 + 按 token 动态 INT8 激活,compressed-tensors 格式;不含 DFlash2 草稿;MTP 以单独的 BF16 草稿目录(`INT8/W8A8/MTP-BF16/`)提供,供 vLLM 投机解码使用;仅 vLLM 可加载 | 30,422,466,299(约 28.3 GiB) | 8.77 | 175 / 450 / 91 |
 | INT4 W4A16 | `INT4/W4A16/` | 文本 + 图像(`Qwen3_5ForConditionalGeneration`):GPTQ INT4 权重(对称,分组大小 128),激活保持 BF16,compressed-tensors 格式;内置 BF16 MTP 头(`model_mtp.safetensors`),供 vLLM 投机解码;BF16 视觉塔(`model_visual.safetensors`);不含 DFlash2 草稿;在 vLLM 上实测 | 19,437,985,972(约 18.1 GiB) | 5.25 | 177 / 446 / 87 |
+| INT8 W8A8 | `INT8/W8A8/` | 文本 + 图像(`Qwen3_5ForConditionalGeneration`;BF16 视觉塔单独存为 `model_visual.safetensors`,2026-10-09 加入),SmoothQuant 按通道 INT8 权重 + 按 token 动态 INT8 激活,compressed-tensors 格式;不含 DFlash2 草稿;MTP 以单独的 BF16 草稿目录(`INT8/W8A8/MTP-BF16/`)提供,供 vLLM 投机解码使用;仅 vLLM 可加载 | 30,422,466,299(约 28.3 GiB) | 8.77 | 175 / 450 / 91 |
+| INT8 W8A16 | `INT8/W8A16/` | 文本 + 图像(`Qwen3_5ForConditionalGeneration`):GPTQ 对称按通道 INT8 权重 + BF16 激活(compressed-tensors pack-quantized);BF16 视觉塔 `model_visual.safetensors`;MTP 以单独的 BF16 草稿目录 `INT8/W8A16/MTP-BF16/` 提供;不含 DFlash2 草稿;仅 vLLM 可加载 | 30,370,996,824(约 28.3 GiB,含视觉;MTP 草稿另计) | 8.76 | 170 / 449 / 94 |
 | GGUF Q3 LynnStyle | `GGUF/` | 混合精度 LynnStyle GGUF(`Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-MTP.gguf`):最低 Q3;内置 **Q4 MTP**;视觉外挂 | 17,303,770,432(约 16.1 GiB) | 5.07 | 173 / 449 / 92 |
 | GGUF Q3 LynnStyle · NInfer | `GGUF-NInfer/` | 由 Q3 LynnStyle GGUF 转换;内置 Q4_K MTP 与视觉;NInfer-all 与 ninfer-fusion-kvmem 均可 | 17,596,369,920(约 16.4 GiB) | 5.07 | 173 / 449 / 92 |
 | GGUF Q3 LynnStyle · Q8MTP | `GGUF/` | 同一个 Q3 LynnStyle GGUF,只把内置 MTP 头改为 Q8_0(`Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-Q8MTP.gguf`),其他张量与原包逐字节相同;Q8_0 MTP 头备选版(原包的 Q4_0 MTP 头 llama.cpp 支持);llama.cpp 看图同样用 `GGUF/` 里的 mmproj | 17,516,107,072(约 16.3 GiB) | 5.13 | 173 / 449 / 92 |
@@ -1915,6 +1967,8 @@ LCB 以 llama.cpp 的结果为准:LCB 测评脚本请求 NInfer 时收到的回�
 | GGUF Q4 LynnStyle · NInfer | `GGUF-NInfer/` | 由 Q4 LynnStyle GGUF 转换;内置 Q4_K MTP 与视觉;NInfer-all 与 ninfer-fusion-kvmem 均可 | 19,913,006,080(约 18.5 GiB) | 5.74 | 175 / 448 / 89 |
 | GGUF Q4 LynnStyle · Q8MTP | `GGUF/` | 同一个 Q4 LynnStyle GGUF,只把内置 MTP 头改为 Q8_0(`Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.gguf`),其他张量与原包逐字节相同;Q8_0 MTP 头备选版(原包的 Q4_0 MTP 头 llama.cpp 支持);llama.cpp 看图同样用 `GGUF/` 里的 mmproj | 19,832,743,232(约 18.5 GiB) | 5.81 | 175 / 448 / 89 |
 | GGUF Q4 LynnStyle · Q8MTP · NInfer | `GGUF-NInfer/` | 由上面的 Q8MTP GGUF 转成的 NInfer 包(`Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.ninfer`),内置 Q8_0 MTP 头和视觉组件,model id `qwen3.8-27b-coder390-Q4LynnStyle-Q8Mtp`;主体权重与原 Q4 LynnStyle 包相同,分数沿用原包 | 20,125,342,720(约 18.7 GiB) | 5.81 | 175 / 448 / 89 |
+| GGUF Q3 LynnStyle-16G | `GGUF/` | 我们最低的 Q3 档,面向 16G 显存(`Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf`):最低精度 IQ3_XXS,主体无 Q6 / Q8;重要性矩阵校正 + GSQ-RCO(同字节精修,体积不变);内置 **Q4_K MTP**;看图用 `GGUF/` 内的 mmproj;成绩用 llama.cpp + 外挂 DFlash2 测得 | 13,276,009,920(约 12.4 GiB) | 3.89 | 172 / 427 / 90 |
+| GGUF Q3 LynnStyle-16G · NInfer | `GGUF-NInfer/` | 同权重 NInfer 包:内置 **Q4_K MTP** + 内置 **Q8 视觉**(加 `--vision`,无需 mmproj) | 13,765,136,896(约 12.8 GiB) | 3.89 | 同成绩(GGUF 三科) |
 | GGUF Q2 LynnStyle | `GGUF/` | 混合精度 LynnStyle GGUF(`Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-MTP.gguf`):最低 Q2;内置 **Q4 MTP**;视觉外挂 | 13,276,009,792(约 12.4 GiB) | 3.89 | 177 / 433 / 90 |
 | GGUF Q2 LynnStyle · NInfer | `GGUF-NInfer/` | 由 Q2 LynnStyle GGUF 转换;内置 Q4_K MTP 与视觉;NInfer-all 与 ninfer-fusion-kvmem 均可 | 13,568,617,472(约 12.6 GiB) | 3.89 | 177 / 433 / 90 |
 | GGUF Q2 LynnStyle · Q8MTP | `GGUF/` | 同一个 Q2 LynnStyle GGUF,只把内置 MTP 头改为 Q8_0(`Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q8MTP.gguf`),其他张量与原包逐字节相同;Q8_0 MTP 头备选版(原包的 Q4_0 MTP 头 llama.cpp 支持);llama.cpp 看图同样用 `GGUF/` 里的 mmproj | 13,488,346,432(约 12.6 GiB) | 3.95 | 177 / 433 / 90 |
@@ -1948,8 +2002,8 @@ GGUF Q8_0 两个包的 BPW 按单个文件字节数 × 8 ÷ 文本 + MTP 参数�
 - BF16 与静态 FP8 的速度数据在静态 FP8 包上测得,BF16 未单独测速,沿用同一组数据;NVFP4 三档各自单独测速。
 - NVFP4 三档的分数为单卡 C8 测得,口径见上文「NVFP4 三档」。
 - NInfer 两档成绩沿用 2026-10-05 在同一文本路径上以单卡 C8、官方 NInfer、不开投机测得的三联,口径见上文「NInfer 两档」;NInfer 两档的速度为新包单独实测,见下文「最佳 TPS 推荐与并发推荐」中的「NInfer 两档」。
-- INT8 W8A8 成绩为单卡 C8、vLLM、不开投机测得的全量三联,口径见上文「INT8 W8A8」;速度为快测,见下文「最佳 TPS 推荐与并发推荐」中的「INT8 W8A8」。
 - INT4 W4A16 成绩为单卡 C8、vLLM 0.28、开 MTP(草稿长度 3,内置头)测得的全量三联,口径见上文「INT4 W4A16」;速度见下文「最佳 TPS 推荐与并发推荐」中的「INT4 W4A16」。
+- INT8 W8A8 成绩为单卡 C8、vLLM、不开投机测得的全量三联,口径见上文「INT8 W8A8」;速度为快测,见下文「最佳 TPS 推荐与并发推荐」中的「INT8 W8A8」。
 - GGUF Q6_K 成绩为单卡 C4、llama.cpp 测得的全量三联,口径见上文「GGUF Q6_K」;速度为快测,见下文「最佳 TPS 推荐与并发推荐」中的「GGUF Q6_K」。
 - GGUF Q8_0 成绩为单卡 C4、llama.cpp 测得的全量三联,口径见上文「GGUF Q8_0」;速度见下文「GGUF Q8_0」(NInfer C8 MTP 486.3;llama.cpp C4 MTP 190.8)。
 - NInfer 两档已上传到 `NVFP4-NInfer/W4A4/` 与 `NVFP4-NInfer/W4A4-W8A8/`,INT8 W8A8 已上传到 `INT8/W8A8/`,INT4 W4A16 已上传到 `INT4/W4A16/`,GGUF Q2 / Q3 / Q4 LynnStyle(含 Q8 MTP 版)、Q6_K 与 Q8_0 已上传到 `GGUF/` 与 `GGUF-NInfer/`。
@@ -2117,6 +2171,18 @@ C1 为主测(4 个请求),C4/C8/C16 为加大请求数(每档 6×C)的复测。�
 - **最佳组合**:两档、三种模式的总吞吐都在 C8 最高。NInfer W4A4 最高为 DFlash2 · C8(975.9 tok/s),NInfer W4A4-W8A8 最高为 DFlash2 · C8(804.9 tok/s);只用 MTP 时 C8 分别为 678.3 与 663.9 tok/s。
 - **与 NVFP4 W4A4(SGLang)的 C8 对比**:NInfer W4A4 不开投机 306.8 对 316.8,MTP 678.3 对 355.5,DFlash2 975.9 对 689.8 tok/s。两者引擎与上下文设置不同,仅作参考。
 
+### INT4 W4A16
+
+环境:单张 NVIDIA RTX PRO 6000 Blackwell(96 GB);vLLM 0.28,`--max-model-len 102400`、`--max-num-seqs 8`、`--gpu-memory-utilization 0.85`;MTP 一行用内置头,`--speculative-config '{"method":"mtp","num_speculative_tokens":3}'`。生成上限 1024,开思考,采样温度 1.0、top_p 0.95、top_k 20;每档并发发送 2 × 并发数个请求,共用 8 条提示(与 INT8 `MTP-BF16/` 表同一脚本)。数值为总吞吐 tok/s(全部输出 token ÷ 墙钟时间);最后一列是 C1 单请求 decode 速度中位数。
+
+| 投机 | C1 | C2 | C4 | C8 | C1 单请求 |
+|---|---:|---:|---:|---:|---:|
+| 不开投机 | 67.3 | 110.1 | 197.4 | 350.0 | 68.4 |
+| MTP(3 个草稿 token) | 121.2 | 193.2 | 347.5 | 500.1 | 135.2 |
+
+- **接受长度**(每步平均产出 token 数,含校验 token):本表 C1–C8 为 2.77–2.92;整轮测评平均 2.81。
+- 上面的 INT4 分数是开 MTP(3 个草稿 token)测得的。
+
 ### INT8 W8A8
 
 测试环境:单张 RTX PRO 6000 Blackwell;vLLM 0.28,`--max-model-len 102400`、`--max-num-seqs 8`;生成上限 512,开思考(xhigh),采样 temperature 1.0、top_p 0.95、top_k 20;每档只发与并发数相同的请求数(C1 发 1 个、C2 发 2 个、C4 发 4 个、C8 发 8 个)。这是快测:请求少、生成短,数字不能与上面各档直接比较。数字为总吞吐 tok/s(全部输出 token ÷ 墙钟时间)。两行都在另做的内置 MTP 对照版上测得(同一份 INT8 文本权重另加一层 BF16 MTP,未发布);不开投机时 MTP 层不参与计算。本包不含 MTP;现另提供单独的 MTP 草稿目录(见下文)。
@@ -2141,18 +2207,6 @@ C1 为主测(4 个请求),C4/C8/C16 为加大请求数(每档 6×C)的复测。�
 - **接受长度**(每步平均产出 token 数,含验证 token):C1–C8 为 2.74–2.90。
 - 用这份草稿、3 个草稿 token,这台机器上每一档都更快:C1 为 65.9 tok/s,不开投机是 31.1;C8 为 389.8 tok/s,不开投机是 127.0。
 - 上面的 INT8 分数是不开投机测的;草稿目录不改动任何 INT8 权重文件。
-
-### INT4 W4A16
-
-环境:单张 NVIDIA RTX PRO 6000 Blackwell(96 GB);vLLM 0.28,`--max-model-len 102400`、`--max-num-seqs 8`、`--gpu-memory-utilization 0.85`;MTP 一行用内置头,`--speculative-config '{"method":"mtp","num_speculative_tokens":3}'`。生成上限 1024,开思考,采样温度 1.0、top_p 0.95、top_k 20;每档并发发送 2 × 并发数个请求,共用 8 条提示(与 INT8 `MTP-BF16/` 表同一脚本)。数值为总吞吐 tok/s(全部输出 token ÷ 墙钟时间);最后一列是 C1 单请求 decode 速度中位数。
-
-| 投机 | C1 | C2 | C4 | C8 | C1 单请求 |
-|---|---:|---:|---:|---:|---:|
-| 不开投机 | 67.3 | 110.1 | 197.4 | 350.0 | 68.4 |
-| MTP(3 个草稿 token) | 121.2 | 193.2 | 347.5 | 500.1 | 135.2 |
-
-- **接受长度**(每步平均产出 token 数,含校验 token):本表 C1–C8 为 2.77–2.92;整轮测评平均 2.81。
-- 上面的 INT4 分数是开 MTP(3 个草稿 token)测得的。
 
 ### GGUF Q6_K
 
@@ -2396,6 +2450,33 @@ curl http://127.0.0.1:19931/v1/chat/completions \
 
 健康检查:`curl -sf http://127.0.0.1:19931/health`。对话接口为 `POST /v1/chat/completions`,请求里的 `model` 要与 `--model-id` 一致。
 
+**vLLM · INT4 W4A16 · MTP(内置头)· 文本与图像**
+
+```bash
+VLLM_USE_FLASHINFER_SAMPLER=0 \
+vllm serve ./INT4/W4A16 \
+  --trust-remote-code --dtype bfloat16 \
+  --max-model-len 102400 --served-model-name qwen3.8-27b-coder390-int4-w4a16 \
+  --gpu-memory-utilization 0.85 --max-num-seqs 8 \
+  --reasoning-parser qwen3 \
+  --speculative-config '{"method":"mtp","num_speculative_tokens":3}'
+```
+
+图片按 OpenAI 格式放在 `image_url` 里,用同一个服务即可,不需要额外参数:
+
+```bash
+curl -s http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{
+  "model": "qwen3.8-27b-coder390-int4-w4a16",
+  "messages": [{"role": "user", "content": [
+    {"type": "image_url", "image_url": {"url": "https://example.com/chart.png"}},
+    {"type": "text", "text": "描述这张图片。"}
+  ]}],
+  "max_tokens": 2048
+}'
+```
+
+去掉 `--speculative-config` 即不开投机。在 vLLM 0.28 上实测(`VLLM_USE_FLASHINFER_SAMPLER=0` 与实测设置一致);SGLang 与 NInfer 未用此包测试。`--reasoning-parser qwen3` 会把思考单独返回。
+
 **vLLM · INT8 W8A8(不开投机)**
 
 ```bash
@@ -2403,7 +2484,7 @@ VLLM_DISABLED_KERNELS=CutlassInt8ScaledMMLinearKernel \
 VLLM_USE_FLASHINFER_SAMPLER=0 \
 vllm serve ./INT8/W8A8 \
   --trust-remote-code --dtype bfloat16 \
-  --max-model-len 102400 --served-model-name int8 \
+  --max-model-len 102400 --served-model-name qwen3.8-27b-coder390-int8-w8a8 \
   --gpu-memory-utilization 0.85 --max-num-seqs 8 \
   --reasoning-parser qwen3
 ```
@@ -2417,7 +2498,7 @@ VLLM_DISABLED_KERNELS=CutlassInt8ScaledMMLinearKernel \
 VLLM_USE_FLASHINFER_SAMPLER=0 \
 vllm serve ./INT8/W8A8 \
   --trust-remote-code --dtype bfloat16 \
-  --max-model-len 102400 --served-model-name int8 \
+  --max-model-len 102400 --served-model-name qwen3.8-27b-coder390-int8-w8a8 \
   --gpu-memory-utilization 0.85 --max-num-seqs 8 \
   --reasoning-parser qwen3 \
   --speculative-config '{"method":"mtp","model":"./INT8/W8A8/MTP-BF16","num_speculative_tokens":3}'
@@ -2425,32 +2506,26 @@ vllm serve ./INT8/W8A8 \
 
 在 RTX PRO 6000 Blackwell 上按上面的命令设置 `VLLM_DISABLED_KERNELS=CutlassInt8ScaledMMLinearKernel` 和 `VLLM_USE_FLASHINFER_SAMPLER=0`。新表的两行都用了这两项设置。
 
-**vLLM · INT4 W4A16 · MTP(内置头)· 文本与图像**
+**vLLM · INT8 W8A16(不开投机)**
 
 ```bash
-VLLM_USE_FLASHINFER_SAMPLER=0 \
-vllm serve ./INT4/W4A16 \
-  --trust-remote-code --dtype bfloat16 \
-  --max-model-len 102400 --served-model-name int4 \
-  --gpu-memory-utilization 0.85 --max-num-seqs 8 \
-  --reasoning-parser qwen3 \
-  --speculative-config '{"method":"mtp","num_speculative_tokens":3}'
+VLLM_DISABLED_KERNELS=CutlassInt8ScaledMMLinearKernel VLLM_USE_FLASHINFER_SAMPLER=0 \
+vllm serve ./INT8/W8A16 \
+  --served-model-name qwen3.8-27b-coder390-int8-w8a16 \
+  --trust-remote-code --max-model-len 102400 --max-num-seqs 8 \
+  --gpu-memory-utilization 0.90 --reasoning-parser qwen3
 ```
 
-图片按 OpenAI 格式放在 `image_url` 里,用同一个服务即可,不需要额外参数:
+**vLLM · INT8 W8A16 · MTP(外挂草稿 `INT8/W8A16/MTP-BF16/`)**
 
 ```bash
-curl -s http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{
-  "model": "int4",
-  "messages": [{"role": "user", "content": [
-    {"type": "image_url", "image_url": {"url": "https://example.com/chart.png"}},
-    {"type": "text", "text": "描述这张图片。"}
-  ]}],
-  "max_tokens": 2048
-}'
+VLLM_DISABLED_KERNELS=CutlassInt8ScaledMMLinearKernel VLLM_USE_FLASHINFER_SAMPLER=0 \
+vllm serve ./INT8/W8A16 \
+  --served-model-name qwen3.8-27b-coder390-int8-w8a16 \
+  --trust-remote-code --max-model-len 102400 --max-num-seqs 8 \
+  --gpu-memory-utilization 0.90 --reasoning-parser qwen3 \
+  --speculative-config '{"method":"mtp","model":"./INT8/W8A16/MTP-BF16","num_speculative_tokens":3}'
 ```
-
-去掉 `--speculative-config` 即不开投机。在 vLLM 0.28 上实测(`VLLM_USE_FLASHINFER_SAMPLER=0` 与实测设置一致);SGLang 与 NInfer 未用此包测试。`--reasoning-parser qwen3` 会把思考单独返回。
 
 **GGUF / GGUF-NInfer**
 
@@ -2470,6 +2545,19 @@ ninfer-serve ./GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q4MTP
 **MTP 与 DFlash2**:`GGUF/` 与 `GGUF-NInfer/` 下所有包都内置 MTP 头(Q2 / Q3 / Q4 LynnStyle 为内置 **Q4** MTP(`.gguf` 为 Q4_0,`-Q4MTP.ninfer` 为 Q4_K);其 `-Q8MTP` 版本为 Q8_0 MTP 头)。开启方式:NInfer 加 `--spec mtp --draft-tokens N`,llama.cpp 加 `--spec-type draft-mtp --spec-draft-n-max N`;省略这两个参数即不开投机。DFlash2 是外挂草稿模型,不在这些 GGUF / NInfer 包里,本仓库不提供 GGUF / GGUF-NInfer 用的 DFlash2 草稿;需要 DFlash2 时请用本仓库 BF16 / FP8 / NVFP4 各档自带的 `DFlash2-FP8/`(SGLang `--speculative-algorithm DFLASH`)或 `NVFP4-NInfer/` 的 `.ninfer` 包(`--spec dflash2`)。MTP 与 DFlash2 互斥:同一个服务只能开其中一种,不要同时开。
 
 #### GGUF · NInfer
+
+**NInfer · GGUF Q3 LynnStyle-16G · MTP + 视觉(草稿长度 4,推荐并发 8)**
+
+```bash
+ninfer-serve ./GGUF-NInfer/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.ninfer \
+  --host 127.0.0.1 --port 8080 --device 0 \
+  --model-id qwen3.8-27b-coder390-q3lynnstyle16g-mtp \
+  --max-context 102400 --kv-capacity 819200 --max-concurrency 8 \
+  --kv-dtype rk8v4 \
+  --spec mtp --draft-tokens 4 --vision
+```
+
+16G 显存 / 单路可先用 `--max-context 32768 --kv-capacity 32768 --max-concurrency 1`,显存够再调大。本 `.ninfer` 已内置 Q8 视觉塔,加 `--vision` 即可。同档 GGUF 仍只含文本(llama.cpp 看图用 `--mmproj`)。
 
 **NInfer · GGUF Q2 LynnStyle · MTP(草稿长度 4,推荐并发 8)**
 
@@ -2654,6 +2742,19 @@ llama-server -m ./GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-MTP.gguf 
 ```
 
 换其他 GGUF 档只需改 `-m` 为 `...-Q3LynnStyle-MTP.gguf`、`...-Q4LynnStyle-MTP.gguf`、`...-Q6_K-MTP.gguf` 或 `...-Q8_0-MTP.gguf`(并相应改 `--alias`,例如 `qwen3.8-27b-coder390-q6k-mtp`、`qwen3.8-27b-coder390-q8-mtp`)。MTP 已融合进 GGUF(`blk.64`),不要再外挂 draft;日志应出现 `creating MTP draft context against the target model`。需要图像输入时加 `--mmproj ./GGUF/mmproj-Qwen3.8-27B-Q8_0.gguf`。
+
+**llama.cpp · GGUF Q3 LynnStyle-16G · MTP(16G 显存)**
+
+```bash
+llama-server -m ./GGUF/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf \
+  -c 32768 -np 1 -ngl 99 --jinja \
+  --temp 1.0 --top-p 0.95 --top-k 20 \
+  --host 127.0.0.1 --port 8080 \
+  --alias qwen3.8-27b-coder390-q3lynnstyle16g-mtp \
+  --spec-type draft-mtp --spec-draft-n-max 4
+```
+
+本档未在 16G 卡上实测,上面按单路 32K 上下文给出,显存够再调大 `-c` / `-np`。MTP 已融合进 GGUF(Q4_K,`blk.64`),不要再外挂 draft。看图时加 `--mmproj ./GGUF/mmproj-Qwen3.8-27B-Q8_0.gguf`。本档的三科成绩是用 llama.cpp + 外挂 DFlash2 草稿测得(C4,100K 上下文,生成上限 94,208,不计超时,xhigh)。速度在一张 RTX PRO 6000 Blackwell 上测得:llama.cpp 融合 MTP 4096 长测 C1/C2/C4 = 31.9/46.6/78.1 tok/s(接受率 0.597);NInfer 512 短测 C1/C2/C4/C8 = 33.5/44.7/77.4/127.0 tok/s(接受率 0.488)。长短测协议不同。
 
 **llama.cpp · 视觉(图片输入)**
 
@@ -2892,8 +2993,9 @@ llama-server -m ./GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-MTP.gguf 
 (cd NVFP4/W4A4-W8A8 && sha256sum -c SHA256SUMS && cd DFlash2-FP8 && sha256sum -c SHA256SUMS)
 (cd NVFP4-NInfer/W4A4 && sha256sum -c SHA256SUMS)
 (cd NVFP4-NInfer/W4A4-W8A8 && sha256sum -c SHA256SUMS)
-(cd INT8/W8A8 && sha256sum -c SHA256SUMS && cd MTP-BF16 && sha256sum -c SHA256SUMS)
 (cd INT4/W4A16 && sha256sum -c SHA256SUMS)
+(cd INT8/W8A8 && sha256sum -c SHA256SUMS && cd MTP-BF16 && sha256sum -c SHA256SUMS)
+(cd INT8/W8A16 && sha256sum -c SHA256SUMS && cd MTP-BF16 && sha256sum -c SHA256SUMS)
 (cd GGUF && sha256sum -c SHA256SUMS)
 (cd GGUF-NInfer && sha256sum -c SHA256SUMS)
 (cd evaluation && sha256sum -c SHA256SUMS)
@@ -2952,49 +3054,6 @@ ninfer ./NVFP4-NInfer/W4A4/Qwen3.8-27B-Coder390-W4A4-MTP-DFlash2-NInferV2-NOT-FO
 | `NVFP4-NInfer/W4A4-W8A8/vision-bf16.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
 | `NVFP4-NInfer/W4A4-W8A8/SHA256SUMS` | 606 | `78a23ee97290b0d82b7d2a8fb163a2dab4479592568d36bd093ab82ad8747549` |
 
-## INT8 W8A8 说明
-
-- 文本 + 图像(2026-10-09 起):架构为 `Qwen3_5ForConditionalGeneration`(文本 64 层,线性注意力与全注意力 3:1 交替)。视觉塔取自 BF16 档,以 BF16 单独存为 `model_visual.safetensors`(333 个张量,921,497,224 字节),并附 `preprocessor_config.json` / `video_preprocessor_config.json`;视觉塔不量化。8 个 INT8 权重文件未改动。包内不含 MTP 头(用 `MTP-BF16/`),也不含 DFlash2 草稿。2026-10-09 在一台 RTX PRO 6000 上实测(vLLM 0.28,关掉 Cutlass INT8 内核,`MTP-BF16/`、3 个草稿 token):看图问题回答正确,文本输出正常,接受长度 3.21,单请求 decode 86 tok/s。
-- 量化:SmoothQuant + INT8 W8A8。权重按输出通道量化为 INT8,激活在推理时按 token 动态量化为 INT8;SmoothQuant 的预缩放已折进权重,推理框架不需要补丁。量化元数据为 compressed-tensors(`int-quantized`)格式。
-- 层分布:MLP gate/up/down、全注意力 q/k/v/o、线性注意力 `in_proj_qkv` / `in_proj_z` / `out_proj` 共 400 个 Linear 为 INT8;线性注意力 `in_proj_a` / `in_proj_b` 与 `lm_head` 共 97 个保持 BF16;线性注意力的 `A_log`、`dt_bias`、`norm`、`conv1d` 等控制分支也保持 BF16。
-- 校准与误差:512 条校准样本;留出集 NLL 由 BF16 的 0.50535 升到 0.52812,困惑度之比 1.023(在把预缩放折进权重之前测得)。
-- 加载:只在 vLLM 0.28 上验证,不适用于 SGLang 与 NInfer;`VLLM_LOAD.json` 记录了本包的加载条件。RTX PRO 6000 Blackwell 上须关掉 Cutlass INT8 内核,见上文「启动命令」。
-- MTP 草稿:`INT8/W8A8/MTP-BF16/` 只有 BF16 的 MTP 张量。2026-10-09 在一台 RTX PRO 6000 上用 vLLM 0.28 实测(关掉 Cutlass INT8 内核,`num_speculative_tokens=3`):平均接受长度 2.74–2.90。
-
-### `INT8/W8A8/`(19 个文件,30,422,466,299 字节)
-
-| 文件 | 字节 | SHA256 |
-|---|---:|---|
-| `INT8/W8A8/VLLM_LOAD.json` | 329 | `b1101c2ef1d53e76f132686a15079068fc76ad2ae139514817e088c6223adf7b` |
-| `INT8/W8A8/chat_template.jinja` | 8,952 | `c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041` |
-| `INT8/W8A8/config.json` | 25,572 | `66e645bdd0e52dc70fbb7058ada49e937fefd799ac5d8ffddf04a933bb487e17` |
-| `INT8/W8A8/generation_config.json` | 214 | `a4cef85934ea1fdcb207944dbc6eee70dbbf16806874428556ae33023336c0a4` |
-| `INT8/W8A8/model-00001-of-00008.safetensors` | 3,978,325,744 | `f8f7ecb52576f50108d2a9335074e5621dd5a0c2b5ee92b830929c8acc34900a` |
-| `INT8/W8A8/model-00002-of-00008.safetensors` | 3,990,728,496 | `73c182d4362ca9351329eb9c812aa44f627631d1d1866868a326010dc8387a45` |
-| `INT8/W8A8/model-00003-of-00008.safetensors` | 3,927,632,952 | `59510687bfca9272147d8153b0d3cc55a2672a03c7326d7099d78a313cc4f102` |
-| `INT8/W8A8/model-00004-of-00008.safetensors` | 3,995,896,560 | `fd9c32e4a11dec2dbf42dfb4e5da653bbbc01cd075ff60e593869022138e2efd` |
-| `INT8/W8A8/model-00005-of-00008.safetensors` | 3,922,465,008 | `7478173acc5b54c80329756cf2bb81b5b804a0fa107217fbba5d0cb3353c3f77` |
-| `INT8/W8A8/model-00006-of-00008.safetensors` | 3,984,366,360 | `cd53edb6084ec639667f2bdb997f7822db1eb758a15a06818fddcac603642127` |
-| `INT8/W8A8/model-00007-of-00008.safetensors` | 3,138,579,112 | `997de745c52a87d54f684a461dd831f59d80e6b0c4c43e7ad75bd148cc87fdd5` |
-| `INT8/W8A8/model-00008-of-00008.safetensors` | 2,542,796,896 | `6866cf8adcccc4cc6a00e74bc025f1a774fb52103b70f2674d0288272951a733` |
-| `INT8/W8A8/model.safetensors.index.json` | 150,000 | `1eb8ea02681331fd897e247681411f1fad4e7cf421e6e133cdec7459e22f1ca7` |
-| `INT8/W8A8/model_visual.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
-| `INT8/W8A8/preprocessor_config.json` | 390 | `27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516` |
-| `INT8/W8A8/tokenizer.json` | 19,989,325 | `06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523` |
-| `INT8/W8A8/tokenizer_config.json` | 1,075 | `91a08f825d370d085d692e04cf117cdd7faad7bf18e996f1e6031b6dab03db72` |
-| `INT8/W8A8/video_preprocessor_config.json` | 385 | `7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13` |
-| `INT8/W8A8/SHA256SUMS` | 1,705 | `f4c471a136a48766aa0d591f726155161be39530953dd67f497c488d9933efa4` |
-
-### `INT8/W8A8/MTP-BF16/`(3 个文件,849,403,270 字节)
-
-`INT8/W8A8/MTP-BF16/SHA256SUMS` 覆盖下表前 2 个文件,其自身 SHA256 为 `313b058349deba83f05adb44b79f2f76ae668337834086f8dbcfacba131bf403`。
-
-| 文件 | 字节数 | SHA256 |
-|---|---:|---|
-| `INT8/W8A8/MTP-BF16/config.json` | 2,681 | `7204cab1eb08579205ea9d8bbb556c396210d68693797df4333660b7bed6a41f` |
-| `INT8/W8A8/MTP-BF16/mtp-bf16.safetensors` | 849,400,424 | `90fa0e3eed5a647c035c6df9ecabc416c0f8d573ff84ac12485b085f00a7cdf2` |
-| `INT8/W8A8/MTP-BF16/SHA256SUMS` | 165 | `313b058349deba83f05adb44b79f2f76ae668337834086f8dbcfacba131bf403` |
-
 ## INT4 W4A16 说明
 
 - 文本与图像:架构为 `Qwen3_5ForConditionalGeneration`(64 层文本,线性注意力与全注意力 3:1 交替)。BF16 视觉塔单独存为 `model_visual.safetensors`(333 个张量,921,497,224 字节,与 `INT8/W8A8/` 中的是同一个文件),附 `preprocessor_config.json` / `video_preprocessor_config.json`。内置 MTP 头为 BF16(`model_mtp.safetensors`,15 个张量)。不含 DFlash2 草稿。
@@ -3021,6 +3080,73 @@ ninfer ./NVFP4-NInfer/W4A4/Qwen3.8-27B-Coder390-W4A4-MTP-DFlash2-NInferV2-NOT-FO
 | `INT4/W4A16/tokenizer_config.json` | 1,075 | `91a08f825d370d085d692e04cf117cdd7faad7bf18e996f1e6031b6dab03db72` |
 | `INT4/W4A16/video_preprocessor_config.json` | 385 | `7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13` |
 | `INT4/W4A16/SHA256SUMS` | 1,153 | `744e89c9524117579510637c5b194f893cc9cd013b7fcd5029d2fe073a4b3dd2` |
+
+## INT8 W8A8 说明
+
+- 文本 + 图像(2026-10-09 起):架构为 `Qwen3_5ForConditionalGeneration`(文本 64 层,线性注意力与全注意力 3:1 交替)。视觉塔取自 BF16 档,以 BF16 单独存为 `model_visual.safetensors`(333 个张量,921,497,224 字节),并附 `preprocessor_config.json` / `video_preprocessor_config.json`;视觉塔不量化。8 个 INT8 权重文件未改动。包内不含 MTP 头(用 `MTP-BF16/`),也不含 DFlash2 草稿。2026-10-09 在一台 RTX PRO 6000 上实测(vLLM 0.28,关掉 Cutlass INT8 内核,`MTP-BF16/`、3 个草稿 token):看图问题回答正确,文本输出正常,接受长度 3.21,单请求 decode 86 tok/s。
+- 量化:SmoothQuant + INT8 W8A8。权重按输出通道量化为 INT8,激活在推理时按 token 动态量化为 INT8;SmoothQuant 的预缩放已折进权重,推理框架不需要补丁。量化元数据为 compressed-tensors(`int-quantized`)格式。
+- 层分布:MLP gate/up/down、全注意力 q/k/v/o、线性注意力 `in_proj_qkv` / `in_proj_z` / `out_proj` 共 400 个 Linear 为 INT8;线性注意力 `in_proj_a` / `in_proj_b` 与 `lm_head` 共 97 个保持 BF16;线性注意力的 `A_log`、`dt_bias`、`norm`、`conv1d` 等控制分支也保持 BF16。
+- 校准与误差:512 条校准样本;留出集 NLL 由 BF16 的 0.50535 升到 0.52812,困惑度之比 1.023(在把预缩放折进权重之前测得)。
+- 加载:只在 vLLM 0.28 上验证,不适用于 SGLang 与 NInfer;`VLLM_LOAD.json` 记录了本包的加载条件。RTX PRO 6000 Blackwell 上须关掉 Cutlass INT8 内核,见上文「启动命令」。
+- MTP 草稿:`INT8/W8A8/MTP-BF16/` 只有 BF16 的 MTP 张量。2026-10-09 在一台 RTX PRO 6000 上用 vLLM 0.28 实测(关掉 Cutlass INT8 内核,`num_speculative_tokens=3`):平均接受长度 2.74–2.90。
+
+### `INT8/W8A8/`(19 个文件,30,422,466,299 字节)
+
+| 文件 | 字节 | SHA256 |
+|---|---:|---|
+| `INT8/W8A8/VLLM_LOAD.json` | 329 | `b1101c2ef1d53e76f132686a15079068fc76ad2ae139514817e088c6223adf7b` |
+| `INT8/W8A8/chat_template.jinja` | 8,952 | `c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041` |
+| `INT8/W8A8/config.json` | 25,592 | `478564df2dc7566492e2794b68c976491a8d6e98a604e2e307da4535ea3029eb` |
+| `INT8/W8A8/generation_config.json` | 214 | `a4cef85934ea1fdcb207944dbc6eee70dbbf16806874428556ae33023336c0a4` |
+| `INT8/W8A8/model-00001-of-00008.safetensors` | 3,978,325,744 | `f8f7ecb52576f50108d2a9335074e5621dd5a0c2b5ee92b830929c8acc34900a` |
+| `INT8/W8A8/model-00002-of-00008.safetensors` | 3,990,728,496 | `73c182d4362ca9351329eb9c812aa44f627631d1d1866868a326010dc8387a45` |
+| `INT8/W8A8/model-00003-of-00008.safetensors` | 3,927,632,952 | `59510687bfca9272147d8153b0d3cc55a2672a03c7326d7099d78a313cc4f102` |
+| `INT8/W8A8/model-00004-of-00008.safetensors` | 3,995,896,560 | `fd9c32e4a11dec2dbf42dfb4e5da653bbbc01cd075ff60e593869022138e2efd` |
+| `INT8/W8A8/model-00005-of-00008.safetensors` | 3,922,465,008 | `7478173acc5b54c80329756cf2bb81b5b804a0fa107217fbba5d0cb3353c3f77` |
+| `INT8/W8A8/model-00006-of-00008.safetensors` | 3,984,366,360 | `cd53edb6084ec639667f2bdb997f7822db1eb758a15a06818fddcac603642127` |
+| `INT8/W8A8/model-00007-of-00008.safetensors` | 3,138,579,112 | `997de745c52a87d54f684a461dd831f59d80e6b0c4c43e7ad75bd148cc87fdd5` |
+| `INT8/W8A8/model-00008-of-00008.safetensors` | 2,542,796,896 | `6866cf8adcccc4cc6a00e74bc025f1a774fb52103b70f2674d0288272951a733` |
+| `INT8/W8A8/model.safetensors.index.json` | 150,000 | `1eb8ea02681331fd897e247681411f1fad4e7cf421e6e133cdec7459e22f1ca7` |
+| `INT8/W8A8/model_visual.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
+| `INT8/W8A8/preprocessor_config.json` | 390 | `27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516` |
+| `INT8/W8A8/tokenizer.json` | 19,989,325 | `06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523` |
+| `INT8/W8A8/tokenizer_config.json` | 1,075 | `91a08f825d370d085d692e04cf117cdd7faad7bf18e996f1e6031b6dab03db72` |
+| `INT8/W8A8/video_preprocessor_config.json` | 385 | `7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13` |
+| `INT8/W8A8/SHA256SUMS` | 1,705 | `f88bd3ed9476945cdb814e91fea5f18d2dc2b58c64cb187b5d23bfa364d28ebc` |
+
+### `INT8/W8A8/MTP-BF16/`(3 个文件,849,403,270 字节)
+
+`INT8/W8A8/MTP-BF16/SHA256SUMS` 覆盖下表前 2 个文件,其自身 SHA256 为 `313b058349deba83f05adb44b79f2f76ae668337834086f8dbcfacba131bf403`。
+
+| 文件 | 字节数 | SHA256 |
+|---|---:|---|
+| `INT8/W8A8/MTP-BF16/config.json` | 2,681 | `7204cab1eb08579205ea9d8bbb556c396210d68693797df4333660b7bed6a41f` |
+| `INT8/W8A8/MTP-BF16/mtp-bf16.safetensors` | 849,400,424 | `90fa0e3eed5a647c035c6df9ecabc416c0f8d573ff84ac12485b085f00a7cdf2` |
+| `INT8/W8A8/MTP-BF16/SHA256SUMS` | 165 | `313b058349deba83f05adb44b79f2f76ae668337834086f8dbcfacba131bf403` |
+
+### `INT8/W8A16/`(主包 + MTP-BF16 草稿)
+
+`INT8/W8A16/SHA256SUMS` 覆盖下表根目录文件;MTP 文件的哈希见 `INT8/W8A16/MTP-BF16/SHA256SUMS`。
+
+| 路径 | 字节 | SHA256 |
+|---|---:|---|
+| `INT8/W8A16/VLLM_LOAD.json` | 619 | `45ad2233d5117157ae36998ccad835fecf26c6f312ac2d76b4ce18dc5dfd333c` |
+| `INT8/W8A16/chat_template.jinja` | 8,952 | `c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041` |
+| `INT8/W8A16/config.json` | 5,141 | `4a4b2681cf80f9d73d83731f9bb2f94c031ffe7ad8260a5117ca351160a01b8e` |
+| `INT8/W8A16/generation_config.json` | 214 | `df6f86c3fdce573ecdb55cec35f502ddda70e70abe78288a78164aef120232e7` |
+| `INT8/W8A16/model-00001-of-00002.safetensors` | 19,970,729,024 | `56df395c6e33c29e937f976ba6f1eab27301993d8a045343d1b678aedbd1f1b3` |
+| `INT8/W8A16/model-00002-of-00002.safetensors` | 9,478,770,576 | `004c9641a2f2bc9d6906afeb5e73491d3679bedcb0e0e5f8747466f8066e5381` |
+| `INT8/W8A16/model.safetensors.index.json` | 215,980 | `a1891443d49799ef92c47e4a00e2300b30e594eea7bd1bd608bd6023f4c40eea` |
+| `INT8/W8A16/model_visual.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
+| `INT8/W8A16/preprocessor_config.json` | 390 | `27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516` |
+| `INT8/W8A16/recipe.yaml` | 969 | `34751e1269751f9e7d3b60e570bc8dacccbdeaab464ea36d06fee0ff8ba0637c` |
+| `INT8/W8A16/tokenizer.json` | 19,989,325 | `06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523` |
+| `INT8/W8A16/tokenizer_config.json` | 1,075 | `91a08f825d370d085d692e04cf117cdd7faad7bf18e996f1e6031b6dab03db72` |
+| `INT8/W8A16/video_preprocessor_config.json` | 385 | `7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13` |
+| `INT8/W8A16/MTP-BF16/config.json` | 2,681 | `7204cab1eb08579205ea9d8bbb556c396210d68693797df4333660b7bed6a41f` |
+| `INT8/W8A16/MTP-BF16/mtp-bf16.safetensors` | 849,400,392 | `1d8268aa85ace093a561e3e7b63b9d390dac1cd55a90cd55b5ec509c3c9da9fe` |
+| `INT8/W8A16/SHA256SUMS` | 1,179 | `cfac30661e10381caf020d719661342f879f44c057f93cefcca3e14a6f12e09c` |
+| `INT8/W8A16/MTP-BF16/SHA256SUMS` | 165 | `913083df00735f5895bbc7411d0884f3ddad8d35f6a742186bfa9df14c88c790` |
 
 ## GGUF Q2 LynnStyle 说明
 
@@ -3065,6 +3191,8 @@ ninfer ./NVFP4-NInfer/W4A4/Qwen3.8-27B-Coder390-W4A4-MTP-DFlash2-NInferV2-NOT-FO
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-MTP.gguf` | 17,303,770,432 | `9985b3d41fc7dc0bb5d493f7523d4515504912a3a7fc830f66e0fd2f90f9fd95` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-MTP.gguf` | 19,620,406,592 | `56c7c605a59764d9f0bb645d4eb335f1574af2c9e74020386139597df0e872f5` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-MTP.gguf` | 13,276,009,792 | `cad973b3b7cc0d86bd39968209268318a746673c12c9536e5c37408baa7b5e6e` |
+| `GGUF/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf` | 13,276,009,920 | `3872d17684a1b71d38fd36eb5ace047ac61bab11799926455de933fe0b3e60e1` |
+| `GGUF-NInfer/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.ninfer` | 13,765,136,896 | `d9459f94883dde338cbd6ac07059bc92b4842fdba904a30a8cc00969f7dfb423` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q8MTP.gguf` | 13,488,346,432 | `62fd6cf6079dfb02b3e3aab68e39b4cdc6a471a51a82b56c9a76068e961d8a4a` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-Q8MTP.gguf` | 17,516,107,072 | `2c74a65df9d229bfba2eb3a878a25b84d4035d1be4061c9a665af213d98cae58` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.gguf` | 19,832,743,232 | `5e2a1784298f696cb38f063962da0ad4acd1fd020c6e7c6e520df54acf8f57eb` |
@@ -3087,7 +3215,7 @@ ninfer ./NVFP4-NInfer/W4A4/Qwen3.8-27B-Coder390-W4A4-MTP-DFlash2-NInferV2-NOT-FO
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q8_0-MTP.ninfer` | 29,361,802,240 | `8ace439259c8ade2b7dacee8aca92df62d7cc93d6c7d40ac026be797bb02a9c5` |
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q6_K-MTP.ninfer` | 23,379,962,880 | `60d7b3f4f79304e1ab1e22c161cdace29e7f8f9b8350755e4eab45e2d5e0d168` |
 | `GGUF-NInfer/vision-bf16.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
-| `GGUF-NInfer/SHA256SUMS` | 1,082 | `7cb6f58402c7fc14b7740487407c285232a54989e3ad1ebf25892c597944af38` |
+| `GGUF-NInfer/SHA256SUMS` | 1,088 | `786409f76d95820fd18251d55d35ca8c36526412c0d8581645fdd24a73955d4a` |
 
 ### imatrix(发布在 GGUF-NInfer 仓库)
 

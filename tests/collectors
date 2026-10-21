@@ -622,6 +622,27 @@ def a_card_label_is_prose_not_markup():
         eq("=" in x["label"], False, "no label repeats its own values: %r" % x["label"])
 
 
+@test
+def a_sampler_table_is_a_recommendation():
+    """deepseek v4.1 flash 1017 states its samplers as a two-column table.
+
+    The parser only knew `key=value` and `key: value`, so a row reading
+    "| `temperature` | 1.0 |" captured nothing, the profile carrying exactly
+    those numbers resolved as `tuned-here`, and lint demanded prose explaining
+    a choice nobody here made.
+    """
+    mod = load_script("fetch_model_cards",
+                      os.path.join(RESEARCH, "fetch-model-cards"))
+    sets = mod.sampler_sets(
+        "**Recommended sampling parameters:**\n\n"
+        "| Parameter | Value |\n| :--- | :--- |\n"
+        "| `temperature` | 1.0 |\n| `top_p` | 1.0 |\n"
+        "| `context_window` | 1M tokens |\n")
+    eq([s["values"] for s in sets], [{"temp": 1.0, "top_p": 1.0}],
+       "one set from the table rows")
+    eq("|" in sets[0]["label"], False, "no label is a table rule: %r" % sets[0]["label"])
+
+
 # a family whose flagship's alias ends in a bare surname, and a sibling for it
 # to swallow. this is the ling 3.0 flash/tiny shape and the ornith 1.0 35b/9b
 # shape: the sibling is never scored and the flagship is credited twice
@@ -917,7 +938,8 @@ def the_tensor_reader_says_what_a_quant_really_is():
     tmp = tempfile.mkdtemp()
     try:
         out = os.path.join(tmp, "tensors.json")
-        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out]
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out,
+                            "--audiocpp", os.path.join(tmp, "no-catalog.json")]
                            + roster_args(tmp, TENSOR_REPO),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if r.returncode:
@@ -988,7 +1010,8 @@ def a_type_mainline_ships_is_costed_rather_than_counted_at_nothing():
     tmp = tempfile.mkdtemp()
     try:
         out = os.path.join(tmp, "tensors.json")
-        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out]
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out,
+                            "--audiocpp", os.path.join(tmp, "no-catalog.json")]
                            + roster_args(tmp, TENSOR_REPO),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if r.returncode:
@@ -1048,7 +1071,8 @@ def the_tensor_reader_covers_the_registry():
     tmp = tempfile.mkdtemp()
     try:
         out = os.path.join(tmp, "tensors.json")
-        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out]
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out,
+                            "--audiocpp", os.path.join(tmp, "no-catalog.json")]
                            + roster_args(tmp, TENSOR_REPO,
                                            registry=TENSOR_REGISTRY_FIXTURE),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -1092,7 +1116,8 @@ def a_ggml_bin_is_not_asked_for_a_gguf_tensor_table():
     tmp = tempfile.mkdtemp()
     try:
         out = os.path.join(tmp, "tensors.json")
-        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out]
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out,
+                            "--audiocpp", os.path.join(tmp, "no-catalog.json")]
                            + roster_args(tmp, GGML_REPO),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if r.returncode:
@@ -1159,7 +1184,8 @@ def a_rung_already_read_is_not_read_again():
                                                  "bpw": 5.938, "types": {"Q4_K": 1.0}},
                        "%s:Q8_0" % TENSOR_REPO: {"tensors": 1, "elements": 2048,
                                                  "bpw": 8.5, "types": {"Q8_0": 1.0}}}, f)
-        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out]
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--out", out,
+                            "--audiocpp", os.path.join(tmp, "no-catalog.json")]
                            + roster_args(tmp, TENSOR_REPO),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if r.returncode:
@@ -1347,6 +1373,224 @@ def a_quant_field_has_to_name_a_quant():
                  "Fixture-27B-bf16"):
         eq(any(want in e for e in named), True, "%s is named: %r" % (want, named))
     eq(code, 1, "which fails lint rather than printing a note")
+
+
+AUDIOCPP_FAMILY_REGISTRY = """version: 1
+models:
+  Fixture/Separator:
+    kind: speech
+    name: {short: fixture separator}
+    audiocpp: htdemucs
+  Fixture/Typo:
+    kind: speech
+    name: {short: fixture typo}
+    audiocpp: htdemucz
+  Fixture/Listed:
+    kind: speech
+    name: {short: fixture listed}
+    audiocpp: [htdemucs]
+  Fixture/Diarizer:
+    kind: diarize
+    name: {short: fixture diarizer}
+    audiocpp: sortformer_diar
+  Fixture/Music:
+    kind: sound
+    name: {short: fixture music}
+    audiocpp: yue2
+"""
+
+
+@test
+def an_audiocpp_family_is_one_the_catalog_carries():
+    """`audiocpp:` names the `--family` a model loads as, the way `crispasr:`
+    names a backend.
+
+    70 of audio.cpp's 124 families ship only inside its shared
+    `audio-cpp/audio.cpp-gguf` repo, which a join on repo cannot attribute to
+    any one model, so the family is written down. a written name is checked
+    against the catalog, because a typo would otherwise run the wrong loader
+    with nothing to say so.
+    """
+    code, findings, _ = validate(AUDIOCPP_FAMILY_REGISTRY)
+    said = {x["where"]: x["error"] for x in findings if "audiocpp" in x["error"]}
+    eq("Fixture/Separator" in said, False, "a catalogued family passes: %r" % said)
+    eq("htdemucz" in said.get("Fixture/Typo", ""), True, "a typo is named: %r" % said)
+    eq("Fixture/Listed" in said, True, "and it is one family, not a list: %r" % said)
+    # a diarizer audio.cpp loads needs no crispasr role, and a music model is a
+    # pipeline kind that carries no modalities block
+    rest = [x for x in findings if x["where"] in ("Fixture/Diarizer", "Fixture/Music")]
+    eq(rest, [], "an audio.cpp diarizer and a sound model pass")
+    eq(code, 1, "which fails lint")
+
+
+@test
+def an_audiocpp_package_says_what_it_downloads():
+    """67 entries ship only inside audio.cpp's shared repo, so the page knew which
+    package to install and not what it weighs -- the memory filter passed them
+    rather than guess. A package's size is every file it downloads, read off the
+    repo's own listing, including the files past the ones the capture keeps; a
+    package naming a file the listing does not have has no size, not a smaller one."""
+    mod = load_script("fetch_audiocpp", os.path.join(RESEARCH, "fetch-audiocpp"))
+    tree = [{"type": "file", "path": "X-GGUF/x-q8_0.gguf", "size": 100},
+            {"type": "file", "path": "X-GGUF/voice.bin", "size": 5},
+            {"type": "directory", "path": "X-GGUF"}]
+    eq(mod.package_bytes(["X-GGUF/x-q8_0.gguf", "X-GGUF/voice.bin"], tree), 105,
+       "every file the package downloads")
+    eq(mod.package_bytes(["X-GGUF/x-q8_0.gguf", "X-GGUF/gone.gguf"], tree), None,
+       "and nothing where the listing lacks one of them")
+    eq(mod.package_bytes(["X-GGUF/x-q8_0.gguf"], None), None, "or where there is no listing")
+
+
+@test
+def an_audiocpp_package_is_labelled_by_what_its_file_is():
+    """audio.cpp calls a package `orig` or `native` where it ships the
+    checkpoint's own dtype, and neither is a type a reader can pick off a ladder.
+    A native snapshot's dtype is in the hub's safetensors index, and an orig
+    gguf's in its own tensor table, which the tensor collector now reads for
+    every gguf package audio.cpp installs."""
+    ac = load_script("fetch_audiocpp", os.path.join(RESEARCH, "fetch-audiocpp"))
+    eq(ac.native_dtype({"safetensors": {"parameters": {"BF16": 100, "F32": 3}}}), "BF16",
+       "the dtype most of the parameters are in")
+    eq(ac.native_dtype({}), None, "and none where the index says nothing")
+
+    gt = load_script("fetch_gguf_tensors", os.path.join(RESEARCH, "fetch-gguf-tensors"))
+    got = gt.package_rungs({"families": {"x": {"packages": [
+        {"id": "x_orig", "format": "gguf", "repo": "a/b", "files": ["X/x.gguf", "X/x.json"]},
+        {"id": "x_npu", "format": "rknn", "repo": "a/b", "files": ["X/x.rknn"]},
+        {"id": "x_more", "format": "gguf", "repo": "a/b", "files": ["X/y.gguf"], "files_more": 3}]}}})
+    eq(got, [("a/b", "x_orig", ["X/x.gguf"])],
+       "each gguf package's gguf files, keyed by package; a capped file list is not all of it")
+
+    bv = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    pk = lambda pid, prec, fmt="gguf", **kw: dict(id=pid, format=fmt, precision=prec,  # noqa: E731
+                                                  repo="a/b", files=["f"], bytes=GIB_BYTES, **kw)
+    rows = bv.audiocpp_rows({}, [pk("o", "orig"), pk("n", "native", "safetensors", dtype="F32"),
+                                 pk("b", "bfloat16", "safetensors"), pk("u", "orig"),
+                                 pk("i", "native")],
+                            {"a/b:o": {"types": {"F16": 0.9, "F32": 0.1}, "bpw": 16.0},
+                             # bitnet.cpp's i2_s, a type the tensor reader has no name for
+                             "a/b:i": {"types": {"type36": 0.9, "F32": 0.1}, "bpw": 2.5}})
+    got = {a["package"]: a["quant"] for r in rows for a in r["available"]}
+    eq(got, {"o": "F16", "n": "F32", "b": "BF16"},
+       "labelled by what the file is; an orig nobody has read, or one in a type with no "
+       "name, is not offered")
+
+
+GIB_BYTES = 1024 ** 3
+
+
+@test
+def an_audiocpp_package_is_a_rung_only_audiocpp_loads():
+    """The package audio.cpp installs is what it loads, so it is the rung the fit
+    weighs under that runtime -- and only under that one: llama.cpp does not read
+    audio.cpp's conversion of a speech model because it sits on the same row."""
+    mod = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    family = {"packages": [
+        {"id": "x_q8_0", "format": "gguf", "precision": "q8_0", "repo": "audio-cpp/audio.cpp-gguf",
+         "files": ["X/x-q8_0.gguf"], "bytes": 2 * 1024 ** 3},
+        {"id": "x_f16", "format": "gguf", "precision": "f16", "repo": "audio-cpp/audio.cpp-gguf",
+         "files": ["X/x-f16.gguf"], "bytes": 4 * 1024 ** 3},
+        {"id": "x_npu", "format": "rknn", "precision": "f16", "repo": "audio-cpp/audio.cpp-gguf",
+         "bytes": 1024 ** 3},
+        {"id": "x_unsized", "format": "gguf", "precision": "f32", "repo": "audio-cpp/audio.cpp-gguf"}]}
+    rows = mod.audiocpp_rows(family, family["packages"])
+    eq(len(rows), 1, "one row per package repo: %r" % rows)
+    got = {a["quant"]: a for a in rows[0]["available"]}
+    eq(sorted(got), ["F16", "Q8_0"], "the sized packages a ggml build loads, by precision")
+    eq(got["Q8_0"]["gib"], 2.0, "weighed by what the package downloads")
+    eq(got["Q8_0"]["package"], "x_q8_0", "and naming the package that installs it")
+    eq(rows[0]["engines_only"], ["audio.cpp"], "a rung only audio.cpp loads")
+
+
+@test
+def an_audiocpp_rung_is_this_checkpoint_and_not_a_sibling():
+    """qwen3_tts is one family holding five checkpoints, and with no repo of the
+    customvoice entry's matched, the rungs took every package in it -- the base
+    model's native snapshot among them, offered as a size of customvoice. The
+    package's target directory names its checkpoint, and that is the test."""
+    mod = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    catalog = json.load(open(os.path.join(RESEARCH, "data", "audiocpp.json")))["families"]
+    got = mod.audiocpp_block("Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+                             {"audiocpp": "qwen3_tts"}, catalog)
+    pkgs = [a["package"] for r in got["rows"] for a in r["available"]]
+    eq(bool(pkgs), True, "it has rungs: %r" % pkgs)
+    eq([p for p in pkgs if "customvoice" not in p], [], "and every one is customvoice's")
+    omni = mod.audiocpp_block("k2-fsa/OmniVoice", {"audiocpp": "omnivoice"}, catalog)
+    eq(sorted({r["repo"] for r in omni["rows"]}),
+       ["audio-cpp/audio.cpp-gguf", "k2-fsa/OmniVoice"],
+       "a matched checkpoint keeps audio.cpp's conversions of itself")
+    # a name that extends the entry's, or that the entry's extends, is the same
+    # checkpoint where nothing matches exactly: fireredtts3 ships as -base and
+    # -instruct, moss-ttsd-v1.0 as moss-ttsd
+    pk = lambda pid, target: {"id": pid, "format": "gguf", "repo": "a/b",  # noqa: E731
+                              "target_directory": target}
+    got = mod.checkpoint_packages("FireRedTeam/FireRedTTS3",
+                                  [pk("b", "FireRedTTS3-Base-GGUF"),
+                                   pk("i", "FireRedTTS3-Instruct-GGUF")], [])
+    eq([p["id"] for p in got], ["b", "i"], "a checkpoint name the entry's begins")
+    got = mod.checkpoint_packages("OpenMOSS-Team/MOSS-TTSD-v1.0",
+                                  [pk("m", "MOSS-TTSD-GGUF"), pk("n", "MOSS-TTS-Nano-GGUF")], [])
+    eq([p["id"] for p in got], ["m"], "and one the entry's name begins with")
+    # dots.tts-soar ships in `DotTTS-SOAR-GGUF`, a spelling of the directory and
+    # not of the checkpoint; the package id spells the checkpoint
+    got = mod.checkpoint_packages("dots-studio/dots.tts-soar",
+                                  [dict(pk("dots_tts_soar_q8_0", "DotTTS-SOAR-GGUF"), precision="q8_0"),
+                                   dict(pk("dots_tts_mf_q8_0", "DotTTS-MF-GGUF"), precision="q8_0")], [])
+    eq([p["id"] for p in got], ["dots_tts_soar_q8_0"], "the package id names the checkpoint too")
+
+
+@test
+def an_audiocpp_package_rung_joins_the_row_of_a_repo_the_entry_pins():
+    """kitten-tts-2 pins dignome's repo, which is also where audio.cpp's
+    packages download from. The package rungs were dropped because a row for
+    that repo already existed -- one the sizes capture had nothing for -- so the
+    entry had no sized rung at all. They join that row instead."""
+    mod = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    rows = [{"repo": "d/k", "available": [{"quant": "Q8_0", "gib": 3.0}]}]
+    got = mod.merge_rows(rows, [{"repo": "d/k", "engines_only": ["audio.cpp"], "available": [
+        {"quant": "Q8_0", "package": "q8", "gib": 3.1},
+        {"quant": "BF16", "package": "bf", "gib": 4.3}]},
+        {"repo": "x/y", "engines_only": ["audio.cpp"], "available": [{"quant": "F32", "gib": 1}]}])
+    eq([a["quant"] for a in got[0]["available"]], ["Q8_0", "BF16"],
+       "the package the pinned row lacks joins it, and the one it has is not doubled")
+    eq(got[0]["available"][1]["engines_only"], ["audio.cpp"],
+       "a joined package rung is still one only audio.cpp loads")
+    eq([r["repo"] for r in got], ["d/k", "x/y"], "and a package repo the entry does not pin is a row")
+
+
+@test
+def a_voice_list_is_read_from_every_file_a_rung_is():
+    """The voices collector guessed ONE root-level filename per tag, so a rung
+    kept in a folder -- onicubag's `q4_0/xtts-v2-gpt-q4_0.gguf` -- matched
+    nothing, and a rung of several files -- cosyvoice3's llm, flow and vocoder --
+    matched too many and was refused. The sizes collector already groups a
+    rung's files, folders and shards included; the voices are read from each."""
+    mod = load_script("fetch_gguf_voices", os.path.join(RESEARCH, "fetch-gguf-voices"))
+    by_tag = {"Q4_0": [("q4_0/xtts-v2-gpt-q4_0.gguf", 1), ("q4_0/mel_norms.bin", 2),
+                       ("q4_0/xtts-v2-vocoder-f16.gguf", 3)]}
+    eq(mod.rung_paths("Q4_0", None, by_tag),
+       ["q4_0/xtts-v2-gpt-q4_0.gguf", "q4_0/xtts-v2-vocoder-f16.gguf"],
+       "every gguf in the rung, wherever it sits")
+    eq(mod.rung_paths("Q8_0", None, by_tag), [], "and none for a tag the repo lacks")
+    eq(mod.rung_paths("F16", "voice.gguf", by_tag), ["voice.gguf"],
+       "a rung the registry names by file is that file")
+
+
+@test
+def a_named_audiocpp_family_is_the_one_the_page_runs():
+    """the written family wins over the repo join, and needs no repo to work.
+
+    htdemucs ships only in the shared repo, so no entry's repos can say which
+    family it is; the package the page names is the family's recommended one.
+    """
+    mod = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    catalog = json.load(open(os.path.join(RESEARCH, "data", "audiocpp.json")))["families"]
+    got = mod.audiocpp_block("Fixture/Separator", {"audiocpp": "htdemucs"}, catalog)
+    eq((got or {}).get("family"), "htdemucs", "the named family: %r" % (got,))
+    eq(((got or {}).get("package") or {}).get("id"),
+       catalog["htdemucs"]["ui"]["recommended_package"], "and its recommended package")
+    eq(mod.audiocpp_block("Fixture/Nothing", {}, catalog), None,
+       "an entry naming nothing and sharing no repo has no family")
 
 
 @test
@@ -4056,6 +4300,413 @@ def a_pretrain_never_takes_the_scores_of_the_post_trained_model_beside_it():
        "and the pretrain is left unmatched rather than taking its sibling's")
 
 
+@test
+def a_discussion_thread_outlives_falling_out_of_the_sample():
+    """A cited fish s2 pro quote vanished because its thread lost its place.
+
+    Bodies are fetched for the twelve most-commented threads per model, and
+    s2-pro gained repos, so thread 26 dropped out of the twelve and the next
+    run wrote it without a body. A thread captured once is kept, a refetch adds
+    comments rather than replacing them, and a repo whose listing came back
+    empty keeps what it had.
+    """
+    mod = load_script("fetch_hf_discussions", os.path.join(RESEARCH, "fetch-hf-discussions"))
+    old_quote = {"author": "a", "created": "t1", "reactions": 0, "text": "strong german"}
+    before = {
+        "r/one": {"count": 2, "model": "m", "discussions": [
+            {"num": 26, "comments": 2, "thread": [old_quote]},
+            {"num": 3, "comments": 1, "thread": [old_quote]},
+            # past the two listing pages this run read
+            {"num": 5, "comments": 0}]},
+        "r/quiet": {"count": 1, "model": "m", "discussions": [{"num": 1, "comments": 0}]}}
+    new_reply = {"author": "b", "created": "t2", "reactions": 1, "text": "agreed"}
+    now = {"r/one": {"count": 2, "model": "m", "discussions": [
+        {"num": 26, "comments": 3},
+        {"num": 27, "comments": 9, "thread": [new_reply]}]}}
+    now["r/one"]["discussions"].append(
+        {"num": 3, "comments": 2, "thread": [new_reply]})
+    got = mod.merge(before, now)
+
+    rows = {d["num"]: d for d in got["r/one"]["discussions"]}
+    eq(rows[26]["thread"], [old_quote], "a thread not refetched keeps its body")
+    eq(rows[26]["comments"], 3, "while its listing fields are the fresh ones")
+    eq(rows[3]["thread"], [new_reply, old_quote],
+       "a refetched thread gains the new comment and keeps the old")
+    eq(sorted(rows), [3, 5, 26, 27],
+       "a new thread arrives and one past the pages read stays")
+    eq(got["r/quiet"], before["r/quiet"], "a repo that answered nothing keeps its threads")
+    eq(got["r/one"]["count"], 4, "the count is of what the capture holds")
+
+
+@test
+def a_refetched_reddit_thread_adds_to_what_was_captured():
+    """A thread is cut to its top 120 comments by score, so a refetch drops any
+    comment the scores moved below the cut, and a failed post fetch wrote an
+    empty title and body over the ones the capture held. A refetch adds what is
+    new and keeps the rest."""
+    mod = load_script("fetch_reddit", os.path.join(RESEARCH, "fetch-reddit"))
+    old = {"id": "t", "title": "the thread", "body": "the post", "fetched": 1,
+           "comments": [{"score": 9, "depth": 0, "text": "cited"},
+                        {"score": 5, "depth": 0, "text": "also here"}]}
+    new = {"id": "t", "title": "", "body": "", "fetched": 2,
+           "comments": [{"score": 11, "depth": 0, "text": "also here"},
+                        {"score": 3, "depth": 1, "text": "new reply"}]}
+    got = mod.merge_thread(old, new)
+    eq(got["title"], "the thread", "an empty title is a failed fetch, not a rename")
+    eq(got["body"], "the post", "and so is an empty body")
+    eq([c["text"] for c in got["comments"]], ["also here", "new reply", "cited"],
+       "fresh comments first, and the one the cut dropped stays")
+    eq(got["comments"][0]["score"], 11, "a comment seen again carries its new score")
+    eq(got["fetched"], 2, "and the thread says when it was last read")
+
+
+@test
+def a_hacker_news_story_outlives_its_query_and_its_fetch():
+    """A query that failed wrote `[]` and passed the guard, because the guard
+    counts queries and the query was still there. A story that fell out of a
+    query's top three lost its comments. Neither loses anything now, and a story
+    the fresh run files under another query is not kept twice."""
+    mod = load_script("fetch_hackernews", os.path.join(RESEARCH, "fetch-hackernews"))
+    s = lambda sid, comments, **kw: dict(id=sid, title=sid, comments=comments, **kw)  # noqa: E731
+    before = {"qwen": [s("1", ["cited"]), s("2", ["kept"]), s("3", ["moved"])],
+              "kimi": [s("4", ["four"])]}
+    now = {"qwen": [s("1", ["fresh"], points=9)], "kimi": [],
+           "glm": [s("3", ["moved"])]}
+    got = mod.merge(before, now)
+    qwen = {x["id"]: x for x in got["qwen"]}
+    eq(sorted(qwen), ["1", "2"], "the dropped story stays and the moved one does not")
+    eq(qwen["1"]["comments"], ["fresh", "cited"], "comments accumulate")
+    eq(qwen["1"]["points"], 9, "and the story's fields are the fresh ones")
+    eq(got["kimi"], before["kimi"], "a query that answered nothing keeps its stories")
+    eq([x["id"] for x in got["glm"]], ["3"], "the moved story lives in one place")
+
+
+@test
+def a_card_that_did_not_arrive_keeps_what_was_read_off_it():
+    """A card fetch that answered nothing wrote an entry with no claims, no
+    summary and no samplers, and a failed hub call wrote `hub: {}` -- the licence
+    and base model gone with it, past a guard that only counts cards."""
+    mod = load_script("fetch_model_cards", os.path.join(RESEARCH, "fetch-model-cards"))
+    prev = {"claimed": {"gpqa": 50}, "summary": "a model", "samplers": [{"values": {"temp": 1.0}}],
+            "hub": {"license": "mit"}, "quant_repo": "q/r", "quant_samplers": [{"values": {}}]}
+    got = mod.card_entry(prev, "", {}, "v/m", ["m"])
+    eq(got["claimed"], {"gpqa": 50}, "the claims stay")
+    eq(got["summary"], "a model", "and the summary")
+    eq(got["hub"], {"license": "mit"}, "and the hub metadata")
+    eq(got["quant_samplers"], [{"values": {}}], "and the quant card's samplers")
+    fresh = mod.card_entry(prev, "# m\n\nA fresh summary of this model, long enough to keep.\n",
+                           {"license": "apache-2.0"}, "v/m", ["m"])
+    eq(fresh["hub"], {"license": "apache-2.0"}, "a card that did arrive is read afresh")
+
+
+@test
+def a_fact_whose_fetch_failed_keeps_its_last_value():
+    """Each fact comes from its own fetch -- config, gguf header, safetensors
+    index, template, generation config -- and one failing dropped its fields,
+    with nothing on the write to object. A failed index also swapped a counted
+    parameter total for the one the repo's name states."""
+    mod = load_script("fetch_model_facts", os.path.join(RESEARCH, "fetch-model-facts"))
+    prev = {"arch": "Qwen3ForCausalLM", "layers": 64, "input": ["text"],
+            "params_total_b": 27.31, "params_source": "safetensors"}
+    got = mod.merge_facts(prev, {"params_total_b": 27.0, "params_source": "name",
+                                 "samplers_shipped": {"temp": 0.6}}, index_answered=False)
+    eq(got["arch"], "Qwen3ForCausalLM", "a config that did not arrive keeps its fields")
+    eq(got["params_total_b"], 27.31, "a counted total is not traded for a named one")
+    eq(got["samplers_shipped"], {"temp": 0.6}, "and a fact that did arrive lands")
+    got = mod.merge_facts(prev, {"params_total_b": 27.4, "params_source": "safetensors"},
+                          index_answered=True)
+    eq(got["params_total_b"], 27.4, "an index that answered is the count")
+
+
+@test
+def a_refreshed_tensor_capture_starts_from_the_one_it_has():
+    """`--refresh` meant starting from nothing, and `scripts/sweep --refresh`
+    passes it to every collector: every one of 2900 rungs re-read, and every one
+    that did not read lost. Refreshing re-reads; it does not forget."""
+    tmp = tempfile.mkdtemp()
+    try:
+        out = os.path.join(tmp, "tensors.json")
+        row = {"tensors": 10, "elements": 100, "bpw": 4.5, "types": {"Q4_K": 1.0}}
+        with open(out, "w") as f:
+            json.dump({"Fixture/Widget-GGUF:Q4_K_M": row}, f)
+        reg = os.path.join(tmp, "models.yaml")
+        with open(reg, "w") as f:
+            f.write("version: 1\nmodels: {}\n")
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-gguf-tensors"), "--registry", reg,
+                            "--out", out, "--refresh",
+                            "--audiocpp", os.path.join(tmp, "no-catalog.json")],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        got = json.load(open(out))
+    finally:
+        shutil.rmtree(tmp)
+    eq(r.returncode, 0, "a refresh with nothing new to read is not a failure: %s" % r.stderr)
+    eq(got.get("Fixture/Widget-GGUF:Q4_K_M"), row, "and the rung it had is still there")
+
+
+@test
+def a_gguf_that_stops_being_published_is_kept_aside_not_forgotten():
+    """A repo whose tree listing failed was left out of the capture, and a tag
+    gone from a live listing vanished with its size. A failed listing now keeps
+    the repo as it was, and a file no longer published -- or a repo the registry
+    stopped naming -- moves to a delisted capture beside this one, so the page
+    stops offering it and the size is still on record."""
+    mod = load_script("fetch_gguf_sizes", os.path.join(RESEARCH, "fetch-gguf-sizes"))
+    before = {"r/a": {"Q4_K_M": 10, "Q8_0": 20}, "r/b": {"Q4_K_M": 5}, "r/gone": {"F16": 9}}
+    now = {"r/a": {"Q4_K_M": 11}}
+    sizes, gone = mod.merge_sizes(before, now, attempted={"r/a", "r/b"},
+                                  gone_before={"r/a": {"IQ1_S": {"bytes": 3, "delisted": "2026-01-01"}}},
+                                  on="2026-10-21")
+    eq(sizes, {"r/a": {"Q4_K_M": 11}, "r/b": {"Q4_K_M": 5}},
+       "fresh sizes, and a repo whose listing failed as it was")
+    eq(gone["r/a"]["Q8_0"], {"bytes": 20, "delisted": "2026-10-21"},
+       "a file the repo stopped publishing, with its size")
+    eq(gone["r/a"]["IQ1_S"]["delisted"], "2026-01-01", "an earlier one keeps its date")
+    eq(gone["r/gone"]["F16"]["bytes"], 9, "and a repo off the roster is kept aside")
+    sizes, gone = mod.merge_sizes(sizes, {"r/a": {"Q4_K_M": 11, "Q8_0": 20}, "r/b": {"Q4_K_M": 5}},
+                                  attempted={"r/a", "r/b"}, gone_before=gone, on="2026-10-22")
+    eq("Q8_0" in gone.get("r/a", {}), False, "a file published again is not delisted")
+
+
+@test
+def a_published_quant_curve_outlives_the_card_it_was_read_off():
+    """Only hand-written curves were kept: a parsed one was rebuilt from the
+    card every run, so a card that did not arrive, or was edited, took a
+    published measurement with it."""
+    mod = load_script("fetch_quant_sweeps", os.path.join(RESEARCH, "fetch-quant-sweeps"))
+    c = lambda q, metric, **kw: dict(kind="proxy", metric=metric, quant_repo=q,  # noqa: E731
+                                     points=[[4.0, 0.9]], **kw)
+    old = {"m/a": [c("u/a", "kld"), c("b/a", "ppl")], "m/b": [c("u/b", "kld")]}
+    now = {"m/a": [c("u/a", "kld", fresh=True)]}
+    got = mod.carry_curves(old, now)
+    eq([x.get("fresh") for x in got["m/a"] if x["quant_repo"] == "u/a"], [True],
+       "a curve read again is the fresh one, once")
+    eq(sorted(x["quant_repo"] for x in got["m/a"]), ["b/a", "u/a"],
+       "and one not read this run stays")
+    eq(got["m/b"], old["m/b"], "as does every curve of a model nothing answered for")
+
+
+@test
+def a_forum_topic_and_an_issue_outlive_the_sample_that_found_them():
+    """level1techs fetches posts for its thirty busiest topics and github issues
+    keeps the thirty most recently updated per query, so both lost whatever the
+    next run's ranking moved out -- and github wrote with no guard at all."""
+    l1 = load_script("fetch_level1techs", os.path.join(RESEARCH, "fetch-level1techs"))
+    before = {"searches": {"q": [1, 2]},
+              "topics": {"1": {"id": 1, "posts": [{"n": 1, "text": "cited"}]},
+                         "2": {"id": 2, "posts": [{"n": 1, "text": "two"}]}}}
+    now = {"searches": {"q": [1, 3]},
+           "topics": {"1": {"id": 1, "posts_count": 9},
+                      "3": {"id": 3, "posts": [{"n": 1, "text": "new"}]}}}
+    got = l1.merge(before, now)
+    eq(sorted(got["topics"]), ["1", "2", "3"], "every topic stays")
+    eq(got["topics"]["1"]["posts"], [{"n": 1, "text": "cited"}],
+       "a topic outside this run's busiest keeps its posts")
+    eq(got["topics"]["1"]["posts_count"], 9, "and takes its fresh listing fields")
+    eq(got["searches"]["q"], [1, 3, 2], "a search keeps the topics it found before")
+
+    gh = load_script("fetch_github_issues", os.path.join(RESEARCH, "fetch-github-issues"))
+    before = {"q": {"total": 2, "items": [{"number": 1, "body": "old"}, {"number": 2}]},
+              "gone": {"total": 1, "items": [{"number": 5}]}}
+    now = {"q": {"total": 3, "items": [{"number": 1, "body": "edited"}, {"number": 3}]}}
+    got = gh.merge(before, now)
+    eq([i["number"] for i in got["q"]["items"]], [1, 3, 2], "an issue out of the top stays")
+    eq(got["q"]["items"][0]["body"], "edited", "and one seen again is the fresh one")
+    eq(got["gone"], before["gone"], "a query that failed keeps its issues")
+
+
+@test
+def a_template_that_did_not_arrive_keeps_its_index_entry():
+    """The index was rebuilt from what this run fetched and written with no
+    guard, so a repo whose template fetch failed fell out of it -- and with it
+    the turn probes the registry's `turns:` blocks are derived from."""
+    tmp = tempfile.mkdtemp()
+    try:
+        out, repos = os.path.join(tmp, "templates.json"), os.path.join(tmp, "repos")
+        entry = {"kind": "base", "base": "v/m", "source": "chat_template.jinja",
+                 "file": "v_m.jinja", "sha256": "ab", "bytes": 10, "lines": 1}
+        with open(out, "w") as f:
+            json.dump({"v/m": entry}, f)
+        with open(repos, "w") as f:
+            f.write("")
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-chat-templates"), "--repos", repos,
+                            "--out", out, "--outdir", tmp],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        got = json.load(open(out))
+    finally:
+        shutil.rmtree(tmp)
+    eq(r.returncode, 0, "runs: %s" % r.stderr)
+    eq(got.get("v/m"), entry, "the template the index had is still indexed")
+
+
+@test
+def an_engine_catalog_keeps_what_it_dropped_and_claims_none_of_it():
+    """A family audio.cpp stops shipping, a guide gufo drops, a backend crispasr
+    removes: each fell out of its capture, along with every spec, guide or
+    matrix that merely failed to download. They are kept now -- marked where
+    the source dropped them, as they were where a fetch failed -- and a marked
+    row is never a reason to say an engine loads a model."""
+    ac = load_script("fetch_audiocpp", os.path.join(RESEARCH, "fetch-audiocpp"))
+    before = {"meta": {"n": 3}, "families": {"kept": {"v": 1}, "failed": {"v": 2},
+                                              "dropped": {"v": 3}}}
+    now = {"meta": {"n": 1}, "families": {"kept": {"v": 9}}}
+    got = ac.merge(before, now, unread=["failed"])
+    eq(got["families"]["kept"], {"v": 9}, "a family read again is the fresh one")
+    eq(got["families"]["failed"], {"v": 2}, "an unread spec keeps its family unmarked")
+    eq("delisted" in got["families"]["dropped"], False,
+       "and with any spec unread, a missing family could be one of them: unmarked")
+    got = ac.merge(before, now, unread=[])
+    eq(bool(got["families"]["dropped"].get("delisted")), True,
+       "a family gone from a listing that read whole is marked")
+
+    gufo = load_script("fetch_gufo_support", os.path.join(RESEARCH, "fetch-gufo-support"))
+    before = {"meta": {"subcommands": ["llm", "tts"]},
+              "models": {"a": {"serve": "gufo serve llm", "doc": "a.md"}, "b": {"doc": "b.md"}}}
+    now = {"meta": {"subcommands": []}, "models": {"a": {"doc": "a.md"}}}
+    got = gufo.merge(before, now, unread=["a"], server_read=False)
+    eq(got["models"]["a"]["serve"], "gufo serve llm", "an unread guide keeps its command")
+    eq(got["meta"]["subcommands"], ["llm", "tts"], "an unread server doc keeps its list")
+    eq(bool(got["models"]["b"].get("delisted")), True, "a guide gone from the index is marked")
+
+    cr = load_script("fetch_crispasr", os.path.join(RESEARCH, "fetch-crispasr"))
+    before = {"backends": {"w": {"gguf": []}, "x": {"gguf": []}},
+              "caps": {"w": {"tts": True}}, "arch": {"whisper": "w"}}
+    now = {"backends": {"w": {"gguf": ["r"]}}, "caps": {}, "arch": {}}
+    got = cr.merge(before, now, matrix_read=False, arch_read=False)
+    eq(got["caps"], before["caps"], "a matrix that did not arrive keeps the one it had")
+    eq(got["arch"], before["arch"], "and so does the architecture map")
+    eq(bool(got["backends"]["x"].get("delisted")), True, "a removed backend is marked")
+
+    bv = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    catalog = json.load(open(os.path.join(RESEARCH, "data", "audiocpp.json")))["families"]
+    gone = dict(catalog, htdemucs=dict(catalog["htdemucs"], delisted="2026-10-21"))
+    eq(bv.audiocpp_block("Fixture/Separator", {"audiocpp": "htdemucs"}, gone), None,
+       "the page does not run a family audio.cpp stopped shipping")
+
+
+@test
+def a_publisher_page_that_failed_keeps_the_repos_it_listed():
+    """A failed author page wrote `[]` over the publisher, and `base_model` is
+    only readable for a repo this capture holds -- so resolve-base lost every
+    conversion that publisher had. Repos past the page cap are a sample too."""
+    mod = load_script("fetch_hf_catalog", os.path.join(RESEARCH, "fetch-hf-catalog"))
+    before = {"cstr": [{"id": "cstr/a-GGUF", "tracked": False}, {"id": "cstr/b-GGUF"}],
+              "gone": [{"id": "gone/c-GGUF"}]}
+    now = {"cstr": [{"id": "cstr/new-GGUF", "tracked": False}], "gone": []}
+    got = mod.merge_authors(before, now, tracked={"cstr/a-gguf"})
+    eq([r["id"] for r in got["cstr"]], ["cstr/new-GGUF", "cstr/a-GGUF", "cstr/b-GGUF"],
+       "fresh repos first, and the ones this run did not reach stay")
+    eq([r["id"] for r in got["gone"]], ["gone/c-GGUF"],
+       "a page that answered nothing keeps its repos")
+    eq(got["cstr"][1]["tracked"], True,
+       "and a kept repo is judged against today's registry, not the one it was seen under")
+
+
+@test
+def an_architecture_whose_header_did_not_read_is_kept():
+    """llama-support rebuilt `repos` from this run's header reads and wrote
+    with no guard, so a failed read dropped a repo and an empty `repos` turned
+    the crispasr reachability lint off without a word."""
+    tmp = tempfile.mkdtemp()
+    try:
+        out, reg = os.path.join(tmp, "support.json"), os.path.join(tmp, "models.yaml")
+        prev = {"llama_cpp": {"commit": "abc"}, "arch": {"qwen3": {"mainline": True}},
+                "repos": {"v/m-GGUF": "qwen3"}, "repo_archs": {"v/x-GGUF": ["a", "b"]},
+                "quants": ["Q4_K_M"]}
+        with open(out, "w") as f:
+            json.dump(prev, f)
+        with open(reg, "w") as f:
+            f.write("version: 1\nmodels: {}\n")
+        r = subprocess.run([os.path.join(RESEARCH, "fetch-llama-support"), "--registry", reg,
+                            "--out", out, "--llama", os.path.join(tmp, "no-clone")],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        got = json.load(open(out))
+    finally:
+        shutil.rmtree(tmp)
+    eq(r.returncode, 0, "runs: %s" % r.stderr[-300:])
+    eq(got["repos"], prev["repos"], "the repo whose header was not read keeps its arch")
+    eq(got["repo_archs"], prev["repo_archs"], "and its per-file list")
+
+
+# what may write its capture from this run alone: verdict reads one pinned
+# export, and a row leaving it is a decision made in that repo
+FROM_SCRATCH = {"fetch-verdict"}
+
+
+@test
+def every_collector_starts_from_the_capture_it_has():
+    """A collector that writes only what this run fetched loses whatever the run
+    did not reach, however good its count guard. Six wrote with a bare
+    json.dump and no guard at all. Each one now reads its previous capture and
+    writes through research/capture.py."""
+    sweep = open(os.path.join(ROOT, "scripts", "sweep")).read()
+    names = sorted(set(re.findall(r'\["\./(fetch-[a-z-]+)"', sweep)) - FROM_SCRATCH)
+    eq(len(names) > 25, True, "the sweep's collectors were found: %s" % names)
+    # the two that ask a model, whose answers are the slowest thing here to redo
+    names += ["propose", "score-sentiment"]
+    for name in names:
+        src = open(os.path.join(RESEARCH, name)).read()
+        eq("capture.previous(" in src or "capture.carry(" in src, True,
+           "%s reads the capture it already has" % name)
+        eq(re.search(r'json\.dump\([^)]*\bf\b', src) is None, True,
+           "%s writes through capture.write, not a bare json.dump" % name)
+
+
+RENAMED_REGISTRY = """version: 1
+models:
+  Fixture/Widget-ASR-0.6B:
+    kind: speech
+    name: {short: widget asr 0.6b}
+    modalities: {input: [text, audio], output: [text]}
+    ids: {open-asr: Fixture/Widget-ASR-0.6B}
+  Fixture/Retired-ASR-1B:
+    kind: speech
+    name: {short: retired asr 1b}
+    modalities: {input: [text, audio], output: [text]}
+    ids: {open-asr: Fixture/Retired-ASR-1B}
+  Fixture/Gadget-2B:
+    kind: text
+    name: {short: gadget 2b}
+    modalities: {input: [text], output: [text]}
+    ids: {aa: gadget-2b}
+"""
+
+
+@test
+def an_id_on_a_row_its_board_dropped_moves_to_the_row_it_lists():
+    """AutoArk-AI became Edge0 and the open asr board renamed three rows.
+
+    The collectors keep a dropped row at its last score, so an id set to the
+    old name kept resolving -- to a frozen number, while the board published a
+    current one under the new name. An id is kept as set unless its row is one
+    the board no longer lists AND the listed rows match the model; a retired
+    model with no listed successor keeps its last score.
+    """
+    capture = {"open-asr.json": {"models": {
+        "Fixture/Widget-ASR-0.6B": {"open_weights": True, "accuracy": 90.0,
+                                    "delisted": "2026-10-21"},
+        "Renamed/Widget-ASR-0.6B": {"open_weights": True, "accuracy": 91.0},
+        "Fixture/Retired-ASR-1B": {"open_weights": True, "accuracy": 80.0,
+                                   "delisted": "2026-10-21"}}},
+        # the successor that replaced it on the board, which is another model
+        "artificial-analysis.json": {
+            "gadget-2b": {"name": "Gadget 2B", "delisted": "2026-10-21"},
+            "gadget-2b-1017": {"name": "Gadget 2B 1017"}}}
+    tmp = tempfile.mkdtemp()
+    try:
+        got = ids_fixture(tmp, capture, RENAMED_REGISTRY)
+    finally:
+        shutil.rmtree(tmp)
+
+    eq(got["Fixture/Widget-ASR-0.6B"]["ids"]["open-asr"], "Renamed/Widget-ASR-0.6B",
+       "the id follows the rename to the row the board still lists")
+    eq(got["Fixture/Retired-ASR-1B"]["ids"]["open-asr"], "Fixture/Retired-ASR-1B",
+       "and a model with no listed row keeps the one it has")
+    # artificial analysis replaced deepseek v4.1 flash's row with 1017's, and a
+    # fuzzy move put the older model on its successor's scores
+    eq(got["Fixture/Gadget-2B"]["ids"]["aa"], "gadget-2b",
+       "a row resembling the dropped one is a successor, not a rename")
+
+
 JEV_CAPTURE = {
     "meta": {"benchmark": "JevBench", "revision": "v1"},
     "systems": {
@@ -4272,6 +4923,169 @@ def an_image_model_is_kept_at_its_overall_elo_not_a_category_slice():
     eq(row["appearances"], 7377, "and the vote count that identifies it")
     eq(row["openWeightsUrl"], "https://huggingface.co/fixture/Diffusion",
        "the repo path resolve-ids matches on survives")
+
+
+@test
+def a_board_keeps_what_its_source_stopped_listing():
+    """A leaderboard that stops listing a model has not withdrawn its score.
+
+    Artificial analysis took its image board from 167 models to 105 and its
+    text board from 691 to 273 by listing only current models. The shrink guard
+    could refuse the smaller file, which kept the old scores and lost every new
+    model and every updated score with them, or accept it, which lost the old
+    scores. `carry` takes the fresh rows and keeps the rest, marked with the
+    date the source was first seen without them.
+    """
+    sys.path.insert(0, RESEARCH)
+    import capture
+
+    rows, n = capture.carry({"a": {"elo": 1}, "b": {"elo": 2},
+                             "c": {"elo": 3, "delisted": "2026-01-01"}},
+                            {"a": {"elo": 5}, "d": {"elo": 4}}, on="2026-10-21")
+    eq(n, 2, "two rows the source no longer lists")
+    eq(rows["a"], {"elo": 5}, "a listed row is the fresh one")
+    eq(rows["d"], {"elo": 4}, "a new row arrives")
+    eq(rows["b"], {"elo": 2, "delisted": "2026-10-21"}, "a dropped row keeps its score")
+    eq(rows["c"]["delisted"], "2026-01-01", "and the date it first went missing")
+
+    rows, n = capture.carry({"a": {"elo": 1, "delisted": "2026-01-01"}},
+                            {"a": {"elo": 1}}, on="2026-10-21")
+    eq(rows["a"], {"elo": 1}, "a row listed again is not delisted any more")
+
+    rows, n = capture.carry([{"id": "a", "v": 1}, {"id": "b", "v": 2}],
+                            [{"id": "a", "v": 3}], key=lambda r: r["id"],
+                            on="2026-10-21")
+    eq(rows, [{"id": "a", "v": 3}, {"id": "b", "v": 2, "delisted": "2026-10-21"}],
+       "a list board is carried by the key its rows are joined on")
+
+
+@test
+def a_capture_that_will_not_parse_is_not_written_over():
+    """An unreadable capture counted as empty, so any run wrote over it --
+    a file with a merge conflict in it is still months of fetches."""
+    sys.path.insert(0, RESEARCH)
+    import capture
+    tmp = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmp, "board.json")
+        with open(path, "w") as f:
+            f.write('{"a": 1,\n<<<<<<< HEAD\n')
+        written, _, _ = capture.write(path, {"b": 2}, len)
+        body = open(path).read()
+        forced, _, _ = capture.write(path, {"b": 2}, len, allow_shrink=True)
+    finally:
+        shutil.rmtree(tmp)
+    eq(written, False, "a capture that does not parse is refused")
+    eq("<<<<<<<" in body, True, "and left exactly as it was")
+    eq(forced, True, "--allow-shrink is still the way to replace it")
+
+
+@test
+def an_image_board_keeps_the_models_the_site_stopped_listing():
+    """The image board was written around the shrink guard entirely.
+
+    So the sweep that refused a text board of 273 over 691 wrote an image board
+    of 105 over 167 -- the site had stopped listing retired models, and every
+    stable diffusion release lost its score with nothing saying so.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        with open(os.path.join(tmp, "page.html"), "w") as f:
+            f.write(t2i_fixture_html())
+        out = os.path.join(tmp, "image.json")
+        with open(out, "w") as f:
+            json.dump({n: {"elo": 1000.0} for n in ("Old One", "Old Two")}, f)
+        base, stop = serve(tmp)
+        purge("test-aa-t2i")
+        try:
+            r = subprocess.run(
+                [os.path.join(RESEARCH, "fetch-artificial-analysis"),
+                 "--board", "text-to-image", "--url", base + "/page.html",
+                 "--out", out, "--cache-key", "test-aa-t2i", "--max-age", "0"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        finally:
+            stop()
+            purge("test-aa-t2i")
+        got = json.load(open(out))
+    finally:
+        shutil.rmtree(tmp)
+
+    eq(r.returncode, 0, "a board that lists fewer models is not a failure: %s" % r.stderr)
+    eq(sorted(got), ["Fixture Diffusion", "Old One", "Old Two"],
+       "the new model arrives and the old ones stay")
+    eq(got["Old One"]["elo"], 1000.0, "with the score they were last listed at")
+    eq(bool(got["Old One"].get("delisted")), True, "marked as no longer listed")
+    eq("delisted" in got["Fixture Diffusion"], False, "and a listed model is not")
+
+
+# every collector whose capture is a score board, which is every one a model's
+# rows can disappear from between two sweeps. verdict is not here: it is this
+# project's own export at a pinned revision, so a row leaving it is a decision
+SCORE_BOARDS = ("fetch-artificial-analysis", "fetch-tts-arena", "fetch-voicearena",
+                "fetch-open-asr", "fetch-genai-showdown", "fetch-gbench",
+                "fetch-lmarena", "fetch-swerebench", "fetch-tbench", "fetch-epoch",
+                "fetch-livebench", "fetch-jevbench")
+
+
+@test
+def every_score_board_carries_what_its_source_stopped_listing():
+    """Five boards wrote over their capture with a bare json.dump.
+
+    lmarena, epoch, gbench, swe-rebench and terminal-bench had neither the
+    shrink guard nor anything in its place, so a model leaving any of them took
+    its score with it the next sweep.
+    """
+    for name in SCORE_BOARDS:
+        src = open(os.path.join(RESEARCH, name)).read()
+        eq("capture.carry(" in src, True, "%s carries what its source stopped listing" % name)
+        eq("capture.write(" in src, True, "%s writes through the guard" % name)
+
+
+@test
+def an_epoch_result_outlives_the_zip_dropping_it():
+    """Epoch's rows are lists, so a row is carried by the version it scores."""
+    tmp = tempfile.mkdtemp()
+    try:
+        epoch_zip(os.path.join(tmp, "benchmark_data.zip"))
+        out = os.path.join(tmp, "epoch.json")
+        with open(out, "w") as f:
+            json.dump({"eci": [{"Model version": "gone-model", "Model name": "Gone",
+                                "ECI Score": "99.0"}],
+                       "eci_fit": [],
+                       "benchmarks": {
+                           "gpqa_diamond": {"source": "epoch", "metric": "mean_score",
+                                            "results": [{"Model version": "gone-model",
+                                                         "mean_score": "0.5"}]},
+                           "retired_bench": {"source": "epoch", "metric": "mean_score",
+                                             "results": [{"Model version": "gone-model",
+                                                          "mean_score": "0.1"}]}}}, f)
+        base, stop = serve(tmp)
+        purge("test-epoch")
+        try:
+            r = subprocess.run(
+                [os.path.join(RESEARCH, "fetch-epoch"),
+                 "--url", base + "/benchmark_data.zip", "--out", out,
+                 "--cache-key", "test-epoch"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        finally:
+            stop()
+            purge("test-epoch")
+        if r.returncode:
+            raise AssertionError("collector exited %d: %s" % (r.returncode, r.stderr.strip()))
+        got = json.load(open(out))
+    finally:
+        shutil.rmtree(tmp)
+
+    gpqa = {x["Model version"]: x for x in got["benchmarks"]["gpqa_diamond"]["results"]}
+    eq(sorted(gpqa), ["fixture-large_high", "gone-model"],
+       "the fresh result and the one the zip dropped")
+    eq(gpqa["gone-model"]["mean_score"], "0.5", "at the score it was last published at")
+    eq(bool(gpqa["gone-model"].get("delisted")), True, "and marked")
+    eq("delisted" in gpqa["fixture-large_high"], False, "a listed row is not")
+    eq(got["benchmarks"]["retired_bench"]["results"][0]["mean_score"], "0.1",
+       "a benchmark the zip no longer ships keeps its results")
+    eci = {x["Model version"]: x for x in got["eci"]}
+    eq(eci["gone-model"]["ECI Score"], "99.0", "and so does a model the index dropped")
 
 
 # the showdown as the site ships it: a comparisons file naming its own
@@ -4745,6 +5559,22 @@ AUDIO_CONFIGS = {
          "architectures": ["VibeVoiceForConditionalGeneration"],
          "acoustic_tokenizer_config": {"model_type": "vibevoice_acoustic_tokenizer"},
          "decoder_config": {"model_type": "qwen2"}}, False),
+    # remote-code models name the task rather than the modality. niagara's only
+    # architecture is `Model`, and the head it registers is the evidence: CTC is
+    # an audio head. whistle spells the task out, and index echo's model_type
+    # is the speech-to-text-translation acronym
+    "abr-ai/niagara-38m-batch.en": (
+        {"architectures": ["Model"], "model_type": "niagara-38m-batch",
+         "auto_map": {"AutoConfig": "config.Config",
+                      "AutoModelForCTC": "model.Model"},
+         "input_features": 80, "sample_rate": 16000}, True),
+    "Cactus-Compute/whistle": (
+        {"model_type": "whistle",
+         "architectures": ["WhistleForSpeechRecognition"],
+         "sample_rate": 16000}, True),
+    "IndexTeam/Index-Echo-S2TT-2B": (
+        {"model_type": "index_echo_s2tt",
+         "components": {"audio_encoder": {"config": "audio_config.json"}}}, True),
 }
 
 
@@ -7116,6 +7946,31 @@ def a_rung_that_is_a_link_is_still_the_rung():
     points, _, _ = mod.sweep_from(tables[0], 177)
     eq([p[2] for p in points], ["Q4_K_M", "Q6_K", "Q8_0"],
        "each point wears the linked rung's tag: %r" % points)
+
+
+@test
+def a_lookup_table_is_counted_apart_from_the_weights_it_sits_beside():
+    """deepseek v4.1 flash carries 196.9b of engram rows, gemma 4's e models and
+    qwen3.8 flash next a per-layer embedding table.
+
+    a row is read once per token rather than multiplied, so its precision is not
+    what a quantization loss curve was fitted on. smalinin's MXFP4 keeps the
+    engram at 8.5 bits and read as a 5.43 bpw file when the weights it computes
+    with are 4.33. the engram's own projections are matrices and stay weights.
+    """
+    mod = load_script_with_research("fetch_gguf_tensors", "fetch-gguf-tensors")
+    got = mod.summarise([
+        ("blk.0.engram_embd.weight", 100, "Q8_0", 100),
+        ("blk.0.engram_k.weight", 100, "Q2_K", 25),
+        ("per_layer_token_embd.weight", 100, "Q8_0", 100),
+        ("llm.embed_tokens_per_layer.weight", 100, "Q8_0", 100),
+        ("blk.0.ffn_down_exps.weight", 100, "Q2_K", 25)])
+    eq(got["bpw"], 5.6, "the file's bits are every tensor's: %r" % got)
+    eq(got["core_bpw"], 2.0, "the weights' bits leave the lookup rows out")
+    eq(got["lookup"], 0.6, "and the rows' share of elements is kept beside it")
+    plain = mod.summarise([("blk.0.ffn_down_exps.weight", 100, "Q2_K", 25)])
+    eq(sorted(set(plain) & {"core_bpw", "lookup"}), [],
+       "a model with no lookup table is unchanged: %r" % plain)
 
 
 @test

@@ -40,6 +40,11 @@ A model post-trained with several rounds of SFT and RLOO on top of [Qwen3.8-27B-
 - **GGUF Q2 LynnStyle · reasoning length (P50 / P70 / P90 tokens)**: GPQA 2,989.5 / 8,923.8 / 27,156.1; MMLU 181 / 326.3 / 1,020.5; LCB 5,656.5 / 17,835.8 / 40,067.3.
 - **GGUF Q2 LynnStyle · speed**: NInfer with built-in Q4 MTP, C8 aggregate 521.0 tok/s (512-token cap, short run); llama.cpp with built-in Q4 MTP, C4 aggregate 174.8 tok/s (4096-token cap, long run). Protocols differ; do not compare directly.
 - **GGUF Q2 LynnStyle · size**: GGUF 13,276,009,792 bytes (BPW 3.89), NInfer 13,568,617,472 bytes with vision (text + MTP BPW 3.89).
+- **GGUF Q3 LynnStyle-16G · what it is**: our lowest Q3 tier, recommended for 16 GB VRAM (`GGUF/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf`). It changes the earlier Q2 scheme: the lowest type is now IQ3_XXS (no Q6 / Q8 in the body), built with importance-matrix correction and GSQ-RCO (only same-byte GSQ refinements were applied, so the size is unchanged). Built-in Q4_K MTP head (norms F32). Text-only GGUF; vision via the mmproj in `GGUF/`. Matching NInfer package under `GGUF-NInfer/` with built-in Q8 vision tower + Q4_K MTP.
+- **GGUF Q3 LynnStyle-16G · scores**: GPQA 172/198, MMLU 427/500, LCB 90/100 (llama.cpp + DFlash2 external draft, C4, 100K context, max_tokens 94,208, no timeout, reasoning effort xhigh; full sets).
+- **GGUF Q3 LynnStyle-16G · reasoning length (P50 / P70 / P90 tokens)**: GPQA 3,811 / 11,404 / 31,418; MMLU 190 / 361 / 1,665; LCB 6,520 / 21,586 / 43,184. GPQA uses `reasoning_tokens`; the MMLU and LCB records have no separate reasoning field, so `completion_tokens` (including the final answer) is used.
+- **GGUF Q3 LynnStyle-16G · size**: GGUF 13,276,009,920 bytes (~12.4 GiB, BPW 3.89); NInfer 13,765,136,896 bytes with Q8 vision (~12.8 GiB, text + MTP BPW 3.89).
+- **GGUF Q3 LynnStyle-16G · speed**: measured on one RTX PRO 6000 Blackwell. llama.cpp fused MTP, 4096-token generation cap (long): C1 31.9 / C2 46.6 / C4 78.1 tok/s, acceptance 0.597. NInfer, 512-token generation cap (short): C1 33.5 / C2 44.7 / C4 77.4 / C8 127.0 tok/s, acceptance 0.488. Protocols differ (long vs short); do not compare directly.
 - **GGUF Q3 LynnStyle · scores**: GPQA 173/198, MMLU 449/500, LCB 92/100 (llama.cpp, C4, 100K full sets; scored before the built-in MTP head was attached (external Q8 MTP draft); same quantized weights).
 - **GGUF Q3 LynnStyle · reasoning length (P50 / P70 / P90 tokens)**: GPQA 3,125.5 / 7,265.2 / 24,343.1; MMLU 148 / 279.3 / 923.4; LCB 4,421 / 14,232.2 / 34,946.
 - **GGUF Q3 LynnStyle · speed**: NInfer with built-in Q4 MTP, C8 aggregate 512.3 tok/s (512-token cap, short run); llama.cpp with built-in Q4 MTP, C4 aggregate 191.8 tok/s (4096-token cap, long run). Protocols differ; do not compare directly.
@@ -118,6 +123,9 @@ The original Qwen3.8 27B (FP8) was measured on two RTX PRO 6000 GPUs at C8 per G
 | GPQA | GGUF Q2 LynnStyle | 177/198 | **2,989.5** / **8,923.8** / **27,156.1** | **3** | **0** |
 | MMLU | GGUF Q2 LynnStyle | 433/500 | **181** / **326.3** / **1,020.5** | 1 | 0 |
 | LCB | GGUF Q2 LynnStyle | **90/100** | **5,656.5** / **17,835.8** / **40,067.3** | **1** | **1** |
+| GPQA | GGUF Q3 LynnStyle-16G | 172/198 | **3,811** / **11,404** / **31,418** | **2** | **2** |
+| MMLU | GGUF Q3 LynnStyle-16G | 427/500 | **190** / **361** / 1,665 | **0** | 0 |
+| LCB | GGUF Q3 LynnStyle-16G | **90/100** | **6,520** / **21,586** / **43,184** | **3** | **3** |
 | GPQA | GGUF Q8_0 | 171/198 | **3,102.5** / **7,971** / **28,891.6** | **2** | **0** |
 | GPQA | GGUF Q6_K | 174/198 | **3,683** / **9,814** / **27,966** | **2** | **2** |
 | MMLU | Original Qwen3.8 27B (FP8) | 444/500 | 205 / 373 / 1,622 | 1 | 0 |
@@ -135,11 +143,11 @@ LCB has no 94K truncations; its 1 empty answer is problem 92, which stopped norm
 
 LCB is scored on llama.cpp: the LCB eval script gets replies from NInfer that are not valid JSON. This is a compatibility issue between the eval script and the API, not a model-quality issue; the same GGUF on llama.cpp passed every problem in the same spot-check batch.
 
-## Run this model in Lynn desktop Agent (V0.87.1)
+## Run this model in Lynn desktop Agent (V0.87.3)
 
 [Lynn](https://github.com/MerkyorLynn/Lynn) is an open-source desktop AI Agent (GUI + standalone CLI): chat, search, file edits, coding, and realtime voice in one app, or as a headless worker for other tools and CI. **Free. Quick Start needs no configuration and no API key.**
 
-Current defaults (V0.87.1):
+Current defaults (V0.87.3):
 
 | Role | Stack |
 |---|---|
@@ -151,11 +159,11 @@ Hardware guidance: Apple Silicon uses unified memory; NVIDIA uses the largest si
 
 Tool arguments (places, dates, leagues, tickers, currency pairs, and so on) are filled by the model rather than guessed from the whole user sentence. Desktop features such as long-term memory and writing Diff ship with Lynn; see the release notes for the full changelog.
 
-- [V0.87.1 release notes](https://github.com/MerkyorLynn/Lynn/releases/tag/v0.87.1)
+- [V0.87.3 release notes](https://github.com/MerkyorLynn/Lynn/releases/tag/v0.87.3)
 - [China download page (recommended)](https://download.merkyorlynn.com/download.html)
-- macOS Apple Silicon: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.1-macOS-arm64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.1/Lynn-0.87.1-macOS-arm64.dmg)
-- macOS Intel: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.1-macOS-x64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.1/Lynn-0.87.1-macOS-x64.dmg)
-- Windows: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.1-Windows-Setup.exe) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.1/Lynn-0.87.1-Windows-Setup.exe)
+- macOS Apple Silicon: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-macOS-arm64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-macOS-arm64.dmg)
+- macOS Intel: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-macOS-x64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-macOS-x64.dmg)
+- Windows: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-Windows-Setup.exe) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-Windows-Setup.exe)
 
 In Lynn: **Settings → Models → Local Qwen3.8-27B → pick Q2 / Q3 → Install & start**. Local tiers load only the Q2 / Q3 LynnStyle-MTP files under this repo’s `GGUF/` directory. NInfer / NVFP4 and other formats stay outside Lynn’s one-click install — use their own engines.
 
@@ -171,6 +179,8 @@ In Lynn: **Settings → Models → Local Qwen3.8-27B → pick Q2 / Q3 → Instal
 | GGUF Q4 LynnStyle · NInfer | `GGUF-NInfer/` | NInfer package from the same Q4 LynnStyle GGUF (`.ninfer`), built-in Q4_K MTP and vision; NInfer-all and ninfer-fusion-kvmem; scored on llama.cpp before the built-in MTP head was attached (external Q8 MTP draft); same quantized weights | 19,913,006,080 (~18.5 GiB) | 5.74 | 175 / 448 / 89 |
 | GGUF Q4 LynnStyle · Q8MTP | `GGUF/` | The same Q4 LynnStyle GGUF with only the built-in MTP head re-encoded as Q8_0 (`Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.gguf`); every other tensor is byte-identical to the original; an alternative with a Q8_0 MTP head (the original's Q4_0 MTP head is supported by llama.cpp); llama.cpp vision via the mmproj in `GGUF/` | 19,832,743,232 (~18.5 GiB) | 5.81 | 175 / 448 / 89 |
 | GGUF Q4 LynnStyle · Q8MTP · NInfer | `GGUF-NInfer/` | NInfer package from the Q8MTP GGUF above (`Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.ninfer`), built-in Q8_0 MTP head and vision, model id `qwen3.8-27b-coder390-Q4LynnStyle-Q8Mtp`; body weights identical to the original Q4 LynnStyle package, scores carried over | 20,125,342,720 (~18.7 GiB) | 5.81 | 175 / 448 / 89 |
+| GGUF Q3 LynnStyle-16G | `GGUF/` | Our lowest Q3 tier, for 16 GB VRAM (`Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf`): lowest type IQ3_XXS, no Q6 / Q8 in the body; importance-matrix correction + GSQ-RCO (same-byte refinements, size unchanged); **built-in Q4_K MTP**; llama.cpp vision via the mmproj in `GGUF/`; scored with llama.cpp + DFlash2 external draft | 13,276,009,920 (~12.4 GiB) | 3.89 | 172 / 427 / 90 |
+| GGUF Q3 LynnStyle-16G · NInfer | `GGUF-NInfer/` | NInfer package from the same Q3 LynnStyle-16G weights: built-in **Q4_K MTP** + built-in **Q8 vision** (add `--vision`; no mmproj) | 13,765,136,896 (~12.8 GiB) | 3.89 | same scores (GGUF triad) |
 | GGUF Q2 LynnStyle | `GGUF/` | Mixed-precision LynnStyle GGUF for llama.cpp (`Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-MTP.gguf`): lowest type reaches Q2; **built-in Q4 MTP** (not Q8); llama.cpp vision via `--mmproj` with the mmproj in `GGUF/` | 13,276,009,792 (~12.4 GiB) | 3.89 | 177 / 433 / 90 |
 | GGUF Q2 LynnStyle · NInfer | `GGUF-NInfer/` | NInfer package from the same Q2 LynnStyle GGUF (`.ninfer`), built-in Q4_K MTP and vision; NInfer-all and ninfer-fusion-kvmem; scores from GGUF on llama.cpp | 13,568,617,472 (~12.6 GiB) | 3.89 | 177 / 433 / 90 |
 | GGUF Q2 LynnStyle · Q8MTP | `GGUF/` | The same Q2 LynnStyle GGUF with only the built-in MTP head re-encoded as Q8_0 (`Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q8MTP.gguf`); every other tensor is byte-identical to the original; an alternative with a Q8_0 MTP head (the original's Q4_0 MTP head is supported by llama.cpp); llama.cpp vision via the mmproj in `GGUF/` | 13,488,346,432 (~12.6 GiB) | 3.95 | 177 / 433 / 90 |
@@ -190,7 +200,7 @@ In Lynn: **Settings → Models → Local Qwen3.8-27B → pick Q2 / Q3 → Instal
 | Q3 LynnStyle · Q8MTP | 134.9 | 51.7% (2.55) | 138.3 | 0.904 | correct |
 | Q4 LynnStyle · Q8MTP | 154.8 | 71.0% (3.13) | 135.6 | 0.879 | correct |
 
-BPW for GGUF Q3 LynnStyle is 17303770432 × 8 ÷ the text + MTP parameter count 27,320,697,856 = 5.07; the Q3 NInfer package was 17300551168 bytes before the vision component was added, BPW 5.07. BPW for GGUF Q4 LynnStyle is 19620406592 × 8 ÷ the text + MTP parameter count 27,320,697,856 = 5.75; the Q4 NInfer package was 19617187328 bytes before the vision component was added, BPW 5.74. BPW for GGUF Q2 LynnStyle is 13,276,009,792 × 8 ÷ the text + MTP parameter count 27,320,697,856 = 3.89; the Q2 NInfer package was 13,272,798,720 bytes before the vision component was added, BPW 3.89. BPW for GGUF Q8_0 is 29,069,202,688 × 8 ÷ 27,320,697,856 = 8.51; the Q8_0 NInfer package was 29,065,983,488 bytes before the vision component was added, BPW 8.51. BPW for the two GGUF Q6_K packages is the single file's bytes × 8 ÷ the text + MTP parameter count 27,320,697,856: the GGUF is 23,177,516,384 bytes, giving 6.79, and the NInfer package was 23,084,144,128 bytes before the vision component was added, giving 6.76. The parameter count comes from the GGUF header (866 tensors: text 26,895,998,464 + MTP 424,699,392); vision is not counted in the denominator (neither the llama.cpp mmproj nor the 295,720,448-byte vision part now inside each `.ninfer`). The BF16 / FP8 / NVFP4 tiers in the main repository use 27,781,427,952 (including the vision tower), so BPW should not be compared directly across the two.
+BPW for GGUF Q3 LynnStyle is 17303770432 × 8 ÷ the text + MTP parameter count 27,320,697,856 = 5.07; the Q3 NInfer package was 17300551168 bytes before the vision component was added, BPW 5.07. BPW for GGUF Q4 LynnStyle is 19620406592 × 8 ÷ the text + MTP parameter count 27,320,697,856 = 5.75; the Q4 NInfer package was 19617187328 bytes before the vision component was added, BPW 5.74. BPW for GGUF Q2 LynnStyle is 13,276,009,792 × 8 ÷ the text + MTP parameter count 27,320,697,856 = 3.89; the Q2 NInfer package was 13,272,798,720 bytes before the vision component was added, BPW 3.89. BPW for GGUF Q8_0 is 29,069,202,688 × 8 ÷ 27,320,697,856 = 8.51; the Q8_0 NInfer package was 29,065,983,488 bytes before the vision component was added, BPW 8.51. BPW for the two GGUF Q6_K packages is the single file's bytes × 8 ÷ the text + MTP parameter count 27,320,697,856: the GGUF is 23,177,516,384 bytes, giving 6.79, and the NInfer package was 23,084,144,128 bytes before the vision component was added, giving 6.76. The parameter count comes from the GGUF header (866 tensors: text 26,895,998,464 + MTP 424,699,392); vision is not counted in the denominator (neither the llama.cpp mmproj nor the 295,720,448-byte vision part now inside each `.ninfer`). The BF16 / FP8 / NVFP4 tiers in the main repository use 27,781,427,952 (including the vision tower), so BPW should not be compared directly across the two. BPW for GGUF Q3 LynnStyle-16G is 13,276,009,920 × 8 ÷ 27,320,697,856 = 3.89. The matching NInfer is 13,765,136,896 bytes with the Q8 vision tower built in (text + MTP BPW still 3.89; vision not in the denominator).
 
 ## Best-TPS and concurrency recommendations
 
@@ -206,6 +216,8 @@ Setup: one RTX PRO 6000 Blackwell; 1-minute quick benchmark, 512 generation cap,
 | NInfer · Q4 LynnStyle MTP (4 draft, 512-cap short) | 157.0 | 174.3 | 287.5 | **436.4** |
 | llama.cpp · Q4 LynnStyle MTP (4096-cap long) | 73.6 | 77.7 | **81.1** | not measured |
 | NInfer · Q2 LynnStyle MTP (4 draft) | 205.7 | 210.4 | 308.0 | **521.0** |
+| NInfer · Q3 LynnStyle-16G MTP (4 draft, 512-cap short, PRO 6000) | 33.5 | 44.7 | 77.4 | **127.0** |
+| llama.cpp · Q3 LynnStyle-16G MTP (4096-cap long, PRO 6000) | 31.9 | 46.6 | **78.1** | not measured |
 | llama.cpp · Q2 LynnStyle MTP | 104.9 | 167.6 | **174.8** | not measured |
 | llama.cpp · Q8_0 MTP | 85.3 | 133.6 | **190.8** | not measured |
 | llama.cpp · Q6_K MTP | 97.2 | 95.3 | 168.1 | 189.0 |
@@ -238,6 +250,19 @@ ninfer-serve ./GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q4MTP
 **MTP and DFlash2**: every GGUF / NInfer package in this repository has a built-in MTP head (Q2 / Q3 / Q4 LynnStyle use built-in **Q4** MTP: Q4_0 in the `.gguf`, Q4_K in the `-Q4MTP.ninfer`; their `-Q8MTP` versions use a Q8_0 MTP head). To enable it, add `--spec mtp --draft-tokens N` for NInfer or `--spec-type draft-mtp --spec-draft-n-max N` for llama.cpp; leave these out to run without speculation. DFlash2 is an external draft model and is not in these packages; this repository does not ship a DFlash2 draft for GGUF / NInfer. For DFlash2, use the `DFlash2-FP8/` draft that ships with the BF16 / FP8 / NVFP4 tiers in the main repository (SGLang `--speculative-algorithm DFLASH`) or the `.ninfer` packages in the NVFP4-NInfer repository (`--spec dflash2`). MTP and DFlash2 are mutually exclusive: a server runs one or the other, never both.
 
 #### NInfer
+
+**NInfer · GGUF Q3 LynnStyle-16G · MTP + vision (draft 4, recommended concurrency 8)**
+
+```bash
+ninfer-serve ./GGUF-NInfer/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.ninfer \
+  --host 127.0.0.1 --port 8080 --device 0 \
+  --model-id qwen3.8-27b-coder390-q3lynnstyle16g-mtp \
+  --max-context 102400 --kv-capacity 819200 --max-concurrency 8 \
+  --kv-dtype rk8v4 \
+  --spec mtp --draft-tokens 4 --vision
+```
+
+For 16 GB VRAM / single-stream, start with `--max-context 32768 --kv-capacity 32768 --max-concurrency 1` and raise if memory allows. Vision is built into this `.ninfer` (Q8 tower); add `--vision`. GGUF for this tier stays text-only (use `--mmproj` on llama.cpp).
 
 **NInfer · GGUF Q2 LynnStyle · MTP (draft 4, recommended concurrency 8)**
 
@@ -423,6 +448,19 @@ llama-server -m ./GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-MTP.gguf 
 
 To use another GGUF tier, only change `-m` to `...-Q3LynnStyle-MTP.gguf`, `...-Q4LynnStyle-MTP.gguf`, `...-Q6_K-MTP.gguf`, or `...-Q8_0-MTP.gguf` (and the `--alias`, e.g. `qwen3.8-27b-coder390-q6k-mtp`, `qwen3.8-27b-coder390-q8-mtp`). MTP is fused inside the GGUF (`blk.64`); do not attach an external draft; the log should show `creating MTP draft context against the target model`. For image input add `--mmproj ./GGUF/mmproj-Qwen3.8-27B-Q8_0.gguf`.
 
+**llama.cpp · GGUF Q3 LynnStyle-16G · MTP (16 GB VRAM)**
+
+```bash
+llama-server -m ./GGUF/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf \
+  -c 32768 -np 1 -ngl 99 --jinja \
+  --temp 1.0 --top-p 0.95 --top-k 20 \
+  --host 127.0.0.1 --port 8080 \
+  --alias qwen3.8-27b-coder390-q3lynnstyle16g-mtp \
+  --spec-type draft-mtp --spec-draft-n-max 4
+```
+
+Not yet tested on a 16 GB card; the command above uses one slot at 32K context, raise `-c` / `-np` if memory allows. MTP is fused inside the GGUF (Q4_K, `blk.64`); do not attach an external draft. For image input add `--mmproj ./GGUF/mmproj-Qwen3.8-27B-Q8_0.gguf`. The three-suite scores for this tier were measured with llama.cpp + DFlash2 external draft (C4, 100K context, 94,208 generation cap, no timeout, xhigh). Speeds on one RTX PRO 6000 Blackwell: llama.cpp fused MTP 4096-cap long C1/C2/C4 = 31.9/46.6/78.1 tok/s (accept 0.597); NInfer 512-cap short C1/C2/C4/C8 = 33.5/44.7/77.4/127.0 tok/s (accept 0.488). Protocols differ.
+
 **llama.cpp · vision (image input)**
 
 ```bash
@@ -455,6 +493,8 @@ llama-server -m ./GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-MTP.gguf 
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-MTP.gguf` | 17,303,770,432 | `9985b3d41fc7dc0bb5d493f7523d4515504912a3a7fc830f66e0fd2f90f9fd95` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-MTP.gguf` | 19,620,406,592 | `56c7c605a59764d9f0bb645d4eb335f1574af2c9e74020386139597df0e872f5` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-MTP.gguf` | 13,276,009,792 | `cad973b3b7cc0d86bd39968209268318a746673c12c9536e5c37408baa7b5e6e` |
+| `GGUF/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf` | 13,276,009,920 | `3872d17684a1b71d38fd36eb5ace047ac61bab11799926455de933fe0b3e60e1` |
+| `GGUF-NInfer/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.ninfer` | 13,765,136,896 | `d9459f94883dde338cbd6ac07059bc92b4842fdba904a30a8cc00969f7dfb423` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q8MTP.gguf` | 13,488,346,432 | `62fd6cf6079dfb02b3e3aab68e39b4cdc6a471a51a82b56c9a76068e961d8a4a` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-Q8MTP.gguf` | 17,516,107,072 | `2c74a65df9d229bfba2eb3a878a25b84d4035d1be4061c9a665af213d98cae58` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.gguf` | 19,832,743,232 | `5e2a1784298f696cb38f063962da0ad4acd1fd020c6e7c6e520df54acf8f57eb` |
@@ -477,7 +517,7 @@ llama-server -m ./GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-MTP.gguf 
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q8_0-MTP.ninfer` | 29,361,802,240 | `8ace439259c8ade2b7dacee8aca92df62d7cc93d6c7d40ac026be797bb02a9c5` |
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q6_K-MTP.ninfer` | 23,379,962,880 | `60d7b3f4f79304e1ab1e22c161cdace29e7f8f9b8350755e4eab45e2d5e0d168` |
 | `GGUF-NInfer/vision-bf16.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
-| `GGUF-NInfer/SHA256SUMS` | 1,082 | `7cb6f58402c7fc14b7740487407c285232a54989e3ad1ebf25892c597944af38` |
+| `GGUF-NInfer/SHA256SUMS` | 1,088 | `786409f76d95820fd18251d55d35ca8c36526412c0d8581645fdd24a73955d4a` |
 
 ### `imatrix/` (GGUF imatrix + calibration set)
 
@@ -535,6 +575,11 @@ Thanks to the Qwen team for the base model and the official FP8 scheme; to Opus5
 - **GGUF Q2 LynnStyle · 思考长度(P50 / P70 / P90 token)**:GPQA 2,989.5 / 8,923.8 / 27,156.1;MMLU 181 / 326.3 / 1,020.5;LCB 5,656.5 / 17,835.8 / 40,067.3。
 - **GGUF Q2 LynnStyle · 速度**:NInfer 内置 Q4 MTP,C8 合计 521.0 tok/s(生成上限 512 短测);llama.cpp 内置 Q4 MTP,C4 合计 174.8 tok/s(生成上限 4096 长测)。口径不同,勿直接横比。
 - **GGUF Q2 LynnStyle · 体积**:GGUF 13,276,009,792 字节(BPW 3.89),NInfer 13,568,617,472 字节,含视觉(文本 + MTP BPW 3.89)。
+- **GGUF Q3 LynnStyle-16G · 简介**:我们最低的 Q3 档,推荐 16G 显存(`GGUF/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf`)。相对此前的 Q2 方案做了调整:最低精度改为 IQ3_XXS(主体无 Q6 / Q8),并做了重要性矩阵校正和 GSQ-RCO(只采用同字节的 GSQ 精修,体积不变)。内置 Q4_K MTP 头(norm 为 F32)。GGUF 只含文本,看图用 `GGUF/` 内的 mmproj。同权重 NInfer 包在 `GGUF-NInfer/`,内置 Q8 视觉塔 + Q4_K MTP。
+- **GGUF Q3 LynnStyle-16G · 成绩**:GPQA 172/198、MMLU 427/500、LCB 90/100(llama.cpp + 外挂 DFlash2 草稿,C4,100K 上下文,生成上限 94,208,不计超时,reasoning effort xhigh,全量)。
+- **GGUF Q3 LynnStyle-16G · 思考长度(P50 / P70 / P90 token)**:GPQA 3,811 / 11,404 / 31,418;MMLU 190 / 361 / 1,665;LCB 6,520 / 21,586 / 43,184。GPQA 用 `reasoning_tokens`;MMLU 和 LCB 的记录没有单独的 reasoning 字段,用的是 `completion_tokens`(含最终答案)。
+- **GGUF Q3 LynnStyle-16G · 体积**:GGUF 13,276,009,920 字节(约 12.4 GiB,BPW 3.89);NInfer 13,765,136,896 字节(含 Q8 视觉,约 12.8 GiB,文本 + MTP BPW 3.89)。
+- **GGUF Q3 LynnStyle-16G · 速度**:在一张 RTX PRO 6000 Blackwell 上测得。llama.cpp 融合 MTP,生成上限 4096(长测):C1 31.9 / C2 46.6 / C4 78.1 tok/s,接受率 0.597。NInfer,生成上限 512(短测):C1 33.5 / C2 44.7 / C4 77.4 / C8 127.0 tok/s,接受率 0.488。长短测协议不同,不要直接横比。
 - **GGUF Q3 LynnStyle · 成绩**:GPQA 173/198、MMLU 449/500、LCB 92/100(llama.cpp,C4,100K 全量;成绩在内置 MTP 前测得(外挂 Q8 MTP 草稿),量化权重相同)。
 - **GGUF Q3 LynnStyle · 思考长度(P50 / P70 / P90 token)**:GPQA 3,125.5 / 7,265.2 / 24,343.1;MMLU 148 / 279.3 / 923.4;LCB 4,421 / 14,232.2 / 34,946。
 - **GGUF Q3 LynnStyle · 速度**:NInfer 内置 Q4 MTP,C8 合计 512.3 tok/s(生成上限 512 短测);llama.cpp 内置 Q4 MTP,C4 合计 191.8 tok/s(生成上限 4096 长测)。口径不同,勿直接横比。
@@ -613,6 +658,9 @@ Thanks to the Qwen team for the base model and the official FP8 scheme; to Opus5
 | GPQA | GGUF Q2 LynnStyle | 177/198 | **2,989.5** / **8,923.8** / **27,156.1** | **3** | **0** |
 | MMLU | GGUF Q2 LynnStyle | 433/500 | **181** / **326.3** / **1,020.5** | 1 | 0 |
 | LCB | GGUF Q2 LynnStyle | **90/100** | **5,656.5** / **17,835.8** / **40,067.3** | **1** | **1** |
+| GPQA | GGUF Q3 LynnStyle-16G | 172/198 | **3,811** / **11,404** / **31,418** | **2** | **2** |
+| MMLU | GGUF Q3 LynnStyle-16G | 427/500 | **190** / **361** / 1,665 | **0** | 0 |
+| LCB | GGUF Q3 LynnStyle-16G | **90/100** | **6,520** / **21,586** / **43,184** | **3** | **3** |
 | GPQA | GGUF Q8_0 | 171/198 | **3,102.5** / **7,971** / **28,891.6** | **2** | **0** |
 | GPQA | GGUF Q6_K | 174/198 | **3,683** / **9,814** / **27,966** | **2** | **2** |
 | MMLU | 原版 Qwen3.8 27B(FP8) | 444/500 | 205 / 373 / 1,622 | 1 | 0 |
@@ -630,11 +678,11 @@ LCB 无 94K 截断;空答 1 条是第 92 题,正常停止但没有给出代码�
 
 LCB 以 llama.cpp 的结果为准:LCB 测评脚本请求 NInfer 时收到的回复不是合法 JSON,这是测评脚本与接口的兼容问题,不是模型质量问题;同一份 GGUF 用 llama.cpp 跑同一批抽测题全部通过。
 
-## 用 Lynn 桌面 Agent 跑本模型（V0.87.1）
+## 用 Lynn 桌面 Agent 跑本模型（V0.87.3）
 
 [Lynn](https://github.com/MerkyorLynn/Lynn) 是开源桌面 AI Agent（GUI + 独立 CLI）：对话、搜资料、改文件、写代码、实时语音都能在同一套界面里完成，也可以当其他工具或 CI 的无头 worker。**全部免费，Quick Start 无需配置、无需 API Key。**
 
-当前默认能力（V0.87.1）：
+当前默认能力（V0.87.3）：
 
 | 用途 | 方案 |
 |---|---|
@@ -646,11 +694,11 @@ LCB 以 llama.cpp 的结果为准:LCB 测评脚本请求 NInfer 时收到的回�
 
 工具参数由模型自己填写（地点、日期、联赛、行情代码、货币对等），不再从整句问题硬猜实体。长期记忆与写作 Diff 等桌面能力随 Lynn 提供；完整说明与更新见发布页。
 
-- [V0.87.1 发布说明](https://github.com/MerkyorLynn/Lynn/releases/tag/v0.87.1)
+- [V0.87.3 发布说明](https://github.com/MerkyorLynn/Lynn/releases/tag/v0.87.3)
 - [国内下载页（推荐）](https://download.merkyorlynn.com/download.html)
-- macOS Apple Silicon：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.1-macOS-arm64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.1/Lynn-0.87.1-macOS-arm64.dmg)
-- macOS Intel：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.1-macOS-x64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.1/Lynn-0.87.1-macOS-x64.dmg)
-- Windows：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.1-Windows-Setup.exe) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.1/Lynn-0.87.1-Windows-Setup.exe)
+- macOS Apple Silicon：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-macOS-arm64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-macOS-arm64.dmg)
+- macOS Intel：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-macOS-x64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-macOS-x64.dmg)
+- Windows：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-Windows-Setup.exe) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-Windows-Setup.exe)
 
 在 Lynn 里：**设置 → 模型 → 本地 Qwen3.8-27B → 选 Q2 / Q3 → 安装并启动**。本地档位只加载本仓库 `GGUF/` 下的 Q2 / Q3 LynnStyle-MTP 文件；NInfer / NVFP4 等其他格式请用对应引擎自行部署，不走 Lynn 一键安装。
 
@@ -666,6 +714,8 @@ LCB 以 llama.cpp 的结果为准:LCB 测评脚本请求 NInfer 时收到的回�
 | GGUF Q4 LynnStyle · NInfer | `GGUF-NInfer/` | 由同一份 Q4 LynnStyle GGUF 转换的 NInfer 包(`.ninfer`),内置 Q4_K MTP 与视觉;NInfer-all 与 ninfer-fusion-kvmem 均可;成绩在内置 MTP 前测得(外挂 Q8 MTP 草稿),量化权重相同,成绩在 llama.cpp 上测得 | 19,913,006,080(约 18.5 GiB) | 5.74 | 175 / 448 / 89 |
 | GGUF Q4 LynnStyle · Q8MTP | `GGUF/` | 同一个 Q4 LynnStyle GGUF,只把内置 MTP 头改为 Q8_0(`Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.gguf`),其他张量与原包逐字节相同;Q8_0 MTP 头备选版(原包的 Q4_0 MTP 头 llama.cpp 支持);llama.cpp 看图同样用 `GGUF/` 里的 mmproj | 19,832,743,232(约 18.5 GiB) | 5.81 | 175 / 448 / 89 |
 | GGUF Q4 LynnStyle · Q8MTP · NInfer | `GGUF-NInfer/` | 由上面的 Q8MTP GGUF 转成的 NInfer 包(`Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.ninfer`),内置 Q8_0 MTP 头和视觉组件,model id `qwen3.8-27b-coder390-Q4LynnStyle-Q8Mtp`;主体权重与原 Q4 LynnStyle 包相同,分数沿用原包 | 20,125,342,720(约 18.7 GiB) | 5.81 | 175 / 448 / 89 |
+| GGUF Q3 LynnStyle-16G | `GGUF/` | 我们最低的 Q3 档,面向 16G 显存(`Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf`):最低精度 IQ3_XXS,主体无 Q6 / Q8;重要性矩阵校正 + GSQ-RCO(同字节精修,体积不变);内置 **Q4_K MTP**;看图用 `GGUF/` 内的 mmproj;成绩用 llama.cpp + 外挂 DFlash2 测得 | 13,276,009,920(约 12.4 GiB) | 3.89 | 172 / 427 / 90 |
+| GGUF Q3 LynnStyle-16G · NInfer | `GGUF-NInfer/` | 同权重 NInfer 包:内置 **Q4_K MTP** + 内置 **Q8 视觉**(加 `--vision`,无需 mmproj) | 13,765,136,896(约 12.8 GiB) | 3.89 | 同成绩(GGUF 三科) |
 | GGUF Q2 LynnStyle | `GGUF/` | llama.cpp 用混合精度 LynnStyle GGUF(`Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-MTP.gguf`):最低精度到 Q2;内置 **Q4 MTP**(不是 Q8);视觉用 `GGUF/` 内的 mmproj(llama.cpp `--mmproj`) | 13,276,009,792(约 12.4 GiB) | 3.89 | 177 / 433 / 90 |
 | GGUF Q2 LynnStyle · NInfer | `GGUF-NInfer/` | 由同一份 Q2 LynnStyle GGUF 转换的 NInfer 包(`.ninfer`),内置 Q4_K MTP 与视觉;NInfer-all 与 ninfer-fusion-kvmem 均可;成绩为 GGUF 在 llama.cpp 上测得 | 13,568,617,472(约 12.6 GiB) | 3.89 | 177 / 433 / 90 |
 | GGUF Q2 LynnStyle · Q8MTP | `GGUF/` | 同一个 Q2 LynnStyle GGUF,只把内置 MTP 头改为 Q8_0(`Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q8MTP.gguf`),其他张量与原包逐字节相同;Q8_0 MTP 头备选版(原包的 Q4_0 MTP 头 llama.cpp 支持);llama.cpp 看图同样用 `GGUF/` 里的 mmproj | 13,488,346,432(约 12.6 GiB) | 3.95 | 177 / 433 / 90 |
@@ -685,7 +735,7 @@ LCB 以 llama.cpp 的结果为准:LCB 测评脚本请求 NInfer 时收到的回�
 | Q3 LynnStyle · Q8MTP | 134.9 | 51.7%(2.55) | 138.3 | 0.904 | 正确 |
 | Q4 LynnStyle · Q8MTP | 154.8 | 71.0%(3.13) | 135.6 | 0.879 | 正确 |
 
-GGUF Q3 LynnStyle 的 BPW 按 17303770432 × 8 ÷ 文本 + MTP 参数数 27,320,697,856 = 5.07;Q3 NInfer 加视觉前为 17300551168 字节、BPW 5.07。GGUF Q4 LynnStyle 的 BPW 按 19620406592 × 8 ÷ 文本 + MTP 参数数 27,320,697,856 = 5.75;Q4 NInfer 加视觉前为 19617187328 字节、BPW 5.74。GGUF Q2 LynnStyle 的 BPW 按 13,276,009,792 × 8 ÷ 文本 + MTP 参数数 27,320,697,856 = 3.89;Q2 NInfer 加视觉前为 13,272,798,720 字节、BPW 3.89。GGUF Q8_0 的 BPW 按 29,069,202,688 × 8 ÷ 文本 + MTP 参数数 27,320,697,856 = 8.51;Q8_0 NInfer 加视觉前为 29,065,983,488 字节、BPW 8.51。GGUF Q6_K 两个包的 BPW 按单个文件字节数 × 8 ÷ 文本 + MTP 参数数 27,320,697,856 计算:GGUF 为 23,177,516,384 字节、6.79,NInfer 加视觉前为 23,084,144,128 字节、6.76。参数数按 GGUF 头部统计(866 个张量:文本 26,895,998,464 + MTP 424,699,392);视觉不计入分母:llama.cpp 的外挂 mmproj 和现在打进每个 `.ninfer` 的视觉部分(295,720,448 字节)都不算。主仓库 BF16 / FP8 / NVFP4 各档按 27,781,427,952(含视觉塔)计算,分母不同,不宜直接横向比较 BPW。
+GGUF Q3 LynnStyle 的 BPW 按 17303770432 × 8 ÷ 文本 + MTP 参数数 27,320,697,856 = 5.07;Q3 NInfer 加视觉前为 17300551168 字节、BPW 5.07。GGUF Q4 LynnStyle 的 BPW 按 19620406592 × 8 ÷ 文本 + MTP 参数数 27,320,697,856 = 5.75;Q4 NInfer 加视觉前为 19617187328 字节、BPW 5.74。GGUF Q2 LynnStyle 的 BPW 按 13,276,009,792 × 8 ÷ 文本 + MTP 参数数 27,320,697,856 = 3.89;Q2 NInfer 加视觉前为 13,272,798,720 字节、BPW 3.89。GGUF Q8_0 的 BPW 按 29,069,202,688 × 8 ÷ 文本 + MTP 参数数 27,320,697,856 = 8.51;Q8_0 NInfer 加视觉前为 29,065,983,488 字节、BPW 8.51。GGUF Q6_K 两个包的 BPW 按单个文件字节数 × 8 ÷ 文本 + MTP 参数数 27,320,697,856 计算:GGUF 为 23,177,516,384 字节、6.79,NInfer 加视觉前为 23,084,144,128 字节、6.76。参数数按 GGUF 头部统计(866 个张量:文本 26,895,998,464 + MTP 424,699,392);视觉不计入分母:llama.cpp 的外挂 mmproj 和现在打进每个 `.ninfer` 的视觉部分(295,720,448 字节)都不算。主仓库 BF16 / FP8 / NVFP4 各档按 27,781,427,952(含视觉塔)计算,分母不同,不宜直接横向比较 BPW。GGUF Q3 LynnStyle-16G 的 BPW 按 13,276,009,920 × 8 ÷ 27,320,697,856 = 3.89。 对应 NInfer 为 13,765,136,896 字节,已打入 Q8 视觉塔(文本 + MTP BPW 仍为 3.89;视觉不进分母)。
 
 ## 最佳 TPS 推荐与并发推荐
 
@@ -734,6 +784,19 @@ ninfer-serve ./GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q4MTP
 **MTP 与 DFlash2**:本仓库所有 GGUF / NInfer 包都内置 MTP 头(Q2 / Q3 / Q4 LynnStyle 为内置 **Q4** MTP(`.gguf` 为 Q4_0,`-Q4MTP.ninfer` 为 Q4_K);其 `-Q8MTP` 版本为 Q8_0 MTP 头)。开启方式:NInfer 加 `--spec mtp --draft-tokens N`,llama.cpp 加 `--spec-type draft-mtp --spec-draft-n-max N`;省略这两个参数即不开投机。DFlash2 是外挂草稿模型,不在本仓库这些包里,本仓库不提供 GGUF / NInfer 用的 DFlash2 草稿;需要 DFlash2 时请用主仓 BF16 / FP8 / NVFP4 各档自带的 `DFlash2-FP8/`(SGLang `--speculative-algorithm DFLASH`)或 NVFP4-NInfer 仓库的 `.ninfer` 包(`--spec dflash2`)。MTP 与 DFlash2 互斥:同一个服务只能开其中一种,不要同时开。
 
 #### NInfer
+
+**NInfer · GGUF Q3 LynnStyle-16G · MTP + 视觉(草稿长度 4,推荐并发 8)**
+
+```bash
+ninfer-serve ./GGUF-NInfer/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.ninfer \
+  --host 127.0.0.1 --port 8080 --device 0 \
+  --model-id qwen3.8-27b-coder390-q3lynnstyle16g-mtp \
+  --max-context 102400 --kv-capacity 819200 --max-concurrency 8 \
+  --kv-dtype rk8v4 \
+  --spec mtp --draft-tokens 4 --vision
+```
+
+16G 显存 / 单路可先用 `--max-context 32768 --kv-capacity 32768 --max-concurrency 1`,显存够再调大。本 `.ninfer` 已内置 Q8 视觉塔,加 `--vision` 即可。同档 GGUF 仍只含文本(llama.cpp 看图用 `--mmproj`)。
 
 **NInfer · GGUF Q2 LynnStyle · MTP(草稿长度 4,推荐并发 8)**
 
@@ -919,6 +982,19 @@ llama-server -m ./GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-MTP.gguf 
 
 换其他 GGUF 档只需改 `-m` 为 `...-Q3LynnStyle-MTP.gguf`、`...-Q4LynnStyle-MTP.gguf`、`...-Q6_K-MTP.gguf` 或 `...-Q8_0-MTP.gguf`(并相应改 `--alias`,例如 `qwen3.8-27b-coder390-q6k-mtp`、`qwen3.8-27b-coder390-q8-mtp`)。MTP 已融合进 GGUF(`blk.64`),不要再外挂 draft;日志应出现 `creating MTP draft context against the target model`。需要图像输入时加 `--mmproj ./GGUF/mmproj-Qwen3.8-27B-Q8_0.gguf`。
 
+**llama.cpp · GGUF Q3 LynnStyle-16G · MTP(16G 显存)**
+
+```bash
+llama-server -m ./GGUF/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf \
+  -c 32768 -np 1 -ngl 99 --jinja \
+  --temp 1.0 --top-p 0.95 --top-k 20 \
+  --host 127.0.0.1 --port 8080 \
+  --alias qwen3.8-27b-coder390-q3lynnstyle16g-mtp \
+  --spec-type draft-mtp --spec-draft-n-max 4
+```
+
+本档未在 16G 卡上实测,上面按单路 32K 上下文给出,显存够再调大 `-c` / `-np`。MTP 已融合进 GGUF(Q4_K,`blk.64`),不要再外挂 draft。看图时加 `--mmproj ./GGUF/mmproj-Qwen3.8-27B-Q8_0.gguf`。本档的三科成绩是用 llama.cpp + 外挂 DFlash2 草稿测得(C4,100K 上下文,生成上限 94,208,不计超时,xhigh)。速度在一张 RTX PRO 6000 Blackwell 上测得:llama.cpp 融合 MTP 4096 长测 C1/C2/C4 = 31.9/46.6/78.1 tok/s(接受率 0.597);NInfer 512 短测 C1/C2/C4/C8 = 33.5/44.7/77.4/127.0 tok/s(接受率 0.488)。长短测协议不同。
+
 **llama.cpp · 视觉(图片输入)**
 
 ```bash
@@ -952,6 +1028,8 @@ llama-server -m ./GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-MTP.gguf 
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-MTP.gguf` | 17,303,770,432 | `9985b3d41fc7dc0bb5d493f7523d4515504912a3a7fc830f66e0fd2f90f9fd95` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-MTP.gguf` | 19,620,406,592 | `56c7c605a59764d9f0bb645d4eb335f1574af2c9e74020386139597df0e872f5` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-MTP.gguf` | 13,276,009,792 | `cad973b3b7cc0d86bd39968209268318a746673c12c9536e5c37408baa7b5e6e` |
+| `GGUF/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.gguf` | 13,276,009,920 | `3872d17684a1b71d38fd36eb5ace047ac61bab11799926455de933fe0b3e60e1` |
+| `GGUF-NInfer/Qwen3.8-27B-Coder390-Q3LynnStyle16G-MTP.ninfer` | 13,765,136,896 | `d9459f94883dde338cbd6ac07059bc92b4842fdba904a30a8cc00969f7dfb423` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q2LynnStyle-Q8MTP.gguf` | 13,488,346,432 | `62fd6cf6079dfb02b3e3aab68e39b4cdc6a471a51a82b56c9a76068e961d8a4a` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-Q8MTP.gguf` | 17,516,107,072 | `2c74a65df9d229bfba2eb3a878a25b84d4035d1be4061c9a665af213d98cae58` |
 | `GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.gguf` | 19,832,743,232 | `5e2a1784298f696cb38f063962da0ad4acd1fd020c6e7c6e520df54acf8f57eb` |
@@ -974,7 +1052,7 @@ llama-server -m ./GGUF/Qwen3.8-27B-Coder390-EfficientThink-Q3LynnStyle-MTP.gguf 
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q8_0-MTP.ninfer` | 29,361,802,240 | `8ace439259c8ade2b7dacee8aca92df62d7cc93d6c7d40ac026be797bb02a9c5` |
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q6_K-MTP.ninfer` | 23,379,962,880 | `60d7b3f4f79304e1ab1e22c161cdace29e7f8f9b8350755e4eab45e2d5e0d168` |
 | `GGUF-NInfer/vision-bf16.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
-| `GGUF-NInfer/SHA256SUMS` | 1,082 | `7cb6f58402c7fc14b7740487407c285232a54989e3ad1ebf25892c597944af38` |
+| `GGUF-NInfer/SHA256SUMS` | 1,088 | `786409f76d95820fd18251d55d35ca8c36526412c0d8581645fdd24a73955d4a` |
 
 ### `imatrix/`(GGUF imatrix 与校正集)
 

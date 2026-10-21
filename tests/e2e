@@ -137,14 +137,15 @@ test('the roster can say what it is MISSING, and does it one way', () => {
   // same question with none of the answer, and the two disagreed: turning it
   // off still hid supertonic-3, because the runtime filter was hiding it for
   // its own reason. one control now, and clearing it is what shows the entries
-  // carried precisely because nothing here serves them.
+  // carried precisely because nothing here serves them. supertonic-3 has since
+  // gained a runtime in audio.cpp; step-audio-editx is still one nothing loads
   const runnable = visible().map(m => m.short);
-  eq(runnable.includes('supertonic-3'), false,
+  eq(runnable.includes('step-audio-editx'), false,
      'with a runtime selected, weights nothing loads are out');
 
   filters.engines = new Set();
   const all = visible().map(m => m.short);
-  ok(all.includes('supertonic-3'), 'clearing it says what is missing');
+  ok(all.includes('step-audio-editx'), 'clearing it says what is missing');
   ok(all.length > runnable.length, 'and that is strictly more rows');
 
   // the image models used to be four of these and are not any more: reading
@@ -152,7 +153,7 @@ test('the roster can say what it is MISSING, and does it one way', () => {
   // found all five of them, ernie and krea included
   const missing = all.filter(s => !(model(s).engines || []).length);
   ok(missing.length >= 2, 'entries that name no runtime at all: ' + missing);
-  ok(missing.includes('supertonic-3'), 'including the onnx-only one');
+  ok(missing.includes('step-audio-editx'), 'including one with no runtime anywhere');
 
   RESET();
 });
@@ -519,6 +520,44 @@ test('a filter menu opens on its button and swallows the click', () => {
 
   document.querySelector('#engines-ms .ms-btn').onclick();
   eq(html('#engines-ms').includes('ms-menu open'), false, 'and it closes again');
+  RESET();
+});
+
+test('a model only audio.cpp loads is weighed by the package it installs', () => {
+  RESET();
+  // sortformer ships only inside audio.cpp's shared repo, so the registry names
+  // no repo of its own and the page used to have no size to judge the fit by
+  const m = model('sortformer diarization');
+  const pkg = quantChoices(m).filter(c => c.package);
+  ok(pkg.length && pkg.every(c => c.gib > 0), 'its packages are sized rungs: ' + JSON.stringify(pkg));
+  filters.engines = new Set(['audio.cpp']);
+  ok(rungPool(m).length, 'which audio.cpp loads');
+  filters.engines = new Set(['llama.cpp']);
+  eq(rungPool(m).filter(c => c.package).length, 0, 'and nothing else does');
+
+  // where the entry pins a conversion of its own, audio.cpp is weighed by its
+  // package rather than by a file it would not read
+  const o = model('omnivoice');
+  filters.engines = new Set(['audio.cpp']);
+  const own = rungPool(o).filter(c => !c.package && c.repo !== 'audio-cpp/audio.cpp-gguf');
+  eq(own.map(c => c.repo + ':' + c.quant).join(', '), '',
+     'no rung audio.cpp does not install is in its pool');
+  RESET();
+});
+
+test('a score its board stopped listing says so where it is sourced', () => {
+  RESET();
+  // the collectors keep a row its board dropped, at the score it last
+  // published, so a reader has to be able to tell that number from a current one
+  const hit = D.models.flatMap(m => Object.entries(m.facets || {})
+    .filter(([, f]) => (f.ref || {}).delisted).map(([k, f]) => [m.short, k, f]))[0];
+  ok(hit, 'some facet on the page comes from a row its board no longer lists');
+  const [, , f] = hit;
+  showTip({dataset: {ref: JSON.stringify(f.ref)},
+           getBoundingClientRect: () => ({left: 0, right: 0, top: 0, bottom: 0, width: 0})});
+  const said = document.querySelector('#tip').innerHTML;
+  ok(said.includes('no longer listed by the board since ' + f.ref.delisted),
+     'and its [src] panel says since when: ' + said);
   RESET();
 });
 
@@ -922,8 +961,12 @@ test('a ceiling reads the bits in the file, not size over a count of weights '
 test('a runtime is offered only the repos it can read', () => {
   RESET();
   const m = model('qwen3-tts-1.7b-customvoice');
-  const repos = [...new Set(quantChoices(m).map(c => c.repo))];
+  // the registry's own conversions; audio.cpp's package of the checkpoint is a
+  // rung beside them that only audio.cpp loads, and is not one of them
+  const repos = [...new Set(quantChoices(m).filter(c => !c.package).map(c => c.repo))];
   eq(repos.length, 2, 'the model carries two conversions: ' + repos);
+  ok(quantChoices(m).filter(c => c.package).every(c => /customvoice/.test(c.package)),
+     'and the packages beside them are this checkpoint, not the base model');
 
   // two conversions of one checkpoint are not interchangeable, and this pair is
   // the case the registry documents: crispasr reads cstr's metadata namespace
@@ -1129,13 +1172,13 @@ test('the operations section shows the runtimes that load THIS model', () => {
 
   // and a model nothing here loads says so rather than printing a command
   ops = {runtime: null, repo: null, quant: null, profile: null};
-  eq(runtimesFor(model('supertonic-3')).length, 0,
-     'onnx-only weights have no runtime');
-  eq(snippets(model('supertonic-3')).length, 0, 'so there is nothing to run');
+  eq(runtimesFor(model('step-audio-editx')).length, 0,
+     'weights nothing here loads have no runtime');
+  eq(snippets(model('step-audio-editx')).length, 0, 'so there is nothing to run');
 
   // and the tab that shows all this renders for each of them: the runtime row
   // is built from a list that can now be empty, which is a new way to be null
-  ['whisper-large-v3-turbo', 'z-image-turbo', 'supertonic-3', 'kokoro-v1']
+  ['whisper-large-v3-turbo', 'z-image-turbo', 'step-audio-editx', 'kokoro-v1']
     .forEach(short => {
       const html_ = tabOperate(model(short));
       ok(html_.includes('how to run it'), short + ' renders the operations tab');
@@ -2114,6 +2157,42 @@ test('the diarization roster says which weights are a whole diarizer', () => {
      'and it claims no shape: a speaker timeline is not text out');
 });
 
+test('a lookup table is not counted as weights the curve was fitted on', () => {
+  RESET();
+  // smalinin's MXFP4 keeps v4.1 flash's engram at 8.5 bits: the file reads 5.43
+  // and the weights a token is computed with are 4.33
+  const v41 = model('deepseek v4.1 flash');
+  const q = quantChoices(v41).find(c => c.repo.startsWith('smalinin/') && c.quant === 'MXFP4');
+  ok(q && q.coreBpw, 'the rung carries the bits of its weights alone');
+  near(q.coreBpw, 4.33, 0.01, 'and they are the weights without the engram rows');
+  ok(curveFor(v41, q).kind !== 'measured', 'v4.1 flash has no sweep of its own');
+  eq(retentionBpw(v41, q), q.coreBpw, 'so the fitted curve is read at those bits');
+
+  // a sweep measured on this model was drawn against whole files, so its own
+  // curve keeps reading whole files: the axis has to be the one it was drawn on.
+  // no carried sweep speaks for a model with lookup rows yet, so one is planted
+  const next = model('qwen3.8 flash next heretic 2');
+  const nq = quantChoices(next).find(c => c.coreBpw);
+  ok(nq, 'heretic 2 has a rung with a lookup table');
+  const measured = D.retention.measured || (D.retention.measured = {});
+  const had = measured[next.repo];
+  measured[next.repo] = [{points: [[2, 0.5], [9, 1]], metric: 'planted'}];
+  try {
+    eq(curveFor(next, nq).kind, 'measured', 'the planted sweep speaks for it');
+    eq(retentionBpw(next, nq), rungBpw(nq), 'and it reads the whole file');
+  } finally {
+    if (had) measured[next.repo] = had; else delete measured[next.repo];
+  }
+
+  // and the discount every row is scored at uses the same number
+  D.models.forEach(m => {
+    const a = activeQuant(m);
+    if (!a || !rungBpw(a) || m.native_low_bpw) return;
+    near(modelRetention(m), retention(retentionBpw(m, a), m, a), 1e-9,
+         m.short + ': scored at the bits the curve is read at');
+  });
+});
+
 test('the page says when it last changed, and so does every model', () => {
   RESET();
   const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -2443,14 +2522,23 @@ test('a rung no selected runtime loads is off the ladder, however many bits it h
 
 test('an entry nothing here is known to load is unknown, not too big', () => {
   RESET();
+  // fish s2 pro was this case's real example until audio.cpp's catalog claimed
+  // it, and no entry since both publishes rungs and has no runtime. so its
+  // engine claim is lifted for the length of the case, which is the state the
+  // case is about
   const m = model('fish-s2-pro');
-  ok(!m.engines.length, 'the registry names no engine for it');
-  ok(quantChoices(m).length > 3, 'and it publishes rungs, so it is not an empty entry');
-  eq(rungPool(m).length, 0, 'nothing in the pool is loadable');
-  ok(fitsBudget(m), 'the memory question is not answered with a no');
-  ok(col('quant').cell(m).includes('no runtime'), 'the cell says which kind of empty');
-  ok(!col('quant').cell(m).includes('does not fit'), 'and never blames the box');
-  ok(!visible().some(v => v.repo === m.repo), 'the runtime filter is what hides it');
+  const saved = {engines: m.engines, audiocpp: m.audiocpp};
+  Object.assign(m, {engines: [], audiocpp: null});
+  try {
+    ok(quantChoices(m).length > 3, 'it publishes rungs, so it is not an empty entry');
+    eq(rungPool(m).length, 0, 'nothing in the pool is loadable');
+    ok(fitsBudget(m), 'the memory question is not answered with a no');
+    ok(col('quant').cell(m).includes('no runtime'), 'the cell says which kind of empty');
+    ok(!col('quant').cell(m).includes('does not fit'), 'and never blames the box');
+    ok(!visible().some(v => v.repo === m.repo), 'the runtime filter is what hides it');
+  } finally {
+    Object.assign(m, saved);
+  }
 });
 
 // a kind with no chip is unreachable: `post` and `translate` carry no
@@ -2689,11 +2777,13 @@ test('more bits per weight never score lower within a model', () => {
     const rows = expand([m]).filter(r => r._q && scored(r).value !== null);
     for (let i = 1; i < rows.length; i++) {
       const more = rows[i - 1], less = rows[i];
-      if (!(rungBpw(less._q) < rungBpw(more._q))) continue;
+      // the bits the discount reads, which leave out a table of lookup rows
+      const bits = q => retentionBpw(m, q);
+      if (!(bits(less._q) < bits(more._q))) continue;
       if (scored(less).value > scored(more).value + 0.05) {
-        bad.push(m.short + ': ' + less._q.quant + ' at ' + rungBpw(less._q)
+        bad.push(m.short + ': ' + less._q.quant + ' at ' + bits(less._q)
           + 'bpw scores ' + scored(less).value.toFixed(1) + ' over ' + more._q.quant
-          + ' at ' + rungBpw(more._q) + 'bpw on ' + scored(more).value.toFixed(1));
+          + ' at ' + bits(more._q) + 'bpw on ' + scored(more).value.toFixed(1));
       }
     }
   });

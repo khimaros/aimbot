@@ -888,6 +888,26 @@ false
 {{- "\n</ifm|tool_calls>" }}
 {%- endmacro -%}
 
+{#- Normalize text content for user, system, and assistant messages. File text -#}
+{#- must be extracted upstream and supplied as strings or typed text parts. -#}
+{%- macro render_text_content(raw_content, role) -%}
+{%- if raw_content is string -%}
+{{- raw_content -}}
+{%- elif role == 'assistant' and (raw_content is none or raw_content is undefined) -%}
+{{- '' -}}
+{%- elif raw_content is defined and raw_content is sequence and raw_content is not mapping -%}
+    {%- for part in raw_content -%}
+        {%- if part is mapping and part.type == 'text' and part.text is string -%}
+{{- part.text -}}
+        {%- else -%}
+            {{- raise_exception("Unsupported " ~ role ~ " content part at index " ~ loop.index0 ~ ". Expected type='text' with a string text field; extract file contents to text before templating.") -}}
+        {%- endif -%}
+    {%- endfor -%}
+{%- else -%}
+    {{- raise_exception("Unsupported " ~ role ~ " message content. Expected a string or a list of text parts.") -}}
+{%- endif -%}
+{%- endmacro -%}
+
 {%- macro render_tool_response_messages(raw_content) -%}
 {%- if raw_content is string -%}
 {{- '<|ifm|im_start|>tool\n' + raw_content + '<|ifm|im_end|>' }}
@@ -916,22 +936,22 @@ false
 {%- if (not available_tools) and messages[0].role == 'system' and messages[0].get('tools') -%}
     {%- set available_tools = messages[0]['tools'] -%}
 {%- endif -%}
+{%- set system_content = '' -%}
+{%- if messages[0].role == 'system' -%}
+    {%- set system_content = render_text_content(messages[0].content, 'system') -%}
+{%- endif -%}
 {%- if available_tools -%}
     {{- validate_tools(available_tools, tool_presentation_fmt != 'json') }}
-    {%- set system_content = '' -%}
-    {%- if messages[0].role == 'system' and messages[0].content -%}
-        {%- set system_content = messages[0].content -%}
-    {%- endif -%}
     {{- render_system_with_tools(available_tools, system_content, tool_presentation_fmt, tool_call_fmt) }}
 {%- else -%}
     {%- if messages[0].role == 'system' -%}
-        {{- '<|ifm|im_start|>system\n' + messages[0].content + '<|ifm|im_end|>' }}
+        {{- '<|ifm|im_start|>system\n' + system_content + '<|ifm|im_end|>' }}
     {%- endif -%}
 {%- endif -%}
 
 {%- for message in messages -%}
-    {%- if message.content is string -%}
-        {%- set content = message.content -%}
+    {%- if message.role == 'user' or message.role == 'assistant' or (message.role == 'system' and not loop.first) -%}
+        {%- set content = render_text_content(message.content, message.role) -%}
     {%- else -%}
         {%- set content = '' -%}
     {%- endif -%}

@@ -114,14 +114,33 @@ the other order regenerates MODELS.md from the previous sweep's data.
 
 **check** `make lint` and `make test-e2e`.
 
-**a capture may grow and may not shrink.** six collectors write through
-`research/capture.py`, which refuses to replace a capture with one holding fewer
-records and exits non-zero saying so. this is not hypothetical: `fetch-reddit
---refresh` does not read the existing file, so when old.reddit stopped serving
-parseable html it rebuilt from nothing and wrote 0 searches, 0 listings and 0
-threads over 38, 3 and 147 -- and `scripts/sweep --refresh` passes `--refresh`
-to every collector. nothing here can rebuild that corpus. `--allow-shrink` is
-the override for when the smaller result is the correct one.
+**no run loses what a capture already holds.** every collector starts from its
+previous capture and writes through `research/capture.py`. what that means
+depends on what went missing:
+
+- **a fetch that failed or answered empty changes nothing.** the record, or
+  the field of it that fetch supplies, keeps its previous value. a card that
+  did not arrive keeps its claims; a header that did not read keeps its
+  architecture.
+- **a row its source stopped listing stays, marked `delisted: <date>`.** a
+  leaderboard dropping a retired model has not withdrawn the score it
+  published, so the score stays on the page and its hover says since when. a
+  family audio.cpp stopped shipping stays in the capture, and nothing claims the
+  engine through it. a gguf no longer published moves to
+  `gguf-sizes-delisted.json`, so the page stops offering it and its size is
+  still on record.
+- **a sample accumulates.** forum threads, comments and hub listings are a
+  top-n of something bigger, so a thread that fell out of this run's top twelve
+  keeps the body it had and a refetch adds comments rather than replacing them.
+- **a successful fetch whose content changed replaces what was derived from
+  it**, because that is the current fact. the previous content itself is not
+  kept as history.
+
+`--refresh` means refetch, never start over: `fetch-reddit --refresh` once
+rebuilt from nothing against a dead source and wrote 0 threads over 147. the
+count guard is still there behind all of this, and a capture that does not
+parse is refused rather than written over. `--allow-shrink` is the override for
+both.
 
 nothing refetches what it already has -- `research/httpcache` keeps an
 etag/last-modified cache in `research/.cache` -- so a re-run costs minutes

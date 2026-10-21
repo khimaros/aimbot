@@ -58,8 +58,8 @@ has a receipt in the repository (`docs/Q8_FULL_CONTEXT.md`, `docs/RECEIPTS.md`, 
 
 | | before: the published 12 GB recipes | this serve |
 | --- | --- | --- |
-| window on 12 GB with q8_0 KV | 96k (q4_0 KV to reach 262k) | **262,144 at q8_0** |
-| KV precision at depth | q4_0: 1 flipped top token in 48 | q8_0: **1 in 160** |
+| window on 12 GB | 96k (q4_0 KV to reach 262k, much of it in system RAM) | **262,144, ~99 % in VRAM (q4_0)** |
+| decode at 245k on 12 GB (RTX 4070) | 15.4 tok/s (q8_0, window past VRAM) | **60.4 tok/s** |
 | decode at 32k / 64k | 47.6 / 36.9 | **78 / 69** on new text, **175 / 109** on code (2026-10-08 table) |
 | decode when the answer copies the context (file rewrite), 4k / 130k / 250k | 117 / 63 / 18.5 (MTP only) | **352 / 164 / 66** (lookup drafting) |
 | speculative decoding | up to 24k, then off | **at every depth**, outputs identical to drafting off |
@@ -81,7 +81,7 @@ those; the layer adds exact references and a sandbox. The weights are untouched.
 | file | what | size |
 | --- | --- | ---: |
 | `Ternary-Bonsai-2-27B-PTQ1_0-mtp-procreations.gguf` | PrismML's PTQ1_0 file with the on-policy Q8_0 MTP draft head from [ProCreations/Ternary-Bonsai-2-27B-MTP](https://huggingface.co/ProCreations/Ternary-Bonsai-2-27B-MTP) grafted on as `blk.64.*`; every original tensor byte-identical to PrismML's file (proof below). This is the file the launcher uses: lossless speculative decoding, 70.6% draft acceptance, +50-100% decode | 6.40 GB |
-| `bonsai-bundle-win-x64.zip` | Windows binaries: the patched llama.cpp (PrismML fork + 53 patches), sm_75 / 86 / 89 machine code (RTX 20 / 30 / 40) plus compute_89 PTX for RTX 50, CUDA 13 runtime included, NVIDIA driver only. Launcher, layer, suite and docs at the release tag (`bundle-20261011`) | 610 MB |
+| `bonsai-bundle-win-x64.zip` | Windows binaries: the patched llama.cpp (PrismML fork + 66 patches), sm_75 / 86 / 89 machine code (RTX 20 / 30 / 40) plus compute_89 PTX for RTX 50, CUDA 13 runtime included, NVIDIA driver only. Launcher, layer, suite and docs at the release tag (`bundle-20261016`) | 617 MB |
 | `start-server.ps1` | the launcher (also inside the bundle): reads free VRAM, sizes the VRAM line, starts the layer and the server | |
 
 The original `Ternary-Bonsai-2-27B-PTQ1_0.gguf` without the head also works with everything here (`BONSAI_SPEC=0`
@@ -103,13 +103,18 @@ llama.cpp's chat UI on the same port. The launcher prints the VRAM line it chose
 `layer\fetch_runtime.ps1` downloads the sandbox runtime for the layer (CPython 3.12 on WASI, checksummed, 14 isolation
 canaries); without it the plain server runs.
 
-Linux: `bash build/build_linux.sh` in the repository builds the pinned PrismML source with all 53 patches applied;
+Linux: `bash build/build_linux.sh` in the repository builds the pinned PrismML source with all 66 patches applied;
 the full-window command line is in the repository README. No prebuilt Linux binary yet.
 
-Cards: 12 GB is the measured recipe (display on the iGPU: ~119k positions in VRAM; display on the card: ~95k, measured 2026-09-27).
+Cards: 12 GB is the measured recipe: q4_0 K/V by default from bundle-20261016, 260,352 of 262,144 positions in VRAM with the display on the iGPU, 242,176 with the display on the card (copies, needles and HumanEval at 245k equal to q8_0; `BONSAI_CTK=q8_0` for the previous cache).
 16 GB and up: the whole q8_0 window fits, the tier switches itself off. 8 GB: the launcher detects the card and
-uses its 8 GB preset (q4_0 K/V, a 131k window, a Q4_0 MTP head). Measured on an RTX 2060 SUPER that also draws
-the desktop: 51.2 / 43.1 tok/s at 4k / 32k, HumanEval medium 157 of 164 (repository `docs/8GB.md`).
+uses its 8 GB preset (q3_0 K/V since bundle-20261015b, q4_0 before; a 262k window with 24 GB of RAM, else 131k; a
+Q4_0 MTP head; from bundle-20261016b prefill attention packs 2 query heads per column group on Turing: cold 245k
+1.147x on an RTX 2060 SUPER, perplexity +0.02 %; from bundle-20261017 saved conversations
+(`BONSAI_SLOT_SAVE_PATH`, automatic with the layer) restore a 199k conversation ~6 s after a restart on this card; from bundle-20261017b the launcher warns with a
+`spill` line when another program fills the card after the start, which on this card halves reads or worse). Measured on an RTX 2060 SUPER that also draws the desktop: 51.2 / 43.1 tok/s at 4k / 32k (q4_0); with
+q3_0, 80,640 positions in VRAM, 64k 41.0, 128k 22.8, 192k 12.3 tok/s, HumanEval medium 163 of 164 (repository
+`docs/8GB.md`, `docs/research/release-20261014b/`).
 
 ## For agents and apps
 
@@ -172,7 +177,7 @@ template with `--jinja`, so this file serves with that template; PrismML's origi
 | --- | --- |
 | `Ternary-Bonsai-2-27B-PTQ1_0-mtp-procreations.gguf` | `5f212d02ff57cb8eaad260fd7ff57bfaff87ae2bc9183a21dd2f127c27252505` |
 | PrismML's `Ternary-Bonsai-2-27B-PTQ1_0.gguf` (the base) | `53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3` |
-| `bonsai-bundle-win-x64.zip` | `f8899cbfd98091b6830615dc83182626b0b551d8b833ceea58c4e2e52cda8bf8` |
+| `bonsai-bundle-win-x64.zip` | `6285cd5d6ef72e9e13ffadefb20b1ef91dd90afe80e53f3375bae268454e79ce` |
 
 Every kernel in the stack is checked against the CPU reference, and the served output is checked greedy
 token-for-token against the unpatched fork before any speed number is recorded.

@@ -67,6 +67,54 @@ DOWNLOAD = ("kind", "repo", "revision", "gated")
 
 # how many of a package's files the capture keeps
 FILE_LIMIT = 6
+# a package repo's file listing, under the cache key fetch-gguf-sizes reads the
+# same listing by, so the two collectors share one fetch of it
+TREE = "https://huggingface.co/api/models/%s/tree/main?recursive=true"
+TREE_MAX_AGE = 48 * 3600
+# and the safetensors index, under fetch-model-facts' key for the same call
+INFO = "https://huggingface.co/api/models/%s?expand[]=safetensors"
+# what audio.cpp calls a package that ships the checkpoint's own dtype
+OWN_DTYPE = ("native", "orig")
+
+
+def hub_json(url, key, refresh):
+    try:
+        return json.loads(get(url, key, TREE_MAX_AGE, refresh) or "")
+    except ValueError:
+        return None
+
+
+def tree(repo, refresh):
+    """The repo's file listing, or None if it did not answer."""
+    t = hub_json(TREE % repo, "hf-" + repo.replace("/", "_"), refresh)
+    return t if isinstance(t, list) else None
+
+
+def info(repo, refresh):
+    """The repo's model info with its safetensors index, or None."""
+    d = hub_json(INFO % repo, "facts-%s-info" % repo.replace("/", "_"), refresh)
+    return d if isinstance(d, dict) else None
+
+
+def native_dtype(d):
+    """The dtype most of a checkpoint's parameters are stored in, per the hub."""
+    params = ((d or {}).get("safetensors") or {}).get("parameters") or {}
+    return max(params, key=params.get) if params else None
+
+
+def package_bytes(files, listing):
+    """What a package downloads, in bytes, or None where that is not known.
+
+    Every file it names, the ones past what the capture keeps included. A file
+    the listing does not carry makes the size unknown rather than smaller:
+    a package that would fail to download is not a lighter one.
+    """
+    if not files or listing is None:
+        return None
+    size = {e.get("path"): e.get("size") for e in listing if e.get("type") == "file"}
+    if any(size.get(f) is None for f in files):
+        return None
+    return sum(size[f] for f in files)
 
 
 def get(url, key, max_age, refresh):
@@ -94,13 +142,15 @@ def spec_names(body):
                   if isinstance(e, dict) and str(e.get("name", "")).endswith(".json"))
 
 
-def package(pk, defaults):
+def package(pk, defaults, listing=lambda repo: None, about=lambda repo: None):
     """One downloadable package, with the repo it comes from resolved.
 
     `download` is per-package and falls back to `package_defaults.download`,
     which is how one spec holds both audio.cpp's own gguf and the vendor's
     safetensors snapshot: the ggufs inherit the default repo and the native
-    packages name their own.
+    packages name their own. `listing` answers a repo's file listing, which is
+    what the package's size is read from, and `about` its model info, which is
+    where a native snapshot's dtype is.
     """
     out = {k: pk[k] for k in PACKAGE if pk.get(k) is not None}
     dl = dict(defaults)
@@ -117,10 +167,18 @@ def package(pk, defaults):
         out["files"] = files[:FILE_LIMIT]
         if len(files) > FILE_LIMIT:
             out["files_more"] = len(files) - FILE_LIMIT
+    if out.get("repo"):
+        size = package_bytes(files, listing(out["repo"]))
+        if size is not None:
+            out["bytes"] = size
+        if out.get("format") == "safetensors" and out.get("precision") in OWN_DTYPE:
+            dtype = native_dtype(about(out["repo"]))
+            if dtype:
+                out["dtype"] = dtype
     return out
 
 
-def spec(body):
+def spec(body, listing=lambda repo: None, about=lambda repo: None):
     """One family's record, or None if the body is not a spec."""
     try:
         d = json.loads(body or "")
@@ -130,8 +188,8 @@ def spec(body):
         return None
     out = {k: d[k] for k in SPEC if d.get(k) is not None}
     defaults = (d.get("package_defaults") or {}).get("download") or {}
-    out["packages"] = [package(pk, defaults) for pk in (d.get("packages") or [])
-                       if pk.get("id")]
+    out["packages"] = [package(pk, defaults, listing, about)
+                       for pk in (d.get("packages") or []) if pk.get("id")]
     ui = d.get("ui") or {}
     keep = {k: ui[k] for k in UI if ui.get(k) is not None}
     if keep:
@@ -224,6 +282,19 @@ def report(payload, registry):
     return 0
 
 
+def merge(before, now, unread):
+    """`now` keeping every family `before` had.
+
+    A family the listing no longer names is one audio.cpp stopped shipping, and
+    it is kept marked so nothing claims the engine through it. A spec that did
+    not download is not that, and while any did not, a missing family could be
+    one of them -- so that run marks nothing and keeps everything as it was.
+    """
+    families, _ = capture.carry((before or {}).get("families") or {}, now["families"],
+                                mark=not unread)
+    return dict(now, families=families)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -252,15 +323,27 @@ def main():
         print("!!! the model_specs listing read no json files", file=sys.stderr)
         return 1
 
+    listings, infos = {}, {}
+
+    def listing(repo):
+        if repo not in listings:
+            listings[repo] = tree(repo, args.refresh)
+        return listings[repo]
+
+    def about(repo):
+        if repo not in infos:
+            infos[repo] = info(repo, args.refresh)
+        return infos[repo]
+
     specs, failed = {}, []
     for name in names:
         body = get(RAW + name, "audiocpp-" + name[:-5], args.max_age, args.refresh)
-        rec = spec(body) if body else None
+        rec = spec(body, listing, about) if body else None
         if rec:
             specs[name[:-5]] = rec
         else:
             failed.append(name)
-    payload = shape(specs)
+    payload = merge(capture.previous(path), shape(specs), failed)
     if failed:
         print("  %d of %d spec(s) unread: %s"
               % (len(failed), len(names), ", ".join(failed[:6])), file=sys.stderr)

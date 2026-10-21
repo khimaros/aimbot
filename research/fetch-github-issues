@@ -26,6 +26,7 @@ import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import roster  # noqa: E402  the model names to search for, from the registry
+import capture  # noqa: E402  the keep-what-we-have writer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 API = "https://api.github.com/search/issues?%s"
@@ -70,6 +71,21 @@ def shape(item):
     return d
 
 
+def merge(before, now):
+    """`now` keeping every query and issue `before` captured.
+
+    Each query keeps the thirty most recently updated issues, so an issue
+    nobody touched this week falls out of the sample; it has not closed. A query
+    that failed keeps what it had.
+    """
+    out, _ = capture.carry(before, now, mark=False)
+    for q, rec in now.items():
+        items, _ = capture.carry((before.get(q) or {}).get("items") or [], rec["items"],
+                                 key=lambda i: i.get("number"), mark=False)
+        out[q] = dict(rec, items=items)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--repo", default=REPO)
@@ -103,10 +119,15 @@ def main():
 
     if not out:
         sys.exit("no queries succeeded")
-    with open(args.out, "w") as f:
-        json.dump({"repo": args.repo, "queries": out}, f, indent=1, sort_keys=True)
+    prev = capture.previous(args.out)
+    out = merge(prev.get("queries") if prev.get("repo") == args.repo else {}, out)
+    written, now, before = capture.write(args.out, {"repo": args.repo, "queries": out},
+                                         lambda p: len(p["queries"]), sort_keys=True,
+                                         label="queries")
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "queries"))
     print("wrote %s: %d queries, %d distinct issues"
-          % (args.out, len(out), len(seen)))
+          % (args.out, len(out), len({i["number"] for q in out.values() for i in q["items"]})))
 
 
 if __name__ == "__main__":

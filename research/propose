@@ -44,6 +44,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import capture  # noqa: E402  the keep-what-we-have writer
 import llm  # noqa: E402
 import publishers  # noqa: E402  the `[role]` parser, shared with resolve-base
 import rungs  # noqa: E402  a model's repos, whichever shape the registry is in
@@ -506,10 +507,11 @@ def main():
         print("llm: %s at %s answering" % (model, base))
         return
 
-    try:
-        captured = (json.load(open(args.out)).get("proposals") or {})
-    except (IOError, ValueError):
-        captured = {}
+    prev = capture.previous(args.out)
+    # every row says which model wrote it: the top-level `model` is the last
+    # run's, and rewriting it relabelled every older answer as that model's
+    captured = {k: dict(v, by=v.get("by") or prev.get("model"))
+                for k, v in (prev.get("proposals") or {}).items()}
     decisions = read_decisions(args.decided)
     aa = load_json("artificial-analysis")
     out, counts = triage(candidates(args.limit, decisions),
@@ -518,13 +520,15 @@ def main():
 
     # a proposal nobody re-asked about is still a proposal; keep it
     merged = dict(captured)
-    merged.update(out)
-    with open(args.out, "w") as f:
-        json.dump({"_about": [
-            "PROPOSALS, not facts. written by a model, kept apart from the",
-            "registry on purpose: nothing here is true until a human moves it.",
-            "`verified` is this repo's own check of the claim beside it.",
-        ], "model": model, "proposals": dict(sorted(merged.items()))}, f, indent=1)
+    merged.update({k: dict(v, by=v.get("by") or model) for k, v in out.items()})
+    written, now, before = capture.write(args.out, {"_about": [
+        "PROPOSALS, not facts. written by a model, kept apart from the",
+        "registry on purpose: nothing here is true until a human moves it.",
+        "`verified` is this repo's own check of the claim beside it.",
+    ], "model": model, "proposals": dict(sorted(merged.items()))},
+        lambda p: len(p["proposals"]), label="proposals")
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "proposals"))
 
     disagree = [k for k, v in out.items() if not v["verified"]["agrees"]]
     carry = [k for k, v in out.items() if v["verdict"] == "carry"]

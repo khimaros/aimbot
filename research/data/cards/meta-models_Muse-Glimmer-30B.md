@@ -215,3 +215,19 @@ All artifacts are released under Apache 2.0:
 | Perception encoder | Frozen ViT-G/14 vision encoder (\~1.8B params) |
 
 **Where to send questions or comments about the model:** Please provide any feedback, comments or bug reports on the model through the Hugging Face page at [https://huggingface.co/meta-models/](https://huggingface.co/meta-models/). For more technical information about generation parameters and recipes for how to use Muse Glimmer in applications, please see the developer documentation.
+
+## Citation
+
+If you find our work helpful, please consider citing it:
+
+```bibtex
+@misc{museglimmerteam2026museglimmer30b,
+      title={Muse Glimmer 30B: An On-Device Agentic Model}, 
+      author={Muse Glimmer team},
+      year={2026},
+      eprint={2610.24628},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2610.24628}, 
+}
+```

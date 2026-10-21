@@ -390,6 +390,11 @@ def main():
         print("  %-46s %-22s %s" % (repo, version or "no signature", sig or ""),
               file=sys.stderr)
 
+    # a model whose header did not read keeps the detection it had: the
+    # signatures are re-read from the current source every run, but what a file
+    # declares does not change because one fetch of it failed
+    models, _ = capture.carry(capture.previous(args.out).get("models") or {}, models,
+                              mark=False)
     payload = {"signatures": dict(sorted(signatures.items())),
                "conditional": conditional,
                "models": dict(sorted(models.items()))}

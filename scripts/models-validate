@@ -51,7 +51,14 @@ class Findings:
 # selects it by `kind`. a shape would ALSO put them in the shape filters: `text
 # in, text out` on a punctuation restorer lands it in `any to text` beside the
 # language models, which is a roster claim nobody made.
-UNSHAPED_KINDS = {"post", "translate", "diarize"}
+#
+# audio.cpp's non-speech families are the same case three ways: `sound` makes
+# music and sound effects, `audio` turns audio into other audio (separation,
+# enhancement, voice conversion, codecs), and `detect` turns it into a label
+# (voice activity, wake words, turns, tags, alignment, notes). a music model
+# declared text in / audio out would sit in the speech-synthesis filter and be
+# offered the tts boards.
+UNSHAPED_KINDS = {"post", "translate", "diarize", "sound", "audio", "detect"}
 
 
 def check_modalities(models, facts, f):
@@ -651,7 +658,8 @@ ENGINES = ("llama.cpp", "vllm", "crispasr", "whisper.cpp", "transcribe.cpp",
 # second place for the same fact to be wrong. the value is where it comes from.
 DERIVED_ENGINES = {"llama.cpp": "runtime.arch, from llama.cpp's own history",
                    "crispasr": "a crispasr: block naming a backend",
-                   "audio.cpp": "a model_specs package naming this model's repo",
+                   "audio.cpp": "an audiocpp: family, or a model_specs package "
+                                "naming this model's repo",
                    "gufo": "a model guide naming this model's repo"}
 
 
@@ -687,7 +695,9 @@ def check_diarize_kind(m, where, f):
     kind = m.get("kind", "text")
     cr = m.get("crispasr") or {}
     role = cr.get("diarize")
-    if kind == DIARIZE_KIND and not role:
+    # audio.cpp loads its diarizers by `--family`, so there the family is what
+    # says how the file is used, and check_audiocpp_family checks the name
+    if kind == DIARIZE_KIND and not role and not m.get("audiocpp"):
         f.add(where, "kind %s needs a crispasr.diarize saying what --diarize "
                      "loads it as; nothing else here can use the file" % DIARIZE_KIND)
     elif role and kind != DIARIZE_KIND:
@@ -1254,6 +1264,30 @@ def check_backend_reachable(models, data, f):
                       % (repo, ", ".join(sorted(archs))))
 
 
+def check_audiocpp_family(models, catalog, f):
+    """`audiocpp:` names one family audio.cpp's catalog carries.
+
+    The field exists because most of audio.cpp's families ship only inside its
+    shared `audio-cpp/audio.cpp-gguf` repo, where a join on repo names every
+    family at once. The name is the `--family` argument, so a typo is a command
+    that loads the wrong network; a checkout with no catalog skips the check
+    the way it skips every other capture.
+    """
+    families = catalog.get("families") or {}
+    for repo, m in sorted((models.get("models") or {}).items()):
+        name = m.get("audiocpp")
+        if name is None:
+            continue
+        if not isinstance(name, str):
+            f.add(repo, "audiocpp must name one family as a string, got %r" % (name,))
+        elif families and name not in families:
+            f.add(repo, "audiocpp family %r is not in audio.cpp's catalog of %d"
+                  % (name, len(families)))
+        elif (families.get(name) or {}).get("delisted"):
+            f.add(repo, "audiocpp family %r left audio.cpp's catalog on %s; the "
+                        "page no longer runs it" % (name, families[name]["delisted"]))
+
+
 def check_sdcpp_detected(models, data, f):
     """A stable-diffusion.cpp claim has to be one its DETECTOR makes.
 
@@ -1432,6 +1466,7 @@ def main():
     check_backend_reachable(models, {"crispasr": capture("crispasr"),
                                      "llama-support": capture("llama-support")}, f)
     check_sdcpp_detected(models, {"sdcpp": capture("sdcpp-support")}, f)
+    check_audiocpp_family(models, capture("audiocpp"), f)
     if args.modalities:
         print("\nmodalities: %d model(s) disagreeing with their own config" % len(rows))
         for repo, got, want in sorted(rows):

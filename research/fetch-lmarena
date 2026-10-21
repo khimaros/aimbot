@@ -28,6 +28,8 @@ import os
 import subprocess
 import sys
 
+import capture
+
 URL = "https://lmarena.ai/leaderboard/%s"
 # the arenas the overview links to. webdev was a board here once and its page
 # no longer embeds one; a page that answers nothing is reported and skipped
@@ -105,11 +107,25 @@ def collect(pages):
     return {"boards": boards, "models": models}
 
 
+def carry(before, now):
+    """(capture, n): `now` keeping every board, entry and model `before` had.
+
+    An arena page that did not answer and a board lmarena retired look the
+    same from here, and either way the ratings it published stay quotable.
+    """
+    boards, kept = capture.carry_groups(before.get("boards"), now["boards"], "entries",
+                                        key=lambda e: e.get("modelDisplayName"))
+    models, _ = capture.carry(before.get("models"), now["models"])
+    return {"boards": boards, "models": models}, kept
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default="data/lmarena.json")
     ap.add_argument("--max-age", type=int, default=6 * 3600)
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even though the capture would hold fewer models")
     args = ap.parse_args()
 
     pages = []
@@ -119,14 +135,19 @@ def main():
             print("  %-16s no leaderboard on the page" % arena, file=sys.stderr)
         pages.append(lines)
     out = collect(pages)
-    boards, models = out["boards"], out["models"]
-    if not boards:
+    if not out["boards"]:
         sys.exit("no leaderboards found -- the page structure probably changed")
-    with open(args.out, "w") as f:
-        json.dump(out, f, indent=1, sort_keys=True)
+    out, kept = carry(capture.previous(args.out), out)
+    boards, models = out["boards"], out["models"]
+    written, now, before = capture.write(args.out, out, lambda p: len(p["models"]),
+                                         allow_shrink=args.allow_shrink, sort_keys=True)
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "models"))
     ow = sum(1 for m in models.values() if m["openWeights"])
     print("wrote %s: %d boards, %d models (%d open weights)"
           % (args.out, len(boards), len(models), ow))
+    if kept:
+        print(capture.carried(kept, "board entries"))
     for n in sorted(boards):
         print("  %-32s %4d entries, %s votes" % (n, len(boards[n]["entries"]),
                                                  boards[n]["total_votes"]))

@@ -119,6 +119,36 @@ def by_model(out):
     return groups
 
 
+def comment_key(c):
+    return (c.get("author"), c.get("created"))
+
+
+def merge(before, now):
+    """`now` keeping every repo, thread and comment `before` captured.
+
+    The bodies are a SAMPLE -- the twelve most-commented threads per model --
+    and the listing is two pages, so a thread missing from this run has not
+    left the hub; it has left the sample. fish s2 pro's thread 26 did, and a
+    verdict lost the quote it cited. So a thread keeps a body it once had, a
+    refetch adds comments rather than replacing them, and a repo that answered
+    nothing keeps what it had.
+    """
+    out, _ = capture.carry(before, now, mark=False)
+    for repo, box in now.items():
+        old = {d.get("num"): d for d in ((before.get(repo) or {}).get("discussions") or [])}
+        rows = []
+        for d in box.get("discussions") or []:
+            was = old.get(d.get("num")) or {}
+            if was.get("thread") or d.get("thread"):
+                d["thread"], _ = capture.carry(was.get("thread") or [], d.get("thread") or [],
+                                               key=comment_key, mark=False)
+            rows.append(capture.fill(was, d))
+        rows, _ = capture.carry(list(old.values()), rows, key=lambda d: d.get("num"),
+                                mark=False)
+        out[repo] = dict(box, discussions=rows, count=len(rows))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--registry",
@@ -187,6 +217,7 @@ def main():
             print("  %-52s %d bodies over %d repo(s)"
                   % (model, len(want), len({r for r, _ in want})), file=sys.stderr)
 
+    out = merge(capture.previous(args.out), out)
     written, now, before = capture.write(args.out, out, len, args.allow_shrink,
                                          "repos")
     if not written:

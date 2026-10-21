@@ -82,13 +82,18 @@ def main():
     args = ap.parse_args()
 
     registry = yaml.safe_load(open(args.registry)) or {}
-    repos = {}
+    # a config that did not answer is kept as the capture has it: a fetch that
+    # failed and a file that went away read the same here, and the readout
+    # derived from it should not flip on a timeout
+    old, repos = capture.previous(args.out).get("repos") or {}, {}
     for repo in pinned_repos(registry):
         found = {n: c for n in AUTHOR_CONFIGS
                  for c in [get(repo, n, args.refresh)] if c is not None}
         print("  %-46s %s" % (repo, ", ".join(sorted(found)) or "-"))
+        found = capture.fill(old.get(repo), found)
         if found:
             repos[repo] = found
+    repos, _ = capture.carry(old, repos, mark=False)
 
     written, now, before = capture.write(args.out, {"repos": repos},
                                          lambda p: len(p["repos"]),

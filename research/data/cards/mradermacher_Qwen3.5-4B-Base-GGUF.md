@@ -70,6 +70,6 @@ questions you might have and/or if you want some other model quantized.
 
 I thank my company, [nethype GmbH](https://www.nethype.de/), for letting
 me use its servers and providing upgrades to my workstation to enable
-this work in my free time.
+this work in my free time. Additional thanks to [@nicoboss](https://huggingface.co/nicoboss) for giving me access to his private supercomputer, enabling me to provide many more imatrix quants, at much higher quality, than I would otherwise be able to.
 
 <!-- end -->

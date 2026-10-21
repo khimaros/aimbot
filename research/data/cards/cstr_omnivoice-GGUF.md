@@ -1,5 +1,7 @@
 ---
-license: apache-2.0
+license: other
+license_name: omnivoice-and-boson-tokenizer-terms
+license_link: https://huggingface.co/k2-fsa/OmniVoice/blob/c5fdb5ccb189668d56333f77ba2629f4cd7535f4/README.md
 tags:
   - tts
   - omnivoice
@@ -54,7 +56,22 @@ GGUF conversions of [k2-fsa/OmniVoice](https://huggingface.co/k2-fsa/OmniVoice) 
 
 ## License
 
-Apache-2.0 (same as k2-fsa/OmniVoice).
+The inference code license does **not** describe the weight bundle. The original
+[OmniVoice model card](https://huggingface.co/k2-fsa/OmniVoice/blob/c5fdb5ccb189668d56333f77ba2629f4cd7535f4/README.md#license)
+states that its code is Apache-2.0 and its pretrained model weights are CC-BY-NC.
+The bundled HiggsAudioV2 tokenizer separately carries the
+[Boson Higgs Audio 2 Community License](https://huggingface.co/k2-fsa/OmniVoice/blob/c5fdb5ccb189668d56333f77ba2629f4cd7535f4/audio_tokenizer/LICENSE),
+which includes additional use and user-count conditions.
+
+These GGUF files inherit their respective upstream terms; conversion and
+quantization grant no additional rights. This bundle is **not Apache-2.0** and
+plain NC acceptance does not cover the tokenizer's additional terms. CrispASR
+requires distinct `omnivoice-terms` acceptance for managed downloads; further
+bundle support/promotion remains under license review. The main card does not
+specify a CC-BY-NC version, so we do not infer one.
+
+License correction, 2026-10-20: the previous blanket Apache-2.0 label confused
+code and weight licensing. This metadata correction changes no model bytes.
 
 ## Provenance and EU AI Act Art. 53 note
 

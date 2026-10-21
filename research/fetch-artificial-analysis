@@ -287,12 +287,23 @@ def open_weights(rows):
                or d.get("openWeightsUrl"))
 
 
-def write_board(path, rows):
-    """One board to its own file, in the formatting its capture was committed in."""
-    with open(path, "w") as f:
-        json.dump(rows, f, indent=1, sort_keys=True)
+def write_board(path, rows, allow_shrink):
+    """One board to its own file, in the formatting its capture was committed in.
+
+    The image board went from 167 models to 105 when the site stopped listing
+    retired ones, so the models it drops are carried at their last scores.
+    """
+    rows, kept = capture.carry(capture.previous(path), rows)
+    written, now, before = capture.write(path, rows, len, allow_shrink=allow_shrink,
+                                         sort_keys=True)
+    if not written:
+        print(capture.refused(path, now, before), file=sys.stderr)
+        return False
     print("wrote %s: %d models (%d open weights)"
-          % (path, len(rows), open_weights(rows)))
+          % (path, now, open_weights(rows)))
+    if kept:
+        print(capture.carried(kept))
+    return True
 
 
 def write_text(path, boards, allow_shrink):
@@ -303,23 +314,22 @@ def write_text(path, boards, allow_shrink):
     consumer reads `aa[slug]` without knowing which page a field came from.
 
     The leaderboard board decides MEMBERSHIP when it ran, so a model that left
-    the site leaves the capture; a detail-only run updates fields and adds
-    nobody. Which is also why this goes through capture.write: the reshape that
-    made this function necessary wrote a narrower file over a wider one and
-    nothing objected, and a row count would not have caught that either -- but
-    it catches the next source that goes away entirely.
+    the site is carried at its last scores and marked; a detail-only run updates
+    fields and marks nobody. Which is also why this goes through capture.write:
+    the reshape that made this function necessary wrote a narrower file over a
+    wider one and nothing objected, and a row count would not have caught that
+    either -- but it catches the next source that goes away entirely.
     """
-    try:
-        with open(path) as f:
-            payload = json.load(f)
-    except (IOError, ValueError):
-        payload = {}
+    old, kept = capture.previous(path), 0
+    payload = dict(old)
     if "models" in boards:
-        payload = {k: payload.get(k) or {} for k in boards["models"]}
+        payload, kept = capture.carry(old, {k: old.get(k) or {} for k in boards["models"]})
     for rows in boards.values():
         for key, rec in rows.items():
             payload[key] = dict(sorted(dict(payload.get(key) or {}, **rec).items()))
     payload = dict(sorted(payload.items()))
+    if kept:
+        print(capture.carried(kept))
 
     written, now, before = capture.write(path, payload, len,
                                          allow_shrink=allow_shrink)
@@ -339,13 +349,13 @@ def write_speech(path, sections, allow_shrink):
     not drop the two transcription boards, and the shrink guard then measures
     the whole file rather than the section that happened to be refreshed.
     """
-    try:
-        with open(path) as f:
-            payload = json.load(f)
-    except (IOError, ValueError):
-        payload = {}
-    payload.update(sections)
+    payload, kept = capture.previous(path), 0
+    for name, rows in sections.items():
+        payload[name], n = capture.carry(payload.get(name), rows)
+        kept += n
     payload = dict(sorted(payload.items()))
+    if kept:
+        print(capture.carried(kept))
 
     written, now, before = capture.write(
         path, payload, lambda p: sum(len(v) for v in p.values()),
@@ -372,7 +382,7 @@ def main():
     ap.add_argument("--max-age", type=int, default=6 * 3600)
     ap.add_argument("--refresh", action="store_true")
     ap.add_argument("--allow-shrink", action="store_true",
-                    help="write the speech file even though it holds fewer rows")
+                    help="write a board even though it holds fewer rows")
     args = ap.parse_args()
 
     for flag in ("out", "url", "cache_key"):
@@ -399,8 +409,8 @@ def main():
         elif spec["out"] == TEXT_OUT:
             text[board] = rows
             text_out = args.out or TEXT_OUT
-        else:
-            write_board(args.out or spec["out"], rows)
+        elif not write_board(args.out or spec["out"], rows, args.allow_shrink):
+            failed.append(board)
 
     if text and not write_text(text_out, text, args.allow_shrink):
         failed.append(text_out)

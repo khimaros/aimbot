@@ -61,19 +61,19 @@ Validated against the NeMo reference at transcribe.cpp commit
 [3083021](https://github.com/handy-computer/transcribe.cpp/tree/3083021)
 on 2026-08-03.
 
-Offline and cache-aware streaming English speech-to-text with punctuation and capitalization. A 0.6B-parameter cache-aware streaming FastConformer encoder with an RNN-T transducer decoder, fine-tuned from nvidia/nemotron-speech-streaming-en-0.6b. Plain GGUFs run the single_speaker_mode ASR path, while bundle GGUFs under `bundle/` embed nvidia/diar_streaming_sortformer_4spk-v2.1 and, with `--diarize`, transcribe up to four overlapping speakers into a speaker-tagged transcript. The encoder preserves the upstream att_context_size=[70, 13] (1.12s) cache-aware attention mask; all four latency lookahead settings are selectable.
+Offline and cache-aware streaming English speech-to-text with punctuation and capitalization. A cache-aware streaming FastConformer encoder with an RNN-T transducer decoder, fine-tuned from nvidia/nemotron-speech-streaming-en-0.6b. Plain GGUFs run the single_speaker_mode ASR path, while bundle GGUFs embed nvidia/diar_streaming_sortformer_4spk-v2.1 and, with `--diarize`, transcribe up to four overlapping speakers into a speaker-tagged transcript. The encoder preserves the upstream att_context_size=[70, 13] (1.12s) cache-aware attention mask; all four latency lookahead settings are selectable.
 
 
 ## Downloads
 
 | Quantization | Download | Size | WER (LibriSpeech test-clean, offline) |
 | --- | --- | ---: | ---: |
-| F32 | [bundle/multitalker-parakeet-streaming-0.6b-v1-F32.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/bundle/multitalker-parakeet-streaming-0.6b-v1-F32.gguf) | 2.96 GB | 2.19% |
-| F16 | [bundle/multitalker-parakeet-streaming-0.6b-v1-F16.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/bundle/multitalker-parakeet-streaming-0.6b-v1-F16.gguf) | 1.48 GB | 2.19% |
-| Q8_0 | [bundle/multitalker-parakeet-streaming-0.6b-v1-Q8_0.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/bundle/multitalker-parakeet-streaming-0.6b-v1-Q8_0.gguf) | 873 MB | 2.18% |
-| Q6_K | [bundle/multitalker-parakeet-streaming-0.6b-v1-Q6_K.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/bundle/multitalker-parakeet-streaming-0.6b-v1-Q6_K.gguf) | 743 MB | 2.20% |
-| Q5_K_M | [bundle/multitalker-parakeet-streaming-0.6b-v1-Q5_K_M.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/bundle/multitalker-parakeet-streaming-0.6b-v1-Q5_K_M.gguf) | 681 MB | 2.18% |
-| Q4_K_M | [bundle/multitalker-parakeet-streaming-0.6b-v1-Q4_K_M.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/bundle/multitalker-parakeet-streaming-0.6b-v1-Q4_K_M.gguf) | 617 MB | 2.18% |
+| F32 | [multitalker-parakeet-streaming-0.6b-v1-F32.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/multitalker-parakeet-streaming-0.6b-v1-F32.gguf) | 2.96 GB | 2.19% |
+| F16 | [multitalker-parakeet-streaming-0.6b-v1-F16.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/multitalker-parakeet-streaming-0.6b-v1-F16.gguf) | 1.48 GB | 2.19% |
+| Q8_0 | [multitalker-parakeet-streaming-0.6b-v1-Q8_0.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/multitalker-parakeet-streaming-0.6b-v1-Q8_0.gguf) | 873 MB | 2.18% |
+| Q6_K | [multitalker-parakeet-streaming-0.6b-v1-Q6_K.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/multitalker-parakeet-streaming-0.6b-v1-Q6_K.gguf) | 743 MB | 2.20% |
+| Q5_K_M | [multitalker-parakeet-streaming-0.6b-v1-Q5_K_M.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/multitalker-parakeet-streaming-0.6b-v1-Q5_K_M.gguf) | 681 MB | 2.18% |
+| Q4_K_M | [multitalker-parakeet-streaming-0.6b-v1-Q4_K_M.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/multitalker-parakeet-streaming-0.6b-v1-Q4_K_M.gguf) | 617 MB | 2.18% |
 
 WER on the full LibriSpeech test-clean split (2,620 utterances), batch size 1, timestamps none. Figures without a commit were published before provenance was recorded.
 
@@ -88,18 +88,18 @@ Bundle GGUFs embed the streaming Sortformer diarizer alongside the ASR model. Ru
 
 | Bundle | Download | Size |
 | --- | --- | ---: |
-| F32 | [bundle/multitalker-parakeet-streaming-0.6b-v1-F32.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/bundle/multitalker-parakeet-streaming-0.6b-v1-F32.gguf) | 2.96 GB |
-| F16 | [bundle/multitalker-parakeet-streaming-0.6b-v1-F16.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/bundle/multitalker-parakeet-streaming-0.6b-v1-F16.gguf) | 1.48 GB |
-| Q8_0 | [bundle/multitalker-parakeet-streaming-0.6b-v1-Q8_0.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/bundle/multitalker-parakeet-streaming-0.6b-v1-Q8_0.gguf) | 873 MB |
-| Q6_K | [bundle/multitalker-parakeet-streaming-0.6b-v1-Q6_K.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/bundle/multitalker-parakeet-streaming-0.6b-v1-Q6_K.gguf) | 743 MB |
-| Q5_K_M | [bundle/multitalker-parakeet-streaming-0.6b-v1-Q5_K_M.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/bundle/multitalker-parakeet-streaming-0.6b-v1-Q5_K_M.gguf) | 681 MB |
-| Q4_K_M | [bundle/multitalker-parakeet-streaming-0.6b-v1-Q4_K_M.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/bundle/multitalker-parakeet-streaming-0.6b-v1-Q4_K_M.gguf) | 617 MB |
+| F32 | [multitalker-parakeet-streaming-0.6b-v1-F32.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/multitalker-parakeet-streaming-0.6b-v1-F32.gguf) | 2.96 GB |
+| F16 | [multitalker-parakeet-streaming-0.6b-v1-F16.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/multitalker-parakeet-streaming-0.6b-v1-F16.gguf) | 1.48 GB |
+| Q8_0 | [multitalker-parakeet-streaming-0.6b-v1-Q8_0.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/multitalker-parakeet-streaming-0.6b-v1-Q8_0.gguf) | 873 MB |
+| Q6_K | [multitalker-parakeet-streaming-0.6b-v1-Q6_K.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/multitalker-parakeet-streaming-0.6b-v1-Q6_K.gguf) | 743 MB |
+| Q5_K_M | [multitalker-parakeet-streaming-0.6b-v1-Q5_K_M.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/multitalker-parakeet-streaming-0.6b-v1-Q5_K_M.gguf) | 681 MB |
+| Q4_K_M | [multitalker-parakeet-streaming-0.6b-v1-Q4_K_M.gguf](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/resolve/main/multitalker-parakeet-streaming-0.6b-v1-Q4_K_M.gguf) | 617 MB |
 
 cpWER on AMI-IHM test (16 meetings, F32 bundle) is 19.35% in the default kernel mode and 23.73% in masked mode. The matched NeMo reference scores 21.39% and 24.00%, respectively; see the transcribe.cpp model page for the exactness accounting.
 
 ```bash
 build/bin/transcribe-cli --diarize \
-  -m bundle/multitalker-parakeet-streaming-0.6b-v1-Q8_0.gguf \
+  -m multitalker-parakeet-streaming-0.6b-v1-Q8_0.gguf \
   meeting.wav
 ```
 
@@ -118,7 +118,7 @@ Run on a 16 kHz mono WAV:
 
 ```bash
 build/bin/transcribe-cli \
-  -m bundle/multitalker-parakeet-streaming-0.6b-v1-Q8_0.gguf \
+  -m multitalker-parakeet-streaming-0.6b-v1-Q8_0.gguf \
   input.wav
 ```
 
@@ -135,6 +135,10 @@ numbers, numerical validation, and reproduction steps.
 
 Inherited from the base model: **NVIDIA Open Model License**. See the
 [upstream model card](https://huggingface.co/nvidia/multitalker-parakeet-streaming-0.6b-v1) for full terms.
+This repository includes the license text
+([`LICENSE`](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/blob/main/LICENSE)) and a
+[`NOTICE`](https://huggingface.co/handy-computer/multitalker-parakeet-streaming-0.6b-v1-gguf/blob/main/NOTICE) recording
+how these files were derived from the original.
 
 ---
 

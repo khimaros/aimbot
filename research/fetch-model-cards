@@ -228,11 +228,12 @@ def parse_tables(tables, repo, names):
 
 
 
-# sampler recommendations, which cards state as prose rather than in a table.
-# both formats are in use: one line of `temperature=1.0, top_p=0.95, ...`, or a
-# bulleted list with one setting per line, so consecutive lines are joined.
+# sampler recommendations. three formats are in use: one line of
+# `temperature=1.0, top_p=0.95, ...`, a bulleted list with one setting per line,
+# or a two-column table with one per row -- so consecutive lines are joined, and
+# a table cell boundary separates a key from its value like `=` does
 SAMPLER_KV = re.compile(r"\b(temperature|temp|top_p|top_k|min_p|presence_penalty|"
-                        r"repetition_penalty|repeat_penalty)\b\s*[=:]\s*`?(\d+(?:\.\d+)?)")
+                        r"repetition_penalty|repeat_penalty)\b`?\s*[=:|]\s*`?(\d+(?:\.\d+)?)")
 SAMPLER_FIELD = {"temperature": "temp", "temp": "temp", "top_p": "top_p",
                  "top_k": "top_k", "min_p": "min_p",
                  "presence_penalty": "presence_penalty",
@@ -279,7 +280,7 @@ def label_for(part):
     label, which the viewer renders as no label rather than as a stray fragment.
     """
     m = SAMPLER_KV.search(part)
-    head = (part[:m.start()] if m else part).strip().strip("*->`:, ").strip()
+    head = (part[:m.start()] if m else part).strip().strip("*->`:,| ").strip()
     if len(head) <= MAX_LABEL:
         return head
     # cut on a word boundary; a label ending mid-token reads as corruption
@@ -455,6 +456,38 @@ def hub_meta(repo, max_age, refresh):
     return {k: v for k, v in out.items() if v not in (None, [], "")}
 
 
+# what a record reads off the card body, and what each is with no card
+CARD_FIELDS = {"claimed": {}, "others": {}, "unmatched": [], "samplers": [],
+               "summary": "", "highlights": []}
+
+
+def card_entry(prev, text, hub, repo, names):
+    """One model's record, keeping what `prev` read where this run read nothing.
+
+    The fields parsed off the card are only as good as the card that arrived: a
+    fetch that answered nothing is not a card with no claims, no summary and no
+    samplers. The same goes for the hub's metadata, which is where the licence
+    and the base model come from.
+    """
+    prev = prev or {}
+    out = {k: prev[k] for k in ("quant_repo", "quant_samplers") if k in prev}
+    if text:
+        p = Tables()
+        try:
+            p.feed(text)
+        except Exception:
+            pass
+        claimed, others, unmatched = parse_tables(p.tables + markdown_tables(text), repo, names)
+        out.update(claimed=claimed, others=others, unmatched=unmatched[:20],
+                   samplers=sampler_sets(text), summary=summary(text),
+                   highlights=highlights(text))
+    else:
+        out.update({k: prev.get(k, empty) for k, empty in CARD_FIELDS.items()})
+    out["hub"] = hub or prev.get("hub") or {}
+    out["card_url"] = "https://huggingface.co/%s" % repo
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -499,6 +532,7 @@ def main():
     if not os.path.isdir(cards_dir):
         os.makedirs(cards_dir)
 
+    before = capture.previous(args.out)
     out = {}
     for repo, m in reg.items():
         if "/" not in repo:
@@ -509,20 +543,10 @@ def main():
         # an entry is written even with no card at all: the hub metadata below
         # answers "what is this and who publishes it" for the image and speech
         # models, which have no benchmark table anywhere
-        p = Tables()
-        try:
-            p.feed(text)
-        except Exception:
-            pass
-        names = [(m.get("name") or {}).get("short")]
-        claimed, others, unmatched = parse_tables(
-            p.tables + markdown_tables(text), repo, names)
-        out[repo] = {"claimed": claimed, "others": others,
-                     "unmatched": unmatched[:20],
-                     "samplers": sampler_sets(text),
-                     "summary": summary(text), "highlights": highlights(text),
-                     "hub": hub_meta(repo, args.max_age, args.refresh),
-                     "card_url": "https://huggingface.co/%s" % repo}
+        out[repo] = card_entry(before.get(repo), text,
+                               hub_meta(repo, args.max_age, args.refresh),
+                               repo, [(m.get("name") or {}).get("short")])
+        claimed, unmatched = out[repo]["claimed"], out[repo]["unmatched"]
         # the quant repo is what actually gets run, and it does not always say
         # the same thing as the base repo. EVERY quant repo's body is kept, not
         # just the first one's: a registry note hangs off a rung and quotes the
@@ -534,15 +558,24 @@ def main():
             qtext = get(RAW % qrepo, "qcard-%s" % qrepo.replace("/", "_"),
                         args.max_age, args.refresh)
             keep(qrepo, qtext)
+            if i or not qtext:
+                # a first quant card that did not arrive keeps what it said last
+                continue
             qsets = sampler_sets(qtext)
-            if qsets and not i:
+            if qsets:
                 out[repo]["quant_repo"] = qrepo
                 out[repo]["quant_samplers"] = qsets
+            else:
+                out[repo].pop("quant_repo", None)
+                out[repo].pop("quant_samplers", None)
         print("  %-40s %d claimed, %d unmatched, %s summary, %d highlights"
               % (repo, len(claimed), len(unmatched),
                  "no" if not out[repo]["summary"] else "a",
                  len(out[repo]["highlights"])), file=sys.stderr)
 
+    # a model the registry stopped carrying keeps its card: what it claimed is
+    # still what it claimed
+    out, _ = capture.carry(before, out, mark=False)
     written, now, before = capture.write(args.out, out, len, args.allow_shrink,
                                          "cards")
     if not written:

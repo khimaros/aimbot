@@ -1,0 +1,204 @@
+{#- DeepSeek-V4.1 prompt format, text-only port of encoding/encoding.py (deepseek-ai/DeepSeek-V4.1-Flash).
+    Inputs: messages, tools, add_generation_prompt, thinking (or enable_thinking), drop_thinking,
+    reasoning_effort (1-100 or 'low'/'high'/'max'), response_format.
+    Fix vs the official encoder: top-level tools also render when the conversation starts with a user message.
+    tool_calls_block_name: V4.1  (marker smalinin's my_build_deepseek41 parser reads to pick the V4.1 tool-call format) -#}
+{%- if not add_generation_prompt is defined -%}
+  {%- set add_generation_prompt = false -%}
+{%- endif -%}
+{%- if not thinking is defined -%}
+  {%- if enable_thinking is defined -%}
+    {%- set thinking = enable_thinking -%}
+  {%- else -%}
+    {%- set thinking = false -%}
+  {%- endif -%}
+{%- endif -%}
+{%- if not drop_thinking is defined -%}
+  {%- set drop_thinking = true -%}
+{%- endif -%}
+{%- if not reasoning_effort is defined or reasoning_effort is none -%}
+  {%- set reasoning_effort = 'high' -%}
+{%- endif -%}
+{%- if reasoning_effort == 'low' -%}
+  {%- set effort_budget = 50 -%}
+{%- elif reasoning_effort == 'high' or reasoning_effort == 'medium' -%}
+  {%- set effort_budget = 75 -%}
+{%- elif reasoning_effort == 'max' -%}
+  {%- set effort_budget = 100 -%}
+{%- else -%}
+  {%- set effort_budget = reasoning_effort -%}
+{%- endif -%}
+{%- set dsml_token = '｜DSML｜' -%}
+{%- set thinking_start_token = '<think>' -%}
+{%- set thinking_end_token = '</think>' -%}
+{%- set image_placeholder = '<｜deepseek_image｜>' -%}
+{%- set reasoning_effort_prefix = 'Reasoning Effort: ' ~ effort_budget ~ ' (range 1-100, the higher the value, the more thorough the reasoning)\n\n' -%}
+{%- set response_format_template = '## Response Format:\n\nYou MUST strictly adhere to the following schema to reply:\n' -%}
+{%- set tools_header = '## Tools\n\nYou have access to a set of tools to help answer the user\'s question. You can invoke tools by writing a "<' + dsml_token + ' calls>" block like the following:\n\n<' + dsml_token + ' calls>\n<' + dsml_token + ' invoke name="$TOOL_NAME">\n<' + dsml_token + ' parameter name="$PARAMETER_NAME" string="true|false">$PARAMETER_VALUE</' + dsml_token + ' parameter>\n...\n</' + dsml_token + ' invoke>\n<' + dsml_token + ' invoke name="$TOOL_NAME2">\n...\n</' + dsml_token + ' invoke>\n</' + dsml_token + ' calls>\n\nString parameters should be specified as is and set `string="true"`. For all other types (numbers, booleans, arrays, objects), pass the value in JSON format and set `string="false"`.\n\nIf thinking_mode is enabled (triggered by ' + thinking_start_token + '), you MUST output your complete reasoning inside ' + thinking_start_token + '...' + thinking_end_token + ' BEFORE any tool calls or final response.\n\nOtherwise, output directly after ' + thinking_end_token + ' with tool calls or final response.\n\n### Available Tool Schemas\n\n' -%}
+{%- set tools_footer = '\nYou MUST strictly follow the above defined tool name and parameter schemas to invoke tool calls.\n' -%}
+{%- set task_tokens = {'action': '<｜action｜>', 'query': '<｜query｜>', 'authority': '<｜authority｜>', 'domain': '<｜domain｜>', 'title': '<｜title｜>', 'read_url': '<｜read_url｜>'} -%}
+{#- tools anywhere (top level or on a system message) keep the reasoning of every turn -#}
+{#- llama-swap local fix (2026-10-14): top-level tools and response_format render only inside a
+    leading system message, exactly as in the official encoding/encoding.py, so a user-first
+    request silently lost its tools. Give such a request the empty system message the official
+    encoder would render for {"role": "system", "content": ""}. -#}
+{%- if ((tools is defined and tools) or (response_format is defined and response_format)) and messages and messages[0]['role'] != 'system' -%}
+  {%- set messages = [{'role': 'system', 'content': ''}] + messages -%}
+{%- endif -%}
+{%- set ns = namespace(has_tools=false, last_user_idx=-1, in_user=false) -%}
+{%- if tools is defined and tools -%}
+  {%- set ns.has_tools = true -%}
+{%- endif -%}
+{%- for message in messages -%}
+  {%- if message['tools'] is defined and message['tools'] -%}
+    {%- set ns.has_tools = true -%}
+  {%- endif -%}
+  {#- a mid-conversation system message counts as a user message for the generation header -#}
+  {%- if message['role'] == 'user' or message['role'] == 'tool' or (message['role'] == 'system' and loop.index0 > 0) -%}
+    {%- set ns.last_user_idx = loop.index0 -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- set effective_drop_thinking = drop_thinking and not ns.has_tools -%}
+{{- bos_token -}}
+{%- for message in messages -%}
+  {%- set idx = loop.index0 -%}
+  {%- set role = message['role'] -%}
+  {%- set is_last = idx + 1 >= messages | length -%}
+  {%- if not is_last -%}
+    {%- set next_role = messages[idx + 1]['role'] -%}
+  {%- else -%}
+    {%- set next_role = '' -%}
+  {%- endif -%}
+  {#- text of the message: a string, or content blocks joined by blank lines (images become the placeholder) -#}
+  {%- set text = namespace(value='') -%}
+  {%- if message['content'] is string -%}
+    {%- set text.value = message['content'] -%}
+  {%- elif message['content'] is iterable and message['content'] is not none -%}
+    {%- for block in message['content'] -%}
+      {%- if not loop.first -%}
+        {%- set text.value = text.value + '\n\n' -%}
+      {%- endif -%}
+      {%- if block is string -%}
+        {%- set text.value = text.value + block -%}
+      {%- elif block['type'] == 'image' or block['type'] == 'image_url' -%}
+        {%- set text.value = text.value + image_placeholder -%}
+      {%- elif block['type'] == 'text' -%}
+        {%- set text.value = text.value + (block['text'] or '') -%}
+      {%- else -%}
+        {%- set text.value = text.value + '[Unsupported ' + block['type'] + ']' -%}
+      {%- endif -%}
+    {%- endfor -%}
+  {%- endif -%}
+  {#- the leading system block carries the reasoning effort, the first system message, top-level tools and response_format -#}
+  {%- if idx == 0 and (thinking or role == 'system') -%}
+    {{- '<｜System｜>' -}}
+    {%- if thinking -%}
+      {{- reasoning_effort_prefix -}}
+    {%- endif -%}
+  {%- endif -%}
+  {%- if role == 'system' -%}
+    {%- if idx > 0 -%}
+      {{- '<｜System｜>' -}}
+    {%- endif -%}
+    {{- text.value -}}
+    {%- set sys_tools = namespace(list=none) -%}
+    {%- if message['tools'] is defined and message['tools'] -%}
+      {%- set sys_tools.list = message['tools'] -%}
+    {%- elif idx == 0 and tools is defined and tools -%}
+      {%- set sys_tools.list = tools -%}
+    {%- endif -%}
+    {%- if sys_tools.list -%}
+      {{- '\n\n' + tools_header -}}
+      {%- for tool in sys_tools.list -%}
+        {%- if tool['function'] is defined -%}
+          {{- (tool['function'] | tojson) + '\n' -}}
+        {%- else -%}
+          {{- (tool | tojson) + '\n' -}}
+        {%- endif -%}
+      {%- endfor -%}
+      {{- tools_footer -}}
+    {%- endif -%}
+    {%- if message['response_format'] is defined and message['response_format'] -%}
+      {{- '\n\n' + response_format_template + (message['response_format'] | tojson) -}}
+    {%- elif idx == 0 and response_format is defined and response_format -%}
+      {{- '\n\n' + response_format_template + (response_format | tojson) -}}
+    {%- endif -%}
+  {%- elif role == 'user' or role == 'tool' -%}
+    {#- consecutive user and tool messages merge into one user turn -#}
+    {%- if ns.in_user -%}
+      {{- '\n\n' -}}
+    {%- else -%}
+      {{- '<｜User｜>' -}}
+      {%- set ns.in_user = true -%}
+    {%- endif -%}
+    {%- if role == 'tool' -%}
+      {{- '<tool_result>' + text.value + '</tool_result>' -}}
+    {%- else -%}
+      {{- text.value -}}
+    {%- endif -%}
+  {%- elif role == 'latest_reminder' -%}
+    {{- '<｜latest_reminder｜>' + text.value -}}
+  {%- elif role == 'assistant' -%}
+    {%- set prev_has_task = idx > 0 and messages[idx - 1]['task'] is defined and messages[idx - 1]['task'] -%}
+    {%- if thinking and not prev_has_task and ((not effective_drop_thinking) or idx > ns.last_user_idx) -%}
+      {%- if message['reasoning_content'] is defined and message['reasoning_content'] -%}
+        {{- message['reasoning_content'] -}}
+      {%- endif -%}
+      {{- thinking_end_token -}}
+    {%- endif -%}
+    {{- text.value -}}
+    {%- if message['tool_calls'] is defined and message['tool_calls'] -%}
+      {{- '\n\n<' + dsml_token + ' calls>\n' -}}
+      {%- for tool in message['tool_calls'] -%}
+        {%- set func = tool['function'] if tool['function'] is defined else tool -%}
+        {%- if not loop.first -%}
+          {{- '\n' -}}
+        {%- endif -%}
+        {{- '<' + dsml_token + ' invoke name="' + func['name'] + '">\n' -}}
+        {%- set args = func['arguments'] -%}
+        {%- if args is string -%}
+          {%- set args = args | from_json -%}
+        {%- endif -%}
+        {%- for key, val in args.items() -%}
+          {%- if not loop.first -%}
+            {{- '\n' -}}
+          {%- endif -%}
+          {%- if val is string -%}
+            {{- '<' + dsml_token + ' parameter name="' + key + '" string="true">' + val + '</' + dsml_token + ' parameter>' -}}
+          {%- else -%}
+            {{- '<' + dsml_token + ' parameter name="' + key + '" string="false">' + (val | tojson) + '</' + dsml_token + ' parameter>' -}}
+          {%- endif -%}
+        {%- endfor -%}
+        {{- '\n</' + dsml_token + ' invoke>' -}}
+      {%- endfor -%}
+      {{- '\n</' + dsml_token + ' calls>' -}}
+    {%- endif -%}
+    {{- '<｜end▁of▁sentence｜>' -}}
+  {%- endif -%}
+  {%- if role != 'user' and role != 'tool' -%}
+    {%- set ns.in_user = false -%}
+  {%- endif -%}
+  {#- transition after the message: the assistant header follows a user turn (or a mid-conversation
+      system message) when the next message is an assistant or a reminder, or at the end of the prompt -#}
+  {%- set user_turn_ends = (role == 'user' or role == 'tool') and next_role != 'user' and next_role != 'tool' -%}
+  {%- if user_turn_ends -%}
+    {%- set ns.in_user = false -%}
+  {%- endif -%}
+  {%- set transition = (is_last and add_generation_prompt) or next_role == 'assistant' or next_role == 'latest_reminder' -%}
+  {%- if transition -%}
+    {%- if message['task'] is defined and message['task'] -%}
+      {%- if message['task'] == 'action' -%}
+        {{- '<｜Assistant｜>' -}}
+        {{- thinking_start_token if thinking else thinking_end_token -}}
+      {%- endif -%}
+      {{- task_tokens[message['task']] -}}
+    {%- elif user_turn_ends or (role == 'system' and idx > 0) -%}
+      {{- '<｜Assistant｜>' -}}
+      {%- if thinking and ((not effective_drop_thinking) or idx >= ns.last_user_idx) -%}
+        {{- thinking_start_token -}}
+      {%- else -%}
+        {{- thinking_end_token -}}
+      {%- endif -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endfor -%}

@@ -11,7 +11,9 @@ base_model:
 
 # Clef
 
-Run with https://llama.app
+Run it in the Llama app: https://llama.app
+
+Or from the terminal:
 
 ```bash
 llama serve -hf ggml-org/Clef-GGUF

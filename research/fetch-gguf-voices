@@ -186,6 +186,30 @@ def pick_file(files, quant):
     return (hits[0] if len(hits) == 1 else None), hits
 
 
+def rung_paths(quant, file, by_tag):
+    """Every gguf a rung is, off the sizes collector's grouping of the repo.
+
+    A rung is not always one root-level file: onicubag keeps xtts in a folder
+    per tag, and cosyvoice3's rung is an llm, a flow model and a vocoder. The
+    voice list sits in one of them, so each is read rather than one guessed.
+    """
+    if file:
+        return [file]
+    return [p for p, _size in by_tag.get(quant) or [] if p.endswith(".gguf")]
+
+
+def sizes_module():
+    """fetch-gguf-sizes, for the one grouping of a repo's files into rungs."""
+    import importlib.machinery
+    import importlib.util
+    loader = importlib.machinery.SourceFileLoader(
+        "fetch_gguf_sizes", os.path.join(HERE, "fetch-gguf-sizes"))
+    spec = importlib.util.spec_from_loader("fetch_gguf_sizes", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -203,14 +227,21 @@ def main():
     models = yaml.safe_load(open(args.registry))
     sizes = json.load(open(os.path.join(HERE, "data", "gguf-sizes.json")))
 
+    grouping, by_tag = sizes_module(), {}
+    pinned = grouping.pinned_files(args.registry)
     out = {}
     for base, repo, quant, file in emitters(models, sizes):
         if args.repo and repo != args.repo:
             continue
-        name = resolve_filename(repo, quant, file)
-        if not name:
+        if repo not in by_tag:
+            by_tag[repo] = grouping.files_by_tag(repo, pinned=pinned.get(repo, ())) or {}
+        paths = rung_paths(quant, file, by_tag[repo])
+        if not paths:
+            print("  %-46s %-28s no gguf in the rung" % (repo, file or quant))
             continue
-        found = read_voices(repo, name)
+        found = {}
+        for path in paths:
+            found.update(read_voices(repo, path) or {})
         if not found:
             print("  %-46s %-28s no voice list" % (repo, file or quant))
             continue
@@ -224,6 +255,9 @@ def main():
 
     if not out:
         sys.exit("!!! no voice lists found -- every gguf read came back without one")
+    # this reads with urllib and no cache, so any transient error drops a list;
+    # a gguf whose voices did not read this run keeps the list it had
+    out, _ = capture.carry(capture.previous(args.out), out, mark=False)
     written, now, before = capture.write(args.out, dict(sorted(out.items())), len,
                                          allow_shrink=args.allow_shrink)
     if not written:

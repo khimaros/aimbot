@@ -58,6 +58,7 @@ import re
 import subprocess
 import sys
 
+import capture
 import rungs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -280,6 +281,35 @@ def card(repo, max_age, refresh):
     return subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout
 
 
+def curve_key(c):
+    return (c.get("kind"), c.get("quant_repo"), c.get("metric"))
+
+
+def carry_curves(old, curves):
+    """{repo: curves}: this run's, after every curve the capture held that it
+    did not produce again.
+
+    A hand-written score curve is worth more than anything parsed here, and
+    nothing in this script can produce one. It is kept BESIDE what was parsed
+    rather than over it: a model can have been measured twice, and replacing
+    the card's proxy with the hand-written score was silent data loss -- the ten
+    unsloth kl rungs of qwen3.8 flash next and ISTA's benchmark table of the same
+    model are different experiments and both are worth reading. A parsed curve
+    is kept the same way when its card did not answer or no longer carries the
+    table: what a quantizer published about its own rungs stays what it
+    published.
+    """
+    out = {}
+    for repo in list(old) + [r for r in curves if r not in old]:
+        fresh = curves.get(repo) or []
+        have = {curve_key(c) for c in fresh}
+        entry = old.get(repo) or []
+        out[repo] = [c for c in (entry if isinstance(entry, list) else [entry])
+                     if c.get("kind") == "score" or c.get("hand_written")
+                     or curve_key(c) not in have] + fresh
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -306,10 +336,10 @@ def main():
     except (IOError, ValueError):
         pass
 
-    old = {}
-    if os.path.exists(args.out):
-        with open(args.out) as f:
-            old = json.load(f)
+    # resolved here, so the curves carried and the curves written are one file
+    # wherever this runs from
+    args.out = capture.resolve(args.out)
+    old = capture.previous(args.out)
     curves = {}
     for repo, m in reg.items():
         params = (facts.get(repo) or {}).get("params_total_b")
@@ -367,19 +397,9 @@ def main():
                   file=sys.stderr)
             break
 
-    # a hand-written score curve is worth more than anything parsed here, and
-    # nothing in this script can produce one. it is kept BESIDE what was parsed
-    # rather than over it: a model can have been measured twice, and replacing
-    # the card's proxy with the hand-written score was silent data loss -- the
-    # ten unsloth kl rungs of qwen3.8 flash next and ISTA's benchmark table of
-    # the same model are different experiments and both are worth reading
-    kept = {}
-    for repo, entry in (old.get("curves") or {}).items():
-        for curve in (entry if isinstance(entry, list) else [entry]):
-            if curve.get("kind") == "score" or curve.get("hand_written"):
-                kept.setdefault(repo, []).append(curve)
-    for repo, hand in kept.items():
-        curves[repo] = hand + curves.get(repo, [])
+    curves = carry_curves(old.get("curves") or {}, curves)
+    kept = {r: [c for c in v if c.get("kind") == "score" or c.get("hand_written")]
+            for r, v in curves.items()}
 
     doc = dict(old)
     doc["version"] = 2

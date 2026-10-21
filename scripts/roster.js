@@ -227,13 +227,17 @@ const rungBpw = c => c.realBpw && c.bpw
 // is not a tie -- then by the smaller download, then by repo so that the order
 // does not depend on which publisher's listing the size table happened to read
 // first. a rung with no bits figure at all -- a repo with no tensor table and no
-// parameter count -- ranks last rather than inventing a position.
-const byQuality = list => [...list].sort((a, b) =>
-  ((rungBpw(b) ?? -1) - (rungBpw(a) ?? -1))
+// parameter count -- ranks last rather than inventing a position. ranked on the
+// bits the retention curve is read at, so a rung whose lookup rows are cheap is
+// not ranked above one the discount then scores higher
+const byQuality = (list, m) => {
+  const bits = c => (rungBpw(c) ? retentionBpw(m, c) : null) ?? -1;
+  return [...list].sort((a, b) => (bits(b) - bits(a))
   || ((a.speculative === false ? 1 : 0) - (b.speculative === false ? 1 : 0))
   || ((a.gib ?? Infinity) - (b.gib ?? Infinity))
   || String(a.repo).localeCompare(String(b.repo))
   || String(a.quant).localeCompare(String(b.quant)));
+};
 
 // context to serve, and what its kv cache costs. the geometry comes from each
 // model's own config: full-attention layers hold a cache that grows with the
@@ -319,7 +323,12 @@ function quantChoices(m) {
                    // `realBpw` is over the block geometry of every tensor;
                    // `bpw` beside it is file size over parameter count
                    types: a.types, realBpw: a.real_bpw,
+                   coreBpw: a.core_bpw, lookup: a.lookup,
                    role: r.role, speculative: r.speculative, crispasr: r.crispasr,
+                   // a package audio.cpp installs, which only it loads, and a
+                   // pinned file it does not read
+                   package: a.package, enginesOnly: a.engines_only || r.engines_only,
+                   enginesNot: r.engines_not,
                    forkType: a.fork_type, runtime: a.runtime, voices: a.voices,
                    // the words for the tables that print text, and the parts --
                    // references and all -- for the page that links them
@@ -355,11 +364,11 @@ const rungDrafts = c => c.speculative !== false;
 // tab. same test either way, so the two cannot disagree about what fits.
 function bestOf(m, all) {
   if (!all.length) return null;
-  if (!all.some(c => c.gib)) return byQuality(all)[0];
-  if (!budget) return byQuality(affordable(m, all, Infinity))[0] || byQuality(all)[0];
+  if (!all.some(c => c.gib)) return byQuality(all, m)[0];
+  if (!budget) return byQuality(affordable(m, all, Infinity), m)[0] || byQuality(all, m)[0];
   const room = usable() - kvGib(m, wantCtx(m)) - draftGib(m);
   const fits = affordable(m, all, room);
-  return fits.length ? byQuality(fits)[0] : null;
+  return fits.length ? byQuality(fits, m)[0] : null;
 }
 
 const bestRung = m => bestOf(m, rungPool(m));
@@ -424,16 +433,22 @@ function draftYield(m, q = activeQuant(m)) {
 // gufo is the other rung that speaks: it loads the files its guide measured, so
 // it is an engine for those rungs only, and for none where the guide names the
 // checkpoint rather than a gguf.
+//
+// audio.cpp loads the package it installs and not the rung on the row, so its
+// packages are rungs of their own that nothing else loads, and a pinned file no
+// package downloads from is one it does not read.
 const crispasrNamed = m => quantChoices(m).some(c => (c.crispasr || {}).backend);
 const gufoLoads = (m, c) => ((m.gufo || {}).rungs || [])
   .some(r => r.repo === c.repo && r.quant === c.quant);
 function rungEngines(m, c, named) {
+  if (c.enginesOnly) return new Set(c.enginesOnly);
   const out = new Set(c.engine || []);
   if ((c.crispasr || {}).backend) out.add('crispasr');
   else if (named) (m.engines || []).forEach(e => { if (e !== 'crispasr') out.add(e); });
   else { if ((m.crispasr || {}).backend) out.add('crispasr');
          (m.engines || []).forEach(e => out.add(e)); }
   if (!gufoLoads(m, c)) out.delete('gufo');
+  (c.enginesNot || []).forEach(e => out.delete(e));
   return out;
 }
 
@@ -473,7 +488,7 @@ function smallestRung(m) {
   const sized = all.filter(c => c.gib);
   // a repo that publishes no sizes has not failed to be small, and the lowest
   // rung by type is the answer that does not invent a measurement
-  if (!sized.length) return byQuality(all).slice(-1)[0] || null;
+  if (!sized.length) return byQuality(all, m).slice(-1)[0] || null;
   return sized.reduce((a, b) => (b.gib < a.gib ? b : a));
 }
 // an entry with no quants at all -- onnx-only weights the roster carries to say
@@ -518,14 +533,14 @@ function fittingQuants(m) {
   if (!filters.flags.has('fits')) {
     // a rung nobody weighed is not a rung that failed the weighing, so it stays
     // on the ladder rather than dropping out with the fit
-    return byQuality(all);
+    return byQuality(all, m);
   }
   // the SAME room the fit charges, drafter included: a ladder that bills only
   // the weights offers rungs the row could never read, and deepseek v4 flash
   // was handing out UD-IQ3_S at 108.1 of a 116 gib box that the draft file
   // takes past the end
   const room = usable() - kvGib(m, wantCtx(m)) - draftGib(m);
-  return byQuality(affordable(m, all, room));
+  return byQuality(affordable(m, all, room), m);
 }
 
 // one row per model, or one per (model, quant). the expanded row inherits the
@@ -654,6 +669,14 @@ function retention(bpw, m, q = activeQuant(m)) {
   return interpolate(c.points, bpw);
 }
 
+// the bits a curve is read at. the fitted curve was drawn over models whose
+// weights are all multiplied, so a rung carrying lookup rows -- v4.1 flash's
+// engram, gemma 4's per-layer embeddings -- is read at the bits of the rest. a
+// sweep measured on THIS model was drawn against whole files, so it keeps
+// reading whole files: the axis has to be the one the points were put on
+const retentionBpw = (m, q) =>
+  q.coreBpw && curveFor(m, q).kind !== 'measured' ? q.coreBpw : rungBpw(q);
+
 // a model whose weights are natively low-bpw is not paying a quantization
 // penalty for being small, so it is exempt -- the registry says which
 function modelRetention(m) {
@@ -662,7 +685,7 @@ function modelRetention(m) {
   // the same bits the ladder ranked the rung on: the curve is a curve of bits
   // per weight, and feeding it a figure the ceiling refused to trust is how a
   // rung folded around a drafter came to be credited with the head's precision
-  return q && rungBpw(q) ? retention(rungBpw(q), m, q) : 1;
+  return q && rungBpw(q) ? retention(retentionBpw(m, q), m, q) : 1;
 }
 
 // whether the rung being served sits below everything the curve measured, where
@@ -674,7 +697,7 @@ function modelRetention(m) {
 // evidenced against on the one model anybody has run there.
 function belowCurve(m, q = m && activeQuant(m)) {
   if (!m || m.native_low_bpw) return false;
-  return !!(q && rungBpw(q) && rungBpw(q) < curveFor(m, q).points[0][0]);
+  return !!(q && rungBpw(q) && retentionBpw(m, q) < curveFor(m, q).points[0][0]);
 }
 
 // an ALLOWLIST: a facet is discounted only where the curve is evidence about
@@ -892,13 +915,13 @@ const COLUMNS = [
      // below the curve's lowest measured point the multiplier stops falling, so
      // the number is a floor rather than a prediction and has to say which
      const floored = effective && belowCurve(m)
-       ? `; ${rungBpw(q)} bpw is below the lowest rung the curve measured `
+       ? `; ${retentionBpw(m, q)} bpw is below the lowest rung the curve measured `
          + `(${curveFor(m).points[0][0]}), so this is its floor rather than a `
          + `prediction -- the only sweep run that low found a 27b at chance`
        : '';
      const title = effective && r < 1 && q
        ? ` title="${num(s.value, 1)}, scored at x${r.toFixed(3)} `
-         + `${curveFor(m).kind} retention for ${esc(q.quant)} at ${rungBpw(q)} bpw${floored}"`
+         + `${curveFor(m).kind} retention for ${esc(q.quant)} at ${retentionBpw(m, q)} bpw${floored}"`
        : ` title="${num(s.value, 1)}"`;
      return `<td class="n"${title}><span class="bar" style="--w:${s.value}%">`
        + `<span>${num(s.value, 0)}</span></span></td>`;
@@ -1227,6 +1250,15 @@ const MODALITIES = [
    help: 'punctuation and language id, applied to a transcript after it exists. crispasr runs them by flag rather than by --backend, and no board scores them'},
   {k: 'mt', t: 'translation', test: m => m.kind === 'translate',
    help: 'text in, text in another language out. crispasr loads them to translate a transcript, and they are scored by nobody here'},
+  // audio.cpp's families that are neither speech nor diarization, unshaped for
+  // the same reason: a music model declared text in / audio out would land in
+  // `text to audio` beside the speech synthesizers and be offered their boards
+  {k: 'sound', t: 'music & effects', test: m => m.kind === 'sound',
+   help: 'music and sound-effect generation. audio.cpp runs them by --family, and no board this repo collects scores them'},
+  {k: 'audio', t: 'audio to audio', test: m => m.kind === 'audio',
+   help: 'audio in, other audio out: source separation, enhancement and super-resolution, voice conversion, codecs. audio.cpp runs them, and nothing here scores them'},
+  {k: 'detect', t: 'audio analysis', test: m => m.kind === 'detect',
+   help: 'audio in, a label out: voice activity, wake words, end of turn, sound tags, forced alignment and transcription to notes. audio.cpp runs them, and nothing here scores them'},
 ];
 const modIn = (m, x) => (m.modalities.input || []).includes(x);
 const modOut = (m, x) => (m.modalities.output || []).includes(x);
@@ -1581,6 +1613,6 @@ if (typeof module !== 'undefined' && module.exports) {
                     visible, sorted, expand, col, shown, scored, activeQuant, readQuant,
                     fittingQuants, quantChoices, rungPool, rungEngines,
                     unusedSweeps, kvGib, fitContext, tgTps, ppTps,
-                    modelRetention, curveFor, belowCurve, facetValue, facetPctRaw,
+                    modelRetention, retentionBpw, curveFor, belowCurve, facetValue, facetPctRaw,
                     COLUMNS, MODALITIES, FLAGS, proseText, esc, num, gib, ctxLabel};
 }

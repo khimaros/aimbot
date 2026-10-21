@@ -46,6 +46,7 @@ import re
 import subprocess
 import sys
 
+import capture
 import rungs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -244,15 +245,21 @@ RAW_WAVEFORM = ("num_feat_extract_layers", "conv_stride")
 # case-folded: `ASR` is an acronym and matching it case-insensitively would
 # claim every word that happens to spell it, so the lowercase forms are spelled
 # out separately. `audio` is not here on purpose -- it is the substring of a
-# dozen TTS architectures, which emit audio rather than read it
+# dozen TTS architectures, which emit audio rather than read it. remote-code
+# models often name only the TASK, in an architecture or an auto_map head:
+# `ForCTC` and `SpeechRecognition` are transcription heads, `s2tt` is speech to
+# text translation
 AUDIO_IN_NAME = re.compile(
     r"wav2vec|data2vec[_-]?audio|hubert|wavlm|whisper|moonshine|gigaam"
-    r"|speech[a-z_-]*encoder|ASR|(?:^|[_-])(?:asr|stt)(?:[_-]|$)")
+    r"|speech[a-z_-]*encoder|ASR|ForCTC|SpeechRecognition|SpeechSeq2Seq"
+    r"|(?:^|[_-])(?:asr|stt|s2tt)(?:[_-]|$)")
 
 
 def names_audio(cfg):
     """Whether what this component calls itself says it reads audio."""
-    names = [cfg.get("model_type")] + list(cfg.get("architectures") or [])
+    auto_map = cfg.get("auto_map")
+    names = ([cfg.get("model_type")] + list(cfg.get("architectures") or [])
+             + list(auto_map if isinstance(auto_map, dict) else []))
     return any(isinstance(n, str) and AUDIO_IN_NAME.search(n) for n in names)
 
 
@@ -434,6 +441,22 @@ def shape_facts(cfg):
     return {k: v for k, v in out.items() if v is not None}
 
 
+def merge_facts(prev, facts, index_answered):
+    """This run's facts over the last run's, field by field.
+
+    Each fact comes from its own fetch, and one that failed leaves its fields
+    absent rather than false. The parameter total is the one fact with a
+    fallback, so it needs saying twice: a total read off the repo's NAME
+    because the safetensors index did not answer is not a reason to give up
+    the counted one the capture already holds.
+    """
+    prev = prev or {}
+    if not index_answered and prev.get("params_source") == "safetensors":
+        facts = {k: v for k, v in facts.items()
+                 if k not in ("params_total_b", "params_source")}
+    return capture.fill(prev, facts)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -456,6 +479,7 @@ def main():
         gguf_repos = {r: (rungs.repo_names(m) or [None])[0]
                       for r, m in models.items()}
 
+    before = capture.previous(args.out)
     out = {}
     disagreed = []
     for repo in repos:
@@ -494,6 +518,7 @@ def main():
         active = ACTIVE_IN_NAME.search(repo)
         if active:
             facts["params_active_b"] = float(active.group(1))
+        index_answered = info is not None
         think = thinking_facts(repo, args.max_age, args.refresh)
         if think:
             facts["thinking"] = think
@@ -501,6 +526,7 @@ def main():
                                         slug(repo, "gen"), args.max_age, args.refresh)))
         if gen:
             facts["samplers_shipped"] = gen
+        facts = merge_facts(before.get(repo), facts, index_answered)
         if not facts:
             print("  %-40s unavailable" % repo, file=sys.stderr)
             continue
@@ -511,8 +537,11 @@ def main():
     for repo, want, got in disagreed:
         print("  !!! %-40s config says %d, its gguf says %d"
               % (repo, want, got), file=sys.stderr)
-    with open(args.out, "w") as f:
-        json.dump(out, f, indent=1, sort_keys=True)
+    # a repo the registry stopped naming keeps its facts: they are still its facts
+    out, _ = capture.carry(before, out, mark=False)
+    written, now, was = capture.write(args.out, out, len, sort_keys=True, label="models")
+    if not written:
+        sys.exit(capture.refused(args.out, now, was, "models"))
     missing = [r for r in out if not out[r].get("context_native")]
     print("wrote %s: %d models, %d without a context window"
           % (args.out, len(out), len(missing)))

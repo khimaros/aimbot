@@ -46,6 +46,7 @@ import struct
 import subprocess
 import sys
 
+import capture
 import rungs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -328,17 +329,20 @@ def main():
     ap.add_argument("--refresh", action="store_true")
     args = ap.parse_args()
 
-    try:
-        prev = json.load(open(args.out))
-    except (IOError, ValueError):
-        prev = {}
+    prev = capture.previous(args.out)
 
     named = gguf_repos(args.registry)
-    repos = architectures(named, args.max_age, args.refresh)
+    # what a file declares is a fact of the file: a header that did not read
+    # this run keeps the architecture it had, and so does a repo the registry
+    # stopped naming. the clone below is still what decides whether each loads
+    repos, _ = capture.carry(prev.get("repos") or {},
+                             architectures(named, args.max_age, args.refresh), mark=False)
     # every architecture a multi-file repo publishes, beside the one-per-repo
     # summary above. `repos` stays a scalar because resolve-runtime and
     # report_runtime read it that way; this is additive
-    repo_archs = per_file_architectures(named, args.max_age, args.refresh)
+    repo_archs, _ = capture.carry(prev.get("repo_archs") or {},
+                                  per_file_architectures(named, args.max_age, args.refresh),
+                                  mark=False)
     clone = find_clone(args.llama)
     if not clone:
         print("no llama.cpp clone found; keeping the %d architecture(s) already "
@@ -357,10 +361,12 @@ def main():
             arch[a] = arch_support(clone, a, args.ref, table)
             print("  %-20s %s" % (a, arch[a]), file=sys.stderr)
 
-    with open(args.out, "w") as f:
-        json.dump({"llama_cpp": head, "arch": arch, "repos": repos,
+    written, now, before = capture.write(
+        args.out, {"llama_cpp": head, "arch": arch, "repos": repos,
                    "repo_archs": repo_archs, "quants": quants},
-                  f, indent=1, sort_keys=True)
+        lambda p: len(p["repos"]), sort_keys=True, label="repos")
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "repos"))
     absent = sorted(a for a, v in arch.items() if not v.get("mainline"))
     near = sorted(a for a, v in arch.items() if v.get("near"))
     print("wrote %s: %d repos over %d architectures, %d absent from mainline%s"

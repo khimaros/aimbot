@@ -375,6 +375,21 @@ def report(payload, registry):
                                    ", ".join((b["models"] + b["gguf"])[:2])))
 
 
+def merge(before, now, matrix_read, arch_read):
+    """`now` keeping every backend, capability row and architecture `before` had.
+
+    A backend the readme no longer lists is one crispasr removed: kept, marked,
+    and no reason to say crispasr loads a model. A capability matrix or an
+    architecture map that did not download keeps the one the capture holds --
+    either going empty used to switch a lint check off without saying so.
+    """
+    before = before or {}
+    backends, _ = capture.carry(before.get("backends") or {}, now["backends"])
+    return {"backends": dict(sorted(backends.items())),
+            "caps": now["caps"] if matrix_read else (before.get("caps") or now["caps"]),
+            "arch": now["arch"] if arch_read else (before.get("arch") or now["arch"])}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -414,9 +429,11 @@ def main():
     if table and not index:
         sys.exit("!!! the architecture table parsed empty -- its shape changed")
 
-    payload = {"backends": dict(sorted(backends.items())),
-               "caps": dict(sorted(caps.items())),
-               "arch": dict(sorted(index.items()))}
+    payload = merge(capture.previous(args.out),
+                    {"backends": dict(sorted(backends.items())),
+                     "caps": dict(sorted(caps.items())),
+                     "arch": dict(sorted(index.items()))},
+                    matrix_read=bool(matrix), arch_read=bool(table))
     written, now, before = capture.write(
         args.out, payload, lambda p: len(p["backends"]),
         allow_shrink=args.allow_shrink)

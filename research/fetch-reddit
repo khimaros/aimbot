@@ -666,6 +666,27 @@ def parse_thread(page, tid, limit):
                 comments=out[:limit])
 
 
+def hit_id(h):
+    # records captured before this collector was rewritten carry only a url
+    return h.get("id") or first(r"/comments/([a-z0-9]+)/", h.get("url") or "", 0)
+
+
+def merge_thread(old, new):
+    """A refetched thread, keeping everything the capture already held of it.
+
+    A thread is cut to its top comments by score, so a refetch drops whatever
+    the scores moved below the cut -- including a comment a verdict quotes -- and
+    a failed post fetch reads as an empty title and body. Fresh comments come
+    first with their new scores; the rest follow as they were.
+    """
+    if not old:
+        return new
+    comments, _ = capture.carry(old.get("comments") or [], new.get("comments") or [],
+                                key=lambda c: c.get("text"), mark=False)
+    got = capture.fill(old, {k: v for k, v in new.items() if v not in ("", None)})
+    return dict(got, comments=comments)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--sub", default="LocalLLaMA")
@@ -698,15 +719,12 @@ def main():
                          "against a dead source rebuilds the file from nothing")
     args = ap.parse_args()
 
-    out = {"searches": {}, "listings": {}, "threads": {}}
-    if os.path.exists(args.out) and not args.refresh:
-        try:
-            out = json.load(open(args.out))
-            out.setdefault("searches", {})
-            out.setdefault("listings", {})
-            out.setdefault("threads", {})
-        except ValueError:
-            print("  existing %s unreadable, starting fresh" % args.out, file=sys.stderr)
+    # the capture is read whether or not this is a --refresh: refreshing means
+    # refetching, and starting from nothing is how a dead source once wrote 0
+    # threads over 147
+    out = capture.previous(args.out)
+    for part in ("searches", "listings", "threads"):
+        out.setdefault(part, {})
     now = int(time.time())
 
     def fresh(rec):
@@ -783,6 +801,11 @@ def main():
             failed += 1
             print("  search %-34s no hits" % q, file=sys.stderr)
             continue
+        # the hits are what the harvest reads thread ids from, so a hit this
+        # run's ranking left out is kept rather than forgotten
+        was = out["searches"].get(q)
+        hits, _ = capture.carry(was.get("hits") if isinstance(was, dict) else [], hits,
+                                key=hit_id, mark=False)
         out["searches"][q] = dict(fetched=now, hits=hits)
         fetched += 1
         print("  search %-34s %d hits" % (q, len(hits)), file=sys.stderr)
@@ -824,10 +847,6 @@ def main():
     def hits_of(q):
         rec = out["searches"].get(q)
         return rec.get("hits", []) if isinstance(rec, dict) else (rec or [])
-
-    def hit_id(h):
-        # records captured before this collector was rewritten carry only a url
-        return h.get("id") or first(r"/comments/([a-z0-9]+)/", h.get("url") or "", 0)
 
     wanted = list(THREADS)
     if args.harvest:
@@ -872,7 +891,7 @@ def main():
                 print("  thread %-10s no comments parsed" % tid, file=sys.stderr)
             continue
         t["fetched"] = now
-        out["threads"][tid] = t
+        out["threads"][tid] = merge_thread(out["threads"].get(tid), t)
         fetched += 1
         print("  thread %-10s %3d comments  %s" % (tid, len(t["comments"]), t["title"][:52]),
               file=sys.stderr)

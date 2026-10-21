@@ -13,6 +13,18 @@ library_name: llama.cpp
 
 # Ling 3.0 flash: GGUF
 
+<div style="display: flex; gap: 8px; align-items: center; margin-top: 10px; margin-bottom: 10px;">
+  <a href="https://atomic.chat/?utm_source=huggingface&utm_medium=referral&utm_campaign=hf_ling_3_0_flash&utm_content=btn_atomic"><img src="https://huggingface.co/AtomicChat/Qwen3.8-27B-GGUF/resolve/main/btn_atomic.png" width="162" alt="Atomic Chat"></a>
+  <a href="https://discord.gg/8wGSsvmg4V"><img src="https://huggingface.co/AtomicChat/Qwen3.8-27B-GGUF/resolve/main/btn_discord.png" width="119" alt="Discord"></a>
+  <a href="https://github.com/AtomicBot-ai/Atomic-Chat"><img src="https://huggingface.co/AtomicChat/Qwen3.8-27B-GGUF/resolve/main/btn_github.png" width="115" alt="GitHub"></a>
+</div>
+<ul style="margin: 0 0 12px 0;">
+  <li>Ling 3.0 flash is a 124B MoE with 5.1B active parameters; its GGUF chat template includes thinking mode and tool calling.</li>
+  <li>Our AD layouts have 31–41% lower mean KL than stock llama.cpp presets at comparable sizes. The <a href="https://huggingface.co/datasets/AtomicChat/Ling-3.0-flash-GGUF-metrics">raw measurements</a> and controls are public.</li>
+  <li>From the team behind <a href="https://atomic.chat/?utm_source=huggingface&utm_medium=referral&utm_campaign=hf_ling_3_0_flash&utm_content=bullet_app">Atomic Chat</a>, the local AI app for chat and agents. These Ling files require our TurboQuant build; use the <a href="#run-it">CLI instructions below</a>. The tests documented below cover the CLI workflow, not app compatibility.</li>
+</ul>
+<hr style="margin: 0 0 16px 0;">
+
 Quantizations of [`inclusionAI/Ling-3.0-flash`](https://huggingface.co/inclusionAI/Ling-3.0-flash):
 124B total, 5.1B active, hybrid linear attention (35 KDA blocks interleaved 5:1 with 7 gated MLA
 blocks) over a 512-expert MoE.

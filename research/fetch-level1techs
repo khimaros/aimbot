@@ -63,6 +63,28 @@ def strip(cooked):
     return re.sub(r"\n{3,}", "\n\n", html.unescape(s)).strip()
 
 
+def merge(before, now):
+    """`now` keeping every search hit, topic and post `before` captured.
+
+    Posts are fetched for the busiest topics only, and a topic is found only
+    by this run's searches, so both are a sample: a topic missing from this
+    run has left the sample, not the forum.
+    """
+    searches, _ = capture.carry(before.get("searches") or {}, now["searches"], mark=False)
+    for q, ids in now["searches"].items():
+        searches[q] = ids + [i for i in (before.get("searches") or {}).get(q) or []
+                             if i not in ids]
+    old = before.get("topics") or {}
+    topics, _ = capture.carry(old, {k: capture.fill(old.get(k), t)
+                                    for k, t in now["topics"].items()}, mark=False)
+    for k, t in now["topics"].items():
+        was = (old.get(k) or {}).get("posts")
+        if was and t.get("posts"):
+            topics[k]["posts"], _ = capture.carry(was, t["posts"], key=lambda p: p.get("n"),
+                                                  mark=False)
+    return {"searches": searches, "topics": topics}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default="data/level1techs.json")
@@ -116,7 +138,8 @@ def main():
         print("  topic %-8d %3d posts  %s" % (t["id"], len(t["posts"]), t["title"][:48]),
               file=sys.stderr)
 
-    out = {"searches": searches, "topics": {str(t["id"]): t for t in found.values()}}
+    out = merge(capture.previous(args.out),
+                {"searches": searches, "topics": {str(t["id"]): t for t in found.values()}})
     written, now, before = capture.write(
         args.out, out, lambda d: len(d.get("topics") or {}), args.allow_shrink,
         "topics")

@@ -51,11 +51,27 @@ def norm(s):
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
-def load(name, data=None):
+def load(name, data=None, listed=False):
+    """One capture; with `listed`, only the rows its source still lists."""
     try:
-        return json.load(open(os.path.join(data or DATA, "%s.json" % name)))
+        doc = json.load(open(os.path.join(data or DATA, "%s.json" % name)))
     except (IOError, ValueError):
         return {}
+    return unlisted_dropped(doc) if listed else doc
+
+
+def unlisted_dropped(x):
+    """`x` without the rows a collector carried after their source dropped them.
+
+    The captures differ in shape but mark a carried row the same way, so this
+    walks any of them: a dict value or list item that is a marked row goes.
+    """
+    gone = lambda v: isinstance(v, dict) and v.get("delisted")  # noqa: E731
+    if isinstance(x, dict):
+        return {k: unlisted_dropped(v) for k, v in x.items() if not gone(v)}
+    if isinstance(x, list):
+        return [unlisted_dropped(v) for v in x if not gone(v)]
+    return x
 
 
 def open_keys(rows, open_field, id_fields=()):
@@ -122,8 +138,12 @@ def jev_space(rows):
     return space
 
 
-def key_spaces(data=None):
+def key_spaces(data=None, listed=False):
     """{kind: {source: {normalized name: real id}}} for every source that names models.
+
+    With `listed`, only over the rows each source still lists: the collectors
+    keep a dropped row at its last score, and an id on one is re-matched
+    against what the board publishes now.
 
     Split by the modality a source MEASURES. A text leaderboard has no opinion
     about a transcription model and a synthesis arena has none about a text one,
@@ -133,7 +153,7 @@ def key_spaces(data=None):
     """
     out = {}
 
-    aa = load("artificial-analysis", data)
+    aa = load("artificial-analysis", data, listed)
     out["aa"] = {}
     for slug, r in aa.items():
         # skip the non-reasoning twins: the roster scores reasoning mode
@@ -142,14 +162,14 @@ def key_spaces(data=None):
         out["aa"].setdefault(norm(r.get("name")), slug)
         out["aa"].setdefault(norm(slug), slug)
 
-    gb = load("gbench", data)
+    gb = load("gbench", data, listed)
     out["gbench"] = {}
     for m in gb.get("rankings") or []:
         mid = m.get("model_id") or ""
         out["gbench"].setdefault(norm(mid.split("/")[-1]), mid)
         out["gbench"].setdefault(norm(m.get("model")), mid)
 
-    lm = load("lmarena", data)
+    lm = load("lmarena", data, listed)
     out["lmarena"] = {}
     for board in (lm.get("boards") or {}).values():
         for e in board.get("entries") or []:
@@ -157,14 +177,14 @@ def key_spaces(data=None):
             if n:
                 out["lmarena"].setdefault(norm(n), n)
 
-    sw = load("swe-rebench", data)
+    sw = load("swe-rebench", data, listed)
     out["swerebench"] = {}
     for m in (sw.get("models") or {}).values():
         n = m.get("name")
         if n:
             out["swerebench"].setdefault(norm(n), n)
 
-    ep = load("epoch", data)
+    ep = load("epoch", data, listed)
     out["epoch"] = {}
     for r in ep.get("eci") or []:
         mv = (r.get("Model version") or "").split("/")[-1].rsplit("_", 1)[0]
@@ -181,7 +201,7 @@ def key_spaces(data=None):
     # no url for, a hosted model behind a reasoning-effort suffix like
     # `inkling-xhigh`, resolve through `ids.livebench` in the registry.
     livebench = {}
-    for name, r in ((load("livebench", data) or {}).get("models") or {}).items():
+    for name, r in ((load("livebench", data, listed) or {}).get("models") or {}).items():
         if not r.get("openweight"):
             continue
         livebench.setdefault(norm(name), name)
@@ -190,7 +210,7 @@ def key_spaces(data=None):
             livebench.setdefault(norm(repo.split("/")[-1]), name)
     out["livebench"] = livebench
 
-    speech = load("artificial-analysis-speech", data)
+    speech = load("artificial-analysis-speech", data, listed)
     spoken = {
         "aa-stt": open_keys(speech.get("speech-to-text") or {}, "openWeights",
                             ("hostApiId",)),
@@ -198,8 +218,8 @@ def key_spaces(data=None):
                                       "openWeights", ("hostApiId",)),
         "aa-tts": open_keys(speech.get("text-to-speech") or {}, "openWeights",
                             ("slug",)),
-        "tts-arena": open_keys(load("tts-arena", data), "open"),
-        "voicearena": open_keys(load("voicearena", data), "openSource"),
+        "tts-arena": open_keys(load("tts-arena", data, listed), "open"),
+        "voicearena": open_keys(load("voicearena", data, listed), "openSource"),
     }
     # the one board keyed the way this registry is. every other space here maps
     # a display name and needs the open-weights filter to keep a hosted SKU out;
@@ -207,7 +227,7 @@ def key_spaces(data=None):
     # under the same normalisation `roster_names` applies to a repo's last
     # segment -- an exact join rather than a resemblance
     spoken["open-asr"] = {}
-    for repo, row in ((load("open-asr", data) or {}).get("models") or {}).items():
+    for repo, row in ((load("open-asr", data, listed) or {}).get("models") or {}).items():
         if not row.get("open_weights"):
             continue
         stem = repo.split("/")[-1]
@@ -223,7 +243,7 @@ def key_spaces(data=None):
     # these boards gives: a repo path. it points at a COLLECTION for a couple of
     # them, which normalizes to the family name and is matched as one more
     # spelling rather than trusted as a repo
-    pictured = {"aa-t2i": open_keys(load("artificial-analysis-image", data),
+    pictured = {"aa-t2i": open_keys(load("artificial-analysis-image", data, listed),
                                     "openWeightsUrl", ("openWeightsUrl",))}
     # lmarena's image board, which the collector has been capturing all along
     # and nothing read: 76 entries over 6.1m votes, and the same open-weights
@@ -256,7 +276,7 @@ def key_spaces(data=None):
     # join on. `locallyHostable` is its open-weights flag and it agrees with
     # this registry where lmarena's licence string does not: ideogram 4 and
     # krea 2 are hostable here and both have ggufs the roster pins
-    showdown = ((load("genai-showdown", data) or {}).get("boards") or {})
+    showdown = ((load("genai-showdown", data, listed) or {}).get("boards") or {})
     for source, name in (("showdown-t2i", "text-to-image"),
                          ("showdown-edit", "image-editing")):
         pictured[source] = open_keys((showdown.get(name) or {}).get("models") or {},
@@ -266,7 +286,7 @@ def key_spaces(data=None):
     # number this repo has for them and it is quoted in the model's notes
     # the board the decision half is scored on, and the only source here whose
     # rows are decision models, rerankers and classifiers rather than chat models
-    decision = {"jev": jev_space((load("jevbench", data) or {}).get("systems") or {})}
+    decision = {"jev": jev_space((load("jevbench", data, listed) or {}).get("systems") or {})}
     return {"text": out, "speech": spoken, "image": pictured,
             "decision": decision, "diarize": {}}
 
@@ -558,9 +578,17 @@ def main():
               % (kind, ", ".join("%s %d" % (k, len(v)) for k, v in spaces.items())
                  or "none"))
 
-    filled, kept, amb = 0, 0, 0
+    by_kind_listed = key_spaces(args.data, listed=True)
+    # {source: ids some registry entry already holds}, which no move may take
+    held = {}
+    for m in reg.values():
+        for source, v in (m.get("ids") or {}).items():
+            if v:
+                held.setdefault(source, set()).add(v)
+    filled, kept, moved, amb = 0, 0, 0, 0
     for repo, m in reg.items():
         spaces = spaces_for(m, by_kind)
+        listed = spaces_for(m, by_kind_listed)
         if not spaces:
             continue
         # sources drop or keep trailing qualifiers inconsistently: AA writes
@@ -601,7 +629,19 @@ def main():
         ids = m.setdefault("ids", {})
         marks = []
         for source, space in spaces.items():
-            if ids.get(source):
+            have, now = ids.get(source), listed.get(source) or {}
+            # an id on a row its board dropped follows a RENAME to the row the
+            # board lists now, and stays where it is when nothing listed matches.
+            # exact only: artificial analysis replaced deepseek v4.1 flash's row
+            # with 1017's, and a resemblance is how a successor looks
+            if have and have in space.values() and have not in now.values():
+                found, how = candidates(now, wants, sized, exact_only=True)
+                if found and found != have and found not in held.get(source, ()):
+                    ids[source] = found
+                    moved += 1
+                    marks.append("%s=moved(%s)" % (source, how))
+                    continue
+            if have:
                 kept += 1
                 marks.append("%s=kept" % source)
                 continue
@@ -618,8 +658,8 @@ def main():
                     marks.append("%s=%s" % (source, how))
         print("  %-46s %s" % (repo, " ".join(marks)))
 
-    print("\nfilled %d, kept %d already set, %d ambiguous left empty"
-          % (filled, kept, amb))
+    print("\nfilled %d, kept %d already set, moved %d off a dropped row, "
+          "%d ambiguous left empty" % (filled, kept, moved, amb))
     if args.write:
         n = patch_ids(args.registry, reg)
         print("wrote %s: %d ids block(s) rewritten" % (args.registry, n))

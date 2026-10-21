@@ -24,6 +24,8 @@ import os
 import subprocess
 import sys
 
+import capture
+
 # the api answers 100 rows unless told otherwise, and the board outgrew that:
 # gemma 4 26b fell off at rank 98 when eighteen models were added above it.
 # `limit` is the only paging parameter it honours (page/offset are ignored),
@@ -87,6 +89,8 @@ def main():
     # the api sends no etag, so freshness is time-based
     ap.add_argument("--max-age", type=int, default=6 * 3600)
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="write even though the capture would hold fewer models")
     args = ap.parse_args()
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -119,10 +123,17 @@ def main():
             m[mode] = keep
         out.append(m)
 
-    with open(args.out, "w") as f:
-        json.dump({"rankings": out}, f, indent=1)
     langs = sorted({l for m in out for l in m.get("by_language", {})})
-    print("wrote %s: %d models, languages: %s" % (args.out, len(out), ", ".join(langs)))
+    out, kept = capture.carry(capture.previous(args.out).get("rankings"), out,
+                              key=lambda m: m.get("model_id"))
+    written, now, before = capture.write(args.out, {"rankings": out},
+                                         lambda p: len(p["rankings"]),
+                                         allow_shrink=args.allow_shrink)
+    if not written:
+        sys.exit(capture.refused(args.out, now, before, "models"))
+    print("wrote %s: %d models, languages: %s" % (args.out, now, ", ".join(langs)))
+    if kept:
+        print(capture.carried(kept))
 
 
 if __name__ == "__main__":

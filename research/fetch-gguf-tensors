@@ -105,6 +105,8 @@ SKIP_TAG = re.compile(r"^(mmproj|mtp|dspark|dflash|eagle3|imatrix)", re.I)
 # asking anyway is a request that can only fail, so a rung with no gguf in it is
 # skipped rather than fetched and reported unreadable
 GGUF_FILE = re.compile(r"\.gguf$", re.I)
+# audio.cpp's catalog, whose gguf packages are rungs too
+AUDIOCPP = "data/audiocpp.json"
 
 
 def tensors_in(data):
@@ -178,25 +180,42 @@ def read_tensors(repo, path, refresh=False):
     return None
 
 
+# tables a token reads one row of rather than multiplies through: deepseek
+# v4.1's engram memory and the per-layer embeddings of gemma 4's e models and
+# qwen3.8 flash next. the engram's own projections are matrices and stay weights.
+# cstr's crispasr conversions keep the checkpoint's own name for the gemma table
+LOOKUP = re.compile(r"(?:^|\.)(?:engram_embd|per_layer_token_embd|embed_tokens_per_layer)\.")
+
+
 def summarise(rows):
     """{tensors, elements, bpw, types} over every tensor of one rung.
 
     `types` is each type's share of ELEMENTS rather than of tensors, because a
     bits-per-weight average is over weights: a model's 400 f32 norms are most of
-    its tensors and almost none of its size.
+    its tensors and almost none of its size. Where lookup tables are present,
+    `core_bpw` is the bits of everything else and `lookup` their share of the
+    elements, because a quantization loss curve was fitted on weights that are
+    multiplied and these are not.
     """
     by = collections.Counter()
-    total = bits = 0
-    for _name, n, label, nbytes in rows:
+    total = bits = look = look_bits = 0
+    for name, n, label, nbytes in rows:
         by[label] += n
         total += n
         bits += nbytes * 8
+        if LOOKUP.search(name):
+            look += n
+            look_bits += nbytes * 8
     if not total:
         return None
-    return {"tensors": len(rows), "elements": total,
-            "bpw": round(bits / total, 3),
-            "types": {k: round(v / total, 4)
-                      for k, v in sorted(by.items(), key=lambda kv: -kv[1])}}
+    out = {"tensors": len(rows), "elements": total,
+           "bpw": round(bits / total, 3),
+           "types": {k: round(v / total, 4)
+                     for k, v in sorted(by.items(), key=lambda kv: -kv[1])}}
+    if look and look < total:
+        out["core_bpw"] = round((bits - look_bits) / (total - look), 3)
+        out["lookup"] = round(look / total, 4)
+    return out
 
 
 def rungs(repo, max_age, refresh, pinned=(), drafter=False):
@@ -214,12 +233,52 @@ def rungs(repo, max_age, refresh, pinned=(), drafter=False):
     return out
 
 
+def read_rung(repo, paths, refresh):
+    """One rung's summary over all of its files, or None if any did not read.
+
+    A sharded rung is one model in several files, and its bits per weight is
+    over all of them.
+    """
+    rows = []
+    for path in paths:
+        got = read_tensors(repo, path, refresh)
+        if got is None:
+            return None
+        rows.extend(got)
+    return summarise(rows) if rows else None
+
+
+def package_rungs(catalog):
+    """[(repo, package id, gguf paths)] for every gguf package audio.cpp installs.
+
+    A package is the rung audio.cpp loads, and several ship at `orig` -- the
+    checkpoint's own dtype -- which says nothing a ladder can label until the
+    file's own table is read. Keyed by package id, since one package can be
+    several files. A file list the catalog capped is not the whole package, so
+    a summary over it would be of part of a model.
+    """
+    out = []
+    for rec in sorted(((catalog or {}).get("families") or {}).values(),
+                      key=lambda r: r.get("family") or ""):
+        for p in rec.get("packages") or []:
+            paths = [f for f in p.get("files") or [] if GGUF_FILE.search(f)]
+            if p.get("format") == "gguf" and p.get("repo") and paths and not p.get("files_more"):
+                out.append((p["repo"], p["id"], paths))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--registry", default=sizes.REGISTRY)
+    ap.add_argument("--audiocpp", default=AUDIOCPP,
+                    help="audio.cpp's catalog, whose gguf packages are read too")
     ap.add_argument("--out", default="data/gguf-tensors.json")
-    ap.add_argument("--repo", help="read one gguf repo rather than the roster")
+    ap.add_argument("--repo", action="append",
+                    help="read this gguf repo rather than the roster; repeatable")
+    ap.add_argument("--reread", action="store_true",
+                    help="with --repo, read its rungs again even where the capture "
+                         "has them, as when the summary grows a field")
     ap.add_argument("--max-age", type=int, default=sizes.MAX_AGE,
                     help="for the TREE listing; the headers themselves are immutable")
     ap.add_argument("--refresh", action="store_true")
@@ -228,7 +287,9 @@ def main():
 
     # the same roster the sizer reads, from the same function: a rung this skips
     # is a ladder the viewer draws with sizes and no layer mix
-    names = [args.repo] if args.repo else sizes.roster(args.registry)
+    names = args.repo or sizes.roster(args.registry)
+    if args.reread and not args.repo:
+        sys.exit("!!! --reread is for named repos: the whole roster is --refresh")
 
     # the capture is the durable cache and the downloaded bytes are scratch.
     # reaching one tensor table means transferring the vocabulary in front of
@@ -237,40 +298,31 @@ def main():
     # already recorded is skipped without a request, and the http bodies can be
     # deleted -- `rm research/.cache/gtensors-*` -- at the cost of a re-download
     # only for whatever is asked for again.
-    try:
-        with open(args.out) as f:
-            out = json.load(f)
-    except (IOError, ValueError):
-        out = {}
-    if args.refresh:
-        out = {}
-    known = set(out)
+    # `--refresh` re-reads every rung the way `--reread` does, and like it keeps
+    # a rung's row when the re-read fails: starting from nothing is how a sweep
+    # with --refresh would have lost every rung that did not answer
+    out = capture.previous(args.out)
+    known = set() if args.reread or args.refresh else set(out)
 
     failed, pinned = 0, sizes.pinned_files(args.registry)
     heads = sizes.drafter_repos(args.registry)
-    for repo in names:
-        for tag, paths in rungs(repo, args.max_age, args.refresh,
-                                pinned.get(repo, ()), repo in heads):
-            if "%s:%s" % (repo, tag) in known:
-                continue
-            rows = []
-            for path in paths:
-                # a sharded rung is one model in several files, and its bits per
-                # weight is over all of them
-                got = read_tensors(repo, path, args.refresh)
-                if got is None:
-                    rows = None
-                    break
-                rows.extend(got)
-            summary = summarise(rows) if rows else None
-            if not summary:
-                failed += 1
-                continue
-            out["%s:%s" % (repo, tag)] = summary
-            print("  %-46s %-16s %6.3f bpw  %s"
-                  % (repo, tag, summary["bpw"],
-                     " ".join("%s %d%%" % (k, round(100 * v))
-                              for k, v in list(summary["types"].items())[:4])))
+    jobs = [(repo, tag, paths) for repo in names
+            for tag, paths in rungs(repo, args.max_age, args.refresh,
+                                    pinned.get(repo, ()), repo in heads)]
+    jobs += [j for j in package_rungs(capture.previous(args.audiocpp))
+             if not args.repo or j[0] in args.repo]
+    for repo, tag, paths in jobs:
+        if "%s:%s" % (repo, tag) in known:
+            continue
+        summary = read_rung(repo, paths, args.refresh)
+        if not summary:
+            failed += 1
+            continue
+        out["%s:%s" % (repo, tag)] = summary
+        print("  %-46s %-16s %6.3f bpw  %s"
+              % (repo, tag, summary["bpw"],
+                 " ".join("%s %d%%" % (k, round(100 * v))
+                          for k, v in list(summary["types"].items())[:4])))
 
     if not out:
         sys.exit("!!! no tensor tables read -- every gguf came back unreadable")
