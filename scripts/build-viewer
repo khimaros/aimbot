@@ -35,6 +35,7 @@ absent -- see the README's split.
 """
 
 import argparse
+import datetime
 import functools
 import hashlib
 import importlib.machinery
@@ -1756,7 +1757,7 @@ def build():
         # copy the page could disagree with
         "licenses": ctx["licenses"]["tiers"],
         "provenance": provenance(),
-        # the newest of the models' own days, which is what the top bar prints
+        # the newest of the models' own days, the floor under `page_day`
         "updated": max([m["updated"] for m in models if m.get("updated")], default=None),
         "models": models,
         "adapters": adapters,
@@ -1876,6 +1877,33 @@ def layouts_export(table, models):
     return {"version": table.get("version"), "layouts": layouts, "models": mapped}
 
 
+def page_day(payload, page, prior, prior_page, today):
+    """The day the top bar prints: when what ships last differed from before.
+
+    The models' own days only move with the hub or an assessment, so a default
+    turned on or a board refreshed left the page claiming an older day. The
+    build time alone would fail `--check` every morning; carrying the committed
+    day forward while nothing shipped differs keeps a rebuild reproducible.
+    """
+    # compared as written, since a tuple built here reads back as a list
+    def bare(p):
+        return json.dumps({k: v for k, v in p.items() if k != "updated"}, sort_keys=True)
+    if prior and page == prior_page and bare(payload) == bare(prior):
+        return prior.get("updated")
+    return max(d for d in (payload.get("updated"), today) if d)
+
+
+def read_prior(out):
+    """The payload and page currently on disk, or Nones where there are none."""
+    try:
+        with open(os.path.join(out, "data.json")) as f:
+            payload = json.load(f)
+        with open(os.path.join(out, "index.html")) as f:
+            return payload, f.read()
+    except (OSError, ValueError):
+        return None, None
+
+
 def write(path, text, check):
     current = open(path).read() if os.path.exists(path) else None
     if check:
@@ -1898,8 +1926,10 @@ def main():
     args = ap.parse_args()
 
     payload = build()
-    data = json.dumps(payload, indent=1, sort_keys=True) + "\n"
     page = render(payload)
+    payload["updated"] = page_day(payload, page, *read_prior(args.out),
+                                  datetime.date.today().isoformat())
+    data = json.dumps(payload, indent=1, sort_keys=True) + "\n"
     layouts = layouts_export(
         load_yaml(os.path.join(ROOT, "registry", "layouts.yaml")),
         load_yaml(os.path.join(ROOT, "registry", "models.yaml")).get("models") or {})

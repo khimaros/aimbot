@@ -592,13 +592,14 @@ takes a lora only as a local path.
 it straight from the `docs/` folder on `master`.
 
 **the top bar says when the registry last changed, and each model says its
-own.** `model registry (updated YYYY-MM-DD)` is the newest of the models' days,
-and a model's day is on its detail page and in an `updated` column that starts
-hidden. the day is read off the captures and is deliberately not the build
-time, which would make `make lint` fail every morning: it is the newest of the
-hub's last change to the weights, the hub's last change to any gguf repo the
-entry carries, and the day its assessment was written. a registry edit that
-touches none of those does not move it.
+own.** `model registry (updated YYYY-MM-DD)` is the day `make site` last wrote
+a page or payload that differed from the copy in `docs/`, so a registry edit, a
+changed default or a refreshed board moves it. a rebuild that changes nothing
+keeps the committed day, which is why `make lint` does not fail every morning.
+a model's day is on its detail page and in an `updated` column that starts
+hidden. it is read off the captures: the newest of the hub's last change to the
+weights, the hub's last change to any gguf repo the entry carries, and the day
+its assessment was written.
 
 **the tab icon is inlined, and it is a reticle.** `href="favicon.svg"` would be
 a second file to deploy for a decoration, so `build-viewer` writes the mark into

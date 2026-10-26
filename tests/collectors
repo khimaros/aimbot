@@ -1710,6 +1710,27 @@ def the_dashboard_defaults_are_a_reviewed_file_rather_than_a_constant():
         eq(shipped["config"][block], live[block], "%s is shipped verbatim" % block)
 
 
+@test
+def the_page_day_moves_when_what_ships_does_and_only_then():
+    """Turning audio.cpp on by default and refreshing every AA board left the
+    top bar on the day of the last hub change, because the day was read off
+    the models alone. It is the day the shipped page last differed from the
+    copy before it, which a rebuild on a later day with the same inputs keeps.
+    """
+    bv = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    payload = {"updated": "2026-10-21", "config": {"engines": ["llama.cpp"]}}
+    prior = dict(payload, updated="2026-10-23")
+    today = "2026-10-26"
+    eq(bv.page_day(payload, "<p>", prior, "<p>", today), "2026-10-23",
+       "nothing shipped differs, so a later build keeps the committed day")
+    eq(bv.page_day(payload, "<p>", dict(prior, config={"engines": []}), "<p>", today),
+       today, "a default the page ships changed")
+    eq(bv.page_day(payload, "<p>", prior, "<q>", today), today, "the page's code changed")
+    eq(bv.page_day(payload, "<p>", None, None, today), today, "nothing to compare with")
+    eq(bv.page_day(dict(payload, pair=("a", 1)), "<p>", dict(prior, pair=["a", 1]), "<p>",
+                   today), "2026-10-23", "a tuple built is the list read back off disk")
+
+
 def aimbot_cli(*argv):
     """(returncode, stdout, stderr) from the query cli."""
     r = subprocess.run([os.path.join(ROOT, "scripts", "aimbot")] + list(argv),
