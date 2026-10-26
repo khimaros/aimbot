@@ -8661,6 +8661,118 @@ models:
         eq("decides" in errs and why in errs, True, "%r is refused: %s" % (body.strip(), errs))
 
 
+# a decensored model shipped as a lora over the base model's own ggufs, rather
+# than a second copy of the weights. the rungs are the base's, so its repos are
+# the base's repos and nothing else
+ADAPTER_REGISTRY = """version: 1
+models:
+  Vendor/Big:
+    kind: text
+    name: {short: big model, match: 'big[\\\\s-]*model'}
+    repos:
+    - {repo: Quanter/Big-GGUF, files: {Q8_0: {}}}
+    sampling:
+      instruct: {source: quant-card, temp: 0.7}
+  Ablator/Big-Uncensored:
+    kind: text
+    name: {short: big model uncensored, match: 'big[\\\\s-]*model[\\\\s-]*uncensored'}
+    base: {repo: Vendor/Big, relation: adapter}
+    adapter:
+      repo: Ablator/Big-Uncensored-GGUF
+      file: lora/Big-Uncensored-LoRA.gguf
+      scale: 1.25
+      built_on: {repo: Quanter/Big-GGUF, quant: Q8_0}
+      note: rank 1, measured against bf16
+    repos:
+    - {repo: Quanter/Big-GGUF, files: {Q8_0: {}}}
+    sampling:
+      instruct: {source: quant-card, temp: 0.7}
+"""
+
+
+@test
+def an_adapter_names_its_file_and_rides_on_the_base_models_rungs():
+    """`adapter:` is a lora loaded over a rung of another entry's weights.
+
+    the file is one object in one repo, the scale is what `--lora-scaled` takes,
+    and `built_on` pins the rung its factors were computed from, since a rank-1
+    abliteration is exact only on the weights it read. the entry's repos have to
+    be the base's: an adapter applied to weights it was not made for is a
+    configuration nobody measured.
+    """
+    code, findings, _ = validate(ADAPTER_REGISTRY)
+    eq(code, 0, "an adapter over a carried base is legal: %r" % (findings,))
+    for old, new, why in (
+            ("      scale: 1.25\n", "      scale: 1.25\n      rank: 1\n", "rank"),
+            ("      file: lora/Big-Uncensored-LoRA.gguf\n", "", "file"),
+            # `--lora-scaled` splits each item on `,` and then on `:`, so a path
+            # holding either is refused or misread by llama-server
+            ("file: lora/Big-Uncensored-LoRA.gguf", "file: 'lora/Big:Uncensored.gguf'", "file"),
+            ("file: lora/Big-Uncensored-LoRA.gguf", "file: 'lora/Big,Uncensored.gguf'", "file"),
+            ("scale: 1.25", "scale: -1", "scale"),
+            ("relation: adapter}\n    adapter", "relation: finetune}\n    adapter", "relation"),
+            ("    base: {repo: Vendor/Big, relation: adapter}\n", "", "base"),
+            ("{repo: Quanter/Big-GGUF, quant: Q8_0}", "{repo: Other/Big-GGUF, quant: Q8_0}",
+             "built_on"),
+            ("{repo: Quanter/Big-GGUF, quant: Q8_0}", "{repo: Quanter/Big-GGUF, quant: model}",
+             "built_on"),
+            # the entry's own repo list, which is the last one in the fixture
+            ("{repo: Quanter/Big-GGUF, files:", "{repo: Other/Big-GGUF, files:",
+             "Other/Big-GGUF")):
+        head, found, tail = ADAPTER_REGISTRY.rpartition(old)
+        eq(bool(found), True, "the fixture edit for %r applied" % why)
+        bad = head + new + tail
+        code, findings, _ = validate(bad)
+        errs = " ".join(f["error"] for f in findings)
+        eq(code == 1 and "adapter" in errs and why in errs, True,
+           "%r is refused: %s" % (why, errs))
+
+
+@test
+def an_adapter_is_sized_narrowed_and_kept_off_the_dashboard():
+    """The lora is resident beside the weights, so it is sized like a drafter.
+
+    The adapter repo is named nowhere else in the registry -- AtomicChat ships
+    its lora in a folder beside full builds of its own -- so the sizer has to
+    put it on the roster and pin the file, and the build has to find its bytes
+    under whichever key the sizer filed it, since a consumer charges them.
+    Where `built_on` pins a rung, that rung is the only one offered: the
+    factors were read off those weights.
+    """
+    import yaml
+    sz =load_script_with_research("fetch_gguf_sizes", "fetch-gguf-sizes")
+    tmp = tempfile.mkdtemp()
+    try:
+        reg = os.path.join(tmp, "models.yaml")
+        with open(reg, "w") as f:
+            f.write(ADAPTER_REGISTRY)
+        got, pinned = sz.roster(reg), sz.pinned_files(reg)
+    finally:
+        shutil.rmtree(tmp)
+    eq("Ablator/Big-Uncensored-GGUF" in got, True, "the adapter repo is sized: %r" % (got,))
+    eq("Big-Uncensored-LoRA.gguf" in pinned.get("Ablator/Big-Uncensored-GGUF", ()), True,
+       "and its file is pinned apart from the folder: %r" % (dict(pinned),))
+
+    bv = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    model = yaml.safe_load(ADAPTER_REGISTRY)["models"]["Ablator/Big-Uncensored"]
+    for key in ("lora", "Big-Uncensored-LoRA.gguf"):
+        a = bv.adapter(model, {"Ablator/Big-Uncensored-GGUF": {key: 318 * 2 ** 20}})
+        eq((a["gib"], a["scale"]), (0.31, 1.25), "sized under the %s key: %r" % (key, a))
+    rows = [{"repo": "Quanter/Big-GGUF", "available": [{"quant": "Q4_K_M"}, {"quant": "Q8_0"}]},
+            {"repo": "Other/Big-GGUF", "available": [{"quant": "Q8_0"}]}]
+    eq(bv.built_on(rows, model["adapter"]),
+       [{"repo": "Quanter/Big-GGUF", "available": [{"quant": "Q8_0"}]}],
+       "a pinned adapter offers the rung it was built on and nothing else")
+    eq(bv.built_on(rows, {"repo": "x", "file": "y"}), rows, "an unpinned one offers every rung")
+
+    # an adapter entry carries no measurement of its own, so it is not a row of
+    # the dashboard; it ships beside the models for llama-tools to serve
+    listed, adapters = bv.split_adapters([{"repo": "a"}, {"repo": "b", "adapter": {"file": "x"}},
+                                          {"repo": "c", "adapter": None}])
+    eq(([m["repo"] for m in listed], [m["repo"] for m in adapters]), (["a", "c"], ["b"]),
+       "adapters leave the model list and nothing else does")
+
+
 @test
 def transcribe_cpp_is_an_engine_a_speech_model_can_name():
     """handy-computer's parakeet ggufs load in transcribe.cpp and nothing else.

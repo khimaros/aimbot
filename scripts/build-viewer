@@ -742,6 +742,57 @@ def speculative(model, sizes):
     return spec
 
 
+def adapter(model, sizes):
+    """The lora an entry loads over its base's rungs, and what it weighs.
+
+    Resident beside the weights the way a drafter is, so the fit charges for
+    it. Sized under the key the sizer files it by -- its own name where it was
+    pinned apart from a folder of others, the folder's otherwise -- by asking
+    the sizer, so the two cannot disagree about which key a path is.
+    """
+    a = model.get("adapter")
+    if not a:
+        return None
+    have = sizes.get(a["repo"]) or {}
+    out = dict(a)
+    for key in (a["file"].rpartition("/")[2], sizer().tag_of(a["file"])):
+        if have.get(key):
+            out.update(bytes=have[key], gib=round(have[key] / GIB, 2))
+            break
+    return out
+
+
+def built_on(rows, block):
+    """Only the rung an adapter's factors were read from, where it pins one.
+
+    A rank-1 abliteration is exact on the weights it was computed from and an
+    approximation on any other, so a pinned adapter offers that rung alone.
+    """
+    on = (block or {}).get("built_on")
+    if not on:
+        return rows
+    return [dict(r, available=[a for a in r["available"]
+                               if not on.get("quant") or on["quant"] in (a["quant"], a.get("file"))])
+            for r in rows if r["repo"] == on["repo"]]
+
+
+def split_adapters(built):
+    """(dashboard rows, adapter entries) out of every built entry.
+
+    An adapter entry has no measurement of its own -- every score is its
+    base's -- so it is a serving fact for llama-tools rather than a row to
+    rank, and it ships beside the models where the page never loads it.
+    """
+    return ([m for m in built if not m.get("adapter")],
+            [m for m in built if m.get("adapter")])
+
+
+@functools.lru_cache(maxsize=1)
+def sizer():
+    """research/fetch-gguf-sizes, for the one rule saying which key a path sizes under."""
+    return load_script("fetch_gguf_sizes", os.path.join(ROOT, "research", "fetch-gguf-sizes"))
+
+
 def load_script(name, path):
     """Import one of this repo's extensionless scripts as a module."""
     spec = importlib.util.spec_from_loader(
@@ -1512,7 +1563,8 @@ def build_model(repo, model, ctx):
             if row["repo"] not in own:
                 row["engines_not"] = ["audio.cpp"]
         rows = merge_rows(rows, ac.pop("rows"))
-    rows = with_bpw(rows, facts.get("params_total_b"))
+    lora = adapter(model, ctx["sizes"])
+    rows = with_bpw(built_on(rows, lora), facts.get("params_total_b"))
     gufo = gufo_block(repo, model, ctx["gufo"])
     if gufo:
         gufo["rungs"] = gufo_rungs(gufo, rows)
@@ -1553,6 +1605,7 @@ def build_model(repo, model, ctx):
                                       c.get("file") or c.get("quant"))
                        for c in (model.get("components") or [])],
         "speculative": rendered_notes(speculative(model, ctx["sizes"]), repo),
+        "adapter": rendered_notes(lora, repo) if lora else None,
         "sampling": rendered_notes(model.get("sampling") or {}, repo),
         "thinking": rendered_notes(model.get("thinking") or {}, repo),
         "turns": rendered_notes(model.get("turns") or {}, repo),
@@ -1659,7 +1712,8 @@ def build():
     ctx["registry_keys"] = set(registry)
     sampling = load_yaml(os.path.join(ROOT, "registry", "sampling.yaml"))
     cfg = dashboard_config(tiers=ctx["licenses"]["tiers"])
-    models = [build_model(repo, m, ctx) for repo, m in sorted(registry.items())]
+    models, adapters = split_adapters(
+        [build_model(repo, m, ctx) for repo, m in sorted(registry.items())])
     # a ladder that got shorter says so. these are files a repo publishes that
     # name no type, so the page has no label to offer them under -- a reference
     # build for a diff harness, or an untagged full-precision upload
@@ -1705,6 +1759,7 @@ def build():
         # the newest of the models' own days, which is what the top bar prints
         "updated": max([m["updated"] for m in models if m.get("updated")], default=None),
         "models": models,
+        "adapters": adapters,
     }
 
 

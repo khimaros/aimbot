@@ -3335,6 +3335,15 @@ test('a drafter somebody else published is priced and asked for by name', () => 
      'the served rung drafts with what it already holds: ' + cmd);
 });
 
+test('an adapter entry ships for a consumer and is not a row of the dashboard', () => {
+  // a lora over another entry's weights has no measurement of its own, so it
+  // travels in `adapters` for llama-tools and never reaches the ranking
+  ok(Array.isArray(D.adapters), 'the payload carries the adapter list');
+  eq(D.models.filter(m => m.adapter).length, 0, 'and no model row is one');
+  D.adapters.forEach(a => ok(a.adapter.repo && a.adapter.file && a.base.repo,
+                             'each names its file and its base: ' + a.repo));
+});
+
 test('the drafter comes out of the budget before a quant is chosen', () => {
   RESET();
   const m = model('deepseek v4 flash 0731'), d = draftGib(m);

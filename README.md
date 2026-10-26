@@ -550,7 +550,39 @@ is any rung a listed repo publishes, resolved in repo order: it reads each
 repo's `available` ladder out of `docs/data.json`, and skips the rungs marked
 `fork_type`, so `models[].repo` and `repos[].{repo, role, crispasr, speculative,
 readout, available[].{quant, file, fork_type}}` there are a contract with another repo
-rather than page internals.
+rather than page internals. so is `adapters[]`, described next.
+
+## adapters
+
+an abliteration removes one direction from every matrix that writes the
+residual stream, `W - r (r^T W)`, which is a rank-1 change and so a lora
+exactly. a decensored model can then be a few hundred megabytes loaded over the
+base model's own gguf rather than a second copy of its weights. such an entry
+says `base: {repo: <the base entry>, relation: adapter}` and carries:
+
+```yaml
+adapter:
+  repo: AtomicChat/Qwen3.8-Flash-Next-Uncensored-GGUF
+  file: lora/Qwen3.8-Flash-Next-Uncensored-LoRA.gguf
+  scale: 1.25                                    # what --lora-scaled takes
+  built_on: {repo: unsloth/Qwen3.8-Flash-Next-GGUF, quant: UD-IQ4_XS}
+```
+
+its `repos:` are the base entry's, since those are the rungs it loads over, and
+lint refuses any other. `built_on` is for an adapter whose factors were computed
+from one quantized file: the edit is exact on the weights it read and an
+approximation on any other, so the entry offers that rung alone. an adapter
+computed from the full-precision weights leaves it out and rides on every rung.
+lint also refuses a `file` holding `:` or `,`, which `--lora-scaled` splits its
+argument on.
+
+an adapter entry is not a row of the dashboard or of MODELS.md: it has no
+measurement of its own, every score being its base's. `docs/data.json` ships
+it in `adapters[]` beside `models[]`, in the same shape, with the file sized
+like a drafter (`adapter.{bytes, gib}`) and `repos` narrowed to the `built_on`
+rung. that list is for llama-tools, which loads the file with
+`--lora-scaled hf://<repo>:<file>:<scale>` through hf-exec, since llama-server
+takes a lora only as a local path.
 
 ## the viewer
 

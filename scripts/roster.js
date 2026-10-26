@@ -402,7 +402,6 @@ const draftKind = m => (m.speculative || {}).type || '';
 // fit and the ladder, and never the row a reader is looking at.
 const draftGib = (m, q) => q && !rungDrafts(q)
   ? 0 : ((m.speculative || {}).draft || {}).gib || 0;
-
 // what drafting yields, wherever the vendor ships a drafter. the read cost of
 // the draft pass itself is NOT modelled -- for a head of half a gib beside 30
 // of weights that is noise, for deepseek's 10gib dspark it is not -- so this

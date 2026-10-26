@@ -338,6 +338,71 @@ def check_base(b, where, keys, f):
         f.add(where, "base.repo is the entry itself")
 
 
+# A LORA LOADED OVER ANOTHER ENTRY'S WEIGHTS, rather than a second copy of them.
+# an abliteration is a rank-1 edit per matrix and fits a lora exactly, so a
+# decensored model can be a few hundred megabytes beside the base's own gguf.
+# the rungs are the base's, which is why the entry's repos must be too, and
+# `built_on` pins the rung the factors were computed from: the edit is exact
+# only on the weights it read, and a pin says which those were
+ADAPTER_FIELDS = {"repo", "file", "scale", "built_on", "note"}
+ADAPTER_BUILT_ON_FIELDS = {"repo", "quant"}
+# llama.cpp's common/arg.cpp splits `--lora-scaled` on `,` into adapters and
+# each of those on `:` into exactly a path and a scale
+ADAPTER_PATH_SEPARATORS = re.compile(r"[:,]")
+
+
+def check_adapter(m, where, models, f):
+    """An adapter names one file, a base it rides on, and the rung it was built on."""
+    a = m.get("adapter")
+    if a is None:
+        return
+    if not isinstance(a, dict):
+        f.add(where, "adapter must be a mapping, got %r" % (a,))
+        return
+    unknown = sorted(set(a) - ADAPTER_FIELDS)
+    if unknown:
+        f.add(where, "unknown adapter field(s) %s (known: %s)"
+              % (", ".join(unknown), ", ".join(sorted(ADAPTER_FIELDS))))
+    for key in ("repo", "file"):
+        if not a.get(key):
+            f.add(where, "adapter needs a %s: the lora is one object in one repo" % key)
+    if ADAPTER_PATH_SEPARATORS.search(str(a.get("file") or "")):
+        f.add(where, "adapter.file %r holds `:` or `,`, which --lora-scaled splits "
+                     "its argument on" % a["file"])
+    scale = a.get("scale")
+    if scale is not None and (isinstance(scale, bool) or not isinstance(scale, (int, float))
+                              or scale <= 0):
+        f.add(where, "adapter.scale %r must be a positive number, what --lora-scaled takes"
+              % (scale,))
+    b = m.get("base") or {}
+    if b.get("relation") != "adapter":
+        f.add(where, "an adapter entry says `base: {repo: ..., relation: adapter}`, "
+                     "got relation %r" % (b.get("relation"),))
+    base = (models.get("models") or {}).get(b.get("repo"))
+    if base is None:
+        f.add(where, "adapter base %r is not an entry here, and its rungs are what "
+                     "the adapter loads over" % (b.get("repo"),))
+        return
+    have = set(rungs.repo_names(base))
+    for r in rungs.repo_names(m):
+        if r not in have:
+            f.add(where, "adapter rides on %s's weights, and %s is not one of its repos"
+                  % (b["repo"], r))
+    on = a.get("built_on")
+    if on is None:
+        return
+    if not isinstance(on, dict) or set(on) - ADAPTER_BUILT_ON_FIELDS or not on.get("repo"):
+        f.add(where, "adapter.built_on %r must be {repo, quant}" % (on,))
+        return
+    if on["repo"] not in rungs.repo_names(m):
+        f.add(where, "adapter.built_on names %s, which is not one of this entry's repos"
+              % on["repo"])
+    if on.get("quant") and not rungs.facts_for(m, on["quant"], on["repo"]) \
+            and not is_quant_name(on["quant"]):
+        f.add(where, "adapter.built_on quant %r does not name a quantization type"
+              % on["quant"])
+
+
 # how a client reads an answer out of the model, which verdict imports through
 # docs/layouts.json. `chat` builds the prompt from the model's own
 # template, `layout` renders a named plain layout the weights were trained on
@@ -791,6 +856,7 @@ def check_registry(models, sampling, f):
         check_runtime(m.get("runtime"), repo, f)
         check_crispasr(m.get("crispasr"), repo, f)
         check_base(m.get("base"), repo, models, f)
+        check_adapter(m, repo, models, f)
         check_readout(m.get("readout"), repo, f)
         check_decides(m.get("decides"), repo, f)
         check_speculative(m.get("speculative"), repo, f)
