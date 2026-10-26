@@ -842,12 +842,20 @@ function rungEngines(m, c, named) {
 // the pool the choice is made from: every rung the registry lists that one of
 // the runtimes this view has selected can actually load. no runtime picked is
 // no runtime filter, which is also how the entries nothing here runs stay.
+//
+// audio.cpp is on by default for the speech models nothing else runs, so where
+// another selected runtime loads the model, audio.cpp's rungs stand back:
+// ranking them first would move every qwen3-tts and breeze-tts-2 row off the
+// file crispasr serves and off the speaker list that file carries.
+const FALLBACK_ENGINE = 'audio.cpp';
 function rungPool(m) {
   const all = quantChoices(m);
   if (!filters.engines.size) return all;
   const named = crispasrNamed(m);
-  return all.filter(c => [...rungEngines(m, c, named)]
-    .some(e => filters.engines.has(e)));
+  const loads = c => [...rungEngines(m, c, named)].filter(e => filters.engines.has(e));
+  const pool = all.filter(c => loads(c).length);
+  const others = pool.filter(c => loads(c).some(e => e !== FALLBACK_ENGINE));
+  return others.length ? others : pool;
 }
 
 // which rung a ROW is being read as. an expanded row carries its own; a model
@@ -3814,9 +3822,16 @@ let ops = {runtime: null, repo: null, quant: null, profile: null};
 // checkpoint it loads the base repo whole, the way vllm does.
 const runtimesFor = m => RUNTIMES.filter(r => (m.engines || []).includes(r.k))
   .map(r => r.k === 'gufo' ? {...r, gguf: !!((m.gufo || {}).rungs || []).length} : r);
+// unpicked, the modal opens on a runtime that loads the rung the row reads, so
+// the two cannot name different files: qwen3-asr lists a checkpoint runtime
+// first and reads audio.cpp's package
 const pickedRuntime = m => {
   const mine = runtimesFor(m);
-  return mine.find(r => r.k === ops.runtime) || mine[0] || {k: '', gguf: true};
+  const q = activeQuant(m);
+  const loads = q ? rungEngines(m, q, crispasrNamed(m)) : new Set();
+  const row = r => loads.has(r.k) && (!filters.engines.size || filters.engines.has(r.k));
+  return mine.find(r => r.k === ops.runtime) || mine.find(row) || mine[0]
+    || {k: '', gguf: true};
 };
 // the rungs the picked runtime can load, which is every rung but under gufo
 const rungsUnder = m => pickedRuntime(m).k === 'gufo'

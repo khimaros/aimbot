@@ -2206,9 +2206,16 @@ let ops = {runtime: null, repo: null, quant: null, profile: null};
 // checkpoint it loads the base repo whole, the way vllm does.
 const runtimesFor = m => RUNTIMES.filter(r => (m.engines || []).includes(r.k))
   .map(r => r.k === 'gufo' ? {...r, gguf: !!((m.gufo || {}).rungs || []).length} : r);
+// unpicked, the modal opens on a runtime that loads the rung the row reads, so
+// the two cannot name different files: qwen3-asr lists a checkpoint runtime
+// first and reads audio.cpp's package
 const pickedRuntime = m => {
   const mine = runtimesFor(m);
-  return mine.find(r => r.k === ops.runtime) || mine[0] || {k: '', gguf: true};
+  const q = activeQuant(m);
+  const loads = q ? rungEngines(m, q, crispasrNamed(m)) : new Set();
+  const row = r => loads.has(r.k) && (!filters.engines.size || filters.engines.has(r.k));
+  return mine.find(r => r.k === ops.runtime) || mine.find(row) || mine[0]
+    || {k: '', gguf: true};
 };
 // the rungs the picked runtime can load, which is every rung but under gufo
 const rungsUnder = m => pickedRuntime(m).k === 'gufo'

@@ -834,8 +834,8 @@ test('the runtime filter is a multi-select over what actually loads a model', ()
   filters.licenses = new Set();  // and no tier picked is every licence
 
   eq([...filters.engines].sort().join(','),
-     'crispasr,llama.cpp,stable-diffusion.cpp',
-     'three runtimes are on by default');
+     'audio.cpp,crispasr,llama.cpp,stable-diffusion.cpp',
+     'four runtimes are on by default');
 
   const shown_ = visible().map(m => m.short);
   ok(shown_.includes('whisper-large-v3-turbo'), 'crispasr models are in');
@@ -1257,8 +1257,16 @@ test('audio.cpp and gufo are engines their own catalogs claim', () => {
   const rt = k => (D.config.runtimes || []).find(r => r.k === k);
   ok(rt('audio.cpp'), 'audio.cpp is a runtime the config declares');
   ok(rt('gufo'), 'and so is gufo');
-  ok(DEFAULT_ENGINES.indexOf('audio.cpp') < 0 && DEFAULT_ENGINES.indexOf('gufo') < 0,
-     'neither is on by default: ' + DEFAULT_ENGINES.join(','));
+  // audio.cpp is the only runtime for most of the speech roster, so a reader
+  // asking for text to audio would otherwise not see them. gufo is a second
+  // engine for weights llama.cpp already loads, so it stays opt-in
+  ok(DEFAULT_ENGINES.indexOf('audio.cpp') >= 0, 'audio.cpp is on by default: '
+     + DEFAULT_ENGINES.join(','));
+  ok(DEFAULT_ENGINES.indexOf('gufo') < 0, 'gufo is not: ' + DEFAULT_ENGINES.join(','));
+  filters.mods = new Set(['t2a']);
+  ok(visible().some(m => m.repo === 'fishaudio/drama-3'),
+     'an audio.cpp-only model is in the default text to audio roster');
+  RESET();
 
   ok(runtimesFor(model('omnivoice')).some(r => r.k === 'audio.cpp'),
      'omnivoice runs under audio.cpp');
@@ -2525,10 +2533,12 @@ test('an entry nothing here is known to load is unknown, not too big', () => {
   // fish s2 pro was this case's real example until audio.cpp's catalog claimed
   // it, and no entry since both publishes rungs and has no runtime. so its
   // engine claim is lifted for the length of the case, which is the state the
-  // case is about
+  // case is about. its packages carry the same claim on each rung, so audio.cpp
+  // leaves the runtime filter for the case too
   const m = model('fish-s2-pro');
   const saved = {engines: m.engines, audiocpp: m.audiocpp};
   Object.assign(m, {engines: [], audiocpp: null});
+  filters.engines.delete('audio.cpp');
   try {
     ok(quantChoices(m).length > 3, 'it publishes rungs, so it is not an empty entry');
     eq(rungPool(m).length, 0, 'nothing in the pool is loadable');
@@ -2538,6 +2548,7 @@ test('an entry nothing here is known to load is unknown, not too big', () => {
     ok(!visible().some(v => v.repo === m.repo), 'the runtime filter is what hides it');
   } finally {
     Object.assign(m, saved);
+    RESET();
   }
 });
 
@@ -2571,9 +2582,12 @@ test('a quant below the curve is marked as a floor, not a prediction', () => {
   const lowest = curveFor(model('kimi k3')).points[0][0];
   ok(lowest > 1.5, 'the curve starts well above one bit (' + lowest + ')');
 
+  // the bits the curve is charged with, which are the file's own where its
+  // tensor table was read: yue2's F32 file is 1.17 by size over a parameter
+  // count it does not hold, and 32 by what is in it
   const under = D.models.filter(m => {
     const q = activeQuant(m);
-    return q && q.bpw && q.bpw < lowest && !m.native_low_bpw;
+    return q && rungBpw(q) && retentionBpw(m, q) < lowest && !m.native_low_bpw;
   });
   ok(under.length > 0, 'some model is served a rung under the curve at 96gb');
   under.forEach(m => ok(belowCurve(m),

@@ -656,8 +656,8 @@ two jobs and now does one. an option that would select nothing is not offered
 rather than sitting there returning an empty table.
 
 **the runtime dropdown is what you have built.** the same control, over the
-engines that load these weights, on by default for llama.cpp, crispasr and
-stable-diffusion.cpp. it is a fact per model rather than a guess from the file
+engines that load these weights, on by default for llama.cpp, crispasr,
+stable-diffusion.cpp and audio.cpp. it is a fact per model rather than a guess from the file
 extension: two of the entries are derived -- llama.cpp from the architecture
 llama.cpp merged, crispasr from the backend the registry names -- and the rest
 are written down, because a gguf does not say what wrote it. kokoro's is a

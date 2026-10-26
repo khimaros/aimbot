@@ -454,12 +454,20 @@ function rungEngines(m, c, named) {
 // the pool the choice is made from: every rung the registry lists that one of
 // the runtimes this view has selected can actually load. no runtime picked is
 // no runtime filter, which is also how the entries nothing here runs stay.
+//
+// audio.cpp is on by default for the speech models nothing else runs, so where
+// another selected runtime loads the model, audio.cpp's rungs stand back:
+// ranking them first would move every qwen3-tts and breeze-tts-2 row off the
+// file crispasr serves and off the speaker list that file carries.
+const FALLBACK_ENGINE = 'audio.cpp';
 function rungPool(m) {
   const all = quantChoices(m);
   if (!filters.engines.size) return all;
   const named = crispasrNamed(m);
-  return all.filter(c => [...rungEngines(m, c, named)]
-    .some(e => filters.engines.has(e)));
+  const loads = c => [...rungEngines(m, c, named)].filter(e => filters.engines.has(e));
+  const pool = all.filter(c => loads(c).length);
+  const others = pool.filter(c => loads(c).some(e => e !== FALLBACK_ENGINE));
+  return others.length ? others : pool;
 }
 
 // which rung a ROW is being read as. an expanded row carries its own; a model

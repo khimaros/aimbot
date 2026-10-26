@@ -477,16 +477,16 @@ the same tool on AA's own fields, where n is large enough to trust:
 | metric a | metric b | n | spearman | pearson |
 |---|---|--:|--:|--:|
 | intelligenceIndex | terminalbenchV21 | 234 | +0.97 | +0.94 |
-| intelligenceIndex | gdpvalNormalized | 299 | +0.96 | +0.96 |
+| intelligenceIndex | gdpvalNormalized | 302 | +0.96 | +0.96 |
 | intelligenceIndex | gpqa | 614 | +0.95 | +0.79 |
-| intelligenceIndex | lcr | 577 | +0.94 | +0.81 |
-| intelligenceIndex | mmmuPro | 290 | +0.94 | +0.83 |
+| intelligenceIndex | lcr | 579 | +0.94 | +0.81 |
+| intelligenceIndex | mmmuPro | 291 | +0.94 | +0.82 |
 | intelligenceIndex | terminalbenchV40 | 151 | +0.93 | +0.81 |
-| intelligenceIndex | scicode | 236 | +0.92 | +0.89 |
+| intelligenceIndex | scicode | 238 | +0.92 | +0.89 |
 | intelligenceIndex | tauBanking | 209 | +0.91 | +0.91 |
-| intelligenceIndex | hle | 666 | +0.90 | +0.96 |
-| intelligenceIndex | critpt | 578 | +0.88 | +0.90 |
-| intelligenceIndex | omniscienceAccuracy | 578 | +0.86 | +0.87 |
+| intelligenceIndex | hle | 668 | +0.90 | +0.96 |
+| intelligenceIndex | critpt | 580 | +0.88 | +0.90 |
+| intelligenceIndex | omniscienceAccuracy | 580 | +0.86 | +0.87 |
 | intelligenceIndex | livecodebench | 340 | +0.85 | +0.77 |
 | intelligenceIndex | ifbench | 447 | +0.82 | +0.73 |
 
@@ -1127,12 +1127,12 @@ of the slowest decode in its size class.
 - **use for** agentic / tool use, long context, instruction following, scientific code
 - **avoid for** latency-sensitive chat
 - **runs at** UD-IQ3_S, 77.9 gib, 6/7 of the weighted factors measured it
-- **evidence** aa.ifbench p93; aa.lcr p81; aa.scicode p78; aa.speed p30; hf-discussions 112 mentions at 79% approval
+- **evidence** aa.ifbench p93; aa.lcr p81; aa.scicode p78; aa.speed p26; hf-discussions 112 mentions at 79% approval
 - **confidence in that evidence** high
 
 reception splits by forum: hf-discussions 112 mentions at 79% approval on the
 busy one, reddit 22 mentions at 100% approval on the small one, and
-hackernews carries no scored sentence at all. speed sits at aa.speed p30, so
+hackernews carries no scored sentence at all. speed sits at aa.speed p26, so
 a long agent loop pays for the quality.
 
 #### 6. mimo v2.6 flash
@@ -1206,12 +1206,12 @@ planner among dense 27b weights.
 - **use for** coding, agentic / tool use, planning, long context
 - **avoid for** latency-sensitive work
 - **runs at** UD-Q8_K_XL, 33.3 gib, 6/7 of the weighted factors measured it
-- **evidence** aa.scicode p49; gbench.decision 0.496 p82; reddit 202 mentions at 85% approval; aa.speed p32; gbench kotlin 60%
+- **evidence** aa.scicode p49; gbench.decision 0.496 p82; reddit 202 mentions at 85% approval; aa.speed p28; gbench kotlin 60%
 - **confidence in that evidence** high
 
 reddit 202 mentions at 85% approval, and the phrase that keeps coming back is
 daily driver. gbench decision-making gbench.decision p82 is unusual for its
-size. slow decode, aa.speed p32, is the price.
+size. slow decode, aa.speed p28, is the price.
 
 #### 10. nemotron 3.5 super vl
 
@@ -1239,7 +1239,7 @@ scicode at once.
 - **use for** science / reasoning, physics, scientific code, coding
 - **avoid for** latency-sensitive work
 - **runs at** UD-IQ3_XXS, 91.2 gib, 4/7 of the weighted factors measured it
-- **evidence** aa.critpt p84; aa.scicode p76; aa.gpqa p85; aa.speed p74; no gbench entry
+- **evidence** aa.critpt p84; aa.scicode p76; aa.gpqa p85; aa.speed p89; no gbench entry
 - **confidence in that evidence** medium
 
 do not read the flagship inkling's gbench score onto this model -- the
@@ -1279,7 +1279,7 @@ coding.
 - **use for** coding, physics, scientific code, rust and c++ work
 - **avoid for** one-shot coding
 - **runs at** UD-Q2_K_XL, 95.9 gib, 5/7 of the weighted factors measured it
-- **evidence** aa.scicode p52; aa.critpt p73; gbench.oneshot p25; lang.rust p62; aa.speed p34
+- **evidence** aa.scicode p52; aa.critpt p73; gbench.oneshot p25; lang.rust p62; aa.speed p32
 - **confidence in that evidence** high
 
 do not confuse it with mimo v2.5 pro, which is a different model with a
@@ -1329,11 +1329,11 @@ one-shot coder in python and javascript.
 - **use for** chat / general use, one-shot coding, science / reasoning, instruction following
 - **avoid for** agentic / tool use, planning, real-world bug fixing
 - **runs at** UD-Q8_K_XL, 32.6 gib, 7/7 of the weighted factors measured it
-- **evidence** lmarena.rating 1453 p88; gbench.oneshot p55; aa.speed p7; gbench python 89%; reddit 106 mentions at 81% approval
+- **evidence** lmarena.rating 1453 p88; gbench.oneshot p55; aa.speed p3; gbench python 89%; reddit 106 mentions at 81% approval
 - **confidence in that evidence** high
 
 arena lmarena.rating p88 and gbench one-shot gbench.oneshot p55 against
-agentic weakness; also the slowest decode measured here, aa.speed p7. it
+agentic weakness; also the slowest decode measured here, aa.speed p3. it
 writes well and does not drive.
 
 #### 17. qwen3.5 122b a10b
@@ -1358,7 +1358,7 @@ a fast dense 128b that calls tools well and does no science at all.
 - **use for** agentic / tool use, planning, javascript and go work
 - **avoid for** science / reasoning, physics, one-shot coding
 - **runs at** UD-Q4_K_XL, 70.5 gib, 4/7 of the weighted factors measured it
-- **evidence** aa.speed 153 tok/s p70; aa.tau2 p85; aa.critpt p20; gbench javascript 100%
+- **evidence** aa.speed 162 tok/s p72; aa.tau2 p85; aa.critpt p20; gbench javascript 100%
 - **confidence in that evidence** high
 
 critpt aa.critpt p20 twice over, from both aa and epoch, is a consistent
@@ -1457,7 +1457,7 @@ suite and on little else.
 artificial analysis has it flagged deprecated, and m2.7 leads on most of what
 they share -- gpqa, hle, instruction following, long context. what it does
 not lead on is tool use: aa.tau2 p90 here against p62 there, and not speed
-either at aa.speed 102 tok/s p56. that is the whole case for reaching back a
+either at aa.speed 102 tok/s p52. that is the whole case for reaching back a
 version.
 
 #### 25. nemotron 3.5 bolt 74b a9b
@@ -1516,7 +1516,7 @@ predict, on a harness built from commits made after its release.
 - **use for** real-world bug fixing, agentic / tool use, coding agents on a latency budget
 - **avoid for** science / reasoning, physics
 - **runs at** UD-Q8_K_XL, 80.4 gib, 4/7 of the weighted factors measured it
-- **evidence** swerebench.resolved 47.7 p78; aa.speed 90 tok/s p54; aa.scicode p25; reddit 59 mentions at 53% approval
+- **evidence** swerebench.resolved 47.7 p78; aa.speed 94 tok/s p50; aa.scicode p25; reddit 59 mentions at 53% approval
 - **confidence in that evidence** high
 
 the gap is the interesting part: swerebench.resolved p78 against aa.scicode
@@ -1710,10 +1710,10 @@ being average.
 - **use for** high-throughput batch generation, draft and first-pass work
 - **avoid for** coding, science / reasoning, long context, agentic / tool use
 - **runs at** Q8_0, 32.6 gib, 4/7 of the weighted factors measured it
-- **evidence** aa.speed 311 tok/s p95; aa.intelligence p44; aa.terminalbench p30; hf-discussions 18 mentions at 0% approval
+- **evidence** aa.speed 295 tok/s p95; aa.intelligence p44; aa.terminalbench p30; hf-discussions 18 mentions at 0% approval
 - **confidence in that evidence** medium
 
-aa.speed 311 tok/s p95 with intelligence at aa.intelligence p44. worth it
+aa.speed 295 tok/s p95 with intelligence at aa.intelligence p44. worth it
 when volume matters more than the answer; not otherwise. read the low rungs
 before picking one: a forum report finds that "all four IQ2 rungs are the
 same" file published under four different names.
@@ -1768,11 +1768,11 @@ the board that times it, and weak at nearly everything else.
 - **use for** latency-sensitive chat, a second slot beside a large model, drafting
 - **avoid for** coding, science / reasoning, agentic / tool use
 - **runs at** Q8_0, 7.8 gib, 3/7 of the weighted factors measured it
-- **evidence** aa.speed p3; aa.non_hallucination p80; aa.scicode p5; aa.terminalbench p40; aa.intelligence p33; hf-discussions 14 mentions at 67% approval
+- **evidence** aa.speed p30; aa.non_hallucination p80; aa.scicode p5; aa.terminalbench p40; aa.intelligence p33; hf-discussions 14 mentions at 67% approval
 - **confidence in that evidence** medium
 
 a 7.9b/1.3b moe, and the question is what that is worth. coding aa.scicode p5
-and agentic aa.terminalbench p40 say not much; aa.speed 24 tok/s p3 is near
+and agentic aa.terminalbench p40 say not much; aa.speed 58 tok/s p30 is near
 the floor of artificial analysis's timing table, and aa.non_hallucination p80
 is the one axis reading well. one gotcha: the card says to run it with MTP,
 and it cannot -- the base checkpoints "ship the pretraining MTP layer" but
@@ -1786,7 +1786,7 @@ the small gpt-oss: quick, cheap, and out of its depth on anything agentic.
 - **use for** cheap local chat, high-throughput drafts
 - **avoid for** agentic / tool use, real-world bug fixing, instruction following
 - **runs at** F16, 12.8 gib, 5/7 of the weighted factors measured it
-- **evidence** aa.speed p91; aa.tau2 p48; swerebench.resolved p3
+- **evidence** aa.speed p77; aa.tau2 p48; swerebench.resolved p3
 - **confidence in that evidence** medium
 
 #### 44. minicpm-v 4.6
@@ -1832,7 +1832,7 @@ the best pure language play measured here.
 - **use for** high-throughput generation, go, c++ and java work
 - **avoid for** coding indices, agentic / tool use, chat / general use
 - **runs at** F16, 60.9 gib, 6/7 of the weighted factors measured it
-- **evidence** aa.speed 248 tok/s p89; gbench go 100%; gbench cpp 100%; reddit 58 mentions at 80% approval
+- **evidence** aa.speed 233 tok/s p91; gbench go 100%; gbench cpp 100%; reddit 58 mentions at 80% approval
 - **confidence in that evidence** high
 
 100% gbench success in go, c++ and java against aa coding and agentic near
@@ -1847,7 +1847,7 @@ aa.intelligence p35: a cheap way to buy a model that will not make things up.
 - **use for** rag and tool-grounded pipelines on a small budget, high-throughput extraction and classification, anywhere apache 2.0 is the requirement
 - **avoid for** closed-book knowledge work, coding, agentic / tool use
 - **runs at** Q8_0, 8.7 gib, 4/7 of the weighted factors measured it
-- **evidence** aa.non_hallucination p74; aa.speed p19; aa.omniscience_index p60; aa.intelligence p35; aa.terminalbench p28; aa.omniscience p32; scored by aa alone
+- **evidence** aa.non_hallucination p74; aa.speed p21; aa.omniscience_index p60; aa.intelligence p35; aa.terminalbench p28; aa.omniscience p32; scored by aa alone
 - **confidence in that evidence** medium
 
 it keeps most of the 30b's calibration -- aa.non_hallucination p74, close to
@@ -1888,11 +1888,11 @@ at a real cost in reasoning.
 - **use for** classification and extraction where a wrong answer costs more than no answer, on-device work at 3b
 - **avoid for** reasoning, long-context retrieval
 - **runs at** Q8_0, 3.6 gib, 4/7 of the weighted factors measured it
-- **evidence** aa.non_hallucination p87; aa.speed p23; aa.intelligence p29; aa.lcr p25; hf-discussions 3 mentions, none of it a rating
+- **evidence** aa.non_hallucination p87; aa.speed p17; aa.intelligence p29; aa.lcr p25; hf-discussions 3 mentions, none of it a rating
 - **confidence in that evidence** medium
 
 aa.non_hallucination p87 on artificial analysis' non-hallucination measure is
-the reason to pick it; speed is not, at aa.speed p23 on that same harness.
+the reason to pick it; speed is not, at aa.speed p17 on that same harness.
 the index is aa.intelligence p29, mid-field for its size, and aa.lcr p25 on
 long-context reasoning is in the bottom band against the whole roster, low
 enough that it forgets what it read. ibm's own gguf, fifteen rungs, and the
@@ -1939,12 +1939,12 @@ fast, sees images, and measured on more axes than anything else its size.
 - **use for** high-throughput work, vision on a small box
 - **avoid for** reasoning, agentic work
 - **runs at** Q8_0, 3.4 gib, 3/7 of the weighted factors measured it
-- **evidence** aa.speed p77; aa.mmmu_pro p8; aa.intelligence p2; nineteen facets, and no forum mentions
+- **evidence** aa.speed p83; aa.mmmu_pro p8; aa.intelligence p2; nineteen facets, and no forum mentions
 - **confidence in that evidence** medium
 
 nineteen artificial analysis facets, the deepest evidence of any model under
 4.5b on this roster, and the picture they paint is of a fast generalist
-rather than a strong one: aa.speed p77 tokens per second, aa.mmmu_pro p8 on
+rather than a strong one: aa.speed p83 tokens per second, aa.mmmu_pro p8 on
 vision, and aa.intelligence p2 overall, which is last among the models added
 with it. aa.terminalbench p3 on terminal-bench is zero. mistral asks for a
 temperature below 0.1 in production, the coldest recommendation here after
@@ -2444,7 +2444,7 @@ of what a third party measured.
 - **use for** high-throughput generation, maths problems
 - **avoid for** agentic / tool use, long context, real-world bug fixing
 - **runs at** UD-Q8_K_XL, 37.7 gib, 3/7 of the weighted factors measured it
-- **evidence** aa.speed 263 tok/s p93; card.aime 98.2 p95; aa.lcr p16; card.swebench_verified p7
+- **evidence** aa.speed 277 tok/s p93; card.aime 98.2 p95; aa.lcr p16; card.swebench_verified p7
 - **confidence in that evidence** medium
 
 card.aime 98.2 p95 is its own claim; the third-party numbers around it sit
@@ -3572,7 +3572,7 @@ three things the table itself says:
 <!-- generated by research/build-sections --section prose:qwen3-8-27b -->
 unscored by anything for its first two weeks, which is why it is written up
 here. artificial analysis carries it at aa.intelligence 33.7 p85,
-aa.terminalbench 0.798 p91, aa.tau_banking 0.48 p97, aa.gdpval 0.458 p83 and
+aa.terminalbench 0.798 p91, aa.tau_banking 0.48 p97, aa.gdpval 0.459 p83 and
 aa.omniscience_index -9.983 p74; GBENCH has since scored it at gbench.overall
 0.352 p73 and lmarena at lmarena.rating 1438 p70. swe-rebench still carries
 nothing for it.
@@ -3705,8 +3705,8 @@ Studio's rocm runtime, with the direct llama.cpp rocm binary failing to
 enumerate gfx1151 at all, which matches the general strix halo picture below.
 
 **it is slower than qwen3.6 27b at the same quant, despite the same
-architecture.** the independent harness agrees -- aa.speed 42 tok/s p15
-against qwen3.6 27b's 58 tok/s p32 -- and so do two reports from the forums:
+architecture.** the independent harness agrees -- aa.speed 45 tok/s p9
+against qwen3.6 27b's 58 tok/s p28 -- and so do two reports from the forums:
 45 t/s to 35 t/s on a 2080ti at UD-Q4_K_XL with MTP, and 45-50 t/s to 30 t/s
 on a 3060 Ti + 4070 Ti Super. a third reporter with R9700s says the speeds
 are identical. the likely reconciliation is MTP draft acceptance -- one full
@@ -3965,32 +3965,32 @@ speech synthesis
 
 | # | model | quant | size (gib) | runs on | evidence | quality |
 |--:|---|---|--:|---|--:|--:|
-| 1 | breeze-tts-2 | Q8_0 audio-cpp | 4.7 | audio.cpp | 64% | **80.3** |
-| 2 | fish-s2-pro | Q8_0 audio-cpp | 5.9 | audio.cpp | 64% | **73.0** |
-| 3 | step-audio-editx | - | - | - | 55% | **69.1** |
-| 4 | voxtral-tts | Q8_0 audio-cpp | 4.4 | audio.cpp | 64% | **61.3** |
-| 5 | kokoro-v1 | Q4 mmwillet2 | 0.2 | TTS.cpp, crispasr | 64% | **58.6** |
-| 6 | magpie-tts-357m | Q8 m1el | 0.7 | - | 64% | **47.4** |
-| 7 | maya1 | Q8_0 audio-cpp | 3.8 | audio.cpp | 55% | **43.6** |
-| 8 | chatterbox | Q8_0 cstr | 0.6 | crispasr | 64% | **37.7** |
-| 9 | vibevoice-1.5b | Q8_0 audio-cpp | 3.0 | audio.cpp | 64% | **31.2** |
-| 10 | zonos-tts | Q8_0 cstr | 1.6 | crispasr | 64% | **31.0** |
-| 11 | xtts v2 | Q4_0 onicubag | 0.3 | audio.cpp | 55% | **18.2** |
-| 12 | audio8 tts preview 0.6b | Q8_0 js-byte | 1.3 | audio.cpp | 0% | **-** |
-| 13 | auk | Q8_0 audio-cpp | 7.0 | audio.cpp | 0% | **-** |
-| 14 | bark | Q4_K cstr | 0.2 | crispasr | 9% | **-** |
-| 15 | chatterbox turbo | Q8_0 audio-cpp | 0.7 | audio.cpp | 0% | **-** |
-| 16 | confucius4-tts | F32 audio-cpp | 7.6 | audio.cpp | 0% | **-** |
-| 17 | cosyvoice3-tts | Q8_0 audio-cpp | 2.1 | audio.cpp | 9% | **-** |
-| 18 | csm | Q8_0 cstr | 1.9 | crispasr | 9% | **-** |
-| 19 | dia | Q8_0 cstr | 1.6 | crispasr | 9% | **-** |
-| 20 | dots.tts | Q8_0 audio-cpp | 2.8 | audio.cpp | 0% | **-** |
-| 21 | dramabox | Q8_0 audio-cpp | 17.6 | audio.cpp | 0% | **-** |
-| 22 | echo-tts | Q8_0 dignome | 2.8 | audio.cpp | 0% | **-** |
-| 23 | fastpitch | Q4_K cstr | 0.2 | crispasr | 9% | **-** |
-| 24 | fireredaudio | Q8_0 audio-cpp | 13.0 | audio.cpp | 0% | **-** |
-| 25 | fireredtts3 | Q8_0 audio-cpp | 3.9 | audio.cpp | 0% | **-** |
-| 26 | fish drama 3 | Q4_K Jmica | 22.9 | audio.cpp | 9% | **-** |
+| 1 | fish drama 3 | Q4_K Jmica | 22.9 | audio.cpp | 64% | **79.9** |
+| 2 | breeze-tts-2 | Q8_0 audio-cpp | 4.7 | audio.cpp | 64% | **75.7** |
+| 3 | fish-s2-pro | Q8_0 audio-cpp | 5.9 | audio.cpp | 64% | **68.3** |
+| 4 | step-audio-editx | - | - | - | 55% | **64.8** |
+| 5 | voxtral-tts | Q8_0 audio-cpp | 4.4 | audio.cpp | 64% | **57.3** |
+| 6 | kokoro-v1 | Q4 mmwillet2 | 0.2 | TTS.cpp, crispasr | 64% | **55.3** |
+| 7 | magpie-tts-357m | Q8 m1el | 0.7 | - | 64% | **44.8** |
+| 8 | maya1 | Q8_0 audio-cpp | 3.8 | audio.cpp | 55% | **41.5** |
+| 9 | chatterbox | Q8_0 cstr | 0.6 | crispasr | 64% | **35.7** |
+| 10 | vibevoice-1.5b | Q8_0 audio-cpp | 3.0 | audio.cpp | 64% | **29.9** |
+| 11 | zonos-tts | Q8_0 cstr | 1.6 | crispasr | 64% | **29.7** |
+| 12 | xtts v2 | Q4_0 onicubag | 0.3 | audio.cpp | 55% | **17.5** |
+| 13 | audio8 tts preview 0.6b | Q8_0 js-byte | 1.3 | audio.cpp | 0% | **-** |
+| 14 | auk | Q8_0 audio-cpp | 7.0 | audio.cpp | 0% | **-** |
+| 15 | bark | Q4_K cstr | 0.2 | crispasr | 9% | **-** |
+| 16 | chatterbox turbo | Q8_0 audio-cpp | 0.7 | audio.cpp | 0% | **-** |
+| 17 | confucius4-tts | F32 audio-cpp | 7.6 | audio.cpp | 0% | **-** |
+| 18 | cosyvoice3-tts | Q8_0 audio-cpp | 2.1 | audio.cpp | 9% | **-** |
+| 19 | csm | Q8_0 cstr | 1.9 | crispasr | 9% | **-** |
+| 20 | dia | Q8_0 cstr | 1.6 | crispasr | 9% | **-** |
+| 21 | dots.tts | Q8_0 audio-cpp | 2.8 | audio.cpp | 0% | **-** |
+| 22 | dramabox | Q8_0 audio-cpp | 17.6 | audio.cpp | 0% | **-** |
+| 23 | echo-tts | Q8_0 dignome | 2.8 | audio.cpp | 0% | **-** |
+| 24 | fastpitch | Q4_K cstr | 0.2 | crispasr | 9% | **-** |
+| 25 | fireredaudio | Q8_0 audio-cpp | 13.0 | audio.cpp | 0% | **-** |
+| 26 | fireredtts3 | Q8_0 audio-cpp | 3.9 | audio.cpp | 0% | **-** |
 | 27 | glm-tts | Q8_0 mirek190 | 4.8 | audio.cpp | 0% | **-** |
 | 28 | habibi-tts | F32 trklou | 1.3 | audio.cpp | 0% | **-** |
 | 29 | indextts | Q4_K cstr | 0.3 | crispasr | 9% | **-** |
