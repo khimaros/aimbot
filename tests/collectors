@@ -486,6 +486,20 @@ def roster_args(tmp, *repos, **kw):
 
 
 @test
+def an_imatrix_named_after_a_quant_is_not_that_rung():
+    """ggml-org ships `imatrix-mistral-q8.gguf` beside mistral large 4, 1.3 gib of
+    calibration data the sizer read as a rung called `Q8`. the page then ranked a
+    1t model on a file that holds no weights. a build quantized WITH an imatrix
+    can carry the word in its name and is still a rung."""
+    mod = load_script("fetch_gguf_sizes", os.path.join(RESEARCH, "fetch-gguf-sizes"))
+    eq(mod.tag_of("imatrix-mistral-q8.gguf"), "imatrix-mistral-q8.gguf",
+       "keyed by name, which is how the viewer knows to drop it")
+    eq(mod.tag_of("imatrix_unsloth.gguf"), "imatrix_unsloth.gguf", "as the others are")
+    eq(mod.tag_of("Model-imatrix-Q4_K_M.gguf"), "Q4_K_M",
+       "a rung built with an imatrix keeps its tag")
+
+
+@test
 def every_publisher_naming_convention_yields_a_quant_tag():
     """A tag the sizer cannot parse is not an error, it is a missing model.
 
@@ -5682,6 +5696,9 @@ AUDIO_CONFIGS = {
     # TTS: the mel count is what it EMITS. kokoro spells it `n_mels` and s2-pro
     # nests it under a decoder, and neither may read as taking audio in
     "hexgrad/Kokoro-82M": ({"n_mels": 80, "sample_rate": 24000}, False),
+    # a quantizer's config with nothing in it but a model_type: phonon-2 repacks
+    # parakeet at five values, and the name is all it says
+    "FermionResearch/Phonon-2": ({"model_type": "parakeet_tdt_five_value"}, True),
     "fishaudio/s2-pro": (
         {"audio_decoder_config": {"num_mel_bins": 128}}, False),
     # a TTS model that clones from a reference clip DOES take audio in, and says

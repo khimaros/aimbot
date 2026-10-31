@@ -21,25 +21,21 @@ version: 1
 # model carries one, and the composite's denominator is the weight it actually
 # used.
 #
-# the two artificial analysis keys carried the coding and agentic INDICES until
-# the site retired both. the facets are named for evals now, so these name
-# evals -- scicode for writing code and terminal-bench 2.1 for driving a
-# terminal -- chosen over the alternatives on roster coverage: an axis the
-# composite has to impute for most of the roster moves ranks on absence rather
-# than on evidence. livecodebench scores 5 of the 46 models artificial analysis
-# rates here and terminal-bench 4.0 scores 29 with 14 of them at exactly zero,
-# so both are carried at no weight until the boards fill in.
+# the artificial analysis keys carried the coding and agentic INDICES until the
+# site retired both. the facets are named for evals now, so these name evals --
+# one for writing code and one for driving a terminal, on each board.
 #
-# intelligence index v5 is a separate board, because it is a different scale over
-# different evals, and `aa.intelligence` stays frozen at v4 for every model. this
-# is the dial for how much the balanced ranking leans on it. it rides at zero for
-# the reason livecodebench did: v5 scores 12 of the 73 roster models artificial
-# analysis lists, so weighting it now would move the other 61 on absence. it
-# shows on the model, and the `aa5` preset ranks on it.
+# each version of artificial analysis' index is its own board, `aa4` frozen at
+# v4.3 and `aa5` live, and A NEWER VERSION OUTWEIGHS AN OLDER ONE. the two share
+# the 0.60 the site always had, 0.35 to v5 and 0.25 to v4, on one coding eval and
+# one terminal eval each. v5's cover less of the roster, which the shrink toward
+# the middle absorbs, and that is the accepted price of leaning on the current
+# measurement. a v6 goes here the same way, above v5.
 weights:
-  aa.scicode: 0.30
-  aa.terminalbench: 0.30
-  aa5.*: 0.0
+  aa5.terminalbench_v40: 0.20
+  aa5.frontiercode: 0.15
+  aa4.scicode: 0.125
+  aa4.terminalbench: 0.125
   gbench.agentic: 0.15
   lmarena.rating: 0.10
   swerebench.resolved: 0.10
@@ -120,7 +116,8 @@ presets:
 - k: coding
   title: writing code
   weights:
-    aa.scicode: 0.4
+    aa5.frontiercode: 0.25
+    aa4.scicode: 0.15
     gbench.oneshot: 0.2
     swerebench.resolved: 0.25
     card.*: 0.05
@@ -128,8 +125,9 @@ presets:
 - k: agentic
   title: agentic and tool use
   weights:
-    aa.terminalbench: 0.4
-    aa.tau2: 0.15
+    aa5.terminalbench_v40: 0.25
+    aa4.terminalbench: 0.15
+    aa4.tau2: 0.15
     gbench.agentic: 0.3
     community.reddit-localllama: 0.15
 - k: measured

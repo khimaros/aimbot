@@ -829,7 +829,8 @@ pass `--refresh` to any collector to ignore all of it.
 - intelligence index v5 (2026-10-27) changed the evals and their weights, and
   left about 190 of the 275 leaderboard rows with no index. `intelligenceIndex`
   and the `omniscience*` fields are frozen at v4, and the collector writes v5 to
-  `intelligenceIndexV5`, `omniscienceV5` and the v5 evals, which `aa5.*` reads.
+  `intelligenceIndexV5`, `omniscienceV5` and the v5 evals. `aa4.*` reads the
+  first set and `aa5.*` the second, and the newer board carries more weight.
   `null` there means listed and unscored, and absent means not listed since v5.
   `gdpval-aa-normalized` also moved to an elo scale, so `gdpvalNormalized` no
   longer updates.

@@ -203,7 +203,9 @@ def tag_of(path):
         elif not named and plain and QUANT_AT.search(name) and not SHARD.search(name):
             tag = name
     else:
-        m = QUANT.search(path)
+        # an imatrix is calibration data, whatever quant its name mentions. only
+        # the leading word: `Model-imatrix-Q4_K_M.gguf` is weights built with one
+        m = None if path.lower().startswith("imatrix") else QUANT.search(path)
         # uppercased so `s2-pro-q8_0.gguf` and `Model-Q8_0.gguf` are one
         # rung. every tag that matched before this was already uppercase,
         # so no existing key moves

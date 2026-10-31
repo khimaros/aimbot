@@ -1988,6 +1988,152 @@ models:
       knob: enable_thinking
       kind: boolean
       default: false
+  LiquidAI/d1-3B:
+    kind: decision
+    name:
+      short: d1-3b
+      match: \bd1[\s-]*3b\b
+    notes: >-
+      liquid's decision model on LFM2.5-VL-3B, which answers in one forward pass and
+      generates nothing {card} over text and images. llama-server answers it on
+      `/v1/systemone`. the d1 generation before d1-2B, and under the same liquid licence.
+    repos:
+    - LiquidAI/d1-3B-GGUF
+    runtime:
+      arch: lfm2
+      mainline: true
+      since: b5873
+      merged: '2025-07-11'
+      note: the release above is when mainline learned the backbone. the decision head came with
+        PR 30110, merged 2026-10-07, and the gguf runs on that {card@LiquidAI/d1-3B-GGUF}
+    ids:
+      jev: ''
+    modalities:
+      input:
+      - text
+      - image
+      output: []
+    readout:
+      kind: native
+      source: card
+    turns:
+      source: LiquidAI/d1-3B-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+  LiquidAI/d1-omni-600M:
+    kind: decision
+    name:
+      short: d1-omni-600m
+      match: \bd1[\s-]*omni[\s-]*600m\b
+    notes: >-
+      a 600m decision model built on LFM2.5-Encoder-350M, taking text with images or "a voice
+      clip" {card}, and the smallest decision model here that hears. llama-server answers it
+      on `/v1/systemone`. the gguf card's server line sets `-b` and `-ub` to 4096
+      {card@LiquidAI/d1-omni-600M-GGUF}. it has no chat template, so no `turns:` could be
+      measured.
+    repos:
+    - LiquidAI/d1-omni-600M-GGUF
+    runtime:
+      arch: lfm2
+      mainline: true
+      since: b5873
+      merged: '2025-07-11'
+      note: the release above is when mainline learned the backbone. this model came with PR 30114,
+        merged 2026-10-08, and the gguf runs on that {card@LiquidAI/d1-omni-600M-GGUF}
+    ids:
+      jev: ''
+    modalities:
+      input:
+      - text
+      - image
+      - audio
+      output: []
+    readout:
+      kind: native
+      source: card
+  h2oai/h2o-lightning-4b:
+    kind: decision
+    name:
+      short: h2o lightning 4b
+      match: h2o[\s-]*lightning[\s-]*4b
+    notes: >-
+      h2o's decision model, a fine-tune of qwen3.5 4b that "returns a probability for every
+      option" {card} over a record and any images with it. llama-server answers it on
+      `/v1/systemone`. the gguf card reports wrong scores from the IQ3_XXS files on blackwell
+      gpus under two cuda toolkit releases, through llama.cpp issue 28581
+      {card@h2oai/h2o-lightning-4b-gguf}.
+    repos:
+    - h2oai/h2o-lightning-4b-gguf
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+      note: the release above is when mainline learned the backbone. the decision type came with
+        PR 30361, merged 2026-10-20, and the gguf runs on that {card@h2oai/h2o-lightning-4b-gguf}
+    ids:
+      jev: ''
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output: []
+    readout:
+      kind: native
+      source: card
+    turns:
+      source: h2oai/h2o-lightning-4b-gguf
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  openbmb/MiniCPM-OCR-Jev:
+    kind: decision
+    name:
+      short: minicpm-ocr-jev
+      match: minicpm[\s-]*ocr[\s-]*jev
+    notes: >-
+      a narrow decision model: given a region image and a candidate transcription, it scores
+      how likely the text is to be right {card}. it answers that one
+      question on `/v1/systemone` and has no lm head, so it cannot chat, and its use is
+      checking an ocr model such as minicpm-ocr 1.0.
+    repos:
+    - openbmb/MiniCPM-OCR-Jev-gguf
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+      note: the release above is when mainline learned the backbone. the decision type came with
+        PR 30980, merged 2026-10-27, and the gguf runs on that {card@openbmb/MiniCPM-OCR-Jev-gguf}
+    ids:
+      jev: ''
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output: []
+    readout:
+      kind: native
+      source: card
+    turns:
+      source: openbmb/MiniCPM-OCR-Jev-gguf
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
   # CARRIED AS A BASE, not as a candidate. qwen3 8b is two generations behind the
   # qwen3.5/3.6/3.8 entries beside it and nobody should pick it off this roster
   # today. it is here because `prism-ml/Ternary-Bonsai-8B` derives from it, and a
@@ -5560,6 +5706,510 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+  RecursiveSI/flint:
+    kind: text
+    name:
+      short: flint 40b a2.5b
+      match: \bflint[\s-]*40b|recursivesi[\s/_-]*flint
+    notes: >-
+      recursive's mixture-of-experts model "for coding agents" {card}, built to "investigate
+      codebases, fix bugs, implement features, and write tests". the template names no
+      thinking knob, so a client has nothing to turn on or off. no board has scored it, and
+      the sampler below is the set the card's own results were run with.
+    repos:
+    - unsloth/flint-GGUF
+    - bartowski/RecursiveSI_flint-GGUF
+    - ggml-org/Flint-GGUF
+    runtime:
+      arch: flint
+      mainline: true
+      since: b11803
+      merged: '2026-10-21'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      tool-use:
+        source: generation-config
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        tuned: [instruct, code, tools]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: unsloth/flint-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+  Aleph-Alpha/Kolibri-1:
+    kind: text
+    name:
+      short: kolibri-1
+      match: \bkolibri[\s-]*1\b
+    notes: >-
+      aleph alpha's reasoning model "with a focus on German and English" {card}, which is the
+      reason to carry it: it reasons in german rather than translating an english trace. no
+      collected board measures german, so the thing that sets it apart goes unscored here.
+    repos:
+    - Hob-forge/Kolibri-1-GGUF
+    - bartowski/Kolibri-1-GGUF
+    runtime:
+      arch: kolibri1
+      mainline: true
+      since: b11709
+      merged: '2026-10-17'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.97
+        top_k: 128
+        tuned: [instruct, chat, reason, tools]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: Hob-forge/Kolibri-1-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [none, minimal, medium]
+      aliases: {low: minimal}
+  JetBrains/Mellum2.1-12B-A2.5B-Thinking:
+    kind: text
+    name:
+      short: mellum2.1 12b
+      match: \bmellum[\s-]*2\.1
+    notes: >-
+      jetbrains' coding model, with the architecture of mellum2 and "almost all of the work
+      for this version went into post-training" {card}. the release below is when mainline
+      learned that architecture, and the drafter support for 2.1 came later, in PR 30612.
+    repos:
+    - JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF
+    - bartowski/Mellum2.1-12B-A2.5B-Thinking-GGUF
+    runtime:
+      arch: mellum
+      mainline: true
+      since: b9482
+      merged: '2026-06-02'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 0.6
+        top_p: 0.95
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  mistralai/Mistral-Large-4-1T-A52B:
+    kind: text
+    name:
+      short: mistral large 4
+      match: mistral[\s-]*large[\s-]*4
+    notes: >-
+      mistral's flagship, "trained from scratch on 3,800 NVIDIA Grace Blackwell GPUs" {card},
+      with a 1m-token context and image input. the template rejects a developer turn and a
+      system turn in mid-conversation, so a client has to place both up front. the licence
+      is mistral's own rather than a standard one.
+    repos:
+    - unsloth/Mistral-Large-4-1T-A52B-GGUF
+    - ggml-org/Mistral-Large-4-1T-A52B-GGUF
+    runtime:
+      arch: mistral-large4
+      mainline: true
+      since: b11998
+      merged: '2026-10-29'
+    ids:
+      aa: mistral-large-4
+      gbench: mistral/mistral-large-4-0
+      lmarena: ''
+      swerebench: ''
+      epoch: mistral-large-4-0
+      livebench: ''
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    turns:
+      source: unsloth/Mistral-Large-4-1T-A52B-GGUF
+      developer: rejected
+      leading_system_max: unlimited
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: reasoning_effort
+      accepts: [low, medium, high]
+      default: high
+  meta-models/Muse-Spark-Open-816B-A42B:
+    kind: text
+    name:
+      short: muse spark open
+      match: muse[\s-]*spark[\s-]*open
+    notes: >-
+      the open release beside muse glimmer, a latent-space mixture of experts with a 1m-token
+      context that takes text, images, video and audio. the base repo is gated, so the facts
+      and quotes here come off the gguf cards {card@unsloth/Muse-Spark-Open-816B-A42B-GGUF}.
+      the sampler below is the set the card's own comparison was run with, and the licence
+      is the "Muse Model License".
+    repos:
+    - unsloth/Muse-Spark-Open-816B-A42B-GGUF
+    - ggml-org/Muse-Spark-Open-816B-A42B-GGUF
+    runtime:
+      arch: muse-spark
+      mainline: true
+      since: b11671
+      merged: '2026-10-15'
+    ids:
+      aa: muse-spark-open
+      gbench: meta/muse-spark-open
+      lmarena: ''
+      swerebench: ''
+      epoch: Muse-Spark-Open-816B-A42B
+      livebench: ''
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+    sampling:
+      thinking:
+        source: tuned-here
+        temp: 1.0
+        top_p: 1.0
+        note: the set the card's comparison ran at xhigh {card@unsloth/Muse-Spark-Open-816B-A42B-GGUF}
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      - audio
+      output:
+      - text
+    turns:
+      source: unsloth/Muse-Spark-Open-816B-A42B-GGUF
+      developer: as-system
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: reasoning_effort
+      accepts: [low, medium, high, xhigh]
+      default: xhigh
+  IFM/K2-Horizon-375B-A23B:
+    kind: text
+    name:
+      short: k2 horizon 375b
+      match: k2[\s-]*horizon[\s-]*375b
+    notes: >-
+      the flagship of the family, which "stores 375B parameters and runs 23B per token"
+      {card}. ifm publishes the data and training code with it, and intermediate checkpoints
+      too. this is the one k2 horizon with no vendor gguf, so the ladder is bartowski's.
+    repos:
+    - bartowski/K2-Horizon-375B-A23B-GGUF
+    runtime:
+      arch: k2-horizon
+      mainline: true
+      since: b11454
+      merged: '2026-10-06'
+    ids:
+      aa: k2-horizon-375b-a23b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: bartowski/K2-Horizon-375B-A23B-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: reasoning_effort
+      accepts: [low, medium, high]
+      default: high
+  reflection/Beam-1.0-501B-A23B:
+    kind: text
+    name:
+      short: beam 1.0 501b
+      match: \bbeam[\s-]*1\.0\b|reflection[\s-]*beam
+    notes: >-
+      reflection's open model, a sparse mixture of experts with a 1m-token context,
+      "developed predominantly for English" {card}. the card claims comparable quality on far
+      fewer reasoning tokens than its peers. the template drops a mid-conversation system
+      turn without saying so, which a client relying on one has to know.
+    repos:
+    - unsloth/Beam-1.0-501B-A23B-GGUF
+    - bartowski/Beam-1.0-501B-A23B-GGUF
+    runtime:
+      arch: beam
+      mainline: true
+      since: b11701
+      merged: '2026-10-17'
+    ids:
+      aa: reflection-beam
+      gbench: reflection/beam-1.0-501b-a23b
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: generation-config
+        temp: 0.7
+        top_p: 0.99
+        repeat_penalty: 1.0
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: unsloth/Beam-1.0-501B-A23B-GGUF
+      developer: as-system
+      leading_system_max: unlimited
+      mid_system: dropped
+      mid_developer: dropped
+    thinking:
+      knob: reasoning_effort
+      accepts: [minimal, low, medium, high, xhigh, max]
+      default: max
+  sensenova/SenseNova-U1.5-8B-MoT:
+    kind: text
+    name:
+      short: sensenova u1.5 8b
+      match: sensenova[\s-]*u1\.5
+    notes: >-
+      built "for more accurate, consistent, reliable, and aesthetically compelling visual
+      creation" {card}, and image generation is the point of it. this entry does not carry
+      that: llama.cpp took the understanding and text branch only, so these files read images
+      and answer in text. stable-diffusion.cpp's detector knows u1.5 for generation, and no
+      file for it is pinned here. mainline's support was written against u1, and no file
+      listed here has been loaded.
+    repos:
+    - mradermacher/SenseNova-U1.5-8B-MoT-i1-GGUF
+    - mradermacher/SenseNova-U1.5-8B-MoT-GGUF
+    runtime:
+      arch: sensenova_u1
+      mainline: true
+      since: b11801
+      merged: '2026-10-21'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      deterministic:
+        source: tuned-here
+        temp: 0.0
+        note: neither the card {card} nor a generation config names a sampler for the text branch
+        tuned: [instruct]
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    turns:
+      source: mradermacher/SenseNova-U1.5-8B-MoT-i1-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  openbmb/MiniCPM-OCR-1.0:
+    kind: text
+    name:
+      short: minicpm-ocr 1.0
+      match: minicpm[\s-]*ocr[\s-]*1\.0
+    notes: >-
+      openbmb's document parser {card}, which writes its transcription inside the thinking
+      block, so llama.cpp has to run it with `--reasoning off` or the text lands in
+      reasoning_content and `content` comes back empty. the release below is when mainline
+      learned the backbone. the projector came with PR 30979, merged 2026-10-22.
+    repos:
+    - openbmb/MiniCPM-OCR-1.0-gguf
+    - AtomicChat/MiniCPM-OCR-1.0-GGUF
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      deterministic:
+        source: tuned-here
+        temp: 0.0
+        note: a transcription has one right answer, and the card {card} names no sampler
+        tuned: [instruct]
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: openbmb/MiniCPM-OCR-1.0-gguf
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+  ibm-granite/granite-switch-4.1-8b:
+    kind: text
+    name:
+      short: granite switch 4.1 8b
+      match: granite[\s-]*switch[\s-]*4\.1[\s-]*\b8b\b
+    notes: >-
+      a chat model with adapters embedded in the weights, so one server answers chat, guardian
+      checks and decisions without swapping files {card}. llama-server also takes it on
+      `/v1/systemone`, as of PR 30676. it is carried as a text model because that is what it
+      is first. the card's speech input needs an encoder this entry does not claim.
+    repos:
+    - ibm-granite/granite-switch-4.1-8b-GGUF
+    runtime:
+      arch: graniteswitch
+      mainline: true
+      since: b10342
+      merged: '2026-08-10'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      deterministic:
+        source: tuned-here
+        temp: 0.0
+        note: what the card's own decision examples set {card}
+        tuned: [instruct]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: ibm-granite/granite-switch-4.1-8b-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+  ibm-granite/granite-switch-4.1-30b:
+    kind: text
+    name:
+      short: granite switch 4.1 30b
+      match: granite[\s-]*switch[\s-]*4\.1[\s-]*\b30b\b
+    notes: >-
+      the larger size of granite switch, with adapters embedded in the weights so one server
+      answers chat, guardian checks and decisions {card}. llama-server also takes it on
+      `/v1/systemone`.
+    repos:
+    - ibm-granite/granite-switch-4.1-30b-GGUF
+    runtime:
+      arch: graniteswitch
+      mainline: true
+      since: b10342
+      merged: '2026-08-10'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      deterministic:
+        source: tuned-here
+        temp: 0.0
+        note: what the card's own decision examples set {card}
+        tuned: [instruct]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: ibm-granite/granite-switch-4.1-30b-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
   microsoft/Phi-4-mini-instruct:
     kind: text
     name:
@@ -11328,6 +11978,117 @@ models:
       leading_system_max: unlimited
       mid_system: ok
       mid_developer: ok
+  FermionResearch/Phonon-2:
+    kind: speech
+    name:
+      short: phonon-2
+      match: \bphonon[\s-]*2(?!\.\d)\b
+    notes: >-
+      a compact english transcriber derived from parakeet-tdt-0.6b-v3, which its card says it
+      matches set for set {card}. crispasr loads it on the `phonon2` backend. phonon-2.5 is a later release and a separate model.
+    repos:
+    - repo: cstr/phonon2-GGUF
+      role: model
+      crispasr:
+        backend: phonon2
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: FermionResearch/Phonon-2
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  gradium/phonon-31m-en:
+    kind: speech
+    audiocpp: gradium_phonon
+    name:
+      short: gradium phonon 31m
+      match: gradium[\s-]*phonon
+    notes: >-
+      a small english synthesizer that "streams audio while it is still generating" {card}, at
+      24 khz. it shares a name with fermion's phonon transcribers and nothing else.
+    repos:
+    - gradium/phonon-31m-en-audiocpp
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    turns:
+      source: gradium/phonon-31m-en
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+  inclusionAI/Ming-3.0-TTS-0.5B:
+    kind: speech
+    audiocpp: ming3_tts
+    name:
+      short: ming-3.0 tts 0.5b
+      match: \bming[\s-]*3(?:\.0)?[\s-]*tts
+    notes: >-
+      inclusionai's multilingual synthesizer, with "Zero-shot voice cloning from a short
+      reference clip" {card} and a voice designed from a written description. it is listed
+      by the 0.5b in its name, and the checkpoint counts more parameters than that.
+    repos:
+    - audio-cpp/Ming-3.0-TTS-0.5B-GGUF
+    ids:
+      aa-tts: ming-3-0-tts
+      tts-arena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
+    turns:
+      source: inclusionAI/Ming-3.0-TTS-0.5B
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+  inclusionAI/Ming-3.0-Audio-Tiny:
+    kind: speech
+    audiocpp: ming3_audio
+    name:
+      short: ming-3.0 audio tiny
+      match: \bming[\s-]*3(?:\.0)?[\s-]*audio
+    notes: >-
+      a "compact native audio-language model" {card} that takes audio with text instructions,
+      and does speech recognition, spoken question answering and audio reasoning, with
+      optional speech back. the mixture-of-experts checkpoint runs on audio.cpp.
+    repos:
+    - audio-cpp/Ming-3.0-Audio-Tiny-GGUF
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+      open-asr: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+      - audio
+    turns:
+      source: inclusionAI/Ming-3.0-Audio-Tiny
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
   XiaomiMiMo/MiMo-V2.5-ASR:
     kind: speech
     name:

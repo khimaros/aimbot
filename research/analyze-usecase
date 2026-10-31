@@ -59,7 +59,7 @@ ASSESSED = "usecase-assessed.json"
 
 # artificial analysis fields worth carrying, as (facet key, label, aa field).
 # there were two facets here named after indices rather than after evals --
-# `aa.coding` and `aa.agentic` -- and artificial analysis has retired both. they
+# `aa4.coding` and `aa4.agentic` -- and artificial analysis has retired both. they
 # are gone rather than repointed: a key that says `coding` over a number that is
 # one benchmark's pass rate is a claim the source no longer makes, and pointing
 # it at whichever eval is nearest would hide the change in exactly the place a
@@ -73,46 +73,46 @@ ASSESSED = "usecase-assessed.json"
 # the intelligence index is included for display but is NOT a separate axis: it
 # is a composite over the rest of this list, so a reader who weights it beside
 # them is counting the same runs twice. build-tables says so at length.
-AA_FACETS = [
-    ("aa.intelligence", "intelligence index v4", "intelligenceIndex", "index"),
-    ("aa.scicode", "scicode", "scicode", "share"),
-    ("aa.livecodebench", "livecodebench", "livecodebench", "share"),
-    ("aa.gpqa", "gpqa diamond", "gpqa", "share"),
-    ("aa.hle", "humanity's last exam", "hle", "share"),
-    ("aa.tau2", "tau2 (tool use)", "tau2", "share"),
-    ("aa.tau_banking", "tau2 banking split", "tauBanking", "share"),
-    ("aa.ifbench", "instruction following", "ifbench", "share"),
-    ("aa.lcr", "long context reasoning", "lcr", "share"),
-    ("aa.critpt", "critpt (physics)", "critpt", "share"),
-    ("aa.mmmu_pro", "mmmu pro (vision)", "mmmuPro", "share"),
-    ("aa.terminalbench", "terminal-bench 2.1", "terminalbenchV21", "share"),
-    ("aa.terminalbench_v40", "terminal-bench 4.0", "terminalbenchV40", "share"),
-    ("aa.terminalbench_hard", "terminal-bench hard", "terminalbenchHard", "score"),
-    ("aa.gdpval", "gdpval (economic tasks)", "gdpvalNormalized", "share"),
-    ("aa.apex_agents", "apex agents", "apexAgents", "share"),
-    ("aa.analyst_agent", "analyst agent", "analystAgent", "share"),
-    ("aa.itbench_sre", "itbench sre", "itbenchSre", "share"),
-    ("aa.omniscience", "omniscience accuracy", "omniscienceAccuracy", "share"),
+AA4_FACETS = [
+    ("aa4.intelligence", "intelligence index v4", "intelligenceIndex", "index"),
+    ("aa4.scicode", "scicode", "scicode", "share"),
+    ("aa4.livecodebench", "livecodebench", "livecodebench", "share"),
+    ("aa4.gpqa", "gpqa diamond", "gpqa", "share"),
+    ("aa4.hle", "humanity's last exam", "hle", "share"),
+    ("aa4.tau2", "tau2 (tool use)", "tau2", "share"),
+    ("aa4.tau_banking", "tau2 banking split", "tauBanking", "share"),
+    ("aa4.ifbench", "instruction following", "ifbench", "share"),
+    ("aa4.lcr", "long context reasoning", "lcr", "share"),
+    ("aa4.critpt", "critpt (physics)", "critpt", "share"),
+    ("aa4.mmmu_pro", "mmmu pro (vision)", "mmmuPro", "share"),
+    ("aa4.terminalbench", "terminal-bench 2.1", "terminalbenchV21", "share"),
+    ("aa4.terminalbench_hard", "terminal-bench hard", "terminalbenchHard", "score"),
+    ("aa4.gdpval", "gdpval (economic tasks)", "gdpvalNormalized", "share"),
+    ("aa4.apex_agents", "apex agents", "apexAgents", "share"),
+    ("aa4.analyst_agent", "analyst agent", "analystAgent", "share"),
+    ("aa4.itbench_sre", "itbench sre", "itbenchSre", "share"),
+    ("aa4.omniscience", "omniscience accuracy", "omniscienceAccuracy", "share"),
     # the one axis here where a model is rewarded for declining to answer.
     # accuracy and non-hallucination pull against each other, and the composite
     # `omniscience` is accuracy minus the hallucination rate, which is why all
     # three are carried rather than the summary alone
-    ("aa.non_hallucination", "omniscience non-hallucination",
+    ("aa4.non_hallucination", "omniscience non-hallucination",
      "omniscienceNonHallucination", "share"),
-    ("aa.omniscience_index", "omniscience index v4 (accuracy less hallucination)",
+    ("aa4.omniscience_index", "omniscience index v4 (accuracy less hallucination)",
      "omniscience", "score"),
-    ("aa.speed", "median output tokens/s", "medianOutputTokensPerSecond", "rate"),
 ]
 
 # intelligence index v5 as a board of its own: a different scale over different
-# evals, so a v5 number and a v4 number are never one facet. `aa.intelligence` and
-# the omniscience facets above stay frozen at v4, which is what keeps a model v5
-# left out comparable with the roster it sat in. the evals v5 kept that were
-# already carried stay in `AA_FACETS`, and only what v5 introduced or re-versioned
-# is here.
+# evals, so a v5 number and a v4 number are never one facet. `aa4.intelligence`
+# and the omniscience facets above stay frozen at v4.3, which is what keeps a
+# model v5 left out comparable with the roster it sat in. the board holds what
+# the current index is made of, plus decode speed, which is live and belongs to
+# no version of the index.
 AA5_FACETS = [
     ("aa5.intelligence", "intelligence index v5", "intelligenceIndexV5", "index"),
     ("aa5.frontiercode", "frontiercode 2.0", "frontierCode20", "share"),
+    ("aa5.terminalbench_v40", "terminal-bench 4.0", "terminalbenchV40", "share"),
+    ("aa5.speed", "median output tokens/s", "medianOutputTokensPerSecond", "rate"),
     ("aa5.terminalbench_science", "terminal-bench-science", "terminalBenchScience", "share"),
     ("aa5.briefcase", "aa-briefcase", "briefcase", "score"),
     ("aa5.automationbench", "automationbench-aa", "automationBench", "share"),
@@ -147,9 +147,9 @@ LANG_MIN_GAMES = 5
 EPOCH_LOSSES = {"Pooled score"}
 
 SOURCES = {
-    "aa": {"label": "artificial analysis", "file": "data/artificial-analysis.json",
-           "url": "https://artificialanalysis.ai/leaderboards/models",
-           "model_url": "https://artificialanalysis.ai/models/%s"},
+    "aa4": {"label": "artificial analysis v4", "file": "data/artificial-analysis.json",
+            "url": "https://artificialanalysis.ai/leaderboards/models",
+            "model_url": "https://artificialanalysis.ai/models/%s"},
     "aa5": {"label": "artificial analysis v5", "file": "data/artificial-analysis.json",
             "url": "https://artificialanalysis.ai/leaderboards/models",
             "model_url": "https://artificialanalysis.ai/models/%s"},
@@ -305,7 +305,7 @@ def percentile(value, population):
 def aa_facets(entry, aa_id):
     """Both boards off one row: v4 frozen, v5 live, under one slug."""
     out = {}
-    for source, group, facets in (("aa", "artificial analysis", AA_FACETS),
+    for source, group, facets in (("aa4", "artificial analysis v4", AA4_FACETS),
                                   ("aa5", "artificial analysis v5", AA5_FACETS)):
         for key, label, field, unit in facets:
             v = entry.get(field)

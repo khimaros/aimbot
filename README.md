@@ -1097,15 +1097,15 @@ models in the default view and does not reorder the top 11.
 every number carries a reference: hover a `[src]` for the source, the file it
 came from, and -- for a community claim -- the sentence somebody actually wrote
 and a link to the thread. that holds inside the PROSE too. a verdict names its
-figures rather than typing them, so `aa.lcr p95` in a sentence is the same
-measurement as the `aa.lcr` cell in the table: it is double-underlined where it
+figures rather than typing them, so `aa4.lcr p95` in a sentence is the same
+measurement as the `aa4.lcr` cell in the table: it is double-underlined where it
 stands, and hovering it gives the same panel plus what the percentile is of. a
 marker beside the sentence would interrupt the line it is part of, so the
 phrase carries the affordance itself. the prose ships as parts -- words, and
 the reference between them carrying the key it resolved -- because the renderer
 is the only thing that knows which reference produced which figure; matching
 the rendered words afterwards would be a second implementation of the
-substitution, and could not attribute `{aa.lcr@other/Repo}` at all, since a
+substitution, and could not attribute `{aa4.lcr@other/Repo}` at all, since a
 comparison against another model prints bare on purpose.
 
 a score from a board that has since stopped listing the model says so in its
@@ -1113,11 +1113,14 @@ a score from a board that has since stopped listing the model says so in its
 number is kept rather than dropped: artificial analysis retiring every older
 model at once would otherwise have unscored all of them.
 
-artificial analysis' intelligence index v5 is its own board for the same reason.
-it is a different scale over a different set of evals, so `aa.intelligence` stays
-at the last v4 score for every model and `aa5.*` holds v5 beside it. the two
-weight apart: `aa5.*` rides at zero in the balanced ranking until v5 covers more
-of the roster, and the `artificial analysis v5` preset ranks on it alone.
+each version of artificial analysis' intelligence index is its own board for the
+same reason. v5 is a different scale over a different set of evals, so `aa4.*`
+keeps the last v4.3 scores and `aa5.*` holds v5 beside them. they weight apart,
+and the newer version always outweighs the older: the balanced ranking gives v5
+0.35 and v4 0.25, and the `artificial analysis v5` preset ranks on v5 alone. the
+registry's `ids.aa` keeps its name, because it is the site's model slug and both
+boards read it. links and saved weights made before the rename named `aa.*`
+facets, and those weights no longer apply.
 
 the table itself is deep-linked too, and without being asked: from the first
 thing the reader changes, the url's fragment carries what is on screen -- the
@@ -1356,7 +1359,7 @@ typed into markdown cannot be re-read at print time, and that is how the summary
 came to say the leader scored 87.4 against a table under it reading 79.1, and
 the qwen3.8 27b writeup to quote an artificial analysis index of 52.0 against
 33.9 in the capture beside it. a section there names the model it is about and
-references its figures -- including `{aa.lcr@owner/Repo}` for the model a
+references its figures -- including `{aa4.lcr@owner/Repo}` for the model a
 comparison is against, `dash.quality`/`dash.gib` for the ranking itself,
 `box.reserve` and `weight.*` for the settings it was taken under, and
 `reddit.mentions` for the forum columns.

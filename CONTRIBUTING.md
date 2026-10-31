@@ -283,7 +283,7 @@ captures, so the class of error is removed rather than detected. vcruz305's
 deepseek pack is why: its note said `95.75 gib` and `3 of 7 shards` while the
 sizes capture beside it read 246.35 over seven.
 
-**A comparison references both sides.** `{aa.lcr@owner/Repo}` resolves against
+**A comparison references both sides.** `{aa4.lcr@owner/Repo}` resolves against
 that model rather than the block's own, and renders without repeating the facet
 name because both halves are the same facet. Half of `II 55.8 against 52.0` used
 to be typed for want of this, inside a sentence that was otherwise generated,

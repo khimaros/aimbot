@@ -133,7 +133,7 @@ def prose_fields():
 def rendered_verdict(block, facets, other=None):
     """One assessed block with its figures rendered out of the facets.
 
-    The verdicts name their figures -- `{aa.speed}` rather than `aa.speed p77`
+    The verdicts name their figures -- `{aa5.speed}` rather than `aa5.speed p77`
     -- so the number a reader sees comes off the capture on the build that
     prints it. Shipped raw the page would print the brace, which is how this
     was noticed. An unresolved reference is left in place by `verdicts.render`
@@ -204,9 +204,9 @@ QUANT_EVIDENCE = [
     ("code", True,
      "the curve was fitted to a code-editing pass rate, so it is evidence "
      "about writing code and driving a tool loop through a software task",
-     ["aa.scicode", "aa.livecodebench", "aa.terminalbench",
-      "aa.terminalbench_v40", "aa.terminalbench_hard", "aa.itbench_sre",
-      "aa5.frontiercode", "aa5.terminalbench_science",
+     ["aa4.scicode", "aa4.livecodebench", "aa4.terminalbench",
+      "aa4.terminalbench_hard", "aa4.itbench_sre",
+      "aa5.frontiercode", "aa5.terminalbench_science", "aa5.terminalbench_v40",
       "gbench.agentic", "gbench.decision", "gbench.oneshot", "gbench.overall",
       "lang.clojure", "lang.cpp", "lang.csharp", "lang.go", "lang.java",
       "lang.javascript", "lang.kotlin", "lang.ocaml", "lang.python",
@@ -228,8 +228,8 @@ QUANT_EVIDENCE = [
     ("recall", False,
      "knowledge recall and question answering. quantization is widely reported "
      "to cost recall differently from reasoning, and nothing here measures it",
-     ["aa.critpt", "aa.gpqa", "aa.hle", "aa.lcr", "aa.non_hallucination",
-      "aa.omniscience", "aa.omniscience_index",
+     ["aa4.critpt", "aa4.gpqa", "aa4.hle", "aa4.lcr", "aa4.non_hallucination",
+      "aa4.omniscience", "aa4.omniscience_index",
       "aa5.critpt_hard", "aa5.hle_diamond", "aa5.non_hallucination",
       "aa5.omniscience", "aa5.omniscience_index",
       "epoch.critpt", "epoch.gpqa_diamond", "epoch.hle",
@@ -259,12 +259,12 @@ QUANT_EVIDENCE = [
 
     ("following", False,
      "instruction following: whether it did what it was told, not how well",
-     ["aa.ifbench", "card.ifbench", "card.ifeval"]),
+     ["aa4.ifbench", "card.ifbench", "card.ifeval"]),
 
     ("vision", False,
      "vision. the sweep quantized a text model's weights and never touched a "
      "vision tower, which is often left at full precision anyway",
-     ["aa.mmmu_pro", "card.mmmu", "card.mmmu_pro",
+     ["aa4.mmmu_pro", "card.mmmu", "card.mmmu_pro",
       # epoch's spatial reasoning board: a photo of an IKEA build beside its
       # manual, and the model says whether the build is right and which step is
       # wrong. the answer comes off an image, so a retention curve fitted to a
@@ -274,13 +274,13 @@ QUANT_EVIDENCE = [
     ("tools", False,
      "tool use outside software: booking, banking, desktop control. the loop "
      "is agentic but the output is not code",
-     ["aa.tau2", "aa.tau_banking", "epoch.osworld_2",
+     ["aa4.tau2", "aa4.tau_banking", "epoch.osworld_2",
       "card.tau2", "card.osworld"]),
 
     ("longrun", False,
      "long-horizon and economic work, where the reported failure mode is "
      "drift over many steps rather than a wrong answer in one",
-     ["aa.analyst_agent", "aa.apex_agents", "aa.gdpval",
+     ["aa4.analyst_agent", "aa4.apex_agents", "aa4.gdpval",
       "aa5.automationbench", "aa5.briefcase", "aa5.gdp_pdf",
       "epoch.apex_agents", "epoch.blueprint_bench_2", "epoch.cl_bench",
       # earthborne rangers: repeated playthroughs of a campaign board game with
@@ -297,7 +297,7 @@ QUANT_EVIDENCE = [
     ("composite", False,
      "a composite of the others, so discounting it would apply the curve "
      "again on top of components it does not cover",
-     ["aa.intelligence", "aa5.intelligence"]),
+     ["aa4.intelligence", "aa5.intelligence"]),
 
     ("elo", False,
      "an elo. a retention multiplier means `keep this fraction of the measured "
@@ -314,7 +314,7 @@ QUANT_EVIDENCE = [
 
     ("faster", False,
      "decode speed goes UP when you quantize, not down",
-     ["aa.speed"]),
+     ["aa5.speed"]),
 
     ("speech", False,
      "transcription and synthesis. the retention curve was fitted to a "
@@ -350,7 +350,7 @@ QUANT_EVIDENCE = [
     # the rows are SERVED ENDPOINTS, scored through a vendor's API, so which
     # weights answered is a claim about a deployment rather than a checkpoint in a
     # harness. `score` is the mean of the seven categories the board orders rows
-    # by, and it rides here for the same reason aa.intelligence rides under
+    # by, and it rides here for the same reason aa4.intelligence rides under
     # `composite`: it is a mean over the facets beside it.
     ("livebench", False,
      "graded tasks with published answer keys, scored against hosted endpoints of "
@@ -589,11 +589,15 @@ def license_of(repo, cards, table):
 # actually measures. a reader deciding what to trust needs this more than the
 # numbers.
 GROUPS = [
-    ("artificial analysis", "one harness across every model, third party. every "
-     "facet here is one benchmark: the coding and agentic indices that used to "
-     "be the two axes were retired by the site, so scicode and terminal-bench "
-     "2.1 carry the default weight instead. the intelligence index is a "
-     "composite over these runs and would count them twice."),
+    ("artificial analysis v5", "the site's current index, released 2026-10-27, "
+     "and the board the ranking leans on most. one harness across every model, "
+     "third party. frontiercode 2.0 and terminal-bench 4.0 carry the default "
+     "weight. the intelligence index is a composite over these runs and would "
+     "count them twice, and it is on a different scale from v4."),
+    ("artificial analysis v4", "the board as it stood at index v4.3, kept so a "
+     "model v5 left out still has a score. scicode and terminal-bench 2.1 carry "
+     "its default weight, below v5's, and the index and omniscience numbers are "
+     "frozen at their last v4 values."),
     ("gbench", "models play generated games against each other, so there is no "
      "public problem set to train against and outcomes are decided by play."),
     ("gbench languages", "success rate per language, rolled up from the games "
@@ -1796,7 +1800,7 @@ def milestones():
     The comparison these exist for is on artificial analysis' index, which is
     NOT the page's quality column: that is a weighted mean of percentiles inside
     the open-weights cohort and has no frontier model in it by construction. So
-    the milestone ships as a raw index for the `aa.intelligence` facet to be read
+    the milestone ships as a raw index for the `aa4.intelligence` facet to be read
     against, and the collector is what refuses a milestone that is open weights.
     """
     out = subprocess.run([os.path.join(ROOT, "research", "milestones"), "--json"],

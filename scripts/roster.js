@@ -95,7 +95,7 @@ function activeB(m) {
 
 // --- scoring -----------------------------------------------------------------
 //
-// a weight key is either a facet key (aa.scicode) or a prefix wildcard
+// a weight key is either a facet key (aa4.scicode) or a prefix wildcard
 // (card.*), which averages every facet under it. the wildcard exists because
 // card claims and epoch runs are per benchmark: a reader wants one knob for
 // "how much do i trust what the vendor says", not eleven.
@@ -1069,12 +1069,12 @@ const COLUMNS = [
      return v === null ? noEstimate(flops, 'set a compute figure under hardware')
        : `<td class="n dim">~${tps(v)}</td>`;
    }},
-  {k: 'scicode', t: 'aa scicode', num: true, get: m => facetVal(m, 'aa.scicode'),
-   help: 'scicode pass rate on artificial analysis\' harness. it carries the coding weight their coding index carried until they retired it',
-   cell: m => facetCell(m, 'aa.scicode', 1)},
-  {k: 'tbench', t: 'aa tbench', num: true, get: m => facetVal(m, 'aa.terminalbench'),
-   help: 'terminal-bench 2.1 pass rate: tool use and multi-step terminal work. it carries the agentic weight their agentic index carried',
-   cell: m => facetCell(m, 'aa.terminalbench', 1)},
+  {k: 'scicode', t: 'aa4 scicode', num: true, get: m => facetVal(m, 'aa4.scicode'),
+   help: 'scicode pass rate on artificial analysis\' harness, from the v4 board. intelligence index v5 dropped it, so it carries less weight than frontiercode',
+   cell: m => facetCell(m, 'aa4.scicode', 1)},
+  {k: 'tbench', t: 'aa4 tbench', num: true, get: m => facetVal(m, 'aa4.terminalbench'),
+   help: 'terminal-bench 2.1 pass rate: tool use and multi-step terminal work, from the v4 board. it carries less weight than terminal-bench 4.0 on v5',
+   cell: m => facetCell(m, 'aa4.terminalbench', 1)},
   {k: 'gbench', t: 'gbench', num: true, get: m => facetVal(m, 'gbench.agentic'),
    help: 'gbench agentic coding score. models play generated games, so there is no problem set to train against',
    cell: m => facetCell(m, 'gbench.agentic', 3)},
@@ -1155,7 +1155,7 @@ const licenseOf = m => m.license || {tier: UNKNOWN_TIER};
 const tierHelp = k => ((D.licenses || []).find(t => t.k === k) || {}).help || '';
 
 // which table columns read a scaled facet, so the header can say so
-const SCALED_COLUMNS = {scicode: 'aa.scicode', tbench: 'aa.terminalbench',
+const SCALED_COLUMNS = {scicode: 'aa4.scicode', tbench: 'aa4.terminalbench',
                         gbench: 'gbench.agentic', swe: 'swerebench.resolved',
                         arena: 'lmarena.rating'};
 

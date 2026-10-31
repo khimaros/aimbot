@@ -8,7 +8,7 @@ forum figures were ever checked.
 
 So a verdict names the FACET and this renders the number when it is printed:
 
-    "{aa.lcr} and {gbench.overall}"  ->  "aa.lcr p95 and gbench.overall p74"
+    "{aa4.lcr} and {gbench.overall}"  ->  "aa4.lcr p95 and gbench.overall p74"
 
 which removes the class of error rather than detecting it. It also turns a
 rename into a build failure instead of silent prose: when artificial analysis
@@ -121,7 +121,7 @@ def render_ref(key, facet, form=None, named=True):
 
     `named=False` drops the facet key, which is what a comparison against
     another model wants: it is the SAME facet on the other side, so repeating
-    the key gives "aa.lcr p80 against aa.lcr p90" where "aa.lcr p80 against
+    the key gives "aa4.lcr p80 against aa4.lcr p90" where "aa4.lcr p80 against
     p90" says it once.
 
     A community facet renders as the sentence the verdicts already use, because
@@ -256,10 +256,10 @@ def check_proposal(text, facets, require_reference=False):
     return True, ""
 
 
-# `aa.lcr p70` -- a facet named beside its percentile, which is exactly what
-# `{aa.lcr}` renders back to. 262 of the verdicts' figures are in this shape
+# `aa4.lcr p70` -- a facet named beside its percentile, which is exactly what
+# `{aa4.lcr}` renders back to. 262 of the verdicts' figures are in this shape
 TYPED_FACET = re.compile(r"(?<![\w.]){?([a-z][a-z0-9_.\-]{2,})}?\s+p(\d{1,3})\b", re.I)
-# and `aa.speed 140 tok/s p78`, which is what `{aa.speed:value}` renders back
+# and `aa5.speed 140 tok/s p78`, which is what `{aa5.speed:value}` renders back
 # to. tried FIRST, because the pattern above would match its tail and drop the
 # measurement the sentence was written to carry
 TYPED_VALUE = re.compile(r"(?<![\w.])([a-z][a-z0-9_.\-]{2,})\s+-?[\d.]+\s*"
@@ -275,15 +275,15 @@ CARD_CLAIM = re.compile(r"(?<![\w.])card ([a-z][a-z0-9 _-]{2,28}?)\s+"
 def aliases(facets, prefer=()):
     """{short name: key} for every facet whose short name is settled here.
 
-    The prose drops the prefix -- `ifbench p96` rather than `aa.ifbench p96` --
+    The prose drops the prefix -- `ifbench p96` rather than `aa4.ifbench p96` --
     and that is most of what is left once the keyed form is converted. A short
-    name shared by two facets needs settling first: `tau2` is both `aa.tau2` and
+    name shared by two facets needs settling first: `tau2` is both `aa4.tau2` and
     `card.tau2` on several models, and choosing between a third party's
     measurement and the vendor's own claim about itself is not a substitution
     anything should make on a guess.
 
     `prefer` settles it where the BLOCK already does. Two verdicts wrote
-    `tau2 pNN` in their notes while their own evidence list cited `{aa.tau2}` --
+    `tau2 pNN` in their notes while their own evidence list cited `{aa4.tau2}` --
     one facet named two ways in one block -- so the ambiguity was in the short
     name and never in what the author meant. Where the block cites BOTH
     candidates, nothing is settled and the name stays as written.
@@ -316,18 +316,18 @@ def convert(text, facets, prefer=()):
 
     EVERY figure a facet still carries is referenced, including one that has
     drifted. That is the point rather than a compromise: the number printed for
-    `{aa.lcr}` is read from the capture at print time, so referencing a stale
+    `{aa4.lcr}` is read from the capture at print time, so referencing a stale
     literal is what MAKES it correct. Muse glimmer's `gbench overall p84`
     against a facet reading p74 is the case this file was written for, and the
     fix for it is exactly this substitution.
 
     What a substitution cannot fix is the SENTENCE. A figure that has crossed a
-    band -- `aa.speed p77` to p28, top to bottom -- leaves prose arguing the
+    band -- `aa5.speed p77` to p28, top to bottom -- leaves prose arguing the
     opposite of its own rendered number, and no amount of referencing repairs
     that. Those come back as `crossed`, for a human to re-read the argument.
 
     The substitution changes no printed character where nothing has drifted:
-    `{aa.lcr}` renders as `aa.lcr p70`, which is what was there.
+    `{aa4.lcr}` renders as `aa4.lcr p70`, which is what was there.
     """
     converted, crossed = [], []
     short = aliases(facets, prefer)
@@ -359,7 +359,7 @@ def convert(text, facets, prefer=()):
     def one(m):
         key, pct = m.group(1), int(m.group(2))
         if key not in facets:
-            # the prose writes the short name -- `ifbench p96` for `aa.ifbench`
+            # the prose writes the short name -- `ifbench p96` for `aa4.ifbench`
             found = short.get(key.lower())
             if not found:
                 return m.group(0)
@@ -374,7 +374,7 @@ def convert(text, facets, prefer=()):
         converted.append((m.group(0), "{%s}" % key))
         return "{%s}" % key
 
-    # a reference already written is left alone: `{aa.lcr}` has no `pNN` after
+    # a reference already written is left alone: `{aa4.lcr}` has no `pNN` after
     # it, so the pattern cannot match one, but a caller may pass rendered text.
     # the value form goes first so its measurement is not thrown away
     out = CARD_CLAIM.sub(card_claim, text or "")
@@ -405,8 +405,8 @@ def check_evidence(keys, facets):
     """(ok, why) for the citation list beside a drafted verdict.
 
     Citations sit here rather than inside the sentence. Asked for inline
-    references a model wrote "{aa.lcr} sits at {aa.lcr}", which renders as
-    "aa.lcr p53 sits at aa.lcr p53" -- it was using one citation token as both
+    references a model wrote "{aa4.lcr} sits at {aa4.lcr}", which renders as
+    "aa4.lcr p53 sits at aa4.lcr p53" -- it was using one citation token as both
     a noun and a value, because splicing a citation into prose invites exactly
     that. Keeping them apart also means the prose reads as prose and the
     figures stay rendered.
@@ -428,7 +428,7 @@ def cite(text, facets):
     A citation sits beside the words it supports rather than in a list at the
     end, so a reader can tell which claim rests on which evidence. It renders as
     a MARKER and never as a value: an earlier design substituted the figure
-    inline, and a model handed that promptly wrote "{aa.lcr} sits at {aa.lcr}"
+    inline, and a model handed that promptly wrote "{aa4.lcr} sits at {aa4.lcr}"
     -- one token doing duty as a noun and a number in the same sentence.
     """
     order, lines = {}, []
