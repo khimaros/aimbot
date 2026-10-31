@@ -148,10 +148,13 @@ chosen for accuracy per gigabyte, built on the same recipes as the measured base
 | tier | download | VRAM | experts (gate/up) |
 |---|---:|---:|---|
 | `Q8_0` | 175.3 GiB | ~135 GiB | Q8_0 8.5 bpw — reference quality |
+| `AP-Q5_K_M` | 103.6 GiB | ~77 GiB | Q5_K 5.5 bpw: the most accurate below Q8 |
 | `AP-Q4_K_XL` | 94.2 GiB | ~67 GiB | Q4_K 4.5 bpw |
 | `AP-IQ4_XS` | 84.2 GiB | ~57 GiB | IQ3_S 3.44 bpw |
 
 VRAM is with the n-gram table offloaded to disk. More tiers to follow.
+
+**2026-10-30: `AP-Q5_K_M` added.** Built on the current `Qwen3.8-Flash-Next-AP` `AP-Q5_K_M` (an improved encode).
 
 **Vision:** Signal keeps Qwen3.8-Flash-Next's image input. The projector `mmproj-F16.gguf` is at the
 repository root — download it alongside the tier.

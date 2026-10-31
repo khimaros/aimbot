@@ -327,7 +327,7 @@ corpora mentioned under **Training Data**.
 (3) Large language model: intermediate checkpoint of granite-4.0-1b-base with 128k context length (https://huggingface.co/ibm-granite/granite-4.0-1b-base) finetuned on all 
 the corpora mentioned under **Training Data**.
 
-**Training Data:** 
+## Training Data:
 
 Overall, our training data is largely comprised of two key sources: (1) publicly available datasets (2) Synthetic data created from publicly
 available datasets specifically targeting Japanese ASR, keyword list-prompted ASR and the speech translation task. 

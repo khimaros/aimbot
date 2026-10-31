@@ -24,6 +24,7 @@ tags:
   <a href="https://atomic.chat/?utm_source=huggingface&utm_medium=referral&utm_campaign=hf_minicpm_v_4_7_35b_a3b&utm_content=btn_atomic"><img src="https://huggingface.co/AtomicChat/Qwen3.8-27B-GGUF/resolve/main/btn_atomic.png" width="162" alt="Atomic Chat"></a>
   <a href="https://discord.gg/8wGSsvmg4V"><img src="https://huggingface.co/AtomicChat/Qwen3.8-27B-GGUF/resolve/main/btn_discord.png" width="119" alt="Discord"></a>
   <a href="https://github.com/AtomicBot-ai/Atomic-Chat"><img src="https://huggingface.co/AtomicChat/Qwen3.8-27B-GGUF/resolve/main/btn_github.png" width="115" alt="GitHub"></a>
+  <a href="https://x.com/atomic_chat_hq"><img src="https://huggingface.co/AtomicChat/Qwen3.8-27B-GGUF/resolve/main/btn_x.png" width="108" alt="X"></a>
 </div>
 <ul style="margin: 0 0 12px 0;">
   <li>You can now run MiniCPM in <a href="https://atomic.chat/?utm_source=huggingface&utm_medium=referral&utm_campaign=hf_minicpm_v_4_7_35b_a3b&utm_content=bullet_app">Atomic Chat</a>.</li>

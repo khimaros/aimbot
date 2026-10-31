@@ -26,13 +26,14 @@ tags:
     </a>
   </div>
     <ul style="margin: 0;">
+      <img width="600" alt="deepseek-v4.1-flash unsloth desktop" src="https://cdn-uploads.huggingface.co/production/uploads/62ecdc18b72a69615d6bd857/NL1yOq6MuJeGmrEZckR_h.png" />
     <li>Run on a 128GB+ RAM device for the smallest 1-bit, 3-bit on 256GB or full precision on 320GB. <a href="https://unsloth.ai/docs/models/deepseek-v4.1-flash">Read Guide</a></li>
     <li>To run, please use our llama.cpp PR or the <a href="https://unsloth.ai/docs/desktop">Unsloth Desktop</a> app.</li>
     <li>Get up to 3x faster inference with Unsloth vs other ngram/CPU/VRAM repos./</li>
 </div>
 </div
 
-Quantization analysis, KLD plots and other analysis [is here.](https://unsloth.ai/docs/models/deepseek-v4.1-flash#quantization-analysis)
+Quantization analysis, KLD plots and other analysis [is here.](https://unsloth.ai/docs/models/deepseek-v4.1-flash)
 <br>
 To swap the engram (MXFP8 to Q6_K / Q5_K / IQ4_NL, see [this guide](https://unsloth.ai/docs/models/deepseek-v4.1-flash#mix-n-matching-the-engram))
 

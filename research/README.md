@@ -826,6 +826,15 @@ pass `--refresh` to any collector to ignore all of it.
   leaned on. `fetch-artificial-analysis` no longer asks for them and nothing
   here maps another eval onto their names: scicode and `terminalbenchV21` carry
   the weight instead, chosen on how much of THIS roster they cover.
+- intelligence index v5 (2026-10-27) changed the evals and their weights, and
+  left about 190 of the 275 leaderboard rows with no index. `intelligenceIndex`
+  and the `omniscience*` fields are frozen at v4, and the collector writes v5 to
+  `intelligenceIndexV5`, `omniscienceV5` and the v5 evals, which `aa5.*` reads.
+  `null` there means listed and unscored, and absent means not listed since v5.
+  `gdpval-aa-normalized` also moved to an elo scale, so `gdpvalNormalized` no
+  longer updates.
+- the evals moved into a nested `scores` object on the leaderboard row, keyed by
+  the site's slugs, which `SCORE_FIELDS` maps back to this repo's names.
 - the leaderboard row went narrow with them, so the text file is two boards
   merged per model -- `models` for the creator and the decode speed, and
   `model-detail` off a `/models/<slug>` page for the license, the parameter

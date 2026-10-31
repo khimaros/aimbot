@@ -21,6 +21,37 @@ base_model_relation: quantized
 > **This repository hosts the GGUF (llama.cpp) quantized version of [MiniCPM-V 4.7 35B-A3B](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B).** For the original BF16 weights and the full model card, please refer to [openbmb/MiniCPM-V-4.7-35B-A3B](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B).
 
 
+## GGUF files
+
+Two sets of files are provided. **They differ only in the embedded chat template** — the tensor
+weights are byte-identical.
+
+| Location | Thinking | Files |
+|:---|:---|:---|
+| repository root | **disabled** (fixed) | F16, Q8_0, Q6_K, Q5_K_M, Q5_K_S, Q5_1, Q5_0, Q4_K_M, Q4_K_S, Q4_1, Q4_0, IQ3_M, IQ3_XS, IQ4_NL, IQ4_XS, mix_q3gud_im |
+| `thinking/` | **enabled** by default | the same set, with a `-thinking` suffix |
+
+### Which one to use
+
+- **Root files** — thinking is disabled inside the embedded template and cannot be turned on.
+  This is the recommended default for this model, which is not trained as a reasoning model.
+- **`thinking/` files** — the official upstream template is restored, so the model emits a
+  `[Start thinking] … [End thinking]` trace before answering. Useful when you want to see the
+  reasoning steps; note that it multiplies the token count, so set a larger `-n`.
+
+```bash
+# default (thinking disabled, no flag needed)
+llama-cli -m MiniCPM-V-4_7-35B-A3B-Q4_K_M.gguf --mmproj mmproj-model-f16.gguf --image img.jpg -p "Describe."
+
+# thinking enabled
+llama-cli -m thinking/MiniCPM-V-4_7-35B-A3B-Q4_K_M-thinking.gguf --mmproj mmproj-model-f16.gguf \
+          --image img.jpg -p "Describe." -n 1024
+```
+
+`llama.cpp` always injects `enable_thinking` into the chat template, so `--reasoning off` has no
+effect on the root files; on the `thinking/` files it disables the trace. `mmproj` files are shared
+by both sets — they carry no chat template.
+
 # MiniCPM-V 4.7
 
 [GitHub](https://github.com/openbmb/MiniCPM-V) · [On-device results](#on-device-capability-and-efficiency) · [Evaluation](#evaluation) · [Examples](#examples) · [Usage](#usages) · [Model weights](#model-weights) · [DSpark-gguf](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-DSpark-gguf)

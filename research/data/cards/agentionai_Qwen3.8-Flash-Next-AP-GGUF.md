@@ -142,5 +142,18 @@ llama-cli -hf agentionai/Qwen3.8-Flash-Next-AP-GGUF:AP-Q4_K_XL \
   KL divergence 0.0886 (held-out), 0.0206 (code). 0 loops in a 45-run loop stress test.
   Download the file again; the first release stays available as revision `0061a60e`.
 
-## Support AgentionAI
-These quants are released freely. If it saves you compute or makes Qwen more useful, you can sponsor continued tuning, quantization and benchmarking on [GitHub](https://github.com/sponsors/agentionai).
+
+## Credits and license
+
+Built and tested on AMD Ryzen AI Max (Strix Halo). Hardware supported by AMD
+
+
+### Support AgentionAI
+
+These quants are released freely. If they save you VRAM or make Qwen more useful, you
+can buy me a coffee or some GPU time and sponsor continued quantization and benchmarking on
+[Buy Me a Coffee](https://buymeacoffee.com/agentionai). AgentionAI is a one-person team and can use your help.
+
+
+
+

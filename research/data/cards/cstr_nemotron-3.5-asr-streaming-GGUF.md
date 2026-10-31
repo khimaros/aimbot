@@ -83,35 +83,63 @@ GGUF conversion of [nvidia/nemotron-3.5-asr-streaming-0.6b](https://huggingface.
 - Streaming: cache-aware attention with 4 context presets (see below)
 - Vocab: 13087 SentencePiece tokens + 1 blank (pure RNN-T, no TDT durations)
 - Native punctuation and capitalization
-- License: [OpenMDW-1.1](https://github.com/linux-foundation/open-model-developer-weight-license/blob/main/LICENSE.md) (permissive, commercial OK)
+- License: [OpenMDW-1.1](https://openmdw.ai/license/1-1/) (permissive, commercial OK)
 
 ## Files
 
 | File | Size | Description |
 |------|------|-------------|
-| `nemotron-3.5-asr-streaming-0.6b-f16.gguf` | 1.3 GB | F16 weights (full precision, F32 pre-encode) |
-| `nemotron-3.5-asr-streaming-0.6b-q4_k.gguf` | 458 MB | **Recommended.** Q4_K quantized, identical text output, ~2x faster. |
+| [`nemotron-3.5-asr-streaming-0.6b-f16.gguf`](https://huggingface.co/cstr/nemotron-3.5-asr-streaming-GGUF/resolve/bbd95a9ca5fa0dfca3312a122dfc45a2b578b9c2/nemotron-3.5-asr-streaming-0.6b-f16.gguf) | 1.29 GB | **Recommended.** F16 passes the fixed original-reference CPU/T4 controls. |
+| `nemotron-3.5-asr-streaming-0.6b-q4_k.gguf` | 409 MB | Historical Q4 diagnostic; rejected by the fixed original-reference controls. |
 
-Pre-encode weights are kept at F32 in both GGUFs (F16 causes 1.56 max accumulation error across the 4352-dim projection).
+The accepted F16 profile retains its F32 pre-encode. The current Q4 file fails pre-encode and encoder stage gates and is not a safe managed default. No model weights changed in this documentation/notice correction.
+
+## Original-reference qualification (2026-10-26)
+
+The fixed 26-recording corpus is scored against actual pinned NVIDIA F32 ASR
+transcripts, not rewritten TTS prompts. CPU and actual Tesla T4 results agree:
+
+| Profile | Matches original transcript words | Matches 22 VoxCPM prompts | Stage/magnitude gates |
+| --- | --- | --- | --- |
+| F16 | 26/26 | 22/22 | pass |
+| Current Q4 | 11/26 | 8/22 | fail |
+
+All cases are retained, fresh/reused sessions are stable, and CLI plus opaque
+C ABI controls are included. Four OmniVoice recordings differ from their input
+prompts in ways the original ASR also hears. Acceptance retains cosine minimum
+0.999 and relative L2 maximum 0.01. This en-US L56/R3 batch corpus does not
+establish full language/streaming coverage or a performance comparison.
+
+F16 SHA-256: `14cbc98df495d8ab452c6a4ac367136d94ab5da55e73afaa96ba4f749dd95d09`.
+Current Q4 SHA-256: `22480dd283a3bf1b39e9d2ab86c048b0c1654b2fc280e46627a4cbfded4b46fd`.
+The current 409 MB Q4 file is distinct from the historical 479 MB Q4 snapshot;
+file identity must be checked before applying any old receipt.
+
+The [permanent evidence bundle](https://huggingface.co/cstr/crispasr-regression-fixtures/resolve/5fccbdd17f5640385576d7d5a8b06d41c3f5db08/tts-asr/nemotron-default-replay-20261026/proof.zip)
+contains the receipts, original-reference lineage, complete stage arrays,
+independent auditor and CUDA allocation/activity evidence, without model weights.
 
 ## Usage with CrispASR
 
+Existing v0.8.45 binaries retain the old automatic-download registry. Use an
+explicit downloaded F16 file with those binaries; source builds containing the
+2026-10-26 registry fix select F16 for managed downloads.
+
 ```bash
-# Auto-download (Q4_K, 458 MB)
+# Source builds containing the 2026-10-26 registry fix: F16, about 1.3 GB
 crispasr --backend nemotron -m auto --auto-download -f audio.wav
 
-# Or download manually
-huggingface-cli download cstr/nemotron-3.5-asr-streaming-GGUF \
-  nemotron-3.5-asr-streaming-0.6b-q4_k.gguf --local-dir models/
+# Download the pinned F16 file linked above to models/ for an existing binary.
+# Retain the accompanying license and origin notice when redistributing it.
 
 # Transcribe (English, default)
 crispasr --backend nemotron \
-  -m models/nemotron-3.5-asr-streaming-0.6b-q4_k.gguf \
+  -m models/nemotron-3.5-asr-streaming-0.6b-f16.gguf \
   -f audio.wav
 
 # Transcribe in German
 crispasr --backend nemotron \
-  -m models/nemotron-3.5-asr-streaming-0.6b-q4_k.gguf \
+  -m models/nemotron-3.5-asr-streaming-0.6b-f16.gguf \
   -f audio.wav -l de-DE
 
 # Beam search (default is greedy)
@@ -178,6 +206,7 @@ python models/convert-nemotron-to-gguf.py \
   --nemo nvidia/nemotron-3.5-asr-streaming-0.6b \
   --output nemotron-3.5-asr-streaming-0.6b-f16.gguf
 
+# Diagnostic candidate only: the current Q4 is not accepted.
 crispasr-quantize nemotron-3.5-asr-streaming-0.6b-f16.gguf \
   nemotron-3.5-asr-streaming-0.6b-q4_k.gguf q4_k
 ```
@@ -190,10 +219,17 @@ crispasr-quantize nemotron-3.5-asr-streaming-0.6b-f16.gguf \
 | Q4_K | And so my fellow Americans ask not what your country can do for you. \<en-US\> Ask what you can do for your country. \<en-US\> |
 | Streaming (preset 0) | And so, my fellow Americans ask not what your country can do for you. \<en-US\> Ask what you can do for your country. \<en-US\> |
 
-F16 and Q4_K produce identical text. Streaming output has minor punctuation differences but same content.
+These are historical single-clip JFK outputs, not a general F16/Q4 parity result. The broader original-reference controls above reject the current Q4 file. The 2026-10-26 acceptance covers batch decoding, not streaming parity.
 
 ## Original model
 
 - **Source:** [nvidia/nemotron-3.5-asr-streaming-0.6b](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b)
-- **License:** [OpenMDW-1.1](https://github.com/linux-foundation/open-model-developer-weight-license/blob/main/LICENSE.md) — permissive, commercial use OK, derivatives OK with attribution
+- **License:** [OpenMDW-1.1](https://openmdw.ai/license/1-1/) — retain the full agreement and applicable origin/copyright notices when redistributing model materials
 - **Training data:** 530k hours (NVIDIA Riva ASR set + Granary)
+
+## Full model license and notices
+
+The model materials are governed by [OpenMDW-1.1](LICENSE-OpenMDW-1.1.txt).
+The [origin notice](NOTICE.txt) records the pinned NVIDIA and conversion sources.
+The CrispASR runtime's MIT license does not replace the model license. These
+records do not warrant upstream training-data or third-party rights.

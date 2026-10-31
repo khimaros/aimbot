@@ -28,6 +28,7 @@ library_name: transformers
     <a href="https://github.com/google-gemma" target="_blank">GitHub</a> |
     <a href="https://blog.google/innovation-and-ai/technology/developers-tools/embeddinggemma-2" target="_blank">Launch Blog</a> |
     <a href="https://ai.google.dev/gemma/docs/embeddinggemma" target="_blank">Documentation</a> |
+    <a href="https://arxiv.org/abs/2610.37364" target="_blank">Technical Report</a>
     <br>
     <b>License</b>: <a href="https://ai.google.dev/gemma/docs/gemma_4_license" target="_blank">Apache 2.0</a> | <b>Authors</b>: <a href="https://deepmind.google/models/gemma/" target="_blank">Google DeepMind</a>
 </p>
@@ -47,8 +48,9 @@ EmbeddingGemma 2 builds upon the architectural and capability advancements of Ge
 
 ### Model Overview
 
-| Parameters | Total | 740M |
-| :---- | :---- | :---- |
+| | | |
+|---|---|---|
+| **Parameters** | **Total** | 740M |
 |  | **Backbone** | 130M |
 |  | **Embedder** | 140M |
 |  | **Modality Encoders** | *Vision:* 170M  *Audio:* 300M |
@@ -79,12 +81,12 @@ EmbeddingGemma 2 was evaluated across text, code, vision, visual document, video
 | :---- | :---- | :---- | :---- | :---- |
 | *Text* | Massive Text Embedding Benchmark (MTEB, multilingual, v2) | Mean(Task), Multiple | 61.36 | 61.15 |
 |  | Massive Text Embedding Benchmark (MTEB, code, v1) | Mean(Task), NDCG@10 | 78.68 | 68.76 |
-| *Image* | Massive Image Embedding Benchmark (MIEB, lite) | Mean(TaskType), Multiple | 64.64 | \- |
+| *Image* | Massive Image Embedding Benchmark (MIEB, lite) | Mean(TaskType), Multiple | 65.67 | \- |
 |  | Massive Multimodal Embedding Benchmark (MMEB v2 \- Image) | Mean(Task), Hit@1 | 57.28 | \- |
 |  | Massive Multimodal Embedding Benchmark (MMEB v2 \- VisDoc) | Mean(Task), NDCG@5 | 67.84 | \- |
 | *Video* | Massive Multimodal Embedding Benchmark (MMEB v2 \- Video) | Mean(Task), Hit@1 | 50.67 | \- |
 | *Audio* | Massive Sound Embedding Benchmark (MSEB, Retrieval) | Mean(Task), MRR@10 | 69.54 | \- |
-|  | Massive Audio Embedding Benchmark (MAEB) *Hugging Face*&nbsp; | Mean(Task), Multiple | 49.39 | \- |
+|  | Massive Audio Embedding Benchmark (MAEB) *Hugging Face*&nbsp; | Mean(Task), Multiple | 49.87 | \- |
 
 ### Evaluation Results with Vector Truncation
 
@@ -93,10 +95,10 @@ With this, model users can reduce storage requirements, with minimal quality imp
 
 | Output Dimension | Compression Ratio | MTEB *(multilingual, v2) Mean(Task)* | MTEB  *(eng, v2) Mean(Task)* | MTEB *(code, v1) Mean(Task)* | MIEB *(lite) Mean(TaskType)* | MMEB (v2) *Overall* | MSEB  *(Retrieval) Mean(Task)* | MAEB   *Mean(Task)* |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| 768d (Full) | 1:1 | 61.36 | 68.46 | 78.68 | 64.64 | 59.01 | 69.54 | 49.39 |
-| 512d | 1:1.5 | 61.17 | 68.41 | 77.24 | 64.32 | 58.38 | 69.18 | 49.21 |
-| 256d | 1:3 | 60.41 | 67.78 | 76.18 | 63.13 | 56.24 | 66.76 | 48.91 |
-| 128d | 1:6 | 57.89 | 65.68 | 71.41 | 59.06 | 45.65 | 56.71 | 46.92 |
+| 768d (Full) | 1:1 | 61.36 | 68.46 | 78.68 | 65.67 | 59.01 | 69.54 | 49.87 |
+| 512d | 1:1.5 | 61.17 | 68.41 | 77.24 | 65.34 | 58.38 | 69.18 | 49.76 |
+| 256d | 1:3 | 60.41 | 67.78 | 76.18 | 64.16 | 56.24 | 66.76 | 49.13 |
+| 128d | 1:6 | 57.89 | 65.68 | 71.41 | 59.97 | 45.65 | 56.71 | 47.28 |
 
 ## **Quick Start**
 
@@ -333,3 +335,19 @@ In creating an open embedding model, we have carefully considered the following:
 EmbeddingGemma 2 is among the strongest multimodal embedding models under 1B parameters. We’re excited to see how developers will use and adapt this model for on-device or edge AI applications.&nbsp;
 
 The model is designed from the ground up for responsible AI development, like other Gemma-family models.
+
+## **Citation**
+
+If you find our work helpful, please consider citing it:
+
+```bibtex
+@misc{embeddinggemma2_2026,
+    title={EmbeddingGemma 2: Unified and Efficient Multimodal Representations},
+    author={Schechter Vera, Henrique and Dua, Sahil and Team, EmbeddingGemma},
+    year={2026},
+    eprint={2610.37364},
+    archivePrefix={arXiv},
+    primaryClass={cs.LG},
+    url={https://arxiv.org/abs/2610.37364}
+}
+```

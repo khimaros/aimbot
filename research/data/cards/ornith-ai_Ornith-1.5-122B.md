@@ -11,9 +11,12 @@ pipeline_tag: text-generation
 
 # Ornith-1.5-122B
 
-Chirp Chirp! 🐦 Meet Ornith-1.5-122B: No Tradeoff Between Strong and Fast
-Stronger. Faster. Leaner.  It delivers stronger benchmark results, finishes tasks faster, and produces shorter outputs, bringing better instruction following, stronger task decomposition, and deeper knowledge of real-world work scenarios, and it runs on a single DGX. It achieves state-of-the-art performance among open-source models of comparable size. Open weights under the MIT license.
+Chirp Chirp! 🐦 We are introducing Ornith-1.5, a major step toward building foundation models through end-to-end self-improvement.
+
+Ornith-1.5 extends Ornith-1.0 (which was developed on top of Qwen3.5 and Gemma4 with additional continued pretraining, mid-training, and post-training) by expanding the self-improvement loop from scaffold and rollout optimization to jointly optimizing task generation, scaffold construction, and solution rollouts. Rather than relying on a fixed set of human-curated tasks and manually designed harnesses, Ornith-1.5 continuously generates new training tasks, discovers effective strategies for solving them, and improves the policy through reinforcement learning. For more details on the task, harness, and rollout reward design, please refer to our [blog](https://ornith.ai/ornith_1_5.html).
 <img style="width: 100%; max-width: 900px;" src="assets/ornith_122b_eval.png" alt="Ornith 1.5 122B Benchmark Results" title="Ornith 1.5 122B Benchmark Results">
+
+
 
 ## Ornith 1.5 122B
 

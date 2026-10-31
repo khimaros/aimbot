@@ -42,6 +42,7 @@ Full 27B-class reasoning in ternary transformer weights, for llama.cpp (CUDA, Me
 - **End-to-end ternary language weights** across embeddings, attention projections, MLP projections, and LM head, at a *true* 1.72 bits per weight — no high-precision escape hatches behind a low-bit label; the vision tower ships as a separate Q8_0 mmproj pack
 - **262K-token context** on-device, kept practical by the Qwen3.8-27B hybrid-attention backbone (\~75% linear attention)
 - **Two GGUF packings** with custom ternary hybrid-attention kernels for llama.cpp (CUDA, Metal) — **PTQ1_0** packs trits densely (1.75 bits/weight, 5.95 GB), **PQ2_0** stores each trit in a 2-bit slot (2.13 bits/weight, 7.21 GB); packed weights are consumed directly, never expanded back to FP16
+- **Runs on stock llama.cpp too**: a `Q2_0` packing (2.25 bits/weight, 7.63 GB) runs in mainline llama.cpp from release b11556 onward, no fork needed
 - **MLX companion**: also available as [Ternary-Bonsai-2-27B-mlx-2bit](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-mlx-2bit) for native Apple Silicon inference
 
 ## Resources
@@ -82,8 +83,9 @@ The weights are stored in a **rotated basis**: each matrix is transformed blockw
 | Ternary g128 (ideal)            | 1.72             | 5.8 GB      | \~9.3x       |
 | **GGUF PTQ1_0** (dense trits)   | **1.75**         | **5.95 GB** | **\~9.0x**   |
 | **GGUF PQ2_0** (2-bit slots)    | **2.13**         | **7.21 GB** | **\~7.5x**   |
+| **GGUF Q2_0** (stock llama.cpp) | **2.25**         | **7.63 GB** | **\~7.1x**   |
 
-Practical deployment needs packing formats that efficient kernels can consume, and this repo ships two: **PTQ1_0** packs trits densely and lands essentially on the information-theoretic target, while **PQ2_0** stores each trit in a 2-bit slot, trading footprint for cheaper unpacking. Neither is uniformly faster — see the throughput table below for where each wins. These sizes describe the language model alone, the only component that must stay resident for text inference; 26.2M parameters (**0.0976%** of the language model — the recurrent state path of the linear-attention layers, plus the normalization weights) remain in higher precision and are counted in the 1.72 figure.
+Practical deployment needs packing formats that efficient kernels can consume, and this repo ships two: **PTQ1_0** packs trits densely and lands essentially on the information-theoretic target, while **PQ2_0** stores each trit in a 2-bit slot, trading footprint for cheaper unpacking. Neither is uniformly faster — see the throughput table below for where each wins. A third file, **Q2_0**, uses llama.cpp's standard 2-bit type instead, so stock llama.cpp can run it, at a somewhat larger size. These sizes describe the language model alone, the only component that must stay resident for text inference; 26.2M parameters (**0.0976%** of the language model — the recurrent state path of the linear-attention layers, plus the normalization weights) remain in higher precision and are counted in the 1.72 figure.
 
 ### Shipped Components
 
@@ -93,6 +95,7 @@ The vision tower ships alongside the language model as an optional component (on
 | :------------- | :--------------------------------- | -------: | :--------------------------------- |
 | Language model | ternary g128 (PTQ1_0)              | 5.95 GB  | resident                            |
 | Language model | ternary g128 (PQ2_0)               | 7.21 GB  | resident                            |
+| Language model | ternary (Q2_0, stock llama.cpp)    | 7.63 GB  | resident                            |
 | Vision tower   | mmproj (Q8_0)                      | 0.63 GB  | optional — multimodal input only    |
 | Vision tower   | mmproj BF16 (reference)            | 0.93 GB  | optional                            |
 
@@ -133,13 +136,17 @@ You are a helpful assistant
 > running these models.** It carries the tested setup for every backend, pins a known-good binary
 > release, and is kept current as the kernels move. Where anything here disagrees with it, it is right.
 
-### These files need our llama.cpp build
+### Which llama.cpp runs which file
 
-The ternary hybrid-attention kernels live in the
-[PrismML-Eng/llama.cpp](https://github.com/PrismML-Eng/llama.cpp) fork. **Stock llama.cpp will not
-run these files.** It rejects `PQ2_0` and `PTQ1_0` as unknown types, and it loads `Q2_0` without any
-warning and produces garbage, because it has no Hadamard activation runtime. Use a binary from the
-fork.
+`PQ2_0` and `PTQ1_0` need the ternary hybrid-attention kernels in the
+[PrismML-Eng/llama.cpp](https://github.com/PrismML-Eng/llama.cpp) fork. Stock llama.cpp rejects them
+as unknown types. Use a binary from the fork.
+
+`Q2_0` runs on stock llama.cpp from release
+[b11556](https://github.com/ggml-org/llama.cpp/releases/tag/b11556) onward, which added the Hadamard
+activation runtime these weights need. **Older stock builds load `Q2_0` without any warning and
+produce garbage**, so check your build first (`llama-cli --version`). Apps that bundle their own
+llama.cpp need an engine built from b11556 or newer.
 
 ```bash
 # prebuilt, pick the archive for your platform
@@ -157,6 +164,16 @@ hf download prism-ml/Ternary-Bonsai-2-27B-gguf Ternary-Bonsai-2-27B-PQ2_0.gguf -
 
 ```bash
 ./bin/llama-cli -m Ternary-Bonsai-2-27B-PQ2_0.gguf \
+    -ngl 99 -fa on -c 32768 \
+    --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.05 \
+    -p "Explain quantum computing in simple terms." -n 16384
+```
+
+With stock llama.cpp (b11556 or newer), use the `Q2_0` file and the same flags:
+
+```bash
+hf download prism-ml/Ternary-Bonsai-2-27B-gguf Ternary-Bonsai-2-27B-Q2_0.gguf --local-dir .
+llama-cli -m Ternary-Bonsai-2-27B-Q2_0.gguf \
     -ngl 99 -fa on -c 32768 \
     --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.05 \
     -p "Explain quantum computing in simple terms." -n 16384

@@ -1113,6 +1113,12 @@ a score from a board that has since stopped listing the model says so in its
 number is kept rather than dropped: artificial analysis retiring every older
 model at once would otherwise have unscored all of them.
 
+artificial analysis' intelligence index v5 is its own board for the same reason.
+it is a different scale over a different set of evals, so `aa.intelligence` stays
+at the last v4 score for every model and `aa5.*` holds v5 beside it. the two
+weight apart: `aa5.*` rides at zero in the balanced ranking until v5 covers more
+of the roster, and the `artificial analysis v5` preset ranks on it alone.
+
 the table itself is deep-linked too, and without being asked: from the first
 thing the reader changes, the url's fragment carries what is on screen -- the
 weights, the filters, the box, the columns and the sort -- as a diff against the
@@ -1466,7 +1472,9 @@ for 48 models and `thinking.accepts` for 14;
 `scripts/resolve-ids` filled 118 source ids with zero ambiguous matches;
 `research/fetch-model-cards` extracts what models claim about themselves and
 `analyze-self-report` measures the discount (median +0.9 over third-party
-measurement across 70 matched claims).
+measurement across 70 matched claims). the hub's "Evaluation results" count as
+claims too: none on this roster is verified, so a row merged into the repo takes
+the same discount, and one on an open pull request is kept and claims nothing.
 
 not done yet, in the order it should happen:
 

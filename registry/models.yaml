@@ -1903,6 +1903,91 @@ models:
       gate_default: true
       accepts: [low, medium, xhigh]
       default: xhigh
+  LiquidAI/d1-2B:
+    kind: decision
+    name:
+      short: d1-2b
+      match: \bd1[\s-]*2b\b
+    notes: >-
+      liquid's decision model on LFM3-VL-2B, which "returns calibrated answers in one
+      forward pass, without generating tokens" {card} over text, pictures and video.
+      llama-server answers it on `/v1/systemone`, and it reads a question in one batch, so
+      the gguf card's server line sets `-b` and `-ub` to 8192. through the server,
+      `noul`, `choice` and `score` work, and "multiple choice (`\"multiple\": true`),
+      extraction, estimates and boxes are not supported yet" {card@LiquidAI/d1-2B-GGUF}.
+      the weights are under liquid's own "LFM Open License v1.0".
+    repos:
+    - LiquidAI/d1-2B-GGUF
+    runtime:
+      arch: lfm3
+      mainline: true
+      since: b11938
+      merged: '2026-10-27'
+      note: the release above is when mainline learned the backbone, not the decision head. the gguf
+        card {card@LiquidAI/d1-2B-GGUF} names b11960
+    ids:
+      jev: ''
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output: []
+    readout:
+      kind: native
+      source: card
+    turns:
+      source: LiquidAI/d1-2B-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  LiquidAI/d1-Omni-2B:
+    kind: decision
+    name:
+      short: d1-omni-2b
+      match: \bd1[\s-]*omni[\s-]*2b\b
+    notes: >-
+      d1-2B's sibling on LFM3-Omni-2B, "a **decision model for text, pictures, and audio**"
+      {card} that also takes spoken questions, and the only decision model on this roster
+      that hears. llama-server answers it on `/v1/systemone`, with the same limits as
+      d1-2B {card@LiquidAI/d1-Omni-2B-GGUF}. the vendor publishes no rung under Q8_0. the
+      weights are under liquid's own "LFM Open License v1.0".
+    repos:
+    - LiquidAI/d1-Omni-2B-GGUF
+    runtime:
+      arch: lfm3
+      mainline: true
+      since: b11938
+      merged: '2026-10-27'
+      note: the release above is when mainline learned the backbone, not the decision head. the gguf
+        card {card@LiquidAI/d1-Omni-2B-GGUF} names b11960
+    ids:
+      jev: ''
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      - audio
+      output: []
+    readout:
+      kind: native
+      source: card
+    turns:
+      source: LiquidAI/d1-Omni-2B-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
   # CARRIED AS A BASE, not as a candidate. qwen3 8b is two generations behind the
   # qwen3.5/3.6/3.8 entries beside it and nobody should pick it off this roster
   # today. it is here because `prism-ml/Ternary-Bonsai-8B` derives from it, and a
@@ -4349,15 +4434,34 @@ models:
       template, with `encoding/` again the vendor's prompt format. the gains are the
       vendor's own table against the release it replaces -- terminal-bench 4.0 42.3 against
       31.2, hle without tools 42.6 against 36.8 -- and it says the update also shortens
-      output. no llama.cpp release loads it: every gguf here needs PR 28696 or unsloth's
-      build of it, and the smallest rung is {gib@unsloth/DeepSeek-V4.1-Flash-1017-GGUF:UD-IQ1_S}.
+      output. mainline took the model in PR 31086, which renamed the engram table, so
+      unsloth's ladder, rebuilt after the merge, is the only one here a stock build reads.
+      the smallest rung is {gib@unsloth/DeepSeek-V4.1-Flash-1017-GGUF:UD-IQ1_S}.
       the conversions built for other engines are not carried -- lucebox's ROCMFP files for
       an R9700 beside a Ryzen AI Max, the DwarfStar packs from nazeshinjite and elvezjp, and
       peasantsmith's Maya packs for Project Maya.
     repos:
     - unsloth/DeepSeek-V4.1-Flash-1017-GGUF
-    - mrfakename/DeepSeek-V4.1-Flash-1017-GGUF
-    - prometheusAIR/DeepSeek-V4.1-Flash-1017-GGUF
+    # these two predate PR 31086: the tables are `blk.N.engram_embd`, where the
+    # loader requires one `per_layer_token_embd`, and the header arch cannot say so
+    - repo: mrfakename/DeepSeek-V4.1-Flash-1017-GGUF
+      files:
+        Q2_K:
+          runtime: {arch: deepseek41, mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/28696'}
+        Q3_K_M:
+          runtime: {arch: deepseek41, mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/28696'}
+        Q4_K_M:
+          runtime: {arch: deepseek41, mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/28696'}
+        Q8_0:
+          runtime: {arch: deepseek41, mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/28696'}
+    - repo: prometheusAIR/DeepSeek-V4.1-Flash-1017-GGUF
+      files:
+        IQ2_XXS:
+          runtime: {arch: deepseek41, mainline: false, fork: 'https://github.com/smalinin/llama.cpp', branch: my_build_deepseek41}
+        IQ2_XS:
+          runtime: {arch: deepseek41, mainline: false, fork: 'https://github.com/smalinin/llama.cpp', branch: my_build_deepseek41}
+        IQ3_XXS:
+          runtime: {arch: deepseek41, mainline: false, fork: 'https://github.com/smalinin/llama.cpp', branch: my_build_deepseek41}
     ids:
       aa: deepseek-v4-1-flash-1017
       gbench: deepseek/deepseek-v4.1-flash-1017
@@ -4367,10 +4471,12 @@ models:
       livebench: ''
     runtime:
       arch: deepseek41
-      mainline: false
-      tracking: https://github.com/ggml-org/llama.cpp/pull/28696
-      note: unsloth's card says "please use our llama.cpp PR" or its desktop app to run its files
-        {card@unsloth/DeepSeek-V4.1-Flash-1017-GGUF}, and the other two cards name PR 28696 itself
+      mainline: true
+      since: b11870
+      merged: '2026-10-25'
+      note: unsloth's card still says "please use our llama.cpp PR" {card@unsloth/DeepSeek-V4.1-Flash-1017-GGUF},
+        though its rungs now carry the table mainline loads. mrfakename's and prometheusAIR's need
+        the branches their cards name, marked on each file
     speculative:
       type: draft-dspark
       n_max: 3
@@ -5398,6 +5504,62 @@ models:
       leading_system_max: unlimited
       mid_system: ok
       mid_developer: dropped
+  Nanbeige/Nanbeige4.3-33B:
+    kind: text
+    name:
+      short: nanbeige4.3 33b
+      match: nanbeige[\s-]*4\.3(?:[\s-]*33b)?
+    notes: >-
+      "designed as the flagship teacher model for the Nanbeige4.3 series" {card}, built to
+      seed a distillation pipeline for smaller models. the card reports it leading most of
+      its own table against three peers at the 30b scale, all "evaluated at
+      their highest thinking effort", with this model on `preserve_thinking=true`, which the
+      card recommends for "multi-turn tool use, office tasks, and code-agent workflows" and
+      not for general chat. the vendor publishes no gguf, and the converted files declare
+      `llama`, the architecture mainline has carried since long before this model.
+    repos:
+    - AtomicChat/Nanbeige4.3-33B-GGUF
+    - bartowski/Nanbeige_Nanbeige4.3-33B-GGUF
+    runtime:
+      arch: llama
+      mainline: true
+      since: b1046
+      merged: '2023-08-21'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      tool-use:
+        source: tuned-here
+        temp: 1.0
+        top_p: 0.95
+        note: the card's "Agentic and tool-use tasks" row {card}
+        tuned: [instruct, code, tools]
+      thinking:
+        source: tuned-here
+        temp: 0.6
+        top_p: 0.95
+        note: the card's row for reasoning and chat {card}
+        tuned: [chat, reason]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: AtomicChat/Nanbeige4.3-33B-GGUF
+      developer: own
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   microsoft/Phi-4-mini-instruct:
     kind: text
     name:
@@ -5869,6 +6031,185 @@ models:
       leading_system_max: unlimited
       mid_system: ok
       mid_developer: ok
+  LiquidAI/LFM3-1.7B:
+    kind: text
+    name:
+      short: lfm3 1.7b
+      # bare `lfm3` is this one: the siblings all say what they are
+      match: \blfm[\s-]*3(?!\d|\.\d|[\s-]*(?:vl|audio|omni))
+    notes: >-
+      the text model of liquid's LFM3 family, 1.73b parameters of gated convolutions,
+      sliding-window attention and global attention, post-trained "for agentic harnesses"
+      {card} with a 256k-token context. the agentic claim stops short of code: it is "not
+      recommended for agentic coding or complex multi-step reasoning due to its small size".
+      reasoning is on by default and turning it off "can be inconsistent". the card's two
+      sets are a general one at temperature 0.1 and a math one at 1.0, carried here as
+      separate profiles. the post-trained model is the one carried, since
+      `LiquidAI/LFM3-1.7B-Base` has no gguf from the vendor. the weights are under liquid's
+      own "LFM Open License v1.0".
+    repos:
+    - repo: LiquidAI/LFM3-1.7B-GGUF
+      files:
+        Q4_0:
+          note: the quantization-aware distillation checkpoint, "trained to recover the accuracy
+            lost to Q4_0 quantization" {card@LiquidAI/LFM3-1.7B-GGUF} rather than converted after
+            the fact. {gib} here against {gib@LiquidAI/LFM3-1.7B-GGUF:Q4_K_M}
+    - bartowski/LFM3-1.7B-GGUF
+    runtime:
+      arch: lfm3
+      mainline: true
+      since: b11938
+      merged: '2026-10-27'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      tool-use:
+        source: vendor-card
+        temp: 0.1
+        top_k: 50
+        repeat_penalty: 1.1
+        tuned: [instruct, chat, tools]
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        tuned: [reason]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: LiquidAI/LFM3-1.7B-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  LiquidAI/LFM3-VL-2B:
+    kind: text
+    name:
+      short: lfm3-vl 2b
+      match: \blfm[\s-]*3[\s-]*vl\b
+    notes: >-
+      the LFM3 backbone with a vision tower, taking images and video, where "the model
+      reasons step by step before it answers" {card}. the card scopes it to visual work on
+      a device, and says it is "not recommended for coding, multi-turn conversations, or
+      complex reasoning". the projector ships beside the weights, and d1-2B is built on
+      this model. the weights are under liquid's own "LFM Open License v1.0".
+    repos:
+    - LiquidAI/LFM3-VL-2B-GGUF
+    - bartowski/LFM3-VL-2B-GGUF
+    runtime:
+      arch: lfm3
+      mainline: true
+      since: b11938
+      merged: '2026-10-27'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 0.1
+        top_p: 1.0
+        top_k: 50
+        min_p: 0.0
+        repeat_penalty: 1.1
+        tuned: [instruct]
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output:
+      - text
+    turns:
+      source: LiquidAI/LFM3-VL-2B-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+  LiquidAI/LFM3-Omni-2B:
+    kind: text
+    name:
+      short: lfm3-omni 2b
+      match: \blfm[\s-]*3[\s-]*omni\b
+    notes: >-
+      liquid's "single end-to-end model" {card} that takes text, images, video and audio
+      and answers in text or speech, 2.2b parameters that stand in for "a separate ASR
+      model, vision-language model, LLM and TTS model". it is "a **non-reasoning** model",
+      unlike the text and vision siblings, and the gguf card {card@LiquidAI/LFM3-Omni-2B-GGUF}
+      runs the server with `--reasoning off`. the config allows 128,000 positions and the
+      context the card states is lower, "32K tokens (input + output)". the projector carries
+      both the vision and the audio towers. the weights are under liquid's own "LFM Open
+      License v1.0".
+    repos:
+    - LiquidAI/LFM3-Omni-2B-GGUF
+    - ggml-org/LFM3-Omni-2B-GGUF
+    runtime:
+      arch: lfm3
+      mainline: true
+      since: b11938
+      merged: '2026-10-27'
+      note: the release above is when mainline learned the text backbone, and PR 31257 added this
+        model at b11941. the gguf card {card@LiquidAI/LFM3-Omni-2B-GGUF} names b11960 for all of it
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+      open-asr: ''
+    sampling:
+      deterministic:
+        source: generation-config
+        temp: 0.0
+        note: greedy for text is the gguf card's own recommendation {card@LiquidAI/LFM3-Omni-2B-GGUF}.
+          speech has separate audio samplers, stored in the gguf
+        tuned: [instruct, chat]
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      - audio
+      output:
+      - text
+      - audio
+    turns:
+      source: LiquidAI/LFM3-Omni-2B-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: false
   ai9stars/G9v3-3B:
     kind: text
     name:
@@ -10937,6 +11278,56 @@ models:
       leading_system_max: unlimited
       mid_system: ok
       mid_developer: ok
+  LiquidAI/LFM3-Audio-2B:
+    kind: speech
+    name:
+      short: lfm3-audio 2b
+      match: \blfm[\s-]*3[\s-]*audio\b
+    notes: >-
+      liquid's audio model on the LFM3 backbone, which "takes text or audio as input and
+      responds with text, speech, or both" {card}. the one model transcribes, synthesizes
+      and translates across 18 languages, though voice chat "currently supports English
+      only". unlike lfm2-audio it runs on llama.cpp itself: `llama-tts` for speech, and
+      `/v1/realtime` on the server for voice conversations
+      {card@LiquidAI/LFM3-Audio-2B-GGUF}. the config allows 128,000 positions and the context
+      the card states is lower, "32K tokens (input + output)". the projector and the codec
+      come in the same repo. the weights are under liquid's own "LFM Open License v1.0".
+    repos:
+    - LiquidAI/LFM3-Audio-2B-GGUF
+    # resolve-runtime skips `kind: speech`, and a model with no arch gets no engine
+    runtime:
+      arch: lfm3
+      mainline: true
+      since: b11941
+      merged: '2026-10-27'
+      note: the gguf card {card@LiquidAI/LFM3-Audio-2B-GGUF} names b11960 for all of it
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      aa-tts: ''
+      tts-arena: ''
+      voicearena: ''
+      open-asr: ''
+    sampling:
+      deterministic:
+        source: generation-config
+        temp: 0.0
+        note: greedy for text is the gguf card's own recommendation {card@LiquidAI/LFM3-Audio-2B-GGUF}.
+          speech has separate audio samplers, stored in the gguf
+        tuned: [instruct]
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+      - audio
+    turns:
+      source: LiquidAI/LFM3-Audio-2B-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
   XiaomiMiMo/MiMo-V2.5-ASR:
     kind: speech
     name:
@@ -13921,6 +14312,12 @@ models:
     ids:
       aa-tts: ''
       tts-arena: ''
+    turns:
+      source: openbmb/VoxCPM-0.5B
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
   Cactus-Compute/whistle:
     kind: speech
     name:

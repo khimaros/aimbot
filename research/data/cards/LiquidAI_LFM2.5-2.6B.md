@@ -37,7 +37,6 @@ base_model: LiquidAI/LFM2.5-2.6B-Base
   <div style="display: flex; justify-content: center; gap: 0.5em; margin-bottom: 1em;">
     <a href="https://playground.liquid.ai/"><strong>Try LFM</strong></a> • 
     <a href="https://docs.liquid.ai/lfm/getting-started/welcome"><strong>Docs</strong></a> • 
-    <a href="https://leap.liquid.ai/"><strong>LEAP</strong></a> • 
     <a href="https://discord.com/invite/liquid-ai"><strong>Discord</strong></a>
   </div>
 </div>

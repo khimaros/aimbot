@@ -2158,6 +2158,127 @@
    ],
    "assessed_on": "2026-10-21"
   },
+  "LiquidAI/LFM3-1.7B": {
+   "one_liner": "liquid's 1.73b text model, post-trained for agent harnesses, with a 256k-token context and reasoning on by default.",
+   "use_for": [
+    "local agents and tool calling on small hardware",
+    "structured output",
+    "a base for domain-specific fine-tuning"
+   ],
+   "avoid_for": [
+    "agentic coding, which its own card rules out",
+    "complex multi-step reasoning",
+    "knowledge-heavy work without retrieval or search"
+   ],
+   "notes": "no board has scored it, so the only numbers are the vendor's own table. the card keeps two sampler sets, a cold general one and a hot one for math, and they are different enough to be separate profiles here.",
+   "confidence": "low",
+   "evidence": [
+    "card: not recommended for agentic coding or complex multi-step reasoning",
+    "card: temperature 0.1 for general use, 1.0 for math and science",
+    "no board scores it"
+   ],
+   "assessed_on": "2026-10-30"
+  },
+  "LiquidAI/LFM3-VL-2B": {
+   "one_liner": "the LFM3 backbone with a vision tower, reasoning over images and video.",
+   "use_for": [
+    "on-device visual questions about charts, documents and app screens",
+    "finding objects and spatial reasoning for robotics",
+    "short questions about a video"
+   ],
+   "avoid_for": [
+    "coding, multi-turn conversations and complex reasoning, which its card rules out",
+    "audio, which is the omni sibling's job"
+   ],
+   "notes": "the only numbers are the vendor's. a cold temperature with reasoning on is the card's own set rather than a house choice.",
+   "confidence": "low",
+   "evidence": [
+    "card: not recommended for coding, multi-turn conversations, or complex reasoning",
+    "config: vision_config with image and video tokens",
+    "no board scores it"
+   ],
+   "assessed_on": "2026-10-30"
+  },
+  "LiquidAI/LFM3-Omni-2B": {
+   "one_liner": "one 2.2b model that takes text, images, video and audio and answers in text or speech, without reasoning.",
+   "use_for": [
+    "a single on-device model in place of separate asr, vision, llm and tts models",
+    "questions about a video that need both the picture and the soundtrack",
+    "real-time voice conversations with tool calls on `/v1/realtime`"
+   ],
+   "avoid_for": [
+    "reasoning-heavy tasks, since this one is a non-reasoning model",
+    "any single modality where a dedicated sibling is available"
+   ],
+   "notes": "the projector carries both towers, so it adds more than the vision or audio sibling's does. an open llama.cpp issue reports audio glitches on the sibling, so voice output is the part to test first.",
+   "confidence": "low",
+   "evidence": [
+    "card: non-reasoning model, enable_thinking=True is not supported",
+    "gguf card: --reasoning off, real-time voice on /v1/realtime",
+    "llama.cpp issue 31436",
+    "no board scores it"
+   ],
+   "assessed_on": "2026-10-30"
+  },
+  "LiquidAI/LFM3-Audio-2B": {
+   "one_liner": "liquid's speech model on llama.cpp itself: transcription, synthesis and translation in one model, across 18 languages.",
+   "use_for": [
+    "transcription and synthesis from one small model",
+    "spoken tool calling",
+    "questions about a recording"
+   ],
+   "avoid_for": [
+    "voice chat in anything but english",
+    "images or video, which are the omni sibling's job"
+   ],
+   "notes": "lfm2-audio went through crispasr; this one runs on stock llama.cpp, with `llama-tts` for speech and `/v1/realtime` for conversations. llama.cpp issue 31436 reports glitches in the realtime path's audio output. no speech board has scored it yet.",
+   "confidence": "low",
+   "evidence": [
+    "card: voice chat currently supports english only",
+    "gguf card: llama-tts and /v1/realtime",
+    "llama.cpp issue 31436",
+    "no board scores it"
+   ],
+   "assessed_on": "2026-10-30"
+  },
+  "LiquidAI/d1-2B": {
+   "one_liner": "a calibrated decision model on LFM3-VL-2B: typed answers over text, pictures and video in one forward pass.",
+   "use_for": [
+    "routing and triage with `noul`, `choice` and `score` questions",
+    "typed questions about an image or video"
+   ],
+   "avoid_for": [
+    "multiple choice, extraction, estimates or boxes through llama.cpp, which does not support them yet",
+    "anything that needs generated text"
+   ],
+   "notes": "the gguf serves a narrower set of question types than the card describes. the card says it leads the open d1 models on liquid's own decision board, which no outside board has checked.",
+   "confidence": "low",
+   "evidence": [
+    "gguf card: noul, choice and score only on llama.cpp",
+    "card: calibrate any decision threshold on data from your own use",
+    "no independent board scores it"
+   ],
+   "assessed_on": "2026-10-30"
+  },
+  "LiquidAI/d1-Omni-2B": {
+   "one_liner": "the d1 decision model on LFM3-Omni-2B, and the one that hears: typed answers over audio, and questions that can be spoken.",
+   "use_for": [
+    "typed questions about audio clips",
+    "spoken questions, in the same pass as text and pictures"
+   ],
+   "avoid_for": [
+    "multiple choice, extraction, estimates or boxes through llama.cpp, which does not support them yet",
+    "text and pictures alone, where d1-2B has a smaller rung and a smaller projector"
+   ],
+   "notes": "the audio is what separates it from d1-2B. the vendor stops at Q8_0, so nothing below that rung is published.",
+   "confidence": "low",
+   "evidence": [
+    "gguf card: audio clips and spoken questions on /v1/systemone",
+    "repo listing: Q8_0 and float rungs only",
+    "no independent board scores it"
+   ],
+   "assessed_on": "2026-10-30"
+  },
   "LiquidAI/LFM2.5-Audio-1.5B": {
    "one_liner": "liquid's audio model on their LFM2 backbone, with a japanese sibling under the same backend.",
    "use_for": [
@@ -2681,6 +2802,26 @@
     "no forum mentions, and no vendor gguf"
    ],
    "assessed_on": "2026-09-19"
+  },
+  "Nanbeige/Nanbeige4.3-33B": {
+   "one_liner": "a dense 33b built for agent work, with a 512k context and a vendor table that puts it first in its size class on most rows.",
+   "use_for": [
+    "agentic coding",
+    "long tool-using sessions, with preserve_thinking on",
+    "knowledge work in a loop"
+   ],
+   "avoid_for": [
+    "general chat at the agentic sampler set, which the card keeps for tool use",
+    "anything that needs images or audio"
+   ],
+   "notes": "no board has scored it, so the only numbers are the vendor's own, run with its own preserve_thinking setting. the card's terminal-bench figure is well above the next model in the same table, and that gap is the claim worth checking first. the weights are dense, so every parameter is active on every token, unlike the a3b class beside it.",
+   "confidence": "low",
+   "evidence": [
+    "card: compared at each model's highest thinking effort, on one harness per benchmark",
+    "card: two sampler rows, temperature 1.0 for agents and 0.6 for reasoning and chat",
+    "no board scores it, and no vendor gguf"
+   ],
+   "assessed_on": "2026-10-31"
   },
   "OpenMOSS-Team/MOSS-Audio-4B-Instruct": {
    "one_liner": "the largest transcriber here at 4b, and an instruct model that takes a prompt about the audio.",
@@ -4768,25 +4909,26 @@
    "assessed_on": "2026-10-21"
   },
   "deepseek-ai/DeepSeek-V4.1-Flash-1017": {
-   "one_liner": "deepseek's october update of v4.1 flash: the same 763b of weights, better on the vendor's own agentic table, and loadable by no llama.cpp release.",
+   "one_liner": "deepseek's october update of v4.1 flash: the same 763b of weights, better on the vendor's own agentic table, and in mainline llama.cpp through unsloth's rebuilt ladder.",
    "use_for": [
-    "agentic and coding work on hardware that can hold or stream its smallest rung, a 1-bit quant, through a build of PR 28696",
-    "anything v4.1 flash was used for, since the architecture and format are unchanged"
+    "agentic and coding work on hardware that can hold or stream its smallest rung, a 1-bit quant, from unsloth's ladder on mainline",
+    "anything v4.1 flash was used for, since the architecture is unchanged"
    ],
    "avoid_for": [
-    "a stock llama.cpp build, which refuses the architecture",
+    "mrfakename's and prometheusair's files on a stock build, whose engram tables predate the mainline format",
     "a box that has to serve it resident -- the page works out whether even the smallest rung fits"
    ],
-   "notes": "a point release the card calls a minor update, with vendor-reported gains over the release it replaces on every row of its table and the claim of shorter outputs. artificial analysis and gbench have since scored it independently: {aa.intelligence}, {gbench.overall}. the conversions split by engine as v4.1's did: unsloth, mrfakename and prometheusair need the llama.cpp PR, while lucebox, dwarfstar and maya builds need their own runtimes and are not carried.",
+   "notes": "a point release the card calls a minor update, with vendor-reported gains over the release it replaces on every row of its table and the claim of shorter outputs. artificial analysis and gbench have since scored it independently: {aa.intelligence}, {gbench.overall}. mainline took the architecture in PR 31086 and renamed the engram table on the way in. unsloth rebuilt after the merge, so its rungs carry the mainline table even though its card still points at its own PR; mrfakename and prometheusair keep the older per-layer tables and need their branches. lucebox, dwarfstar and maya builds need their own runtimes and are not carried.",
    "confidence": "low",
    "evidence": [
     "{aa.intelligence}",
     "{gbench.overall}",
     "card: terminal-bench 4.0 42.3 against 31.2, hle without tools 42.6 against 36.8, vendor's evaluation",
-    "unsloth card: run with its llama.cpp PR or unsloth desktop",
+    "llama.cpp PR 31086, first tagged b11870",
+    "gguf headers: unsloth per_layer_token_embd, mrfakename and prometheusair blk.N.engram_embd",
     "repo listing: smallest unsloth rung UD-IQ1_S"
    ],
-   "assessed_on": "2026-10-21"
+   "assessed_on": "2026-10-30"
   },
   "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16": {
    "one_liner": "nemotron 3.5 super vl cut to 74b with 9b active and shipped by nvidia as a native 2-bit gguf.",

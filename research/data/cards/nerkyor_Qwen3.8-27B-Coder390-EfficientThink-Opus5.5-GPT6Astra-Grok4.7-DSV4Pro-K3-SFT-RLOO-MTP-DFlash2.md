@@ -318,11 +318,11 @@ GPQA: 2 truncations, 0 empty. MMLU: 0 / 0. LCB: 3 truncations, 3 empty (length w
 LCB is scored on llama.cpp: the LCB harness gets non-JSON replies from NInfer — a harness issue, not model quality.
 
 
-## Run this model in Lynn desktop Agent (V0.87.3)
+## Run this model in Lynn desktop Agent (V0.87.4)
 
 [Lynn](https://github.com/MerkyorLynn/Lynn) is an open-source desktop AI Agent (GUI + standalone CLI): chat, search, file edits, coding, and realtime voice in one app, or as a headless worker for other tools and CI. **Free. Quick Start needs no configuration and no API key.**
 
-Current defaults (V0.87.3):
+Current defaults (V0.87.4):
 
 | Role | Stack |
 |---|---|
@@ -334,11 +334,11 @@ Hardware guidance: Apple Silicon uses unified memory; NVIDIA uses the largest si
 
 Tool arguments (places, dates, leagues, tickers, currency pairs, and so on) are filled by the model rather than guessed from the whole user sentence. Desktop features such as long-term memory and writing Diff ship with Lynn; see the release notes for the full changelog.
 
-- [V0.87.3 release notes](https://github.com/MerkyorLynn/Lynn/releases/tag/v0.87.3)
+- [V0.87.4 release notes](https://github.com/MerkyorLynn/Lynn/releases/tag/v0.87.4)
 - [China download page (recommended)](https://download.merkyorlynn.com/download.html)
-- macOS Apple Silicon: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-macOS-arm64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-macOS-arm64.dmg)
-- macOS Intel: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-macOS-x64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-macOS-x64.dmg)
-- Windows: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-Windows-Setup.exe) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-Windows-Setup.exe)
+- macOS Apple Silicon: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.4-macOS-arm64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.4/Lynn-0.87.4-macOS-arm64.dmg)
+- macOS Intel: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.4-macOS-x64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.4/Lynn-0.87.4-macOS-x64.dmg)
+- Windows: [mirror](https://download.merkyorlynn.com/downloads/Lynn-0.87.4-Windows-Setup.exe) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.4/Lynn-0.87.4-Windows-Setup.exe)
 
 In Lynn: **Settings → Models → Local Qwen3.8-27B → pick Q2 / Q3 → Install & start**. Local tiers load only the Q2 / Q3 LynnStyle-MTP files under this repo’s `GGUF/` directory. NInfer / NVFP4 and other formats stay outside Lynn’s one-click install — use their own engines.
 
@@ -1921,11 +1921,11 @@ GPQA 截断 2、空答 0。MMLU 无截断、无空答。LCB 截断 3、空答 3(
 LCB 以 llama.cpp 的结果为准:LCB 测评脚本请求 NInfer 时收到的回复不是合法 JSON,这是测评脚本与接口的兼容问题,不是模型质量问题。
 
 
-## 用 Lynn 桌面 Agent 跑本模型（V0.87.3）
+## 用 Lynn 桌面 Agent 跑本模型（V0.87.4）
 
 [Lynn](https://github.com/MerkyorLynn/Lynn) 是开源桌面 AI Agent（GUI + 独立 CLI）：对话、搜资料、改文件、写代码、实时语音都能在同一套界面里完成，也可以当其他工具或 CI 的无头 worker。**全部免费，Quick Start 无需配置、无需 API Key。**
 
-当前默认能力（V0.87.3）：
+当前默认能力（V0.87.4）：
 
 | 用途 | 方案 |
 |---|---|
@@ -1937,11 +1937,11 @@ LCB 以 llama.cpp 的结果为准:LCB 测评脚本请求 NInfer 时收到的回�
 
 工具参数由模型自己填写（地点、日期、联赛、行情代码、货币对等），不再从整句问题硬猜实体。长期记忆与写作 Diff 等桌面能力随 Lynn 提供；完整说明与更新见发布页。
 
-- [V0.87.3 发布说明](https://github.com/MerkyorLynn/Lynn/releases/tag/v0.87.3)
+- [V0.87.4 发布说明](https://github.com/MerkyorLynn/Lynn/releases/tag/v0.87.4)
 - [国内下载页（推荐）](https://download.merkyorlynn.com/download.html)
-- macOS Apple Silicon：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-macOS-arm64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-macOS-arm64.dmg)
-- macOS Intel：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-macOS-x64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-macOS-x64.dmg)
-- Windows：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.3-Windows-Setup.exe) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.3/Lynn-0.87.3-Windows-Setup.exe)
+- macOS Apple Silicon：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.4-macOS-arm64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.4/Lynn-0.87.4-macOS-arm64.dmg)
+- macOS Intel：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.4-macOS-x64.dmg) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.4/Lynn-0.87.4-macOS-x64.dmg)
+- Windows：[国内](https://download.merkyorlynn.com/downloads/Lynn-0.87.4-Windows-Setup.exe) · [GitHub](https://github.com/MerkyorLynn/Lynn/releases/download/v0.87.4/Lynn-0.87.4-Windows-Setup.exe)
 
 在 Lynn 里：**设置 → 模型 → 本地 Qwen3.8-27B → 选 Q2 / Q3 → 安装并启动**。本地档位只加载本仓库 `GGUF/` 下的 Q2 / Q3 LynnStyle-MTP 文件；NInfer / NVFP4 等其他格式请用对应引擎自行部署，不走 Lynn 一键安装。
 

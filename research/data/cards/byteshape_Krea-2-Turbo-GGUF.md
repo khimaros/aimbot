@@ -31,6 +31,11 @@ Krea-2-Turbo is **step-distilled**: 8 steps, no classifier-free guidance. A 1024
 
 If you have questions or want to share feedback, reach us on [Reddit](https://www.reddit.com/r/ByteShape/).
 
+> **License acceptance:** By downloading or using these weights, you agree
+> to the [Krea 2 Community License Agreement](https://www.krea.ai/krea-2-licensing)
+> and [Krea's Acceptable Use Policy](https://www.krea.ai/krea-2-use-policy).
+> If you do not agree, do not download or use these weights.
+
 ## A Note on Speed
 
 Unlike the decoding stage of an LLM, diffusion inference is **not** heavily constrained by memory bandwidth. Compressing the model therefore does not necessarily make image generation faster. Quantization here buys you **VRAM headroom**, not throughput. Backend optimization is what moves the needle.
@@ -194,3 +199,6 @@ Krea 2 Community License. Read it at [krea.ai/krea-2-licensing](https://www.krea
 These weights are a **quantized** version of [krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo), modified by quantizing the diffusion transformer with ByteShape's ShapeLearn. They are not an official Krea product and are not endorsed by Krea.
 
 > Krea 2 is licensed under the Krea 2 Community License Agreement. For more information, visit https://krea.ai/krea-2-licensing.
+
+A copy of the agreement is included in [LICENSE.pdf](./LICENSE.pdf).
+Attribution and modification information is included in [NOTICE](https://huggingface.co/byteshape/Krea-2-Turbo-GGUF/blob/main/NOTICE).

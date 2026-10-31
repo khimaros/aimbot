@@ -24,10 +24,12 @@ tags:
   <a href="https://atomic.chat/?utm_source=huggingface&utm_medium=referral&utm_campaign=hf_nvidia_nemotron_3_5_bolt_74b_a9b&utm_content=btn_atomic"><img src="https://huggingface.co/AtomicChat/Qwen3.8-27B-GGUF/resolve/main/btn_atomic.png" width="162" alt="Atomic Chat"></a>
   <a href="https://discord.gg/8wGSsvmg4V"><img src="https://huggingface.co/AtomicChat/Qwen3.8-27B-GGUF/resolve/main/btn_discord.png" width="119" alt="Discord"></a>
   <a href="https://github.com/AtomicBot-ai/Atomic-Chat"><img src="https://huggingface.co/AtomicChat/Qwen3.8-27B-GGUF/resolve/main/btn_github.png" width="115" alt="GitHub"></a>
+  <a href="https://x.com/atomic_chat_hq"><img src="https://huggingface.co/AtomicChat/Qwen3.8-27B-GGUF/resolve/main/btn_x.png" width="108" alt="X"></a>
 </div>
 <ul style="margin: 0 0 12px 0;">
   <!-- TODO(editorial): guide bullet: link to the atomic.chat blog guide for this model, if there is one -->
   <li>Every file here was measured against the BF16 original on the same stand as the other publishers' files.</li>
+  <li>You can now run Nemotron 3.5 Bolt in <a href="https://atomic.chat/?utm_source=huggingface&utm_medium=referral&utm_campaign=hf_nvidia_nemotron_3_5_bolt_74b_a9b&utm_content=bullet_app">Atomic Chat</a>: 74B total parameters, 9B active per token.</li>
   <li>See our quantization analysis below for measurements and instructions.</li>
 </ul>
 <hr style="margin: 0 0 16px 0;">

@@ -5,6 +5,7 @@ license_link: https://huggingface.co/nvidia/audio-flamingo-next-hf/blob/5634886e
 base_model:
   - nvidia/audio-flamingo-3-hf
   - nvidia/audio-flamingo-next-hf
+  - nvidia/music-flamingo-2601-hf
 tags:
   - audio.cpp
   - gguf
@@ -14,14 +15,15 @@ language:
   - en
 ---
 
-# Audio Flamingo 3 and Next GGUF
+# Audio Flamingo 3, Next, and Music Flamingo GGUF
 
 For use with [audio.cpp](https://github.com/0xShug0/audio.cpp).
 
 These self-contained GGUFs package the model tensors, tokenizer, configuration,
-and audio.cpp model spec for Audio Flamingo 3 and Audio Flamingo Next. Both
-models support transcription, captioning, and questions about speech, music,
-and environmental sounds.
+and audio.cpp model spec for Audio Flamingo 3, Audio Flamingo Next, and Music
+Flamingo. AF3 and Next support transcription, captioning, and questions about
+speech, music, and environmental sounds. Music Flamingo specializes in music
+understanding; it produces text, not audio.
 
 | File | Upstream checkpoint | Size | Maximum audio |
 | --- | --- | ---: | ---: |
@@ -31,6 +33,7 @@ and environmental sounds.
 | `audio-flamingo-next-bf16.gguf` | [Audio Flamingo Next](https://huggingface.co/nvidia/audio-flamingo-next-hf) | 15.4 GiB | 30 minutes |
 | `audio-flamingo-next-q8_0.gguf` | Audio Flamingo Next | 8.7 GiB | 30 minutes |
 | `audio-flamingo-next-q4_k.gguf` | Audio Flamingo Next | 5.1 GiB | 30 minutes |
+| `music-flamingo-2601-q8_0.gguf` | [Music Flamingo 2601](https://huggingface.co/nvidia/music-flamingo-2601-hf/tree/6b5be086d52f65a1e204cb0faf70bf54e2741ecd) | 8.7 GiB | 20 minutes |
 
 ## Usage
 
@@ -42,13 +45,52 @@ audiocpp_cli --task asr --family audio_flamingo \
   --text-out response.txt --log
 ```
 
-Select either GGUF with `--model`. Use a question such as
+Select a GGUF with `--model`. Use a question such as
 `Describe the instruments and tempo.` for general audio understanding. Requested
 timestamps or speaker descriptions are generated text, not structured alignment
 or diarization results.
 
 For server use, configure family `audio_flamingo`, task `asr`, and mode `offline`,
 then submit audio to `/v1/audio/transcriptions` with the instruction in `prompt`.
+
+## Music Flamingo
+
+```bash
+audiocpp_cli --task asr --family audio_flamingo \
+  --model music-flamingo-2601-q8_0.gguf --backend cuda \
+  --audio music.wav \
+  --request-option "instruct=Describe the instruments, rhythm, and mood of this music." \
+  --text-out description.txt --log
+```
+
+The Q8 package was tested on CUDA with an official music example and produced a
+coherent description. This is a functional check, not a BF16 parity or performance
+comparison.
+
+## SpotSound LoRA
+
+[SpotSound](https://huggingface.co/Loie/SpotSound) adds sound-event temporal
+grounding to **Audio Flamingo 3**. Use an AF3 base, not Next or Music Flamingo.
+Download its adapter and configuration together:
+
+```bash
+hf download Loie/SpotSound adapter_model.safetensors adapter_config.json \
+  --local-dir adapters/SpotSound
+
+audiocpp_cli --task asr --family audio_flamingo \
+  --model audio-flamingo-3-bf16.gguf --backend cuda \
+  --audio recording.wav \
+  --session-option audio_flamingo.lora=adapters/SpotSound \
+  --request-option template_name=temporal_grounding \
+  --request-option "instruct=ambulance siren" \
+  --text-out intervals.txt --log
+```
+
+The template applies SpotSound's task prompt and timestamp-interleaved audio
+layout. Results are generated timestamp text; boundaries can be inaccurate.
+Upstream processing keeps complete one-second feature groups and omits the final
+fractional group. Use `audio_flamingo.lora_scale` to adjust adapter strength
+(default `1`). Ordinary requests default to `template_name=default`.
 
 ## Correctness Reference
 
@@ -102,7 +144,8 @@ implementations. Python's optional TorchCodec loader and librosa fallback use
 different downmixing and resampling paths. audio.cpp averages channels and uses
 SOXR when resampling is needed.
 
-Both checkpoints use the NVIDIA OneWay Noncommercial License. The upstream
+The base checkpoints use the NVIDIA OneWay Noncommercial License. SpotSound
+licenses its adapter under MIT; the base-model terms still apply. The upstream
 license is included in this directory. Review its terms before use or redistribution.
 
 See the [audio.cpp model documentation](https://github.com/0xShug0/audio.cpp/blob/main/docs/models/audio_flamingo.md)

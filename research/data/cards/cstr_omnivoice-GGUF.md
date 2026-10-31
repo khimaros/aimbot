@@ -36,7 +36,7 @@ GGUF conversions of [k2-fsa/OmniVoice](https://huggingface.co/k2-fsa/OmniVoice) 
 
 ```bash
 # Auto-download
-./crispasr --backend omnivoice -m auto --tts "Hello world."
+./crispasr --backend omnivoice -m auto --accept-license omnivoice-terms --tts "Hello world."
 
 # Manual
 ./crispasr --backend omnivoice --model omnivoice-q8_0.gguf \
@@ -66,17 +66,33 @@ which includes additional use and user-count conditions.
 These GGUF files inherit their respective upstream terms; conversion and
 quantization grant no additional rights. This bundle is **not Apache-2.0** and
 plain NC acceptance does not cover the tokenizer's additional terms. CrispASR
-requires distinct `omnivoice-terms` acceptance for managed downloads; further
-bundle support/promotion remains under license review. The main card does not
+requires distinct `omnivoice-terms` acceptance for managed downloads. Supplying it affirms that you accept both components' terms, are eligible to use them, and will comply with all applicable conditions, including obtaining any separately required permission. The switch grants no additional rights. Main weights remain non-commercial absent separate permission; the companion's Boson conditions also apply. The main card does not
 specify a CC-BY-NC version, so we do not infer one.
 
 License correction, 2026-10-20: the previous blanket Apache-2.0 label confused
 code and weight licensing. This metadata correction changes no model bytes.
 
+### Tokenizer attribution and full companion terms
+
+Built with Higgs Materials licensed from Boson AI USA, Inc., Copyright Boson AI USA, Inc., All Rights Reserved and Meta Llama 3 licensed under the Meta Llama 3 Community License, Copyright Meta Platforms, Inc., All Right Reserved. Based on Meta Llama 3.
+
+The Higgs Audio 2 tokenizer is the companion listed above. Copies of its
+[Boson agreement](LICENSE.boson-higgs-audio-2.txt), incorporated
+[Meta Llama 3 agreement](LICENSE.meta-llama-3.txt),
+[acceptable-use policy](USE-POLICY.meta-llama-3.md), and [NOTICE](NOTICE.txt)
+accompany these files. Boson section 2 requires expanded permission above
+100,000 annual active users under its licensee/affiliate wording; section 1.b.v
+restricts improving other LLMs with the materials or outputs/results. The full
+terms, including attribution and naming conditions, control. Acceptance is an
+affirmation of compliance, not a waiver or a certificate for every use.
+
+License-documentation update, 2026-10-22: corrected the stale Apache-only
+provenance footer and added companion notices/full terms. No model bytes changed.
+
 ## Provenance and EU AI Act Art. 53 note
 
 - **Upstream model:** [k2-fsa/OmniVoice](https://huggingface.co/k2-fsa/OmniVoice) — published by `k2-fsa`.
-- **Upstream licence:** `apache-2.0`. This repository redistributes under the same terms; it grants no rights the upstream licence does not.
+- **Upstream licences:** Apache-2.0 describes the upstream inference code. Main model weights are CC-BY-NC (version unspecified by the pinned upstream card); the HiggsAudioV2 tokenizer has the separate Boson/Meta terms described above. Each weight component inherits its applicable upstream terms.
 - **What was done here:** format conversion and/or quantisation only (GGUF). No training, no fine-tuning, no merging, no distillation, no change to architecture, vocabulary or capability. Only the numeric representation of the upstream weights differs.
 - **Training data:** documented — where it is documented at all — by the upstream provider; see the upstream model card. No training data was used, added or selected by this repository.
 - **Provider status:** under Regulation (EU) 2024/1689 the upstream authors remain the provider of this model. Converting the serialisation format does not make this repository the provider of a new general-purpose AI model, and no such claim is made. Questions about training content, copyright policy or model capability belong upstream.

@@ -88,10 +88,12 @@ The "fits" column below is therefore about your **combined available RAM+VRAM**,
 |---|--:|:--|---|
 | `Tiel-Coder-35B-A3B-MTP-UD-Q2_K_XL.gguf` | 12.7 GB | 16 GB | **THE LAST RESORT**; 2-bit gives up real ability, and struggles with agentic coding. Use anything larger, wherever it fits |
 | `Tiel-Coder-35B-A3B-MTP-UD-IQ3_XXS.gguf` | 13.6 GB | 16 GB | **the 16 GB pick** — significantly better than Q2_K_XL for under a gigabyte more |
+| `Tiel-Coder-35B-A3B-MTP-UD-IQ3_S.gguf` | 14.1 GB | 16 GB | a step up from IQ3_XXS for ~0.5 GB more, at the cost of some context room on 16 GB |
 | `Tiel-Coder-35B-A3B-MTP-UD-Q3_K_XL.gguf` | 17.2 GB | 24 GB | 3-bit with plenty of context room; prefer IQ4_XS below unless you need the extra ~1 GB |
 | `Tiel-Coder-35B-A3B-MTP-UD-IQ4_XS.gguf` | 18.1 GB | 24 GB | 4-bit quality with the most context headroom of any 4-bit tier |
 | `Tiel-Coder-35B-A3B-MTP-UD-Q4_K_S.gguf` | 21.3 GB | 24 GB | tight 4-bit; useful when Q4_K_XL leaves too little room |
 | `Tiel-Coder-35B-A3B-MTP-UD-Q4_K_XL.gguf` | 22.7 GB | 24-32 GB | **start here** — the benchmarked tier plus the head; snug on 24 GB, comfortable on 32 |
+| `Tiel-Coder-35B-A3B-MTP-UD-Q5_K_S.gguf` | 25.3 GB | 32 GB | 5-bit about 1.7 GB under Q5_K_XL; more context room on 32 GB |
 | `Tiel-Coder-35B-A3B-MTP-UD-Q5_K_XL.gguf` | 27.0 GB | 32 GB | the **32 GB** pick |
 | `Tiel-Coder-35B-A3B-MTP-UD-Q6_K_XL.gguf` | 32.2 GB | 48 GB | near-lossless; will not leave usable context on 32 GB |
 | `Tiel-Coder-35B-A3B-MTP-UD-Q8_K_XL.gguf` | 38.8 GB | 48 GB | reference |

@@ -12,6 +12,7 @@ tags:
 # **<span style="color:#76b900;">🤫 RE-USE: Multilingual Universal Speech Enhancement</span>**
 # Model Overview
 
+**<span style="color:#ff0000;"> For the commercially friendly model, please refer to [NVIDIA-NemotronLabs-RE-USE](https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE) and [NVIDIA-NemotronLabs-RE-USE-laughter](https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE-laughter)</span>**
 
 ## Description
 In universal speech enhancement, the goal is to restore the **quality** of diverse degraded speech while preserving **fidelity**, ensuring that all other factors remain unchanged, e.g., linguistic content, speaker identity, emotion, accent, and other paralinguistic attributes. Inspired by the **distortion–perception trade-off theory**, our proposed single model achieves a good balance between these two objectives and has the following desirable properties:

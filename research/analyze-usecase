@@ -74,7 +74,7 @@ ASSESSED = "usecase-assessed.json"
 # is a composite over the rest of this list, so a reader who weights it beside
 # them is counting the same runs twice. build-tables says so at length.
 AA_FACETS = [
-    ("aa.intelligence", "intelligence index", "intelligenceIndex", "index"),
+    ("aa.intelligence", "intelligence index v4", "intelligenceIndex", "index"),
     ("aa.scicode", "scicode", "scicode", "share"),
     ("aa.livecodebench", "livecodebench", "livecodebench", "share"),
     ("aa.gpqa", "gpqa diamond", "gpqa", "share"),
@@ -99,9 +99,31 @@ AA_FACETS = [
     # three are carried rather than the summary alone
     ("aa.non_hallucination", "omniscience non-hallucination",
      "omniscienceNonHallucination", "share"),
-    ("aa.omniscience_index", "omniscience index (accuracy less hallucination)",
+    ("aa.omniscience_index", "omniscience index v4 (accuracy less hallucination)",
      "omniscience", "score"),
     ("aa.speed", "median output tokens/s", "medianOutputTokensPerSecond", "rate"),
+]
+
+# intelligence index v5 as a board of its own: a different scale over different
+# evals, so a v5 number and a v4 number are never one facet. `aa.intelligence` and
+# the omniscience facets above stay frozen at v4, which is what keeps a model v5
+# left out comparable with the roster it sat in. the evals v5 kept that were
+# already carried stay in `AA_FACETS`, and only what v5 introduced or re-versioned
+# is here.
+AA5_FACETS = [
+    ("aa5.intelligence", "intelligence index v5", "intelligenceIndexV5", "index"),
+    ("aa5.frontiercode", "frontiercode 2.0", "frontierCode20", "share"),
+    ("aa5.terminalbench_science", "terminal-bench-science", "terminalBenchScience", "share"),
+    ("aa5.briefcase", "aa-briefcase", "briefcase", "score"),
+    ("aa5.automationbench", "automationbench-aa", "automationBench", "share"),
+    ("aa5.gdp_pdf", "gdp.pdf", "gdpPdf", "share"),
+    ("aa5.critpt_hard", "critpt v2 hard subset", "critptHard", "share"),
+    ("aa5.hle_diamond", "hle-diamond", "hleDiamond", "share"),
+    ("aa5.omniscience", "omniscience v1.1 accuracy", "omniscienceAccuracyV5", "share"),
+    ("aa5.non_hallucination", "omniscience v1.1 non-hallucination",
+     "omniscienceNonHallucinationV5", "share"),
+    ("aa5.omniscience_index", "omniscience index v5 (accuracy less hallucination)",
+     "omniscienceV5", "score"),
 ]
 
 GBENCH_MODES = [("gbench.overall", "gscore (all games)", None),
@@ -128,6 +150,9 @@ SOURCES = {
     "aa": {"label": "artificial analysis", "file": "data/artificial-analysis.json",
            "url": "https://artificialanalysis.ai/leaderboards/models",
            "model_url": "https://artificialanalysis.ai/models/%s"},
+    "aa5": {"label": "artificial analysis v5", "file": "data/artificial-analysis.json",
+            "url": "https://artificialanalysis.ai/leaderboards/models",
+            "model_url": "https://artificialanalysis.ai/models/%s"},
     "gbench": {"label": "gert labs gbench", "file": "data/gbench.json",
                "url": "https://gertlabs.com/rankings"},
     "lmarena": {"label": "lmarena", "file": "data/lmarena.json",
@@ -278,13 +303,16 @@ def percentile(value, population):
 
 
 def aa_facets(entry, aa_id):
+    """Both boards off one row: v4 frozen, v5 live, under one slug."""
     out = {}
-    for key, label, field, unit in AA_FACETS:
-        v = entry.get(field)
-        if v is None:
-            continue
-        out[key] = {"value": v, "label": label, "unit": unit,
-                    "group": "artificial analysis", "ref": ref("aa", aa_id, row=entry)}
+    for source, group, facets in (("aa", "artificial analysis", AA_FACETS),
+                                  ("aa5", "artificial analysis v5", AA5_FACETS)):
+        for key, label, field, unit in facets:
+            v = entry.get(field)
+            if v is None:
+                continue
+            out[key] = {"value": v, "label": label, "unit": unit,
+                        "group": group, "ref": ref(source, aa_id, row=entry)}
     return out
 
 

@@ -3,7 +3,7 @@
   "repo": "0xShug0/audio.cpp",
   "ref": "main",
   "source": "https://api.github.com/repos/0xShug0/audio.cpp/contents/model_specs",
-  "specs": 126
+  "specs": 132
  },
  "families": {
   "ace_step": {
@@ -404,8 +404,8 @@
   },
   "audio_flamingo": {
    "family": "audio_flamingo",
-   "display_name": "Audio Flamingo 3 / Next",
-   "description": "Audio Flamingo 3 and Audio Flamingo Next models for transcription, captioning, and questions about speech, music, and environmental sounds.",
+   "display_name": "Audio Flamingo 3 / Next / Music Flamingo",
+   "description": "Audio Flamingo 3, Audio Flamingo Next, and Music Flamingo for transcription, captioning, and audio questions, with optional PEFT LoRA and SpotSound temporal grounding.",
    "category": "asr",
    "status": "supported",
    "tasks": [
@@ -508,6 +508,21 @@
       "audio-flamingo-3-bf16.gguf"
      ],
      "bytes": 16550564800
+    },
+    {
+     "id": "music_flamingo_2601_q8_0",
+     "display_name": "Music Flamingo 2601 GGUF Q8_0",
+     "format": "gguf",
+     "precision": "q8_0",
+     "target_directory": "Audio-Flamingo-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/Audio-Flamingo-GGUF",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "music-flamingo-2601-q8_0.gguf"
+     ],
+     "bytes": 9312778080
     }
    ],
    "ui": {
@@ -3062,10 +3077,77 @@
     ]
    }
   },
+  "gradium_phonon": {
+   "family": "gradium_phonon",
+   "display_name": "Gradium Phonon",
+   "description": "Gradium's Phonon text-to-speech: a small flow-matching language model with a Mimi decoder, a descendant of Kyutai's pocket-tts, for real-time local synthesis on CPU and GPU with prepared voices.",
+   "category": "tts",
+   "status": "experimental",
+   "tasks": [
+    "tts"
+   ],
+   "modes": [
+    "offline",
+    "streaming"
+   ],
+   "languages": [
+    "en"
+   ],
+   "packages": [
+    {
+     "id": "gradium_phonon_31m_en_q8_0",
+     "display_name": "Phonon 31m English Q8_0 GGUF",
+     "default": true,
+     "format": "gguf",
+     "precision": "q8_0",
+     "target_directory": "phonon-31m-en",
+     "kind": "huggingface_snapshot",
+     "repo": "gradium/phonon-31m-en-audiocpp",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "phonon-31m-en-q8_0.gguf",
+      "default-voice.safetensors"
+     ],
+     "bytes": 85460904
+    },
+    {
+     "id": "gradium_phonon_31m_en_safetensors",
+     "display_name": "Phonon 31m English Safetensors",
+     "format": "safetensors",
+     "precision": "native",
+     "target_directory": "phonon-31m-en-safetensors",
+     "kind": "huggingface_snapshot",
+     "repo": "gradium/phonon-31m-en",
+     "revision": "52433c46975bfa13144c56204c9f4ee1c5b148aa",
+     "gated": false,
+     "files": [
+      "config.json",
+      "tokenizer.model",
+      "model.safetensors",
+      "default-voice.safetensors"
+     ],
+     "bytes": 103149735,
+     "dtype": "BF16"
+    }
+   ],
+   "ui": {
+    "recommended_package": "gradium_phonon_31m_en_q8_0",
+    "docs": [
+     "docs/models/gradium_phonon.md",
+     "docs/gguf.md"
+    ]
+   },
+   "runtime": {
+    "tags": [
+     "gguf"
+    ]
+   }
+  },
   "granite5asr": {
    "family": "granite5asr",
    "display_name": "Granite Speech 5.0 470M TurboCTC",
-   "description": "IBM Granite Speech 5.0 TurboCTC 470M parameter compact and ultra-fast English ASR model using a Conformer CTC architecture with block self-attention and self-conditioning.",
+   "description": "IBM Granite Speech 5.0 TurboCTC 470M parameter Conformer CTC model. The current checkpoint transcribes English, French, German, Spanish, Portuguese, Italian, and Japanese with punctuation and capitalization. An older English-only checkpoint still loads.",
    "category": "asr",
    "status": "supported",
    "tasks": [
@@ -3076,7 +3158,13 @@
     "streaming"
    ],
    "languages": [
-    "en"
+    "en",
+    "fr",
+    "de",
+    "es",
+    "pt",
+    "it",
+    "ja"
    ],
    "packages": [
     {
@@ -3108,11 +3196,10 @@
      "gated": false,
      "files": [
       "config.json",
-      "preprocessor_config.json",
       "tokenizer.json",
       "model.safetensors"
      ],
-     "bytes": 947319449
+     "bytes": 948012281
     }
    ],
    "ui": {
@@ -3902,7 +3989,7 @@
   "irodori_tts": {
    "family": "irodori_tts",
    "display_name": "Irodori-TTS",
-   "description": "Japanese TTS model based on RF-DiT continuous audio latents, supporting zero-shot voice cloning, automatic duration prediction, multimodal voice design, and emoji-style control.",
+   "description": "Japanese TTS with RF and MeanFlow checkpoints, supporting zero-shot voice cloning, automatic duration prediction, multimodal voice design, and emoji-style control.",
    "category": "tts",
    "status": "supported",
    "tasks": [
@@ -4016,6 +4103,38 @@
      "bytes": 1093742688
     },
     {
+     "id": "irodori_tts_v4_1_small_mf_q8_0",
+     "display_name": "Irodori-TTS v4.1 Small MeanFlow Q8_0 GGUF",
+     "format": "gguf",
+     "precision": "q8_0",
+     "target_directory": "Irodori-TTS-v4-Small-GGUF",
+     "strip_prefix": "Irodori-TTS-v4-Small-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/audio.cpp-gguf",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "Irodori-TTS-v4-Small-GGUF/irodori-tts-v4.1-small-mf-q8_0.gguf"
+     ],
+     "bytes": 1368276320
+    },
+    {
+     "id": "irodori_tts_v4_1_small_mf_f16",
+     "display_name": "Irodori-TTS v4.1 Small MeanFlow F16 GGUF",
+     "format": "gguf",
+     "precision": "f16",
+     "target_directory": "Irodori-TTS-v4-Small-GGUF",
+     "strip_prefix": "Irodori-TTS-v4-Small-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/audio.cpp-gguf",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "Irodori-TTS-v4-Small-GGUF/irodori-tts-v4.1-small-mf-f16.gguf"
+     ],
+     "bytes": 1768191712
+    },
+    {
      "id": "irodori_tts_500m_v3_f16",
      "display_name": "Irodori-TTS 500M v3 F16 GGUF",
      "format": "gguf",
@@ -4116,12 +4235,18 @@
     "it",
     "pt",
     "ru",
-    "es"
+    "es",
+    "nl",
+    "id",
+    "ja",
+    "ko",
+    "pl",
+    "tr"
    ],
    "packages": [
     {
      "id": "kitten_tts2_bf16",
-     "display_name": "Kitten TTS 2 BF16 GGUF",
+     "display_name": "Kitten TTS 2 BF16 GGUF (Previous Checkpoint)",
      "default": false,
      "format": "gguf",
      "precision": "bf16",
@@ -4142,8 +4267,8 @@
     },
     {
      "id": "kitten_tts2_q8_v2",
-     "display_name": "Kitten TTS 2 Q8 GGUF",
-     "default": true,
+     "display_name": "Kitten TTS 2 Q8 GGUF (Previous Checkpoint)",
+     "default": false,
      "format": "gguf",
      "precision": "q8_0",
      "target_directory": "kitten-tts2-v2",
@@ -4163,7 +4288,7 @@
     },
     {
      "id": "kitten_tts2_q4",
-     "display_name": "Kitten TTS 2 Q4 GGUF (Experimental)",
+     "display_name": "Kitten TTS 2 Hybrid Q4 GGUF (Previous Checkpoint, Experimental)",
      "default": false,
      "format": "gguf",
      "precision": "q4_0",
@@ -4181,10 +4306,44 @@
       "SHA256SUMS"
      ],
      "bytes": 2273753549
+    },
+    {
+     "id": "kitten_tts2_20261021_q8_0",
+     "display_name": "Kitten TTS 2 2026-10-21 Q8 GGUF",
+     "default": true,
+     "format": "gguf",
+     "precision": "q8_0",
+     "target_directory": "KittenTTS2-GGUF",
+     "strip_prefix": "KittenTTS2-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/audio.cpp-gguf",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "KittenTTS2-GGUF/kitten-tts2-20261021-q8_0.gguf"
+     ],
+     "bytes": 3343404128
+    },
+    {
+     "id": "kitten_tts2_20261021_q4_0",
+     "display_name": "Kitten TTS 2 2026-10-21 Q4 GGUF (BF16 Embedding)",
+     "default": false,
+     "format": "gguf",
+     "precision": "q4_0",
+     "target_directory": "KittenTTS2-GGUF",
+     "strip_prefix": "KittenTTS2-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/audio.cpp-gguf",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "KittenTTS2-GGUF/kitten-tts2-20261021-q4_0.gguf"
+     ],
+     "bytes": 2638763488
     }
    ],
    "ui": {
-    "recommended_package": "kitten_tts2_q8_v2",
+    "recommended_package": "kitten_tts2_20261021_q8_0",
     "docs": [
      "docs/models/kitten_tts2.md"
     ]
@@ -4447,6 +4606,83 @@
     ]
    }
   },
+  "latentsync": {
+   "family": "latentsync",
+   "display_name": "LatentSync 1.6",
+   "description": "Audio-conditioned lip synchronization of a reference video.",
+   "category": "audio_generation",
+   "status": "experimental",
+   "tasks": [
+    "sfx"
+   ],
+   "modes": [
+    "offline"
+   ],
+   "languages": [
+    "auto"
+   ],
+   "packages": [
+    {
+     "id": "latentsync_1_6_q8_0_f16",
+     "display_name": "LatentSync 1.6 Q8/F16",
+     "default": true,
+     "format": "gguf",
+     "precision": "q8_0",
+     "target_directory": "LatentSync-1.6-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/LatentSync-1.6-GGUF",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "latentsync-1.6-q8_0-f16.gguf"
+     ],
+     "bytes": 2097768128
+    },
+    {
+     "id": "latentsync_1_6_f16",
+     "display_name": "LatentSync 1.6 F16",
+     "default": false,
+     "format": "gguf",
+     "precision": "f16",
+     "target_directory": "LatentSync-1.6-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/LatentSync-1.6-GGUF",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "latentsync-1.6-f16.gguf"
+     ],
+     "bytes": 2732673728
+    },
+    {
+     "id": "latentsync_1_6_f32_f16",
+     "display_name": "LatentSync 1.6 F32/F16",
+     "default": false,
+     "format": "gguf",
+     "precision": "orig",
+     "target_directory": "LatentSync-1.6-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/LatentSync-1.6-GGUF",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "latentsync-1.6-f32-f16.gguf"
+     ],
+     "bytes": 5448377824
+    }
+   ],
+   "ui": {
+    "recommended_package": "latentsync_1_6_q8_0_f16",
+    "docs": [
+     "docs/models/latentsync.md"
+    ]
+   },
+   "runtime": {
+    "tags": [
+     "gguf"
+    ]
+   }
+  },
   "lfm2_audio": {
    "family": "lfm2_audio",
    "display_name": "LFM2.5-Audio",
@@ -4610,6 +4846,140 @@
     ]
    }
   },
+  "lfm3_audio": {
+   "family": "lfm3_audio",
+   "display_name": "LFM3-Audio",
+   "description": "Liquid AI's LFM3-Audio-2B, from the llama.cpp-format GGUFs Liquid publishes or the upstream safetensors directory. ASR: a log-mel LFM2 encoder feeds an LFM3 hybrid conv/attention backbone. TTS: the backbone drives a bidirectional MaskGIT depth decoder (12 codebooks, 12.5 Hz) and the LiquidCodec decoder and ISTFT give 24 kHz audio. S2S: a spoken question in, interleaved text and audio out, with client-held multi-turn history.",
+   "category": "asr",
+   "status": "experimental",
+   "tasks": [
+    "asr",
+    "tts",
+    "s2s"
+   ],
+   "modes": [
+    "offline",
+    "streaming"
+   ],
+   "languages": [
+    "en",
+    "ar",
+    "da",
+    "de",
+    "el",
+    "es",
+    "fi",
+    "fr",
+    "he",
+    "it",
+    "ja",
+    "ko",
+    "nl",
+    "pl",
+    "pt",
+    "sv",
+    "tr",
+    "zh"
+   ],
+   "packages": [
+    {
+     "id": "lfm3_audio_2b_q8_0",
+     "display_name": "LFM3-Audio-2B Q8_0 GGUF",
+     "default": true,
+     "format": "gguf",
+     "precision": "q8_0",
+     "target_directory": "LFM3-Audio-2B-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "LiquidAI/LFM3-Audio-2B-GGUF",
+     "revision": "fcfae9027c00a6f3f872c48a841cfeb77e2b5a1c",
+     "gated": false,
+     "files": [
+      "LFM3-Audio-2B-Q8_0.gguf",
+      "mmproj-LFM3-Audio-2B-Q8_0.gguf"
+     ],
+     "bytes": 2150048544
+    },
+    {
+     "id": "lfm3_audio_2b_f16",
+     "display_name": "LFM3-Audio-2B F16 GGUF",
+     "format": "gguf",
+     "precision": "f16",
+     "target_directory": "LFM3-Audio-2B-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "LiquidAI/LFM3-Audio-2B-GGUF",
+     "revision": "fcfae9027c00a6f3f872c48a841cfeb77e2b5a1c",
+     "gated": false,
+     "files": [
+      "LFM3-Audio-2B-F16.gguf",
+      "mmproj-LFM3-Audio-2B-F16.gguf"
+     ],
+     "bytes": 4037470944
+    },
+    {
+     "id": "lfm3_audio_2b_bf16",
+     "display_name": "LFM3-Audio-2B BF16 GGUF",
+     "format": "gguf",
+     "precision": "bf16",
+     "target_directory": "LFM3-Audio-2B-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "LiquidAI/LFM3-Audio-2B-GGUF",
+     "revision": "fcfae9027c00a6f3f872c48a841cfeb77e2b5a1c",
+     "gated": false,
+     "files": [
+      "LFM3-Audio-2B-BF16.gguf",
+      "mmproj-LFM3-Audio-2B-BF16.gguf"
+     ],
+     "bytes": 4037470944
+    },
+    {
+     "id": "lfm3_audio_2b_q4_k_m",
+     "display_name": "LFM3-Audio-2B Q4_K_M GGUF (Q8_0 mmproj)",
+     "format": "gguf",
+     "precision": "q4_k_m",
+     "target_directory": "LFM3-Audio-2B-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "LiquidAI/LFM3-Audio-2B-GGUF",
+     "revision": "fcfae9027c00a6f3f872c48a841cfeb77e2b5a1c",
+     "gated": false,
+     "files": [
+      "LFM3-Audio-2B-Q4_K_M.gguf",
+      "mmproj-LFM3-Audio-2B-Q8_0.gguf"
+     ],
+     "bytes": 1403437856
+    },
+    {
+     "id": "lfm3_audio_2b_q4_0",
+     "display_name": "LFM3-Audio-2B Q4_0 GGUF (Q8_0 mmproj)",
+     "format": "gguf",
+     "precision": "q4_0",
+     "target_directory": "LFM3-Audio-2B-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "LiquidAI/LFM3-Audio-2B-GGUF",
+     "revision": "fcfae9027c00a6f3f872c48a841cfeb77e2b5a1c",
+     "gated": false,
+     "files": [
+      "LFM3-Audio-2B-Q4_0.gguf",
+      "mmproj-LFM3-Audio-2B-Q8_0.gguf"
+     ],
+     "bytes": 1353425696
+    }
+   ],
+   "ui": {
+    "recommended_package": "lfm3_audio_2b_q8_0",
+    "docs": [
+     "docs/models/lfm3_audio.md"
+    ]
+   },
+   "runtime": {
+    "tags": [
+     "gguf",
+     "stream",
+     "cpu",
+     "metal",
+     "cuda"
+    ]
+   }
+  },
   "liveavatar": {
    "family": "liveavatar",
    "display_name": "LiveAvatar",
@@ -4657,6 +5027,97 @@
      "cuda",
      "gguf",
      "stream"
+    ]
+   }
+  },
+  "magenta_realtime_2": {
+   "family": "magenta_realtime_2",
+   "display_name": "Magenta RealTime 2",
+   "description": "Frame-autoregressive stereo music generation with text, audio style, and MIDI conditioning.",
+   "category": "audio_generation",
+   "status": "experimental",
+   "tasks": [
+    "music"
+   ],
+   "modes": [
+    "offline",
+    "streaming"
+   ],
+   "languages": [
+    "auto"
+   ],
+   "packages": [
+    {
+     "id": "magenta_realtime_2_small_f16",
+     "display_name": "Magenta RealTime 2 Small F16",
+     "default": true,
+     "format": "gguf",
+     "precision": "f16",
+     "target_directory": "Magenta-RealTime-2-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/Magenta-RealTime-2-GGUF",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "magenta-rt2-small-f16.gguf"
+     ],
+     "bytes": 1529647616
+    },
+    {
+     "id": "magenta_realtime_2_small_q8_0",
+     "display_name": "Magenta RealTime 2 Small Q8_0",
+     "format": "gguf",
+     "precision": "q8_0",
+     "target_directory": "Magenta-RealTime-2-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/Magenta-RealTime-2-GGUF",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "magenta-rt2-small-q8_0.gguf"
+     ],
+     "bytes": 1326277984
+    },
+    {
+     "id": "magenta_realtime_2_base_f16",
+     "display_name": "Magenta RealTime 2 Base F16",
+     "format": "gguf",
+     "precision": "f16",
+     "target_directory": "Magenta-RealTime-2-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/Magenta-RealTime-2-GGUF",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "magenta-rt2-base-f16.gguf"
+     ],
+     "bytes": 5885022848
+    },
+    {
+     "id": "magenta_realtime_2_base_q8_0",
+     "display_name": "Magenta RealTime 2 Base Q8_0",
+     "format": "gguf",
+     "precision": "q8_0",
+     "target_directory": "Magenta-RealTime-2-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/Magenta-RealTime-2-GGUF",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "magenta-rt2-base-q8_0.gguf"
+     ],
+     "bytes": 3665006528
+    }
+   ],
+   "ui": {
+    "recommended_package": "magenta_realtime_2_small_f16",
+    "docs": [
+     "docs/models/magenta_realtime_2.md"
+    ]
+   },
+   "runtime": {
+    "tags": [
+     "gguf"
     ]
    }
   },
@@ -5057,6 +5518,155 @@
     "tags": [
      "gguf",
      "cuda"
+    ]
+   }
+  },
+  "ming3_audio": {
+   "family": "ming3_audio",
+   "display_name": "Ming 3.0 Audio Tiny",
+   "description": "Whisper audio encoder and hybrid KDA/MLA mixture-of-experts Thinker, with a separate continuous-latent Talker for spoken responses.",
+   "category": "asr",
+   "status": "experimental",
+   "tasks": [
+    "asr",
+    "s2s",
+    "tts",
+    "clone"
+   ],
+   "modes": [
+    "offline"
+   ],
+   "languages": [
+    "zh",
+    "en"
+   ],
+   "packages": [
+    {
+     "id": "ming3_audio_tiny_bf16",
+     "display_name": "Ming 3.0 Audio Tiny BF16",
+     "default": true,
+     "format": "gguf",
+     "precision": "bf16",
+     "target_directory": "Ming-3.0-Audio-Tiny-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/Ming-3.0-Audio-Tiny-GGUF",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "ming-3.0-audio-tiny-bf16.gguf"
+     ],
+     "bytes": 20177585376
+    },
+    {
+     "id": "ming3_audio_tiny_q8_0",
+     "display_name": "Ming 3.0 Audio Tiny Q8_0 Experts",
+     "format": "gguf",
+     "precision": "q8_0",
+     "target_directory": "Ming-3.0-Audio-Tiny-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/Ming-3.0-Audio-Tiny-GGUF",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "ming-3.0-audio-tiny-q8_0.gguf"
+     ],
+     "bytes": 13665928416
+    },
+    {
+     "id": "ming3_audio_tiny_q4_k",
+     "display_name": "Ming 3.0 Audio Tiny Q4_K Experts",
+     "format": "gguf",
+     "precision": "q4_k",
+     "target_directory": "Ming-3.0-Audio-Tiny-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/Ming-3.0-Audio-Tiny-GGUF",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "ming-3.0-audio-tiny-q4_k.gguf"
+     ],
+     "bytes": 9966699744
+    }
+   ],
+   "ui": {
+    "recommended_package": "ming3_audio_tiny_bf16",
+    "docs": [
+     "docs/models/ming3_audio.md"
+    ]
+   },
+   "runtime": {
+    "tags": [
+     "gguf"
+    ]
+   }
+  },
+  "ming3_tts": {
+   "family": "ming3_tts",
+   "display_name": "Ming 3.0 TTS 0.5B",
+   "description": "Multilingual continuous-latent speech synthesis with a Qwen backbone, flow-matching acoustic head, CAMPPlus speaker conditioning and an audio VAE.",
+   "category": "tts",
+   "status": "supported",
+   "tasks": [
+    "tts",
+    "clone",
+    "design"
+   ],
+   "modes": [
+    "offline",
+    "streaming"
+   ],
+   "languages": [
+    "zh",
+    "en",
+    "ja",
+    "ko",
+    "de",
+    "fr",
+    "es"
+   ],
+   "packages": [
+    {
+     "id": "ming_3_0_tts_0_5b_bf16",
+     "display_name": "Ming 3.0 TTS 0.5B BF16",
+     "default": true,
+     "format": "gguf",
+     "precision": "bf16",
+     "target_directory": "Ming-3.0-TTS-0.5B-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "ming-3.0-tts-0.5b-bf16.gguf"
+     ],
+     "bytes": 2998284288
+    },
+    {
+     "id": "ming_3_0_tts_0_5b_q8_0",
+     "display_name": "Ming 3.0 TTS 0.5B Q8_0",
+     "default": false,
+     "format": "gguf",
+     "precision": "q8_0",
+     "target_directory": "Ming-3.0-TTS-0.5B-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "ming-3.0-tts-0.5b-q8_0.gguf"
+     ],
+     "bytes": 1742280896
+    }
+   ],
+   "ui": {
+    "recommended_package": "ming_3_0_tts_0_5b_bf16",
+    "docs": [
+     "docs/models/ming3_tts.md"
+    ]
+   },
+   "runtime": {
+    "tags": [
+     "gguf"
     ]
    }
   },
@@ -7373,7 +7983,8 @@
    "ui": {
     "recommended_package": "parakeet_tdt_q8_0",
     "docs": [
-     "docs/models/parakeet_tdt.md"
+     "docs/models/parakeet_tdt.md",
+     "docs/models/underdog_bark3.md"
     ]
    },
    "runtime": {
@@ -11002,6 +11613,22 @@
      "bytes": 4960723200
     },
     {
+     "id": "voxcpm2_vocalrender_pro",
+     "display_name": "VocalRender-Pro (VoxCPM2) Original-Dtype GGUF",
+     "format": "gguf",
+     "precision": "orig",
+     "target_directory": "VoxCPM2-GGUF",
+     "strip_prefix": "VoxCPM2-GGUF",
+     "kind": "huggingface_snapshot",
+     "repo": "audio-cpp/audio.cpp-gguf",
+     "revision": "main",
+     "gated": false,
+     "files": [
+      "VoxCPM2-GGUF/finetune/vocalrender-pro-orig.gguf"
+     ],
+     "bytes": 9544158368
+    },
+    {
      "id": "voxcpm2_safetensors",
      "display_name": "VoxCPM2 Safetensors",
      "format": "safetensors",
@@ -11025,7 +11652,8 @@
     "recommended_package": "voxcpm2_q8_0",
     "docs": [
      "docs/tts.md",
-     "docs/gguf.md"
+     "docs/gguf.md",
+     "docs/models/vocalrender.md"
     ]
    },
    "runtime": {

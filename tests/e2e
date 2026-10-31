@@ -2638,6 +2638,28 @@ test('a milestone is carried as a line, not as a row', () => {
     + ' (' + over.length + ' of ' + scored.length + ')');
 });
 
+// intelligence index v5 is a different scale over different evals, so it is a
+// board beside v4 rather than an update to it: a model v5 left out keeps its v4
+// score, and a reader weights the two apart.
+test('artificial analysis v4 and v5 are separate boards', () => {
+  const both = D.models.filter(m => m.facets['aa.intelligence']
+    && m.facets['aa5.intelligence']);
+  ok(both.length > 0, 'a rescored model carries both');
+  ok(both.some(m => m.facets['aa.intelligence'].value
+    !== m.facets['aa5.intelligence'].value), 'at two different values');
+  ok(D.models.some(m => m.facets['aa.intelligence'] && !m.facets['aa5.intelligence']),
+     'a model v5 left out keeps its v4 score');
+  eq(both[0].facets['aa5.intelligence'].ref.source, 'artificial analysis v5',
+     'and the page names the board it came from');
+  eq(D.weights['aa5.*'], 0, 'the dial exists, and ranks on nothing until moved');
+  ok(PRESETS.aa5, 'a reader can rank on v5 by name');
+  const text = D.models.find(m => m.kind === 'text');
+  const speech = D.models.find(m => m.kind === 'speech'
+    && !can(m).has('text'));
+  ok(asked(text, 'aa5.intelligence'), 'it is asked of a text model');
+  ok(!asked(speech, 'aa5.intelligence'), 'and of nothing that is not one');
+});
+
 // the milestone is a line the payload carries, not a control on the page: no
 // flag is built from one, and a stored or shared filter set naming a flag this
 // page does not offer is dropped rather than travelling in every later link.

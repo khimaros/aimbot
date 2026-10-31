@@ -36,22 +36,58 @@ TEXT_OUT = "data/artificial-analysis.json"
 SPEECH_OUT = "data/artificial-analysis-speech.json"
 IMAGE_OUT = "data/artificial-analysis-image.json"
 
-# the text board is flat, so every field is its own path. it is also NARROWER
-# than it was: the leaderboard row no longer carries the model's metadata, and
-# the coding and agentic indices are gone from the site entirely -- artificial
-# analysis publishes Intelligence, Omniscience and Openness now. what it still
-# has alone is the creator and the decode speed, so the model board below fills
-# the rest back in.
+# the leaderboard row no longer carries the model's metadata, and the coding and
+# agentic indices are gone from the site entirely -- artificial analysis publishes
+# Intelligence, Omniscience and Openness now. what it still has alone is the
+# creator and the decode speed, so the model board below fills the rest back in.
 TEXT_FIELDS = (
     "name", "slug", "modelCreatorName",
     "isOpenWeights", "deprecated", "isReasoning", "contextWindowTokens",
-    "intelligenceIndex",
-    "terminalbenchV21", "terminalbenchHard", "tau2", "tauBanking",
-    "scicode", "gpqa", "hle", "lcr", "ifbench", "critpt",
-    "itbenchSre", "gdpvalNormalized", "analystAgent", "apexAgents", "mmmuPro",
-    "omniscience", "omniscienceAccuracy", "omniscienceNonHallucination",
     "medianOutputTokensPerSecond",
 )
+
+# every eval moved into a nested `scores` object keyed by the site's own slug.
+# these are the same measurements under the names this repo already used, so a
+# fresh value replaces the old one. gdpval is not here: `gdpval-aa-normalized`
+# is an elo near 1400 now against the 0 to 1 share `gdpvalNormalized` holds.
+SCORE_FIELDS = {
+    "terminalbenchV21": "scores.terminalbench-2-1",
+    "terminalbenchV40": "scores.terminalbench-4-0",
+    "terminalbenchHard": "scores.terminalbench-hard",
+    "tau2": "scores.tau2-bench",
+    "tauBanking": "scores.tau3-banking",
+    "scicode": "scores.scicode",
+    "gpqa": "scores.gpqa-diamond",
+    "hle": "scores.humanitys-last-exam",
+    "lcr": "scores.artificial-analysis-long-context-reasoning",
+    "ifbench": "scores.ifbench",
+    "critpt": "scores.critpt",
+    "itbenchSre": "scores.itbench-aa",
+    "analystAgent": "scores.aa-analyst-agent",
+    "apexAgents": "scores.apex-agents-aa",
+    "mmmuPro": "scores.mmmu-pro",
+    "livecodebench": "scores.livecodebench",
+}
+
+# INTELLIGENCE INDEX V5 IS A NEW BOARD. released 2026-10-27 over a different set
+# of evals with different weights, and the site rescored about 90 of its 275 rows
+# and left the rest null. so `intelligenceIndex` and the omniscience fields stay
+# frozen at their last v4 values, which nothing below writes, and v5 lands in
+# fields of its own that `aa5.*` reads. `intelligenceIndexV5` is null on a model
+# v5 has not scored, which is how that differs from one the site never listed.
+V5_FIELDS = {
+    "intelligenceIndexV5": "intelligenceIndex",
+    "omniscienceV5": "omniscience",
+    "omniscienceAccuracyV5": "scores.omniscience-accuracy",
+    "omniscienceNonHallucinationV5": "scores.omniscience-non-hallucination",
+    "frontierCode20": "scores.frontiercode-2-0",
+    "terminalBenchScience": "scores.terminal-bench-science",
+    "briefcase": "scores.aa-briefcase",
+    "automationBench": "scores.automationbench-aa",
+    "gdpPdf": "scores.gdp-pdf",
+    "critptHard": "scores.critpt-v2-hard",
+    "hleDiamond": "scores.hle-diamond",
+}
 
 # the same models off a MODEL page, which ships a far richer record for every
 # one of them rather than for the one it is about -- the comparison charts need
@@ -93,7 +129,7 @@ BOARDS = {
         "require": "intelligenceIndex",
         "out": TEXT_OUT,
         "key": ["slug", "name"],
-        "fields": {k: k for k in TEXT_FIELDS},
+        "fields": dict({k: k for k in TEXT_FIELDS}, **SCORE_FIELDS, **V5_FIELDS),
     },
     # the second half of the text file. the url names one model and gets all of
     # them, so the slug in it is an arbitrary choice of door rather than a

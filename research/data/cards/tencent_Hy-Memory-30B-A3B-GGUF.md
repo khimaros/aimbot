@@ -26,15 +26,81 @@ tags:
 
 ## GGUF Quantization
 
-This repository provides GGUF quantizations of [Hy-Memory-30B-A3B](https://huggingface.co/tencent/Hy-Memory-30B-A3B) for efficient local inference with [llama.cpp](https://github.com/ggml-org/llama.cpp). Three quantization levels are available:
+This repository provides GGUF quantizations of [Hy-Memory-30B-A3B](https://huggingface.co/tencent/Hy-Memory-30B-A3B) for efficient local inference with [llama.cpp](https://github.com/ggml-org/llama.cpp).
+
+The releases use **Tencent Hunyuan's Hy-Memory quantization recipe**: imatrix calibration plus MoE-aware mixed precision. Routed experts, which dominate parameter count, can be compressed aggressively, while shared experts, attention, and input/output layers keep higher precision. On the same fixed Mem0 LoCoMo setup, even the **~8 GB** expert-mixed build stays within about **1.5 points** of the strongest Q6_K result (**57.25%** vs **58.78%**), so the quality drop remains small while the file size falls to roughly **one quarter** of Q8_0.
 
 | Quantization | File | Size | LoCoMo Judge |
 | :--- | :--- | ---: | ---: |
-| Q6_K imatrix | `hy3a3b-memrl1009-step250-Q6_K-imat.gguf` | 24.71 GB | **58.78%** (154/262) |
-| Q8_0 | `Hy-Memory-Step250-Q8_0.gguf` | 31.99 GB | 57.63% (151/262) |
-| Q4_K_M imatrix | `hy3a3b-memrl1009-step250-Q4_K_M-imat.gguf` | 18.24 GB | 56.49% (148/262) |
+| Q6_K imatrix | `Hy-Memory-30B-A3B-Q6_K.gguf` | 24.71 GB | **58.78%** (154/262) |
+| Q8_0 | `Hy-Memory-30B-A3B-Q8_0.gguf` | 31.99 GB | 57.63% (151/262) |
+| Q3_K_M imatrix | `Hy-Memory-30B-A3B-Q3_K_M.gguf` | 14.45 GB | 57.25% (150/262) |
+| Experts IQ1_M + rest Q8_0, imatrix | `Hy-Memory-30B-A3B-Q8_0-expsIQ1_M.gguf` | **8.03 GB** | 57.25% (150/262) |
+| Q4_K_M imatrix | `Hy-Memory-30B-A3B-Q4_K_M.gguf` | 18.24 GB | 56.49% (148/262) |
+| Experts IQ2_XXS + rest Q8_0, imatrix | `Hy-Memory-30B-A3B-Q8_0-expsIQ2_XXS.gguf` | 9.14 GB | 55.73% (146/262) |
 
-All three files passed llama.cpp `--check-tensors`, real no-think generation, and the complete quantization evaluation described below.
+All six files passed llama.cpp `--check-tensors`, real no-think generation, and the complete fixed 20% Mem0 LoCoMo evaluation. Each version builds its own memory bank under identical settings. These are single-run scores: they do not claim lossless quantization, and lower-bit variants are not guaranteed to beat higher-bit ones.
+
+### Quantization Recipe
+
+The recipe focuses on two design choices:
+
+1. **imatrix calibration** collects activation statistics from calibration data to control quantization error.
+2. **MoE mixed precision** assigns lower bit-widths to routed experts and keeps higher precision on shared experts, attention, and embedding / output layers. Expert count and routing structure are unchanged.
+
+Encoding formats come from the open-source llama.cpp ecosystem (`Q3_K_M`, `Q4_K_M`, `Q6_K`, `Q8_0`, `IQ1_M`, `IQ2_XXS`). What this repository publishes is the Hy-Memory calibration and precision-allocation recipe on top of those formats. Five files use an importance matrix; `Q8_0` is the standard 8-bit baseline without imatrix.
+
+### Spec Cheatsheet
+
+| Spec | How weights are compressed | How to read it |
+| :--- | :--- | :--- |
+| `Q3_K_M` | Mostly 3-bit K-quants, with some tensors kept at higher precision | Compact 3-bit mixed recipe; not every weight is exactly 3 bits |
+| `Q4_K_M` | Mostly 4-bit K-quants, with some tensors kept at higher precision | Mid-tier 4-bit recipe; `M` means Medium in that family |
+| `Q6_K` | Mostly 6-bit K-quants | Higher bit-width and larger file than Q3/Q4 |
+| `Q8_0` | Main matrices use 8-bit weights with group scales | Higher-precision integer quantization; not FP8 |
+| `Q8_0-expsIQ1_M` | Routed experts use IQ1_M; remaining main matrices use Q8_0 | Smallest fully evaluated release in this repo (~8.03 GB) |
+| `Q8_0-expsIQ2_XXS` | Routed experts use IQ2_XXS; remaining main matrices use Q8_0 | Expert encoding uses more bits than IQ1_M (~9.14 GB) |
+
+Naming notes:
+
+- **K**: K-quants block/sub-block scaling. Unrelated to MoE top-k routing.
+- **M / XXS**: Medium / Extra Extra Small within each quantization family. Do not compare suffixes across families by name alone; IQ1_M actually uses fewer bits per weight than IQ2_XXS.
+- **IQ1_M / IQ2_XXS**: two IQ encodings. For tensors of that type, average bit-widths are about 1.75 and 2.0625 bits/weight. The leading `I` is a letter, not the digit `1`; these are not aliases of `Q1_0` / `Q2_0`.
+- **imatrix**: importance matrix from calibration activations; not a model size or bit-width.
+- **exps**: routed experts compressed to the low-bit IQ type in that file.
+
+File size still includes scales, floating-point leftovers, and metadata. Runtime VRAM also includes KV cache and framework overhead, so it is not equal to the download size.
+
+### Expert Mixed-Precision Allocation
+
+Verified against GGUF tensor types:
+
+| Model part | `Q8_0-expsIQ1_M` | `Q8_0-expsIQ2_XXS` |
+| :--- | :--- | :--- |
+| Routed experts selected by the router | IQ1_M | IQ2_XXS |
+| Shared experts | Q8_0 | Q8_0 |
+| Attention projections | Q8_0 | Q8_0 |
+| Token embedding and output layer | Q8_0 | Q8_0 |
+| Router, norms, and other small float tensors | F32 | F32 |
+
+Each mixed file has 141 routed-expert tensors in the corresponding IQ type, 338 other matrix tensors in Q8_0, and 287 tensors kept in F32. “Low-bit experts + Q8_0 elsewhere” is a precision allocation, not a 1-bit / 2-bit whole-model compress, and not expert pruning.
+
+### Community Ultra-Low-Bit Warning
+
+Some community ultra-low-bit GGUF files can **load successfully but fail memory writing**: garbled text, endless repetition, or broken JSON. A `Q1` / `Q2` filename or a successful server start is not enough evidence that the model works.
+
+On 2026-10-21 we checked `vinnipukh/Hy-Memory-30B-A3B-GGUF` at commit `aa6b91554c36e108fe4463a20b5a8eac9121410f` with matching SHA256 downloads, llama.cpp `5aeac37a35b44fde4bdffaec9159f2fcb253b622`, H20, no-think, F16 KV, and no forced JSON decoding:
+
+| Community file | Loads | Valid JSON on 8 basic memory prompts | Observed output |
+| :--- | :---: | ---: | :--- |
+| `Q1_0` | Yes | 0/8 | Irrelevant word loops until the output limit |
+| `Q2_0` | Yes | 0/8 | Mixed characters / words and repetition |
+| `TQ1_0` | Yes | 0/8 | Non-sentence content and repetition |
+| `TQ2_0` | Yes | 0/8 | Non-sentence content and repetition |
+
+The check covered Chinese/English extract, update, delete, and fact-source prompts (`temperature=0`, `max_tokens=256`). All four community responses hit the token limit. Under the same prompts, local Q6_K returned valid JSON in all 8 trials. This is a basic output check, not a LoCoMo Judge score, and it does not isolate quantization error vs conversion vs backend issues. The conclusion applies only to the files and setup above.
+
+By contrast, this repository's `Q8_0-expsIQ1_M` and `Q8_0-expsIQ2_XXS` use different IQ encodings, compress only routed experts to those low bit-widths, and have passed both structured-output checks and the full fixed 20% Mem0 LoCoMo pipeline. Distinguish releases by the full filename.
 
 ### GGUF Evaluation Setup
 
@@ -49,7 +115,16 @@ All three files passed llama.cpp `--check-tensors`, real no-think generation, an
 - **Inference framework:** official llama.cpp, commit `5aeac37a35b44fde4bdffaec9159f2fcb253b622`
 - **KV cache:** F16
 
-> The Q6_K imatrix version provides the strongest measured quality in this evaluation. The Q4_K_M imatrix version offers the smallest download and memory footprint.
+All six releases completed 59 memory-chunk writes and 262 judged answers with no leftover evaluation errors. This directory does not include the BF16 Hugging Face weights.
+
+### Checksums
+
+| File | SHA256 |
+| :--- | :--- |
+| `Hy-Memory-30B-A3B-Q3_K_M.gguf` | `26df98e88117fb2a32c083e2ca95dae169e3de263989a100be169f613db21dd3` |
+| `Hy-Memory-30B-A3B-Q8_0-expsIQ1_M.gguf` | `49288904a31654efb57b1b113e36009c17852f7e665d05cbe1c0dd36d96e0f55` |
+| `Hy-Memory-30B-A3B-Q8_0-expsIQ2_XXS.gguf` | `d53dc44baf8e64a0ef58344e9c1550acb0999234f44966284f593b0a27c081e9` |
+| `Hy-Memory-30B-A3B-Q8_0.gguf` | `3ba2897dbb7e21e618cb65cec4b31498e59eca2960b381c5e0a0590e7ce8526b` |
 
 ---
 
@@ -155,12 +230,14 @@ Tables 2–5 report the six benchmark scores used to compute each harness mean i
 
 We recommend using a recent official llama.cpp build. The commands below were validated with llama.cpp commit `5aeac37a35b44fde4bdffaec9159f2fcb253b622` and the Q6_K imatrix model.
 
+The example uses Q6_K. For another release, change `--model` to the corresponding filename and keep `--alias` / the request `model` field consistent; keep the same no-think settings.
+
 ### 1. Launch the llama.cpp server
 
 ```bash
 llama-server \
-  --model ./hy3a3b-memrl1009-step250-Q6_K-imat.gguf \
-  --alias hy-memory-q6-k-imat \
+  --model ./Hy-Memory-30B-A3B-Q6_K.gguf \
+  --alias Hy-Memory-30B-A3B-Q6_K \
   --host 127.0.0.1 \
   --port 8000 \
   --n-gpu-layers all \
@@ -193,7 +270,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="hy-memory-q6-k-imat",
+    model="Hy-Memory-30B-A3B-Q6_K",
     messages=[
         {
             "role": "user",
@@ -220,7 +297,7 @@ print(response.choices[0].message.content)
 curl http://127.0.0.1:8000/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "hy-memory-q6-k-imat",
+    "model": "Hy-Memory-30B-A3B-Q6_K",
     "messages": [
       {
         "role": "user",

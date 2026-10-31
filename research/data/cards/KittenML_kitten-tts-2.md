@@ -25,8 +25,8 @@ import soundfile as sf
 m = KittenTTS("KittenML/kitten-tts-2")
 
 # a built-in voice
-audio = m.generate("One day, a little girl named Lily found a needle in her room.",
-                   voice="Bruno")
+audio = m.generate("Hi! umm.. how are you, I guess?  .. uh.. nice to meet you??",
+                   voice="WeatherPresenterCheerful")
 
 # or clone one, from 5-30 seconds of a single speaker
 audio = m.generate("This is my own voice.", reference="my_voice.wav")
@@ -38,17 +38,26 @@ Everything the model needs is in this repository, so no Hugging Face login is re
 
 ## Voices
 
-`m.available_voices` lists all 47. Bella, Jasper, Luna, Bruno, Rosie, Hugo, Kiki
+`m.available_voices` lists all 115. Bella, Jasper, Luna, Bruno, Rosie, Hugo, Kiki
 and Leo are the same speakers as in KittenTTS 0.8, so existing code keeps working.
 
-Nine are named after a language rather than a person — Arabic, Chinese, French, German,
-Hindi, Italian, Portuguese, Russian, Spanish — and are how you reach those languages,
-since the voice is what carries the accent:
+Voices named after a person are English. The rest are named for the language they
+speak followed by what they are — `SpanishAbuela`, `JapaneseTrainConductor`,
+`RussianBabushka` — and are how you reach those languages, since the voice is what
+carries the accent. Nine older entries carry a bare language name: Arabic, Chinese,
+French, German, Hindi, Italian, Portuguese, Russian, Spanish.
 
 ```python
 m.generate("Guten Morgen. Ich wünsche dir einen wunderschönen Tag.",
            voice="German", normalize=False)
+
+m.generate("Buenas tardes. Hoy vamos a preparar algo muy especial.",
+           voice="SpanishAbuela", normalize=False)
 ```
+
+Sixteen languages have a named voice: Arabic, Chinese, Dutch, French, German, Hindi,
+Indonesian, Italian, Japanese, Korean, Polish, Portuguese, Russian, Spanish, Turkish,
+and English.
 
 Pass `normalize=False` for non-English text: the text normalizer is English-tuned and
 will mangle numbers and dates in other languages.
@@ -88,27 +97,27 @@ than treated as markup — as is anything else bracketed, like `section [3]` or 
 
 ## Weight variants
 
-The language model ships in two packings of the same weights. `weights=` picks one;
+The language model ships in three packings of the same weights. `weights=` picks one;
 `model.available_weights` lists them.
 
 | `weights=` | On disk | |
 |---|---|---|
 | `"packed"` *(default)* | 954 MB | 1.58-bit ternary body, bf16 embedding. **Lossless** |
+| `"emb4"` | 469 MB | Same body in TL2, plus a 4-bit embedding. **Lossy** |
 | `"full"` | 3469 MB | Plain bf16 |
 
 ```python
-m = KittenTTS("KittenML/kitten-tts-2", weights="packed")
+m = KittenTTS("KittenML/kitten-tts-2", weights="emb4")
 ```
 
 Only the variant you ask for is downloaded.
 
-`packed` stores the ternary transformer body at 1.58 bits and is bit-exact against `full`,
-so there is nothing lossy in either. The embedding stays at bf16: those 324M parameters are
-not ternary, and they are most of what `packed` cannot shrink further.
-
-Earlier revisions also offered an `emb4` variant, which halved the download by quantizing
-that embedding to 4 bits. This checkpoint has no 4-bit export, so the variant is absent; it
-remains available on the `v1` and `v2` branches.
+`emb4` halves the download, and the saving is almost entirely the token embedding — 324M
+parameters that `packed` has to leave at bf16 because they are not ternary. Its transformer
+body is still bit-exact: all 313 non-embedding tensors reproduce `full` exactly. The
+embedding is not, at L2 relative error 0.118 against the bf16 export, and it is coded at
+4.21 bits per weight across three frequency tiers. That is the one lossy thing here, which
+is why `packed` stays the default.
 
 ## Decoders
 

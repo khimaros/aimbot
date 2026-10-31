@@ -44,7 +44,7 @@ tags:
 Chirp Chirp! 🐦 We are introducing Ornith-1.5, a major step toward building foundation models through end-to-end self-improvement.
 
 Ornith-1.5 extends Ornith-1.0 (which was developed on top of Qwen3.5 and Gemma4 with additional continued pretraining, mid-training, and post-training) by expanding the self-improvement loop from scaffold and rollout optimization to jointly optimizing task generation, scaffold construction, and solution rollouts. Rather than relying on a fixed set of human-curated tasks and manually designed harnesses, Ornith-1.5 continuously generates new training tasks, discovers effective strategies for solving them, and improves the policy through reinforcement learning. For more details on the task, harness, and rollout reward design, please refer to our [blog](https://ornith.ai/ornith_1_5.html).
-<img style="width: 100%; max-width: 900px;" src="assets/ornith_122b_eval.png" alt="Ornith 1.5 122B Benchmark Results" title="Ornith 1.5 122B Benchmark Results">
+<img style="width: 100%; max-width: 900px;" src="https://huggingface.co/ornith-ai/Ornith-1.5-122B/resolve/main/assets/ornith_122b_eval.png" alt="Ornith 1.5 122B Benchmark Results" title="Ornith 1.5 122B Benchmark Results">
 
 ## Ornith 1.5 122B
 

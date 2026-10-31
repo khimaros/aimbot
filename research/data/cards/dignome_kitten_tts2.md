@@ -24,6 +24,8 @@ tags:
   - multilingual
 ---
 
+For the latest models please see audio.cpp project main.  This is no longer maintained.
+
 # Kitten TTS 2 for audio.cpp
 
 **Powered by Stellon Labs.**

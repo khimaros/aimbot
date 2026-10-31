@@ -14,6 +14,10 @@ library_name: transformers
 
 [GitHub](https://github.com/openbmb/MiniCPM-V) · [On-device results](#on-device-capability-and-efficiency) · [Evaluation](#evaluation) · [Examples](#examples) · [Usage](#usages) · [Model weights](#model-weights) · [DSpark](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-DSpark)
 
+## News
+
+- [2026.10.28] 🔥🔥🔥 We open-source the [MiniCPM-OCR suite](https://github.com/OpenBMB/MiniCPM-OCR), pairing two models for **fast, accurate parsing and result verification**: **MiniCPM-OCR 1.0** (based on **MiniCPM-V 4.6**, SOTA on Real5-OmniDocBench and OCRBench v2) and **MiniCPM-OCR Jev** for result correctness checks.
+
 **MiniCPM-V 4.7** is the latest model in the MiniCPM-V series, available in a **35B-A3B** variant, with **35B-A3B being the first MoE model in the MiniCPM-V series**. It builds on the family's single-image, multi-image, and video understanding capabilities, combining stronger foundation capabilities with efficient visual encoding and on-device inference. Notable features of MiniCPM-V 4.7 include:
 
 - 📱 **The First Open-Source MoE Model with Lossless, Smooth On-Device Inference.**
@@ -416,5 +420,10 @@ MiniCPM-V 4.7 is available in **35B-A3B and 1B** variants. Each model is paired 
 </table>
 
 The 1B int4 variant uses bitsandbytes; AWQ and GPTQ use W4A16 quantization. Quantized variants reduce memory usage; GGUF weights support CPU inference.
+
+Each GGUF repository also ships a `thinking/` subfolder with the same quantization levels
+suffixed `-thinking`. Those files restore the upstream chat template and therefore emit a
+`[Start thinking] … [End thinking]` trace; the files at the repository root keep thinking disabled.
+Tensor weights are identical between the two sets; only the embedded template differs.
 
 Also available on [Ollama](https://ollama.com/openbmb/minicpm-v4.7).

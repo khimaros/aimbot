@@ -48,6 +48,8 @@ from html.parser import HTMLParser
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = "https://huggingface.co/%s/raw/main/README.md"
 API = "https://huggingface.co/api/models/%s"
+# a second request because an `expand` narrows the answer to what it names
+EVALS = API + "?expand[]=evalResults"
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/140.0.0.0 Safari/537.36")
 
@@ -97,6 +99,20 @@ BENCH = {
     "tau2": "tau2", "tau2bench": "tau2", "taubench": "tau2",
     "osworld": "osworld", "osworldverified": "osworld",
     "gdpval": "gdpval", "critpt": "critpt", "weirdml": "weirdml",
+}
+# the hub's "Evaluation results", as (dataset, task) -> the same keys. a pair not
+# here is kept in `evals` and claims nothing: most of the rest are not scores on a
+# percent scale, yc-bench's being dollars and open-asr's a word error rate.
+EVAL_BENCH = {
+    ("harborframework/terminal-bench-2.1", "terminalbench_2_1"): "terminalbench",
+    ("harborframework/terminal-bench-2.0", "terminalbench_2"): "terminalbench",
+    ("Idavidrein/gpqa", "diamond"): "gpqa",
+    ("cais/hle", "hle"): "hle",
+    ("SWE-bench/SWE-bench_Verified", "swe_bench_%_resolved"): "swebench_verified",
+    ("ScaleAI/SWE-bench_Pro", "SWE_Bench_Pro"): "swebench_pro",
+    ("TIGER-Lab/MMLU-Pro", "mmlu_pro"): "mmlu_pro",
+    ("MMMU/MMMU_Pro", "mmmu_pro_vision"): "mmmu_pro",
+    ("datacurve/deep-swe", "deep_swe"): "deepswe",
 }
 NUM = re.compile(r"^-?\d+(?:\.\d+)?$")
 # longest alias first: "swebench" is a substring of "swebenchpro", and a card
@@ -456,18 +472,60 @@ def hub_meta(repo, max_age, refresh):
     return {k: v for k, v in out.items() if v not in (None, [], "")}
 
 
+def eval_rows(raw):
+    """The hub's evaluation results, flattened, dropping any row with no dataset."""
+    out = []
+    for r in raw or []:
+        d = r.get("data") or {}
+        ds = d.get("dataset") or {}
+        if not ds.get("id"):
+            continue
+        out.append({"dataset": ds["id"], "task": ds.get("task_id"),
+                    "value": d.get("value"), "date": d.get("date"),
+                    "source": (d.get("source") or {}).get("name"),
+                    "verified": r.get("verified"), "pr": r.get("pullRequest")})
+    return out
+
+
+def eval_claims(rows):
+    """{benchmark: value} from merged results, in the shape `claimed` holds.
+
+    A row on an open pull request is left out: anybody can file one, and the
+    repo has not said it. Merged or not, none on this roster is verified, so the
+    rest are claims and take the same bias as a table in the card does.
+    """
+    out = {}
+    for r in rows:
+        key = EVAL_BENCH.get((r["dataset"], r["task"]))
+        if key and not r["pr"] and isinstance(r["value"], (int, float)):
+            out.setdefault(key, float(r["value"]))
+    return out
+
+
+def hub_evals(repo, max_age, refresh):
+    """[row], or None when the hub did not answer, which is not `no results`."""
+    raw = get(EVALS % repo, "hub-evals-%s" % repo.replace("/", "_"), max_age, refresh,
+              "User-Agent: " + UA)
+    try:
+        return eval_rows(json.loads(raw).get("evalResults"))
+    except (ValueError, AttributeError):
+        return None
+
+
 # what a record reads off the card body, and what each is with no card
 CARD_FIELDS = {"claimed": {}, "others": {}, "unmatched": [], "samplers": [],
                "summary": "", "highlights": []}
 
 
-def card_entry(prev, text, hub, repo, names):
+def card_entry(prev, text, hub, repo, names, evals=None):
     """One model's record, keeping what `prev` read where this run read nothing.
 
     The fields parsed off the card are only as good as the card that arrived: a
     fetch that answered nothing is not a card with no claims, no summary and no
     samplers. The same goes for the hub's metadata, which is where the licence
-    and the base model come from.
+    and the base model come from, and for its evaluation results, which replace
+    a claim parsed off a table because they state the number rather than leave
+    it to be read out of a column.
     """
     prev = prev or {}
     out = {k: prev[k] for k in ("quant_repo", "quant_samplers") if k in prev}
@@ -483,6 +541,8 @@ def card_entry(prev, text, hub, repo, names):
                    highlights=highlights(text))
     else:
         out.update({k: prev.get(k, empty) for k, empty in CARD_FIELDS.items()})
+    out["evals"] = prev.get("evals", []) if evals is None else evals
+    out["claimed"] = dict(out["claimed"], **eval_claims(out["evals"]))
     out["hub"] = hub or prev.get("hub") or {}
     out["card_url"] = "https://huggingface.co/%s" % repo
     return out
@@ -545,7 +605,8 @@ def main():
         # models, which have no benchmark table anywhere
         out[repo] = card_entry(before.get(repo), text,
                                hub_meta(repo, args.max_age, args.refresh),
-                               repo, [(m.get("name") or {}).get("short")])
+                               repo, [(m.get("name") or {}).get("short")],
+                               hub_evals(repo, args.max_age, args.refresh))
         claimed, unmatched = out[repo]["claimed"], out[repo]["unmatched"]
         # the quant repo is what actually gets run, and it does not always say
         # the same thing as the base repo. EVERY quant repo's body is kept, not

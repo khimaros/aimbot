@@ -4421,6 +4421,48 @@ def a_card_that_did_not_arrive_keeps_what_was_read_off_it():
 
 
 @test
+def a_hub_eval_result_is_a_claim_only_once_merged():
+    """The hub's "Evaluation results" are structured, and every one of 1,109 rows
+    on this roster is unverified, so they read as what a card claims and go
+    through the same bias. 820 of those rows sit on an open pull request that
+    anybody can file, which is a proposal rather than what the repo says."""
+    mod = load_script("fetch_model_cards", os.path.join(RESEARCH, "fetch-model-cards"))
+    row = lambda ds, task, value, **kw: dict(
+        {"filename": ".eval_results/m.yaml", "verified": False,
+         "data": {"dataset": {"id": ds, "task_id": task}, "value": value,
+                  "date": "2026-10-25", "source": {"name": "m model card"}}}, **kw)
+    raw = [row("harborframework/terminal-bench-2.1", "terminalbench_2_1", 80.9),
+           row("Idavidrein/gpqa", "diamond", 89.5),
+           row("cais/hle", "hle", 40.0, pullRequest=6),
+           row("collinear-ai/yc-bench", "medium", 230465),
+           {"filename": ".eval_results/broken.yaml", "verified": False}]
+    rows = mod.eval_rows(raw)
+    eq(len(rows), 4, "a row with no dataset is not a result")
+    eq(rows[0], {"dataset": "harborframework/terminal-bench-2.1",
+                 "task": "terminalbench_2_1", "value": 80.9, "date": "2026-10-25",
+                 "source": "m model card", "verified": False, "pr": None},
+       "the fields kept")
+    eq(mod.eval_claims(rows), {"terminalbench": 80.9, "gpqa": 89.5},
+       "merged rows on a known benchmark are claims, and only those")
+
+    # a table is parsed and a result is stated: nanbeige 4.3's footnoted header
+    # read as terminal-bench 6.3 off a table whose own row says 80.9
+    text = ("# m\n\n| Benchmark | m |\n|---|---|\n| GPQA Diamond | 6.3 |\n"
+            "| HLE | 31.0 |\n")
+    got = mod.card_entry({}, text, {"license": "mit"}, "v/m", ["m"], rows)
+    eq(got["claimed"]["gpqa"], 89.5, "a stated result beats a parsed table")
+    eq(got["claimed"]["hle"], 31.0, "and the table keeps what the hub does not say")
+    eq(got["claimed"]["terminalbench"], 80.9, "and the hub fills in the rest")
+    eq(got["evals"], rows, "every row is kept, the proposals included")
+
+    again = mod.card_entry(got, "", {}, "v/m", ["m"], None)
+    eq(again["evals"], rows, "a fetch that failed keeps the last rows")
+    eq(again["claimed"]["terminalbench"], 80.9, "and their claims")
+    eq(mod.card_entry(got, "", {}, "v/m", ["m"], [])["evals"], [],
+       "a repo that withdrew its results has none")
+
+
+@test
 def a_fact_whose_fetch_failed_keeps_its_last_value():
     """Each fact comes from its own fetch -- config, gguf header, safetensors
     index, template, generation config -- and one failing dropped its fields,
@@ -5469,6 +5511,92 @@ def a_retired_leaderboard_field_is_recovered_from_the_model_page():
     # enough to rank on -- 5 models and 29-with-14-zeroes of the 46 it scores
     eq(row["livecodebench"], 0.878306878306878, "livecodebench is carried")
     eq(row["terminalbenchV40"], 0.42, "and so is terminal-bench 4.0")
+
+
+def aa_v5_fixture_html():
+    """The leaderboard after v5: a rescored row, and one left without an index."""
+    rows = [{"slug": "rescored", "name": "Rescored", "intelligenceIndex": 20.1,
+             "omniscience": -6.3, "medianOutputTokensPerSecond": 38.0,
+             "scores": {"scicode": 0.47, "frontiercode-2-0": 0.15,
+                        "terminal-bench-science": 0.05, "aa-briefcase": 1349.6,
+                        "omniscience-accuracy": 0.17}},
+            {"slug": "fell-off", "name": "Fell Off", "intelligenceIndex": None,
+             "omniscience": None, "scores": {"scicode": 0.38}},
+            {"slug": "v5-only", "name": "V5 Only", "intelligenceIndex": 59.4,
+             "omniscience": 53.5, "scores": {"frontiercode-2-0": 0.41}}]
+    payload = json.dumps({"models": rows})
+    chunks = "".join(
+        "<script>self.__next_f.push([1,%s])</script>" % json.dumps(part)
+        for part in (payload[:len(payload) // 2], payload[len(payload) // 2:]))
+    return "<!doctype html><html><body><!-- %s -->%s</body></html>" % (
+        "x" * 100000, chunks)
+
+
+@test
+def a_rebased_index_is_a_new_board_rather_than_an_update():
+    """Intelligence index v5 is another scale over another set of evals.
+
+    Writing it over `intelligenceIndex` lost qwen3.8 flash next's 39.8 to a null,
+    moved qwen3.8 27b from 33.7 to 20.1, and left 438 rows the site no longer
+    lists at their v4 values, so one column held two scales and nothing refused
+    the write. v4 is frozen where it was and v5 lands beside it, which keeps every
+    model that fell off at its old score.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        with open(os.path.join(tmp, "page.html"), "w") as f:
+            f.write(aa_v5_fixture_html())
+        out = os.path.join(tmp, "text.json")
+        with open(out, "w") as f:
+            json.dump({
+                "rescored": {"slug": "rescored", "name": "Rescored",
+                             "intelligenceIndex": 33.7, "omniscience": 1.5,
+                             "omniscienceAccuracy": 0.2, "scicode": 0.4},
+                "fell-off": {"slug": "fell-off", "name": "Fell Off",
+                             "intelligenceIndex": 12.7, "omniscience": -3.0,
+                             "scicode": 0.38},
+                "not-listed": {"slug": "not-listed", "name": "Not Listed",
+                               "intelligenceIndex": 9.0}}, f)
+
+        base, stop = serve(tmp)
+        purge("test-aa-v5")
+        try:
+            r = subprocess.run(
+                [os.path.join(RESEARCH, "fetch-artificial-analysis"),
+                 "--board", "models", "--url", base + "/page.html",
+                 "--out", out, "--cache-key", "test-aa-v5", "--max-age", "0"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        finally:
+            stop()
+            purge("test-aa-v5")
+        if r.returncode:
+            raise AssertionError("collector exited %d: %s" % (r.returncode, r.stderr.strip()))
+        got = json.load(open(out))
+    finally:
+        shutil.rmtree(tmp)
+
+    row = got["rescored"]
+    eq(row["intelligenceIndex"], 33.7, "the v4 index is frozen")
+    eq(row["omniscience"], 1.5, "and so is v4 omniscience")
+    eq(row["omniscienceAccuracy"], 0.2, "omniscience v1.1 is not v1")
+    eq(row["intelligenceIndexV5"], 20.1, "v5 lands beside it")
+    eq(row["omniscienceV5"], -6.3, "with its omniscience")
+    eq(row["omniscienceAccuracyV5"], 0.17, "and its accuracy, off the nested scores")
+    eq(row["frontierCode20"], 0.15, "a v5 eval comes off the nested scores")
+    eq(row["terminalBenchScience"], 0.05, "and so does its science eval")
+    eq(row["briefcase"], 1349.6, "and its knowledge-work eval")
+    eq(row["scicode"], 0.47, "an unrebased eval still updates")
+
+    fell = got["fell-off"]
+    eq(fell["intelligenceIndex"], 12.7, "a model v5 left out keeps its v4 score")
+    eq(fell["omniscience"], -3.0, "and its omniscience")
+    eq(fell["intelligenceIndexV5"], None, "and says v5 has no score for it")
+    eq(fell["scicode"], 0.38, "its evals are still read")
+
+    eq(got["not-listed"]["intelligenceIndex"], 9.0, "a delisted model keeps its score")
+    only = got["v5-only"]
+    eq("intelligenceIndex" in only, False, "a model newer than v4 has no v4 score")
+    eq(only["intelligenceIndexV5"], 59.4, "only a v5 one")
 
 
 def t2i_fixture_html():

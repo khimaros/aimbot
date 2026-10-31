@@ -29,9 +29,17 @@ version: 1
 # than on evidence. livecodebench scores 5 of the 46 models artificial analysis
 # rates here and terminal-bench 4.0 scores 29 with 14 of them at exactly zero,
 # so both are carried at no weight until the boards fill in.
+#
+# intelligence index v5 is a separate board, because it is a different scale over
+# different evals, and `aa.intelligence` stays frozen at v4 for every model. this
+# is the dial for how much the balanced ranking leans on it. it rides at zero for
+# the reason livecodebench did: v5 scores 12 of the 73 roster models artificial
+# analysis lists, so weighting it now would move the other 61 on absence. it
+# shows on the model, and the `aa5` preset ranks on it.
 weights:
   aa.scicode: 0.30
   aa.terminalbench: 0.30
+  aa5.*: 0.0
   gbench.agentic: 0.15
   lmarena.rating: 0.10
   swerebench.resolved: 0.10
@@ -128,6 +136,10 @@ presets:
   title: third-party measurement only
   base: true
   drop_prefixes: [card, community]
+- k: aa5
+  title: artificial analysis v5
+  weights:
+    aa5.intelligence: 1.0
 - k: community
   title: what people report
   weights:

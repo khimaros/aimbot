@@ -83,7 +83,7 @@ LFM2.5-24B-A2B is a general-purpose text-only reasoning model with the following
 | **[LFM2.5-24B-A2B-GGUF](https://huggingface.co/LiquidAI/LFM2.5-24B-A2B-GGUF)**     | Quantized format for llama.cpp and compatible tools. Optimized for CPU inference and local deployment with reduced memory usage.             |
 | **[LFM2.5-24B-A2B-ONNX](https://huggingface.co/LiquidAI/LFM2.5-24B-A2B-ONNX)**     | ONNX Runtime format for cross-platform deployment. Enables hardware-accelerated inference across diverse environments (cloud, edge, mobile). |
 | **[LFM2.5-24B-A2B-MLX-4bit](https://huggingface.co/LiquidAI/LFM2.5-24B-A2B-MLX-4bit)** | MLX format for Apple Silicon. Optimized for fast inference on Mac devices using the MLX framework.                                           |
-| LFM2.5-24B-A2B-DSpark | DSpark draft model for speculative decoding with SGLang, for faster generation. *Coming soon.* |
+| **[LFM2.5-24B-A2B-DSpark](https://huggingface.co/LiquidAI/LFM2.5-24B-A2B-DSpark)** | DSpark draft model for speculative decoding with SGLang, for faster generation. *Coming soon.* |
 
 We recommend using it for agents that need to reason, call tools, and run reliably on your device. It is not recommended for knowledge-heavy tasks on its own: pair it with retrieval or web search, which plays to its tool-calling strength.
 
