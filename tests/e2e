@@ -3878,6 +3878,124 @@ test('a pasted link still opens the model and the tab it names', () => {
   RESET();
 });
 
+// a decision model starts under one server line and answers three different
+// ways, so a command alone leaves a reader with a server and no way to read it
+const answerBlock = m => (tabOperate(m).split('<h3>how to get an answer</h3>')[1] || '')
+  .split('<h3>')[0];
+const serverLine = m => snippets(m).find(s => s.label.startsWith('llama-server')).text;
+const verdictLine = m => (snippets(m).find(s => s.label.startsWith('verdict')) || {}).text;
+
+test('operate says how every decision model gives an answer', () => {
+  RESET();
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  const deciders = D.models.filter(m => m.kind === 'decision');
+  ok(deciders.length >= 20, 'the roster: ' + deciders.length);
+  deciders.forEach(m => {
+    ok(answerBlock(m), m.short + ' says how to read it');
+    eq(/\{[a-z]+[@}]/.test(answerBlock(m)), false, m.short + ' renders its references');
+    eq(snippets(m).some(s => s.label.includes('models.json')), false,
+       m.short + ' answers no chat turn, so no chat client is configured for it');
+  });
+
+  const native = answerBlock(model('laya'));
+  ok(native.includes('/v1/systemone'), 'native names the endpoint');
+  ok(native.includes('verdict refuses'), 'and says verdict will not read it');
+  eq(native.includes('layouts.yaml'), false, 'with no prompt to write');
+  eq(serverLine(model('laya')).includes('--embeddings'), false, 'a plain server');
+  eq(verdictLine(model('laya')), undefined, 'and nothing to put in front of it');
+
+  const layout = answerBlock(model('decider-4b'));
+  ok(layout.includes('decider-plain'), 'a layout is named');
+  ok(layout.includes('/blob/master/registry/layouts.yaml'), 'and links its bytes');
+  ok(layout.includes('https://github.com/khimaros/verdict'), 'verdict is the client');
+  ok(layout.includes('2.173'), 'the fitted temperature is shown');
+  eq(serverLine(model('decider-4b')).includes('--embeddings'), false, 'a plain server');
+  const front = verdictLine(model('decider-4b'));
+  ok(front.includes('llama_verdict.server'), 'verdict is a config: ' + front);
+  ok(front.includes('--layout decider-plain'), 'on the layout the model reads');
+  ok(front.includes('--base-url http://localhost:8080/v1'), 'in front of that server');
+  ok(front.includes('--model ' + pickedQuant(model('decider-4b')).repo + ':'),
+     'under the id that server advertises');
+  ok(front.includes('--port 8477'), 'on the port verdict documents');
+
+  const head = answerBlock(model('jev-omni'));
+  ok(head.includes('decision-head-f32.npz'), 'a head names its file');
+  ok(head.includes('last token'), 'and what it reads');
+  ok(head.includes('https://github.com/khimaros/verdict'), 'and who applies it');
+  const line = serverLine(model('jev-omni'));
+  ok(line.includes('--embeddings'), 'an embedding server');
+  ok(line.includes('--pooling none'), 'of raw hidden states');
+  const ctx = model('jev-omni').facts.context_native;
+  ok(line.includes('-b ' + ctx) && line.includes('-ub ' + ctx), 'one batch holds a prompt');
+  ok(verdictLine(model('jev-omni')).includes('--layout jev-omni'), 'read by its head');
+  RESET();
+});
+
+test('the repo picked on operate decides how clef is read', () => {
+  RESET();
+  const clef = model('clef');
+  ops = {runtime: null, repo: 'bartowski/Cloudflare_clef-GGUF', quant: null, profile: null};
+  ok(answerBlock(clef).includes('joint_head.safetensors'), 'a backbone gguf needs the head');
+  ok(answerBlock(clef).includes('every position'), 'over every hidden state');
+  ok(serverLine(clef).includes('--embeddings'), 'so it is an embedding server');
+  ok(verdictLine(clef).includes('--layout clef'), 'with verdict in front of it');
+
+  ops = {runtime: null, repo: 'ggml-org/Clef-GGUF', quant: null, profile: null};
+  ok(answerBlock(clef).includes('/v1/systemone'), 'the conversion answers natively');
+  eq(answerBlock(clef).includes('joint_head.safetensors'), false, 'with no head to fetch');
+  eq(serverLine(clef).includes('--embeddings'), false, 'so it is a plain server');
+  eq(verdictLine(clef), undefined, 'and verdict is not offered');
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  RESET();
+});
+
+// a chat model that also decides is two products on one file, so the samplers
+// row carries both, and the table's modality says which one the reader came for
+test('a chat model that decides has a decisions profile the table can pick', () => {
+  RESET();
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  const m = model('qwen3.5-4b');
+  ok(tabOperate(m).includes('data-profile="decisions"'), 'the chip is offered');
+  ok(pickedProfile(m) !== 'decisions', 'a chat table opens on a chat profile');
+  eq(answerBlock(m), '', 'with no decision section');
+  ok(snippets(m).some(s => s.label.includes('models.json')), 'and pi still offered');
+
+  filters.mods = new Set(['decision']);
+  eq(pickedProfile(m), 'decisions', 'the decisions modality picks it unasked');
+  ok(answerBlock(m).includes('chat template'), 'read through its own template');
+  ok(answerBlock(m).includes('https://github.com/khimaros/verdict'), 'by verdict');
+  eq(/\{[a-z]+[@}]/.test(answerBlock(m)), false, 'with its references rendered');
+  ok(verdictLine(m).includes('--layout chat'), 'verdict is told so');
+  eq(serverLine(m).includes('--temp'), false, 'nothing is sampled');
+  eq(serverLine(m).includes('--spec-type'), false, 'and nothing is drafted');
+  eq(snippets(m).some(s => s.label.includes('models.json')), false, 'and no chat client');
+
+  ops.profile = 'thinking';
+  eq(pickedProfile(m), 'thinking', 'a chip the reader pressed beats the modality');
+  eq(answerBlock(m), '', 'and takes the section with it');
+
+  ops.profile = null;
+  const chat = model('qwen3.8 27b');
+  ok(pickedProfile(chat) !== 'decisions', 'a model that never measured is not picked');
+  eq(tabOperate(chat).includes('data-profile="decisions"'), false, 'or offered it');
+
+  filters.mods = new Set(DEFAULT_MODALITIES);
+  ops.profile = 'decisions';
+  eq(pickedProfile(m), 'decisions', 'and the chip works from any table');
+  ops.runtime = 'vllm';
+  ok(pickedProfile(m) !== 'decisions', 'but only where verdict has a server to read');
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  RESET();
+});
+
+test('a chat model is not told how to read a decision', () => {
+  RESET();
+  const m = model('qwen3.8 27b');
+  eq(answerBlock(m), '', 'no section');
+  ok(snippets(m).some(s => s.label.includes('models.json')), 'and pi is still offered');
+  RESET();
+});
+
 // the tab icon. `href="favicon.svg"` would ask a reader to deploy a second file
 // for a decoration, and the site is one file that opens off disk, so the mark
 // is inlined as a data uri. what it depicts is what the page is for: pointing a

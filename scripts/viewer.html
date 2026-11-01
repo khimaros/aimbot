@@ -2117,8 +2117,75 @@ function draftBlock(m, pick) {
     + '</tbody></table>';
 }
 
+// a repo's own readout before the model's: clef's backbone ggufs need the head
+// fetched, and the conversion beside them carries it in the file
+const readoutOf = (m, repo) =>
+  (m.repos.find(r => r.repo === repo) || {}).readout || m.readout || null;
+
+// a chat model has no readout of its own: it decides through its chat template,
+// and only while the decisions profile is the one picked
+const activeReadout = (m, repo) => pickedProfile(m) === DECISION_PROFILE
+  ? {kind: 'chat', layout: 'chat', note: m.decides.note} : readoutOf(m, repo);
+
+// which layout or head verdict reads this as, which is also the key that says a
+// caller exists: a head nobody named is refused there
+const readoutName = r => r.layout || (r.head || {}).name || null;
+
+const verdictHow = why => `${why} ${out_link(VERDICT_URL, 'verdict')} does that and serves`
+  + ` <code>/v1/systemone</code> on port ${VERDICT_PORT}: run it beside the server,`
+  + ' from the example configs below.';
+
+// a decision model starts under an ordinary server line and answers one of three
+// ways, so the command alone leaves a reader with a server and no way to read it
+const READOUT_ROWS = {
+  chat: () => [
+    ['how', verdictHow('a typed answer needs more than the server. this model decides'
+                       + ' through its own chat template, in one forward pass with nothing'
+                       + ' generated, so a client has to read the probability on each option.')],
+  ],
+  native: () => [
+    ['how', 'llama-server answers <code>/v1/systemone</code> itself. the head and its'
+     + ' temperatures are in the gguf, so there is no prompt to write and no file to fetch.'],
+    ['verdict', 'not needed: verdict refuses this mode and does not proxy it'],
+  ],
+  layout: r => [
+    ['how', verdictHow('the server is not enough. this model was trained on a prompt of its'
+                       + ' own, and asked any other way it reads a prompt it never saw.'
+                       + ' a client has to send those exact bytes and read the option'
+                       + ' probabilities.')],
+    ['prompt', `<a href="${esc(D.repo_url)}/blob/${esc(D.branch)}/registry/layouts.yaml"`
+     + ` target="_blank" rel="noopener"><code>${esc(r.layout)}</code></a>`],
+    ...(r.temperature ? [['temperature', Object.entries(r.temperature)
+      .map(([k, v]) => `${esc(k)} ${esc(v)}`).join(', ')]] : []),
+  ],
+  head: r => {
+    const h = r.head, url = 'https://huggingface.co/' + h.repo + '/blob/'
+      + (h.revision || 'main') + '/' + h.file;
+    return [
+      ['how', verdictHow('the server is not enough. the answer comes off a head outside'
+                         + ' this gguf, so the server runs as an embedding endpoint and a'
+                         + ' client has to apply the head to its hidden states.')],
+      ['head', out_link(url, `${h.repo} ${h.file}`)],
+      ['reads', (h.reads || {}).states === 'all' ? 'the final hidden state of every position'
+        : 'the final hidden state of the last token'],
+      ...(h.rows ? [['also reads', `<code>${esc(h.rows.tensor)}</code> from `
+                     + out_link('https://huggingface.co/' + h.rows.repo, h.rows.repo)]] : []),
+    ];
+  },
+};
+
+function readoutBlock(m, repo) {
+  const r = activeReadout(m, repo);
+  if (!r || !READOUT_ROWS[r.kind]) return '';
+  const rows = READOUT_ROWS[r.kind](r);
+  if (r.note) rows.push(['', `<span class="dim">${proseHtml(r.note, m)}</span>`]);
+  return '<h3>how to get an answer</h3><table><tbody>'
+    + rows.map(([k, v]) => `<tr><th class="nw">${k}</th><td>${v}</td></tr>`).join('')
+    + '</tbody></table>';
+}
+
 function tabOperate(m) {
-  const profiles = Object.entries(m.sampling);
+  const profiles = profileNames(m);
   const repo = pickedRepo(m), pick = pickedQuant(m), profile = pickedProfile(m);
   // a runtime with nothing to say builds none, and a bare heading over nothing
   // is worse than no heading
@@ -2130,10 +2197,11 @@ function tabOperate(m) {
       + ` data-runtime="${esc(r.k)}">${esc(r.k)}</button>`).join(''))
     + repoRow(m, repo, pickedRuntime(m).gguf)
     + (pickedRuntime(m).gguf ? quantRow(m, repo, pick) : '')
-    + (profiles.length > 1 ? pickRow('samplers', profiles.map(([name]) =>
+    + (profiles.length > 1 ? pickRow('samplers', profiles.map(name =>
       `<button class="chip${name === profile ? ' on' : ''}"`
       + ` data-profile="${esc(name)}">${esc(name)}</button>`).join('')) : '')
     + '</div>'
+    + readoutBlock(m, repo)
     // under a heading like every other section, and only the server command
     // open: it is what a reader came for, where a client config is twenty lines
     // that pushed the samplers off the screen. each label stays visible, so
@@ -2189,7 +2257,19 @@ const AUDIOCPP_TASKS = ['gen', 'tts', 'clon', 'vc', 'svc', 's2s', 'asr',
 const SAMPLER_FLAG = {temp: '--temp', top_p: '--top-p', top_k: '--top-k',
                       min_p: '--min-p', presence_penalty: '--presence-penalty',
                       repeat_penalty: '--repeat-penalty'};
-let ops = {runtime: null, repo: null, quant: null, profile: null};
+const LLAMA_BASE_URL = 'http://localhost:8080/v1';
+const VERDICT_URL = 'https://github.com/khimaros/verdict';
+const VERDICT_PORT = 8477;
+// what a head is fed by, from verdict's readme: raw hidden states, no pooling
+const HEAD_SERVER_FLAGS = ['--embeddings', '--pooling none'];
+// not a sampling profile in the registry: a decision samples nothing, so this is
+// the samplers row's way of saying the file is being read as the other product
+const DECISION_PROFILE = 'decisions';
+const SERVER_LABEL = {native: 'llama-server, answering /v1/systemone itself',
+                      chat: 'llama-server, the backend verdict reads',
+                      layout: 'llama-server, the backend verdict reads',
+                      head: 'llama-server, as the embedding endpoint verdict reads'};
+let ops ={runtime: null, repo: null, quant: null, profile: null};
 
 // what you are being shown a command for. the runtime decides which repos are
 // even candidates: llama.cpp and anything speaking to it serve a GGUF, vllm
@@ -2268,9 +2348,16 @@ function pickedQuant(m) {
     || bestOf(m, inRepo) || inRepo[0] || null;
 }
 
+// verdict reads a gguf through llama-server, so the decisions profile is offered
+// only under the runtime that has one
+const profileNames = m => Object.keys(m.sampling).concat(
+  m.decides && pickedRuntime(m).k === 'llama.cpp' ? [DECISION_PROFILE] : []);
+
+// a chip the reader pressed, then what the table they came from was asking about
 function pickedProfile(m) {
-  const names = Object.keys(m.sampling);
-  if (ops.profile && m.sampling[ops.profile]) return ops.profile;
+  const names = profileNames(m);
+  if (names.includes(ops.profile)) return ops.profile;
+  if (names.includes(DECISION_PROFILE) && filters.mods.has('decision')) return DECISION_PROFILE;
   return ['tool-use', 'thinking', 'instruct'].find(n => names.includes(n)) || names[0] || '';
 }
 
@@ -2290,7 +2377,9 @@ function llamaServer(m, pick, profileName) {
   const notes = (m.components || []).map(componentNote);
   // speculative decoding is a property of the GGUF, not of the model: a quant
   // saying `speculative: false` cannot draft whatever the model declares
-  const spec = (pick && pick.speculative === false) ? {} : (m.speculative || {});
+  // and a decision generates nothing to draft
+  const spec = (pick && pick.speculative === false) || profileName === DECISION_PROFILE
+    ? {} : (m.speculative || {});
   // a drafter in the served repo needs no flag -- llama.cpp resolves a sidecar
   // beside the weights on its own, and the head folded into the build is simply
   // there. one somebody ELSE published is a second download and has to be asked
@@ -2302,6 +2391,13 @@ function llamaServer(m, pick, profileName) {
     cmd.push('--spec-type ' + spec.type);
     if (spec.n_max) cmd.push('--spec-draft-n-max ' + spec.n_max);
   }  if (m.facts.context_native) cmd.push('-c ' + m.facts.context_native);
+  // a head reads a whole prompt out of one batch, so the batch is the context
+  if (pick && (readoutOf(m, pick.repo) || {}).kind === 'head') {
+    cmd.push(...HEAD_SERVER_FLAGS);
+    if (m.facts.context_native) {
+      cmd.push('-b ' + m.facts.context_native, '-ub ' + m.facts.context_native);
+    }
+  }
   Object.entries(SAMPLER_FLAG).forEach(([f, flag]) => {
     if (p[f] !== undefined && p[f] !== null) cmd.push(`${flag} ${p[f]}`);
   });
@@ -2387,8 +2483,25 @@ function piProvider(m, pick, profileName, gguf) {
     entry.contextWindow = m.facts.context_native;
     entry.maxTokens = m.facts.context_native;
   }
-  return JSON.stringify({providers: {local: {baseUrl: 'http://localhost:8080/v1',
+  return JSON.stringify({providers: {local: {baseUrl: LLAMA_BASE_URL,
     api: 'openai-completions', apiKey: 'none', models: [entry]}}}, null, 2);
+}
+
+// verdict in front of the server above, for a model that server cannot answer
+// for alone. `--layout` is spelled out because verdict's copy of the registry is
+// refreshed by hand, and a model it does not recognise is read as chat. the
+// `uv run` is verdict's own, and its dev group is what brings the joint head's numpy
+function verdictConfig(m, pick) {
+  const r = pick && activeReadout(m, pick.repo);
+  if (!r || r.kind === 'native' || !readoutName(r)) return null;
+  return {label: 'verdict, the /v1/systemone endpoint in front of that server',
+          open: true,
+          text: withNotes([`# from python/ in a checkout of ${VERDICT_URL}`],
+                          ['uv run python -m llama_verdict.server',
+                           `--base-url ${LLAMA_BASE_URL}`,
+                           `--model ${pick.repo}:${pick.quant}`,
+                           `--layout ${readoutName(r)}`,
+                           `--port ${VERDICT_PORT}`])};
 }
 
 // a component by role, as `hf://repo:file` -- which is how every runtime here
@@ -2610,11 +2723,16 @@ function snippets(m) {
   const out = [];
   if (!rt.k) return out;
   if (rt.k === 'llama.cpp') {
-    out.push({label: `llama-server, ${profile || 'no'} samplers`,
+    const read = pick && activeReadout(m, pick.repo);
+    out.push({label: SERVER_LABEL[(read || {}).kind] || `llama-server, ${profile || 'no'} samplers`,
               text: llamaServer(m, pick, profile), open: true});
+    const verdict = verdictConfig(m, pick);
+    if (verdict) out.push(verdict);
   } else {
     out.push(otherRuntime(m, rt, pick));
   }
+  // a decision model answers no chat turn, so there is no chat client to configure
+  if (m.kind === 'decision' || profile === DECISION_PROFILE) return out;
   // pi has to be told the level vocabulary; it cannot read a chat template
   const pi = piProvider(m, pick, profile, rt.gguf);
   if (pi) out.push({label: '~/.pi/agent/models.json', text: pi});

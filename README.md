@@ -1184,6 +1184,30 @@ quant repo, the profile's samplers, the native context, the derived knob. what
 context to serve it at, on which host, under which server binary is still
 policy and still absent.
 
+a decision model gets `how to get an answer` above those, read off the `readout:`
+of the repo you picked, or the model's where the repo has none. one server line
+cannot say this, because the three modes answer differently:
+
+```
+native   llama-server answers /v1/systemone itself; the head is in the gguf.
+         verdict refuses these
+layout   stock llama-server, but the model was trained on a prompt of its own,
+         which verdict sends and then serves /v1/systemone on port 8477
+head     the answer comes off a head outside the gguf, so llama-server runs
+         with --embeddings --pooling none and verdict applies the head
+```
+
+the last two list a verdict command beside the server's, and no decision model
+is offered a chat client's config. clef is both of the last and the first: its
+backbone ggufs need the head, and ggml-org's conversion carries it.
+
+a text model with a `decides:` block is both products on one file, so its
+samplers row carries a `decisions` chip beside the registry's profiles: no
+samplers, no drafting, and verdict with `--layout chat`. it is not a profile in
+the registry, since a decision samples nothing. opened from the decisions
+modality the tab starts on it, and a chip you press beats the modality. it is
+offered under llama.cpp only, the one runtime verdict reads.
+
 where a thinking level appears, **the template's default is in bold**: it is
 the level a client gets by sending nothing, and it is rarely the cheap one. a
 profile asking for `off` on a model with a `gate` is annotated `via

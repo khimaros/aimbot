@@ -1084,6 +1084,8 @@ def repo_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
         repo_sizes = sizes.get(r["repo"]) or {}
         row = {"repo": r["repo"], "url": HF + r["repo"]}
         row.update({k: r[k] for k in rungs.REPO_FIELDS if k in r})
+        if "readout" in row:
+            row["readout"] = rendered_notes(row["readout"], r["repo"])
         # the tag the registry gives a file whose name carries none: kokoro's
         # `Kokoro_espeak.gguf` is the F32 rung, whisper's `ggml-large-v3-turbo.bin`
         # the F16 one, and nothing in either name says so
@@ -1608,6 +1610,8 @@ def build_model(repo, model, ctx):
         "gguf_only": model.get("gguf_only"),
         # a text model that measured as a decision model, and the run that did
         "decides": rendered_notes(model.get("decides"), repo) or None,
+        # how a client gets an answer out of it, which `repos[].readout` overrides
+        "readout": rendered_notes(model.get("readout"), repo) or None,
         "modalities": model.get("modalities") or {},
         "facts": facts, "repos": rows,
         "components": [rendered_notes(c, c.get("repo") or repo,

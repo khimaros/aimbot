@@ -1545,6 +1545,7 @@
    ],
    "params": {},
    "publisher": "ACE-Step",
+   "readout": null,
    "repo": "ACE-Step/Ace-Step1.5",
    "repos": [
     {
@@ -1761,6 +1762,7 @@
    ],
    "params": {},
    "publisher": "ASLP-lab",
+   "readout": null,
    "repo": "ASLP-lab/MeanVC2",
    "repos": [
     {
@@ -1936,6 +1938,7 @@
    ],
    "params": {},
    "publisher": "ATH-MaaS",
+   "readout": null,
    "repo": "ATH-MaaS/Ovis-Image-7B",
    "repos": [
     {
@@ -2172,6 +2175,7 @@
    ],
    "params": {},
    "publisher": "Aleph-Alpha",
+   "readout": null,
    "repo": "Aleph-Alpha/Kolibri-1",
    "repos": [
     {
@@ -2892,6 +2896,7 @@
    ],
    "params": {},
    "publisher": "Aratako",
+   "readout": null,
    "repo": "Aratako/Irodori-TTS-v4.1-Small",
    "repos": [],
    "runtime": {},
@@ -3058,6 +3063,7 @@
    ],
    "params": {},
    "publisher": "Aratako",
+   "readout": null,
    "repo": "Aratako/MioCodec-25Hz-44.1kHz-v2",
    "repos": [
     {
@@ -3298,6 +3304,7 @@
    ],
    "params": {},
    "publisher": "Aratako",
+   "readout": null,
    "repo": "Aratako/MioTTS-0.6B",
    "repos": [
     {
@@ -3540,6 +3547,7 @@
    ],
    "params": {},
    "publisher": "Aratako",
+   "readout": null,
    "repo": "Aratako/MioTTS-1.7B",
    "repos": [
     {
@@ -3828,6 +3836,7 @@
    ],
    "params": {},
    "publisher": "Audio8",
+   "readout": null,
    "repo": "Audio8/Audio8-ASR-0.1B",
    "repos": [
     {
@@ -4053,6 +4062,7 @@
    ],
    "params": {},
    "publisher": "Audio8",
+   "readout": null,
    "repo": "Audio8/Audio8-TTS-Preview-0.6B",
    "repos": [
     {
@@ -4262,6 +4272,7 @@
    ],
    "params": {},
    "publisher": "AutoArk-AI",
+   "readout": null,
    "repo": "AutoArk-AI/ARK-ASR-0.6B",
    "repos": [],
    "runtime": {},
@@ -4506,6 +4517,7 @@
    ],
    "params": {},
    "publisher": "AutoArk-AI",
+   "readout": null,
    "repo": "AutoArk-AI/ARK-ASR-3B",
    "repos": [
     {
@@ -4715,6 +4727,7 @@
    ],
    "params": {},
    "publisher": "Banafo",
+   "readout": null,
    "repo": "Banafo/Kroko-ASR",
    "repos": [
     {
@@ -5216,6 +5229,7 @@
    ],
    "params": {},
    "publisher": "BreezeBlue",
+   "readout": null,
    "repo": "BreezeBlue/Breeze-TTS-2",
    "repos": [
     {
@@ -5541,6 +5555,7 @@
    ],
    "params": {},
    "publisher": "Cactus-Compute",
+   "readout": null,
    "repo": "Cactus-Compute/whistle",
    "repos": [
     {
@@ -6096,6 +6111,45 @@
    ],
    "params": {},
    "publisher": "Cloudflare",
+   "readout": {
+    "head": {
+     "file": "joint_head.safetensors",
+     "heads": 16,
+     "kind": "joint-schema",
+     "name": "clef",
+     "reads": {
+      "states": "all"
+     },
+     "repo": "Cloudflare/clef",
+     "revision": "2f3de3dd85f379784083b0814d997ab627200f0c",
+     "rows": {
+      "file": "model-00001-of-00012.safetensors",
+      "repo": "Cloudflare/clef",
+      "revision": "2f3de3dd85f379784083b0814d997ab627200f0c",
+      "tensor": "lm_head.weight"
+     },
+     "sha256": "a010ac04f078e699988e4049cbea5e62c962393f59fec366640b64e8d69a4953"
+    },
+    "kind": "head",
+    "note": [
+     "the head needs the final hidden state of every position ",
+     {
+      "field": "card",
+      "locator": null,
+      "shown": "https://huggingface.co/Cloudflare/clef",
+      "url": "https://huggingface.co/Cloudflare/clef"
+     },
+     " AND the backbone's output embedding rows, which an embedding server does not hand out, so verdict range-reads them from the bf16 `lm_head.weight`. verdict's port of the head ",
+     {
+      "field": "url",
+      "locator": "https://github.com/khimaros/verdict",
+      "shown": "https://github.com/khimaros/verdict",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     " is the one caller for a backbone gguf, the same code that reads clef-flash, and it has NOT been checked against the bf16 backbone"
+    ],
+    "source": "card"
+   },
    "repo": "Cloudflare/clef",
    "repos": [
     {
@@ -6536,7 +6590,16 @@
      ],
      "readout": {
       "kind": "native",
-      "note": "the head is in the file -- the conversion declares its own architecture and writes the joint schema head beside the backbone -- so llama-server answers for it, \"a decision model, to be used via `/v1/systemone` API\" {card@ggml-org/Clef-GGUF}. text only, and a server loading it serves nothing else",
+      "note": [
+       "the head is in the file -- the conversion declares its own architecture and writes the joint schema head beside the backbone -- so llama-server answers for it, \"a decision model, to be used via `/v1/systemone` API\" ",
+       {
+        "field": "card",
+        "locator": "ggml-org/Clef-GGUF",
+        "shown": "https://huggingface.co/ggml-org/Clef-GGUF",
+        "url": "https://huggingface.co/ggml-org/Clef-GGUF"
+       },
+       ". text only, and a server loading it serves nothing else"
+      ],
       "source": "card"
      },
      "repo": "ggml-org/Clef-GGUF",
@@ -7162,6 +7225,45 @@
    ],
    "params": {},
    "publisher": "Cloudflare",
+   "readout": {
+    "head": {
+     "file": "joint_head.safetensors",
+     "heads": 16,
+     "kind": "joint-schema",
+     "name": "clef-flash",
+     "reads": {
+      "states": "all"
+     },
+     "repo": "Cloudflare/clef-flash",
+     "revision": "17f0b0ad64efb65d273590632833508766b2aae6",
+     "rows": {
+      "file": "model-00001-of-00004.safetensors",
+      "repo": "Cloudflare/clef-flash",
+      "revision": "17f0b0ad64efb65d273590632833508766b2aae6",
+      "tensor": "lm_head.weight"
+     },
+     "sha256": "19cdcec8c81dc9212be320fff47462ab342fbc1278be4368fb3da71241cf5ba0"
+    },
+    "kind": "head",
+    "note": [
+     "the same head as clef's ",
+     {
+      "field": "card",
+      "locator": null,
+      "shown": "https://huggingface.co/Cloudflare/clef-flash",
+      "url": "https://huggingface.co/Cloudflare/clef-flash"
+     },
+     " at hidden size 4096, with the same two needs -- every position's final hidden state and the backbone's output embedding rows, which verdict range-reads from the bf16 `lm_head.weight` because the gguf's copy is quantised. verdict's numpy port ",
+     {
+      "field": "url",
+      "locator": "https://github.com/khimaros/verdict",
+      "shown": "https://github.com/khimaros/verdict",
+      "url": "https://github.com/khimaros/verdict"
+     },
+     " is the one caller for a backbone gguf; it matches the author's torch head on a fixture and has NOT been checked against the bf16 backbone on real records"
+    ],
+    "source": "card"
+   },
    "repo": "Cloudflare/clef-flash",
    "repos": [
     {
@@ -7480,7 +7582,15 @@
      ],
      "readout": {
       "kind": "native",
-      "note": "the same conversion as clef's, head in the file, read by llama-server as \"a decision model, to be used via `/v1/systemone` API\" {card@ggml-org/Clef-Flash-GGUF}",
+      "note": [
+       "the same conversion as clef's, head in the file, read by llama-server as \"a decision model, to be used via `/v1/systemone` API\" ",
+       {
+        "field": "card",
+        "locator": "ggml-org/Clef-Flash-GGUF",
+        "shown": "https://huggingface.co/ggml-org/Clef-Flash-GGUF",
+        "url": "https://huggingface.co/ggml-org/Clef-Flash-GGUF"
+       }
+      ],
       "source": "card"
      },
      "repo": "ggml-org/Clef-Flash-GGUF",
@@ -8104,6 +8214,7 @@
    ],
    "params": {},
    "publisher": "CohereLabs",
+   "readout": null,
    "repo": "CohereLabs/cohere-transcribe-03-2026",
    "repos": [
     {
@@ -8399,6 +8510,7 @@
    ],
    "params": {},
    "publisher": "CohereLabs",
+   "readout": null,
    "repo": "CohereLabs/cohere-transcribe-arabic-07-2026",
    "repos": [
     {
@@ -8851,6 +8963,7 @@
     "advertised_total_b": 3.35
    },
    "publisher": "CohereLabs",
+   "readout": null,
    "repo": "CohereLabs/tiny-aya-global",
    "repos": [
     {
@@ -9436,6 +9549,7 @@
    ],
    "params": {},
    "publisher": "ConwayResearch",
+   "readout": null,
    "repo": "ConwayResearch/Underdog-Saluki-27B-1.0",
    "repos": [
     {
@@ -9979,6 +10093,30 @@
    ],
    "params": {},
    "publisher": "EldanRing",
+   "readout": {
+    "kind": "layout",
+    "layout": "winnow",
+    "note": [
+     "stock llama.cpp loads the gguf directly; the author's fork serves `/v1/systemone` with shared-prefix branching over the same weights ",
+     {
+      "field": "card",
+      "locator": null,
+      "shown": "https://huggingface.co/EldanRing/Winnow-12B",
+      "url": "https://huggingface.co/EldanRing/Winnow-12B"
+     },
+     ". the layout keeps the gemma chat template and fills each turn with winnow's own JSON-quoted wording, per winnow-inference's `native/protocol.h` at 77d1458 ",
+     {
+      "field": "url",
+      "locator": "https://github.com/EldanRing/winnow-inference/blob/77d1458/native/protocol.h",
+      "shown": "https://github.com/EldanRing/winnow-inference/blob/77d1458/native/protocol.h",
+      "url": "https://github.com/EldanRing/winnow-inference/blob/77d1458/native/protocol.h"
+     }
+    ],
+    "source": "hand",
+    "temperature": {
+     "overall": 1.0
+    }
+   },
    "repo": "EldanRing/Winnow-12B",
    "repos": [
     {
@@ -10300,6 +10438,7 @@
    ],
    "params": {},
    "publisher": "FINAL-Bench",
+   "readout": null,
    "repo": "FINAL-Bench/Darwin-27B-RSI",
    "repos": [
     {
@@ -10534,6 +10673,7 @@
    ],
    "params": {},
    "publisher": "FermionResearch",
+   "readout": null,
    "repo": "FermionResearch/Phonon-2",
    "repos": [
     {
@@ -10787,6 +10927,7 @@
    ],
    "params": {},
    "publisher": "FireRedTeam",
+   "readout": null,
    "repo": "FireRedTeam/FireRedASR2-AED",
    "repos": [],
    "runtime": {},
@@ -10952,6 +11093,7 @@
    ],
    "params": {},
    "publisher": "FireRedTeam",
+   "readout": null,
    "repo": "FireRedTeam/FireRedAudio",
    "repos": [
     {
@@ -11240,6 +11382,7 @@
    ],
    "params": {},
    "publisher": "FireRedTeam",
+   "readout": null,
    "repo": "FireRedTeam/FireRedPunc",
    "repos": [
     {
@@ -11427,6 +11570,7 @@
    ],
    "params": {},
    "publisher": "FireRedTeam",
+   "readout": null,
    "repo": "FireRedTeam/FireRedTTS3",
    "repos": [
     {
@@ -11604,6 +11748,7 @@
    ],
    "params": {},
    "publisher": "FireRedTeam",
+   "readout": null,
    "repo": "FireRedTeam/FireRedVAD",
    "repos": [
     {
@@ -11858,6 +12003,7 @@
    ],
    "params": {},
    "publisher": "FunAudioLLM",
+   "readout": null,
    "repo": "FunAudioLLM/Fun-ASR-MLT-Nano-2512",
    "repos": [
     {
@@ -12258,6 +12404,7 @@
    ],
    "params": {},
    "publisher": "FunAudioLLM",
+   "readout": null,
    "repo": "FunAudioLLM/Fun-ASR-Nano-2512",
    "repos": [
     {
@@ -12675,6 +12822,7 @@
    ],
    "params": {},
    "publisher": "FunAudioLLM",
+   "readout": null,
    "repo": "FunAudioLLM/Fun-CosyVoice3-0.5B-2512",
    "repos": [
     {
@@ -13036,6 +13184,7 @@
    ],
    "params": {},
    "publisher": "FunAudioLLM",
+   "readout": null,
    "repo": "FunAudioLLM/SenseVoiceSmall",
    "repos": [
     {
@@ -13238,6 +13387,7 @@
    ],
    "params": {},
    "publisher": "HeartMuLa",
+   "readout": null,
    "repo": "HeartMuLa/HeartMuLa-oss-3B",
    "repos": [
     {
@@ -13402,6 +13552,7 @@
    ],
    "params": {},
    "publisher": "HojoAI",
+   "readout": null,
    "repo": "HojoAI/Hojo-ASR-V1",
    "repos": [],
    "runtime": {},
@@ -13573,6 +13724,7 @@
    ],
    "params": {},
    "publisher": "HumeAI",
+   "readout": null,
    "repo": "HumeAI/tada-1b",
    "repos": [
     {
@@ -13796,6 +13948,7 @@
    "notes": null,
    "params": {},
    "publisher": "IFM",
+   "readout": null,
    "repo": "IFM/K2-Horizon-3.7B",
    "repos": [
     {
@@ -14879,6 +15032,7 @@
     "advertised_total_b": 375
    },
    "publisher": "IFM",
+   "readout": null,
    "repo": "IFM/K2-Horizon-375B-A23B",
    "repos": [
     {
@@ -15713,6 +15867,7 @@
     "advertised_total_b": 7
    },
    "publisher": "IFM",
+   "readout": null,
    "repo": "IFM/K2-Horizon-7B",
    "repos": [
     {
@@ -16311,6 +16466,7 @@
     "advertised_total_b": 36
    },
    "publisher": "IFM",
+   "readout": null,
    "repo": "IFM/K2-Horizon-MoVA-36B-A4B",
    "repos": [
     {
@@ -16958,6 +17114,7 @@
    ],
    "params": {},
    "publisher": "IndexTeam",
+   "readout": null,
    "repo": "IndexTeam/Index-Echo-S2TT-2B",
    "repos": [
     {
@@ -17318,6 +17475,7 @@
    ],
    "params": {},
    "publisher": "IndexTeam",
+   "readout": null,
    "repo": "IndexTeam/IndexTTS-1.5",
    "repos": [
     {
@@ -17494,6 +17652,7 @@
    ],
    "params": {},
    "publisher": "IndexTeam",
+   "readout": null,
    "repo": "IndexTeam/IndexTTS-2",
    "repos": [
     {
@@ -17776,6 +17935,7 @@
    ],
    "params": {},
    "publisher": "JetBrains",
+   "readout": null,
    "repo": "JetBrains/Mellum2.1-12B-A2.5B-Thinking",
    "repos": [
     {
@@ -18343,6 +18503,7 @@
    ],
    "params": {},
    "publisher": "JusperLee",
+   "readout": null,
    "repo": "JusperLee/Apollo",
    "repos": [
     {
@@ -18490,6 +18651,7 @@
    ],
    "params": {},
    "publisher": "KimberleyJSN",
+   "readout": null,
    "repo": "KimberleyJSN/melbandroformer",
    "repos": [
     {
@@ -18678,6 +18840,7 @@
    ],
    "params": {},
    "publisher": "KittenML",
+   "readout": null,
    "repo": "KittenML/kitten-tts-2",
    "repos": [
     {
@@ -18891,6 +19054,7 @@
    ],
    "params": {},
    "publisher": "KittenML",
+   "readout": null,
    "repo": "KittenML/kitten-tts-mini-0.8",
    "repos": [
     {
@@ -19481,6 +19645,7 @@
     "advertised_total_b": 1.28
    },
    "publisher": "LGAI-EXAONE",
+   "readout": null,
    "repo": "LGAI-EXAONE/EXAONE-4.0-1.2B",
    "repos": [
     {
@@ -20029,6 +20194,7 @@
    ],
    "params": {},
    "publisher": "Lightricks",
+   "readout": null,
    "repo": "Lightricks/LTX-Video",
    "repos": [
     {
@@ -20862,6 +21028,7 @@
     "advertised_total_b": 2.7
    },
    "publisher": "LiquidAI",
+   "readout": null,
    "repo": "LiquidAI/LFM2.5-2.6B",
    "repos": [
     {
@@ -21605,6 +21772,7 @@
    ],
    "params": {},
    "publisher": "LiquidAI",
+   "readout": null,
    "repo": "LiquidAI/LFM2.5-24B-A2B",
    "repos": [
     {
@@ -22067,6 +22235,7 @@
    ],
    "params": {},
    "publisher": "LiquidAI",
+   "readout": null,
    "repo": "LiquidAI/LFM2.5-Audio-1.5B",
    "repos": [
     {
@@ -22427,6 +22596,7 @@
    ],
    "params": {},
    "publisher": "LiquidAI",
+   "readout": null,
    "repo": "LiquidAI/LFM2.5-Audio-1.5B-JP",
    "repos": [
     {
@@ -22939,6 +23109,7 @@
    ],
    "params": {},
    "publisher": "LiquidAI",
+   "readout": null,
    "repo": "LiquidAI/LFM3-1.7B",
    "repos": [
     {
@@ -23621,6 +23792,7 @@
    ],
    "params": {},
    "publisher": "LiquidAI",
+   "readout": null,
    "repo": "LiquidAI/LFM3-Audio-2B",
    "repos": [
     {
@@ -24009,6 +24181,7 @@
    ],
    "params": {},
    "publisher": "LiquidAI",
+   "readout": null,
    "repo": "LiquidAI/LFM3-Omni-2B",
    "repos": [
     {
@@ -24498,6 +24671,7 @@
    ],
    "params": {},
    "publisher": "LiquidAI",
+   "readout": null,
    "repo": "LiquidAI/LFM3-VL-2B",
    "repos": [
     {
@@ -25151,6 +25325,10 @@
    ],
    "params": {},
    "publisher": "LiquidAI",
+   "readout": {
+    "kind": "native",
+    "source": "card"
+   },
    "repo": "LiquidAI/d1-2B",
    "repos": [
     {
@@ -25426,6 +25604,10 @@
    ],
    "params": {},
    "publisher": "LiquidAI",
+   "readout": {
+    "kind": "native",
+    "source": "card"
+   },
    "repo": "LiquidAI/d1-3B",
    "repos": [
     {
@@ -25738,6 +25920,10 @@
    ],
    "params": {},
    "publisher": "LiquidAI",
+   "readout": {
+    "kind": "native",
+    "source": "card"
+   },
    "repo": "LiquidAI/d1-Omni-2B",
    "repos": [
     {
@@ -26007,6 +26193,10 @@
    ],
    "params": {},
    "publisher": "LiquidAI",
+   "readout": {
+    "kind": "native",
+    "source": "card"
+   },
    "repo": "LiquidAI/d1-omni-600M",
    "repos": [
     {
@@ -26207,6 +26397,7 @@
    ],
    "params": {},
    "publisher": "MIT",
+   "readout": null,
    "repo": "MIT/ast-finetuned-audioset-10-10-0.4593",
    "repos": [
     {
@@ -26510,6 +26701,7 @@
    ],
    "params": {},
    "publisher": "MahmoudAshraf",
+   "readout": null,
    "repo": "MahmoudAshraf/mms-300m-1130-forced-aligner",
    "repos": [
     {
@@ -27025,6 +27217,17 @@
    ],
    "params": {},
    "publisher": "Mapika",
+   "readout": {
+    "kind": "layout",
+    "layout": "decider-plain",
+    "source": "author-config",
+    "temperature": {
+     "choice": 2.465,
+     "noul": 0.05,
+     "overall": 2.515,
+     "score": 2.833
+    }
+   },
    "repo": "Mapika/decider-2b",
    "repos": [
     {
@@ -27384,6 +27587,31 @@
    ],
    "params": {},
    "publisher": "Mapika",
+   "readout": {
+    "kind": "layout",
+    "layout": "decider-plain",
+    "note": [
+     "the card's prompt is the plain `Context:` layout with an `Answer k: (` slot ",
+     {
+      "field": "card",
+      "locator": null,
+      "shown": "https://huggingface.co/Mapika/decider-35b-a3b",
+      "url": "https://huggingface.co/Mapika/decider-35b-a3b"
+     },
+     ", and the base repo's `decider_config.json` gives 1.08 and no per-type temperatures. that config also says `schema_first_trained`: training mixed both orders, and decider's own server ",
+     {
+      "field": "url",
+      "locator": "https://github.com/Mapika/decider",
+      "shown": "https://github.com/Mapika/decider",
+      "url": "https://github.com/Mapika/decider"
+     },
+     " stays state-first unless a config asks for `schema_first`, so the plain layout is still the one it is served in"
+    ],
+    "source": "card",
+    "temperature": {
+     "overall": 1.08
+    }
+   },
    "repo": "Mapika/decider-35b-a3b",
    "repos": [
     {
@@ -27913,6 +28141,17 @@
    ],
    "params": {},
    "publisher": "Mapika",
+   "readout": {
+    "kind": "layout",
+    "layout": "decider-plain",
+    "source": "author-config",
+    "temperature": {
+     "choice": 2.098,
+     "noul": 0.05,
+     "overall": 2.173,
+     "score": 3.152
+    }
+   },
    "repo": "Mapika/decider-4b",
    "repos": [
     {
@@ -28175,6 +28414,7 @@
    ],
    "params": {},
    "publisher": "MiniMaxAI",
+   "readout": null,
    "repo": "MiniMaxAI/MiniMax-H3",
    "repos": [
     {
@@ -29507,6 +29747,7 @@
     "advertised_total_b": 230
    },
    "publisher": "MiniMaxAI",
+   "readout": null,
    "repo": "MiniMaxAI/MiniMax-M2.5",
    "repos": [
     {
@@ -31349,6 +31590,7 @@
     "advertised_total_b": 230
    },
    "publisher": "MiniMaxAI",
+   "readout": null,
    "repo": "MiniMaxAI/MiniMax-M2.7",
    "repos": [
     {
@@ -33357,6 +33599,7 @@
     "advertised_total_b": 428
    },
    "publisher": "MiniMaxAI",
+   "readout": null,
    "repo": "MiniMaxAI/MiniMax-M3",
    "repos": [
     {
@@ -33919,6 +34162,7 @@
    ],
    "params": {},
    "publisher": "MiniMaxAI",
+   "readout": null,
    "repo": "MiniMaxAI/MiniMax-Music3",
    "repos": [
     {
@@ -34696,6 +34940,7 @@
     "advertised_total_b": 314
    },
    "publisher": "Motif-Technologies",
+   "readout": null,
    "repo": "Motif-Technologies/Motif-3",
    "repos": [
     {
@@ -34992,6 +35237,7 @@
    ],
    "params": {},
    "publisher": "MuScriptor",
+   "readout": null,
    "repo": "MuScriptor/muscriptor-small",
    "repos": [
     {
@@ -35709,6 +35955,7 @@
     "advertised_total_b": 3.93
    },
    "publisher": "Nanbeige",
+   "readout": null,
    "repo": "Nanbeige/Nanbeige4.1-3B",
    "repos": [
     {
@@ -36132,6 +36379,7 @@
    ],
    "params": {},
    "publisher": "Nanbeige",
+   "readout": null,
    "repo": "Nanbeige/Nanbeige4.3-33B",
    "repos": [
     {
@@ -36990,6 +37238,7 @@
    ],
    "params": {},
    "publisher": "OpenMOSS-Team",
+   "readout": null,
    "repo": "OpenMOSS-Team/MOSS-Audio-4B-Instruct",
    "repos": [
     {
@@ -37261,6 +37510,7 @@
    ],
    "params": {},
    "publisher": "OpenMOSS-Team",
+   "readout": null,
    "repo": "OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5",
    "repos": [
     {
@@ -37559,6 +37809,7 @@
    ],
    "params": {},
    "publisher": "OpenMOSS-Team",
+   "readout": null,
    "repo": "OpenMOSS-Team/MOSS-TTS-Nano",
    "repos": [
     {
@@ -37950,6 +38201,7 @@
    ],
    "params": {},
    "publisher": "OpenMOSS-Team",
+   "readout": null,
    "repo": "OpenMOSS-Team/MOSS-TTS-v1.5",
    "repos": [
     {
@@ -38275,6 +38527,7 @@
    ],
    "params": {},
    "publisher": "OpenMOSS-Team",
+   "readout": null,
    "repo": "OpenMOSS-Team/MOSS-TTSD-v1.0",
    "repos": [
     {
@@ -38618,6 +38871,7 @@
    ],
    "params": {},
    "publisher": "OpenMOSS-Team",
+   "readout": null,
    "repo": "OpenMOSS-Team/MOSS-Transcribe-Diarize",
    "repos": [
     {
@@ -38996,6 +39250,7 @@
    ],
    "params": {},
    "publisher": "OpenMOSS-Team",
+   "readout": null,
    "repo": "OpenMOSS-Team/MOSS-Transcribe-preview-2B",
    "repos": [
     {
@@ -39231,6 +39486,7 @@
    ],
    "params": {},
    "publisher": "OpenMOSS-Team",
+   "readout": null,
    "repo": "OpenMOSS-Team/MOSS-VoiceGenerator",
    "repos": [
     {
@@ -39472,6 +39728,7 @@
    ],
    "params": {},
    "publisher": "OuteAI",
+   "readout": null,
    "repo": "OuteAI/Llama-OuteTTS-1.0-1B",
    "repos": [
     {
@@ -39833,6 +40090,7 @@
    ],
    "params": {},
    "publisher": "OuteAI",
+   "readout": null,
    "repo": "OuteAI/OuteTTS-0.3-1B",
    "repos": [
     {
@@ -40030,6 +40288,7 @@
    ],
    "params": {},
    "publisher": "Plachta",
+   "readout": null,
    "repo": "Plachta/Seed-VC",
    "repos": [
     {
@@ -40238,6 +40497,7 @@
    ],
    "params": {},
    "publisher": "Quark-Vision",
+   "readout": null,
    "repo": "Quark-Vision/Live-Avatar",
    "repos": [
     {
@@ -40697,6 +40957,7 @@
    ],
    "params": {},
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen-AgentWorld-35B-A3B",
    "repos": [
     {
@@ -41532,6 +41793,7 @@
    ],
    "params": {},
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen-Image-2.1",
    "repos": [
     {
@@ -42494,6 +42756,7 @@
     "advertised_total_b": 4.02
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3-4B-Thinking-2507",
    "repos": [
     {
@@ -43485,6 +43748,7 @@
    ],
    "params": {},
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3-8B",
    "repos": [
     {
@@ -44347,6 +44611,7 @@
    ],
    "params": {},
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3-ASR-0.6B",
    "repos": [
     {
@@ -44925,6 +45190,7 @@
    ],
    "params": {},
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3-ASR-1.7B",
    "repos": [
     {
@@ -45612,6 +45878,7 @@
     "advertised_total_b": 30.5
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
    "repos": [
     {
@@ -47261,6 +47528,7 @@
     "advertised_total_b": 79.7
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3-Coder-Next",
    "repos": [
     {
@@ -48014,6 +48282,7 @@
    ],
    "params": {},
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3-ForcedAligner-0.6B",
    "repos": [
     {
@@ -48277,6 +48546,7 @@
    ],
    "params": {},
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
    "repos": [
     {
@@ -48575,6 +48845,7 @@
    ],
    "params": {},
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
    "repos": [
     {
@@ -48981,6 +49252,7 @@
    ],
    "params": {},
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
    "repos": [
     {
@@ -49344,6 +49616,7 @@
    ],
    "params": {},
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
    "repos": [
     {
@@ -49982,6 +50255,7 @@
     "advertised_total_b": 4.44
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3-VL-4B-Instruct",
    "repos": [
     {
@@ -51098,6 +51372,7 @@
     "advertised_total_b": 0.873
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.5-0.8B",
    "repos": [
     {
@@ -52873,6 +53148,7 @@
     "advertised_total_b": 125
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.5-122B-A10B",
    "repos": [
     {
@@ -55194,6 +55470,7 @@
     "advertised_total_b": 27.8
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.5-27B",
    "repos": [
     {
@@ -56883,6 +57160,7 @@
     "advertised_total_b": 2.27
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.5-2B",
    "repos": [
     {
@@ -58930,6 +59208,7 @@
     "advertised_total_b": 36
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.5-35B-A3B",
    "repos": [
     {
@@ -61528,6 +61807,7 @@
     "advertised_total_b": 397
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.5-397B-A17B",
    "repos": [
     {
@@ -63601,6 +63881,7 @@
     "advertised_total_b": 4.66
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.5-4B",
    "repos": [
     {
@@ -64211,6 +64492,7 @@
    ],
    "params": {},
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.5-4B-Base",
    "repos": [
     {
@@ -65702,6 +65984,7 @@
     "advertised_total_b": 9.65
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.5-9B",
    "repos": [
     {
@@ -68245,6 +68528,7 @@
     "advertised_total_b": 27.8
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.6-27B",
    "repos": [
     {
@@ -70961,6 +71245,7 @@
     "advertised_total_b": 36
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.6-35B-A3B",
    "repos": [
     {
@@ -72674,6 +72959,7 @@
     "advertised_total_b": 2400
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.8-2.4T-A95B",
    "repos": [
     {
@@ -74927,6 +75213,7 @@
     "advertised_total_b": 27
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.8-27B",
    "repos": [
     {
@@ -77757,6 +78044,7 @@
     "advertised_total_b": 180
    },
    "publisher": "Qwen",
+   "readout": null,
    "repo": "Qwen/Qwen3.8-Flash-Next",
    "repos": [
     {
@@ -78815,6 +79103,7 @@
    ],
    "params": {},
    "publisher": "RecursiveSI",
+   "readout": null,
    "repo": "RecursiveSI/flint",
    "repos": [
     {
@@ -79567,6 +79856,7 @@
    ],
    "params": {},
    "publisher": "ResembleAI",
+   "readout": null,
    "repo": "ResembleAI/Dramabox",
    "repos": [
     {
@@ -80244,6 +80534,7 @@
    ],
    "params": {},
    "publisher": "ResembleAI",
+   "readout": null,
    "repo": "ResembleAI/chatterbox",
    "repos": [
     {
@@ -80517,6 +80808,7 @@
    ],
    "params": {},
    "publisher": "ResembleAI",
+   "readout": null,
    "repo": "ResembleAI/chatterbox-turbo",
    "repos": [
     {
@@ -80701,6 +80993,7 @@
    ],
    "params": {},
    "publisher": "SWivid",
+   "readout": null,
    "repo": "SWivid/Habibi-TTS",
    "repos": [
     {
@@ -81001,6 +81294,26 @@
    ],
    "params": {},
    "publisher": "StandardThinking",
+   "readout": {
+    "kind": "layout",
+    "layout": "standardone-native",
+    "note": [
+     "the card's `native` wording from `jev-adapter` (`State:` / `Question:` / `Options:` headers, options as `A. name: description`) inside the chat template with no system turn ",
+     {
+      "field": "card",
+      "locator": null,
+      "shown": "https://huggingface.co/StandardThinking/StandardOne-8B",
+      "url": "https://huggingface.co/StandardThinking/StandardOne-8B"
+     }
+    ],
+    "source": "card",
+    "temperature": {
+     "choice": 0.85,
+     "noul": 0.85,
+     "overall": 0.85,
+     "score": 0.7
+    }
+   },
    "repo": "StandardThinking/StandardOne-8B",
    "repos": [
     {
@@ -81372,6 +81685,10 @@
    ],
    "params": {},
    "publisher": "SupersonicLabs",
+   "readout": {
+    "kind": "native",
+    "source": "card"
+   },
    "repo": "SupersonicLabs/Julia-1",
    "repos": [
     {
@@ -81894,6 +82211,7 @@
    ],
    "params": {},
    "publisher": "Supertone",
+   "readout": null,
    "repo": "Supertone/supertonic-3",
    "repos": [
     {
@@ -82512,6 +82830,7 @@
    ],
    "params": {},
    "publisher": "Tongyi-MAI",
+   "readout": null,
    "repo": "Tongyi-MAI/Z-Image-Turbo",
    "repos": [
     {
@@ -83075,6 +83394,7 @@
    ],
    "params": {},
    "publisher": "UsefulSensors",
+   "readout": null,
    "repo": "UsefulSensors/moonshine-base",
    "repos": [
     {
@@ -83374,6 +83694,7 @@
    ],
    "params": {},
    "publisher": "UsefulSensors",
+   "readout": null,
    "repo": "UsefulSensors/moonshine-streaming-tiny",
    "repos": [
     {
@@ -83796,6 +84117,7 @@
    ],
    "params": {},
    "publisher": "Wan-AI",
+   "readout": null,
    "repo": "Wan-AI/Wan2.1-T2V-14B",
    "repos": [
     {
@@ -84091,6 +84413,7 @@
    ],
    "params": {},
    "publisher": "Wespeaker",
+   "readout": null,
    "repo": "Wespeaker/wespeaker-voxceleb-resnet34-LM",
    "repos": [
     {
@@ -85361,6 +85684,7 @@
     "advertised_total_b": 310
    },
    "publisher": "XiaomiMiMo",
+   "readout": null,
    "repo": "XiaomiMiMo/MiMo-V2.5",
    "repos": [
     {
@@ -86014,6 +86338,7 @@
    ],
    "params": {},
    "publisher": "XiaomiMiMo",
+   "readout": null,
    "repo": "XiaomiMiMo/MiMo-V2.5-ASR",
    "repos": [
     {
@@ -86373,6 +86698,7 @@
    ],
    "params": {},
    "publisher": "XiaomiMiMo",
+   "readout": null,
    "repo": "XiaomiMiMo/MiMo-V2.6-Distill-Qwen-9B",
    "repos": [
     {
@@ -88068,6 +88394,7 @@
     "advertised_total_b": 309
    },
    "publisher": "XiaomiMiMo",
+   "readout": null,
    "repo": "XiaomiMiMo/MiMo-V2.6-Flash-RL",
    "repos": [
     {
@@ -88604,6 +88931,7 @@
    ],
    "params": {},
    "publisher": "YJX-Xiaomi",
+   "readout": null,
    "repo": "YJX-Xiaomi/ControlFoley",
    "repos": [
     {
@@ -88921,6 +89249,7 @@
    ],
    "params": {},
    "publisher": "Zyphra",
+   "readout": null,
    "repo": "Zyphra/Zonos-v0.1-transformer",
    "repos": [
     {
@@ -89164,6 +89493,7 @@
    ],
    "params": {},
    "publisher": "aadel4",
+   "readout": null,
    "repo": "aadel4/omniASR-CTC-1B-v2",
    "repos": [
     {
@@ -89410,6 +89740,7 @@
    ],
    "params": {},
    "publisher": "abr-ai",
+   "readout": null,
    "repo": "abr-ai/niagara-38m-batch.en",
    "repos": [
     {
@@ -89727,6 +90058,7 @@
    ],
    "params": {},
    "publisher": "agentionai",
+   "readout": null,
    "repo": "agentionai/Signal-3.8-27B",
    "repos": [
     {
@@ -90153,6 +90485,7 @@
    ],
    "params": {},
    "publisher": "agentionai",
+   "readout": null,
    "repo": "agentionai/Signal-3.8-Flash-Next-GGUF",
    "repos": [
     {
@@ -90543,6 +90876,7 @@
    ],
    "params": {},
    "publisher": "ai-sage",
+   "readout": null,
    "repo": "ai-sage/GigaAM-v3",
    "repos": [
     {
@@ -90997,6 +91331,7 @@
     "advertised_total_b": 3
    },
    "publisher": "ai21labs",
+   "readout": null,
    "repo": "ai21labs/AI21-Jamba-Reasoning-3B",
    "repos": [
     {
@@ -91710,6 +92045,7 @@
     "advertised_total_b": 3
    },
    "publisher": "ai9stars",
+   "readout": null,
    "repo": "ai9stars/G9v3-3B",
    "repos": [
     {
@@ -92459,6 +92795,31 @@
    ],
    "params": {},
    "publisher": "akhilaaa3",
+   "readout": {
+    "head": {
+     "file": "decision-head-f32.npz",
+     "kind": "linear",
+     "name": "jev-omni",
+     "reads": {
+      "states": "last"
+     },
+     "repo": "ngquocvinh/Jev-Omni-GGUF",
+     "revision": "f07b38e109cbc9b338029f88faeb3e6b6f894c73",
+     "sha256": "47b346e120dc9110ef7c0b610cf5d1f459ddcdb05ffd3cd126b6938d88a8bb77"
+    },
+    "kind": "head",
+    "note": [
+     "the 256-way head reads one vector, the last token's unnormalized hidden state. the author's `jev_omni_gguf_decide.py` serves the gguf with `--embedding --pooling none --embd-normalize -1` and takes the last row itself ",
+     {
+      "field": "card",
+      "locator": "ngquocvinh/Jev-Omni-GGUF",
+      "shown": "https://huggingface.co/ngquocvinh/Jev-Omni-GGUF",
+      "url": "https://huggingface.co/ngquocvinh/Jev-Omni-GGUF"
+     },
+     ", which is the author's launch and more than the head requires"
+    ],
+    "source": "card"
+   },
    "repo": "akhilaaa3/Jev-Omni",
    "repos": [
     {
@@ -92743,6 +93104,7 @@
    ],
    "params": {},
    "publisher": "alibabasglab",
+   "readout": null,
    "repo": "alibabasglab/MossFormer2_SS_16K",
    "repos": [
     {
@@ -93030,6 +93392,25 @@
    ],
    "params": {},
    "publisher": "alibiserikbay",
+   "readout": {
+    "kind": "layout",
+    "layout": "semif",
+    "note": [
+     "the one-pass JSON prompt comes from SemIf (SemIf-OpenJev's `core.py` `direct_messages`) and is read off `/completion` token probabilities ",
+     {
+      "field": "card",
+      "locator": "alibiserikbay/JevK5-GGUF",
+      "shown": "https://huggingface.co/alibiserikbay/JevK5-GGUF",
+      "url": "https://huggingface.co/alibiserikbay/JevK5-GGUF"
+     },
+     "; these are the v0.2 file's temperatures, and `knockout` applies only to questions with more than 16 options"
+    ],
+    "source": "card",
+    "temperature": {
+     "knockout": 0.77,
+     "overall": 1.532
+    }
+   },
    "repo": "alibiserikbay/JevK5",
    "repos": [
     {
@@ -93278,6 +93659,7 @@
    ],
    "params": {},
    "publisher": "amphion",
+   "readout": null,
    "repo": "amphion/Vevo2",
    "repos": [
     {
@@ -93481,6 +93863,7 @@
    ],
    "params": {},
    "publisher": "ampixa",
+   "readout": null,
    "repo": "ampixa/sanoTTS",
    "repos": [
     {
@@ -93700,6 +94083,7 @@
    "notes": null,
    "params": {},
    "publisher": "baidu",
+   "readout": null,
    "repo": "baidu/ERNIE-Image-Turbo",
    "repos": [
     {
@@ -94334,6 +94718,7 @@
    ],
    "params": {},
    "publisher": "black-forest-labs",
+   "readout": null,
    "repo": "black-forest-labs/FLUX.1-dev",
    "repos": [
     {
@@ -94727,6 +95112,7 @@
    ],
    "params": {},
    "publisher": "black-forest-labs",
+   "readout": null,
    "repo": "black-forest-labs/FLUX.1-schnell",
    "repos": [
     {
@@ -95142,6 +95528,7 @@
    ],
    "params": {},
    "publisher": "black-forest-labs",
+   "readout": null,
    "repo": "black-forest-labs/FLUX.2-dev",
    "repos": [
     {
@@ -95580,6 +95967,7 @@
    ],
    "params": {},
    "publisher": "black-forest-labs",
+   "readout": null,
    "repo": "black-forest-labs/FLUX.2-klein-4B",
    "repos": [
     {
@@ -95920,6 +96308,7 @@
    ],
    "params": {},
    "publisher": "black-forest-labs",
+   "readout": null,
    "repo": "black-forest-labs/FLUX.2-klein-9B",
    "repos": [
     {
@@ -96180,6 +96569,7 @@
    ],
    "params": {},
    "publisher": "bosonai",
+   "readout": null,
    "repo": "bosonai/higgs-audio-v3-stt",
    "repos": [
     {
@@ -96774,6 +97164,7 @@
    ],
    "params": {},
    "publisher": "canopylabs",
+   "readout": null,
    "repo": "canopylabs/orpheus-3b-0.1-ft",
    "repos": [
     {
@@ -99138,6 +99529,7 @@
    ],
    "params": {},
    "publisher": "cis-lmu",
+   "readout": null,
    "repo": "cis-lmu/glotlid",
    "repos": [
     {
@@ -99764,6 +100156,10 @@
    ],
    "params": {},
    "publisher": "convaiinnovations",
+   "readout": {
+    "kind": "native",
+    "source": "card"
+   },
    "repo": "convaiinnovations/laya",
    "repos": [
     {
@@ -100000,6 +100396,7 @@
    ],
    "params": {},
    "publisher": "coqui",
+   "readout": null,
    "repo": "coqui/XTTS-v2",
    "repos": [
     {
@@ -100172,6 +100569,7 @@
    ],
    "params": {},
    "publisher": "cstr",
+   "readout": null,
    "repo": "cstr/cld3-GGUF",
    "repos": [
     {
@@ -100307,6 +100705,7 @@
    ],
    "params": {},
    "publisher": "cstr",
+   "readout": null,
    "repo": "cstr/fasttext-lid176-GGUF",
    "repos": [
     {
@@ -100454,6 +100853,7 @@
    ],
    "params": {},
    "publisher": "cstr",
+   "readout": null,
    "repo": "cstr/omniasr-llm-unlimited-300m-v2-GGUF",
    "repos": [
     {
@@ -100612,6 +101012,7 @@
    ],
    "params": {},
    "publisher": "davidscripka",
+   "readout": null,
    "repo": "davidscripka/openwakeword",
    "repos": [
     {
@@ -102293,6 +102694,7 @@
     "advertised_total_b": 284
    },
    "publisher": "deepseek-ai",
+   "readout": null,
    "repo": "deepseek-ai/DeepSeek-V4-Flash-0731",
    "repos": [
     {
@@ -103232,6 +103634,7 @@
    "notes": null,
    "params": {},
    "publisher": "deepseek-ai",
+   "readout": null,
    "repo": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
    "repos": [
     {
@@ -105039,6 +105442,7 @@
     "advertised_total_b": 1600
    },
    "publisher": "deepseek-ai",
+   "readout": null,
    "repo": "deepseek-ai/DeepSeek-V4-Pro-0813",
    "repos": [
     {
@@ -106682,6 +107086,7 @@
     "advertised_total_b": 552
    },
    "publisher": "deepseek-ai",
+   "readout": null,
    "repo": "deepseek-ai/DeepSeek-V4.1-Flash",
    "repos": [
     {
@@ -108280,6 +108685,7 @@
     "advertised_total_b": 552
    },
    "publisher": "deepseek-ai",
+   "readout": null,
    "repo": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
    "repos": [
     {
@@ -108891,6 +109297,7 @@
    ],
    "params": {},
    "publisher": "distil-whisper",
+   "readout": null,
    "repo": "distil-whisper/distil-large-v3.5",
    "repos": [],
    "runtime": {},
@@ -109069,6 +109476,7 @@
    ],
    "params": {},
    "publisher": "dots-studio",
+   "readout": null,
    "repo": "dots-studio/dots.tts-soar",
    "repos": [
     {
@@ -109303,6 +109711,7 @@
    ],
    "params": {},
    "publisher": "ekwek",
+   "readout": null,
    "repo": "ekwek/Soprano-1.1-80M",
    "repos": [
     {
@@ -109516,6 +109925,7 @@
    ],
    "params": {},
    "publisher": "espnet",
+   "readout": null,
    "repo": "espnet/owsm_ctc_v4_1B",
    "repos": [
     {
@@ -109709,6 +110119,7 @@
    ],
    "params": {},
    "publisher": "espnet",
+   "readout": null,
    "repo": "espnet/owsm_v4_medium_1B",
    "repos": [
     {
@@ -109946,6 +110357,7 @@
    ],
    "params": {},
    "publisher": "facebook",
+   "readout": null,
    "repo": "facebook/data2vec-audio-base-960h",
    "repos": [
     {
@@ -110153,6 +110565,7 @@
    ],
    "params": {},
    "publisher": "facebook",
+   "readout": null,
    "repo": "facebook/hubert-large-ls960-ft",
    "repos": [
     {
@@ -110495,6 +110908,7 @@
    ],
    "params": {},
    "publisher": "facebook",
+   "readout": null,
    "repo": "facebook/m2m100_418M",
    "repos": [
     {
@@ -110808,6 +111222,7 @@
    ],
    "params": {},
    "publisher": "facebook",
+   "readout": null,
    "repo": "facebook/omniASR-LLM-300M",
    "repos": [
     {
@@ -110982,6 +111397,7 @@
    ],
    "params": {},
    "publisher": "facebook",
+   "readout": null,
    "repo": "facebook/sam-audio-large",
    "repos": [
     {
@@ -111162,6 +111578,7 @@
    ],
    "params": {},
    "publisher": "facebook",
+   "readout": null,
    "repo": "facebook/wmt21-dense-24-wide-en-x",
    "repos": [
     {
@@ -111608,6 +112025,7 @@
    ],
    "params": {},
    "publisher": "fishaudio",
+   "readout": null,
    "repo": "fishaudio/drama-3",
    "repos": [
     {
@@ -112203,6 +112621,7 @@
    ],
    "params": {},
    "publisher": "fishaudio",
+   "readout": null,
    "repo": "fishaudio/s2-pro",
    "repos": [
     {
@@ -112534,6 +112953,7 @@
    ],
    "params": {},
    "publisher": "funasr",
+   "readout": null,
    "repo": "funasr/paraformer-zh",
    "repos": [
     {
@@ -113019,6 +113439,7 @@
    ],
    "params": {},
    "publisher": "google",
+   "readout": null,
    "repo": "google/embeddinggemma-2",
    "repos": [
     {
@@ -113615,6 +114036,7 @@
    ],
    "params": {},
    "publisher": "google",
+   "readout": null,
    "repo": "google/embeddinggemma-300M",
    "repos": [
     {
@@ -114080,6 +114502,7 @@
    ],
    "params": {},
    "publisher": "google",
+   "readout": null,
    "repo": "google/functiongemma-270m-it",
    "repos": [
     {
@@ -115077,6 +115500,7 @@
     "advertised_total_b": 0.268
    },
    "publisher": "google",
+   "readout": null,
    "repo": "google/gemma-3-270m-it",
    "repos": [
     {
@@ -116599,6 +117023,7 @@
     "advertised_total_b": 12
    },
    "publisher": "google",
+   "readout": null,
    "repo": "google/gemma-4-12B-it",
    "repos": [
     {
@@ -118446,6 +118871,7 @@
     "advertised_total_b": 25.2
    },
    "publisher": "google",
+   "readout": null,
    "repo": "google/gemma-4-26B-A4B-it",
    "repos": [
     {
@@ -120455,6 +120881,7 @@
     "advertised_total_b": 30.7
    },
    "publisher": "google",
+   "readout": null,
    "repo": "google/gemma-4-31B-it",
    "repos": [
     {
@@ -121815,6 +122242,7 @@
     "advertised_total_b": 5.1
    },
    "publisher": "google",
+   "readout": null,
    "repo": "google/gemma-4-E2B-it",
    "repos": [
     {
@@ -123328,6 +123756,7 @@
     "advertised_total_b": 8
    },
    "publisher": "google",
+   "readout": null,
    "repo": "google/gemma-4-E4B-it",
    "repos": [
     {
@@ -124560,6 +124989,7 @@
    ],
    "params": {},
    "publisher": "google",
+   "readout": null,
    "repo": "google/madlad400-3b-mt",
    "repos": [
     {
@@ -124792,6 +125222,7 @@
    ],
    "params": {},
    "publisher": "gpt-omni",
+   "readout": null,
    "repo": "gpt-omni/mini-omni2",
    "repos": [],
    "runtime": {},
@@ -124983,6 +125414,7 @@
    ],
    "params": {},
    "publisher": "gradium",
+   "readout": null,
    "repo": "gradium/phonon-31m-en",
    "repos": [
     {
@@ -125162,6 +125594,7 @@
    ],
    "params": {},
    "publisher": "grider-transwithai",
+   "readout": null,
    "repo": "grider-transwithai/parakeet-ctc-1.1b-ja",
    "repos": [
     {
@@ -125371,6 +125804,10 @@
    ],
    "params": {},
    "publisher": "h2oai",
+   "readout": {
+    "kind": "native",
+    "source": "card"
+   },
    "repo": "h2oai/h2o-lightning-4b",
    "repos": [
     {
@@ -125615,6 +126052,7 @@
    ],
    "params": {},
    "publisher": "haoheliu",
+   "readout": null,
    "repo": "haoheliu/audiosr_basic",
    "repos": [
     {
@@ -126206,6 +126644,7 @@
    ],
    "params": {},
    "publisher": "hexgrad",
+   "readout": null,
    "repo": "hexgrad/Kokoro-82M",
    "repos": [
     {
@@ -126770,6 +127209,7 @@
    ],
    "params": {},
    "publisher": "huihui-ai",
+   "readout": null,
    "repo": "huihui-ai/Huihui-Qwen3.8-Flash-Next-abliterated",
    "repos": [
     {
@@ -127173,6 +127613,7 @@
    ],
    "params": {},
    "publisher": "ibm-granite",
+   "readout": null,
    "repo": "ibm-granite/granite-4.0-1b-speech",
    "repos": [],
    "runtime": {},
@@ -127510,6 +127951,7 @@
     "advertised_total_b": 1.5
    },
    "publisher": "ibm-granite",
+   "readout": null,
    "repo": "ibm-granite/granite-4.0-h-1b",
    "repos": [
     {
@@ -128150,6 +128592,7 @@
     "advertised_total_b": 3
    },
    "publisher": "ibm-granite",
+   "readout": null,
    "repo": "ibm-granite/granite-4.1-3b",
    "repos": [
     {
@@ -128972,6 +129415,7 @@
     "advertised_total_b": 30
    },
    "publisher": "ibm-granite",
+   "readout": null,
    "repo": "ibm-granite/granite-4.2-30b",
    "repos": [
     {
@@ -129867,6 +130311,7 @@
     "advertised_total_b": 3
    },
    "publisher": "ibm-granite",
+   "readout": null,
    "repo": "ibm-granite/granite-4.2-3b",
    "repos": [
     {
@@ -130773,6 +131218,7 @@
     "advertised_total_b": 8
    },
    "publisher": "ibm-granite",
+   "readout": null,
    "repo": "ibm-granite/granite-4.2-8b",
    "repos": [
     {
@@ -131246,6 +131692,7 @@
    ],
    "params": {},
    "publisher": "ibm-granite",
+   "readout": null,
    "repo": "ibm-granite/granite-speech-3.3-2b",
    "repos": [],
    "runtime": {},
@@ -131592,6 +132039,7 @@
    ],
    "params": {},
    "publisher": "ibm-granite",
+   "readout": null,
    "repo": "ibm-granite/granite-speech-4.1-2b",
    "repos": [],
    "runtime": {},
@@ -131824,6 +132272,7 @@
    ],
    "params": {},
    "publisher": "ibm-granite",
+   "readout": null,
    "repo": "ibm-granite/granite-speech-4.1-2b-nar",
    "repos": [],
    "runtime": {},
@@ -132078,6 +132527,7 @@
    ],
    "params": {},
    "publisher": "ibm-granite",
+   "readout": null,
    "repo": "ibm-granite/granite-speech-4.1-2b-plus",
    "repos": [],
    "runtime": {},
@@ -132304,6 +132754,7 @@
    ],
    "params": {},
    "publisher": "ibm-granite",
+   "readout": null,
    "repo": "ibm-granite/granite-speech-5.0-470m-turboctc",
    "repos": [
     {
@@ -132493,6 +132944,7 @@
    ],
    "params": {},
    "publisher": "ibm-granite",
+   "readout": null,
    "repo": "ibm-granite/granite-switch-4.1-30b",
    "repos": [
     {
@@ -132881,6 +133333,7 @@
    ],
    "params": {},
    "publisher": "ibm-granite",
+   "readout": null,
    "repo": "ibm-granite/granite-switch-4.1-8b",
    "repos": [
     {
@@ -133520,6 +133973,7 @@
    "notes": null,
    "params": {},
    "publisher": "ideogram-ai",
+   "readout": null,
    "repo": "ideogram-ai/ideogram-4-fp8",
    "repos": [
     {
@@ -134340,6 +134794,7 @@
     "advertised_total_b": 124
    },
    "publisher": "inclusionAI",
+   "readout": null,
    "repo": "inclusionAI/Ling-3.0-flash",
    "repos": [
     {
@@ -135337,6 +135792,7 @@
     "advertised_total_b": 124
    },
    "publisher": "inclusionAI",
+   "readout": null,
    "repo": "inclusionAI/Ling-3.0-flash-VL",
    "repos": [
     {
@@ -136573,6 +137029,7 @@
     "advertised_total_b": 7.9
    },
    "publisher": "inclusionAI",
+   "readout": null,
    "repo": "inclusionAI/Ling-3.0-tiny",
    "repos": [
     {
@@ -137219,6 +137676,7 @@
    ],
    "params": {},
    "publisher": "inclusionAI",
+   "readout": null,
    "repo": "inclusionAI/Ming-3.0-Audio-Tiny",
    "repos": [
     {
@@ -137454,6 +137912,7 @@
    ],
    "params": {},
    "publisher": "inclusionAI",
+   "readout": null,
    "repo": "inclusionAI/Ming-3.0-TTS-0.5B",
    "repos": [
     {
@@ -137701,6 +138160,10 @@
    ],
    "params": {},
    "publisher": "interfaze-ai",
+   "readout": {
+    "kind": "native",
+    "source": "card"
+   },
    "repo": "interfaze-ai/lev",
    "repos": [
     {
@@ -138108,6 +138571,10 @@
    ],
    "params": {},
    "publisher": "jaredpalmer",
+   "readout": {
+    "kind": "native",
+    "source": "card"
+   },
    "repo": "jaredpalmer/kev-4b",
    "repos": [
     {
@@ -138343,6 +138810,7 @@
    ],
    "params": {},
    "publisher": "jaykwok",
+   "readout": null,
    "repo": "jaykwok/Qwen3-ASR-1.7B-JA-Anime-Galgame-hf",
    "repos": [],
    "runtime": {},
@@ -138567,6 +139035,7 @@
    ],
    "params": {},
    "publisher": "jonatasgrosman",
+   "readout": null,
    "repo": "jonatasgrosman/wav2vec2-large-xlsr-53-english",
    "repos": [],
    "runtime": {},
@@ -138722,6 +139191,7 @@
    ],
    "params": {},
    "publisher": "jordand",
+   "readout": null,
    "repo": "jordand/echo-tts-base",
    "repos": [
     {
@@ -139918,6 +140388,7 @@
    ],
    "params": {},
    "publisher": "k2-fsa",
+   "readout": null,
    "repo": "k2-fsa/OmniVoice",
    "repos": [
     {
@@ -140205,6 +140676,7 @@
    ],
    "params": {},
    "publisher": "k2-fsa",
+   "readout": null,
    "repo": "k2-fsa/ZipVoice",
    "repos": [
     {
@@ -140400,6 +140872,7 @@
    "notes": null,
    "params": {},
    "publisher": "krea",
+   "readout": null,
    "repo": "krea/Krea-2-Raw",
    "repos": [
     {
@@ -140845,6 +141318,7 @@
    "notes": null,
    "params": {},
    "publisher": "krea",
+   "readout": null,
    "repo": "krea/Krea-2-Turbo",
    "repos": [
     {
@@ -141248,6 +141722,7 @@
    ],
    "params": {},
    "publisher": "kredor",
+   "readout": null,
    "repo": "kredor/punctuate-all",
    "repos": [
     {
@@ -141668,6 +142143,7 @@
    ],
    "params": {},
    "publisher": "kugelaudio",
+   "readout": null,
    "repo": "kugelaudio/kugelaudio-0-open",
    "repos": [
     {
@@ -142107,6 +142583,7 @@
    ],
    "params": {},
    "publisher": "kyutai",
+   "readout": null,
    "repo": "kyutai/pocket-tts",
    "repos": [
     {
@@ -142355,6 +142832,7 @@
    ],
    "params": {},
    "publisher": "kyutai",
+   "readout": null,
    "repo": "kyutai/stt-1b-en_fr",
    "repos": [],
    "runtime": {},
@@ -142579,6 +143057,7 @@
    ],
    "params": {},
    "publisher": "kyutai",
+   "readout": null,
    "repo": "kyutai/stt-2.6b-en",
    "repos": [],
    "runtime": {},
@@ -142713,6 +143192,7 @@
    ],
    "params": {},
    "publisher": "lj1995",
+   "readout": null,
    "repo": "lj1995/VoiceConversionWebUI",
    "repos": [
     {
@@ -142896,6 +143376,7 @@
    ],
    "params": {},
    "publisher": "m-a-p",
+   "readout": null,
    "repo": "m-a-p/SheetSage2",
    "repos": [
     {
@@ -143078,6 +143559,7 @@
    ],
    "params": {},
    "publisher": "m-a-p",
+   "readout": null,
    "repo": "m-a-p/YuE2-3B",
    "repos": [
     {
@@ -143356,6 +143838,7 @@
    ],
    "params": {},
    "publisher": "maya-research",
+   "readout": null,
    "repo": "maya-research/maya1",
    "repos": [
     {
@@ -144719,6 +145202,7 @@
     "advertised_total_b": 30
    },
    "publisher": "meta-models",
+   "readout": null,
    "repo": "meta-models/Muse-Glimmer-30B",
    "repos": [
     {
@@ -146031,6 +146515,7 @@
     "advertised_total_b": 816
    },
    "publisher": "meta-models",
+   "readout": null,
    "repo": "meta-models/Muse-Spark-Open-816B-A42B",
    "repos": [
     {
@@ -146503,6 +146988,7 @@
    ],
    "params": {},
    "publisher": "microsoft",
+   "readout": null,
    "repo": "microsoft/AesCode-32B",
    "repos": [
     {
@@ -147083,6 +147569,7 @@
    ],
    "params": {},
    "publisher": "microsoft",
+   "readout": null,
    "repo": "microsoft/Fara1.5-27B",
    "repos": [
     {
@@ -148128,6 +148615,7 @@
     "advertised_total_b": 3.84
    },
    "publisher": "microsoft",
+   "readout": null,
    "repo": "microsoft/Phi-4-mini-instruct",
    "repos": [
     {
@@ -148590,6 +149078,7 @@
    ],
    "params": {},
    "publisher": "microsoft",
+   "readout": null,
    "repo": "microsoft/VibeVoice-1.5B",
    "repos": [
     {
@@ -149225,6 +149714,7 @@
    ],
    "params": {},
    "publisher": "microsoft",
+   "readout": null,
    "repo": "microsoft/VibeVoice-ASR",
    "repos": [
     {
@@ -149498,6 +149988,7 @@
    ],
    "params": {},
    "publisher": "microsoft",
+   "readout": null,
    "repo": "microsoft/VibeVoice-ASR-BitNet",
    "repos": [
     {
@@ -149771,6 +150262,7 @@
    ],
    "params": {},
    "publisher": "microsoft",
+   "readout": null,
    "repo": "microsoft/VibeVoice-ASR-Streaming-1.5B",
    "repos": [
     {
@@ -150086,6 +150578,7 @@
    ],
    "params": {},
    "publisher": "microsoft",
+   "readout": null,
    "repo": "microsoft/VibeVoice-Realtime-0.5B",
    "repos": [
     {
@@ -150456,6 +150949,7 @@
    ],
    "params": {},
    "publisher": "microsoft",
+   "readout": null,
    "repo": "microsoft/speecht5_tts",
    "repos": [
     {
@@ -150616,6 +151110,7 @@
    ],
    "params": {},
    "publisher": "mispeech",
+   "readout": null,
    "repo": "mispeech/ced-base",
    "repos": [
     {
@@ -150780,6 +151275,7 @@
    ],
    "params": {},
    "publisher": "mispeech",
+   "readout": null,
    "repo": "mispeech/midashenglm-gen",
    "repos": [
     {
@@ -151440,6 +151936,7 @@
     "advertised_total_b": 3
    },
    "publisher": "mistralai",
+   "readout": null,
    "repo": "mistralai/Ministral-3-3B-Instruct-2512",
    "repos": [
     {
@@ -152604,6 +153101,7 @@
     "advertised_total_b": 1050
    },
    "publisher": "mistralai",
+   "readout": null,
    "repo": "mistralai/Mistral-Large-4-1T-A52B",
    "repos": [
     {
@@ -153961,6 +154459,7 @@
     "advertised_total_b": 128
    },
    "publisher": "mistralai",
+   "readout": null,
    "repo": "mistralai/Mistral-Medium-3.5-128B",
    "repos": [
     {
@@ -154802,6 +155301,7 @@
    ],
    "params": {},
    "publisher": "mistralai",
+   "readout": null,
    "repo": "mistralai/Voxtral-4B-TTS-2603",
    "repos": [
     {
@@ -155157,6 +155657,7 @@
    ],
    "params": {},
    "publisher": "mistralai",
+   "readout": null,
    "repo": "mistralai/Voxtral-Mini-3B-2507",
    "repos": [
     {
@@ -155585,6 +156086,7 @@
    ],
    "params": {},
    "publisher": "mistralai",
+   "readout": null,
    "repo": "mistralai/Voxtral-Mini-4B-Realtime-2602",
    "repos": [
     {
@@ -156131,6 +156633,7 @@
    ],
    "params": {},
    "publisher": "mistralai",
+   "readout": null,
    "repo": "mistralai/Voxtral-Small-24B-2507",
    "repos": [],
    "runtime": {},
@@ -158077,6 +158580,7 @@
     "advertised_total_b": 2800
    },
    "publisher": "moonshotai",
+   "readout": null,
    "repo": "moonshotai/Kimi-K3",
    "repos": [
     {
@@ -158457,6 +158961,7 @@
    ],
    "params": {},
    "publisher": "myshell-ai",
+   "readout": null,
    "repo": "myshell-ai/OpenVoiceV2",
    "repos": [
     {
@@ -158750,6 +159255,7 @@
    ],
    "params": {},
    "publisher": "nari-labs",
+   "readout": null,
    "repo": "nari-labs/Dia-1.6B",
    "repos": [
     {
@@ -159070,6 +159576,7 @@
    ],
    "params": {},
    "publisher": "nerkyor",
+   "readout": null,
    "repo": "nerkyor/Qwen3.8-27B-Coder390-EfficientThink-Opus5.5-GPT6Astra-Grok4.7-DSV4Pro-K3-SFT-RLOO-MTP-DFlash2",
    "repos": [
     {
@@ -159411,6 +159918,7 @@
    ],
    "params": {},
    "publisher": "netease-youdao",
+   "readout": null,
    "repo": "netease-youdao/Confucius4-R2T2",
    "repos": [
     {
@@ -159647,6 +160155,7 @@
    ],
    "params": {},
    "publisher": "netease-youdao",
+   "readout": null,
    "repo": "netease-youdao/Confucius4-TTS",
    "repos": [
     {
@@ -159837,6 +160346,7 @@
    ],
    "params": {},
    "publisher": "neuphonic",
+   "readout": null,
    "repo": "neuphonic/neutts-2e",
    "repos": [
     {
@@ -160659,6 +161169,7 @@
     "advertised_total_b": 31.6
    },
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
    "repos": [
     {
@@ -162237,6 +162748,7 @@
     "advertised_total_b": 120.6
    },
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16",
    "repos": [
     {
@@ -163237,6 +163749,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16",
    "repos": [
     {
@@ -164647,6 +165160,7 @@
     "advertised_total_b": 31.6
    },
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
    "repos": [
     {
@@ -166106,6 +166620,7 @@
     "advertised_total_b": 120
    },
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16",
    "repos": [
     {
@@ -166694,6 +167209,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/Nemotron-3-Diarization",
    "repos": [
     {
@@ -166912,6 +167428,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/RE-USE",
    "repos": [
     {
@@ -167083,6 +167600,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/audio-flamingo-3",
    "repos": [
     {
@@ -167284,6 +167802,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/canary-180m-flash",
    "repos": [
     {
@@ -167606,6 +168125,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/canary-1b-flash",
    "repos": [],
    "runtime": {},
@@ -167960,6 +168480,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/canary-1b-v2",
    "repos": [
     {
@@ -168371,6 +168892,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/canary-qwen-2.5b",
    "repos": [
     {
@@ -168584,6 +169106,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/diar_sortformer_4spk-v1",
    "repos": [
     {
@@ -168748,6 +169271,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/diar_streaming_sortformer_4spk-v2.1",
    "repos": [],
    "runtime": {},
@@ -168978,6 +169502,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/magpie_tts_multilingual_357m",
    "repos": [
     {
@@ -169275,6 +169800,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/multitalker-parakeet-streaming-0.6b-v1",
    "repos": [
     {
@@ -169739,6 +170265,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/nemotron-3.5-asr-streaming-0.6b",
    "repos": [
     {
@@ -170054,6 +170581,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/parakeet-ctc-0.6b",
    "repos": [
     {
@@ -170298,6 +170826,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/parakeet-ctc-1.1b",
    "repos": [
     {
@@ -170718,6 +171247,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/parakeet-tdt-0.6b-v2",
    "repos": [
     {
@@ -171184,6 +171714,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/parakeet-tdt-0.6b-v3",
    "repos": [
     {
@@ -171504,6 +172035,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/parakeet-unified-en-0.6b",
    "repos": [
     {
@@ -171741,6 +172273,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/personaplex-7b-v1",
    "repos": [
     {
@@ -171933,6 +172466,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/speakerverification_en_titanet_large",
    "repos": [
     {
@@ -172115,6 +172649,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/stt_en_citrinet_256_ls",
    "repos": [
     {
@@ -172302,6 +172837,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/stt_en_fastconformer_ctc_large",
    "repos": [],
    "runtime": {},
@@ -172566,6 +173102,7 @@
    ],
    "params": {},
    "publisher": "nvidia",
+   "readout": null,
    "repo": "nvidia/tts_en_fastpitch",
    "repos": [
     {
@@ -172776,6 +173313,7 @@
    ],
    "params": {},
    "publisher": "nyralabs",
+   "readout": null,
    "repo": "nyralabs/CrisperWhisper2.0_large",
    "repos": [
     {
@@ -173070,6 +173608,7 @@
    ],
    "params": {},
    "publisher": "oliverguhr",
+   "readout": null,
    "repo": "oliverguhr/fullstop-punctuation-multilang-large",
    "repos": [
     {
@@ -174519,6 +175058,7 @@
     "advertised_total_b": 117
    },
    "publisher": "openai",
+   "readout": null,
    "repo": "openai/gpt-oss-120b",
    "repos": [
     {
@@ -175892,6 +176432,7 @@
     "advertised_total_b": 21
    },
    "publisher": "openai",
+   "readout": null,
    "repo": "openai/gpt-oss-20b",
    "repos": [
     {
@@ -176749,6 +177290,7 @@
    ],
    "params": {},
    "publisher": "openai",
+   "readout": null,
    "repo": "openai/whisper-large-v3",
    "repos": [],
    "runtime": {},
@@ -177337,6 +177879,7 @@
    ],
    "params": {},
    "publisher": "openai",
+   "readout": null,
    "repo": "openai/whisper-large-v3-turbo",
    "repos": [
     {
@@ -177545,6 +178088,7 @@
    ],
    "params": {},
    "publisher": "openbmb",
+   "readout": null,
    "repo": "openbmb/MiniCPM-OCR-1.0",
    "repos": [
     {
@@ -177944,6 +178488,10 @@
    ],
    "params": {},
    "publisher": "openbmb",
+   "readout": {
+    "kind": "native",
+    "source": "card"
+   },
    "repo": "openbmb/MiniCPM-OCR-Jev",
    "repos": [
     {
@@ -178584,6 +179132,7 @@
     "advertised_total_b": 1.3
    },
    "publisher": "openbmb",
+   "readout": null,
    "repo": "openbmb/MiniCPM-V-4.6",
    "repos": [
     {
@@ -179076,6 +179625,7 @@
    ],
    "params": {},
    "publisher": "openbmb",
+   "readout": null,
    "repo": "openbmb/MiniCPM-V-4.7-35B-A3B",
    "repos": [
     {
@@ -180045,6 +180595,7 @@
     "advertised_total_b": 1
    },
    "publisher": "openbmb",
+   "readout": null,
    "repo": "openbmb/MiniCPM5-1B",
    "repos": [
     {
@@ -181132,6 +181683,7 @@
     "advertised_total_b": 2.6
    },
    "publisher": "openbmb",
+   "readout": null,
    "repo": "openbmb/MiniCPM5-2B",
    "repos": [
     {
@@ -181469,6 +182021,7 @@
    ],
    "params": {},
    "publisher": "openbmb",
+   "readout": null,
    "repo": "openbmb/VoxCPM-0.5B",
    "repos": [
     {
@@ -182034,6 +182587,7 @@
    ],
    "params": {},
    "publisher": "openbmb",
+   "readout": null,
    "repo": "openbmb/VoxCPM2",
    "repos": [
     {
@@ -182567,6 +183121,10 @@
    ],
    "params": {},
    "publisher": "openjev",
+   "readout": {
+    "kind": "native",
+    "source": "card"
+   },
    "repo": "openjev/openjev",
    "repos": [
     {
@@ -183229,6 +183787,7 @@
    ],
    "params": {},
    "publisher": "ornith-ai",
+   "readout": null,
    "repo": "ornith-ai/Ornith-1.0-35B",
    "repos": [
     {
@@ -184174,6 +184733,7 @@
    ],
    "params": {},
    "publisher": "ornith-ai",
+   "readout": null,
    "repo": "ornith-ai/Ornith-1.0-9B",
    "repos": [
     {
@@ -184991,6 +185551,7 @@
    ],
    "params": {},
    "publisher": "ornith-ai",
+   "readout": null,
    "repo": "ornith-ai/Ornith-1.5-122B",
    "repos": [
     {
@@ -186077,6 +186638,7 @@
    ],
    "params": {},
    "publisher": "ornith-ai",
+   "readout": null,
    "repo": "ornith-ai/Ornith-1.5-35B-A3B",
    "repos": [
     {
@@ -186943,6 +187505,7 @@
    ],
    "params": {},
    "publisher": "ornith-ai",
+   "readout": null,
    "repo": "ornith-ai/Ornith-1.5-397B",
    "repos": [
     {
@@ -187659,6 +188222,7 @@
    ],
    "params": {},
    "publisher": "ornith-ai",
+   "readout": null,
    "repo": "ornith-ai/Ornith-1.5-9B",
    "repos": [
     {
@@ -188007,6 +188571,7 @@
    ],
    "params": {},
    "publisher": "owensong",
+   "readout": null,
    "repo": "owensong/Inflect-Micro-v2",
    "repos": [
     {
@@ -188266,6 +188831,7 @@
    ],
    "params": {},
    "publisher": "parler-tts",
+   "readout": null,
    "repo": "parler-tts/parler-tts-mini-v1.1",
    "repos": [
     {
@@ -188439,6 +189005,7 @@
    ],
    "params": {},
    "publisher": "pipecat-ai",
+   "readout": null,
    "repo": "pipecat-ai/smart-turn-v3",
    "repos": [
     {
@@ -188643,6 +189210,7 @@
    ],
    "params": {},
    "publisher": "pnnbao-ump",
+   "readout": null,
    "repo": "pnnbao-ump/VieNeu-TTS-v3-Turbo",
    "repos": [
     {
@@ -189487,6 +190055,7 @@
    ],
    "params": {},
    "publisher": "poolside",
+   "readout": null,
    "repo": "poolside/Laguna-M.1",
    "repos": [
     {
@@ -190957,6 +191526,7 @@
    "notes": null,
    "params": {},
    "publisher": "poolside",
+   "readout": null,
    "repo": "poolside/Laguna-S-2.1",
    "repos": [
     {
@@ -192289,6 +192859,7 @@
    ],
    "params": {},
    "publisher": "poolside",
+   "readout": null,
    "repo": "poolside/Laguna-XS-2.1",
    "repos": [
     {
@@ -193119,6 +193690,7 @@
    ],
    "params": {},
    "publisher": "prism-ml",
+   "readout": null,
    "repo": "prism-ml/Bonsai-27B-unpacked",
    "repos": [
     {
@@ -194027,6 +194599,7 @@
    ],
    "params": {},
    "publisher": "prism-ml",
+   "readout": null,
    "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
    "repos": [
     {
@@ -194769,6 +195342,7 @@
    ],
    "params": {},
    "publisher": "prism-ml",
+   "readout": null,
    "repo": "prism-ml/Ternary-Bonsai-27B-unpacked",
    "repos": [
     {
@@ -195275,6 +195849,7 @@
    ],
    "params": {},
    "publisher": "prism-ml",
+   "readout": null,
    "repo": "prism-ml/Ternary-Bonsai-8B-unpacked",
    "repos": [
     {
@@ -195670,6 +196245,7 @@
    ],
    "params": {},
    "publisher": "pyannote",
+   "readout": null,
    "repo": "pyannote/segmentation-3.0",
    "repos": [
     {
@@ -195845,6 +196421,7 @@
    ],
    "params": {},
    "publisher": "reazon-research",
+   "readout": null,
    "repo": "reazon-research/reazonspeech-nemo-v2",
    "repos": [
     {
@@ -196728,6 +197305,7 @@
     "advertised_total_b": 501
    },
    "publisher": "reflection",
+   "readout": null,
    "repo": "reflection/Beam-1.0-501B-A23B",
    "repos": [
     {
@@ -197509,6 +198087,7 @@
    ],
    "params": {},
    "publisher": "rhasspy",
+   "readout": null,
    "repo": "rhasspy/piper-voices",
    "repos": [
     {
@@ -197709,6 +198288,7 @@
    ],
    "params": {},
    "publisher": "samuel-vitorino",
+   "readout": null,
    "repo": "samuel-vitorino/sopro-v2-turbo",
    "repos": [
     {
@@ -198027,6 +198607,7 @@
    ],
    "params": {},
    "publisher": "sarulab-speech",
+   "readout": null,
    "repo": "sarulab-speech/sidon-v0.1",
    "repos": [
     {
@@ -198226,6 +198807,7 @@
    ],
    "params": {},
    "publisher": "sensenova",
+   "readout": null,
    "repo": "sensenova/SenseNova-U1.5-8B-MoT",
    "repos": [
     {
@@ -198836,6 +199418,7 @@
    ],
    "params": {},
    "publisher": "sesame",
+   "readout": null,
    "repo": "sesame/csm-1b",
    "repos": [
     {
@@ -199044,6 +199627,7 @@
    ],
    "params": {},
    "publisher": "stabilityai",
+   "readout": null,
    "repo": "stabilityai/stable-audio-3-medium",
    "repos": [
     {
@@ -199451,6 +200035,7 @@
    ],
    "params": {},
    "publisher": "stabilityai",
+   "readout": null,
    "repo": "stabilityai/stable-diffusion-3.5-large",
    "repos": [
     {
@@ -200702,6 +201287,7 @@
     "advertised_total_b": 198
    },
    "publisher": "stepfun-ai",
+   "readout": null,
    "repo": "stepfun-ai/Step-3.7-Flash",
    "repos": [
     {
@@ -201440,6 +202026,7 @@
    ],
    "params": {},
    "publisher": "stepfun-ai",
+   "readout": null,
    "repo": "stepfun-ai/Step-Audio-EditX",
    "repos": [],
    "runtime": {},
@@ -201690,6 +202277,7 @@
    ],
    "params": {},
    "publisher": "suno",
+   "readout": null,
    "repo": "suno/bark-small",
    "repos": [
     {
@@ -201902,6 +202490,7 @@
    ],
    "params": {},
    "publisher": "syvai",
+   "readout": null,
    "repo": "syvai/hviske-v5.3",
    "repos": [
     {
@@ -202120,6 +202709,7 @@
    ],
    "params": {},
    "publisher": "syvai",
+   "readout": null,
    "repo": "syvai/hviske-v6",
    "repos": [
     {
@@ -202346,6 +202936,7 @@
    ],
    "params": {},
    "publisher": "syvai",
+   "readout": null,
    "repo": "syvai/plapre-3",
    "repos": [
     {
@@ -202541,6 +203132,7 @@
    ],
    "params": {},
    "publisher": "tencent",
+   "readout": null,
    "repo": "tencent/AuK",
    "repos": [
     {
@@ -202982,6 +203574,7 @@
    ],
    "params": {},
    "publisher": "tencent",
+   "readout": null,
    "repo": "tencent/HunyuanVideo",
    "repos": [
     {
@@ -203384,6 +203977,7 @@
    ],
    "params": {},
    "publisher": "tencent",
+   "readout": null,
    "repo": "tencent/Hy-Memory-30B-A3B",
    "repos": [
     {
@@ -204325,6 +204919,7 @@
     "advertised_total_b": 299
    },
    "publisher": "tencent",
+   "readout": null,
    "repo": "tencent/Hy3",
    "repos": [
     {
@@ -206210,6 +206805,7 @@
     "advertised_total_b": 975
    },
    "publisher": "thinkingmachines",
+   "readout": null,
    "repo": "thinkingmachines/Inkling",
    "repos": [
     {
@@ -207495,6 +208091,7 @@
     "advertised_total_b": 266
    },
    "publisher": "thinkingmachines",
+   "readout": null,
    "repo": "thinkingmachines/Inkling-Small",
    "repos": [
     {
@@ -208409,6 +209006,7 @@
    ],
    "params": {},
    "publisher": "trohrbaugh",
+   "readout": null,
    "repo": "trohrbaugh/Qwen3.8-Flash-Next-heretic-2",
    "repos": [
     {
@@ -209169,6 +209767,7 @@
     "advertised_total_b": 250
    },
    "publisher": "upstage",
+   "readout": null,
    "repo": "upstage/Solar-Open2-250B",
    "repos": [
     {
@@ -209497,6 +210096,7 @@
    ],
    "params": {},
    "publisher": "woongzip1",
+   "readout": null,
    "repo": "woongzip1/universr-audio",
    "repos": [
     {
@@ -209756,6 +210356,7 @@
    ],
    "params": {},
    "publisher": "yuxinlu1",
+   "readout": null,
    "repo": "yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2",
    "repos": [
     {
@@ -210127,6 +210728,7 @@
    ],
    "params": {},
    "publisher": "yuxinlu1",
+   "readout": null,
    "repo": "yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1",
    "repos": [
     {
@@ -211140,6 +211742,7 @@
     "advertised_total_b": 106
    },
    "publisher": "zai-org",
+   "readout": null,
    "repo": "zai-org/GLM-4.5-Air",
    "repos": [
     {
@@ -213623,6 +214226,7 @@
     "advertised_total_b": 753
    },
    "publisher": "zai-org",
+   "readout": null,
    "repo": "zai-org/GLM-5.2",
    "repos": [
     {
@@ -215943,6 +216547,7 @@
     "advertised_total_b": 320
    },
    "publisher": "zai-org",
+   "readout": null,
    "repo": "zai-org/GLM-5.3-Flash",
    "repos": [
     {
@@ -216610,6 +217215,7 @@
    ],
    "params": {},
    "publisher": "zai-org",
+   "readout": null,
    "repo": "zai-org/GLM-ASR-Nano-2512",
    "repos": [],
    "runtime": {},
@@ -216799,6 +217405,7 @@
    ],
    "params": {},
    "publisher": "zai-org",
+   "readout": null,
    "repo": "zai-org/GLM-TTS",
    "repos": [
     {
@@ -217041,6 +217648,7 @@
    ],
    "params": {},
    "publisher": "zhifeixie",
+   "readout": null,
    "repo": "zhifeixie/Mega-ASR",
    "repos": [],
    "runtime": {},
@@ -218617,7 +219225,7 @@
    }
   }
  },
- "updated": "2026-10-31",
+ "updated": "2026-11-01",
  "weights": {
   "aa-stt.accuracy": 0.3,
   "aa-t2i.elo": 0.34,
