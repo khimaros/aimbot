@@ -215,8 +215,13 @@ def offsite_sweep(spec, params_b, refresh):
     `columns` is declared because these rows carry no header: they are the
     page's own search index, `UD-IQ4_XS 93.7 89.554 0.083630 2.3677`, and
     nothing in them says which number is which.
+
+    `superseded` names rungs the publisher re-uploaded under the same tag after
+    the page measured them. unsloth replaced most of that ladder on 2026-11-04
+    and left the table as it was, and nothing in a row or a byte count says so.
     """
     cols = list(spec.get("columns") or [])
+    gone = {q.upper() for q in spec.get("superseded") or []}
     if "quant" not in cols:
         return None
     cmd = [os.path.join(HERE, "rsc-extract"), spec["url"],
@@ -234,7 +239,7 @@ def offsite_sweep(spec, params_b, refresh):
         except ValueError:
             continue
         parts = (val or "").split()
-        if len(parts) == len(cols):
+        if len(parts) == len(cols) and parts[cols.index("quant")].upper() not in gone:
             rows.append(dict(zip(cols, parts)))
     if len(rows) < 2:
         return None
@@ -350,15 +355,17 @@ def main():
             found = offsite_sweep(spec, params, args.refresh)
             if found:
                 points, metric, better = found
+                ref = {"source": spec.get("source") or spec["url"], "url": spec["url"],
+                       "note": spec.get("note") or
+                               "published %s per quant, off the card" % metric}
+                if spec.get("superseded"):
+                    ref["superseded"] = list(spec["superseded"])
                 curves.setdefault(repo, []).append({
                     "kind": "proxy", "metric": metric, "better": better,
                     "quant_repo": spec.get("repo"),
                     "points": [[p[0], p[1]] for p in points],
                     "quants": [p[2] for p in points],
-                    "ref": {"source": spec.get("source") or spec["url"],
-                            "url": spec["url"],
-                            "note": spec.get("note") or
-                                    "published %s per quant, off the card" % metric},
+                    "ref": ref,
                 })
                 print("  %-46s %d points of %s from %s"
                       % (repo, len(points), metric, spec["url"]), file=sys.stderr)

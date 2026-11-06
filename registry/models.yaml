@@ -2609,21 +2609,31 @@ models:
       source: unsloth
       repo: unsloth/Qwen3.8-Flash-Next-GGUF
       columns: [quant, gb, top1, kld, delta]
-      note: ten rungs of mean kl divergence and top-1 agreement against bf16, published on
-        unsloth's docs site rather than on the card. the rows are the page's own search index,
-        so the layout above is declared rather than read off a header
+      # requantized as dynamic v3.1 on 2026-11-04 under the same tags. the table was not
+      # redone, and the v3.1 kl figures are only plotted. UD-Q4_K_XL was re-uploaded in
+      # the same commits with its tensor table unchanged, so its row still holds
+      superseded: [UD-IQ1_S, UD-IQ1_M, UD-Q2_K_XL, UD-IQ3_XXS, UD-Q3_K_XL, UD-IQ4_XS]
+      note: mean kl divergence and top-1 agreement against bf16, published on unsloth's docs
+        site rather than on the card. the rows are the page's own search index, so the layout
+        above is declared rather than read off a header. the page measured ten rungs, and six
+        of those files were requantized on 2026-11-04 as dynamic v3.1 quants the table does
+        not describe, so only the four whose tensor tables are unchanged are kept
     repos:
     - repo: unsloth/Qwen3.8-Flash-Next-GGUF
       files:
         UD-IQ4_XS:
           note: 'UD-IQ4_XS at {gib} rather than UD-Q4_K_XL, the next rung up, at
-            {gib@UD-Q4_K_XL}. what the step up buys is measured -- unsloth publishes top-1 agreement against
-            bf16 for all ten rungs, 89.554% here against 92.255% there -- and what it costs is the
-            difference between the two, which is memory a host can keep for the companion models it
-            runs beside this one instead. the tags overstate how
+            {gib@UD-Q4_K_XL}. this file was requantized as dynamic v3.1 on 2026-11-04, at the same
+            {bpw} but with the experts moved from IQ3_S to IQ3_XXS, IQ4_XS and Q5_0, so the top-1
+            agreement unsloth publishes for it, 89.554% against 92.255% there, was measured on the
+            file it replaced; UD-Q4_K_XL kept its tensor table. the v3.1 benchmarks stop lower down the ladder:
+            UD-IQ3_XXS at {gib@UD-IQ3_XXS} keeps 99.9% of bf16''s average over twelve benchmarks
+            and UD-IQ1_S at {gib@UD-IQ1_S} keeps 97.9%, which is a reading of unsloth''s chart
+            rather than a table. the tags overstate how
             far the ladder compresses: 29% of the weights are an n-gram table whose 160-column rows take
-            only block-32 types, so the table never goes below ~4.25 bits and UD-IQ1_S is {bpw@UD-IQ1_S} at {gib@UD-IQ1_S}
-            rather than anything like one. every rung is sharded 3-4 ways, and the card {card} states
+            only block-32 types, so the table never goes below ~4.25 bits and UD-IQ1_S is {bpw@UD-IQ1_S} rather than
+            anything like one -- since v3.1 it holds no IQ1_S tensor at all, its experts being
+            IQ2_XXS, Q2_0 and IQ2_S. every rung is sharded 3-4 ways, and the card {card} states
             sizes in decimal gb, so its figures read ~7% larger than the gib this registry sizes in'
         UD-Q4_K_XL:
           note: 'UD-Q4_K_XL at {gib}'
@@ -2641,44 +2651,51 @@ models:
             card''s default, is Q4_K on gate and up like unsloth''s UD-Q4_K_XL, and the step from {gib}
             to that file''s {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-Q4_K_XL} is unsloth''s down
             projections, Q5_1 with five of the 48 layers at Q8_0, its Q8_0 attention, ssm and
-            embedding tensors, and Q5_K on one layer of gate and up. AP-IQ4_XS is the recipe of the
-            pinned unsloth UD-IQ4_XS, and the step from {gib@AP-IQ4_XS} to
-            {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS} is again unsloth''s Q8_0 on attention,
-            ssm and embedding tensors and on five layers of down projections, plus IQ4_XS on one layer
-            of gate and up. no tier carries an mtp head: every file has the 1224 tensors unsloth''s main
-            files do. the quality figures are kl divergence and top-1 agreement against one reference
+            embedding tensors, and Q5_K on one layer of gate and up. AP-IQ4_XS is the recipe unsloth''s
+            UD-IQ4_XS had until its dynamic v3.1 requantization of 2026-11-04, short of unsloth''s
+            Q8_0 on attention, ssm and embedding tensors and on five layers of down projections; the
+            v3.1 file at {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS} spends the same bytes on
+            IQ3_XXS, IQ4_XS and Q5_0 experts instead. no tier carries an mtp head: every file has
+            the 1224 tensors unsloth''s main files do. the quality figures are kl divergence and top-1 agreement against one reference
             on a held-out corpus at -c 2048 -- 85.71% top-1 here, 84.22% at AP-Q4_K_M, 82.89% at
-            AP-IQ4_XS -- and none reads against unsloth''s page, which puts its near-identical
-            UD-IQ4_XS at 89.554% top-1 and 0.0836 kl divergence against 82.89% and 0.1584 here. the
+            AP-IQ4_XS -- and none reads against unsloth''s page, which put the pre-v3.1 UD-IQ4_XS,
+            AP-IQ4_XS''s recipe, at 89.554% top-1 and 0.0836 kl divergence against 82.89% and 0.1584
+            here. the
             card chose held-out text because the n-gram table has memorised wikitext, and measures the
             same file 6.9 to 8.6 points higher top-1 on wikitext than off it, the gap widening as the
             quant shrinks. its vram column is the download less that table, which it moves to system
             ram with `-ot per_layer_token_embd=CPU`. on mainline that flag restates the default -- the
             table is an input tensor and sits on the cpu anyway -- and qwen4exp has marked it
-            TENSOR_READ_LAZY since b10660, so with mmap on and `--tensor-read-lazy` at its default
-            `auto` a stock build reads its rows from the file as tokens need them instead of keeping
-            it resident, for these files and unsloth''s alike. the vision projector is the repo''s own
+            TENSOR_READ_LAZY since b10660. `--lazy-mode` at its default `auto` reads a marked tensor
+            over 4 gib from the file as tokens need its rows, for these files and unsloth''s alike,
+            and resolves to `off`, keeping the table resident, on any device reporting no mmap
+            support, which at llama.cpp 785322d includes vulkan on an integrated gpu. that answers
+            issue 28160 {url@https://github.com/ggml-org/llama.cpp/issues/28160}: on a radeon 8060s
+            under vulkan, before the change, `auto` ran a 512 token prompt at 216 t/s against 406 on
+            `off`, with generation level. the vision projector is the repo''s own
             mmproj-F16.gguf at the root, and the gguf headers carry unsloth''s chat template byte for
             byte rather than qwen''s'
     - repo: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF
       files:
         IQ3_XXS:
-          note: 'a third ladder, three rungs, and the only one whose publisher ran benchmarks
-            rather than a divergence metric: ist austria assigns a quant type per tensor by
-            gradient search under a size budget. the pinned rung is {gib} at {bpw}, well under the
-            pinned unsloth one, and their card {card} calls it "the strongest operating point",
-            just short of the bf16 task average -- level on aime25, half a point down on
-            gpqa-diamond and a point on livecodebench v6. the curve is in
-            research/quant-curves.json rather than recited here. every rung is two shards and the
-            second is byte-identical across all three: it is the same per_layer_token_embd table
+          note: 'a third ladder, four rungs, benchmarked by its publisher rather than measured
+            by a divergence metric: ist austria assigns a quant type per tensor by gradient search
+            under a size budget. the pinned rung is {gib} at {bpw}, well under the pinned unsloth
+            one, and just short of the bf16 task average on their card {card} -- level on aime25,
+            half a point down on gpqa-diamond and a point on livecodebench v6. the card has since
+            added IQ3_S at {gib@IQ3_S} and calls that "the strongest operating point", level with
+            bf16 on the same three. the curve is in research/quant-curves.json rather than recited
+            here, beside unsloth''s run of these four files over twelve benchmarks, which reads
+            them lower -- IQ3_XXS keeps 96.8% of bf16 there against 99.4% on the card -- and puts
+            each size-matched dynamic v3.1 rung ahead of its GSQ-RCO twin. every rung is two
+            shards and the second is byte-identical across all four: it is the same per_layer_token_embd table
             at IQ4_NL the note above describes, held out of the search because its 160-column rows
-            take only block-32 types, and read "one row per token" off disk rather than resident.
+            take only block-32 types, and are read "one row per token", off disk only where
+            `--lazy-mode` leaves the table lazy.
             Q2_0 at {gib@Q2_0} is the speed rung -- a mainline ggml type since b9913 that
             "avoids lookup-table formats" altogether, and the card measures it delivering "3.4x
             the prompt throughput" of the IQ2_XS rung beside it at {gib@IQ2_XS}, for a tenth of a
-            point of task average. none of these reads against the unsloth sweep above, kl
-            divergence and top-1 agreement rather than a benchmark. the mmproj is separate, and
-            card sizes are decimal gb'
+            point of task average. the mmproj is separate, and card sizes are decimal gb'
     - ggml-org/Qwen3.8-Flash-Next-GGUF
     runtime:
       arch: qwen4exp
@@ -2792,10 +2809,10 @@ models:
           quant: IQ4_XS
           note: 'the largest of the five rungs that are one loadable file, {gib} at {bpw}. these
             are "static quants" {card}, made without an imatrix, and the type name is the recipe:
-            the experts are IQ4_XS where unsloth''s UD-IQ4_XS over the base weights puts IQ3_S,
-            which is most of the step from that file''s
-            {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS}. the n-gram table is IQ4_NL as it is
-            there. Q4_K_S and everything above it ship as `.part1of3` byte splits rather than
+            the experts are IQ4_XS throughout, where unsloth''s UD-IQ4_XS over the base weights,
+            {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS}, put IQ3_S until its dynamic v3.1
+            requantization of 2026-11-04 and mixes IQ3_XXS, IQ4_XS and Q5_0 since. the n-gram
+            table is IQ4_NL as it is there. Q4_K_S and everything above it ship as `.part1of3` byte splits rather than
             gguf shards, so llama.cpp cannot fetch or open them until they are concatenated by
             hand, and this registry sizes none of them. no file carries an mtp head: all five
             have the 1224 tensors unsloth''s main files do. the imatrix ladder is a separate
@@ -3281,11 +3298,10 @@ models:
         AP-IQ4_XS:
           note: 'the cheaper of the two rungs pinned here, {gib} against the
             {gib@AP-Q4_K_XL} above it: IQ3_S on the experts'' gate and up where that
-            one puts Q4_K, and otherwise the recipe unsloth ships as UD-IQ4_XS over
-            the base weights -- {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS} is
-            the same file with Q8_0 rather than Q6_K on the attention, ssm and
-            embedding tensors, five layers of down projections, and IQ4_XS on one
-            layer of gate and up. what every tier of this ladder is actually made of
+            one puts Q4_K, and otherwise the recipe unsloth shipped as UD-IQ4_XS over
+            the base weights until its dynamic v3.1 requantization of 2026-11-04. the
+            v3.1 file at {gib@unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS} mixes IQ3_XXS,
+            IQ4_XS and Q5_0 on the experts instead. what every tier of this ladder is actually made of
             is on the base entry, and the tier names describe none of them'
     runtime:
       arch: qwen4exp
@@ -8266,8 +8282,9 @@ models:
     name:
       short: inkling
       # the lookahead is load-bearing: "inkling" alone used to be this entry's
-      # sibling's alias, and every sentence about this model counted for that one
-      match: inkling(?![\s-]*small)
+      # sibling's alias, and every sentence about this model counted for that one.
+      # the `2` keeps inkling 2 small's threads off this entry
+      match: inkling(?![\s-]*(?:small|2\b))
     notes: >-
       the flagship the small is small relative to: bf16 is 1.76 tib and the
       smallest published rung is {gib@unsloth/inkling-GGUF:UD-IQ1_S}, so nothing here runs local. carried

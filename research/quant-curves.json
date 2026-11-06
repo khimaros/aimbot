@@ -464,6 +464,10 @@
       0.9941
      ],
      [
+      3.72,
+      1.0
+     ],
+     [
       16.0,
       1.0
      ]
@@ -472,13 +476,96 @@
      "Q2_0",
      "IQ2_XS",
      "IQ3_XXS",
+     "IQ3_S",
      "BF16"
     ],
     "ref": {
      "source": "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF",
      "url": "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF",
      "captured": "2026-09-15",
-     "note": "the same three benchmarks against a bf16 base whose task average is 93.12, so IQ3_XXS at 92.57 is 0.9941. the two rungs below it land within a tenth of a point of each other on task average by different routes -- Q2_0 is ahead on gpqa-diamond and behind on livecodebench v6 -- which is why the curve is nearly flat under 3.1 bpw rather than falling. bits per weight are the download bytes over 180b parameters, INCLUDING the n-gram shard, which the card's own bpw column excludes: its 2.40 for Q2_0 is over the transformer weights the search controls, and the 2.95 here is the whole file, which is what the page interpolates against. the unsloth proxy beside this entry is kl divergence on another repo's files and the two cannot be read against each other."
+     "note": "the same three benchmarks against a bf16 base whose task average is 93.12, so IQ3_XXS at 92.57 is 0.9941. the two rungs below it land within a tenth of a point of each other on task average by different routes -- Q2_0 is ahead on gpqa-diamond and behind on livecodebench v6 -- which is why the curve is nearly flat under 3.1 bpw rather than falling. IQ3_S, added to the card later, averages 93.26, which is 1.0015 and is held at 1.0 because a retention cannot exceed one; the card reads its lead as benchmark variance. bits per weight are the download bytes over 180b parameters, INCLUDING the n-gram shard, which the card's own bpw column excludes: its 2.40 for Q2_0 is over the transformer weights the search controls, and the 2.95 here is the whole file, which is what the page interpolates against. the unsloth proxy beside this entry is kl divergence on another repo's files and the two cannot be read against each other."
+    }
+   },
+   {
+    "kind": "score",
+    "hand_written": true,
+    "quant_repo": "unsloth/Qwen3.8-Flash-Next-GGUF",
+    "metric": "average recovery over 12 benchmarks against bf16, unweighted",
+    "points": [
+     [
+      2.95,
+      0.979
+     ],
+     [
+      3.02,
+      0.974
+     ],
+     [
+      3.37,
+      0.994
+     ],
+     [
+      3.72,
+      0.999
+     ],
+     [
+      16.0,
+      1.0
+     ]
+    ],
+    "quants": [
+     "UD-IQ1_S",
+     "UD-IQ1_M",
+     "UD-IQ2_XS",
+     "UD-IQ3_XXS",
+     "BF16"
+    ],
+    "ref": {
+     "source": "unsloth",
+     "url": "https://unsloth.ai/docs/models/qwen3.8-next#dynamic-v3.1-update-november-2nd-2026",
+     "captured": "2026-11-06",
+     "note": "the dynamic v3.1 files of 2026-11-04, read off the labels of the `average recovery over 12 benchmarks` panel, the only per-quant numbers the section gives: no table carries them. the twelve are aime25, hmmt feb 2025 and feb 2026, gpqa-diamond, livecodebench v6, math-500 level 5, mmlu-pro, terminal bench 2.1, deepswe v1.1, automation bench v1.0.6, aider polyglot pass@2 and a zero-shot average of arc, hellaswag, winogrande and piqa, at temperature 1.0, top_p 0.95, top_k 20 and xhigh effort. recovery is each benchmark's score over bf16's, averaged, so a rung can exceed bf16 on one -- UD-IQ2_XS reads 58.4 on deepswe against bf16's 55.8 -- and the agentic panels carry error bars wider than the gaps between rungs. each rung was sized to one of ISTA's GSQ-RCO files within 0.1% of its bytes, and the same panel scores those; that is the curve beside this one. bits per weight are download bytes over 180b parameters, n-gram shard included, as for ISTA's own. the kl table on the same page predates these files and is not of them."
+    }
+   },
+   {
+    "kind": "score",
+    "hand_written": true,
+    "quant_repo": "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF",
+    "metric": "average recovery over 12 benchmarks against bf16, run by unsloth",
+    "points": [
+     [
+      2.95,
+      0.905
+     ],
+     [
+      3.02,
+      0.895
+     ],
+     [
+      3.37,
+      0.968
+     ],
+     [
+      3.72,
+      0.99
+     ],
+     [
+      16.0,
+      1.0
+     ]
+    ],
+    "quants": [
+     "Q2_0",
+     "IQ2_XS",
+     "IQ3_XXS",
+     "IQ3_S",
+     "BF16"
+    ],
+    "ref": {
+     "source": "unsloth",
+     "url": "https://unsloth.ai/docs/models/qwen3.8-next#dynamic-v3.1-update-november-2nd-2026",
+     "captured": "2026-11-06",
+     "note": "a competitor's measurement of ISTA's files, from the same panel and harness as unsloth's v3.1 curve beside it -- the only sweep here run by somebody other than the publisher, apart from prism's of qwen3.8 27b. it disagrees with ISTA's own: IQ3_XXS keeps 0.994 of a three-benchmark task average on ISTA's card and 0.968 of twelve here, and Q2_0 and IQ2_XS, a tenth of a point apart on ISTA's card, are 0.905 and 0.895. most of the gap is benchmarks ISTA did not run: on gpqa-diamond and livecodebench v6 both sweeps put the GSQ-RCO rungs within two points of bf16 at IQ3_XXS, and the largest losses are on deepswe, 46.9 against bf16's 55.8, hmmt feb 2026 and aider polyglot. the files ran are the ones the size collector measured, to the byte."
     }
    },
    {
@@ -487,30 +574,6 @@
     "better": "lower",
     "quant_repo": "unsloth/Qwen3.8-Flash-Next-GGUF",
     "points": [
-     [
-      3.22,
-      0.39607
-     ],
-     [
-      3.31,
-      0.314739
-     ],
-     [
-      3.51,
-      0.224607
-     ],
-     [
-      3.64,
-      0.16512
-     ],
-     [
-      4.0,
-      0.106504
-     ],
-     [
-      4.16,
-      0.08363
-     ],
      [
       4.95,
       0.046893
@@ -529,12 +592,6 @@
      ]
     ],
     "quants": [
-     "UD-IQ1_S",
-     "UD-IQ1_M",
-     "UD-Q2_K_XL",
-     "UD-IQ3_XXS",
-     "UD-Q3_K_XL",
-     "UD-IQ4_XS",
      "UD-Q4_K_XL",
      "UD-Q5_K_XL",
      "UD-Q6_K_XL",
@@ -543,7 +600,15 @@
     "ref": {
      "source": "unsloth",
      "url": "https://unsloth.ai/docs/models/qwen3.8-next",
-     "note": "ten rungs of mean kl divergence and top-1 agreement against bf16, published on unsloth's docs site rather than on the card. the rows are the page's own search index, so the layout above is declared rather than read off a header"
+     "note": "mean kl divergence and top-1 agreement against bf16, published on unsloth's docs site rather than on the card. the rows are the page's own search index, so the layout above is declared rather than read off a header. the page measured ten rungs, and six of those files were requantized on 2026-11-04 as dynamic v3.1 quants the table does not describe, so only the four whose tensor tables are unchanged are kept",
+     "superseded": [
+      "UD-IQ1_S",
+      "UD-IQ1_M",
+      "UD-Q2_K_XL",
+      "UD-IQ3_XXS",
+      "UD-Q3_K_XL",
+      "UD-IQ4_XS"
+     ]
     }
    }
   ],

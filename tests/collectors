@@ -8220,6 +8220,47 @@ def a_two_type_rung_in_a_sweep_table_keeps_both_halves():
 
 
 @test
+def a_sweep_of_files_the_publisher_since_replaced_is_not_drawn_against_their_successors():
+    """unsloth re-uploaded qwen3.8 flash next's UD rungs on 2026-11-04 under the
+    same tags, and the docs page still carries the kl table of the files before.
+
+    a rung is a tag, so every old row read as a measurement of the file a reader
+    downloads today, and two of the replacements are within 0.01% of the old byte
+    count, so no size check could tell them apart. the registry names the rungs
+    the table no longer describes, and the curve keeps the rest and says which
+    it left out.
+    """
+    mod = load_script_with_research("fetch_quant_sweeps", "fetch-quant-sweeps")
+    tmp = tempfile.mkdtemp()
+    rows = [("UD-IQ1_S", "3.22", "0.39"), ("UD-Q4_K_XL", "4.95", "0.047"),
+            ("UD-Q5_K_XL", "7.04", "0.030"), ("Q8_0", "8.36", "0.027")]
+    fake = os.path.join(tmp, "rsc-extract")
+    with open(fake, "w") as f:
+        f.write("#!/bin/sh\n" + "".join("echo '%s'\n" % json.dumps({"searchText": " ".join(r)})
+                                        for r in rows))
+    os.chmod(fake, 0o755)
+    reg = os.path.join(tmp, "models.yaml")
+    with open(reg, "w") as f:
+        f.write("models:\n  Some/Model:\n    quant_sweep:\n      url: https://example.com/sweep\n"
+                "      repo: u/Some-Model-GGUF\n      columns: [quant, bpw, kld]\n"
+                "      superseded: [UD-IQ1_S, UD-Q4_K_XL]\n")
+    out = os.path.join(tmp, "quant-curves.json")
+    real, argv = mod.HERE, sys.argv
+    mod.HERE, sys.argv = tmp, ["fetch-quant-sweeps", "--registry", reg, "--out", out]
+    try:
+        mod.main()
+        with open(out) as f:
+            curve = json.load(f)["curves"]["Some/Model"][0]
+    finally:
+        mod.HERE, sys.argv = real, argv
+        shutil.rmtree(tmp)
+    eq(curve["quants"], ["UD-Q5_K_XL", "Q8_0"],
+       "only the rungs still published as measured are drawn: %r" % curve["quants"])
+    eq(curve["ref"].get("superseded"), ["UD-IQ1_S", "UD-Q4_K_XL"],
+       "and the ones left out are named: %r" % curve["ref"])
+
+
+@test
 def a_relative_capture_path_means_research_and_not_wherever_you_stood():
     """A collector run from the repo root built a second `research/data`.
 
