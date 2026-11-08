@@ -455,19 +455,35 @@ def a_pinned_file_is_sized_alone_where_its_tag_names_several():
     keyed by tag they summed into one 27.97 gib rung, and the registry's pin on
     the 4.2 gib v0.2 file read that sum. a tag is a size class, so a file the
     registry names by `file:` gets a key of its own wherever its tag gathered
-    other files; every other key is left where it was.
+    other files. so does every other file of a tag that gathered several models
+    in a repo the registry pins by filename: left under the tag, the v0.3 4b and
+    the 9b summed into a 14 gib `Q8_0` that the page offered as a rung of the 4b,
+    and audio-cpp's RE-USE repo summed four checkpoints into one f32 rung.
     """
     tree = [
         {"path": "jevk5-4b-v0.2-Q8_0.gguf", "size": 4},
         {"path": "jevk5-4b-v0.3-Q8_0.gguf", "size": 5},
         {"path": "jevk5-9b-v0.3-Q8_0.gguf", "size": 9},
+        {"path": "jevk5-4b-v0.3-Q4_K_M.gguf", "size": 2},
+        {"path": "jevk5-9b-v0.3-Q4_K_M.gguf", "size": 3},
         {"path": "M-Q6_K-00001-of-00002.gguf", "size": 1},
         {"path": "M-Q6_K-00002-of-00002.gguf", "size": 1}]
     got = sizes_of(tree, pinned=["jevk5-4b-v0.2-Q8_0.gguf"])
     eq(got.get("jevk5-4b-v0.2-Q8_0.gguf"), 4, "the pinned file is sized alone: %r" % got)
-    eq(got.get("Q8_0"), 14, "and leaves the rest of its tag where it was")
+    eq((got.get("jevk5-4b-v0.3-Q8_0.gguf"), got.get("jevk5-9b-v0.3-Q8_0.gguf"), got.get("Q8_0")),
+       (5, 9, None), "and so is every other model its tag gathered: %r" % got)
+    eq((got.get("jevk5-4b-v0.3-Q4_K_M.gguf"), got.get("Q4_K_M")), (2, None),
+       "a tag holding several models is split even where no pin falls in it")
     eq(got.get("Q6_K"), 2, "shards of one file are still one rung")
     eq(sizes_of(tree).get("Q8_0"), 18, "with nothing pinned nothing moves")
+    bv = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    rows, _ = bv.repo_rows({"repos": [{"repo": "fixture/Repo",
+                                       "files": {"jevk5-4b-v0.2-Q8_0.gguf": {"quant": "Q8_0"}}}]},
+                           {"fixture/Repo": dict(got, **{"jevk5-4b-v0.2-Q4_K_M.gguf": 2})})
+    eq(sorted(a.get("file", a["quant"]) for a in rows[0]["available"]),
+       ["M-Q6_K.gguf" if "M-Q6_K.gguf" in got else "Q6_K",
+        "jevk5-4b-v0.2-Q4_K_M.gguf", "jevk5-4b-v0.2-Q8_0.gguf"],
+       "the page offers the pinned model's rungs and none of its neighbours'")
 
 
 def roster_args(tmp, *repos, **kw):
@@ -3586,6 +3602,24 @@ def load_write_prose():
 
 
 @test
+def a_verdict_decided_at_its_figures_is_not_reported_stale_by_write_prose():
+    """`analyze-usecase --check-verdicts` and review-verdicts skip a verdict a
+    human decided at these figures; `write-prose --check` did not, so after a
+    sweep's queue was decided the punch list still printed 22 of them. A
+    decision at OTHER figures is no decision about these, and still reports."""
+    wp = load_write_prose()
+    block = wp.prose.Block("usecase", "usecase:a/b", {}, "a/b", None)
+    ledger = {"usecase:a/b": {"authored_against": {"aa4.gpqa": 69}}}
+    models = {"a/b": {"facets": {"aa4.gpqa": {"pct": 32}}}}
+    eq([k for k, _ in wp.stale_of(block, ledger, models, {})], ["aa4.gpqa"],
+       "a figure that moved bands is stale")
+    eq(wp.stale_of(block, ledger, models, {"a/b": {"figures": {"aa4.gpqa": 32}}}), [],
+       "and decided at the figure it moved to, it is settled")
+    eq(len(wp.stale_of(block, ledger, models, {"a/b": {"figures": {"aa4.gpqa": 50}}})), 1,
+       "a decision at another figure settles nothing")
+
+
+@test
 def a_redraft_is_handed_what_the_registry_already_says():
     """Both drafters wrote every block from nothing.
 
@@ -3766,6 +3800,36 @@ def every_block_of_prose_records_who_wrote_it():
        "%d of the repo's prose blocks have no recorded author" % len(missing))
     bad = sorted({v.get("author") for v in ledger.values()} - set(prose.AUTHORS))
     eq(bad, [], "and no block claims an author outside that set")
+
+
+@test
+def reading_the_committed_prose_leaves_the_working_tree_readable():
+    """`write-prose --stamp --restamp` stamped no registry note added since HEAD.
+
+    the registry is parsed once and kept, and `as_committed` swaps the path it
+    is read from without dropping what was kept, so the first read inside the
+    block -- the committed file -- answered every read after it. a model added
+    in the session had no blocks to stamp, and a note rewritten in the session
+    compared equal to itself.
+    """
+    prose = load_prose()
+    tmp = tempfile.mkdtemp()
+    path = os.path.join(tmp, "models.yaml")
+    with open(path, "w") as f:
+        f.write("models:\n  Only/In-The-Tree:\n    kind: text\n    notes: written today\n")
+    real = prose.REGISTRY
+    prose.REGISTRY = path
+    prose._REGISTRY.clear()
+    try:
+        with prose.as_committed():
+            prose.blocks("registry-note")
+        ids = [b.id for b in prose.blocks("registry-note")]
+    finally:
+        prose.REGISTRY = real
+        prose._REGISTRY.clear()
+        shutil.rmtree(tmp)
+    eq(ids, ["registry-note:Only/In-The-Tree#notes"],
+       "after the committed read, the registry on disk is the one read: %r" % ids[:3])
 
 
 @test
@@ -9108,6 +9172,26 @@ def gufos_index_row_names_the_bytes_it_measured():
     eq("revision" in asr, False, "and carries no invented revision")
     eq(rows["qwen3.8-27b"]["modes"], "Q4/Q8, images, AR, DFlash2",
        "the mode column, minus the markdown bold")
+
+
+@test
+def gufos_index_reads_a_guide_that_is_one_file_rather_than_a_folder():
+    """gufo moved every guide from `docs/models/<slug>/README.md` to
+    `docs/models/<slug>.md`, and the index read no rows at all. Two rows can
+    share one file under different anchors -- qwen-image-2.1 and its turbo --
+    and each is its own model, so the anchor names the second one."""
+    flat = GUFO_INDEX.replace("/README.md)", ".md)") + (
+        "| [Qwen-Image-2.1](docs/models/qwen-image-2.1.md) | BF16 | "
+        "[Complete pipeline](https://huggingface.co/Qwen/Qwen-Image-2.1/tree/b317) | x |\n"
+        "| [Qwen-Image-2.1-Turbo](docs/models/qwen-image-2.1.md#qwen-image-21-turbo) | BF16 | "
+        "[Complete pipeline](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo/tree/fc13) | x |\n")
+    rows = gufo_module().index(flat)
+    eq(sorted(rows), ["qwen-image-2.1", "qwen-image-21-turbo", "qwen3-asr", "qwen3.8-27b",
+                      "qwen3.8-flash-next"], "a flat guide keeps the slug a folder gave it")
+    eq(rows["qwen3.8-27b"]["doc"], "docs/models/qwen3.8-27b.md", "and is fetched from where it is")
+    eq((rows["qwen-image-21-turbo"]["doc"], rows["qwen-image-21-turbo"]["weights"][0]["repo"]),
+       ("docs/models/qwen-image-2.1.md", "Qwen/Qwen-Image-2.1-Turbo"),
+       "an anchored row is its own model, read from the file the anchor is in")
 
 
 @test

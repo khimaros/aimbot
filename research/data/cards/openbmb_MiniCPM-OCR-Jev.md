@@ -4,6 +4,7 @@ language:
 - en
 - zh
 pipeline_tag: image-text-to-text
+library_name: transformers
 tags:
 - minicpm-ocr
 - ocr

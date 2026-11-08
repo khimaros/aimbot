@@ -73,22 +73,20 @@ We are excited to embark on this next chapter with you and welcome your feedback
 ## Benchmark Results
 
 <style>
-.vl-table th{font-size:15px!important;line-height:1.2}
-.vl-table td:not(.benchmark-cell):not([colspan]){font-size:15px;line-height:1.2;vertical-align:middle}
+.vl-table th{font-size:15px!important;line-height:1.2;color:inherit!important}
+.vl-table td:not(.benchmark-cell):not([colspan]){font-size:15px;line-height:1.2;vertical-align:middle;color:inherit!important}
 .vl-table .benchmark-cell{padding:12px 10px 12px 18px!important;vertical-align:middle}
-.vl-table .benchmark-capability{font-size:15px;font-weight:600;line-height:1.22;color:#171717}
-.vl-table .benchmark-name{margin-top:4px;font-size:11px;font-weight:400;line-height:1.2;color:#6B6B6B}
+.vl-table .benchmark-capability{font-size:15px;font-weight:600;line-height:1.22;color:inherit!important}
+.vl-table .benchmark-name{margin-top:4px;font-size:11px;font-weight:400;line-height:1.2;opacity:.6}
 .vl-table .metric-stack{display:flex;flex-direction:column;gap:7px;padding:3px 0}
-.vl-table .metric-label{font-size:10px;font-weight:400;line-height:1.1;color:#777}
-.vl-table .metric-value{margin-top:2px;font-size:15px;line-height:1.15;color:#171717}
+.vl-table .metric-label{font-size:10px;font-weight:400;line-height:1.1;opacity:.55}
+.vl-table .metric-value{margin-top:2px;font-size:15px;line-height:1.15;color:inherit!important}
 .vl-table .metric-pair{white-space:nowrap}
-.vl-table .metric-sep{color:#9A9A9A;padding:0 3px}
+.vl-table .metric-sep{color:inherit!important;opacity:.55;padding:0 3px}
 
 @media (prefers-color-scheme: dark){
 .vl-table th,.vl-table td[colspan]{color:#8DA2FF!important;border-bottom-color:#8DA2FF!important}
 .vl-table td[colspan]{background:rgba(10,46,254,0.22)!important}
-.vl-table .benchmark-capability,.vl-table .metric-value{color:#E8E8E8!important}
-.vl-table .benchmark-name,.vl-table .metric-label{color:#A3A3A3!important}
 }
 </style>
 

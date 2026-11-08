@@ -39,6 +39,8 @@ The code, pre-trained model weights, and training logs are publicly released to 
 Inference examples can be found on our [project page](https://www.wavlab.org/activities/2024/owsm/).
 The Gradio demo is [here](https://huggingface.co/spaces/espnet/owsm-v4).
 
+For CPU inference without Python, GGUF conversions of this model are available at [audio-cpp/audio.cpp-gguf](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/OWSM-GGUF) (`owsm-v4-medium-1b`), for use with [audio.cpp](https://github.com/0xShug0/audio.cpp). These builds are produced and maintained outside ESPnet.
+
 [OWSM v4](https://arxiv.org/abs/2506.00338) is the latest version in the OWSM series, which significantly outperforms OWSM v3.1 in LID and multilingual ASR.
 Additionally, OWSM v4 applies 8 times subsampling (instead of 4 times in OWSM v3.1) to the log Mel features, leading to a final resolution of 80 ms in the encoder.
 When running inference, we recommend setting `maxlenratio=1.0` (default) instead of smaller values.

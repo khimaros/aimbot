@@ -1662,6 +1662,28 @@
    ],
    "assessed_on": "2026-10-21"
   },
+  "nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B": {
+   "one_liner": "nvidia's 30b a4b speech language model: transcription in 40 languages, translation, speaker labels and word timestamps from one checkpoint, offline only.",
+   "use_for": [
+    "long recordings transcribed offline, up to an hour",
+    "meeting transcripts with speaker labels and word timestamps",
+    "speech translation to and from english"
+   ],
+   "avoid_for": [
+    "live or streaming transcription; the 0.6b streaming sibling is built for that",
+    "audio questions or spoken instructions outside english, which the card did not evaluate",
+    "speech synthesis"
+   ],
+   "notes": "the card leads the open asr leaderboard's english, long-form and multilingual averages and the multi-speaker sets, all vendor-run. audio understanding and spoken instructions were only evaluated in english. audio.cpp's port is a community one the catalog marks experimental, and atomicchat's measured ladder targets NeMo-Speech.cpp, which this roster does not run. openmdw-1.1.",
+   "confidence": "low",
+   "evidence": [
+    "kind speech, audio -> text",
+    "card: 40 languages, recordings up to one hour, about 4.3b active parameters",
+    "card: transcription at temperature 0 with reasoning off",
+    "audio.cpp family nemotron_transcribe, experimental"
+   ],
+   "assessed_on": "2026-11-08"
+  },
   "nvidia/nemotron-3.5-asr-streaming-0.6b": {
    "one_liner": "a 600m streaming transcriber for 40 locales whose chunk size trades latency for accuracy at runtime.",
    "use_for": [
@@ -2823,6 +2845,27 @@
    ],
    "assessed_on": "2026-10-31"
   },
+  "ricursiveAI/Ripple-65B-Preview": {
+   "one_liner": "a dense 65b trained from scratch for agentic coding, whose card puts it level with open models ten times its size on terminal-bench.",
+   "use_for": [
+    "agentic coding and terminal work",
+    "repository-scale bug fixing with tools"
+   ],
+   "avoid_for": [
+    "clients that need to switch reasoning off",
+    "image or audio input",
+    "workloads that need a stable release, since this is a lightly post-trained preview"
+   ],
+   "notes": "no board has scored it, so every number is the vendor's, and its comparison table fills gaps with its own harness. dense, so all 65b are active on every token, which makes it slower per token than the sparse models it is compared against. the vendor ships a dflash2 drafter, but the only gguf of it does not yet match the recipe under llama.cpp.",
+   "confidence": "low",
+   "evidence": [
+    "card: post-trained with a focus on agentic coding, described as relatively light post-training",
+    "card: italicised scores are the vendor's own runs of the other models",
+    "atomicchat card: kl divergence and top-token agreement against bf16 for every rung",
+    "no board scores it"
+   ],
+   "assessed_on": "2026-11-06"
+  },
   "RecursiveSI/flint": {
    "one_liner": "a 40b sparse coding-agent model at 2.5b active, cheap to run per token for its size.",
    "use_for": ["coding agents", "bug fixing and feature work in a repository"],
@@ -3137,7 +3180,7 @@
     "tool calling",
     "anything qwen3.5-4b does instead"
    ],
-   "notes": "{aa4.intelligence} against its successor's {aa4.intelligence@Qwen/Qwen3.5-4B} at the same parameter count from the same vendor, and {aa4.tau2} on tau2 against that model's {aa4.tau2@Qwen/Qwen3.5-4B} -- a wide gap on tool use in roughly a year, from a vendor iterating faster than anyone else here. {aa4.livecodebench} is where it still holds up, {aa4.gpqa} is mid-table, and {aa4.lcr} on long-context reasoning sits in the bottom band. the card and the shipped generation_config agree exactly on samplers, which is rarer than it should be, and the template names no thinking knob, so this checkpoint always thinks.",
+   "notes": "{aa4.intelligence} against its successor's {aa4.intelligence@Qwen/Qwen3.5-4B} at the same parameter count from the same vendor, and {aa4.tau2} on tau2 against that model's {aa4.tau2@Qwen/Qwen3.5-4B} -- a wide gap on tool use in roughly a year, from a vendor iterating faster than anyone else here. {aa4.livecodebench} is where it still holds up, {aa4.gpqa} is in the lower third, and {aa4.lcr} on long-context reasoning sits in the bottom band. the card and the shipped generation_config agree exactly on samplers, which is rarer than it should be, and the template names no thinking knob, so this checkpoint always thinks.",
    "confidence": "medium",
    "evidence": [
     "{aa4.intelligence}",
@@ -3225,7 +3268,7 @@
     "{swerebench.resolved:value}",
     "{aa5.speed:value}",
     "{aa4.scicode}",
-    "reddit 59 mentions at 53% approval"
+    "reddit 60 mentions at 53% approval"
    ],
    "assessed_on": "2026-09-16"
   },
@@ -3489,7 +3532,7 @@
     "scientific code",
     "physics"
    ],
-   "notes": "{aa4.tau2} with {card.mmmu}, {card.osworld} and scicode at the floor is a narrow shape -- fine as a router or a cheap first pass, not as the model that finishes the job. keep the reasoning on for even that: \"when I used Qwen3.5 9b sans reasoning it performed horrendously across almost every task\" {q:6aa40f69}.",
+   "notes": "{aa4.tau2} with {card.osworld} and scicode at the floor and {card.mmmu} only mid-board is a narrow shape -- fine as a router or a cheap first pass, not as the model that finishes the job. keep the reasoning on for even that: \"when I used Qwen3.5 9b sans reasoning it performed horrendously across almost every task\" {q:6aa40f69}.",
    "confidence": "medium",
    "evidence": [
     "{aa4.tau2}",
@@ -3575,7 +3618,7 @@
     "long context"
    ],
    "avoid_for": [],
-   "notes": "gbench has since played it, {gbench.overall}, so its evidence is aa, gbench, its own card and {community.reddit-localllama}. the template defaults thinking to xhigh, which costs 15k-52k thinking tokens in reported traces against qwen3.6's 3k. it is also the value pick: the top score out of the smallest file of anything near it, which leaves room beside it for context or a second model. one reproducible benchmark on this exact silicon reports UD-Q5_K_XL at 16.68 t/s against Q8_0's 12.74, with MTP at 4 draft tokens under vulkan -- one reporter on one box, so a reason to test the lower quant rather than a recommendation to run it.",
+   "notes": "gbench has since played it and puts it mid-board, {gbench.overall}, so the strongest-dense claim rests on aa and its card more than on gbench. its evidence is aa, gbench, its own card and {community.reddit-localllama}. the template defaults thinking to xhigh, which costs 15k-52k thinking tokens in reported traces against qwen3.6's 3k. it is also the value pick: the top score out of the smallest file of anything near it, which leaves room beside it for context or a second model. one reproducible benchmark on this exact silicon reports UD-Q5_K_XL at 16.68 t/s against Q8_0's 12.74, with MTP at 4 draft tokens under vulkan -- one reporter on one box, so a reason to test the lower quant rather than a recommendation to run it.",
    "confidence": "high",
    "evidence": [
     "{aa4.intelligence:value}",
@@ -4370,7 +4413,7 @@
     "{aa4.ifbench}",
     "{aa4.hle}",
     "{aa4.critpt}",
-    "reddit 42 mentions at 92% approval"
+    "reddit 48 mentions at 92% approval"
    ],
    "assessed_on": "2026-08-17"
   },
@@ -5794,12 +5837,12 @@
     "{aa5.speed:value}",
     "gbench go 100%",
     "gbench cpp 100%",
-    "reddit 58 mentions at 80% approval"
+    "reddit 60 mentions at 82% approval"
    ],
    "assessed_on": "2026-08-17"
   },
   "openai/gpt-oss-20b": {
-   "one_liner": "the small gpt-oss: quick, cheap, and out of its depth on anything agentic.",
+   "one_liner": "the small gpt-oss: cheap to run, mid-pack on speed, and out of its depth on anything agentic.",
    "use_for": [
     "cheap local chat",
     "high-throughput drafts"

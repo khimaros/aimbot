@@ -1,44 +1,49 @@
 ---
 license: other
-license_name: nvidia-one-way-noncommercial
-license_link: LICENSE
-base_model: nvidia/RE-USE
+license_name: mixed-openmdw-and-nvidia-noncommercial
+license_link: https://huggingface.co/audio-cpp/RE-USE-GGUF/blob/main/README.md#license
+base_model:
+  - nvidia/NVIDIA-NemotronLabs-RE-USE
+  - nvidia/Real-time_RE-USE
+base_model_relation: quantized
 library_name: audio.cpp
 pipeline_tag: audio-to-audio
 tags:
   - audio.cpp
   - gguf
   - speech-enhancement
+  - streaming
   - language-agnostic
 ---
 
 # RE-USE GGUF
 
-GGUF weights for native inference with
-[audio.cpp](https://github.com/0xShug0/audio.cpp). RE-USE restores degraded
-speech while preserving its input sample rate. It uses a convolutional
-encoder/decoder and 30 bidirectional time-frequency Mamba blocks.
+Follow or star [audio.cpp](https://github.com/0xShug0/audio.cpp) for the native
+C++ runtime, model support, and updates.
 
-## Upstream
+This repository contains the original **RE-USE** checkpoint, the two newer,
+commercial-friendly **NVIDIA NemotronLabs RE-USE** checkpoints, and causal
+**Real-time RE-USE** for streaming enhancement. The NemotronLabs
+variants use OpenMDW-1.1; the original checkpoint retains its noncommercial license.
 
-The checkpoint and reference implementation are pinned to
-[nvidia/RE-USE, revision 022e920d727347a64d6c21fbf0628f2a5f37ad78](https://huggingface.co/nvidia/RE-USE/tree/022e920d727347a64d6c21fbf0628f2a5f37ad78).
-Each GGUF includes the model weights, configuration, and audio.cpp model spec.
-No separate encoder or tokenizer is required. Packages are converted directly
-from the original safetensors, not from another GGUF.
+Offline RE-USE restores degraded speech using a convolutional encoder/decoder and 30
+bidirectional time-frequency Mamba blocks. All three offline variants use audio.cpp's existing
+`reuse` family. Each GGUF embeds its configuration and model spec; no separate
+encoder, tokenizer, or configuration file is required.
 
-## Packages
+## Packages and pinned upstream checkpoints
 
-| File | Size | Storage | Recommendation |
-|---|---:|---|---|
-| `reuse-f32.gguf` | 37.80 MiB | F32 | Default; fastest of the tested C++ formats. |
+| GGUF | Upstream checkpoint | Revision |
+|---|---|---|
+| `reuse-f32.gguf` | [Original RE-USE](https://huggingface.co/nvidia/RE-USE) | [`022e920`](https://huggingface.co/nvidia/RE-USE/tree/022e920d727347a64d6c21fbf0628f2a5f37ad78) |
+| `reuse-nemotronlabs-f32.gguf` | [NVIDIA-NemotronLabs-RE-USE](https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE) | [`31f82f2`](https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE/tree/31f82f2efad1095034492f236e8dac9239ba713b) |
+| `reuse-laughter-f32.gguf` | [NVIDIA-NemotronLabs-RE-USE-laughter](https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE-laughter) | [`1b1521d`](https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE-laughter/tree/1b1521dd659608e1e063ada83e0acfe1da473a8b) |
+| `realtime-reuse-f32.gguf` | [Real-time RE-USE](https://huggingface.co/nvidia/Real-time_RE-USE) | [`4c0c186`](https://huggingface.co/nvidia/Real-time_RE-USE/tree/4c0c186272ca853cd18d832fc5c28777b62f32d1) |
 
-Only F32 is provided. F16 and Q8 were rejected because their small disk savings
-did not improve speed or peak VRAM in testing, while introducing waveform drift
-and additional packaging complexity.
-
-F32 was checked on CUDA and Vulkan. Metal, and HIP were not validated in
-this comparison.
+Use the laughter variant when better preservation of laughter is desired.
+Each offline GGUF is approximately 38 MiB and retains all 1,416 F32 tensors byte-for-byte
+from its upstream checkpoint. The laughter configuration is unwrapped during
+conversion to match the existing runtime's configuration layout.
 
 ## Controlled Parity With Python
 
@@ -95,12 +100,15 @@ method as above. This is chunked processing, not full-recording parity.
 
 ```bash
 audiocpp_cli --task s2s --family reuse \
-  --model /path/to/RE-USE-GGUF/reuse-f32.gguf --backend cuda \
+  --model models/RE-USE-GGUF/reuse-nemotronlabs-f32.gguf --backend cuda \
   --audio input.wav --out restored.wav --log
 ```
 
-Input audio must be 8-48 kHz and longer than 20 ms. Output retains the input
+For the laughter variant, select `reuse-laughter-f32.gguf` instead.
+
+Input audio must be 8–48 kHz and longer than 20 ms. Output retains the input
 sample rate, channels, and length. Channels are processed independently.
+This is offline speech restoration, not streaming inference.
 
 For long recordings, optional overlapping chunks bound graph workspace:
 
@@ -109,14 +117,75 @@ For long recordings, optional overlapping chunks bound graph workspace:
 --request-option audio_chunk_overlap_sec=1
 ```
 
-Chunking changes bidirectional and normalization context and can change output
-quality. It is not equivalent to full-recording inference. Input and output
-audio still occupy host memory proportional to recording length.
+Chunking changes bidirectional and normalization context and can change the
+output. It is not equivalent to full-recording inference. Input and output audio
+still occupy host memory proportional to recording length.
 
-See the [model usage guide](https://github.com/0xShug0/audio.cpp/blob/main/docs/community_models/reuse.md)
-for options and batching.
+See the [model usage guide](https://github.com/0xShug0/audio.cpp/blob/main/docs/models/reuse.md)
+for options and batching, and the [converter](https://github.com/0xShug0/audio.cpp/blob/main/tests/reuse/convert_reuse_gguf.py)
+for reproducible conversion.
+
+## Real-time RE-USE
+
+`realtime-reuse-f32.gguf` uses the separate `realtime_reuse` family. It is a
+causal checkpoint with offline enhancement and incremental waveform streaming,
+not another weight variant of the bidirectional offline model. All 1,318
+checkpoint tensors are preserved exactly in F32. The upstream NVIDIA One-Way
+Noncommercial License applies.
+
+### Usage
+
+Mono input at 8–48 kHz is supported; output preserves its sample rate and length.
+
+```bash
+audiocpp_cli --task s2s --family realtime_reuse \
+  --model realtime-reuse-f32.gguf --backend cuda --threads 8 \
+  --audio noisy.wav --out restored.wav --log
+```
+
+Add `--mode streaming` for incremental processing. Session options
+`realtime_reuse.exit_layer=3..12` and `realtime_reuse.lookahead_frames=0..2`
+select the 30 trained quality/latency configurations. Defaults are exit layer 8
+and zero lookahead.
+
+### CUDA performance
+
+RTX 5090, eight host threads, a 14.07-second mono 24 kHz input, exit layer 8,
+zero lookahead, one warmup followed by two warm requests. Both implementations
+use the original F32 checkpoint. VRAM is the sampled process peak, including
+runtime allocations.
+
+| Mode | audio.cpp warm RTF | Official Python warm RTF | audio.cpp peak VRAM | Python peak VRAM |
+|---|---:|---:|---:|---:|
+| Streaming | 0.0272 | 0.340 | 1,033 MiB | 854 MiB |
+| Offline | 0.0119 | 0.00622 | 967 MiB | 3,748 MiB |
+
+Streaming is approximately 12.5× faster; warm first-audio latency through the
+local streaming HTTP API is approximately 7–8 ms. audio.cpp starts with single
+frames, then grows to 2, 4, and 8 frames, caching each graph size. At steady state,
+eight frames correspond to approximately 160 ms of live input. RTF excludes real-time pacing
+of the input. Python's online script processes network frames individually but
+precomputes the complete recording's STFT and reconstructs the waveform at the
+end. audio.cpp performs incremental STFT and overlap-add synthesis.
+
+Offline audio.cpp uses bounded causal blocks to reduce GPU memory; Python is
+faster for this offline input. Streaming processing state is bounded, while the
+standard final-result interface also collects emitted audio in host memory.
+
+### Streaming across GPU backends
+
+F32 weights on RTX 5090, eight host threads, 14.07-second mono 24 kHz input,
+exit layer 8, zero lookahead. Results average two requests after one warmup.
+TTFA is measured at the HTTP client with prerecorded input; live capture adds
+input-buffering latency. Peak VRAM is sampled per process.
+
+| Backend | Warm TTFA | Warm RTF | Peak VRAM |
+|---|---:|---:|---:|
+| CUDA | 7.46 ms | 0.02703 | 1,033 MiB |
+| Vulkan | 14.94 ms | 0.04918 | 511 MiB |
 
 ## License
 
-The weights retain the [NVIDIA One-Way Noncommercial License (NSCLv1)](LICENSE)
-specified by the upstream model card. Conversion does not replace those terms.
+- `reuse-nemotronlabs-f32.gguf` and `reuse-laughter-f32.gguf`: [OpenMDW-1.1](LICENSE).
+- Original `reuse-f32.gguf`: [NVIDIA One-Way Noncommercial License](LICENSE-original).
+- `realtime-reuse-f32.gguf`: [upstream NVIDIA One-Way Noncommercial License](https://huggingface.co/nvidia/Real-time_RE-USE/tree/4c0c186272ca853cd18d832fc5c28777b62f32d1).

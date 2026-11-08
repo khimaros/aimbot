@@ -210,10 +210,21 @@ def cmd_list(args, models):
         print("there is one MODELS.md still holds by hand rather than generating.")
 
 
+def stale_of(block, ledger, models, decided):
+    """[(key, why)] for each figure this block vouched for that has since moved,
+    unless a human already decided the block at the figures it moved to."""
+    snap = (ledger.get(block.id) or {}).get("authored_against")
+    facets = prose.facts_for(block, models)
+    if not snap or facets is None or verdicts.settled(block.grounded, snap, facets, decided):
+        return []
+    return verdicts.moved(snap, facets)
+
+
 def cmd_check(args, models):
     """Style and citations over everything, then what the ledger cannot say."""
     import notes
     note_data = notes.load()
+    decided = verdicts.load_decided()
     findings, unstamped, stale = [], [], []
     for surface in ([args.surface] if args.surface else prose.SURFACES):
         for block in prose.blocks(surface):
@@ -222,11 +233,8 @@ def cmd_check(args, models):
             if block.id not in args.ledger:
                 unstamped.append(block.id)
                 continue
-            snap = (args.ledger[block.id] or {}).get("authored_against")
-            facets = prose.facts_for(block, models)
-            if snap and facets is not None:
-                for key, why in verdicts.moved(snap, facets):
-                    stale.append((block.id, key, why))
+            stale += [(block.id, key, why)
+                      for key, why in stale_of(block, args.ledger, models, decided)]
 
     for bid, field, why in findings:
         print("  %-52s %-10s %s" % (bid[:52], field, why))

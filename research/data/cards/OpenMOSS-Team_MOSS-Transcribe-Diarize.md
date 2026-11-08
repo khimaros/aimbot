@@ -24,6 +24,7 @@ pipeline_tag: audio-text-to-text
   <a href="https://github.com/OpenMOSS/MOSS-Transcribe-Diarize"><img src="https://img.shields.io/badge/GitHub-OpenMOSS%2FMOSS--Transcribe--Diarize-black?logo=github"></a>
   <a href="https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize"><img src="https://img.shields.io/badge/HuggingFace-Model-orange?logo=huggingface"></a>
   <a href="https://arxiv.org/abs/2601.01554"><img src="https://img.shields.io/badge/arXiv-2601.01554-b31b1b?logo=arxiv"></a>
+  <a href="https://platform.moss.cn/app/playground/"><img src="https://img.shields.io/badge/Demo-MOSS%20Playground-green?logo=rocket"></a>
 </div>
 
 MOSS-Transcribe-Diarize 0.9B is an end-to-end audio understanding model for long-form multi-speaker transcription, diarization, timestamps, and acoustic event awareness.

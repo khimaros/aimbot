@@ -23,7 +23,13 @@ at 86%. That is what `authored_against` and the staleness check are for.
 """
 
 import hashlib
+import json
+import os
 import re
+
+# what a human answered for each verdict whose evidence moved, written by
+# review-verdicts --decide and read by everything that reports the queue
+DECIDED = os.path.join(os.path.dirname(os.path.abspath(__file__)), "verdicts-decided.json")
 
 # `{facet.key}` for the percentile, `{facet.key:value}` when the measurement
 # itself is part of the sentence, and `{facet.key@owner/Repo}` for the model a
@@ -650,6 +656,26 @@ def snapshot(keys, facets):
         elif facet.get("pct") is not None:
             out[key] = facet["pct"]
     return out
+
+
+def load_decided(path=None):
+    """{repo: {action, note, figures}} -- what a human answered for each verdict."""
+    try:
+        with open(path or DECIDED) as f:
+            return json.load(f)
+    except (IOError, ValueError):
+        return {}
+
+
+def settled(repo, snap, facets, decided):
+    """True where a human decided this verdict at the figures it now stands on.
+
+    One rule for every reader of the queue. review-verdicts honoured decisions
+    and the sweep's punch list did not, so verdicts somebody had re-read came
+    back every sweep; a decision at OTHER figures is no answer about these.
+    """
+    was = ((decided or {}).get(repo) or {}).get("figures")
+    return was is not None and was == snapshot(sorted(snap or {}), facets)
 
 
 def _moved_one(kind, was, now):

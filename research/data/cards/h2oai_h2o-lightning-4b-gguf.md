@@ -30,25 +30,23 @@ levels, and `box` (a bounding box in an image).
 
 ## Leading on Benchmarks
 
-![Leading on Benchmarks: #1 of 46, Composite (open-weight Jev-class models; #2 of 55 Jev-class models, open or API), ImageJevBench edition v0.3.0; #2 of 46, Intelligence (open-weight Jev-class models; #6 of 55 Jev-class models, open or API), ImageJevBench edition v0.3.0; #4 of 46, Capability (open-weight Jev-class models; #10 of 55 Jev-class models, open or API), ImageJevBench edition v0.3.0; #2 of 170, Composite (open-weight Jev-class models; #12 of 201 Jev-class models, open or API), JevBench board of 2026-10-28; #1 of 4, Box Capability (open-weight Jev-class models; #1 of 5 Jev-class systems, open or API), ImageJevBench Box track (PREVIEW); #1 of 46, Composite (open-weight Jev-class models; #3 of 55 Jev-class systems, open or API), ImageJevBench computer-use track](assets/leading_on_benchmarks_4b.png)
+![Leading on Benchmarks: #1 of 46, Composite (open-weight Jev-class models; #2 of 55 Jev-class models, open or API), ImageJevBench edition v0.3.0; #2 of 46, Intelligence (open-weight Jev-class models; #6 of 55 Jev-class models, open or API), ImageJevBench edition v0.3.0; #2 of 46, Capability (open-weight Jev-class models; #6 of 55 Jev-class models, open or API), ImageJevBench edition v0.3.0; #2 of 170, Composite (open-weight Jev-class models; #12 of 201 Jev-class models, open or API), JevBench board of 2026-10-28; #1 of 4, Box Capability (open-weight Jev-class models; #1 of 5 Jev-class systems, open or API), ImageJevBench Box track (PREVIEW); #1 of 46, Composite (open-weight Jev-class models; #3 of 55 Jev-class systems, open or API), ImageJevBench computer-use track](assets/leading_on_benchmarks_4b.png)
 
 - **#1 of 46 — Composite** (open-weight Jev-class models; #2 of 55 Jev-class models, open or API), ImageJevBench
-  edition v0.3.0, page read 2026-10-29, its row for release v1.4.1, measured 2026-10-27 at image
-  temperature 0.65; ahead of
+  edition v0.3.0, page read 2026-10-31, its row for release v1.4.1 @d7f1b05a, measured 2026-10-28 at image temperature
+  1.0; ahead of
   Drex Max (Nace AI, 44.65),
   Jev 1.13.0 + images (TypeSafe, 26.43),
   Clef-Flash (Cloudflare, 20.41) and
-  GPT-6 Luna via OpenAI Decisions (17.30) ([details](https://huggingface.co/h2oai/h2o-lightning-4b#imagejevbench))
+  Liquid d1-3B (4.10) ([details](https://huggingface.co/h2oai/h2o-lightning-4b#imagejevbench))
 - **#2 of 46 — Intelligence** (open-weight Jev-class models; #6 of 55 Jev-class models, open or API), ImageJevBench
-  edition v0.3.0, page read 2026-10-29, its row for release v1.4.1, measured 2026-10-27 at image
-  temperature 0.65; ahead of
-  Clef (Cloudflare, 47.40),
-  GPT-6 Luna via OpenAI Decisions (45.00) and
+  edition v0.3.0, page read 2026-10-31, its row for release v1.4.1 @d7f1b05a, measured 2026-10-28 at image temperature
+  1.0; ahead of
+  Clef (Cloudflare, 47.40) and
   Liquid d1-3B (16.31) ([details](https://huggingface.co/h2oai/h2o-lightning-4b#imagejevbench))
-- **#4 of 46 — Capability** (open-weight Jev-class models; #10 of 55 Jev-class models, open or API), ImageJevBench
-  edition v0.3.0, page read 2026-10-29, its row for release v1.4.1, measured 2026-10-27 at image
-  temperature 0.65; ahead of
-  GPT-6 Luna via OpenAI Decisions (62.87),
+- **#2 of 46 — Capability** (open-weight Jev-class models; #6 of 55 Jev-class models, open or API), ImageJevBench
+  edition v0.3.0, page read 2026-10-31, its row for release v1.4.1 @d7f1b05a, measured 2026-10-28 at image temperature
+  1.0; ahead of
   Clef (Cloudflare, 58.08) and
   Liquid d1-3B (47.78) ([details](https://huggingface.co/h2oai/h2o-lightning-4b#imagejevbench))
 - **#2 of 170 — Composite** (open-weight Jev-class models; #12 of 201 Jev-class models, open or API), JevBench board
@@ -61,9 +59,10 @@ levels, and `box` (a bounding box in an image).
   track: within 2x the latency and cost of Jev 1.14.0), ImageJevBench Box track (PREVIEW), edition v0.3.0, page read
   2026-10-29, its row for release v1.4.1 through the H2O serving package, measured 2026-10-29; ahead of
   Jev 1.14.0 (TypeSafe, 75.71) ([details](https://huggingface.co/h2oai/h2o-lightning-4b#for-benchmark-maintainers-imagejevbench-box-track))
-- **#1 of 46 — Computer-use Composite** (open-weight Jev-class systems; #3 of 55 Jev-class systems, open or API, behind
-  two API systems scored on the board's smaller hosted-API item set), ImageJevBench computer-use track, edition v0.3.0,
-  page read 2026-10-29, its row for release v1.4.1, measured 2026-10-27 at image temperature 0.65; ahead of
+- **#1 of 46 — Computer-use Composite** (open-weight Jev-class systems; #3 of 55 Jev-class systems, open or API,
+  behind two API systems scored on the board's smaller hosted-API item set), ImageJevBench computer-use track, edition
+  v0.3.0, page read 2026-10-31, its row for release v1.4.1 @d7f1b05a, measured 2026-10-28 at image temperature 1.0;
+  ahead of
   Liquid d1-3B (Liquid AI, 66.22) and
   Clef-Flash (Cloudflare, 55.29) ([details](https://huggingface.co/h2oai/h2o-lightning-4b#imagejevbench))
 

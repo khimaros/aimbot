@@ -27,25 +27,23 @@ screenshots, scanned documents, charts). It returns a probability for every opti
 
 ## Leading on Benchmarks
 
-![Leading on Benchmarks: #1 of 46, Composite (open-weight Jev-class models; #2 of 55 Jev-class models, open or API), ImageJevBench edition v0.3.0; #2 of 46, Intelligence (open-weight Jev-class models; #6 of 55 Jev-class models, open or API), ImageJevBench edition v0.3.0; #4 of 46, Capability (open-weight Jev-class models; #10 of 55 Jev-class models, open or API), ImageJevBench edition v0.3.0; #2 of 170, Composite (open-weight Jev-class models; #12 of 201 Jev-class models, open or API), JevBench board of 2026-10-28; #1 of 4, Box Capability (open-weight Jev-class models; #1 of 5 Jev-class systems, open or API), ImageJevBench Box track (PREVIEW); #1 of 46, Composite (open-weight Jev-class models; #3 of 55 Jev-class systems, open or API), ImageJevBench computer-use track](assets/leading_on_benchmarks_4b.png)
+![Leading on Benchmarks: #1 of 46, Composite (open-weight Jev-class models; #2 of 55 Jev-class models, open or API), ImageJevBench edition v0.3.0; #2 of 46, Intelligence (open-weight Jev-class models; #6 of 55 Jev-class models, open or API), ImageJevBench edition v0.3.0; #2 of 46, Capability (open-weight Jev-class models; #6 of 55 Jev-class models, open or API), ImageJevBench edition v0.3.0; #2 of 170, Composite (open-weight Jev-class models; #12 of 201 Jev-class models, open or API), JevBench board of 2026-10-28; #1 of 4, Box Capability (open-weight Jev-class models; #1 of 5 Jev-class systems, open or API), ImageJevBench Box track (PREVIEW); #1 of 46, Composite (open-weight Jev-class models; #3 of 55 Jev-class systems, open or API), ImageJevBench computer-use track](assets/leading_on_benchmarks_4b.png)
 
 - **#1 of 46 — Composite** (open-weight Jev-class models; #2 of 55 Jev-class models, open or API), ImageJevBench
-  edition v0.3.0, page read 2026-10-29, its row for release v1.4.1, measured 2026-10-27 at image
-  temperature 0.65; ahead of
+  edition v0.3.0, page read 2026-10-31, its row for release v1.4.1 @d7f1b05a, measured 2026-10-28 at image temperature
+  1.0; ahead of
   Drex Max (Nace AI, 44.65),
   Jev 1.13.0 + images (TypeSafe, 26.43),
   Clef-Flash (Cloudflare, 20.41) and
-  GPT-6 Luna via OpenAI Decisions (17.30) ([details](#imagejevbench))
+  Liquid d1-3B (4.10) ([details](#imagejevbench))
 - **#2 of 46 — Intelligence** (open-weight Jev-class models; #6 of 55 Jev-class models, open or API), ImageJevBench
-  edition v0.3.0, page read 2026-10-29, its row for release v1.4.1, measured 2026-10-27 at image
-  temperature 0.65; ahead of
-  Clef (Cloudflare, 47.40),
-  GPT-6 Luna via OpenAI Decisions (45.00) and
+  edition v0.3.0, page read 2026-10-31, its row for release v1.4.1 @d7f1b05a, measured 2026-10-28 at image temperature
+  1.0; ahead of
+  Clef (Cloudflare, 47.40) and
   Liquid d1-3B (16.31) ([details](#imagejevbench))
-- **#4 of 46 — Capability** (open-weight Jev-class models; #10 of 55 Jev-class models, open or API), ImageJevBench
-  edition v0.3.0, page read 2026-10-29, its row for release v1.4.1, measured 2026-10-27 at image
-  temperature 0.65; ahead of
-  GPT-6 Luna via OpenAI Decisions (62.87),
+- **#2 of 46 — Capability** (open-weight Jev-class models; #6 of 55 Jev-class models, open or API), ImageJevBench
+  edition v0.3.0, page read 2026-10-31, its row for release v1.4.1 @d7f1b05a, measured 2026-10-28 at image temperature
+  1.0; ahead of
   Clef (Cloudflare, 58.08) and
   Liquid d1-3B (47.78) ([details](#imagejevbench))
 - **#2 of 170 — Composite** (open-weight Jev-class models; #12 of 201 Jev-class models, open or API), JevBench board
@@ -58,9 +56,10 @@ screenshots, scanned documents, charts). It returns a probability for every opti
   track: within 2x the latency and cost of Jev 1.14.0), ImageJevBench Box track (PREVIEW), edition v0.3.0, page read
   2026-10-29, its row for release v1.4.1 through the H2O serving package, measured 2026-10-29; ahead of
   Jev 1.14.0 (TypeSafe, 75.71) ([details](#for-benchmark-maintainers-imagejevbench-box-track))
-- **#1 of 46 — Computer-use Composite** (open-weight Jev-class systems; #3 of 55 Jev-class systems, open or API, behind
-  two API systems scored on the board's smaller hosted-API item set), ImageJevBench computer-use track, edition v0.3.0,
-  page read 2026-10-29, its row for release v1.4.1, measured 2026-10-27 at image temperature 0.65; ahead of
+- **#1 of 46 — Computer-use Composite** (open-weight Jev-class systems; #3 of 55 Jev-class systems, open or API,
+  behind two API systems scored on the board's smaller hosted-API item set), ImageJevBench computer-use track, edition
+  v0.3.0, page read 2026-10-31, its row for release v1.4.1 @d7f1b05a, measured 2026-10-28 at image temperature 1.0;
+  ahead of
   Liquid d1-3B (Liquid AI, 66.22) and
   Clef-Flash (Cloudflare, 55.29) ([details](#imagejevbench))
 
@@ -95,18 +94,17 @@ draw is not yet equated to the board's reference scale. This release is not yet 
 
 ### ImageJevBench
 
-On the board's [ImageJevBench page](https://benchmarkheaven.com/image-jev-bench) (edition v0.3.0, read 2026-10-28), the board's ranked
-run of v1.4.1 (the same weights), measured on 2026-10-27 with images at temperature 0.65 and v1.4.1's image cap, scores:
+On the board's [ImageJevBench page](https://benchmarkheaven.com/image-jev-bench) (edition v0.3.0, read 2026-10-31), the board's run
+of v1.4.1 @d7f1b05a (the same weights), measured on 2026-10-28 with images at temperature 1.0 and v1.4.1's image cap, scores:
 
 | Intelligence | Calibration | Speed | Cost | Capability | Composite |
 |---|---|---|---|---|---|
-| 55.39 | 76.92 | 88.71 | 56.32 | 66.16 | **66.58** |
+| 55.48 | 88.19 | 88.72 | 56.34 | 71.84 | **68.51** |
 
 On Composite it is the first of 46 open-weight Jev-class models and second of 55 Jev-class models, open or API; the one ahead
-of it is an API system (75.38). It is ahead of Drex Max (Nace AI, 44.65) and
-Jev 1.13.0 + images (TypeSafe, 26.43). The board's re-run of v1.4.1's 2026-10-28 files is listed
-without a rank (see
-[Image calibration](#image-calibration)).
+of it is an API system (75.38). On Capability it is the second of 46 open-weight Jev-class models, behind H2O-Lightning-31B,
+and sixth of 55 Jev-class models, open or API. It is ahead of Drex Max (Nace AI, 44.65) and
+Jev 1.13.0 + images (TypeSafe, 26.43). Image temperature: see [Image calibration](#image-calibration).
 
 ## Run it
 
@@ -769,8 +767,7 @@ one-way), all five from right to wrong.
 
 ImageJevBench v0.3.0 ran v1.4.1's 2026-10-28 files (these weights at image temperature 1.0, with v1.4.1's image cap of
 1,048,576 pixels) on 2026-10-28 ([results](https://benchmarkheaven.com/api/decision-results/imagejevbench/v0.3.0/json)): capability 71.84, intelligence 55.48, calibration 88.19, composite
-68.51, against 66.16, 55.39, 76.92 and 66.58 for the same weights at the 0.65 image temperature. The board lists that row
-without a rank; this release is not yet on the board.
+68.51. This release is not yet on the board.
 
 ## Two-way reading (recommended)
 

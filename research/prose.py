@@ -409,11 +409,13 @@ def as_committed(rev="HEAD"):
 
     The readers take their paths from module constants rather than arguments,
     so this swaps the constants at a checkout of the five source files instead
-    of threading a revision through all of them. Nothing else in the module
-    holds a path open across the block.
+    of threading a revision through all of them. The parsed registry is kept
+    across reads, so it is dropped on the way in and on the way out: kept, the
+    committed copy answered every read after the block.
     """
     tmp = tempfile.mkdtemp(prefix="prose-")
     saved = dict(globals())
+    _REGISTRY.clear()
     try:
         for name, rel in SOURCE_PATHS.items():
             globals()[name] = _from_git(rev, rel, tmp)
@@ -424,6 +426,7 @@ def as_committed(rev="HEAD"):
     finally:
         for name in list(SOURCE_PATHS) + ["ABOUT_DIR"]:
             globals()[name] = saved[name]
+        _REGISTRY.clear()
         shutil.rmtree(tmp, ignore_errors=True)
 
 

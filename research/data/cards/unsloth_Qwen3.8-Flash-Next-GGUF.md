@@ -7,11 +7,12 @@ base_model:
 - Qwen/Qwen3.8-Flash-Next
 tags:
 - unsloth
+- Qwen
 ---
 # Read our How to [Run Qwen3.8-Flash-Next Guide!](https://unsloth.ai/docs/models/qwen3.8-next)
 <div>
   <p style="margin: 0 0 0px 0; margin-top: 0px;">
-    <em><a href="https://unsloth.ai/docs/basics/dynamic-3.0-ggufs">Unsloth Dynamic 3.0</a> achieves superior accuracy & outperforms other leading quants.</em>
+    <em><a href="https://unsloth.ai/docs/basics/dynamic-3.0-ggufs">Unsloth Dynamic v3.1</a> achieves superior accuracy & outperforms other leading quants.</em>
   </p>
   <div style="display: flex; gap: 5px; align-items: center; margin-bottom: 0px;">
     <a href="https://github.com/unslothai/unsloth/">
@@ -25,10 +26,12 @@ tags:
     </a>
   </div>
     <ul style="margin: 0;">
+    <li>Nov 4 update: Dynamic v3.1 GGUF is here with 15% more accuracy than other frontier quants and scoring the highest on Terminal Bench, DeepSWE and more! <a href="https://unsloth.ai/docs/models/qwen3.8-next#dynamic-v3.1-update-november-2nd-2026">Details</a></li></li>
     <li>MTP is now available for 1.3-1.7x Faster inference in Unsloth. <a href="https://unsloth.ai/docs/models/qwen3.8-next#mtp-guide">Read Guide</a></li>
     <li>To run, please use llama.cpp or use our <a href="https://unsloth.ai/docs/desktop">Unsloth Desktop</a> app.</li>
-    <li>See below for Qwen3.8-Flash-Next run in Unsloth Desktop with thinking controls:</li>
 </div>
+
+<img width="600" alt="qwen3.8-flash unsloth dynamic v3.1 benchmarks" src="https://unsloth.ai/docs/~gitbook/image?url=https%3A%2F%2F3215535692-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252FxhOjnexMCB3dmuQFQ2Zq%252Fuploads%252FqdXHweLFGzUhUcqj7jZX%252Ffinal%2520key%25204.png%3Falt%3Dmedia%26token%3D8e3249b1-e26c-4a04-82ba-7cfdef952fe6&width=768&dpr=3&quality=100&sign=1e1e946e8b723c1640f46f4e6a7b741b&sv=3" />
 
 <img width="600" alt="qwen3.8-flash unsloth desktop" src="https://unsloth.ai/docs/~gitbook/image?url=https%3A%2F%2F3215535692-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252FxhOjnexMCB3dmuQFQ2Zq%252Fuploads%252F1YneA51oWzaIiwep9H5I%252F1000024423.gif%3Falt%3Dmedia%26token%3D40a169cc-12f1-403a-898c-b310f81ff52a&width=768&dpr=3&quality=100&sign=2c56c5687fac67b851708cbfacdf98aa&sv=3" />
 

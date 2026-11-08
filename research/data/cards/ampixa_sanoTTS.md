@@ -8,6 +8,8 @@ library_name: sanotts
 
 # sanoTTS — a tiny neural voice that runs anywhere
 
+**Release status: Ready for release.**
+
 ***sano*** (सानो) — Nepali for **"small."** A family of tiny neural
 text-to-speech voices — **294k to 2.27M parameters** — that run with
 **no cloud and no NPU**: real-time on a ~$3 ESP32-S3 (out a GPIO into an

@@ -223,16 +223,20 @@ def split_pinned(agg, pinned):
 
     A tag is a size class, not a file: JevK5 publishes five `Q8_0` files -- two
     versions at 4b, two at 9b and a 2b -- and keyed by tag they summed into one
-    27.97 gib rung that the pin on the 4.2 gib v0.2 file then read. only the
-    pinned file moves, so every key a registry `quant:` already resolves stays.
+    27.97 gib rung that the pin on the 4.2 gib v0.2 file then read. a repo the
+    registry pins by filename is one holding other models, so every file of a
+    tag that gathered several is split, the pinned model's and its neighbours'
+    alike: left behind, the neighbours summed into a rung the page offered as
+    the pinned model's. a sidecar tag (`mmproj:`, a drafter's) is not a rung of
+    the ladder and keeps its key.
     """
     out = {}
     for tag, files in agg.items():
         stems = {SHARD.sub(".gguf", p) for p, _ in files}
+        split = len(stems) > 1 and bool(pinned) and ":" not in tag
         for p, size in files:
             name = SHARD.sub(".gguf", p.rpartition("/")[2])
-            key = name if len(stems) > 1 and name in pinned else tag
-            out.setdefault(key, []).append((p, size))
+            out.setdefault(name if split else tag, []).append((p, size))
     return out
 
 

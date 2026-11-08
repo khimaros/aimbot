@@ -26,6 +26,7 @@ tags:
 - lfm2.5
 - edge
 base_model: LiquidAI/LFM2.5-2.6B-Base
+new_version: LiquidAI/LFM3-1.7B
 ---
 
 <div align="center">

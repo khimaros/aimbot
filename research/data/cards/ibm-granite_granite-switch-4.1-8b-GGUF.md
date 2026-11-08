@@ -17,5 +17,7 @@ base_model:
 > Please reference the base model's full model card here:
 > https://huggingface.co/ibm-granite/granite-switch-4.1-8b
 
-<!-- #### Requirements
-- llama.cpp build: $b9768$ -->
+#### Build Information
+
+- **llama.cpp build tag:** `b11798`
+- **Transformers version:** `5.20.2`

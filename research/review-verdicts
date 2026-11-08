@@ -36,7 +36,6 @@ import verdicts  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSESSED = os.path.join(HERE, "usecase-assessed.json")
 USECASE = os.path.join(HERE, "data", "usecase.json")
-DECIDED = os.path.join(HERE, "verdicts-decided.json")
 ACTIONS = ("keep", "rewrite", "drop")
 
 # how much ANSWER to allow. what a reasoning run spends BEFORE the answer is
@@ -69,12 +68,8 @@ def queue(assessed, models, decided, ledger_path=None):
             continue
         facets = (models.get(repo) or {}).get("facets") or {}
         moved = verdicts.moved(snap, facets)
-        if not moved:
-            continue
-        was = (decided.get(repo) or {}).get("figures")
-        if was is not None and was == verdicts.snapshot(sorted(snap), facets):
-            continue
-        out.append((repo, blk, moved))
+        if moved and not verdicts.settled(repo, snap, facets, decided):
+            out.append((repo, blk, moved))
     return out
 
 
@@ -266,7 +261,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--assessed", default=ASSESSED)
     ap.add_argument("--usecase", default=USECASE)
-    ap.add_argument("--decided", default=DECIDED)
+    ap.add_argument("--decided", default=verdicts.DECIDED)
     ap.add_argument("--ledger", default=prose.LEDGER,
                     help="who wrote each block, and against which figures")
     ap.add_argument("--sheet", action="store_true",

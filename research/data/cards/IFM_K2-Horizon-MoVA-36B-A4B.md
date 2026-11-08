@@ -19,6 +19,9 @@ tags:
 
 # K2-Horizon-MoVA-36B-A4B
 
+[Training Code](https://github.com/ifm-ai/xllm) - [Evaluation Code](https://github.com/ifm-ai/Eval360) - [All Training Data](https://github.com/ifm-ai/DATA_NAVIGATOR)
+
+
 K2-Horizon-MoVA-36B-A4B is the sparse member of the K2-Horizon family: a Mixture-of-Experts model with Mixture-of-Values attention (MoVA) that stores 36B parameters and runs 4B per token. We have released the checkpoints, along with the data and the training code.
 
 <p align="center">

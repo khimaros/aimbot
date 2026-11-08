@@ -57,14 +57,14 @@ Qwen3.8-27B features the following enhancements:
 
 ### Text Performance
 <style>
-.vl-table th{font-size:15px!important;line-height:1.2}
-.vl-table td:not(.benchmark-cell):not([colspan]){font-size:15px;line-height:1.2;vertical-align:middle}
+.vl-table th{font-size:15px!important;line-height:1.2;color:inherit!important}
+.vl-table td:not(.benchmark-cell):not([colspan]){font-size:15px;line-height:1.2;vertical-align:middle;color:inherit!important}
 .vl-table .benchmark-cell{padding:12px 10px 12px 18px!important;vertical-align:middle}
-.vl-table .benchmark-capability{font-size:15px;font-weight:600;line-height:1.22;color:#171717}
-.vl-table .benchmark-name{margin-top:4px;font-size:11px;font-weight:400;line-height:1.2;color:#6B6B6B}
+.vl-table .benchmark-capability{font-size:15px;font-weight:600;line-height:1.22;color:inherit!important}
+.vl-table .benchmark-name{margin-top:4px;font-size:11px;font-weight:400;line-height:1.2;opacity:.6}
 .vl-table .metric-stack{display:flex;flex-direction:column;gap:7px;padding:3px 0}
-.vl-table .metric-label{font-size:10px;font-weight:400;line-height:1.1;color:#777}
-.vl-table .metric-value{margin-top:2px;font-size:15px;line-height:1.15;color:#171717}
+.vl-table .metric-label{font-size:10px;font-weight:400;line-height:1.1;opacity:.55}
+.vl-table .metric-value{margin-top:2px;font-size:15px;line-height:1.15;color:inherit!important}
 </style>
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:1200px;margin:0 auto;padding:16px 0">
 <table class="vl-table" style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:13px">
@@ -172,7 +172,7 @@ Qwen3.8-27B features the following enhancements:
 </tr>
 </tbody>
 </table>
-<div style="margin-top:12px;font-size:11px;line-height:1.5;color:rgba(0,0,0,0.72)">
+<div style="margin-top:12px;font-size:11px;line-height:1.5;opacity:0.7">
 <ol style="margin:0;padding-left:20px">
 <li>SWE-bench Pro: Except for Opus4.6 Max, which uses the officially reported score, all models are evaluated with the Claude Code harness at temp=1.0, top_p=0.95, and a 256K context window. Problematic tasks were corrected, and all baseline models were re-evaluated on the refined benchmark.</li>
 <li>NL2Repo-Bench: Evaluated with the Claude Code harness. To prevent reward hacking, we disable Bash commands that attempt to access the specific repository, such as pip download, pip install, and git clone.</li>
@@ -208,7 +208,7 @@ Qwen3.8-27B features the following enhancements:
 <tr><td class="benchmark-cell" style="padding:7px 7px;padding-left:20px;border-bottom:1px solid rgba(128, 128, 128, 0.15);"><div class="benchmark-capability" style="font-size:15px;font-weight:600;line-height:1.22;color:#171717">Embodied intelligence</div><div class="benchmark-name" style="margin-top:4px;font-size:11px;font-weight:400;line-height:1.2;color:#6B6B6B">ERQA</div></td><td style="padding:7px 7px;text-align:center;border-bottom:1px solid rgba(128, 128, 128, 0.15);background:rgba(10, 46, 254, 0.08);vertical-align:middle;font-size:15px;line-height:1.2;">65.5</td><td style="padding:7px 7px;text-align:center;border-bottom:1px solid rgba(128, 128, 128, 0.15);vertical-align:middle;font-size:15px;line-height:1.2;">62.5</td><td style="padding:7px 7px;text-align:center;border-bottom:1px solid rgba(128, 128, 128, 0.15);vertical-align:middle;font-size:15px;line-height:1.2;"><strong>69.8</strong></td><td style="padding:7px 7px;text-align:center;border-bottom:1px solid rgba(128, 128, 128, 0.15);vertical-align:middle;font-size:15px;line-height:1.2;">--</td><td style="padding:7px 7px;text-align:center;border-bottom:1px solid rgba(128, 128, 128, 0.15);vertical-align:middle;font-size:15px;line-height:1.2;">40.8</td></tr>
 </tbody>
 </table>
-<div style="margin-top:12px;font-size:11px;line-height:1.5;color:rgba(0,0,0,0.72)">
+<div style="margin-top:12px;font-size:11px;line-height:1.5;opacity:0.7">
 <ol style="margin:0;padding-left:20px">
 <li>MathVision, BabyVision, and CharXiv (RQ): Where both settings are available, cells report “Without CI” and “With CI” separately; otherwise, only the available setting is shown. A small number of incorrect ground-truth annotations in MathVision and CharXiv (RQ) were corrected following manual verification, and all reported scores on those benchmarks were computed using the corrected annotations.</li>
 <li>MathVision: Qwen3.8-27B is evaluated using the fixed prompt: “Please reason step by step, and put your final answer within <code>\boxed{}</code>.” For the remaining models, we report the higher score from two prompt variants—one with and one without the <code>\boxed{}</code> formatting requirement.</li>

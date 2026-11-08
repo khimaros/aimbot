@@ -1,5 +1,5 @@
 ---
-license: apache-2.0
+license: cc-by-nc-4.0
 base_model:
   - Qwen/Qwen3.8-27B
   - ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF
@@ -115,6 +115,10 @@ Public scores come from a different harness than ours. 120 tasks is a modest tes
 
 ## Credits and license
 
-Apache 2.0. Built on **Qwen3.8-27B** by the Qwen team and **Qwen3.8-27B-GSQ-RCO-GGUF** by ISTA-DASLab, both Apache 2.0. Underdog Bench tasks come from the Berkeley Function Calling Leaderboard. See `NOTICE`.
+CC BY-NC 4.0 (see [LICENSE](LICENSE)). You can use, share and adapt it for non-commercial purposes with credit to
+Underdog. Commercial use needs a separate license: write to license@conway.tech.
+
+Built on **Qwen3.8-27B** by the Qwen team and **Qwen3.8-27B-GSQ-RCO-GGUF** by ISTA-DASLab, both Apache 2.0 (see
+`LICENSE-APACHE`). Underdog Bench tasks come from the Berkeley Function Calling Leaderboard. See `NOTICE`.
 
 Built by Underdog.

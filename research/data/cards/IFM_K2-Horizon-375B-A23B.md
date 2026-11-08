@@ -18,6 +18,9 @@ tags:
 
 # K2-Horizon-375B-A23B
 
+[Training Code](https://github.com/ifm-ai/xllm) - [Evaluation Code](https://github.com/ifm-ai/Eval360) - [All Training Data](https://github.com/ifm-ai/DATA_NAVIGATOR)
+
+
 K2-Horizon-375B-A23B is the flagship of the K2-Horizon family: a sparse Mixture-of-Experts model that stores 375B parameters and runs 23B per token, with a 512K context window. We have released the checkpoints, along with the data and the training code.
 
 <p align="center">

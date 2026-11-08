@@ -13,18 +13,23 @@ tags:
   - vision
 ---
 
-# GLM-5.3-Flash · Maya-S, Maya-S24, Maya-M and Maya-L
+# GLM-5.3-Flash · Maya-XS, Maya-S, Maya-S24, Maya-M and Maya-L
 
 **Maya-L: 99.2% of the full FP8 model's accuracy** on zero-shot tasks (ARC, HellaSwag, WinoGrande, PIQA), in 156 GB.
 **Maya-S: 97.9%** in a 96 GB file. **Maya-S24: 97.7%, and up to 14% faster decode on 24 GB cards**, in 94.7 GB.
 **Maya-M: 97.9%, and closer to the full model token by token**, in 116 GB.
+**Maya-XS: 92.4% in 73.4 GB**, small enough for a PC with 64 GB of RAM and one 24 GB card at 128K context.
 
 GGUF quantizations of [zai-org/GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash) (321 B parameters, a
 mixture of experts with about 18 B active per token), made for **Project Maya**. Project Maya keeps the most-used
-experts on the GPU, the next in RAM and the rest on the SSD, so all four run well below the model's size (two GPUs with
+experts on the GPU, the next in RAM and the rest on the SSD, so all five run well below the model's size (two GPUs with
 30 GB of RAM in the measurements below). More memory is faster, and every machine is different: try it on yours.
-All four are made from Z.ai's own FP8 release - the precision the model is served at - not from a re-quantized file.
+All five are made from Z.ai's own FP8 release - the precision the model is served at - not from a re-quantized file.
 
+- **Maya-XS** (73.4 GB) is the smallest, made to run without the SSD on a PC with 64 GB of RAM and one 24 GB card, at
+  128K context with the KV cache in int8: its routed experts in about 1.5 bits (IQ1_S gate and up, IQ2_XXS down),
+  more bits in the layers that lose the most, and Maya-S24's 4-bit attention and shared experts. It gives up some
+  accuracy for that size; pick Maya-S or Maya-S24 when they fit.
 - **Maya-S** (96.5 GB) is the compact one, made for PCs with a smaller memory pool across RAM and VRAM: its routed
   experts - most of the model - in about 2 bits (IQ2_XXS / IQ2_S), its attention and shared experts in 6-bit (Q6_K).
 - **Maya-S24** (94.7 GB) is Maya-S for 24 GB cards (RTX 3090 / 4090): the same 2-bit routed experts, with only the
@@ -36,7 +41,7 @@ All four are made from Z.ai's own FP8 release - the precision the model is serve
 - **Maya-L** (156.3 GB) is the closest, for PCs with the biggest memory pool: Maya-M's recipe one step up (3- to 4-bit
   experts: IQ3_S / IQ4_XS, Q5_K in the most sensitive layers).
 
-> **Built partly on the IST Austria DAS Lab ([ISTA-DASLab](https://huggingface.co/ISTA-DASLab)) recipe.** All four use their
+> **Built partly on the IST Austria DAS Lab ([ISTA-DASLab](https://huggingface.co/ISTA-DASLab)) recipe.** All five use their
 > GPTQ-style error-feedback rounding for the experts (each expert rounded against its own input statistics from the
 > FP8 model), and are measured the way they measure their quants: task accuracy against the full-precision model.
 
@@ -44,31 +49,34 @@ All four are made from Z.ai's own FP8 release - the precision the model is serve
 
 | Folder | Files | Size |
 | --- | --- | ---: |
+| `Maya-XS/` | `GLM-5.3-Flash-Maya-XS-IQ1_S-00001-of-00002.gguf`, `-00002-of-00002.gguf` | 73.4 GB |
 | `Maya-S-v2-IQ2_XXS/` | `GLM-5.3-Flash-Maya-S-v2-IQ2_XXS-00001-of-00003.gguf`, `-00002-of-00003.gguf`, `-00003-of-00003.gguf` | 96.5 GB |
 | `Maya-S24/` | `GLM-5.3-Flash-Maya-S24-IQ2_XXS_S-00001-of-00003.gguf`, `-00002-of-00003.gguf`, `-00003-of-00003.gguf` | 94.7 GB |
 | `Maya-M/` | `GLM-5.3-Flash-Maya-M-IQ2_S-00001-of-00003.gguf`, `-00002-of-00003.gguf`, `-00003-of-00003.gguf` | 116.0 GB |
 | `Maya-L/` | `GLM-5.3-Flash-Maya-L-IQ3_S-00001-of-00004.gguf`, `-00002-`, `-00003-`, `-00004-of-00004.gguf` | 156.3 GB |
 | `vision/` | `mmproj-GLM-5.3-Flash-F16.gguf` (the vision tower and projector, F16, from the official weights), `GLM-5.3-Flash-vocab.gguf` (the tokenizer, for the encoder) | 1.14 GB |
 
-The model's NextN (MTP) layer is included in all four, so engines that draft with it get speculative decoding.
+The model's NextN (MTP) layer is included in all five, so engines that draft with it get speculative decoding.
 
 ## What is in them
 
-| Tensors | Maya-S | Maya-S24 | Maya-M | Maya-L |
-| --- | --- | --- | --- | --- |
-| Routed experts, gate and up (42 layers) | IQ2_XXS, rounded with error feedback | as Maya-S | IQ2_S, rounded with error feedback | IQ3_S, rounded with error feedback |
-| Routed experts, down | IQ3_XXS in the first and last four MoE layers, IQ2_S in the rest | as Maya-S | IQ3_S in the first and last four MoE layers, IQ3_XXS in the rest | Q5_K in the first and last four MoE layers, IQ4_XS in the rest |
-| Attention projections (KDA, MLA/DSA) and shared experts | Q6_K | **Q4_K** | Q6_K | Q6_K |
-| The three dense layers, embeddings, output, MLA k_b / v_b | Q6_K | Q6_K | Q6_K | Q6_K |
-| Small KDA projections, the DSA indexer | Q8_0 | Q8_0 | Q8_0 | Q8_0 |
-| Router, norms, stream-mixing weights | F32 | F32 | F32 | F32 |
-| NextN draft layer experts | Q2_K (gate/up), Q3_K (down) | as Maya-S | Q3_K (gate/up), Q4_K (down) | Q4_K (gate/up), Q5_K (down) |
+| Tensors | Maya-XS | Maya-S | Maya-S24 | Maya-M | Maya-L |
+| --- | --- | --- | --- | --- | --- |
+| Routed experts, gate and up (42 layers) | IQ1_S, rounded with error feedback | IQ2_XXS, rounded with error feedback | as Maya-S | IQ2_S, rounded with error feedback | IQ3_S, rounded with error feedback |
+| Routed experts, down | IQ2_XXS; IQ3_XXS and IQ2_S in the two layers that lose the most, IQ1_S in the three that lose the least | IQ3_XXS in the first and last four MoE layers, IQ2_S in the rest | as Maya-S | IQ3_S in the first and last four MoE layers, IQ3_XXS in the rest | Q5_K in the first and last four MoE layers, IQ4_XS in the rest |
+| Attention projections (KDA, MLA/DSA) and shared experts | Q4_K | Q6_K | **Q4_K** | Q6_K | Q6_K |
+| The three dense layers, embeddings, output, MLA k_b / v_b | Q6_K | Q6_K | Q6_K | Q6_K | Q6_K |
+| Small KDA projections, the DSA indexer | Q8_0 | Q8_0 | Q8_0 | Q8_0 | Q8_0 |
+| Router, norms, stream-mixing weights | F32 | F32 | F32 | F32 | F32 |
+| NextN draft layer experts | IQ1_S (gate/up), IQ2_XXS (down) | Q2_K (gate/up), Q3_K (down) | as Maya-S | Q3_K (gate/up), Q4_K (down) | Q4_K (gate/up), Q5_K (down) |
 
 ## How they were made
 
 1. **Calibration text**: 128 sequences of 2,048 tokens in GLM's own chat template, reasoning blocks included - chat,
    multilingual chat, reasoning traces, web code (single-file HTML/CSS/JS pages, three.js scenes, canvas and WebGL
    animations), other code and tool calls; Maya-M's and Maya-L's weighted further toward tool calls and front-end code.
+   Maya-XS's is eight times bigger: 1,024 sequences, led by tool calls, then code and three.js, agentic traces, long
+   multi-turn chats, English, Japanese and Chinese; its bits per layer follow a sensitivity scan on that text.
 2. **Statistics from the FP8 model itself**, layer by layer: an importance matrix for every expert separately, not one
    per layer.
 3. **Error-feedback rounding** of the experts' gate and up projections (GPTQ-style, at the quantizer's 256-weight
@@ -78,18 +86,18 @@ The model's NextN (MTP) layer is included in all four, so engines that draft wit
 
 ## Against the original (FP8)
 
-**Maya-L keeps 99.2% of the full model's zero-shot accuracy; Maya-S and Maya-M 97.9%, Maya-S24 97.7%.** Multiple-choice tasks at 400 questions each do not
-separate them (a point or two either way is within the test's noise); token by token, below, Maya-M is clearly
-closer to the FP8 model.
+**Maya-L keeps 99.2% of the full model's zero-shot accuracy; Maya-S and Maya-M 97.9%, Maya-S24 97.7%, Maya-XS 92.4%.** Multiple-choice tasks at 400 questions each do not
+separate Maya-S, S24, M and L (a point or two either way is within the test's noise); token by token, below, Maya-M is clearly
+closer to the FP8 model. Maya-XS is clearly below them: that is the price of its size.
 
-| Task (zero-shot) | FP8 | Maya-S | Maya-S24 | Maya-M | Maya-L |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| ARC-Easy (acc) | 87.2 | 86.2 (98.9%) | 85.8 (98.3%) | 86.5 (99.1%) | 86.0 (98.6%) |
-| ARC-Challenge (acc norm) | 71.0 | 68.2 (96.1%) | 69.0 (97.2%) | 69.0 (97.2%) | 69.8 (98.2%) |
-| HellaSwag (acc norm) | 88.5 | 87.5 (98.9%) | 84.8 (95.8%) | 86.8 (98.0%) | 88.5 (100%) |
-| WinoGrande (acc) | 78.5 | 75.5 (96.2%) | 77.0 (98.1%) | 76.2 (97.1%) | 77.8 (99.0%) |
-| PIQA (acc norm) | 87.0 | 86.2 (99.1%) | 86.2 (99.1%) | 85.0 (97.7%) | 87.0 (100%) |
-| **Average** | **82.5** | **80.8 (97.9%)** | **80.6 (97.7%)** | **80.7 (97.9%)** | **81.8 (99.2%)** |
+| Task (zero-shot) | FP8 | Maya-XS | Maya-S | Maya-S24 | Maya-M | Maya-L |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ARC-Easy (acc) | 87.2 | 81.8 (93.8%) | 86.2 (98.9%) | 85.8 (98.3%) | 86.5 (99.1%) | 86.0 (98.6%) |
+| ARC-Challenge (acc norm) | 71.0 | 61.5 (86.6%) | 68.2 (96.1%) | 69.0 (97.2%) | 69.0 (97.2%) | 69.8 (98.2%) |
+| HellaSwag (acc norm) | 88.5 | 84.5 (95.5%) | 87.5 (98.9%) | 84.8 (95.8%) | 86.8 (98.0%) | 88.5 (100%) |
+| WinoGrande (acc) | 78.5 | 72.3 (92.0%) | 75.5 (96.2%) | 77.0 (98.1%) | 76.2 (97.1%) | 77.8 (99.0%) |
+| PIQA (acc norm) | 87.0 | 81.8 (94.0%) | 86.2 (99.1%) | 86.2 (99.1%) | 85.0 (97.7%) | 87.0 (100%) |
+| **Average** | **82.5** | **76.4 (92.4%)** | **80.8 (97.9%)** | **80.6 (97.7%)** | **80.7 (97.9%)** | **81.8 (99.2%)** |
 
 400 questions per task, the same questions for every model, scored the way lm-evaluation-harness scores them (the answer with the highest log-likelihood; length-normalized where the choices differ in length) - the FP8 model run layer by layer in PyTorch, the quants through Project Maya's engine (`tools/maya_quant/zs_*.py`).
 
@@ -104,6 +112,9 @@ Token by token, on held-out text never used for calibration (7,672 positions), w
 ¹ Measured with a later engine, next to Maya-S at 0.421 in the same run. ² Measured with a later engine, next to Maya-M at 0.291 (same top token 86.8%) in the same run.
 
 Closest on chat and reasoning text, furthest on tool-call formats and on text the FP8 model has memorized.
+
+Maya-XS was not run through that comparison; on Project Maya's own tool-call, three.js and loop tests it passed every
+case Maya-S24 passed (no loops in ten 8,000-token answers at 128K context).
 
 No loops in long generation (Maya-S): 14 answers of 6,000-14,000 tokens (three.js scenes, canvas animations,
 explanations, a plan in Portuguese, a proof; temperature 1.0 and greedy) without a repeated passage. The context fill
@@ -130,7 +141,8 @@ git clone https://github.com/mw00/project-maya.git && cd project-maya
 
 - It checks the PC, downloads the model you pick and verifies every file's sha256, compiles the engine for your
   GPU(s), and starts it. Press Enter at each question for the recommended choice: Maya-S, or Maya-S24 when every card
-  has 24 GB or less. `./setup.sh --setup --model Maya-S24` or `--model Maya-M` or `--model Maya-L` sets up the others.
+  has 24 GB or less. `./setup.sh --setup --model Maya-S24` or `--model Maya-M` or `--model Maya-L` sets up the others,
+  and `--model glm-maya-xs` sets up Maya-XS with its own defaults (int8 KV cache, thinking budget 8192).
 - **GPUs:** NVIDIA, V100 / RTX 20 or newer, one GPU or up to 16 that share the model. AMD (experimental, Linux,
   ROCm 7): RX 7900 XT / XTX and Radeon AI PRO R9700 / RX 9070 (one or two), Strix Halo (one).
 - **Memory:** the most-used experts stay in VRAM, the next in RAM and the rest are read from the SSD, so it runs with

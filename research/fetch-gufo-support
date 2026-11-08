@@ -63,8 +63,10 @@ SERVER = "docs/SERVER.md"
 # "main"
 WEIGHT = re.compile(r"\[([^\]]*)\]\(https://huggingface\.co/([\w.-]+/[\w.-]+)"
                     r"(?:/(?:blob|tree)/([^/]+)(/[^)]*)?)?\)")
-# the model index row's first cell: `[Qwen3.8 27B](docs/models/qwen3.8-27b/README.md)`
-DOC_LINK = re.compile(r"\[([^\]]+)\]\((docs/models/[\w.-]+/README\.md)\)")
+# the model index row's first cell: `[Qwen3.8 27B](docs/models/qwen3.8-27b.md)`, or
+# the `<slug>/README.md` folder gufo used before. an anchor names a second model
+# documented in the same file (qwen-image-2.1's turbo)
+DOC_LINK = re.compile(r"\[([^\]]+)\]\((docs/models/([\w.-]+?)(?:/README)?\.md)(?:#([\w.-]+))?\)")
 # the one line per model that starts a server, with the flags it was measured
 # with. only the flag NAMES are kept: the values in the guides are shell
 # variables and local paths, which say nothing a command could use
@@ -113,7 +115,7 @@ def index(body):
         doc = DOC_LINK.search(cols[0])
         if not doc:
             continue
-        slug = os.path.basename(os.path.dirname(doc.group(2)))
+        slug = doc.group(4) or doc.group(3)
         got = {"display": doc.group(1),
                "doc": doc.group(2),
                "modes": re.sub(r"\s+", " ", re.sub(r"\*\*", "", cols[1])).strip()}

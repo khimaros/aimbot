@@ -4,6 +4,7 @@ language:
 - en
 - zh
 pipeline_tag: image-text-to-text
+library_name: minicpm-ocr
 tags:
 - minicpm-ocr
 - ocr
@@ -23,9 +24,7 @@ base_model_relation: quantized
   <a href="https://github.com/OpenBMB/MiniCPM"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-OCR/main/assets/minicpm-ocr/minicpm-logo.jpg" width="300" alt="MiniCPM logo"></a>
 </p>
 
-Official Demo([CN](https://platform.modelbest.cn/console/playground/document-parse) / [Global](https://platform.modelbest.ai/console/playground/document-parse)) · Basic Demo([CN](http://82.157.64.212:10111/playground/document-parse) / [Global](https://huggingface.co/spaces/openbmb/MiniCPM-OCR))
-\
-[GitHub](https://github.com/OpenBMB/MiniCPM-OCR) · [Free API](https://platform.modelbest.ai/console/docs/api/document-parse) · [Usage](https://github.com/OpenBMB/MiniCPM-OCR#using-minicpm-ocr) · [DSpark](https://huggingface.co/openbmb/MiniCPM-OCR-1.0-DSpark) · [Skill](https://github.com/OpenBMB/MiniCPM-OCR#skill)
+Demo ([CN](https://platform.modelbest.cn/console/playground/document-parse) / [Global](https://platform.modelbest.ai/console/playground/document-parse)) · [GitHub](https://github.com/OpenBMB/MiniCPM-OCR) · [Free API](https://platform.modelbest.ai/console/docs/api/document-parse) · [SDK usage](#use-with-the-minicpm-ocr-sdk) · [DSpark](https://huggingface.co/openbmb/MiniCPM-OCR-1.0-DSpark) · [Skill](https://github.com/OpenBMB/MiniCPM-OCR#skill)
 
 </div>
 
@@ -68,53 +67,139 @@ The projector is 4× only; there is no 16× variant for this model.
 
 Prefer Q8_0 for code- or XML-heavy pages.
 
-## Usage
+## Parsing pipeline
+
+MiniCPM-OCR 1.0 parses full documents as a **two-stage pipeline** orchestrated by the [`minicpm-ocr` SDK](https://pypi.org/project/minicpm-ocr/). The two stages use separate models, run in separate environments, and may run on different machines:
+
+- **Stage 1 — Layout detection (SDK environment).** The PP-DocLayoutV3 layout model detects document regions — text, tables, formulas, charts, seals — and determines reading order; the SDK crops each region. It runs locally inside the SDK environment and requires PaddlePaddle / PaddleX.
+- **Stage 2 — Region recognition (inference service).** The SDK sends each cropped region over HTTP to a MiniCPM-OCR 1.0 inference service — served by vLLM, SGLang, llama.cpp, or Ollama — with a prompt matching the region type, then assembles the recognized content into the final Markdown / JSON in reading order.
+
+<p align="center"><img src="assets/parsing_pipeline.svg" alt="Parsing pipeline: in the minicpm-ocr SDK environment, the PP-DocLayoutV3 layout model detects and crops document regions; each cropped region is sent over HTTP to a separate recognition service running MiniCPM-OCR 1.0 (vLLM, SGLang, llama.cpp, or Ollama); the SDK then assembles the recognized text, tables, formulas, charts, and seals into Markdown and JSON in reading order." width="90%"></p>
+
+See the [model guide](https://github.com/OpenBMB/MiniCPM-OCR/blob/main/docs/minicpm_ocr_1dot0_en.md) for more on architecture, parsing workflow, deployment options, and benchmark breakdowns.
+
+## Quick start
+
+### Use with the MiniCPM-OCR SDK
+
+> **Required before using either the CLI or Python API:** deploy and start the OCR model service first, and wait until it is ready to accept requests. The SDK examples below are clients of that running service; they do not deploy or start the OCR model service automatically.
+
+Use the official `minicpm-ocr` SDK to parse local images or PDFs with this
+GGUF checkpoint. The SDK detects layout with PP-DocLayoutV3, recognises each
+region, and saves structured JSON and Markdown in reading order.
+
+Install Python 3.10+ and the SDK:
 
 ```bash
-llama-server \
-  --model ./MiniCPM-OCR-1_0-Q8_0.gguf \
-  --mmproj ./mmproj-model-f16-4x.gguf \
-  --host 0.0.0.0 --port 18499 \
-  --ctx-size 40960 \
-  --n-gpu-layers 999
+pip install "minicpm-ocr[all]"
 ```
 
-`--n-gpu-layers 999` offloads everything to GPU; use `0` for CPU-only.
+Install minicpm-ocr for your platform using the
+[installation guide](https://github.com/OpenBMB/MiniCPM-OCR/blob/main/docs/minicpm_ocr_tutorial_en.md#1-set-up-the-sdk-environment).
+
+#### Prerequisite: deploy and start the model service
+
+Before running the SDK, start a llama.cpp recognition service using this
+repository's `MiniCPM-OCR-1_0-Q8_0.gguf` and the required
+`mmproj-model-f16-4x.gguf` vision projector. Follow the
+[llama.cpp deployment guide](https://github.com/OpenBMB/MiniCPM-OCR/blob/main/docs/llamacpp_deploy.md).
+For the SDK examples below, configure the service with `--port 8080`,
+`--alias minicpm-ocr`, `--ctx-size 8192`, `--parallel 1`, and
+`--jinja --reasoning off`. If you keep the guide's port `18499`, change the SDK
+URL to match. DSpark setup, when used, is covered by the same guide.
+
+The SDK uses the `llamacpp` backend, an 8192-token context, and one recognition
+request at a time. Layout detection runs on CPU in these examples; the
+recognition service can independently use Metal, CUDA, or CPU. If you increase
+the service context per request slot, update `engine.max_model_len` accordingly.
+
+#### CLI
+
+**Start the model service described above and wait until it is ready before running this command.**
+Save a local image as `demo.png`, then run:
 
 ```bash
-llama-mtmd-cli \
-  -m ./MiniCPM-OCR-1_0-Q8_0.gguf \
-  --mmproj ./mmproj-model-f16-4x.gguf \
-  --image page.png -p "Text Recognition:" \
-  --jinja -ngl 99 -c 8192 --temp 0
-```
-
-**Thinking is already disabled inside the embedded chat template** — no extra flag is needed, and
-`enable_thinking` cannot turn it back on. (If you convert the weights yourself instead of using
-these files, start the server with `--chat-template-kwargs '{"enable_thinking": false}'`.)
-
-### Prompts
-
-| Region | Prompt |
-| :--- | :--- |
-| Text block / paragraph / title / page | `Text Recognition:` |
-| Table | `Table Recognition:` |
-| Display formula | `Formula Recognition:` |
-
-### SDK with a llama.cpp backend
-
-```bash
-minicpmvocr parse --config sdk/minicpmvocr/configs/minicpmvocr.yaml \
-  --backend llamacpp --server-url http://127.0.0.1:18499 \
+minicpmvocr parse demo.png \
+  --backend llamacpp \
+  --server-url http://127.0.0.1:8080 \
   --model minicpm-ocr \
-  --set layout.device=cuda:0 \
+  --device cpu \
+  --set engine.max_model_len=8192 \
+  --workers 1 \
   --set pipeline.queue_mode=serial \
-  --set pipeline.max_workers=1 \
-  --input doc.pdf --output doc.md
+  --set pipeline.overlap_layout=false \
+  --set run.run_root=output \
+  --output output/demo.md
 ```
 
-`llama-server` handles one request at a time by default, so keep `queue_mode=serial` and
-`max_workers=1`.
+The CLI automatically downloads PP-DocLayoutV3 to `models/PP-DocLayoutV3_infer/`
+when needed. The final Markdown is saved to `output/demo.md`; structured JSON
+and per-page Markdown are kept in `output/<run_tag>/results_json/` and
+`output/<run_tag>/output/`.
+
+#### Python API
+
+**The model service described above must already be running before you execute this Python example.**
+Set `engine.server_url` and `engine.model_name` to match that service.
+
+The same pipeline is available from Python:
+
+```python
+from importlib.resources import files
+from pathlib import Path
+
+from minicpmvocr import load_config, pipelined_run
+from minicpmvocr.layouts.download import ensure_layout_model
+
+
+def main():
+    layout_model = ensure_layout_model(Path("models/PP-DocLayoutV3_infer"))
+
+    cfg = load_config(
+        str(files("minicpmvocr").joinpath("configs/minicpmvocr.yaml")),
+        overrides={
+            "input": {"file_path": str(Path("demo.png").resolve())},
+            "engine": {
+                "type": "llamacpp",
+                "server_url": "http://127.0.0.1:8080",
+                "model_name": "minicpm-ocr",
+                "max_model_len": 8192,
+            },
+            "layout": {
+                "model_dir": str(layout_model),
+                "device": "cpu",
+            },
+            "pipeline": {
+                "overlap_layout": False,
+                "queue_mode": "serial",
+                "max_workers": 1,
+            },
+            "run": {"run_root": str(Path("output").resolve())},
+        },
+    )
+
+    pipelined_run(cfg)
+
+    print("JSON directory:", cfg["_meta"]["result_json_dir"])
+    print("Markdown directory:", cfg["_meta"]["output_dir"])
+
+
+if __name__ == "__main__":
+    main()
+```
+
+`ensure_layout_model()` reuses or downloads the official layout model.
+Results are written to `output/<run_tag>/results_json/` and
+`output/<run_tag>/output/`. To parse a PDF, replace `demo.png` with its local path.
+
+For CUDA layout detection, change `--device cpu` to `--device cuda:0` in the CLI,
+or set `layout.device` to `cuda:0` in Python, after installing the matching
+PaddlePaddle runtime. Keep SDK recognition concurrency aligned with the
+llama.cpp service's request slots.
+
+Run `minicpmvocr parse --help` for CLI options, or see the
+[SDK API reference](https://github.com/OpenBMB/MiniCPM-OCR/blob/main/docs/minicpm_ocr_sdk_api_en.md)
+for configuration and document-level Markdown export.
 
 ## Performance
 

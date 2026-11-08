@@ -161,8 +161,28 @@ Drop `enable_thinking=False` to let the model reason first, and raise
 
 ### vLLM
 
-Kolibri requires the **aleph-alpha-inference** package that provides the
-Kolibri vLLM plugin. You can either use the provided container image
+vLLM supports Kolibri natively from version 0.33.0 through its Transformers
+modeling backend
+([vllm-project/vllm#60827](https://github.com/vllm-project/vllm/pull/60827)):
+
+```bash
+pip install "vllm>=0.33.0"
+```
+
+Serve the model with reasoning and tool-calling enabled:
+
+```bash
+vllm serve Aleph-Alpha/Kolibri-1 --kv-cache-dtype fp8 \
+  --reasoning-parser hf \
+  --tool-call-parser hf \
+  --enable-auto-tool-choice
+```
+
+The `hf` parsers read Kolibri's output format from the checkpoint's response
+template.
+
+For `vllm<0.33.0`, use the **aleph-alpha-inference** package that provides the
+Kolibri vLLM plugin instead. Either use the container image
 `ghcr.io/aleph-alpha/aleph-alpha-inference`, or install the package from
 [Aleph-Alpha/aleph-alpha-inference](https://github.com/Aleph-Alpha/aleph-alpha-inference),
 which also installs the vLLM version it supports:
@@ -171,14 +191,8 @@ which also installs the vLLM version it supports:
 pip install 'aleph-alpha-inference>=1'
 ```
 
-Serve the model with reasoning and tool-calling enabled:
-
-```bash
-vllm serve Aleph-Alpha/Kolibri-1 --kv-cache-dtype fp8 \
-  --reasoning-parser kolibri1 \
-  --tool-call-parser kolibri1 \
-  --enable-auto-tool-choice
-```
+With the plugin, serve with `--reasoning-parser kolibri1 --tool-call-parser
+kolibri1` instead.
 
 To serve contexts beyond 262,144 tokens, add `--max-model-len 1048576
 --hf-overrides '{"max_position_embeddings": 1048576}'`.
@@ -223,7 +237,10 @@ will then immediately respond.
 ### Tool calling
 
 The serving command enables Hermes-style tool calling (`--tool-call-parser
-kolibri1 --enable-auto-tool-choice`). Pass your function schemas via the
+hf --enable-auto-tool-choice`). The `hf` parser does not support
+`tool_choice="required"`, a named `tool_choice`, `parallel_tool_calls=false`
+or strict tools; use `--tool-call-parser hermes` if you need them. Pass your
+function schemas via the
 standard `tools` field of the chat completions request; the model will emit
 tool calls that the parser converts into structured output. Tool calling can
 be combined with reasoning mode.

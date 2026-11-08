@@ -30,6 +30,22 @@ tags:
   <img src="https://raw.githubusercontent.com/OpenSenseNova/SenseNova-U1/refs/heads/feat/u1.5/docs/assets/teaserU1.5.png" alt="SenseNova-U1.5 native unified multimodal architecture" width="100%">
 </p>
 
+## News
+
+We introduce [**SenseNova-U1.5-8B-MoT-TailSteer**](https://huggingface.co/sensenova/SenseNova-U1.5-8B-MoT-TailSteer), extending SenseNova-U1.5 with substantially improved multi-turn editing stability while largely preserving its generation and editing capabilities.
+
+<p align="center">
+  <a href="https://huggingface.co/sensenova/SenseNova-U1.5-8B-MoT-TailSteer">
+    <img src="https://huggingface.co/sensenova/SenseNova-U1.5-8B-MoT-TailSteer/resolve/main/media/twenty-turns.gif" alt="SenseNova-U1.5 base model and TailSteer across 20 successive edits" width="100%">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://huggingface.co/sensenova/SenseNova-U1.5-8B-MoT-TailSteer">
+    <img src="https://huggingface.co/sensenova/SenseNova-U1.5-8B-MoT-TailSteer/resolve/main/media/multi-input.gif" alt="Compose objects without rebuilding the scene: multi-reference editing with SenseNova-U1.5 and TailSteer" width="100%">
+  </a>
+</p>
+
 ## Overview
 
 **SenseNova-U1.5-8B-MoT** is our latest native unified multimodal checkpoint for more accurate, consistent, reliable, and aesthetically compelling visual creation. Built on [NEO-unify](https://huggingface.co/blog/sensenova/neo-unify), it strengthens the patchify layers, data quality and distribution, task formulation, prompt enhancement, and post-training pipeline.
@@ -128,6 +144,7 @@ The official release improves upon the Preview, though challenges remain in:
 | :---- | :---- | :--------- |
 | **SenseNova-U1.5-8B-MoT** | RL | [🤗 Model](https://huggingface.co/sensenova/SenseNova-U1.5-8B-MoT) |
 | SenseNova-U1.5-8B-MoT-SFT | Supervised fine-tuning | [🤗 Model](https://huggingface.co/sensenova/SenseNova-U1.5-8B-MoT-SFT) |
+| SenseNova-U1.5-8B-MoT-TailSteer | RL + TailSteer | [🤗 Model](https://huggingface.co/sensenova/SenseNova-U1.5-8B-MoT-TailSteer) |
 
 ## 🌐 Join the Community!
 

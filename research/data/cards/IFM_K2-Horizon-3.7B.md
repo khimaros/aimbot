@@ -18,6 +18,9 @@ tags:
 
 # K2-Horizon-3.7B
 
+[Training Code](https://github.com/ifm-ai/xllm) - [Evaluation Code](https://github.com/ifm-ai/Eval360) - [All Training Data](https://github.com/ifm-ai/DATA_NAVIGATOR)
+
+
 
 K2-Horizon-3.7B is the small dense member of the K2-Horizon family: a 3.7B-core decoder-only model with a 512K context window.
 

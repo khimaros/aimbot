@@ -1948,6 +1948,7 @@ models:
       default: true
   LiquidAI/d1-Omni-2B:
     kind: decision
+    audiocpp: lfm_d1_omni
     name:
       short: d1-omni-2b
       match: \bd1[\s-]*omni[\s-]*2b\b
@@ -2004,8 +2005,8 @@ models:
       mainline: true
       since: b5873
       merged: '2025-07-11'
-      note: the release above is when mainline learned the backbone. the decision head came with
-        PR 30110, merged 2026-10-07, and the gguf runs on that {card@LiquidAI/d1-3B-GGUF}
+      note: the release above is when mainline learned the backbone. the decision head came with PR
+        30110, merged 2026-10-07, and the gguf runs on that {card@LiquidAI/d1-3B-GGUF}
     ids:
       jev: ''
     modalities:
@@ -2071,8 +2072,8 @@ models:
       mainline: true
       since: b7990
       merged: '2026-02-10'
-      note: the release above is when mainline learned the backbone. the decision type came with
-        PR 30361, merged 2026-10-20, and the gguf runs on that {card@h2oai/h2o-lightning-4b-gguf}
+      note: the release above is when mainline learned the backbone. the decision type came with PR
+        30361, merged 2026-10-20, and the gguf runs on that {card@h2oai/h2o-lightning-4b-gguf}
     ids:
       jev: ''
     modalities:
@@ -2111,8 +2112,8 @@ models:
       mainline: true
       since: b7990
       merged: '2026-02-10'
-      note: the release above is when mainline learned the backbone. the decision type came with
-        PR 30980, merged 2026-10-27, and the gguf runs on that {card@openbmb/MiniCPM-OCR-Jev-gguf}
+      note: the release above is when mainline learned the backbone. the decision type came with PR
+        30980, merged 2026-10-27, and the gguf runs on that {card@openbmb/MiniCPM-OCR-Jev-gguf}
     ids:
       jev: ''
     modalities:
@@ -2667,7 +2668,7 @@ models:
             ram with `-ot per_layer_token_embd=CPU`. on mainline that flag restates the default -- the
             table is an input tensor and sits on the cpu anyway -- and qwen4exp has marked it
             TENSOR_READ_LAZY since b10660. `--lazy-mode` at its default `auto` reads a marked tensor
-            over 4 gib from the file as tokens need its rows, for these files and unsloth''s alike,
+            over 2^32 bytes from the file as tokens need its rows, for these files and unsloth''s alike,
             and resolves to `off`, keeping the table resident, on any device reporting no mmap
             support, which at llama.cpp 785322d includes vulkan on an integrated gpu. that answers
             issue 28160 {url@https://github.com/ggml-org/llama.cpp/issues/28160}: on a radeon 8060s
@@ -4629,7 +4630,7 @@ models:
       gbench: deepseek/deepseek-v4.1-flash-1017
       lmarena: ''
       swerebench: ''
-      epoch: ''
+      epoch: deepseek-v4.1-flash-1017
       livebench: ''
     runtime:
       arch: deepseek41
@@ -4676,8 +4677,10 @@ models:
       fish audio's text-to-speech model "built for multi-character scenes and long-form
       content" {card}, on a 35b mixture-of-experts text backbone with 3b active. the vendor
       serves it on sglang-omni and vllm-omni. the gguf is jmica's, which audio.cpp's catalog
-      names as its package and marks experimental, and its card calls them "Experimental
-      native audio.cpp conversions" {card@Jmica/Drama-3-GGUF}.
+      names as its package and marks experimental. its card calls them "experimental
+      conversions" of fish audio's october 29 replacement checkpoint, with the files
+      built from the original weights kept at the revision `original-2026-10-13`
+      {card@Jmica/Drama-3-GGUF}.
     repos:
     - repo: Jmica/Drama-3-GGUF
       role: model
@@ -4693,8 +4696,6 @@ models:
         drama-3-backbone-8bit-F32-routers-BF16-embed-head-experts-Q4_K_S.gguf:
           quant: Q4_K_S
     ids:
-      # artificial analysis still names it a preview, and marks the row open
-      # weights with the 2026-10-14 release date, so it is the weights released
       aa-tts: drama3-preview
       tts-arena: ''
     modalities:
@@ -5688,7 +5689,7 @@ models:
       since: b1046
       merged: '2023-08-21'
     ids:
-      aa: ''
+      aa: nanbeige4-3-33b
       gbench: ''
       lmarena: ''
       swerebench: ''
@@ -5722,6 +5723,78 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+  ricursiveAI/Ripple-65B-Preview:
+    kind: text
+    name:
+      short: ripple 65b
+      # a pretrain-only `Ripple-65B-Base-Preview` and an abliterated rebuild share the
+      # stem, and `ripple` alone is a cryptocurrency
+      match: ripple[\s-]*65b(?![\s-]*(?:base|abliterated))
+    notes: >-
+      ricursive's first model, a 65b dense transformer trained from scratch on 12t tokens
+      and post-trained for agentic coding {card}. the card scores it 80.5 on terminal-bench
+      2.1 against models with ten times its parameters, running its own harness wherever a
+      lab published no score, and says the preview has "gone through relatively light
+      posttraining". the architecture starts from olmo 3 and moves to a gemma 3n-like
+      layout: 80 layers, sliding-window attention over 1024 tokens on four of every five
+      and full attention with no positional encoding on the fifth. text in, text out, and
+      it always reasons -- the template has no knob that turns thinking off. ricursive
+      ships a dflash2 drafter as bf16 safetensors only; the one gguf of it,
+      ashbash/Ripple-65B-Preview-DFlash2-GGUF, loads in llama.cpp as a `dflash` drafter,
+      but its card says llama.cpp applies rope to the layer the recipe runs without it and
+      lets the full-attention layer see the whole context, so no drafter is configured here.
+    repos:
+    - repo: AtomicChat/Ripple-65B-Preview-GGUF
+      files:
+        AD-IQ4_XS:
+          note: 'AD-IQ4_XS at {gib}, the rung the card {card} sets against llama.cpp''s
+            plain Q4_K_M at {gib@Q4_K_M}, kept in the repo as a baseline: 0.0149 mean kl
+            divergence against 0.0380, and the same top token as bf16 95.6% of the time
+            against 93.0%, on atomicchat''s 30-language corpus. the AD layouts are per tensor,
+            from an importance matrix over a published 4.7m-token calibration build.
+            atomicchat wrote llama.cpp''s support for the architecture, and the card calls
+            AD-IQ1_M at {gib@AD-IQ1_M} a "research file"'
+    runtime:
+      arch: ricursive
+      mainline: true
+      since: b12158
+      merged: '2026-11-05'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: tuned-here
+        note: 'neither ricursive''s card {card} nor a generation_config publishes a sampler,
+          and atomicchat''s card says as much. this is the unmodified distribution with a
+          light nucleus cut and no penalties, a starting point rather than a recommendation,
+          which is why the source reads tuned-here'
+        temp: 1.0
+        top_p: 0.95
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: AtomicChat/Ripple-65B-Preview-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
   RecursiveSI/flint:
     kind: text
     name:
@@ -6028,7 +6101,7 @@ models:
       gbench: reflection/beam-1.0-501b-a23b
       lmarena: ''
       swerebench: ''
-      epoch: ''
+      epoch: beam-1.0
       livebench: ''
     sampling:
       thinking:
@@ -10599,6 +10672,35 @@ models:
           quant: F16
     crispasr:
       diarize: embedder
+  nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B:
+    kind: speech
+    audiocpp: nemotron_transcribe
+    name:
+      short: nemotron 3.5 transcribe 30b a4b
+      match: nemotron[\s-]*3\.5[\s-]*transcribe
+    notes: >-
+      nvidia's speech language model, "an open-weight, offline speech and audio model" for
+      transcription in 40 languages {card}, on the nemotron 3.5 lightning 30b a3b backbone
+      with a 600m asr encoder and the nemotron-3-diarization speaker encoder in front. one
+      checkpoint transcribes, translates to and from english, labels speakers, gives word
+      timestamps and answers questions about a recording, and the card recommends
+      temperature 0 with reasoning off for transcription. audio.cpp loads jmica's
+      conversion, a decoder plus a required encoder file named with an `mmproj-` prefix,
+      which its card calls "community packages"
+      {card@Jmica/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-GGUF}. atomicchat's measured ladder
+      is built for nvidia's own NeMo-Speech.cpp, which nothing here runs.
+    repos:
+    - Jmica/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-GGUF
+    ids:
+      aa-stt: Nemotron 3.5 Transcribe
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+    modalities:
+      input:
+      - audio
+      output:
+      - text
   nvidia/Nemotron-3-Diarization:
     kind: diarize
     audiocpp: nemotron_3_diar
@@ -11947,6 +12049,7 @@ models:
       mid_developer: ok
   LiquidAI/LFM3-Audio-2B:
     kind: speech
+    audiocpp: lfm3_audio
     name:
       short: lfm3-audio 2b
       match: \blfm[\s-]*3[\s-]*audio\b
@@ -11995,8 +12098,53 @@ models:
       leading_system_max: unlimited
       mid_system: ok
       mid_developer: ok
+  ConwayResearch/Underdog-Bark-3.0:
+    kind: speech
+    audiocpp: underdog_bark3
+    name:
+      short: underdog bark 3
+      match: underdog[\s-]*bark[\s-]*3
+    notes: >-
+      conway research's english transcriber, a 0.6b model the card calls "state-of-the-art
+      speech recognition for its size" {card} and ranks above phonon-2 and parakeet tdt 0.6b
+      v3 on the open asr leaderboard's english sets. bark 3.0 plus and pro are larger
+      siblings. the weights are cc-by-nc-4.0. audio.cpp's catalog packages it as a
+      community family.
+    modalities:
+      input:
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+  third-intelligence/Haas-ja-v1.0:
+    kind: speech
+    audiocpp: haas_asr
+    name:
+      short: haas ja v1.0
+    notes: >-
+      third intelligence's japanese transcriber on nvidia's parakeet-tdt design, "a
+      FastConformer encoder and a Token-and-Duration Transducer (TDT) decoder" whose
+      prediction network uses kimi delta attention {card}. on the vendor's own japanese
+      benchmark the card calls it "the most accurate of the open models we evaluated"
+      {card}. apache 2.0. audio.cpp loads it through its shared parakeet implementation, as
+      a community family.
+    modalities:
+      input:
+      - audio
+      output:
+      - text
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
   FermionResearch/Phonon-2:
     kind: speech
+    audiocpp: phonon2_asr
     name:
       short: phonon-2
       match: \bphonon[\s-]*2(?!\.\d)\b
@@ -12629,14 +12777,19 @@ models:
     kind: speech
     name:
       short: hojo-asr-v1
-      match: hojo[\s-]*asr
+      match: hojo[\s-]*asr(?![\s-]*multi)
     notes: >-
       second on the open ASR leaderboard at 4.33 mean WER over eight datasets,
       behind qwen3-asr-1.7b and ahead of everything this roster carried before
       it -- that average is the leaderboard's, not the card's. the card {card}
       describes "the classic Encoder-Adapter-LLM framework" over a qwen3 decoder.
-      apache 2.0. no conversion exists and crispasr names no backend, so it
-      is tracked rather than servable -- the number is the reason it is here.
+      apache 2.0. crispasr loads cstr's conversion on its `hojo-asr` backend, the
+      same one that runs the multilingual sibling.
+    repos:
+    - repo: cstr/Hojo-ASR-V1-GGUF
+      role: model
+      crispasr:
+        backend: hojo-asr
     ids:
       aa-stt: ''
       aa-stt-streaming: ''
@@ -12644,6 +12797,109 @@ models:
       tts-arena: ''
       voicearena: ''
       open-asr: HojoAI/Hojo-ASR-V1
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  HojoAI/Hojo-ASR-Multi-V1:
+    kind: speech
+    name:
+      short: hojo-asr multi v1
+      match: hojo[\s-]*asr[\s-]*multi
+    notes: >-
+      the multilingual sibling of hojo-asr-v1, the same encoder-adapter design over a qwen3
+      decoder, which the card calls "a high-performance conversational speech recognition
+      model" {card}. crispasr's catalog lists german, french, italian, portuguese, spanish,
+      japanese, arabic, korean and russian for it. apache 2.0.
+    repos:
+    - repo: cstr/Hojo-ASR-Multi-V1-GGUF
+      role: model
+      crispasr:
+        backend: hojo-asr
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  DataoceanAI1/dolphin-cn-dialect-small-streaming:
+    kind: speech
+    name:
+      short: dolphin cn dialect small
+      match: dolphin[\s-]*cn[\s-]*dialect
+    notes: >-
+      dataocean ai and tsinghua's chinese transcriber, which "supports Mandarin Chinese and
+      22 Chinese dialects" {card} in streaming and non-streaming modes, on a joint
+      CTC-attention design. this small streaming build is the one crispasr loads. apache
+      2.0.
+    repos:
+    - repo: cstr/dolphin-cn-dialect-small-streaming-GGUF
+      role: model
+      crispasr:
+        backend: dolphin
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  sbintuitions/hikari-medium:
+    kind: speech
+    name:
+      short: hikari medium
+      match: hikari[\s-]*medium
+    notes: >-
+      sb intuitions' "streaming speech-to-text translation and transcription model" {card},
+      emitting text while the speaker is still talking: english to japanese, russian and
+      german, japanese to english, and streaming english transcription, over a fully
+      causal whisper encoder. mit.
+    repos:
+    - repo: cstr/hikari-medium-GGUF
+      role: model
+      crispasr:
+        backend: hikari
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
+    modalities:
+      input:
+      - text
+      - audio
+      output:
+      - text
+  KRAFTON/Raon-Speech-9B:
+    kind: speech
+    name:
+      short: raon-speech 9b
+      match: raon[\s-]*speech
+    notes: >-
+      krafton's english and korean speech language model, "a 9B-parameter speech language
+      model" {card} on qwen3 that transcribes, speaks, answers spoken questions and chats.
+      crispasr loads it as a transcriber. the weights are cc-by-nc-4.0.
+    repos:
+    - repo: cstr/raon-speech-9b-GGUF
+      role: model
+      crispasr:
+        backend: raon-speech
+    ids:
+      aa-stt: ''
+      aa-stt-streaming: ''
+      voicearena: ''
+      open-asr: ''
     modalities:
       input:
       - text
@@ -13701,6 +13957,30 @@ models:
       - text
       output:
       - audio
+  Edge0/Audio8-TTS-Realistic-Air:
+    kind: speech
+    name:
+      short: audio8 tts realistic air
+      match: audio8[\s-]*tts[\s-]*realistic
+    notes: >-
+      the follow-up to audio8 tts preview, keeping its 0.6b size and zero-shot voice
+      cloning while covering 23 languages {card}, twelve more than the preview,
+      with the same bundled 44.1 khz codec. crispasr loads cstr's conversion on its
+      `arktts` backend, under the repo's earlier name `Audio8-TTS-Realistic-0.6b`. apache
+      2.0.
+    repos:
+    - repo: cstr/Audio8-TTS-Realistic-0.6b-GGUF
+      role: model
+      crispasr:
+        backend: arktts
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+    modalities:
+      input:
+      - text
+      output:
+      - audio
   nvidia/audio-flamingo-3:
     kind: speech
     name:
@@ -13843,9 +14123,9 @@ models:
       short: confucius4-r2t2
     notes: >-
       a real-time asr from netease youdao, fine-tuned from qwen3-asr 1.7b with longest
-      stable prefix decoding so that it works in "append-only output mode" {card} and
-      never revises committed text. the card claims "only 200 to 600 milliseconds
-      average latency" {card} and is tuned for chinese and english. two ggufs are
+      stable prefix learning on 1,500 hours of chinese and english, so that it "operates in
+      a monotonic output mode" {card} and never revises committed text. decoding chunks
+      run from 80 ms to 2 s {card}. two ggufs are
       tracked: davidxifeng's q8_0 and f16, which refuse 4- and 5-bit quants at load
       time, and nairod785's q4_k_m built with an "asymmetric per-tensor quantization
       recipe" {card@Nairod785/Confucius4-R2T2-Q4_K_M-GGUF}. the weights carry netease
@@ -14105,11 +14385,12 @@ models:
     name:
       short: granite speech 5.0 470m turboctc
     notes: >-
-      IBM's english transcriber, "a compact 470 million parameter English ASR model"
-      {card} made of 16 conformer blocks with a CTC head, decoded "non-autoregressively
-      with greedy decoding" {card}. it was trained on about 60,000 hours of public
-      english audio and targets "low-latency/high-throughput English speech-to-text
-      transcription" {card}.
+      IBM's transcriber, "a compact 470 million parameter multilingual ASR model" {card}
+      for english, french, german, spanish, portuguese, italian and japanese, made of 16
+      conformer blocks with a CTC head over a 16,384-token vocabulary and decoded
+      "non-autoregressively with greedy decoding" {card}. it replaced an english-only
+      release, kept at revision 947f59a, and the card puts its average english WER at
+      5.51% against that release's 5.78% {card}.
     audiocpp: granite5asr
     modalities:
       input:
@@ -14122,6 +14403,38 @@ models:
       aa-stt-streaming: ''
       voicearena: ''
       open-asr: ibm-granite/granite-speech-5.0-470m-turboctc
+  HeartMuLa/MuLaCover:
+    kind: sound
+    audiocpp: mulacover
+    name:
+      short: mulacover
+    notes: >-
+      heartmula's "controllable AI cover-song and music-remix model" {card}: it rewrites
+      reference music to new lyrics and a structured style prompt, or generates from melody
+      and chord MIDI. the weights are cc-by-nc-4.0. audio.cpp's catalog packages it as an
+      experimental family.
+  google/magenta-realtime-2:
+    kind: sound
+    audiocpp: magenta_realtime_2
+    name:
+      short: magenta realtime 2
+    notes: >-
+      google deepmind's "open music generation model from Google built for on device
+      streaming generation with low-latency control" {card}, steered continuously by text
+      prompts, audio examples and MIDI, with a codec that works in stereo 48 khz audio. the
+      weights are cc-by-4.0. audio.cpp's catalog marks it experimental.
+    repos:
+    - audio-cpp/Magenta-RealTime-2-GGUF
+  OpenMOSS-Team/MOSS-SoundEffect-v2.0:
+    kind: sound
+    audiocpp: moss_soundeffect
+    name:
+      short: moss-soundeffect v2
+    notes: >-
+      openmoss's text-to-sound model, "a text-to-audio model with a Diffusion Transformer
+      (DiT) backbone" {card}, generating ambience, creature and action sound effects from
+      english or chinese prompts for up to 30 seconds. its 1.3b DiT replaces v1's
+      autoregressive backbone. apache 2.0.
   HeartMuLa/HeartMuLa-oss-3B:
     kind: sound
     name:
@@ -14334,6 +14647,29 @@ models:
       aa-stt-streaming: ''
       voicearena: ''
       open-asr: ''
+  ByteDance/LatentSync-1.6:
+    kind: video
+    audiocpp: latentsync
+    name:
+      short: latentsync 1.6
+    notes: >-
+      bytedance's lip-sync model, which redraws a reference video's mouth to match an audio
+      track. 1.6 is 1.5 retrained on 512 x 512 video, because the "teeth and lips" 1.5
+      generated came out blurry, with no change to the structure {card}. audio.cpp's
+      catalog packages it as an experimental family.
+    repos:
+    - audio-cpp/LatentSync-1.6-GGUF
+  Soul-AILab/SoulX-FlashHead-1_3B:
+    kind: video
+    audiocpp: soulx_flashhead
+    name:
+      short: soulx-flashhead
+    notes: >-
+      soul ai lab's streaming talking-head generator, which animates a portrait from audio
+      in real time. the repo holds a lite model built for speed and a pro model built for
+      quality {card}. audio.cpp's catalog packages it as an experimental family.
+    repos:
+    - audio-cpp/SoulX-FlashHead-GGUF
   Quark-Vision/Live-Avatar:
     kind: video
     name:
@@ -14775,12 +15111,34 @@ models:
       network that restores degraded speech while keeping its content and speaker. the
       card lists noise, reverberation, clipping, codec artifacts and packet loss among
       the degradations, accepts 8 to 48 khz input, and says "This model is for research
-      and development only." {card}. the audio.cpp conversion ships f32 only, because
-      "F16 and Q8 were rejected" {card@audio-cpp/RE-USE-GGUF} for waveform drift without
-      a speed gain.
+      and development only." {card}. the audio.cpp conversion keeps every tensor in f32
+      "byte-for-byte from its upstream checkpoint" {card@audio-cpp/RE-USE-GGUF}, and the
+      same repo also packages nvidia's two newer nemotronlabs checkpoints and the causal
+      real-time variant, which are different models.
     audiocpp: reuse
     repos:
-    - audio-cpp/RE-USE-GGUF
+    - repo: audio-cpp/RE-USE-GGUF
+      # the repo also holds nvidia's nemotronlabs, laughter and real-time
+      # checkpoints, each an f32 file, so this one is named to be sized alone
+      files:
+        reuse-f32.gguf:
+          quant: F32
+  nvidia/Real-time_RE-USE:
+    kind: audio
+    audiocpp: realtime_reuse
+    name:
+      short: real-time re-use
+    notes: >-
+      the causal sibling of re-use, "a unified, real-time universal speech enhancement
+      framework" {card} offering 30 latency configurations in one model, for input from 8
+      to 48 khz. the card says "This model is for research and development only." {card}.
+      audio.cpp runs it as its own family with incremental streaming, from the repo that
+      holds the offline model {card@audio-cpp/RE-USE-GGUF}.
+    repos:
+    - repo: audio-cpp/RE-USE-GGUF
+      files:
+        realtime-reuse-f32.gguf:
+          quant: F32
   lj1995/VoiceConversionWebUI:
     kind: audio
     name:
@@ -15101,11 +15459,10 @@ models:
     name:
       short: whistle asr
     notes: >-
-      cactus compute's "speech-to-text model for mobiles, wearables, robots, smart home,
-      automotive and microcontrollers" {card}, shipped as a single file for the
-      vendor's needle engine. it transcribes english, german, french, spanish,
-      italian, dutch and polish with word timestamps and keyword biasing, and the card
-      warns that "music especially, can still come out as text" {card}. audio.cpp's
+      cactus compute's speech model "for transcription, word timestamps and speech
+      embeddings in seven languages" {card}, shipped as `whistle.cact` for the
+      vendor's cactus engine beside a safetensors checkpoint. the card's languages
+      are english, german, french, spanish, italian, dutch and polish. audio.cpp's
       catalog packages an f32 gguf with a GGML encoder and a host decoder, and marks it
       experimental.
     audiocpp: whistle_asr

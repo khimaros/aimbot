@@ -53,7 +53,7 @@ Mistral Large 4 is our largest and most capable model to date: a 1 trillion-para
 
 Mistral Large 4 unifies instruction following, reasoning, coding, and agentic workflows in a single set of weights. While a generalist model, it shows especially good performance on workloads such as cybersecurity, finance, and law, and it surpasses frontier closed models on visual grounding. It is natively fluent in 160+ languages, including every official language of the European Union.
 
-Find more information on our [blog](https://mistral.ai/news/mistral-large-4-oss/). The model is also served on the [Mistral API](https://docs.mistral.ai/models/mistral-large-4-0) as `mistral-large-4`.
+Find more information on our [blog](https://mistral.ai/news/mistral-large-4-oss/) and our [technical report](https://huggingface.co/mistralai/Mistral-Large-4-1T-A52B/blob/main/assets/technical_report.pdf). The model is also served on the [Mistral API](https://docs.mistral.ai/models/mistral-large-4-0) as `mistral-large-4`.
 
 > [!Note]
 > The checkpoint ships with an embedded DSpark speculative decoding draft head — see [Speculative decoding (DSpark)](#speculative-decoding-dspark).

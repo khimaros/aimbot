@@ -26,7 +26,7 @@ tags:
     </a>
   </div>
     <ul style="margin: 0;">
-      <img width="600" alt="deepseek-v4.1-flash unsloth desktop" src="https://cdn-uploads.huggingface.co/production/uploads/62ecdc18b72a69615d6bd857/NL1yOq6MuJeGmrEZckR_h.png" />
+      <img width="600" alt="deepseek-v4.1-flash unsloth desktop" src="https://unsloth.ai/docs/~gitbook/image?url=https%3A%2F%2F3215535692-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252FxhOjnexMCB3dmuQFQ2Zq%252Fuploads%252FXC2NHQCS4KKsMoY4IjpT%252Fimage.png%3Falt%3Dmedia%26token%3D67fb9d55-8fbb-4f35-a13f-83465cee8475&width=768&dpr=3&quality=100&sign=2584c9df521ba21c3c72043696f8ee56&sv=3" />
     <li>Run on a 128GB+ RAM device for the smallest 1-bit, 3-bit on 256GB or full precision on 320GB. <a href="https://unsloth.ai/docs/models/deepseek-v4.1-flash">Read Guide</a></li>
     <li>To run, please use our llama.cpp PR or the <a href="https://unsloth.ai/docs/desktop">Unsloth Desktop</a> app.</li>
     <li>Get up to 3x faster inference with Unsloth vs other ngram/CPU/VRAM repos./</li>

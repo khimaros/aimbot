@@ -56,7 +56,9 @@ The model is intended to be used in enterprise applications that involve accurat
 
 ## Usage:
 
-### Usage with `transformers`
+<details>
+<summary><b>Usage with <code>transformers</code></b></summary>
+
 Granite Speech 5.0 TurboCTC is supported natively in `transformers>=5.16.0`:
 
 ```shell
@@ -84,7 +86,10 @@ outputs = model.generate(**inputs)
 print(processor.batch_decode(outputs, skip_special_tokens=True))
 ```
 
-### Usage with `mlx-audio` for Apple Silicon M series chips
+</details>
+
+<details>
+<summary><b>Usage with <code>mlx-audio</code> for Apple Silicon M series chips</b></summary>
 
 Install a recent version of mlx-audio (0.5.1 or later):
 ```shell
@@ -94,6 +99,34 @@ Sample use:
 ```shell
 python -m mlx_audio.stt.generate --model ibm-granite/granite-speech-5.0-470m-turboctc --verbose --audio "audio.wav" --output-path "transcript"
 ```
+
+</details>
+
+<details>
+<summary><b>Usage with <code>transcribe.cpp</code> for local GGUF inference</b></summary>
+
+[transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) runs the model from a
+quantized GGUF on Metal, Vulkan, CUDA, ROCm, or CPU, with no Python at runtime. Build it
+(tested with release 0.4.1), then fetch a pre-quantized GGUF of this multilingual release from
+[vladers/granite-speech-5.0-470m-turboctc-GGUF](https://huggingface.co/vladers/granite-speech-5.0-470m-turboctc-GGUF)
+(community conversion; Q8_0 recommended, Q6_K to Q4_K_M also available):
+
+```shell
+git clone --branch v0.4.1 https://github.com/handy-computer/transcribe.cpp
+cd transcribe.cpp && cmake -B build && cmake --build build --target transcribe-cli
+hf download vladers/granite-speech-5.0-470m-turboctc-GGUF \
+  granite-speech-5.0-470m-turboctc-Q8_0.gguf --local-dir models
+```
+
+Sample use (16 kHz mono WAV; `-o` writes only the transcript to a file):
+```shell
+build/bin/transcribe-cli -q -m models/granite-speech-5.0-470m-turboctc-Q8_0.gguf -o transcript.txt audio.wav
+```
+
+On silence or non-speech audio, transcribe.cpp returns the model's `<|nospeech|>` control token as
+the transcript; treat that output as no speech.
+
+</details>
 
 **Model Architecture:** 
 

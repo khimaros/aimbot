@@ -1002,12 +1002,7 @@ def check_verdicts(authored, built, ledger_path=None, decided_path=None):
     """
     import prose
     led = prose.ledger(ledger_path or prose.LEDGER)
-    here = os.path.dirname(os.path.abspath(__file__))
-    try:
-        with open(decided_path or os.path.join(here, "verdicts-decided.json")) as f:
-            decided = json.load(f)
-    except (IOError, ValueError):
-        decided = {}
+    decided = verdicts.load_decided(decided_path)
     models = (built or {}).get("models") or {}
     stale, unstamped, settled = [], [], 0
     for repo, blk in sorted((authored or {}).items()):
@@ -1016,8 +1011,7 @@ def check_verdicts(authored, built, ledger_path=None, decided_path=None):
         if not snap:
             unstamped.append(repo)
             continue
-        was = (decided.get(repo) or {}).get("figures")
-        if was is not None and was == verdicts.snapshot(sorted(snap), facets):
+        if verdicts.settled(repo, snap, facets, decided):
             settled += 1
             continue
         for key, why in verdicts.moved(snap, facets):

@@ -31,6 +31,8 @@ The newly curated data are publicly released: https://huggingface.co/datasets/es
 
 The Gradio demo is [here](https://huggingface.co/spaces/espnet/owsm-ctc-v4). The encoder-decoder [OWSM v4](https://huggingface.co/spaces/espnet/owsm-v4) has its own, offering the same tasks, so the two models can be compared on the same audio.
 
+For CPU inference without Python, GGUF conversions of this model are available at [audio-cpp/audio.cpp-gguf](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/OWSM-CTC-GGUF) (`owsm-ctc-v4-1b`), for use with [audio.cpp](https://github.com/0xShug0/audio.cpp). These builds are produced and maintained outside ESPnet.
+
 To use the pre-trained model, please install `espnet` and `espnet_model_zoo`. The requirements are:
 ```
 librosa
