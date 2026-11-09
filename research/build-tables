@@ -124,8 +124,17 @@ THIRD_PARTY = ("eff_scicode", "eff_terminalbench", "gbench", "lmarena", "swerebe
 
 # retention vs bits-per-weight, fitted to unsloth's aider polyglot sweep of
 # deepseek v3.1 (671b): bf16 71.6 -> 5bit 70.7 -> 4bit 69.7 -> 3bit 68.4 ->
-# 2bit 65.8 -> 1bit 55.7, with size converted to bpw
-CURVE = [(2.21, 0.778), (2.92, 0.919), (3.39, 0.955), (4.72, 0.974), (5.77, 0.987), (16.0, 1.0)]
+# 2bit 65.8 -> 1bit 55.7, with size converted to bpw.
+#
+# below that sweep's last arm the curve used to hold at 0.778, crediting every
+# one-bit rung three quarters of its score. the one benchmark anybody has run
+# under two bits is quesma's gpqa diamond arm of qwen3.8 27b: UD-IQ1_S at 1.80
+# bpw scored at chance, 25% against the 89.2 the card reports, with the smallest
+# file below it. so (1.80, 0.28) is an UPPER bound from a different benchmark --
+# a code pass rate's chance is zero -- and byteshape's kl divergence over the
+# same ladder agrees on the direction, 3.6x worse at 1.78 bpw than at 2.41
+CURVE = [(1.80, 0.28), (2.21, 0.778), (2.92, 0.919), (3.39, 0.955), (4.72, 0.974),
+         (5.77, 0.987), (16.0, 1.0)]
 
 # display names and the natively-low-bpw exemption both come from the registry:
 # `name.short` is the one name for a model across this document, the lexicon and
@@ -304,19 +313,29 @@ def card_score(repo):
     return sum(pcts) / len(pcts) if pcts else None
 
 
-def sentiment_score(ids, name):
-    """One number from reddit: how much it is discussed x how well received.
+def reception(s):
+    """How much one forum discusses a model x how well it was received, or None.
 
     Volume is log-scaled -- 176 mentions is not 35x the evidence of 5 -- and
-    multiplied by reception (median percentile against same-depth comments in
-    the same thread, recentred so 50 is neutral).
+    multiplied by the share of opinionated mentions that were positive. It was
+    the median upvote percentile of the comments naming the model, which ranked
+    comments rather than reading them: glm-5.3-flash outscored qwen3.8 flash
+    next on reddit with half the mentions and less approval, and on hacker news
+    and huggingface, which publish no usable comment scores, it was 0 for all.
+    The share is smoothed by one opinion each way, so two or three opinions sit
+    near even rather than at 0% or 100%, and a forum with none reads as even.
+    analyze-usecase reads this too, so the page and MODELS.md agree.
     """
-    s = optional("data/sentiment.json").get(name)
-    if not s or not s.get("mentions"):
+    if not s.get("mentions"):
         return None
-    volume = math.log1p(s["mentions"])
-    rel = (s.get("median_rel") if s.get("median_rel") is not None else 50) / 50.0
-    return volume * rel
+    pos, neg = s.get("positive") or 0, s.get("negative") or 0
+    return math.log1p(s["mentions"]) * (pos + 1) / (pos + neg + 2)
+
+
+def sentiment_score(ids, name):
+    """One number from reddit, by the rule `reception` states."""
+    s = optional("data/sentiment.json").get(name)
+    return reception(s) if s else None
 
 
 def model_facts():

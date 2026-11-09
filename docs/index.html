@@ -1052,7 +1052,7 @@ function interpolate(c, bpw) {
 // a MEASURED curve can be shorter than the fitted one and stop well above the
 // rungs a reader can select. quesma ran qwen3.8 27b at three arms on
 // terminal-bench and the lowest is 3.11 bpw; clamping there would answer 0.904
-// for a two-bit quant where the fit says 0.778 -- a measurement of one model
+// for a two-bit quant where the fit says 0.82 -- a measurement of one model
 // making its thin quants look BETTER than the general case, purely because
 // nobody ran that arm. below its own range a measured curve therefore defers to
 // the fitted one, which is the wider evidence rather than the narrower silence.
@@ -1085,11 +1085,10 @@ function modelRetention(m) {
 
 // whether the rung being served sits below everything the curve measured, where
 // `retention` returns the lowest fitted point forever rather than continuing to
-// fall. the fitted curve stops at deepseek v3.1's 2.21 bpw and a 1.67 bpw rung
-// reads as keeping 77.8%, which is not a prediction -- it is the last thing the
-// curve knew. quesma's qwen3.8 27b sweep is the only measurement in that region
-// and it found a 27b collapsing to chance at 1.8 bpw, so the flat part is
-// evidenced against on the one model anybody has run there.
+// fall. the fitted curve stops at quesma's qwen3.8 27b arm at 1.80 bpw, which
+// scored at chance, and nothing has been measured under it: a 1.67 bpw rung
+// reads as keeping that arm's 28%, which is an upper bound rather than a
+// prediction.
 function belowCurve(m, q = m && activeQuant(m)) {
   if (!m || m.native_low_bpw) return false;
   return !!(q && rungBpw(q) && retentionBpw(m, q) < curveFor(m, q).points[0][0]);
@@ -1225,23 +1224,47 @@ const SHRINK_LAMBDA = 0.5;          // how much of the uncovered weight speaks
 // this share for that reason.
 const COVER_FLOOR = 0.20;
 
+// the weighted factors this view asks of a model, which is the loop `score` and
+// `codingFill` both walk
+const askedFactors = m => Object.entries(W)
+  .filter(([key, w]) => w && relevant(key) && asked(m, key));
+
+// what an unmeasured CODING factor is worth: halfway between the median and the
+// model's own mean over the coding factors it WAS measured on. the median alone
+// read qwen3.8 flash next at 75 -- in the 80s and 90s on the three coding
+// boards that ran it, and missing the four that have not -- behind a one-bit
+// rung measured everywhere. coding boards agree with each other far more than
+// with the median, and the halfway keeps a model from being carried by
+// predictions of itself. coding is the quant curve's own allowlist, the one set
+// of factors already argued to measure the same thing; a missing preference
+// vote or forum still reads as the median
+function codingFill(m) {
+  const from = askedFactors(m).map(([key]) => key)
+    .filter(key => scaledFacet(key) && facetPct(m, key) !== null);
+  if (!from.length) return {value: null, from};
+  const own = from.reduce((a, key) => a + facetPct(m, key), 0) / from.length;
+  return {value: (own + SHRINK_PRIOR) / 2, from};
+}
+
 function score(m) {
-  let num = 0, den = 0, denMax = 0, have = 0, want = 0;
-  for (const [key, w] of Object.entries(W)) {
-    // two different questions, and both have to pass: `relevant` is whether the
-    // VIEW is asking this, `asked` is whether this model could answer it. a
-    // transcription board over the language-model roster fails the first; a
-    // coding score for whisper fails the second
-    if (!w || !relevant(key) || !asked(m, key)) continue;
+  let num = 0, den = 0, denMax = 0, filled = 0, have = 0, want = 0;
+  const fill = codingFill(m);
+  // two different questions, and both have to pass: `relevant` is whether the
+  // VIEW is asking this, `asked` is whether this model could answer it. a
+  // transcription board over the language-model roster fails the first; a
+  // coding score for whisper fails the second
+  for (const [key, w] of askedFactors(m)) {
     want++; denMax += w;
     const p = facetPct(m, key);
-    if (p === null) continue;
-    have++; num += w * p; den += w;
+    if (p !== null) { have++; num += w * p; den += w; }
+    else if (fill.value !== null && scaledFacet(key)) { num += w * fill.value; filled += w; }
   }
+  // evidence is what was MEASURED: a prediction fills the composite and never
+  // the coverage it is judged by
   const cover = denMax ? den / denMax : 0;
   if (!den || cover < COVER_FLOOR) return {value: null, have, want, cover};
-  const k = SHRINK_LAMBDA * (denMax - den);
-  return {value: (num + k * SHRINK_PRIOR) / (den + k), have, want, cover};
+  const k = SHRINK_LAMBDA * (denMax - den - filled);
+  return {value: (num + k * SHRINK_PRIOR) / (den + filled + k), have, want, cover};
 }
 
 const scored = m => (m._s || (m._s = score(m)));
@@ -1292,7 +1315,7 @@ const COLUMNS = [
    cell: m => `<td>${esc(m.short)}<span class="sub"> ${esc(m._q ? m._q.quant
      : m.publisher)}</span></td>`},
   {k: 'score', t: 'quality', num: true, get: m => scored(m).value ?? -1,
-   help: "the weighted mean of its percentiles, over the factors it was actually measured on, pulled toward 50 by the weight that measured nothing. under 20% coverage that pull decides the answer, so no number is shown at all -- see the evidence column. set the weights under factors",
+   help: "the weighted mean of its percentiles, over the factors it was actually measured on. a coding factor nobody ran is predicted halfway between its own coding mean and 50; any other unmeasured weight pulls toward 50. under 20% coverage that pull decides the answer, so no number is shown at all -- see the evidence column. set the weights under factors",
    cell: m => {
      const s = scored(m);
      if (s.value === null) {
@@ -1312,7 +1335,7 @@ const COLUMNS = [
      const floored = effective && belowCurve(m)
        ? `; ${retentionBpw(m, q)} bpw is below the lowest rung the curve measured `
          + `(${curveFor(m).points[0][0]}), so this is its floor rather than a `
-         + `prediction -- the only sweep run that low found a 27b at chance`
+         + `prediction -- that arm already scored at chance`
        : '';
      const title = effective && r < 1 && q
        ? ` title="${num(s.value, 1)}, scored at x${r.toFixed(3)} `

@@ -778,7 +778,13 @@ table re-ranks as you drag. `community` and `card` are one slider over every
 forum and every claim under them, averaged, because the question a reader has is
 "how much do i trust what people say" rather than one per venue -- and because
 weighting a single forum made a community-only model's whole rank a fact about
-which forum was in the default set.
+which forum was in the default set. a forum's score is log-damped mentions times
+the share of opinionated mentions that were positive, smoothed by one opinion
+each way so that three opinions sit near even rather than at 0% or 100%. it
+used to be the median upvote rank of the
+comments naming the model, which was 0 for everybody on hacker news and
+huggingface and ranked glm-5.3-flash above qwen3.8 flash next on reddit with
+half the mentions and less approval.
 
 the sliders are behind `custom ranking`, because most readers want a stance
 rather than sixty decisions. the stances are a dropdown in the ranking row:
@@ -1027,9 +1033,12 @@ number a local roster is actually asking about; release it and the scores are
 exactly what the source published. on, it
 discounts by the retention `research/build-tables` fits for the chosen quant's
 bits per weight. that curve is imported rather than restated, so the page and
-MODELS.md cannot disagree about what effective means. it changes the answer:
-kimi k3 runs at UD-IQ1_S, 1.71 bpw, 0.778 retention, and falls from second to
-fourth the moment you ask what you would actually get.
+MODELS.md cannot disagree about what effective means. the curve is unsloth's
+aider polyglot sweep of deepseek v3.1 down to 2.21 bpw, and below that one point
+from quesma: qwen3.8 27b at UD-IQ1_S, 1.80 bpw, scored at chance on gpqa, so at
+most 0.28 kept. it changes the answer: at 128 gib k2 horizon 375b's IQ1_S at
+1.79 bpw falls from ninth to fortieth the moment you ask what you would actually
+get, where the old curve credited it 0.778.
 
 three facets sit outside it. sentiment is people talking rather than a score
 and decode speed goes UP when you quantize, so the penalty does not describe
@@ -1082,6 +1091,14 @@ weight is scored as the MIDDLE instead. these are percentiles, whose median is
 50 by construction, and half the uncovered weight enters at 50 -- unmeasured
 reads as typical rather than as whatever the one remaining factor says. a model
 measured on every factor asked of it has no uncovered weight and does not move.
+
+the one exception is a missing CODING factor -- the facets the quant curve
+covers. scored at the median, qwen3.8 flash next read 75 while its own coding
+boards had it in the 80s and 90s, behind a one-bit rung measured everywhere. so
+an unmeasured coding factor is predicted halfway between the median and the
+model's own mean over the coding factors it was measured on. a preference vote
+or a forum still reads as the median, and `evidence` still counts only what was
+measured.
 
 that fixed the ranking and left a number behind. the prior cuts both ways: it
 stops one good factor carrying a model up, and by the same arithmetic stops one

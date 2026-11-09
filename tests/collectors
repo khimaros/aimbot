@@ -20,6 +20,7 @@ import importlib.machinery
 import importlib.util
 import io
 import json
+import math
 import os
 import re
 import shutil
@@ -3599,6 +3600,35 @@ def load_write_prose():
         return load_script("write_prose", os.path.join(RESEARCH, "write-prose"))
     finally:
         sys.path.remove(RESEARCH)
+
+
+@test
+def a_forum_scores_how_a_model_was_received_rather_than_how_its_comments_ranked():
+    """The community facet was log(mentions) x the median upvote percentile of
+    the comments naming the model. hacker news publishes no comment scores and
+    huggingface's are nearly all zero, so on both that percentile was 0 for every
+    model and the facet one tied value; on reddit glm-5.3-flash ranked 97th
+    against qwen3.8 flash next's 80th with half the mentions and less approval.
+    Reception is what the opinionated mentions said, smoothed by one opinion
+    each way so that a handful reads near even and none reads as even."""
+    au = load_script_with_research("analyze_usecase", "analyze-usecase")
+    src = lambda n, pos, neg, rel: {"mentions": n, "positive": pos, "negative": neg,  # noqa: E731
+                                     "approval": round(100.0 * pos / (pos + neg)) if pos + neg else None,
+                                     "median_rel": rel}
+    qwen = au.community_facet({"by_source": {"reddit-localllama": src(163, 14, 4, 29.1),
+                                             "hackernews": src(15, 4, 0, 0.0),
+                                             "level1techs": src(1, 0, 0, None)}})
+    glm = au.community_facet({"by_source": {"reddit-localllama": src(77, 9, 5, 54.2),
+                                            "hackernews": src(18, 3, 2, 0.0)}})
+    eq(qwen["community.reddit-localllama"]["value"] > glm["community.reddit-localllama"]["value"],
+       True, "more mentions and more approval read higher, whatever the upvotes: %r %r"
+       % (qwen["community.reddit-localllama"]["value"], glm["community.reddit-localllama"]["value"]))
+    eq(qwen["community.reddit-localllama"]["value"], round(math.log1p(163) * 15 / 20, 2),
+       "volume, log-damped, times the share of opinions that were positive, smoothed")
+    eq(qwen["community.hackernews"]["value"] > glm["community.hackernews"]["value"], True,
+       "a forum with no comment scores still separates two models")
+    eq(qwen["community.level1techs"]["value"], round(math.log1p(1) * 0.5, 2),
+       "and one with no opinions reads as even, keeping its facet and its quotes")
 
 
 @test

@@ -137,6 +137,10 @@ setTimeout(() => {
     filters.mods = new Set([x.k]);
     filters.flags = new Set();
     filters.engines = new Set();
+    // a score is memoized per model and the view decides which factors are
+    // relevant, so a transcriber section read the text ranking's score for a
+    // text model that also takes audio -- mimo v2.6 flash first among them
+    clearScores();
     drawTable();
     return {title: x.t, help: x.help, rows: sorted(visible()).map(m => {
       const q = readQuant(m);

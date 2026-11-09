@@ -37,6 +37,7 @@ gbench score" is exactly the drift this repo exists to remove.
 """
 
 import argparse
+import functools
 import hashlib
 import importlib.machinery
 import importlib.util
@@ -227,6 +228,7 @@ TOP_PCT = 67          # top third of the models carrying a facet
 BOTTOM_PCT = 33
 
 
+@functools.cache
 def load_build_tables():
     """Reuse build-tables' joins rather than restating them."""
     spec = importlib.util.spec_from_loader(
@@ -400,20 +402,14 @@ def card_facets(card, repo, bias):
 
 
 def community_facet(sent):
-    """One number per forum: how much it is discussed x how well received.
-
-    Same shape as build-tables' sentiment score -- log-damped volume times
-    reception -- but computed per forum rather than pooled, because a forum
-    that publishes no post bodies cannot vote on quality.
-    """
-    import math
+    """One number per forum, by build-tables' `reception`: discussion x approval."""
     out = {}
     for source, s in (sent.get("by_source") or {}).items():
-        if not s.get("mentions"):
+        v = load_build_tables().reception(s)
+        if v is None:
             continue
-        rel = (s["median_rel"] if s.get("median_rel") is not None else 50) / 50.0
         out["community." + source] = {
-            "value": round(math.log1p(s["mentions"]) * rel, 2),
+            "value": round(v, 2),
             "label": "discussion on %s" % source, "unit": "score",
             "group": "community", "mentions": s["mentions"],
             "approval": s.get("approval"), "refs": s.get("refs") or [],

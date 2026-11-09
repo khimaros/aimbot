@@ -31,6 +31,9 @@ invented. Pearson is printed alongside where a linear claim is being made.
 """
 
 import argparse
+import functools
+import importlib.machinery
+import importlib.util
 import json
 import math
 import os
@@ -38,6 +41,16 @@ import subprocess
 import sys
 
 GIB = 2 ** 30
+
+
+@functools.cache
+def build_tables():
+    """build-tables as a module, for the composite's own forum rule."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build-tables")
+    loader = importlib.machinery.SourceFileLoader("build_tables", path)
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("build_tables", loader))
+    loader.exec_module(mod)
+    return mod
 
 # AA fields worth correlating: the two the composite uses, the index it excludes,
 # and the task-level scores that decide whether AA is one axis or several. the
@@ -235,8 +248,7 @@ def roster_vectors(here, aa, gbench, lm, sw, epoch, sentiment, sizes):
             # the composite's own formula, so this correlates the component that
             # is actually weighted; the two halves are split out because they can
             # disagree -- a model can be much discussed and coolly received
-            rel = (s["median_rel"] if s.get("median_rel") is not None else 50) / 50.0
-            rec["sentiment"] = math.log1p(s["mentions"]) * rel
+            rec["sentiment"] = build_tables().reception(s)
             rec["reddit mentions"] = float(s["mentions"])
             rec["reddit reception"] = float(s.get("median_rel") or 50)
         for m, v in rec.items():

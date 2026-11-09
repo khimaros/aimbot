@@ -2312,12 +2312,16 @@ test('a missing factor is shrunk toward the middle, never scored zero', () => {
   const s = scored(m);
   ok(s.have < s.want, 'this model is measured by only some of the factors');
   ok(s.value > 0, 'and still scores on the ones it has');
-  const k = SHRINK_LAMBDA * (askedWeight(m) - coveredWeight(m));
+  const fill = codingFill(m);
+  const coding = Object.keys(W).filter(k => W[k] && asked(m, k) && scaledFacet(k)
+    && facetPct(m, k) === null).reduce((a, k) => a + W[k], 0);
+  const filled = fill.value === null ? 0 : coding;
+  const k = SHRINK_LAMBDA * (askedWeight(m) - coveredWeight(m) - filled);
   near(s.value,
-       (rawScore(m) * coveredWeight(m) + k * SHRINK_PRIOR)
-         / (coveredWeight(m) + k),
-       1e-9, 'the composite is the mean over present factors, shrunk by the'
-         + ' weight that measured nothing');
+       (rawScore(m) * coveredWeight(m) + filled * (fill.value || 0) + k * SHRINK_PRIOR)
+         / (coveredWeight(m) + filled + k),
+       1e-9, 'the composite is the mean over present factors, a missing coding'
+         + ' factor predicted from its own, and the rest shrunk toward the middle');
 });
 
 // renormalizing over present factors redistributes the missing weight onto
@@ -2407,17 +2411,32 @@ test('a score the prior would decide is not printed at all', () => {
 
 test('a thin score cannot outrank the model that beat it on every shared factor',
   () => {
+    // every pair rather than one named one: minicpm5 1b and 2b were the case
+    // that found this, and which pair is dominated moves with each forum capture.
+    // the thick model has to be at least typical on whatever the thin one was
+    // never run on: a model dragged down by its own bad measurements is not
+    // outranked "on evidence it does not have" -- minimax m2.7 at p24 on
+    // terminal-bench v4.0 below solar open2, which nobody ran there
     RESET();
-    const thin = model('minicpm5 1b'), thick = model('minicpm5 2b');
-    const shared = Object.keys(W).filter(k => W[k] && facetPct(thin, k) !== null
-      && facetPct(thick, k) !== null);
-    ok(shared.length > 0, 'the two are measured on at least one common factor');
-    shared.forEach(k => ok(facetPct(thin, k) <= facetPct(thick, k),
-      'the 1b loses to the 2b on ' + k + ' (' + facetPct(thin, k) + ' vs '
-        + facetPct(thick, k) + ')'));
-    ok(scored(thick).value !== null, 'the 2b is measured enough to be scored');
-    ok(!(scored(thin).value > scored(thick).value),
-       'so the 1b must not rank above it on evidence it does not have');
+    const keys = m => Object.keys(W).filter(k => W[k] && facetPct(m, k) !== null);
+    const pairs = [];
+    D.models.filter(m => m.kind === 'text' && scored(m).value !== null).forEach(thick =>
+      D.models.forEach(thin => {
+        if (thin === thick || thin.kind !== 'text' || scored(thin).value === null
+            || scored(thin).cover >= scored(thick).cover) return;
+        const shared = keys(thin).filter(k => facetPct(thick, k) !== null);
+        const extra = keys(thick).filter(k => facetPct(thin, k) === null);
+        if (shared.length && shared.length === keys(thin).length
+            && shared.every(k => facetPct(thin, k) <= facetPct(thick, k))
+            && extra.every(k => facetPct(thick, k) >= SHRINK_PRIOR)) {
+          pairs.push([thin, thick]);
+        }
+      }));
+    ok(pairs.length > 0, 'some thin model is beaten on every factor it has');
+    pairs.forEach(([thin, thick]) => ok(!(scored(thin).value > scored(thick).value),
+      thin.short + ' (' + scored(thin).value.toFixed(1) + ') must not outrank '
+        + thick.short + ' (' + scored(thick).value.toFixed(1)
+        + ') on evidence it does not have'));
   });
 
 // `have/want` counts factors and the composite spends WEIGHT, and the two
@@ -2567,16 +2586,14 @@ test('every registry kind is reachable by some modality chip', () => {
   });
 });
 
-// the curve's lowest fitted point is deepseek v3.1 at 2.21 bpw, and below that
-// `retention` returns that point's value forever -- a 1.30 bpw rung reads as
-// keeping 77.8% of its score because the curve has nothing to say and says the
-// last thing it knew. quesma's qwen3.8 27b sweep is the first measurement in
-// that region and it found collapse to chance at 1.8 bpw, so the flat part is
-// not merely unevidenced, it is evidenced against on at least one model.
+// the curve's lowest point is quesma's qwen3.8 27b arm at 1.80 bpw, and below
+// that `retention` returns that point's value forever -- a 1.30 bpw rung reads
+// as keeping 28% because the curve has nothing to say and says the last thing
+// it knew, so the number is a floor and has to be marked as one.
 test('a quant below the curve is marked as a floor, not a prediction', () => {
   RESET();
-  // 96gb is where the clamp actually bites: four models drop to a rung under
-  // 2.21 bpw and each is multiplied by the curve's last known value
+  // 96gb is where the clamp actually bites: models drop to a rung under the
+  // curve's lowest point and each is multiplied by its last known value
   setHardware({...DEFAULT_HARDWARE, budget: 96, cap: 'none', floor: 'none'});
   const lowest = curveFor(model('kimi k3')).points[0][0];
   ok(lowest > 1.5, 'the curve starts well above one bit (' + lowest + ')');
@@ -2605,6 +2622,51 @@ test('a quant below the curve is marked as a floor, not a prediction', () => {
   ok(native.length >= 3, 'the roster carries natively low-bpw weights');
   native.forEach(m => eq(belowCurve(m), false,
     m.short + ' is exempt from the curve, so it is not below it'));
+  RESET();
+});
+
+// the generic curve used to start at deepseek v3.1's 2.21 bpw, so every rung
+// under it was credited 77.8% of its score. the one benchmark anybody has run
+// below two bits is quesma's gpqa arm of qwen3.8 27b, and UD-IQ1_S at 1.80 bpw
+// scored at chance: 25% against the 89.2 the card reports, 0.28 kept at most.
+// that is the curve's floor now, and a rung between the two is interpolated
+// down the cliff rather than read off its top.
+test('a one-bit rung is not credited three quarters of its score', () => {
+  RESET();
+  const [b0, r0] = D.retention.fitted.points[0];
+  ok(b0 < 2 && r0 <= 0.3,
+    'the generic curve reaches below two bits at chance, got ' + b0 + ' -> ' + r0);
+  setHardware({...DEFAULT_HARDWARE, budget: 96, cap: 'none', floor: 'none'});
+  const thin = D.models.filter(m => {
+    const q = activeQuant(m);
+    return q && rungBpw(q) && !m.native_low_bpw && curveFor(m, q).kind !== 'measured'
+      && retentionBpw(m, q) < 2;
+  });
+  ok(thin.length > 0, 'some model is served a rung under two bits at 96gb');
+  thin.forEach(m => ok(modelRetention(m) < 0.53, m.short + ' at '
+    + retentionBpw(m, activeQuant(m)) + ' bpw keeps x' + modelRetention(m).toFixed(3)));
+  RESET();
+});
+
+// an unmeasured factor was scored as the roster median, so qwen3.8 flash next,
+// in the 80s and 90s on every coding board that ran it, read 75 for the four it
+// has not been run on -- behind a one-bit rung measured everywhere. a missing
+// CODING factor is now predicted from the model's own coding factors, halfway
+// to the median; a missing preference or opinion factor still reads as the
+// median, and evidence still counts only what was measured.
+test('a missing coding factor is predicted from the model\'s own coding factors', () => {
+  RESET();
+  const m = model('qwen3.8 flash next');
+  const filled = codingFill(m);
+  ok(filled.value !== null, 'it has coding factors to predict from');
+  const own = filled.from.map(k => facetPct(m, k));
+  eq(Math.round(filled.value), Math.round((own.reduce((a, p) => a + p, 0) / own.length + 50) / 2),
+    'halfway between its own coding mean and the median');
+  ok(filled.from.every(k => facetPct(m, k) !== null) && filled.from.length >= 2,
+    'read off the coding factors it was actually measured on: ' + filled.from);
+  ok(!filled.from.includes('lmarena.rating'), 'and never off a preference vote');
+  const s = score(m);
+  ok(s.cover > 0.5 && s.cover < 0.6, 'evidence still reports what was measured, got ' + s.cover);
   RESET();
 });
 
