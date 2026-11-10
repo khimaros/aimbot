@@ -630,10 +630,15 @@ returns a probability per option from one forward pass -- no decode, no parse, n
 answer outside the options the caller supplied. so it is in no shape at all:
 `any to text` is right to leave it out, since it emits no tokens, and `language
 models` is right to as well, since nothing answers a chat turn. its numbers come
-from `fetch-jevbench`, the only board here whose rows are decision models,
-rerankers and classifiers, and the only one with a calibration axis -- for a
+from two boards whose rows are decision models: `fetch-jevbench`, and
+artificial analysis' decision index (`fetch-artificial-analysis --board
+decision`). both score calibration -- jevbench as an axis of its own, the index
+inside every score as accuracy less the brier of the chosen option -- and for a
 model whose entire output is a confidence, that is the product rather than a
-second opinion about it.
+second opinion about it. the two weigh the same in the composite. the index's
+rows are each creator's hosted endpoint with no open-weights flag, so a registry
+model joins one only by its exact name: its "d1" is one row for liquid's 2B and
+3B, and neither gets it.
 
 **`language models` is a classification, not a shape.** it is the registry's own
 `kind`, meaning an LLM you serve as a chat endpoint, and it is neither a subset

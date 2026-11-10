@@ -14,6 +14,7 @@ date is in each file's provenance below.
 | `data/artificial-analysis.json` | 2026-08-17 | artificialanalysis.ai leaderboard |
 | `data/artificial-analysis-speech.json` | 2026-09-04 | artificialanalysis.ai speech-to-text (non-streaming and streaming) and text-to-speech |
 | `data/artificial-analysis-image.json` | 2026-09-04 | artificialanalysis.ai text-to-image arena, one elo per model |
+| `data/artificial-analysis-decision.json` | 2026-11-09 | artificialanalysis.ai decision index v2: the index and its six evals per decision model |
 | `data/genai-showdown.json` | 2026-09-20 | genai-showdown.specr.net: fifteen generation prompts and twelve editing ones, judged pass or fail against published criteria |
 | `data/tts-arena.json` | 2026-09-04 | tts-agi TTS Arena v2, crowd-sourced blind-vote elo |
 | `data/voicearena.json` | 2026-09-04 | voicearena.com speech-to-text, WER sliced by language and noise |
@@ -528,6 +529,17 @@ AND ranked. that matters more here than on the text boards because the field's
 vocabulary is a taxonomy of what the system even is: `system-one-open`,
 `jev-rebuild`, `native-logit`, `reranker`, `classifier`, `raw-logit-control`,
 `llm-baseline`, and the hosted `decision-api` it is being compared against.
+
+`artificial-analysis-decision.json` is the second decision board: artificial
+analysis' decision index v2, 17 decision models and four chat models answering
+the same items for reference (`kind` says which). the index is a weighted mean of
+six evals -- `paperclip` 30%, `onet`, `omniscience`, `hle` and `symmetry` 15% each,
+`when2call` 10% -- and the first five are decision scores, accuracy less the brier
+of the chosen option, so calibration is inside every number rather than an axis
+beside it. `symmetry` is whether the top option survives rewording the question.
+every row was measured through its creator's hosted endpoint, which publishes no
+precision, and the board has no open-weights flag, so `resolve-ids` joins it by
+exact name only. the calibration bins and per-task cost are dropped.
 
 ## analysis
 

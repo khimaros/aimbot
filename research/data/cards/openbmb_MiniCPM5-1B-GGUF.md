@@ -27,7 +27,7 @@ datasets:
 
 <p align="center">
 <a href="https://arxiv.org/pdf/2506.07900" target="_blank">MiniCPM Tech Report</a> |
-<a href="https://modelbest.feishu.cn/wiki/UtWxwcERfiRIpIkBOjuc3h9tn1D" target="_blank">MiniCPM Wiki(Chinese)</a> |
+<a href="https://openbmb.cn/docs/" target="_blank">MiniCPM Wiki(Chinese)</a> |
 <a href="https://github.com/OpenBMB/MiniCPM" target="_blank">GitHub Repo</a> |
 <a href="https://ultradata.openbmb.cn/" target="_blank">UltraData</a> |
 <a href="https://github.com/OpenBMB/MiniCPM-Desk-Pet" target="_blank">MiniCPM Desk Pet</a> |

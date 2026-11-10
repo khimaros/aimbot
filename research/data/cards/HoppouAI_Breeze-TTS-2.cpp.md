@@ -24,7 +24,8 @@ GGUF conversions of [BreezeBlue/Breeze-TTS-2](https://huggingface.co/BreezeBlue/
 [**Breeze-TTS-2.cpp**](https://github.com/HoppouAI/Breeze-TTS-2.cpp), a C++ reimplementation running on
 ggml with a Vulkan backend, so it works on NVIDIA, AMD and Intel GPUs and falls back to CPU.
 
-Bilingual English and Mandarin, 24 kHz, around 1.2x realtime at Q8_0 on an RTX 3060.
+Bilingual English and Mandarin, 24 kHz, about 2x realtime at Q8_0 on an RTX 3060 and about 3.2x on
+an RTX 3080, with first audio in under 150 ms.
 
 These files will not load in llama.cpp. They need the Breeze-TTS-2.cpp runtime, which implements all
 four stages of the model: the T5Gemma2 text encoder, the Qwen3 backbone, the 15 step depth decoder and
@@ -59,6 +60,28 @@ thin past **roughly 45 seconds of continuous generation**. Short lines and dialo
 narration is not, and the failure is gradual rather than obvious, so it is easy to miss on quick tests.
 
 Treat them as experimental. If in doubt, use `q8_0` or `q4_k`.
+
+## Performance
+
+Real time factor for one stream on Vulkan: seconds of audio per second of wall clock, so anything
+above 1x is faster than playback. `cfg_scale` above 1 turns on guidance, which vocal tags and voice
+design often need.
+
+| File | RTX 3060, `cfg_scale` 1 | RTX 3060, `cfg_scale` 3 | RTX 3080, `cfg_scale` 1 | RTX 3080, `cfg_scale` 3 |
+| --- | --- | --- | --- | --- |
+| `q4_k` | 2.41x | 1.74x | 3.50x | 2.81x |
+| `q6_k` | | | 3.67x | 2.87x |
+| `q8_0-dd4` | 2.32x | 1.69x | 3.72x | 2.83x |
+| `q8_0` | 1.99x | 1.58x | 3.16x | 2.71x |
+| `f16` | 1.42x | | 2.71x | 2.32x |
+
+The RTX 3060 has its tensor core limit unlocked, the RTX 3080 is a stock card. Both are 12 GB.
+On the 3060 the smaller files are clearly faster, on the 3080 the gap mostly closes.
+
+The server can also generate several streams at once with `--parallel`. On the RTX 3080, five streams
+at `q8_0` each ran at 1.46x to 1.68x, and three with guidance at about 1.5x, all with no gaps. The
+numbers for every model and both cards are in
+[docs/performance.md](https://github.com/HoppouAI/Breeze-TTS-2.cpp/blob/main/docs/performance.md).
 
 ## Usage
 

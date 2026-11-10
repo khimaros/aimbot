@@ -4997,6 +4997,133 @@ def a_decision_model_is_offered_the_one_board_that_rates_one():
 
 
 @test
+def a_config_with_no_language_model_claims_no_input():
+    """`input` is derived from a transformer config, and text was its default.
+
+    a diffusion config -- wan's, which soulx flashhead ships -- has no layers,
+    no hidden size and no encoders, and was reported as taking text, so lint
+    demanded `text` in for a talking-head generator that animates a portrait
+    from audio. no language model in the config is no claim about its input.
+    """
+    mod = load_script("fetch_model_facts", os.path.join(RESEARCH, "fetch-model-facts"))
+    wan = mod.shape_facts({"architectures": ["WanVideoModel"], "model_type": "wan",
+                           "dim": 1536, "num_layers": 30})
+    eq("input" in wan, False, "a diffusion config says nothing about text: %r" % wan)
+    lm = mod.shape_facts({"architectures": ["Qwen3ForCausalLM"],
+                          "num_hidden_layers": 36, "hidden_size": 4096})
+    eq(lm.get("input"), ["text"], "a language model still takes text")
+
+
+AA_DECISION_CAPTURE = {
+    "acme_widget-one-4b": {"name": "Widget One 4B", "slug": "acme_widget-one-4b",
+                           "indexScore": 70.1},
+    # the site names a family without its size, and the registry carries two
+    "acme_gizmo": {"name": "Gizmo", "slug": "acme_gizmo", "indexScore": 61.6},
+}
+
+AA_DECISION_REGISTRY = """version: 1
+models:
+  vendor/Widget-One-4b:
+    kind: decision
+    name: {short: widget-one-4b}
+  vendor/Gizmo-2B:
+    kind: decision
+    name: {short: gizmo-2b}
+  vendor/Gizmo-3B:
+    kind: decision
+    name: {short: gizmo-3b}
+  vendor/Widget-One-4B-Chat:
+    kind: text
+    name: {short: widget-one-4b-chat}
+"""
+
+
+@test
+def the_decision_index_joins_a_decision_model_by_its_exact_name():
+    """Artificial analysis' decision board is offered to decision models, exact only.
+
+    Every row there is a hosted endpoint with no open-weights flag, and its names
+    drop the size: "d1" is one row for a family the registry carries as a 2B and
+    a 3B. the `sized` pass would hand both the same score, so a name that is not
+    the model's own spelling is left unmatched.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        got = ids_fixture(tmp, {"artificial-analysis-decision.json": AA_DECISION_CAPTURE},
+                          AA_DECISION_REGISTRY)
+    finally:
+        shutil.rmtree(tmp)
+
+    eq((got["vendor/Widget-One-4b"].get("ids") or {}).get("aa-decision"),
+       "acme_widget-one-4b", "the slug without its host is the model's own name")
+    for repo in ("vendor/Gizmo-2B", "vendor/Gizmo-3B"):
+        eq((got[repo].get("ids") or {}).get("aa-decision", ""), "",
+           "%s: a sizeless family row is not a run of either size" % repo)
+    eq("aa-decision" in (got["vendor/Widget-One-4B-Chat"].get("ids") or {}), False,
+       "a text model is never offered the decision board")
+
+
+def decision_fixture_html():
+    """One decision model in the shape the decision index page ships it."""
+    record = {"slug": "acme_widget-one-4b", "name": "Widget One 4B",
+              "creatorName": "Acme", "hostName": "Acme", "kind": "decisionModel",
+              "indexScore": 70.1, "accuracyIndexScore": 55.2, "brier": 0.15,
+              "calibrationBins": [{"accuracy": 1, "answers": 1}],
+              "scores": {"documentDecisionDecisionScore": 52.4,
+                         "evalsafeOnetDecisionScore": 87.4,
+                         "when2callDecisionScore": 95.5,
+                         "omniscienceDecisionScore": 56.0,
+                         "hleDecisionScore": 45.8,
+                         "invarianceSymmetry": 92.6}}
+    payload = json.dumps({"rows": [record]})
+    chunks = "".join(
+        "<script>self.__next_f.push([1,%s])</script>" % json.dumps(part)
+        for part in (payload[:len(payload) // 2], payload[len(payload) // 2:]))
+    return "<!doctype html><html><body><!-- %s -->%s</body></html>" % (
+        "x" * 100000, chunks)
+
+
+@test
+def the_decision_index_keeps_its_index_and_the_six_scores_under_it():
+    """The decision board lands in a file of its own, one row per model.
+
+    the calibration bins are most of each record's bytes and nothing here
+    reads them, so they are left behind with the rest.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        with open(os.path.join(tmp, "page.html"), "w") as f:
+            f.write(decision_fixture_html())
+        out = os.path.join(tmp, "decision.json")
+        base, stop = serve(tmp)
+        purge("test-aa-decision")
+        try:
+            r = subprocess.run(
+                [os.path.join(RESEARCH, "fetch-artificial-analysis"),
+                 "--board", "decision", "--url", base + "/page.html",
+                 "--out", out, "--cache-key", "test-aa-decision", "--max-age", "0"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        finally:
+            stop()
+            purge("test-aa-decision")
+        if r.returncode:
+            raise AssertionError("collector exited %d: %s" % (r.returncode, r.stderr.strip()))
+        got = json.load(open(out))
+    finally:
+        shutil.rmtree(tmp)
+
+    row = got["acme_widget-one-4b"]
+    eq(row["indexScore"], 70.1, "the index")
+    eq(row["paperclip"], 52.4, "and each eval under the name this repo uses")
+    eq(row["symmetry"], 92.6, "including the one scored on invariance")
+    eq("calibrationBins" in row, False, "and nothing nobody reads")
+    au = load_script("analyze_usecase", os.path.join(RESEARCH, "analyze-usecase"))
+    f = au.aa_decision_facets(got, {"aa-decision": "acme_widget-one-4b"})
+    eq(f["aa-decision.index"]["value"], 70.1, "the index is the facet weighted")
+    eq(f["aa-decision.when2call"]["value"], 95.5, "and the evals ride beside it")
+
+
+@test
 def one_speech_board_refreshing_does_not_drop_the_others():
     """The three speech boards share a file, so a single-board run must merge.
 

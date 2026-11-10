@@ -23,7 +23,47 @@ library_name: minicpm-ocr
   <a href="https://github.com/OpenBMB/MiniCPM"><img src="https://raw.githubusercontent.com/OpenBMB/MiniCPM-OCR/main/assets/minicpm-ocr/minicpm-logo.jpg" width="300" alt="MiniCPM logo"></a>
 </p>
 
-Demo ([CN](https://platform.modelbest.cn/console/playground/document-parse) / [Global](https://platform.modelbest.ai/console/playground/document-parse)) · [GitHub](https://github.com/OpenBMB/MiniCPM-OCR) · [Free API](https://platform.modelbest.ai/console/docs/api/document-parse) · [SDK usage](#use-with-the-minicpm-ocr-sdk) · [DSpark](https://huggingface.co/openbmb/MiniCPM-OCR-1.0-DSpark) · [Skill](https://github.com/OpenBMB/MiniCPM-OCR#skill)
+<p align="center">
+  <b>Usage Guide</b>
+</p>
+
+<table align="center" width="100%">
+  <tr>
+    <td align="center" width="25%" valign="top">
+      <b>🚀 Free API</b><br/>
+      <sub>Try it online for free, then call the API from your own code.</sub><br/>
+      Playground (<a href="https://platform.modelbest.cn/console/playground/document-parse">CN</a> /
+      <a href="https://platform.modelbest.ai/console/playground/document-parse">Global</a>)<br/>
+      API docs (<a href="https://platform.modelbest.cn/console/docs/api/document-parse">CN</a> /
+      <a href="https://platform.modelbest.ai/console/docs/api/document-parse">Global</a>)
+    </td>
+    <td align="center" width="25%" valign="top">
+      <b>🤖 Agent Skill</b><br/>
+      <sub>One prompt: the agent installs it and parses your first document.</sub><br/>
+      <a href="https://github.com/OpenBMB/MiniCPM-OCR/blob/main/docs/SKILL_en.md">SKILL.md</a>
+    </td>
+    <td align="center" width="25%" valign="top">
+      <b>💻 Self-hosting</b><br/>
+      <sub>vLLM / SGLang / llama.cpp / Ollama, plus an official Docker image. Data stays on your side.</sub><br/>
+      <a href="https://github.com/OpenBMB/MiniCPM-OCR/blob/main/docs/minicpm_ocr_tutorial_en.md">Deployment guide</a>
+    </td>
+    <td align="center" width="25%" valign="top">
+      <b>📱 Mobile App</b><br/>
+      <sub>On-device and offline. Document parsing is iOS-only for now.</sub><br/>
+      <a href="https://github.com/OpenBMB/MiniCPM-V-Apps/blob/main/README.md#11-ios-demo">iOS Demo</a>
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  Demo (<a href="https://platform.modelbest.cn/console/playground/document-parse">CN</a> /
+  <a href="https://platform.modelbest.ai/console/playground/document-parse">Global</a>) &nbsp;·&nbsp;
+  <a href="https://github.com/OpenBMB/MiniCPM-OCR">GitHub</a> &nbsp;·&nbsp;
+  <a href="#use-with-the-minicpm-ocr-sdk">SDK usage</a> &nbsp;·&nbsp;
+  <a href="https://huggingface.co/openbmb/MiniCPM-OCR-1.0-DSpark">DSpark</a> &nbsp;·&nbsp;
+  <a href="https://discord.gg/JE8KQqtdn">Discord</a>
+  &nbsp;|&nbsp; <a href="https://huggingface.co/openbmb/MiniCPM-OCR-1.0/blob/main/README_zh.md">中文</a>
+</p>
 
 </div>
 

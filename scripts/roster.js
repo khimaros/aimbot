@@ -1267,7 +1267,7 @@ const MODALITIES = [
   // emits no tokens -- and the kind is the only way to ask for it
   // a text model that measured as one joins them on its `decides:` block
   {k: 'decision', t: 'decisions', test: m => m.kind === 'decision' || !!m.decides,
-   help: 'typed decisions in one forward pass: a probability per option and nothing generated. jevbench rates them, and its calibration axis is the only one here'},
+   help: 'typed decisions in one forward pass: a probability per option and nothing generated. jevbench and artificial analysis\' decision index rate them, and both score whether a model knows when it is wrong'},
   {k: 'diar', t: 'diarization', test: m => m.kind === 'diarize',
    help: 'weights --diarize loads, beside an ASR model or in place of a whole '
      + 'method. they transcribe nothing and are scored by nobody'},

@@ -197,6 +197,10 @@ SOURCES = {
     "jev": {"label": "jevbench",
             "file": "data/jevbench.json",
             "url": "https://benchmarkheaven.com/jev-models"},
+    "aa-decision": {"label": "artificial analysis decision index",
+                    "file": "data/artificial-analysis-decision.json",
+                    "url": "https://artificialanalysis.ai/evaluations/"
+                           "artificial-analysis-decision-index"},
     "livebench": {"label": "livebench",
                   "file": "data/livebench.json",
                   "url": "https://livebench.ai/"},
@@ -590,6 +594,35 @@ def jev_facets(board, ids, revision=None):
     return out
 
 
+# the decision index and the six evals it averages, as (facet suffix, capture
+# field, label). the index is a weighted mean of the six, so it is the one the
+# composite weights and the six ride beside it for a reader to rank on
+AA_DECISION_AXES = [("index", "indexScore", "decision index v2"),
+                    ("paperclip", "paperclip", "document decisions (aa-paperclip)"),
+                    ("onet", "onet", "workplace judgement (evalsafe o*net)"),
+                    ("when2call", "when2call", "when to call a tool (when2call)"),
+                    ("omniscience", "omniscience", "knowing what it knows (omniscience)"),
+                    ("hle", "hle", "reasoning or declining (hle multichoice)"),
+                    ("symmetry", "symmetry", "same pick when reworded (aa-symmetry)")]
+
+
+def aa_decision_facets(board, ids):
+    """Artificial analysis' decision index, the second board for decision models.
+
+    The scores are decision scores -- accuracy less the brier of the option the
+    model chose -- so being right and knowing it are one number here, where
+    jevbench publishes them as two axes.
+    """
+    row = board.get(ids.get("aa-decision")) or {}
+    note = "%s's hosted endpoint" % (row.get("host") or "the creator")
+    return {"aa-decision.%s" % suffix: {
+                "value": row[field], "label": label, "unit": "score",
+                "group": "artificial analysis decision",
+                "ref": ref("aa-decision", ids.get("aa-decision"), note, row)}
+            for suffix, field, label in AA_DECISION_AXES
+            if row.get(field) is not None}
+
+
 # one shape, two questions, so they are generated from a table rather than
 # written twice
 SHOWDOWN_BOARDS = [
@@ -787,6 +820,7 @@ def build(bt, registry):
     pictures, showdown = load("artificial-analysis-image"), load("genai-showdown")
     jev = load("jevbench").get("systems") or {}
     jev_revision = (load("jevbench").get("meta") or {}).get("revision")
+    decisions = load("artificial-analysis-decision")
     livebench = load("livebench")
     measured = load("verdict")
 
@@ -812,6 +846,7 @@ def build(bt, registry):
         facets.update(speech_facets(speech, arena, voicearena, ids, open_asr))
         facets.update(image_facets(pictures, lm_images, ids, lm_edits, showdown))
         facets.update(jev_facets(jev, ids, jev_revision))
+        facets.update(aa_decision_facets(decisions, ids))
         facets.update(livebench_facets(livebench, ids))
         facets.update(verdict_facets(measured, m))
         rating = bt.lmarena_score(ids)

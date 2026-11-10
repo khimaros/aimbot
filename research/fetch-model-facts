@@ -437,7 +437,10 @@ def shape_facts(cfg):
         modes.append("video")
     if takes_audio(cfg):
         modes.append("audio")
-    out["input"] = modes
+    # text is the default for a language model, and a config with no language
+    # model and no encoder -- a diffusion stack's -- is no claim about input
+    if out["layers"] or out["hidden"] or len(modes) > 1:
+        out["input"] = modes
     return {k: v for k, v in out.items() if v is not None}
 
 

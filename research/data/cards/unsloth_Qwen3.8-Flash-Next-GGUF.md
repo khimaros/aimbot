@@ -26,13 +26,15 @@ tags:
     </a>
   </div>
     <ul style="margin: 0;">
-    <li>Nov 4 update: Dynamic v3.1 GGUF is here with 15% more accuracy than other frontier quants and scoring the highest on Terminal Bench, DeepSWE and more! <a href="https://unsloth.ai/docs/models/qwen3.8-next#dynamic-v3.1-update-november-2nd-2026">Details</a></li></li>
+    <li>Nov 4 update: Dynamic v3.1 GGUF is here with 15% more accuracy, 50% less token use and 5% faster inference than other frontier quants. Scores the highest on Terminal Bench, DeepSWE & more! <a href="https://unsloth.ai/docs/models/qwen3.8-next#dynamic-v3.1-update-november-2nd-2026">Details</a></li></li>
     <li>MTP is now available for 1.3-1.7x Faster inference in Unsloth. <a href="https://unsloth.ai/docs/models/qwen3.8-next#mtp-guide">Read Guide</a></li>
-    <li>To run, please use llama.cpp or use our <a href="https://unsloth.ai/docs/desktop">Unsloth Desktop</a> app.</li>
+    <li>To run, please use llama.cpp, Strata or use our <a href="https://unsloth.ai/docs/desktop">Unsloth Desktop</a> app.</li>
 </div>
 
 <img width="600" alt="qwen3.8-flash unsloth dynamic v3.1 benchmarks" src="https://unsloth.ai/docs/~gitbook/image?url=https%3A%2F%2F3215535692-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252FxhOjnexMCB3dmuQFQ2Zq%252Fuploads%252FqdXHweLFGzUhUcqj7jZX%252Ffinal%2520key%25204.png%3Falt%3Dmedia%26token%3D8e3249b1-e26c-4a04-82ba-7cfdef952fe6&width=768&dpr=3&quality=100&sign=1e1e946e8b723c1640f46f4e6a7b741b&sv=3" />
-
+50% less token use, 0.5-8% faster inference than other quants of the same size:
+<img width="600" alt="qwen3.8-flash unsloth dynamic v3.1 token use" src="https://unsloth.ai/docs/~gitbook/image?url=https%3A%2F%2F3215535692-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252FxhOjnexMCB3dmuQFQ2Zq%252Fuploads%252FWTSMbLLxexSW1HiwU411%252Fqwen%2520speed%2520token%2520con.png%3Falt%3Dmedia%26token%3Dfea0700d-24e7-4046-a915-4c087e0230aa&width=768&dpr=3&quality=100&sign=36745643af791f5557fab9dd3d10e0b9&sv=3" />
+Run via Unsloth Desktop with browser use and more:
 <img width="600" alt="qwen3.8-flash unsloth desktop" src="https://unsloth.ai/docs/~gitbook/image?url=https%3A%2F%2F3215535692-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252FxhOjnexMCB3dmuQFQ2Zq%252Fuploads%252F1YneA51oWzaIiwep9H5I%252F1000024423.gif%3Falt%3Dmedia%26token%3D40a169cc-12f1-403a-898c-b310f81ff52a&width=768&dpr=3&quality=100&sign=2c56c5687fac67b851708cbfacdf98aa&sv=3" />
 
 ---

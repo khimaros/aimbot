@@ -5,6 +5,9 @@
 # what makes `make` mean the same thing in a plain `sh -c` and in a terminal.
 export PATH := $(CURDIR)/.venv/bin:$(PATH)
 
+# what `make setup` fetches again (uv sync --frozen)
+CLEAN_DEPS := .venv
+
 help:
 	@echo "to install the toolchain this repo runs on, run 'make setup'"
 	@echo "to check the registry, run 'make lint'"
@@ -22,7 +25,8 @@ help:
 	@echo "to run the whole research sweep, run 'make sweep'"
 	@echo "to see what a sweep left for a human, run 'make sweep-report'"
 	@echo "to check everything before committing, run 'make precommit'"
-	@echo "to drop scratch nothing will ask for again, run 'make clean'"
+	@echo "to drop python caches and .venv, run 'make clean' (or 'make clean-build', 'make clean-deps')"
+	@echo "to drop gguf header scratch nothing will ask for again, run 'make clean-data'"
 .PHONY: help
 
 # every script here is `#!/usr/bin/env python3`, so which interpreter runs is
@@ -163,12 +167,24 @@ sweep-report:
 precommit: lint test-e2e
 .PHONY: precommit
 
+clean: clean-build clean-deps
+.PHONY: clean
+
+# python's bytecode caches, rewritten by the next run
+clean-build:
+	find . -name __pycache__ -not -path './.venv/*' -prune -exec rm -rf {} +
+.PHONY: clean-build
+
+clean-deps:
+	rm -rf $(CLEAN_DEPS)
+.PHONY: clean-deps
+
 # scratch only. the gguf headers fetch-gguf-tensors downloaded are most of
 # research/.cache and are never read twice: a rung already in the capture is
 # skipped without a request, so nothing here is fetched again until a NEW rung
 # is asked for. every other cache body is what an etag revalidates against,
-# and removing those turns the next sweep's 304s back into downloads
-clean:
+# and removing those turns the next sweep's 304s back into downloads, so no
+# target touches them
+clean-data:
 	find research/.cache -maxdepth 1 -name 'gtensors-*' -delete 2>/dev/null || true
-	find . -name __pycache__ -not -path './.venv/*' -prune -exec rm -rf {} +
-.PHONY: clean
+.PHONY: clean-data

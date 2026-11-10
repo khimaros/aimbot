@@ -1214,6 +1214,25 @@ test('a sixth text board arrives without moving the ranking it overlaps', () => 
      'and the description carries the caveat: these are served endpoints');
 });
 
+test('the decision index is a second board for decision models and weighs what jevbench does', () => {
+  const f = model('clef').facets;
+  ok(f['aa-decision.index'] && f['aa-decision.index'].value > 0,
+     'clef carries the index its exact name joined');
+  ok(f['aa-decision.symmetry'], 'and the evals under it');
+  const sum = prefix => Object.keys(D.weights).filter(k => k.startsWith(prefix))
+    .reduce((a, k) => a + D.weights[k], 0);
+  near(sum('aa-decision.'), sum('jev.'), 1e-9, 'one board weighs what the other does');
+  eq(D.weights['aa-decision.index'], sum('aa-decision.'),
+     'the index carries the share and its evals ride at zero');
+  // the board names liquid's family once, and the registry carries two sizes
+  ['d1-2b', 'd1-3b'].forEach(short =>
+    eq(model(short).facets['aa-decision.index'], undefined,
+       short + ' is not scored on a row naming no size'));
+  // a text model is never asked this board, even one named like a decision model
+  ok(!D.models.some(m => m.kind === 'text' && m.facets['aa-decision.index']),
+     'no text model carries it');
+});
+
 test('what verdict measured on the served gguf is half of a decision model\'s score', () => {
   // jevbench's board reads each model in bf16 off its author's server; verdict
   // runs the public items through the quantized file a host actually serves.

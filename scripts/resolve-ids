@@ -112,6 +112,22 @@ def open_keys(rows, open_field, id_fields=()):
     return space
 
 
+def aa_decision_space(rows):
+    """{normalized name: slug} for artificial analysis' decision board.
+
+    The slug is `<host>_<model>`, and the half after the host is the closest
+    thing the board has to a repo name: `pplx-decider-flash-v1-2` is the hub's
+    `pplx-decider-flash-v1.2`. there is no open-weights flag to filter on, which
+    is why this space is in EXACT_ONLY.
+    """
+    space = {}
+    for key, r in rows.items():
+        for n in (key, key.split("_", 1)[-1], r.get("name")):
+            if n:
+                space.setdefault(norm(n), key)
+    return space
+
+
 def jev_space(rows):
     """{normalized name: board key} for JevBench, downloadable weights only.
 
@@ -286,7 +302,9 @@ def key_spaces(data=None, listed=False):
     # number this repo has for them and it is quoted in the model's notes
     # the board the decision half is scored on, and the only source here whose
     # rows are decision models, rerankers and classifiers rather than chat models
-    decision = {"jev": jev_space((load("jevbench", data, listed) or {}).get("systems") or {})}
+    decision = {"jev": jev_space((load("jevbench", data, listed) or {}).get("systems") or {}),
+                "aa-decision": aa_decision_space(
+                    load("artificial-analysis-decision", data, listed))}
     return {"text": out, "speech": spoken, "image": pictured,
             "decision": decision, "diarize": {}}
 
@@ -319,7 +337,7 @@ BOARD_NEEDS = {
     # verdict re-runs jevbench's items on a served gguf, so it measures what the
     # board does. declared so the viewer asks it of models that decide and not
     # of the text models verdict also happened to run
-    "jev": "decides", "verdict": "decides",
+    "jev": "decides", "verdict": "decides", "aa-decision": "decides",
 }
 
 
@@ -397,7 +415,9 @@ def tiered(want, key):
 # three rows about two models, and a row whose name is another's plus a release
 # date is not the same run. the map publishes a huggingface repo for most of them,
 # so every join here is either that repo or the row named in `ids.livebench`.
-EXACT_ONLY = {"open-asr", "showdown-t2i", "showdown-edit", "livebench"}
+# the decision index names a family without its size too: "d1" is one row for
+# liquid's 2B and 3B alike.
+EXACT_ONLY = {"open-asr", "showdown-t2i", "showdown-edit", "livebench", "aa-decision"}
 
 
 def candidates(space, wants, sized=(), exact_only=False):

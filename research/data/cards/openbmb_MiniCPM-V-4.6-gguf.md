@@ -15,7 +15,7 @@ base_model_relation: quantized
 
 A Pocket-Sized MLLM for Ultra-Efficient Image and Video Understanding on Your Phone
 
-[GitHub](https://github.com/OpenBMB/MiniCPM-o) | [MiniCPM Wiki(Chinese)](https://modelbest.feishu.cn/wiki/UtWxwcERfiRIpIkBOjuc3h9tn1D) | [CookBook](https://github.com/OpenSQZ/MiniCPM-V-CookBook) | [Demo](https://huggingface.co/spaces/openbmb/MiniCPM-V-4.6-Demo) |
+[GitHub](https://github.com/OpenBMB/MiniCPM-o) | [MiniCPM Wiki(Chinese)](https://openbmb.cn/docs/) | [CookBook](https://github.com/OpenSQZ/MiniCPM-V-CookBook) | [Demo](https://huggingface.co/spaces/openbmb/MiniCPM-V-4.6-Demo) |
 [Feishu (Lark)](https://raw.githubusercontent.com/openbmb/MiniCPM-V/main/assets/feishu_qrcode.png)
 
 ## News

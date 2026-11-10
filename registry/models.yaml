@@ -1197,6 +1197,7 @@ models:
       merged: '2026-02-10'
     ids:
       jev: decider-4b-v2
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1248,6 +1249,7 @@ models:
       merged: '2026-02-10'
     ids:
       jev: decider-2b
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1299,6 +1301,7 @@ models:
       merged: '2026-02-10'
     ids:
       jev: decider-35b-a3b
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1351,6 +1354,7 @@ models:
       merged: '2026-06-07'
     ids:
       jev: winnow-12b
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1399,6 +1403,7 @@ models:
       merged: '2026-04-02'
     ids:
       jev: jev-omni
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1457,6 +1462,7 @@ models:
       merged: '2026-02-10'
     ids:
       jev: ''
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1502,6 +1508,7 @@ models:
       merged: '2025-12-01'
     ids:
       jev: standardone-8b
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1538,7 +1545,7 @@ models:
       short: clef
       # `clef-flash` is a separate release on a different backbone, and a clef
       # is also a thing on a stave, which the tts and music entries get asked about
-      match: (?<!treble\s)(?<!bass\s)\bclef\b(?![\s-]*flash)
+      match: (?<!treble\s)(?<!bass\s)\bclef\b(?![\s-]*(?:flash|omni))
     notes: >-
       post-trained from `Qwen/Qwen3.8-27B` with a joint schema head, "a small transformer
       head that reads the backbone's final hidden states" {card} and "scores all
@@ -1586,6 +1593,7 @@ models:
       merged: '2026-02-10'
     ids:
       jev: ''
+      aa-decision: cloudflare_clef
     modalities:
       input:
       - text
@@ -1671,6 +1679,7 @@ models:
       merged: '2026-02-10'
     ids:
       jev: ''
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1711,6 +1720,244 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+  Cloudflare/clef-omni:
+    kind: decision
+    name:
+      short: clef-omni
+      match: \bclef[\s-]*omni\b
+    notes: >-
+      clef's joint schema head on the qwen3 omni 30b a3b thinker, so the state may
+      be text, images, audio or video and "there is no free-form text generation"
+      {card}. the only gguf is Pollard's, whose `clef-omni` architecture "is not in
+      upstream llama.cpp yet" {card@PollardWeights/clef-omni-Pollard}; every rung
+      there is published with its own agreement against the f16 on 20 typed
+      questions through `/v1/systemone`, which is a small sample and the only
+      quantized measurement of it anywhere.
+    repos:
+    - PollardWeights/clef-omni-Pollard
+    ids:
+      jev: ''
+      aa-decision: cloudflare_clef-omni
+    runtime:
+      arch: clef-omni
+      mainline: false
+      patch: https://github.com/WestWaters/pollard-weights/blob/main/runtime-patches/llama.cpp-clef-omni.patch
+      note: Pollard's patch against llama.cpp b76b133, with an upstream pr pending {card@PollardWeights/clef-omni-Pollard}
+    modalities:
+      input:
+      - text
+      - audio
+      output: []
+    turns:
+      source: PollardWeights/clef-omni-Pollard
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+    readout:
+      kind: native
+      source: card
+      note: the head is in the file and the patched llama-server answers
+        `/v1/systemone` for it {card@PollardWeights/clef-omni-Pollard}
+  # base labs' two decision models. the readout is headless: the language model's
+  # own logits at each option letter, with the full-attention layers bidirectional
+  # inside a block, which a stock gguf conversion runs causal
+  baselabs/elephant-1:
+    kind: decision
+    name:
+      short: elephant 9b
+      match: \belephant[\s-]*(?:1\b|9b)
+    notes: >-
+      post-trained from qwen3.5 9b to "return a calibrated probability for every
+      option" {card}, answering every question from one shared prefill, with a
+      Brier term in the loss and a trained "I don't know" option. the card's own
+      scores are 62.65 on the jev decision index 0.4 and 65.2 on its replica of
+      artificial analysis' decision index.
+    repos:
+    - waseigo/elephant-1-decision-GGUF
+    ids:
+      jev: ''
+      aa-decision: baseten_elephant-9b
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output: []
+    turns:
+      source: waseigo/elephant-1-decision-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+    readout:
+      kind: native
+      source: card
+      note: mradermacher's Q4_K_M with llama.cpp's `openjev` decision keys, a
+        `systemone` prompt template and `attention.causal = false` grafted in, and no
+        weights changed {card@waseigo/elephant-1-decision-GGUF}. the card measures it
+        against the bf16 reference at 28 of 32 decisions agreeing, a largest
+        probability gap of 0.260, and 26 options validated of the 256 the reference
+        reads
+  baselabs/mammoth-1:
+    kind: decision
+    name:
+      short: mammoth 27b
+      match: \bmammoth[\s-]*(?:1\b|27b)
+    notes: >-
+      elephant-1's 27b sibling on qwen3.5 27b, read the same way {card}. no gguf
+      here carries llama.cpp's decision keys: magnitudedev's adds `decision.*` keys
+      that "other runtimes ignore" {card@magnitudedev/mammoth-1-GGUF}, so a stock
+      llama-server loads the backbone as a chat model with causal attention, which
+      is not how the board measured it.
+    repos:
+    - magnitudedev/mammoth-1-GGUF
+    ids:
+      jev: ''
+      aa-decision: baseten_mammoth-27b
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output: []
+    turns:
+      source: magnitudedev/mammoth-1-GGUF
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+    readout:
+      kind: chat
+      source: card
+      note: the answer is the language model's own logits at each option letter, in a
+        prompt wrapped in the qwen chat markers {card@waseigo/elephant-1-decision-GGUF}.
+        the model was trained with its full-attention layers bidirectional, and a stock
+        llama-server runs this gguf causal, so a read through the chat template is of a
+        model the board did not score
+  perplexity-ai/pplx-decider-flash-v1.2:
+    kind: decision
+    name:
+      short: pplx-decider-flash-v1.2
+      match: (?:pplx[\s-]*)?decider[\s-]*flash
+    notes: >-
+      pplx-decider-v1.2 distilled onto qwen3.5 4b, "the student learns the teachers'
+      full probability distributions, not just their answers" {card}. every question
+      of a request shares one sequence and the card recommends one question a request
+      by default, since grouping cost 4 to 20 points on four of its eight tasks.
+    repos:
+    - repo: perplexity-ai/pplx-decider-flash-gguf-v1.2
+      files:
+        Q8_0:
+          note: the vendor's own conversion, backbone and readout at Q8_0 {gib}. "Stock
+            `llama-server` does not implement this checkpoint's protocol v3" {card}, so a
+            runtime has to build the joint prompt, run the full-attention layers
+            non-causal and read each question's codes at its marker itself
+    ids:
+      jev: ''
+      aa-decision: perplexity_pplx-decider-flash-v1-2
+    runtime:
+      arch: qwen35
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output: []
+    turns:
+      source: perplexity-ai/pplx-decider-flash-gguf-v1.2
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+    readout:
+      kind: head
+      source: card
+      head:
+        repo: perplexity-ai/pplx-decider-flash-v1.2
+        file: readout.safetensors
+        kind: linear
+        reads:
+          states: all
+      note: a [255, 2560] head applied at each question's `<|fim_suffix|>` marker, divided
+        by a fitted 1.554 and softmaxed over that question's codes {card}. the gguf carries
+        the same head as `output.weight`, but the full-attention layers have to run
+        non-causal, which an embedding server does not do, and nothing here applies it
+  nace-ai/drex-v2.0:
+    kind: decision
+    name:
+      short: drex-v2.0
+      match: \bdrex[\s-]*(?:v)?2(?:\.0)?\b
+    notes: >-
+      a kev pointer head on qwen3.6 35b a3b, "61.25 on the public Decision Index
+      0.3.1" by the vendor's own run {card}. each question is scored in its own pass
+      over the state plus that question, and the vision tower is dropped on load.
+    repos:
+    - repo: nace-ai/drex-v2.0-Q8_0
+      files:
+        Q8_0:
+          note: the vendor's conversion at {gib}, made with its fork's converter. the header
+            says `qwen35moe`, which mainline loads as the backbone alone; the kev head
+            behind `/v1/systemone` is the fork's
+          runtime: {arch: qwen35moe, mainline: false, fork: 'https://github.com/nace-ai/llama.cpp', branch: drex-v2.0}
+    ids:
+      jev: ''
+      aa-decision: nace_drex-v2-0
+    runtime:
+      arch: qwen35moe
+      mainline: true
+      since: b7990
+      merged: '2026-02-10'
+    modalities:
+      input:
+      - text
+      - image
+      - video
+      output: []
+    turns:
+      source: nace-ai/drex-v2.0-Q8_0
+      developer: rejected
+      leading_system_max: 1
+      mid_system: rejected
+      mid_developer: rejected
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
+    readout:
+      kind: native
+      source: card
+      note: llama-server from nace's fork answers `/v1/systemone` {card@nace-ai/drex-v2.0}
+        with the same request and response as the vendor's python server
   # the five llama.cpp reads by itself: #29818 gave llama-server `/v1/systemone`
   # and a converter that writes each model's decision head and temperatures INTO
   # the gguf, so `readout:` is `native` and there is no client half to describe.
@@ -1738,6 +1985,7 @@ models:
         first tagged b11361
     ids:
       jev: laya
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1770,6 +2018,7 @@ models:
         first tagged b11361
     ids:
       jev: ''
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1801,6 +2050,7 @@ models:
         first tagged b11361
     ids:
       jev: ''
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1840,6 +2090,7 @@ models:
         first tagged b11361
     ids:
       jev: kev-4b
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1882,6 +2133,7 @@ models:
         first tagged b11361
     ids:
       jev: ''
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1927,6 +2179,7 @@ models:
         card {card@LiquidAI/d1-2B-GGUF} names b11960
     ids:
       jev: ''
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -1969,6 +2222,7 @@ models:
         card {card@LiquidAI/d1-Omni-2B-GGUF} names b11960
     ids:
       jev: ''
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -2009,6 +2263,7 @@ models:
         30110, merged 2026-10-07, and the gguf runs on that {card@LiquidAI/d1-3B-GGUF}
     ids:
       jev: ''
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -2045,6 +2300,7 @@ models:
         merged 2026-10-08, and the gguf runs on that {card@LiquidAI/d1-omni-600M-GGUF}
     ids:
       jev: ''
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -2076,6 +2332,7 @@ models:
         30361, merged 2026-10-20, and the gguf runs on that {card@h2oai/h2o-lightning-4b-gguf}
     ids:
       jev: ''
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -2116,6 +2373,7 @@ models:
         30980, merged 2026-10-27, and the gguf runs on that {card@openbmb/MiniCPM-OCR-Jev-gguf}
     ids:
       jev: ''
+      aa-decision: ''
     modalities:
       input:
       - text
@@ -4661,6 +4919,7 @@ models:
       leading_system_max: unlimited
       mid_system: ok
       mid_developer: dropped
+      upstream_differs: [developer, mid_developer]
     thinking:
       knob: reasoning_effort
       gate: enable_thinking
@@ -10698,9 +10957,20 @@ models:
       open-asr: ''
     modalities:
       input:
+      - text
       - audio
       output:
       - text
+    turns:
+      source: nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   nvidia/Nemotron-3-Diarization:
     kind: diarize
     audiocpp: nemotron_3_diar
@@ -12906,6 +13176,12 @@ models:
       - audio
       output:
       - text
+    turns:
+      source: KRAFTON/Raon-Speech-9B
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
   AutoArk-AI/ARK-ASR-0.6B:
     kind: speech
     name:

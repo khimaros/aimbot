@@ -6,7 +6,8 @@ Artificial analysis has no free API (api/v2 returns 401 without a key), but
 their leaderboard pages are a next.js app that ships the whole dataset inline
 as an RSC flight payload. ./rsc-extract pulls the records out; this shapes them.
 
-Six boards, one site, one collector. The image leaderboard keeps its own file;
+Seven boards, one site, one collector. The image and decision leaderboards
+each keep their own file;
 the three speech boards share data/artificial-analysis-speech.json, because a
 speech model is scored on whichever of them measures its modality and a reader
 wants them side by side; and the two text boards share
@@ -35,6 +36,7 @@ UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
 TEXT_OUT = "data/artificial-analysis.json"
 SPEECH_OUT = "data/artificial-analysis-speech.json"
 IMAGE_OUT = "data/artificial-analysis-image.json"
+DECISION_OUT = "data/artificial-analysis-decision.json"
 
 # the leaderboard row no longer carries the model's metadata, and the coding and
 # agentic indices are gone from the site entirely -- artificial analysis publishes
@@ -247,6 +249,36 @@ BOARDS = {
             "openWeightsUrl": "openWeightsUrl",
             "pricePer1kImages": "pricePer1kImages",
             "releaseDate": "releaseDate",
+        },
+    },
+    # models that pick from a fixed set of options and give a probability for
+    # each. every row is the creator's own hosted endpoint and none carries an
+    # open-weights flag, so resolve-ids joins them by exact name. a decision
+    # score is accuracy less the brier of the chosen option; symmetry is
+    # whether the pick survives rewording the question
+    "decision": {
+        "url": "https://artificialanalysis.ai/evaluations/artificial-analysis-decision-index",
+        "cache": "aa-decision-index",
+        "match": '"indexScore":',
+        "require": "indexScore",
+        "out": DECISION_OUT,
+        "key": ["slug", "name"],
+        "fields": {
+            "name": "name",
+            "slug": "slug",
+            "creator": "creatorName",
+            "host": "hostName",
+            # four rows are chat models answering the same items, for reference
+            "kind": "kind",
+            "indexScore": "indexScore",
+            "accuracyIndexScore": "accuracyIndexScore",
+            "brier": "brier",
+            "paperclip": "scores.documentDecisionDecisionScore",
+            "onet": "scores.evalsafeOnetDecisionScore",
+            "when2call": "scores.when2callDecisionScore",
+            "omniscience": "scores.omniscienceDecisionScore",
+            "hle": "scores.hleDecisionScore",
+            "symmetry": "scores.invarianceSymmetry",
         },
     },
 }
