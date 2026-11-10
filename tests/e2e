@@ -3976,6 +3976,11 @@ test('operate says how every decision model gives an answer', () => {
     eq(/\{[a-z]+[@}]/.test(answerBlock(m)), false, m.short + ' renders its references');
     eq(snippets(m).some(s => s.label.includes('models.json')), false,
        m.short + ' answers no chat turn, so no chat client is configured for it');
+    // the release mainline learned the backbone serves it as chat, and
+    // `/v1/systemone` answers 501 there, so the block says when the decision path came
+    if ((m.readout || {}).kind === 'native' && m.runtime.mainline) {
+      ok(m.runtime.note, m.short + ' says which release reads its decision keys');
+    }
   });
 
   const native = answerBlock(model('laya'));
