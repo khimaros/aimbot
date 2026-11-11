@@ -668,13 +668,9 @@ function interpolate(c, bpw) {
 // making its thin quants look BETTER than the general case, purely because
 // nobody ran that arm. below its own range a measured curve therefore defers to
 // the fitted one, which is the wider evidence rather than the narrower silence.
-function retention(bpw, m, q = activeQuant(m)) {
-  const c = curveFor(m, q);
-  if (c.kind === 'measured' && bpw < c.points[0][0]) {
-    return interpolate(D.retention.fitted.points, bpw);
-  }
-  return interpolate(c.points, bpw);
-}
+const readCurve = (c, bpw) => c.kind === 'measured' && bpw < c.points[0][0]
+  ? interpolate(D.retention.fitted.points, bpw) : interpolate(c.points, bpw);
+const retention = (bpw, m, q = activeQuant(m)) => readCurve(curveFor(m, q), bpw);
 
 // the bits a curve is read at. the fitted curve was drawn over models whose
 // weights are all multiplied, so a rung carrying lookup rows -- v4.1 flash's
@@ -686,14 +682,17 @@ const retentionBpw = (m, q) =>
 
 // a model whose weights are natively low-bpw is not paying a quantization
 // penalty for being small, so it is exempt -- the registry says which
-function modelRetention(m) {
-  if (!effective || m.native_low_bpw) return 1;
+//
+// the same bits the ladder ranked the rung on: the curve is a curve of bits per
+// weight, and feeding it a figure the ceiling refused to trust is how a rung
+// folded around a drafter came to be credited with the head's precision.
+// `rungKeeps` is that figure whether or not `quant adjusted` is applying it,
+// null where there is nothing to read
+function rungKeeps(m) {
   const q = activeQuant(m);
-  // the same bits the ladder ranked the rung on: the curve is a curve of bits
-  // per weight, and feeding it a figure the ceiling refused to trust is how a
-  // rung folded around a drafter came to be credited with the head's precision
-  return q && rungBpw(q) ? retention(retentionBpw(m, q), m, q) : 1;
+  return m.native_low_bpw || !q || !rungBpw(q) ? null : retention(retentionBpw(m, q), m, q);
 }
+const modelRetention = m => effective ? rungKeeps(m) ?? 1 : 1;
 
 // whether the rung being served sits below everything the curve measured, where
 // `retention` returns the lowest fitted point forever rather than continuing to
@@ -713,6 +712,9 @@ function belowCurve(m, q = m && activeQuant(m)) {
 let scaledSet = null;
 const scaledFacet = key =>
   (scaledSet || (scaledSet = new Set(D.retention.scaled))).has(key);
+
+// whether `quant adjusted` moves any score this model has at all
+const discounted = m => Object.keys(m.facets).some(scaledFacet);
 
 let evidenceOf = null;
 function whyNotScaled(key) {
@@ -1067,6 +1069,24 @@ const COLUMNS = [
      if (!minCtx) return '<td class="n faint" title="set a context under hardware">-</td>';
      if (!m.facts.attn) return '<td class="n faint" title="its config publishes no attention geometry">?</td>';
      return `<td class="n dim">${gib(v)}</td>`;
+   }},
+  {k: 'keeps', t: 'keeps', num: true,
+   get: m => discounted(m) ? rungKeeps(m) ?? -1 : -1,
+   help: 'the share of its coding and software-agent scores the quant curve says the rung this row reads keeps, which is what `quant adjusted` multiplies them by. dim while that is off, blank for a model with no such score. the curve itself is on each model\'s quantization tab',
+   cell: m => {
+     if (!discounted(m)) {
+       return '<td class="n faint" title="quant adjusted touches none of this model\'s scores">-</td>';
+     }
+     if (m.native_low_bpw) {
+       return '<td class="n faint" title="natively low-bpw weights, so not quantization loss">exempt</td>';
+     }
+     const k = rungKeeps(m), q = activeQuant(m);
+     if (k === null) return '<td class="n faint">-</td>';
+     return `<td class="n${effective ? '' : ' faint'}" title="${esc(q.quant)} at`
+       + ` ${num(retentionBpw(m, q), 2)} bpw on the ${curveFor(m).kind} curve`
+       + (belowCurve(m) ? ', below everything it measured, so a floor rather than a prediction' : '')
+       + (effective ? '' : '. not applied while quant adjusted is off') + `">`
+       + `${num(k * 100, 1)}%</td>`;
    }},
   {k: 'bpw', t: 'bpw', num: true, get: m => (readQuant(m) || {}).bpw ?? -1,
    help: 'bits per weight: the file over the parameter count. where a rung publishes a tensor table that disagrees with that by more than a packer\'s rounding -- a drafter folded into the file, a component counted in the denominator and shipped beside the gguf -- the page judges the rung by the table instead, so this cell and the quality behind it can name different numbers',
@@ -1643,6 +1663,8 @@ if (typeof module !== 'undefined' && module.exports) {
                     visible, sorted, expand, col, shown, scored, activeQuant, readQuant,
                     fittingQuants, quantChoices, rungPool, rungEngines,
                     unusedSweeps, kvGib, fitContext, tgTps, ppTps,
-                    modelRetention, retentionBpw, curveFor, belowCurve, facetValue, facetPctRaw,
+                    modelRetention, rungKeeps, retention, retentionBpw, curveFor, belowCurve,
+                    discounted,
+                    facetValue, facetPctRaw,
                     COLUMNS, MODALITIES, FLAGS, proseText, esc, num, gib, ctxLabel};
 }

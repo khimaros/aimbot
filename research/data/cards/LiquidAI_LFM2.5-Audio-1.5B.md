@@ -15,6 +15,7 @@ library_name: liquid-audio
 pipeline_tag: audio-to-audio
 base_model:
 - LiquidAI/LFM2-1.2B
+new_version: LiquidAI/LFM3-Audio-2B
 ---
 
 <center>

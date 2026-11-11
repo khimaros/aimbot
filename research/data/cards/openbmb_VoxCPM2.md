@@ -52,7 +52,7 @@ pipeline_tag: text-to-speech
 [![Demo](https://img.shields.io/badge/Live%20Playground-Demo-orange)](https://huggingface.co/spaces/OpenBMB/VoxCPM-Demo)
 [![Audio Samples](https://img.shields.io/badge/Audio%20Samples-Demo%20Page-green)](https://openbmb.github.io/voxcpm2-demopage)
 [![Discord](https://img.shields.io/badge/Discord-VoxCPM-5865F2?logo=discord&logoColor=white)](https://discord.gg/KZUx7tVNwz)
-[![Lark](https://img.shields.io/badge/飞书群-VoxCPM-00D6B9?logo=lark&logoColor=white)](https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=acds0b9d-23d8-4d7e-b696-d200f3e22a7f) [![MiniCPM Wiki](https://img.shields.io/badge/MiniCPM-Wiki-1677FF?logo=readthedocs&logoColor=white)](https://modelbest.feishu.cn/wiki/UtWxwcERfiRIpIkBOjuc3h9tn1D)
+[![Lark](https://img.shields.io/badge/飞书群-VoxCPM-00D6B9?logo=lark&logoColor=white)](https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=acds0b9d-23d8-4d7e-b696-d200f3e22a7f) [![MiniCPM Wiki](https://img.shields.io/badge/MiniCPM-Wiki-1677FF?logo=readthedocs&logoColor=white)](https://openbmb.cn/docs/)
 
 ## Highlights
 

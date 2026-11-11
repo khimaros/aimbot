@@ -7,6 +7,25 @@ tags: [laya, system-one, calibrated-decisions, rlcd, classification, routing, sc
 
 # Laya
 
+> **Cite this work.** M, N.; M, A. From Laya to Vega: Open Non-Autoregressive Decision Models with Calibrated Probabilities. *Preprints* **2026**, 2026110781. [https://doi.org/10.20944/preprints202611.0781.v1](https://doi.org/10.20944/preprints202611.0781.v1)
+
+<details>
+<summary>BibTeX</summary>
+
+```bibtex
+@article{m2026laya_vega,
+  title   = {From Laya to Vega: Open Non-Autoregressive Decision Models with Calibrated Probabilities},
+  author  = {M, N. and M, A.},
+  journal = {Preprints},
+  year    = {2026},
+  pages   = {2026110781},
+  doi     = {10.20944/preprints202611.0781.v1},
+  url     = {https://doi.org/10.20944/preprints202611.0781.v1}
+}
+```
+
+</details>
+
 **Multilingual, non-autoregressive System 1 decision model.** Give it a **state** (text, email, ticket, or JSON) and **typed questions**; it returns typed answers with mathematically calibrated probabilities in a single forward pass (~33 ms) across 100+ languages. Trained with reinforcement learning against strictly proper scoring rules (**RLCD**), so reporting honest probabilities is the only way to maximise reward. It never generates text, so there is nothing to parse and nothing to hallucinate.
 
 ## Installation

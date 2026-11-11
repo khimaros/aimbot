@@ -5,20 +5,27 @@ license_name: minimax-h3-community-license-agreement
 license_link: LICENSE
 library_name: minimax-h3
 tags:
-  - text-to-video
-  - image-to-video
-  - image-text-to-video
-  - video-to-video
-  - text-to-audio-video
-  - image-to-audio-video
-  - image-text-to-audio-video
-  - video-to-audio-video
-  - audio-to-audio-video
-  - audio-video-generation
-  - multimodal
-  - synchronized-audio-video
-  - reference-to-audio-video
-  - diffusers
+- text-to-video
+- image-to-video
+- image-text-to-video
+- video-to-video
+- text-to-audio-video
+- image-to-audio-video
+- image-text-to-audio-video
+- video-to-audio-video
+- audio-to-audio-video
+- audio-video-generation
+- multimodal
+- synchronized-audio-video
+- reference-to-audio-video
+- diffusers
+language:
+- sv
+- en
+- fr
+- de
+- es
+- nl
 ---
 
 <div align="center">

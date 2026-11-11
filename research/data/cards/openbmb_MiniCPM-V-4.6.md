@@ -11,7 +11,7 @@ library_name: transformers
 
 A Pocket-Sized MLLM for Ultra-Efficient Image and Video Understanding on Your Phone
 
-[GitHub](https://github.com/OpenBMB/MiniCPM-o) | [MiniCPM Wiki(Chinese)](https://modelbest.feishu.cn/wiki/UtWxwcERfiRIpIkBOjuc3h9tn1D) | [CookBook](https://github.com/OpenSQZ/MiniCPM-V-CookBook) | [Demo](https://huggingface.co/spaces/openbmb/MiniCPM-V-4.6-Demo) |
+[GitHub](https://github.com/OpenBMB/MiniCPM-o) | [MiniCPM Wiki(Chinese)](https://openbmb.cn/docs/) | [CookBook](https://github.com/OpenSQZ/MiniCPM-V-CookBook) | [Demo](https://huggingface.co/spaces/openbmb/MiniCPM-V-4.6-Demo) |
 [Feishu (Lark)](https://raw.githubusercontent.com/openbmb/MiniCPM-V/main/assets/feishu_qrcode.png)
 
 ## News
@@ -414,12 +414,16 @@ curl -s http://localhost:30000/v1/chat/completions -H 'Content-Type: application
 <details>
 <summary><b>llama.cpp</b> — <a href="https://github.com/OpenSQZ/MiniCPM-V-CookBook/blob/main/deployment/llama.cpp/minicpm-v4_6_llamacpp.md">Full Guide</a></summary>
 
-```bash
-llama-server -m MiniCPM-V-4.6-Q4_K_M.gguf --port 8080
-```
+**One-click (macOS / Windows)** — install [Llama](https://llama.app), the desktop app from the llama.cpp team and Hugging Face (`brew install --cask llama-app`, or the Windows installer), then choose **Use this model → Llama** on this page. Llama downloads a build that fits your machine and opens the chat window.
 
 ```bash
-curl -s http://localhost:8080/v1/chat/completions -H 'Content-Type: application/json' -d '{
+llama serve -hf openbmb/MiniCPM-V-4.6-gguf -a MiniCPM-V-4.6
+```
+
+`llama cli -hf openbmb/MiniCPM-V-4.6-gguf` gives the same model in the terminal. `llama-mtmd-cli` and `llama-server` remain available for development; `llama cli` / `llama serve` are the normal entrypoints.
+
+```bash
+curl -s http://localhost:9931/v1/chat/completions -H 'Content-Type: application/json' -d '{
   "model": "MiniCPM-V-4.6",
   "messages": [{"role": "user", "content": [
     {"type": "image_url", "image_url": {"url": "https://huggingface.co/datasets/openbmb/DemoCase/resolve/main/refract.png"}},

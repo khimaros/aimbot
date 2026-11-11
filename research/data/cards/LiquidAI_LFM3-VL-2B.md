@@ -144,6 +144,11 @@ Choose a checkpoint variant for your inference framework and hardware.
 <td style="border: 0; padding: 0.55em 0.75em;"><a href="https://docs.liquid.ai/deployment/on-device/onnx">ONNX Runtime</a></td>
 <td style="border: 0; padding: 0.55em 0.75em;">Cross-platform inference with ONNX Runtime.</td>
 </tr>
+<tr style="border: 0;">
+<td style="border: 0; padding: 0.55em 0.75em;"><a href="https://huggingface.co/OpenVINO/LFM3-VL-2B-int4-ov">OpenVINO</a></td>
+<td style="border: 0; padding: 0.55em 0.75em;"><a href="https://docs.openvino.ai/2026/index.html">OpenVINO</a></td>
+<td style="border: 0; padding: 0.55em 0.75em;">4-bit quantization for Intel hardware.</td>
+</tr>
 </tbody>
 </table>
 

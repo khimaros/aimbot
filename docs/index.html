@@ -1056,13 +1056,9 @@ function interpolate(c, bpw) {
 // making its thin quants look BETTER than the general case, purely because
 // nobody ran that arm. below its own range a measured curve therefore defers to
 // the fitted one, which is the wider evidence rather than the narrower silence.
-function retention(bpw, m, q = activeQuant(m)) {
-  const c = curveFor(m, q);
-  if (c.kind === 'measured' && bpw < c.points[0][0]) {
-    return interpolate(D.retention.fitted.points, bpw);
-  }
-  return interpolate(c.points, bpw);
-}
+const readCurve = (c, bpw) => c.kind === 'measured' && bpw < c.points[0][0]
+  ? interpolate(D.retention.fitted.points, bpw) : interpolate(c.points, bpw);
+const retention = (bpw, m, q = activeQuant(m)) => readCurve(curveFor(m, q), bpw);
 
 // the bits a curve is read at. the fitted curve was drawn over models whose
 // weights are all multiplied, so a rung carrying lookup rows -- v4.1 flash's
@@ -1074,14 +1070,17 @@ const retentionBpw = (m, q) =>
 
 // a model whose weights are natively low-bpw is not paying a quantization
 // penalty for being small, so it is exempt -- the registry says which
-function modelRetention(m) {
-  if (!effective || m.native_low_bpw) return 1;
+//
+// the same bits the ladder ranked the rung on: the curve is a curve of bits per
+// weight, and feeding it a figure the ceiling refused to trust is how a rung
+// folded around a drafter came to be credited with the head's precision.
+// `rungKeeps` is that figure whether or not `quant adjusted` is applying it,
+// null where there is nothing to read
+function rungKeeps(m) {
   const q = activeQuant(m);
-  // the same bits the ladder ranked the rung on: the curve is a curve of bits
-  // per weight, and feeding it a figure the ceiling refused to trust is how a
-  // rung folded around a drafter came to be credited with the head's precision
-  return q && rungBpw(q) ? retention(retentionBpw(m, q), m, q) : 1;
+  return m.native_low_bpw || !q || !rungBpw(q) ? null : retention(retentionBpw(m, q), m, q);
 }
+const modelRetention = m => effective ? rungKeeps(m) ?? 1 : 1;
 
 // whether the rung being served sits below everything the curve measured, where
 // `retention` returns the lowest fitted point forever rather than continuing to
@@ -1101,6 +1100,9 @@ function belowCurve(m, q = m && activeQuant(m)) {
 let scaledSet = null;
 const scaledFacet = key =>
   (scaledSet || (scaledSet = new Set(D.retention.scaled))).has(key);
+
+// whether `quant adjusted` moves any score this model has at all
+const discounted = m => Object.keys(m.facets).some(scaledFacet);
 
 let evidenceOf = null;
 function whyNotScaled(key) {
@@ -1455,6 +1457,24 @@ const COLUMNS = [
      if (!minCtx) return '<td class="n faint" title="set a context under hardware">-</td>';
      if (!m.facts.attn) return '<td class="n faint" title="its config publishes no attention geometry">?</td>';
      return `<td class="n dim">${gib(v)}</td>`;
+   }},
+  {k: 'keeps', t: 'keeps', num: true,
+   get: m => discounted(m) ? rungKeeps(m) ?? -1 : -1,
+   help: 'the share of its coding and software-agent scores the quant curve says the rung this row reads keeps, which is what `quant adjusted` multiplies them by. dim while that is off, blank for a model with no such score. the curve itself is on each model\'s quantization tab',
+   cell: m => {
+     if (!discounted(m)) {
+       return '<td class="n faint" title="quant adjusted touches none of this model\'s scores">-</td>';
+     }
+     if (m.native_low_bpw) {
+       return '<td class="n faint" title="natively low-bpw weights, so not quantization loss">exempt</td>';
+     }
+     const k = rungKeeps(m), q = activeQuant(m);
+     if (k === null) return '<td class="n faint">-</td>';
+     return `<td class="n${effective ? '' : ' faint'}" title="${esc(q.quant)} at`
+       + ` ${num(retentionBpw(m, q), 2)} bpw on the ${curveFor(m).kind} curve`
+       + (belowCurve(m) ? ', below everything it measured, so a floor rather than a prediction' : '')
+       + (effective ? '' : '. not applied while quant adjusted is off') + `">`
+       + `${num(k * 100, 1)}%</td>`;
    }},
   {k: 'bpw', t: 'bpw', num: true, get: m => (readQuant(m) || {}).bpw ?? -1,
    help: 'bits per weight: the file over the parameter count. where a rung publishes a tensor table that disagrees with that by more than a packer\'s rounding -- a drafter folded into the file, a component counted in the denominator and shipped beside the gguf -- the page judges the rung by the table instead, so this cell and the quality behind it can name different numbers',
@@ -2993,8 +3013,21 @@ function tabOverview(m) {
                 + ` asked for, under the ${pctOf(COVER_FLOOR)} a composite needs</span>`
               : '<span class="faint">unmeasured</span>')
             : `${num(s.value, 0)} <span class="sub">on ${s.have} of ${s.want}`
-              + ` weighted factors, ${pctOf(s.cover)} of the weight</span>`]])
+              + ` weighted factors, ${pctOf(s.cover)} of the weight</span>`],
+          ['quant discount', discountLine(m)]])
     + idsSection(m);
+}
+
+// the discount in one line, for a reader who never opens the quantization tab
+function discountLine(m) {
+  if (!discounted(m)) return '';
+  if (m.native_low_bpw) return esc(EXEMPT);
+  const k = rungKeeps(m), q = activeQuant(m);
+  if (k === null) return '';
+  return `${num(k * 100, 1)}% kept at ${esc(q.quant)} <span class="sub">on the`
+    + ` ${curveFor(m).kind} curve, ${effective ? 'multiplying' : 'not applied while quant'
+    + ' adjusted is off, to'} its coding and software-agent scores. the curve and every`
+    + ' rung on it are on the quantization tab</span>';
 }
 
 // a gscore of 0.4517 rounded to one decimal is three models tied at 0.5
@@ -3077,10 +3110,7 @@ function tabQuality(m) {
           + (f.low_confidence ? ' <span class="warn">thin sample</span>' : '')
           + (effective && scaledFacet(k) && modelRetention(m) < 1
             ? ` <span class="faint">x${modelRetention(m).toFixed(3)} for the quant</span>`
-              + refMark({source: curveFor(m).kind + ' retention curve',
-                         file: curveFor(m).src.file,
-                         url: D.repo_url + '/blob/' + D.branch + '/' + curveFor(m).src.file,
-                         note: curveFor(m).src.source}) : '')
+              + curveRef(curveFor(m)) : '')
           + `</td><td class="n${w && !shared(k) ? '' : ' faint'}">`
           + (w ? Math.round(w * 100) + '%' + (shared(k) ? ' shared' : '') : '-') + '</td>'
           + `<td class="n">${num(facetValue(m, k), DIGITS[meta.unit] ?? 2)}</td>`
@@ -3369,11 +3399,15 @@ function quantTable(m, repo, pick) {
   // model publishes no parameter count -- most of the speech half -- the
   // derived one is blank and the read one is the only figure there is
   const anyRead = rows.some(c => c.realBpw);
+  const kept = discounted(m);
   return `<h3>quants in <span class="faint">${esc(repo)}</span></h3>`
     + '<table><thead><tr><th>quant</th><th class="n">gib</th>'
     + '<th class="n">bpw</th>'
     + (anyRead ? '<th class="n" data-help="read from the file\'s tensor table'
        + ' rather than derived from its size">read</th>' : '')
+    + (kept ? '<th class="n" data-help="the share of its coding and software-agent'
+       + ' scores the discount curve above says this rung keeps, which is what'
+       + ' quant adjusted multiplies them by">keeps</th>' : '')
     + (anyRead ? '<th data-help="the ggml type of every tensor in the file, by'
        + ' share of weights. a rung\'s name is its publisher\'s label, and most'
        + ' of them are a mix">layers</th>' : '')
@@ -3392,8 +3426,9 @@ function quantTable(m, repo, pick) {
           ? ' data-help="larger than the vram left after the reserve and the kv cache"' : ''}>`
         + `${gib(c.gib) || '-'}</td>`
         + `<td class="n dim">${num(c.bpw, 2) || '-'}</td>`
-        + (anyRead ? `<td class="n dim">${num(c.realBpw, 2) || '-'}</td>`
-          + `<td>${typeChips(c.types)}</td>` : '') + '</tr>';
+        + (anyRead ? `<td class="n dim">${num(c.realBpw, 2) || '-'}</td>` : '')
+        + (kept ? `<td class="n" data-keeps>${keepsText(m, c)}</td>` : '')
+        + (anyRead ? `<td>${typeChips(c.types)}</td>` : '') + '</tr>';
     }).join('') + '</tbody></table>';
 }
 
@@ -3454,6 +3489,101 @@ function typeChips(types) {
 // moved, not how much of a benchmark score survived, and nothing published
 // maps one onto the other. shown because it is the only per-model measurement
 // of quantization damage that exists for these models at all.
+// which curve answered and where it came from, in the one wording the operate
+// block, the quality tab and the chart all use
+const curveLabel = c => c.kind === 'measured'
+  ? `<b>measured on these files</b> &middot; ${esc(c.src.metric)}`
+    + ` &middot; ${esc(c.src.quant_repo || '')}`
+  : c.kind === 'median' ? 'the median of every measured sweep'
+  : `fitted &middot; ${esc(c.src.source || '')}`;
+const curveRef = c => c.kind === 'measured' && c.src.ref ? refMark(c.src.ref)
+  : refMark({source: c.kind + ' retention curve', file: c.src.file,
+             url: D.repo_url + '/blob/' + D.branch + '/' + c.src.file, note: c.src.source});
+const EXEMPT = 'exempt: the weights are natively low-bpw, so this is not quantization loss';
+
+// what one rung keeps, or null where there is no bit count to read the curve at
+const keeps = (m, q) => rungBpw(q) ? retention(retentionBpw(m, q), m, q) : null;
+const keepsText = (m, q) => m.native_low_bpw ? 'exempt'
+  : keeps(m, q) === null ? '-' : num(keeps(m, q) * 100, 1) + '%';
+
+// bits on a log axis: the curve does all of its moving between one and four
+// bits, and a linear axis out to bf16 gave that a fifth of the width
+const CURVE_BOX = {w: 520, h: 220, l: 40, r: 14, t: 10, b: 34};
+const CURVE_TICKS = [1, 2, 4, 8, 16];
+
+// the curve the discount reads, drawn the way `retention` reads it, with a dot
+// on every rung the model publishes. below the lowest bits the curve measured
+// the line is dashed, because there it holds a value rather than predicting one
+function curveChart(m, c, rungs) {
+  const B = CURVE_BOX, lo = CURVE_TICKS[0], hi = CURVE_TICKS.at(-1);
+  const X = b => B.l + Math.log2(Math.min(Math.max(b, lo), hi) / lo)
+    / Math.log2(hi / lo) * (B.w - B.l - B.r);
+  const Y = v => B.t + (1 - v) * (B.h - B.t - B.b);
+  const floor = (c.kind === 'measured' ? D.retention.fitted : c).points[0][0];
+  const xs = [...new Set([lo, floor, hi, ...c.points.map(p => p[0]),
+    ...(c.kind === 'measured' ? D.retention.fitted.points.map(p => p[0]) : [])])]
+    .filter(b => b >= lo && b <= hi).sort((a, b) => a - b);
+  const path = bs => bs.map((b, i) => `${i ? 'L' : 'M'}${X(b).toFixed(1)},`
+    + Y(readCurve(c, b)).toFixed(1)).join('');
+  const ink = c.kind === 'measured' ? 'var(--live)' : 'var(--dim)';
+  const scored = activeQuant(m);
+  const isScored = q => scored && q.repo === scored.repo && q.quant === scored.quant;
+  const grid = [0, 0.25, 0.5, 0.75, 1].map(v =>
+    `<line x1="${B.l}" x2="${B.w - B.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/>`
+    + `<text x="${B.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v * 100}%</text>`).join('')
+    + CURVE_TICKS.map(b => `<text x="${X(b)}" y="${B.h - B.b + 16}"`
+      + ` text-anchor="middle">${b}</text>`).join('')
+    + `<text x="${(B.l + B.w - B.r) / 2}" y="${B.h - 2}" text-anchor="middle">bits per weight</text>`;
+  const dots = rungs.map(q => {
+    const v = keeps(m, q), at = retentionBpw(m, q);
+    return `<circle class="rung" cx="${X(at).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="${
+      isScored(q) ? 5 : 4}" fill="${isScored(q) ? 'var(--fg)' : ink}" stroke="var(--panel)"`
+      + ` stroke-width="2" data-help="${esc(q.quant)} at ${num(at, 2)} bpw keeps`
+      + ` ${num(v * 100, 1)}%, out of ${esc(q.repo)}${isScored(q)
+        ? '. the rung the table ranks' : ''}"/>`;
+  }).join('');
+  // a rung in the right third is labelled to its left, or the svg clips it
+  const lx = scored && rungBpw(scored) ? X(retentionBpw(m, scored)) : 0;
+  const left = lx > B.w * 2 / 3;
+  const label = scored && rungBpw(scored)
+    ? `<text x="${lx + (left ? -8 : 8)}" y="${Y(keeps(m, scored)) + 14}"`
+      + `${left ? ' text-anchor="end"' : ''} fill="var(--fg)">${esc(scored.quant)}`
+      + ` ${num(keeps(m, scored) * 100, 1)}%</text>` : '';
+  return `<svg class="curve" viewBox="0 0 ${B.w} ${B.h}" width="${B.w}" height="${B.h}"`
+    + ` role="img" aria-label="retention against bits per weight" font-size="11"`
+    + ' fill="var(--faint)">' + grid
+    + `<path d="${path(xs.filter(b => b <= floor))}" fill="none" stroke="${ink}"`
+    + ' stroke-width="2" stroke-dasharray="4 4"/>'
+    + `<path d="${path(xs.filter(b => b >= floor))}" fill="none" stroke="${ink}" stroke-width="2"/>`
+    + dots + label + '</svg>';
+}
+
+// the curve is a fact about the model, true whichever rung is being run, so it
+// is drawn here for every rung at once; the arithmetic for one picked rung
+// stays beside the picker on operate
+function discountCurve(m) {
+  const head = '<h3>the discount curve</h3>';
+  if (!discounted(m)) {
+    return head + '<p class="faint"><b>quant adjusted</b> touches none of this model\'s'
+      + ' scores: it discounts the coding and software-agent benchmarks, and there are'
+      + ' none here.</p>';
+  }
+  if (m.native_low_bpw) return head + `<p class="faint">${EXEMPT}.</p>`;
+  const rungs = quantChoices(m).filter(q => rungBpw(q));
+  if (!rungs.length) {
+    return head + '<p class="faint">no rung here has a bit count to read the curve at.</p>';
+  }
+  const c = curveFor(m);
+  const floor = (c.kind === 'measured' ? D.retention.fitted : c).points[0][0];
+  return head + curveChart(m, c, rungs)
+    + `<p class="faint">${curveLabel(c)} ${curveRef(c)}. the filled dot is the rung the`
+    + ` table ranks, and the keeps column in each ladder below is the same number.`
+    + ` below ${num(floor, 2)} bpw nothing was measured, so the dashed line holds the`
+    + ' last value it knew rather than predicting one. the discount multiplies only'
+    + ` the coding and software-agent scores, and only while <b>quant adjusted</b>`
+    + ' is on.</p>';
+}
+
 // what `quant adjusted` does to the rung picked on operate, and on what
 // evidence. the discount moves every scaled number on the page and was
 // explained nowhere per model: the methodology note describes the mechanism and
@@ -3492,20 +3622,13 @@ function discountBlock(m, q) {
   // than any one sweep ran files of, so no measured curve on the model can rank
   // another publisher's rung without inventing the number
   const unused = unusedSweeps(m, c);
-  rows.push(['curve', (c.kind === 'measured'
-    ? `<b>measured on these files</b> &middot; ${esc(c.src.metric)}`
-      + ` &middot; ${esc(c.src.quant_repo || '')}`
-    : c.kind === 'median'
-      ? 'the median of every measured sweep'
-      : `fitted &middot; ${esc(c.src.source || '')}`)
+  rows.push(['curve', curveLabel(c)
     + (unused.length ? ` <span class="dim">-- and not the ${unused.length} sweep${
       unused.length > 1 ? 's' : ''} this model carries below, because each ran one
        publisher's files against its own base and this ladder ranks rungs from
        more publishers than that</span>` : '')]);
   if (c.kind === 'measured' && c.src.ref) rows.push(['source', refMark(c.src.ref)]);
-  rows.push(['keeps', m.native_low_bpw
-    ? 'exempt: the weights are natively low-bpw, so this is not quantization loss'
-    : !effective
+  rows.push(['keeps', m.native_low_bpw ? EXEMPT : !effective
       ? `<span class="dim">nothing, while <b>quant adjusted</b> is off. it would be
          ${num(kept * 100, 1)}%</span>`
       : `<b>${num(kept * 100, 1)}%</b> of the measured score, on the facets below`]);
@@ -3570,10 +3693,12 @@ function measuredTable(m) {
 // redrew a tab about scoring, and the runtime chip reached further still, because
 // `repoChoices` narrows to the conversions a runtime declares. what is here is
 // true of the model however you happen to be running it: what the registry pins,
-// what each rung is, and who measured what. the discount is arithmetic about the
-// picked rung, so it sits beside the picker on operate.
+// what each rung is, what the discount curve says each keeps, and who measured
+// what. the discount's arithmetic for one picked rung sits beside the picker on
+// operate.
 function tabQuantization(m) {
-  return registryFacts(m) + quantLadders(m) + measuredTable(m) + sweepTable(m);
+  return registryFacts(m) + discountCurve(m) + quantLadders(m) + measuredTable(m)
+    + sweepTable(m);
 }
 
 const repoLink = r => `<a href="${esc('https://huggingface.co/' + r)}" target="_blank" rel="noopener">${esc(r)}</a>`;

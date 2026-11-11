@@ -1195,6 +1195,18 @@ tab shows you rather than what the score is made of. a test holds the invariant
 two ways -- no ladder ranks fewer bits higher, and the rung the fit picks is the
 one its own ladder scores highest.
 
+the discount is shown in three places rather than inferred from a hover. the
+table has a `keeps` column beside `quant`, on by default: the share of the coding
+and software-agent scores the curve says the rung that row reads keeps, dim while
+`quant adjusted` is off and blank for a model with no such score. the overview
+tab says the same in a line. the quantization tab draws the curve itself, on a
+log axis of bits per weight, the way `retention` reads it -- dashed below the
+lowest bits anything measured, where it holds a value rather than predicting one
+-- with a dot for every rung the model publishes, and each repo's ladder carries
+the same number as a `keeps` column. the curve is a fact about the model, so
+picking a rung on operate redraws none of it; the arithmetic for that one rung
+stays on operate.
+
 the `operate` tab emits a `llama-server` argv, open by default, a pi
 `models.json` provider block, the request body carrying the thinking knob, and a
 vllm line -- built from a quant and a sampling profile you pick, since some repos

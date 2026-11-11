@@ -23,8 +23,9 @@ A single checkpoint supports input buffer latency as low as 80 ms for latency-cr
 
 **This model is ready for commercial or non-commercial use.**
 
-
 **[Nemotron 3 Diarization HuggingFace Blog](https://huggingface.co/blog/nvidia/nemotron-diarization)** 
+
+For details on the model architecture, training, and evaluation, see our [research paper](https://arxiv.org/abs/2611.12246).
 
 ## Release Date
 
@@ -679,6 +680,24 @@ Nemotron 3 Diarization is intended for speaker diarization in live or recorded c
 <a id="ref-4"></a>[4] [Can We Really Repurpose Multi-Speaker ASR Corpus for Speaker Diarization?](https://arxiv.org/abs/2507.09226)
 
 <a id="ref-5"></a>[5] [NEST: Self-supervised Fast Conformer as All-purpose Seasoning to Speech Processing Tasks](https://arxiv.org/abs/2408.13106)
+
+<a id="ref-6"></a>[6] [Nemotron 3 Diarization: Advancing the Accuracy-Efficiency Frontier in Streaming Speaker Diarization](https://arxiv.org/abs/2611.12246)
+
+## Citation
+
+If you use this model in your research, please cite:
+
+```bibtex
+@misc{medennikov2026nemotron3diarization,
+  title={Nemotron 3 Diarization: Advancing the Accuracy-Efficiency Frontier in Streaming Speaker Diarization},
+  author={Ivan Medennikov and Taejin Park and Tatiana Timofeeva and He Huang and Alexander Polok and Sofia Kostandian and Weiqing Wang and Dongji Gao and Jagadeesh Balam and Boris Ginsburg},
+  year={2026},
+  eprint={2611.12246},
+  archivePrefix={arXiv},
+  primaryClass={eess.AS},
+  url={https://arxiv.org/abs/2611.12246}
+}
+```
 
 ---
 

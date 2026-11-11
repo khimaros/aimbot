@@ -32,6 +32,7 @@ tags:
 - system-one
 - multimodal
 - decision-model
+new_version: LiquidAI/d1-2B
 ---
 
 <div align="center">

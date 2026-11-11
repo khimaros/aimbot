@@ -1549,6 +1549,60 @@ test('quantization is its own tab, and the discount follows the quant you picked
   RESET();
 });
 
+// the discount was arithmetic about one rung on operate and a shape nowhere: a
+// reader choosing between rungs had no way to see what each would keep. the
+// curve is drawn on the quantization tab with a dot per rung, and the ladders
+// carry the same number as a column, which is the table view of the chart
+test('the quantization tab draws the discount curve and what each rung keeps', () => {
+  RESET();
+  const m = model('qwen3.8 27b');
+  const page = tabQuantization(m);
+  const block = (page.split('<h3>the discount curve')[1] || '').split('<h3>')[0];
+  ok(block.includes('<svg'), 'a model with a discounted score draws the curve');
+  ok(block.includes(curveFor(m).kind), 'and says which curve it is');
+  const rungs = quantChoices(m).filter(q => rungBpw(q));
+  eq((block.match(/<circle class="rung"/g) || []).length, rungs.length, 'one dot per rung');
+  rungs.forEach(q => {
+    const kept = num(retention(retentionBpw(m, q), m, q) * 100, 1) + '%';
+    ok(block.includes(`${esc(q.quant)} at`), q.quant + ' is named on its dot');
+    ok(page.includes(`<td class="n" data-keeps>${kept}</td>`),
+       q.repo + ':' + q.quant + ' keeps ' + kept + ' in its ladder row');
+  });
+  // a tab about what a quant IS: picking a rung to run changes no part of it
+  ops = {runtime: null, repo: rungs[0].repo, quant: rungs[0].quant, profile: null};
+  eq(tabQuantization(m), page, 'the operate pick redraws nothing here');
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+
+  const exempt = tabQuantization(model('bonsai 2 27b'));
+  ok(exempt.includes('<h3>the discount curve'), 'an exempt model still says so');
+  ok(exempt.includes('exempt'), 'in words');
+  eq(exempt.includes('<svg'), false, 'with no curve it does not read');
+
+  const decider = tabQuantization(model('laya'));
+  eq(decider.includes('<svg'), false, 'nothing of a decision model is discounted');
+  ok(decider.includes('touches none of'), 'and the tab says so rather than drawing it');
+  RESET();
+});
+
+// the same number on the table and the overview, so a reader comparing rows or
+// skimming one model sees what the quant costs without opening the arithmetic
+test('the discount a row was scored at is a column and an overview line', () => {
+  RESET();
+  const keepsCol = COLUMNS.find(c => c.k === 'keeps');
+  ok(keepsCol, 'there is a keeps column');
+  eq(DEFAULT_HIDDEN.includes('keeps'), false, 'and it is on screen by default');
+  const m = model('qwen3.8 27b'), q = activeQuant(m);
+  const want = retention(retentionBpw(m, q), m, q);
+  near(keepsCol.get(m), want, 1e-9, 'the column sorts on what the quality cell was multiplied by');
+  ok(keepsCol.cell(m).includes(num(want * 100, 1) + '%'), 'and prints it');
+  ok(tabOverview(m).includes('quant discount'), 'the overview names the discount');
+  ok(tabOverview(m).includes(num(want * 100, 1) + '%'), 'with the same number');
+  eq(keepsCol.get(model('laya')), -1, 'a model the discount touches sorts last');
+  ok(keepsCol.cell(model('laya')).includes('>-<'), 'and prints nothing');
+  ok(keepsCol.cell(model('bonsai 2 27b')).includes('exempt'), 'an exempt model says so');
+  RESET();
+});
+
 // a sweep is published in ladder order and that is the LAST order to read it
 // in: the question a reader brings to it is which rung to pull, and the answer
 // is a row the ladder buries. byteshape's qwen3.8 27b sweep interleaves plain

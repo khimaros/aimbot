@@ -1,12 +1,11 @@
 ---
 license: apache-2.0
-base_model: jhu-clsp/mmBERT-small
 library_name: pytorch
 tags:
-  - decision-model
-  - text-classification
-  - multilingual
-  - routing
+- decision-model
+- text-classification
+- multilingual
+- routing
 ---
 
 ![Supersonic Labs logo](assets/supersonic-labs-dark.svg)

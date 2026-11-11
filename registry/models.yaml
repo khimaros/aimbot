@@ -4040,6 +4040,67 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+  NaiveAI/Naive-N0.5-Flash:
+    kind: text
+    name:
+      short: naive n0.5 flash
+      match: \bnaive[\s-]*n0\.5\b
+    notes: >-
+      a 309b moe with 15.5b active, built for coding and ai research {card} and
+      continued from MiMo-V2.5 with its global-attention layers replaced by
+      DeepSeek sparse attention, so no layer attends to the whole context. the
+      vendor serves it in FP8 and documents no other runtime. its scores are the
+      card's own, run through Claude Code against other vendors' published figures.
+    repos:
+    - repo: Baekpica/Naive-N0.5-Flash-Mixed-Quant-GGUF
+      files:
+        Naive-N0.5-Flash-MQ87.gguf:
+          quant: IQ2_XXS
+          note: four shards at {gib}, IQ2_XXS on the expert gate and up projections and IQ2_XS on
+            the down ones, with attention at Q6_K and Q8_0 and the sparse-attention indexer left at
+            BF16 {card@Baekpica/Naive-N0.5-Flash-Mixed-Quant-GGUF}
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    runtime:
+      arch: naive_n05_flash
+      mainline: false
+      tracking: https://github.com/Baekpica/ds4-dfm-rs/pull/70
+      note: the only gguf is built for ds4-dfm-rs, a rust engine and not llama.cpp, whose card says
+        "Native Naive CUDA execution is implemented on the Rust host" and names revision 6966dd80
+        {card@Baekpica/Naive-N0.5-Flash-Mixed-Quant-GGUF}, measured on a dgx spark. the header
+        declares `naive_n05_flash`, which no llama.cpp build reads, and no llama.cpp pull request or
+        issue names the model
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        tuned:
+        - instruct
+        - chat
+        - reason
+        - code
+        - tools
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: NaiveAI/Naive-N0.5-Flash
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   baidu/ERNIE-Image-Turbo:
     kind: image
     name:
@@ -15035,7 +15096,7 @@ models:
       with added use restrictions, and audio.cpp's catalog marks its port experimental.
     audiocpp: midashenglm_gen
   MiniMaxAI/MiniMax-H3:
-    kind: sound
+    kind: video
     name:
       short: minimax-h3
     notes: >-
@@ -15047,8 +15108,101 @@ models:
       not part of the release. audio.cpp's catalog drives its text-to-audio/video
       pipeline for speech, music and sound effects and marks it experimental. the
       weights are under the minimax h3 community license, with an application form
-      linked for the USA, EU, UK and south korea.
+      linked for the USA, EU, UK and south korea. two runtimes read it. audio.cpp's
+      port is audio-first: its documented run renders a 32x32 canvas to a wav, and
+      it decodes frames only when a request sets `return_video=true`, as a side
+      artifact. stable-diffusion.cpp generates the video and its stereo track
+      together, from leejet's conversions of both checkpoints, the frames one
+      (fl2va) and the references one (ref2va), each whole and pruned.
     audiocpp: minimax_h3
+    engine:
+    - stable-diffusion.cpp
+    repos:
+    - repo: leejet/MiniMax-H3-GGUF
+      role: diffusion
+      files:
+        minimax_h3_fl2va-Q4_K_M.gguf:
+          quant: Q4_K_M
+          note: the frames checkpoint whole at {gib}, text with an optional first and last frame
+        minimax_h3_fl2va_pruned-Q4_K_M.gguf:
+          quant: Q4_K_M
+          note: the frames checkpoint pruned, {gib} against the whole one's
+            {gib@leejet/MiniMax-H3-GGUF:minimax_h3_fl2va-Q4_K_M.gguf}
+        minimax_h3_ref2va-Q4_K_M.gguf:
+          quant: Q4_K_M
+          note: the references checkpoint whole at {gib}, conditioned on reference images, video
+            and audio
+        minimax_h3_ref2va_pruned-Q4_K_M.gguf:
+          quant: Q4_K_M
+          note: the references checkpoint pruned, {gib}
+        minimax_h3_ref2va_pruned-Q2_K_M.gguf:
+          quant: Q2_K
+          note: the references checkpoint pruned at {gib} and {bpw}, the smallest file here
+    ids:
+      aa-tts: ''
+      tts-arena: ''
+    components:
+    - repo: Comfy-Org/MiniMax-H3
+      file: vae/minimax_h3_video_vae_fp16.safetensors
+      role: vae
+    - repo: Comfy-Org/MiniMax-H3
+      file: vae/minimax_h3_audio_vae_fp32.safetensors
+      role: audio-vae
+    - repo: leejet/MiniMax-H3-GGUF
+      file: qwen3vl_32b_minimax_h3-Q4_K_M.gguf
+      quant: Q4_K_M
+      role: llm
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - video
+      - audio
+  MiniMaxAI/MiniMax-H3-Image:
+    kind: image
+    name:
+      short: minimax-h3-image
+      match: minimax[\s-]*h3[\s-]*image
+    notes: >-
+      the image half of the H3 family: text-to-image and editing from up to 16
+      reference images in one checkpoint, "distilled to 6 sampling steps (6 NFEs)
+      with no classifier-free guidance" {card}, at about 16 megapixels with no
+      upscaler. the 33.1b diffusion transformer is H3's without the audio layers,
+      and it reads H3's qwen3-vl text encoder unchanged, which the repo leaves to
+      the video checkpoint. the card's serving paths are sglang,
+      vllm-omni, diffusers and comfyui, and it "expects a detailed English
+      description of the whole image" {card}, which minimax's hosted context-ir
+      or the separate prompt expander supplies. the weights are under the
+      minimax-h3-image community license. the ggufs here are of comfy-org's pruned
+      transformer, and stable-diffusion.cpp reads them "from `master-1088`, the
+      first build that reads MiniMax H3-Image, with no patch"
+      {card@Hearthscale/MiniMax-H3-Image-GGUF}.
+    engine:
+    - stable-diffusion.cpp
+    repos:
+    - repo: Hearthscale/MiniMax-H3-Image-GGUF
+      role: diffusion
+    ids:
+      aa-t2i: ''
+      lmarena-t2i: ''
+      lmarena-edit: ''
+      showdown-t2i: ''
+      showdown-edit: ''
+    components:
+    - repo: Comfy-Org/MiniMax-H3-Image
+      file: vae/minimax_h3_image_vae_fp16.safetensors
+      role: vae
+    - repo: leejet/MiniMax-H3-GGUF
+      file: qwen3vl_32b_minimax_h3-Q4_K_M.gguf
+      quant: Q4_K_M
+      role: llm
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - image
   MiniMaxAI/MiniMax-Music3:
     kind: sound
     name:

@@ -145,24 +145,48 @@
    "assessed_on": "2026-10-21"
   },
   "MiniMaxAI/MiniMax-H3": {
-   "one_liner": "a large joint audio and video generator; in audio.cpp it is an experimental route to speech, music and sound effects.",
+   "one_liner": "a large joint audio and video generator: stable-diffusion.cpp makes the clip with its soundtrack, and audio.cpp uses it as an experimental route to speech, music and sound effects.",
    "use_for": [
     "short clips with synchronised audio and video",
+    "video from first and last frames or from reference images",
     "sound effects or music tied to a scene"
    ],
    "avoid_for": [
     "plain text to speech",
-    "audio longer than 15 seconds",
+    "clips longer than 15 seconds",
     "speech recognition"
    ],
-   "notes": "no benchmark in the registry covers it. the open release lacks the hosted prompt-refinement stage that the card says matters most for output quality, and ships full attention only. audio.cpp marks the family experimental. the licence is a custom community agreement, so check its terms and the regional application form before use.",
+   "notes": "no benchmark in the registry covers it. the open release lacks the hosted prompt-refinement stage that the card says matters most for output quality. for video, use stable-diffusion.cpp with leejet's conversions; it needs the video vae, the audio vae and the 32b qwen3-vl text encoder beside the diffusion file, and leaving out the audio vae gives a silent clip. audio.cpp's port is audio-first and marks the family experimental. the licence is a custom community agreement, so check its terms and the regional application form before use.",
    "confidence": "low",
    "evidence": [
-    "kind sound",
+    "kind video, text and image -> video and audio",
     "card: text, frame or reference input to 4-15 second video with stereo audio",
+    "stable-diffusion.cpp reads leejet's fl2va and ref2va conversions, whole and pruned",
     "audio.cpp family minimax_h3, tasks tts, music, sfx, status experimental"
    ],
-   "assessed_on": "2026-10-21"
+   "assessed_on": "2026-11-11"
+  },
+  "MiniMaxAI/MiniMax-H3-Image": {
+   "one_liner": "a 33b six-step image generator and editor at about 16 megapixels, from the H3 family.",
+   "use_for": [
+    "text to image at high resolution",
+    "editing with up to 16 reference images",
+    "text rendered inside an image"
+   ],
+   "avoid_for": [
+    "short prompts without an expander",
+    "video",
+    "small boxes, given the 32b text encoder it needs beside the transformer"
+   ],
+   "notes": "no board in the registry has scored it yet. it expects a long english description of the whole image, which minimax's hosted context-ir or the separate prompt-expander model writes. the ggufs here are of comfy-org's pruned transformer and load in stable-diffusion.cpp from master-1088; the vae comes from comfy-org and the text encoder from leejet's h3 repo. the licence is a custom community agreement.",
+   "confidence": "low",
+   "evidence": [
+    "kind image, text and image -> image",
+    "card: 6 sampling steps, no classifier-free guidance, about 16 megapixels",
+    "card: 33.1b diffusion transformer, H3's without the audio layers",
+    "gguf card: stable-diffusion.cpp reads it from master-1088 with no patch"
+   ],
+   "assessed_on": "2026-11-11"
   },
   "OpenMOSS-Team/MOSS-TTSD-v1.0": {
    "one_liner": "an 8b multi-speaker dialogue tts that speaks a speaker-tagged script in one take, with per-speaker cloning.",
@@ -3936,6 +3960,27 @@
     "three gguf publishers, ggml-org's mtp head as a sidecar and a dflash drafter beside TrevorJS's file"
    ],
    "assessed_on": "2026-10-21"
+  },
+  "NaiveAI/Naive-N0.5-Flash": {
+   "one_liner": "a 309b coding and ai-research moe over 15.5b live, built on mimo-v2.5 with sparse attention throughout, that only a rust engine outside llama.cpp loads.",
+   "use_for": [
+    "coding",
+    "agentic / tool use",
+    "long context, on hardware that serves the vendor's fp8 weights"
+   ],
+   "avoid_for": [
+    "a local llama.cpp box -- no build reads its architecture",
+    "anything that needs a measured answer"
+   ],
+   "notes": "carried so the roster notices when llama.cpp support arrives. the only gguf is one third-party mixed quant built for ds4-dfm-rs, a rust cuda engine whose card reports it serving the model natively on a dgx spark; no llama.cpp pull request or issue names it. its benchmark figures are charts on the card, run through the vendor's own harness against other vendors' published numbers, and no board this repo collects has scored it.",
+   "confidence": "low",
+   "evidence": [
+    "kind text, text -> text",
+    "card: 309b moe, 15.5b active, 1m native context, 39 sliding-window and 9 sparse-attention layers",
+    "gguf header declares naive_n05_flash, which mainline llama.cpp does not carry",
+    "gguf card: ds4-dfm-rs serves it natively from revision 6966dd80"
+   ],
+   "assessed_on": "2026-11-11"
   },
   "Zyphra/Zonos-v0.1-transformer": {
    "one_liner": "the highest sample rate in this roster at 44.1khz, decoding through a separate DAC codec.",
