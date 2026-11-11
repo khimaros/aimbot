@@ -372,13 +372,15 @@ def attention(text):
     # always in the direction that says a model will not fit.
     #
     # two spellings: most declare `kv_lora_rank`, deepseek writes the latent
-    # width as `head_dim` with a single kv head. `qk_rope_head_dim` is what
-    # says the cache is split that way at all, so it gates both.
-    rope_dim = text.get("qk_rope_head_dim")
+    # width as `head_dim` with a single kv head, which only `qk_rope_head_dim`
+    # tells apart from plain attention. the rope part rides on top where there
+    # is one; glm-5.3-flash declares 0, and gating the latent on it costed that
+    # model's cache as 64 full heads, 16x over
+    rope_dim = text.get("qk_rope_head_dim") or 0
     latent = text.get("kv_lora_rank")
     if latent is None and rope_dim and heads == 1:
         latent = dim
-    if latent and rope_dim:
+    if latent:
         out["latent"] = latent + rope_dim
     return {k: v for k, v in out.items() if v is not None}
 

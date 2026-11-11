@@ -222,17 +222,21 @@ const BPW_DISAGREE = 0.25;
 const rungBpw = c => c.realBpw && c.bpw
   && Math.abs(c.realBpw - c.bpw) / c.bpw > BPW_DISAGREE ? c.realBpw : c.bpw;
 
-// best first, on that number. two rungs worth the same bits are separated by
+// best first, on what the discount says each rung KEEPS, and then on bits. the
+// two agree while every rung is read on one curve; once a publisher's own sweep
+// answers for its rungs and the fit for everybody else's they part, and ranking
+// on bits picked agentionai's AP-Q5_K_M of qwen3.8 flash next over unsloth rungs
+// its own ladder scored higher. two rungs worth the same are separated by
 // whether the build can draft -- equal quality and half the tokens per second
 // is not a tie -- then by the smaller download, then by repo so that the order
 // does not depend on which publisher's listing the size table happened to read
 // first. a rung with no bits figure at all -- a repo with no tensor table and no
-// parameter count -- ranks last rather than inventing a position. ranked on the
-// bits the retention curve is read at, so a rung whose lookup rows are cheap is
-// not ranked above one the discount then scores higher
+// parameter count -- ranks last rather than inventing a position. a natively
+// low-bpw model pays no discount, so bits alone rank it
 const byQuality = (list, m) => {
   const bits = c => (rungBpw(c) ? retentionBpw(m, c) : null) ?? -1;
-  return [...list].sort((a, b) => (bits(b) - bits(a))
+  const kept = c => m.native_low_bpw || !rungBpw(c) ? 0 : retention(retentionBpw(m, c), m, c);
+  return [...list].sort((a, b) => (kept(b) - kept(a)) || (bits(b) - bits(a))
   || ((a.speculative === false ? 1 : 0) - (b.speculative === false ? 1 : 0))
   || ((a.gib ?? Infinity) - (b.gib ?? Infinity))
   || String(a.repo).localeCompare(String(b.repo))
@@ -611,46 +615,68 @@ function ppTps(m) {
   return flops && a !== undefined ? flops * 1e12 * FLOPS_EFFICIENCY / (2 * a * 1e9) : null;
 }
 
-// the curve for THIS model: its own measurement if somebody ran one ON THE RUNG
-// ASKED ABOUT -- the one scored, unless a caller names another -- the median of
-// the measured curves once enough models have one, and build-tables' fitted
-// curve otherwise. which one answered is never hidden.
+// the curve for ONE RUNG -- the one scored, unless a caller names another: the
+// sweep of that rung's own repo where the curves file marks one `discounts`, the
+// median of the measured curves once enough models have one, and build-tables'
+// fitted curve otherwise. which one answered is never hidden.
 //
 // a sweep measures FILES, not a model. ISTA's card scores its own GSQ-RCO rungs
 // of qwen3.8 27b and unsloth's UD rungs over the same three benchmarks and they
 // differ by more than eight points of task average at 2.5 bpw, so lending one
-// family's curve to the other's rung would report a number nobody measured.
+// family's curve to another's rung would report a number nobody measured. a
+// rung out of another repo stays on the fit, so a model can be read on two
+// curves at once, and two rungs on different curves can rank fewer bits higher;
+// the page names the curve of every rung so that reads as two measurements.
 //
-// and it answers for a MODEL, not for one rung at a time. a sweep is a curve of
-// the files it ran against the publisher's own base, and two sweeps of one model
-// are not one scale: ISTA's GSQ-RCO sweep of qwen3.8 flash next reads 0.994 kept
-// at 3.37 bpw where the fit reads 0.955 there and 0.982 at 5.37, so a ladder
-// discounting one rung by each answers `fewer bits is better` -- in the quality
-// column, against the pick the fit makes on bits, on the same screen. qwen3.8
-// 27b carries three sweeps from three quantizers and publishes rungs from all
-// three, so nothing measured on any of them can rank the others: the common curve
-// is what they share, and it is the scale the rest of the roster is on anyway.
-// the sweep is not thrown away -- the quantization tab still prints every one of
-// them, with whose files and what metric.
-const speaksFor = (m, c) => quantChoices(m)
-  .every(rung => !c.quant_repo || rung.repo === c.quant_repo);
+// `discounts` is an allowlist because most sweeps here are not the publisher
+// measuring the files on offer: ISTA's three-benchmark table and byteshape's
+// suite are shown on the quantization tab and multiply nothing. and a sweep
+// stops answering for a rung its publisher has since replaced, which the
+// curve's `ref.superseded` lists.
+const answers = (c, q) => !!(c.discounts && q && c.quant_repo === q.repo
+  && !((c.ref || {}).superseded || []).includes(q.quant));
+
+// the fitted curve for this model's size, which build-viewer computes with the
+// same function as MODELS.md; a model of no published size reads the middle one
+const fitOf = m => m.fit_curve || D.retention.fitted.points;
 
 function curveFor(m, q = activeQuant(m)) {
   const r = D.retention;
-  const own = (r.measured || {})[m.repo] || [];
-  const mine = own.find(c => q && c.quant_repo === q.repo && speaksFor(m, c))
-    || own.find(c => !c.quant_repo && speaksFor(m, c));
-  if (mine) return {points: mine.points, kind: 'measured', src: mine};
+  const mine = ((r.measured || {})[m.repo] || []).find(c => answers(c, q));
+  if (mine) return {points: monotone(mine.points), kind: 'measured', src: mine, fit: fitOf(m)};
   if (r.median && r.median.points) return {points: r.median.points, kind: 'median', src: r.median};
-  return {points: r.fitted.points, kind: 'fitted', src: r.fitted};
+  return {points: fitOf(m), kind: 'fitted', src: r.fitted};
 }
 
-// the sweeps a model carries that the discount did NOT use, which the reader of
-// the quantization tab is going to ask about -- they are on the page three rows
-// below the line that says which curve answered. nothing to explain when a
-// measurement did answer.
-const unusedSweeps = (m, c) => c.kind === 'measured' ? []
-  : ((D.retention.measured || {})[m.repo] || []);
+// a sweep's dips between neighbouring rungs sit inside its own error bars --
+// unsloth's 27b panel reads UD-Q4_K_M under UD-Q3_K_XL -- and a discount that
+// followed them would tell a reader to download fewer bits. so a measured curve
+// is read through its least-squares monotone fit, pooling adjacent violators,
+// and the published points are left as published
+const monotoneOf = new WeakMap();
+function monotone(pts) {
+  if (!monotoneOf.has(pts)) {
+    const blocks = [];
+    pts.forEach(([x, y]) => {
+      blocks.push({xs: [x], sum: y, n: 1});
+      while (blocks.length > 1
+             && blocks.at(-2).sum / blocks.at(-2).n > blocks.at(-1).sum / blocks.at(-1).n) {
+        const b = blocks.pop(), a = blocks.at(-1);
+        a.xs.push(...b.xs);
+        a.sum += b.sum;
+        a.n += b.n;
+      }
+    });
+    monotoneOf.set(pts, blocks.flatMap(b => b.xs.map(x => [x, b.sum / b.n])));
+  }
+  return monotoneOf.get(pts);
+}
+
+// the sweeps a model carries that did NOT answer for this rung, which the reader
+// of the quantization tab is going to ask about -- they are on the page below the
+// line that says which curve answered
+const unusedSweeps = (m, c) => ((D.retention.measured || {})[m.repo] || [])
+  .filter(s => s !== c.src);
 
 function interpolate(c, bpw) {
   if (bpw <= c[0][0]) return c[0][1];
@@ -667,9 +693,12 @@ function interpolate(c, bpw) {
 // for a two-bit quant where the fit says 0.82 -- a measurement of one model
 // making its thin quants look BETTER than the general case, purely because
 // nobody ran that arm. below its own range a measured curve therefore defers to
-// the fitted one, which is the wider evidence rather than the narrower silence.
+// the fitted one, which is the wider evidence rather than the narrower silence --
+// capped at what the sweep's lowest arm kept, since the fit for a model's size
+// can read higher than its own measurement (0.72 at 2.08 bpw for qwen3.8 27b,
+// whose sweep kept 0.655 at 2.2) and fewer bits never keep more
 const readCurve = (c, bpw) => c.kind === 'measured' && bpw < c.points[0][0]
-  ? interpolate(D.retention.fitted.points, bpw) : interpolate(c.points, bpw);
+  ? Math.min(interpolate(c.fit, bpw), c.points[0][1]) : interpolate(c.points, bpw);
 const retention = (bpw, m, q = activeQuant(m)) => readCurve(curveFor(m, q), bpw);
 
 // the bits a curve is read at. the fitted curve was drawn over models whose

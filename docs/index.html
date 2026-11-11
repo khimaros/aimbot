@@ -297,7 +297,7 @@ footer { margin-top: 1.5rem; color: var(--faint); font-size: 11px; line-height: 
     <span class="lbl">ranking</span>
     <select id="preset" data-help="a named set of weights. `balanced` is the one this page and MODELS.md both open on; the others reweight toward one question. changing any weight yourself moves this to `custom ranking`"></select>
     <button id="factors-btn" aria-pressed="false" data-help="build your own weighting: one slider per measurement, grouped by what measured it. the ranking resorts as you drag, and a model missing a factor is scored as typical on it rather than zero or exempt">custom ranking</button>
-    <button id="eff-btn" aria-pressed="true" data-help="off, the scores are what the source published. on, they answer `what would i get from the quant i can actually run`: a benchmark scores the model at the precision the scorer served, so the score is multiplied by the retention that quant's bits per weight predict and the percentiles are recomputed against the discounted cohort. only the coding and software-agent benchmarks are discounted, because the one sweep behind the curve measured a code-editing pass rate and nothing else -- every other number is published as-is and says why on hover. the curve itself is fitted to one model, deepseek v3.1 at 671b, and applied to all of them, which is the weakest step on this page. below its lowest measured rung at 2.21 bpw it stops falling and returns that value forever, so a one-bit quant reads as keeping 77.8%; the quality cell says so on hover where that happens, because the only sweep anybody has run that low found a 27b at chance.">quant adjusted</button>
+    <button id="eff-btn" aria-pressed="true" data-help="off, the scores are what the source published. on, they answer `what would i get from the quant i can actually run`: a benchmark scores the model at the precision the scorer served, so the score is multiplied by the retention that quant's bits per weight predict and the percentiles are recomputed against the discounted cohort. only the coding and software-agent benchmarks are discounted, because the sweeps behind the curve measured coding and agentic benchmarks -- every other number is published as-is and says why on hover. the curve depends on model size, fitted to published sweeps of models from 1b to 748b: at 3.1 bpw a model near 8b keeps about 77%, near 32b 90% and from 400b up 96%. where a quantizer marked its own sweep of the files on offer, that sweep answers for its rungs instead. below a curve's lowest point it stops falling and returns that value; the quality cell says so on hover where that happens.">quant adjusted</button>
     <button class="rst" id="reset-ranking" aria-label="reset ranking"></button>
   </div>
   <div class="controls">
@@ -610,17 +610,21 @@ const BPW_DISAGREE = 0.25;
 const rungBpw = c => c.realBpw && c.bpw
   && Math.abs(c.realBpw - c.bpw) / c.bpw > BPW_DISAGREE ? c.realBpw : c.bpw;
 
-// best first, on that number. two rungs worth the same bits are separated by
+// best first, on what the discount says each rung KEEPS, and then on bits. the
+// two agree while every rung is read on one curve; once a publisher's own sweep
+// answers for its rungs and the fit for everybody else's they part, and ranking
+// on bits picked agentionai's AP-Q5_K_M of qwen3.8 flash next over unsloth rungs
+// its own ladder scored higher. two rungs worth the same are separated by
 // whether the build can draft -- equal quality and half the tokens per second
 // is not a tie -- then by the smaller download, then by repo so that the order
 // does not depend on which publisher's listing the size table happened to read
 // first. a rung with no bits figure at all -- a repo with no tensor table and no
-// parameter count -- ranks last rather than inventing a position. ranked on the
-// bits the retention curve is read at, so a rung whose lookup rows are cheap is
-// not ranked above one the discount then scores higher
+// parameter count -- ranks last rather than inventing a position. a natively
+// low-bpw model pays no discount, so bits alone rank it
 const byQuality = (list, m) => {
   const bits = c => (rungBpw(c) ? retentionBpw(m, c) : null) ?? -1;
-  return [...list].sort((a, b) => (bits(b) - bits(a))
+  const kept = c => m.native_low_bpw || !rungBpw(c) ? 0 : retention(retentionBpw(m, c), m, c);
+  return [...list].sort((a, b) => (kept(b) - kept(a)) || (bits(b) - bits(a))
   || ((a.speculative === false ? 1 : 0) - (b.speculative === false ? 1 : 0))
   || ((a.gib ?? Infinity) - (b.gib ?? Infinity))
   || String(a.repo).localeCompare(String(b.repo))
@@ -999,46 +1003,68 @@ function ppTps(m) {
   return flops && a !== undefined ? flops * 1e12 * FLOPS_EFFICIENCY / (2 * a * 1e9) : null;
 }
 
-// the curve for THIS model: its own measurement if somebody ran one ON THE RUNG
-// ASKED ABOUT -- the one scored, unless a caller names another -- the median of
-// the measured curves once enough models have one, and build-tables' fitted
-// curve otherwise. which one answered is never hidden.
+// the curve for ONE RUNG -- the one scored, unless a caller names another: the
+// sweep of that rung's own repo where the curves file marks one `discounts`, the
+// median of the measured curves once enough models have one, and build-tables'
+// fitted curve otherwise. which one answered is never hidden.
 //
 // a sweep measures FILES, not a model. ISTA's card scores its own GSQ-RCO rungs
 // of qwen3.8 27b and unsloth's UD rungs over the same three benchmarks and they
 // differ by more than eight points of task average at 2.5 bpw, so lending one
-// family's curve to the other's rung would report a number nobody measured.
+// family's curve to another's rung would report a number nobody measured. a
+// rung out of another repo stays on the fit, so a model can be read on two
+// curves at once, and two rungs on different curves can rank fewer bits higher;
+// the page names the curve of every rung so that reads as two measurements.
 //
-// and it answers for a MODEL, not for one rung at a time. a sweep is a curve of
-// the files it ran against the publisher's own base, and two sweeps of one model
-// are not one scale: ISTA's GSQ-RCO sweep of qwen3.8 flash next reads 0.994 kept
-// at 3.37 bpw where the fit reads 0.955 there and 0.982 at 5.37, so a ladder
-// discounting one rung by each answers `fewer bits is better` -- in the quality
-// column, against the pick the fit makes on bits, on the same screen. qwen3.8
-// 27b carries three sweeps from three quantizers and publishes rungs from all
-// three, so nothing measured on any of them can rank the others: the common curve
-// is what they share, and it is the scale the rest of the roster is on anyway.
-// the sweep is not thrown away -- the quantization tab still prints every one of
-// them, with whose files and what metric.
-const speaksFor = (m, c) => quantChoices(m)
-  .every(rung => !c.quant_repo || rung.repo === c.quant_repo);
+// `discounts` is an allowlist because most sweeps here are not the publisher
+// measuring the files on offer: ISTA's three-benchmark table and byteshape's
+// suite are shown on the quantization tab and multiply nothing. and a sweep
+// stops answering for a rung its publisher has since replaced, which the
+// curve's `ref.superseded` lists.
+const answers = (c, q) => !!(c.discounts && q && c.quant_repo === q.repo
+  && !((c.ref || {}).superseded || []).includes(q.quant));
+
+// the fitted curve for this model's size, which build-viewer computes with the
+// same function as MODELS.md; a model of no published size reads the middle one
+const fitOf = m => m.fit_curve || D.retention.fitted.points;
 
 function curveFor(m, q = activeQuant(m)) {
   const r = D.retention;
-  const own = (r.measured || {})[m.repo] || [];
-  const mine = own.find(c => q && c.quant_repo === q.repo && speaksFor(m, c))
-    || own.find(c => !c.quant_repo && speaksFor(m, c));
-  if (mine) return {points: mine.points, kind: 'measured', src: mine};
+  const mine = ((r.measured || {})[m.repo] || []).find(c => answers(c, q));
+  if (mine) return {points: monotone(mine.points), kind: 'measured', src: mine, fit: fitOf(m)};
   if (r.median && r.median.points) return {points: r.median.points, kind: 'median', src: r.median};
-  return {points: r.fitted.points, kind: 'fitted', src: r.fitted};
+  return {points: fitOf(m), kind: 'fitted', src: r.fitted};
 }
 
-// the sweeps a model carries that the discount did NOT use, which the reader of
-// the quantization tab is going to ask about -- they are on the page three rows
-// below the line that says which curve answered. nothing to explain when a
-// measurement did answer.
-const unusedSweeps = (m, c) => c.kind === 'measured' ? []
-  : ((D.retention.measured || {})[m.repo] || []);
+// a sweep's dips between neighbouring rungs sit inside its own error bars --
+// unsloth's 27b panel reads UD-Q4_K_M under UD-Q3_K_XL -- and a discount that
+// followed them would tell a reader to download fewer bits. so a measured curve
+// is read through its least-squares monotone fit, pooling adjacent violators,
+// and the published points are left as published
+const monotoneOf = new WeakMap();
+function monotone(pts) {
+  if (!monotoneOf.has(pts)) {
+    const blocks = [];
+    pts.forEach(([x, y]) => {
+      blocks.push({xs: [x], sum: y, n: 1});
+      while (blocks.length > 1
+             && blocks.at(-2).sum / blocks.at(-2).n > blocks.at(-1).sum / blocks.at(-1).n) {
+        const b = blocks.pop(), a = blocks.at(-1);
+        a.xs.push(...b.xs);
+        a.sum += b.sum;
+        a.n += b.n;
+      }
+    });
+    monotoneOf.set(pts, blocks.flatMap(b => b.xs.map(x => [x, b.sum / b.n])));
+  }
+  return monotoneOf.get(pts);
+}
+
+// the sweeps a model carries that did NOT answer for this rung, which the reader
+// of the quantization tab is going to ask about -- they are on the page below the
+// line that says which curve answered
+const unusedSweeps = (m, c) => ((D.retention.measured || {})[m.repo] || [])
+  .filter(s => s !== c.src);
 
 function interpolate(c, bpw) {
   if (bpw <= c[0][0]) return c[0][1];
@@ -1055,9 +1081,12 @@ function interpolate(c, bpw) {
 // for a two-bit quant where the fit says 0.82 -- a measurement of one model
 // making its thin quants look BETTER than the general case, purely because
 // nobody ran that arm. below its own range a measured curve therefore defers to
-// the fitted one, which is the wider evidence rather than the narrower silence.
+// the fitted one, which is the wider evidence rather than the narrower silence --
+// capped at what the sweep's lowest arm kept, since the fit for a model's size
+// can read higher than its own measurement (0.72 at 2.08 bpw for qwen3.8 27b,
+// whose sweep kept 0.655 at 2.2) and fewer bits never keep more
 const readCurve = (c, bpw) => c.kind === 'measured' && bpw < c.points[0][0]
-  ? interpolate(D.retention.fitted.points, bpw) : interpolate(c.points, bpw);
+  ? Math.min(interpolate(c.fit, bpw), c.points[0][1]) : interpolate(c.points, bpw);
 const retention = (bpw, m, q = activeQuant(m)) => readCurve(curveFor(m, q), bpw);
 
 // the bits a curve is read at. the fitted curve was drawn over models whose
@@ -2689,28 +2718,34 @@ function methodology() {
     + ' roster runs a gguf of it, so `quant adjusted` multiplies the score by the'
     + ' retention the quant\'s bits per weight predict, then recomputes the'
     + ' percentiles against the discounted cohort.</p>'
-    + `<p>the curve is ONE sweep: unsloth ran deepseek v3.1 at eight quants on`
-    + ' aider polyglot -- 71.6 at bf16 down to 55.7 at one bit -- and published'
-    + ' the pass rates. that is evidence about a model writing and editing code,'
-    + ' so it is applied to the coding and software-agent benchmarks and to'
-    + ` nothing else. ${(D.retention.scaled || []).length} of`
+    + '<p>the curve is fitted to every published sweep of coding and agentic'
+    + ' benchmarks this repo could find -- unsloth\'s own, 25 papers, and the gguf'
+    + ' ecosystem\'s (aider, quesma, byteshape, ISTA, turboderp and others) --'
+    + ' weight-only quants against a base run in the same harness, with each model'
+    + ' counted once per bit range. that is evidence about a model writing code and'
+    + ' acting as an agent, so it is applied to the coding and software-agent'
+    + ` benchmarks and to nothing else. ${(D.retention.scaled || []).length} of`
     + ` ${Object.keys(D.facet_meta).length} facets are discounted; the rest keep`
     + ' their published number and say why on hover. that is the same rule as'
     + ' never scoring a missing measurement as a zero -- an unmeasured effect is'
     + ' not no effect, and inventing the correction is worse than admitting it'
     + ' is unknown.</p>'
-    + '<p>two things about the curve are worth holding against it. it was fitted'
-    + ' to a 671b model and is applied unchanged to a 27b one, and quantization'
-    + ' damage is widely reported to scale with how little redundancy a model'
-    + ' has -- so the low rungs read optimistic for small models, and the two'
-    + ' published sweeps this repo does hold are also of large models (127b and'
-    + ' 250b). and it is nearly flat above q4: 0.974 at 4.72 bpw, 0.987 at 5.77.'
-    + ' both proxy sweeps agree on that shape -- solar open2\'s perplexity moves'
-    + ' 0.9% from 6.57 to 4.35 bpw and then 87% by 1.93 -- so the flatness is'
-    + ' corroborated even where the depth is not.</p>'
+    + '<p>size is the largest effect in that evidence, so there is one curve per'
+    + ' size and each model reads a blend of the two either side of it, on log'
+    + ' parameters. at 3.1 bits per weight a model near 8b keeps about 0.77 of its'
+    + ' coding score, near 32b 0.90 and from 400b up 0.96; at 2 bits 0.61, 0.72 and'
+    + ' 0.85. above 4.5 bits every size keeps 0.97 or more. the quantization tab'
+    + ' draws the curve a model is read on, and names the size it was blended'
+    + ' for.</p>'
+    + '<p>what to hold against it: under two bits there is one benchmark arm for'
+    + ' the smaller sizes, quesma\'s qwen3.8 27b at chance on gpqa, so 0.28 there is'
+    + ' an upper bound, and the large curve\'s low end rests on four models that'
+    + ' disagree -- deepseek r1 and v3.1 keep 0.7 to 0.78 where deepseek v4.1 flash'
+    + ' keeps 0.93. a model\'s own fragility can outweigh its size: minimax m2.5'
+    + ' keeps 0.92 at four bits on a mixed suite.</p>'
     + '<p>models with natively low-bpw weights are exempt: they are not paying a'
     + ' quantization penalty for being small.</p>',
-    'the curve: ' + src('research/build-tables CURVE', 'research/build-tables')
+    'the curves: ' + src('research/build-tables CURVES', 'research/build-tables')
     + ' &middot; the classification: '
     + src('scripts/build-viewer QUANT_EVIDENCE', 'scripts/build-viewer'))
 
@@ -3491,11 +3526,12 @@ function typeChips(types) {
 // of quantization damage that exists for these models at all.
 // which curve answered and where it came from, in the one wording the operate
 // block, the quality tab and the chart all use
-const curveLabel = c => c.kind === 'measured'
+const curveLabel = (c, m) => c.kind === 'measured'
   ? `<b>measured on these files</b> &middot; ${esc(c.src.metric)}`
     + ` &middot; ${esc(c.src.quant_repo || '')}`
   : c.kind === 'median' ? 'the median of every measured sweep'
-  : `fitted &middot; ${esc(c.src.source || '')}`;
+  : `fitted for ${m.facts.params_total_b ? num(m.facts.params_total_b, 1) + 'b parameters'
+      : 'a model of no published size, the 32b curve'} &middot; ${esc(c.src.source || '')}`;
 const curveRef = c => c.kind === 'measured' && c.src.ref ? refMark(c.src.ref)
   : refMark({source: c.kind + ' retention curve', file: c.src.file,
              url: D.repo_url + '/blob/' + D.branch + '/' + c.src.file, note: c.src.source});
@@ -3514,18 +3550,30 @@ const CURVE_TICKS = [1, 2, 4, 8, 16];
 // the curve the discount reads, drawn the way `retention` reads it, with a dot
 // on every rung the model publishes. below the lowest bits the curve measured
 // the line is dashed, because there it holds a value rather than predicting one
-function curveChart(m, c, rungs) {
+const curveInk = c => c.kind === 'measured' ? 'var(--live)' : 'var(--dim)';
+const curveFloor = c => (c.kind === 'measured' ? c.fit : c.points)[0][0];
+
+// one line per curve the model's rungs are read on: a publisher's own sweep for
+// its rungs, the fit for everybody else's
+function curveChart(m, groups) {
   const B = CURVE_BOX, lo = CURVE_TICKS[0], hi = CURVE_TICKS.at(-1);
   const X = b => B.l + Math.log2(Math.min(Math.max(b, lo), hi) / lo)
     / Math.log2(hi / lo) * (B.w - B.l - B.r);
   const Y = v => B.t + (1 - v) * (B.h - B.t - B.b);
-  const floor = (c.kind === 'measured' ? D.retention.fitted : c).points[0][0];
-  const xs = [...new Set([lo, floor, hi, ...c.points.map(p => p[0]),
-    ...(c.kind === 'measured' ? D.retention.fitted.points.map(p => p[0]) : [])])]
-    .filter(b => b >= lo && b <= hi).sort((a, b) => a - b);
-  const path = bs => bs.map((b, i) => `${i ? 'L' : 'M'}${X(b).toFixed(1)},`
-    + Y(readCurve(c, b)).toFixed(1)).join('');
-  const ink = c.kind === 'measured' ? 'var(--live)' : 'var(--dim)';
+  const line = c => {
+    const floor = curveFloor(c);
+    const xs = [...new Set([lo, floor, hi, ...c.points.map(p => p[0]),
+      ...(c.kind === 'measured' ? c.fit.map(p => p[0]) : [])])]
+      .filter(b => b >= lo && b <= hi).sort((a, b) => a - b);
+    const path = bs => bs.map((b, i) => `${i ? 'L' : 'M'}${X(b).toFixed(1)},`
+      + Y(readCurve(c, b)).toFixed(1)).join('');
+    return `<path d="${path(xs.filter(b => b <= floor))}" fill="none" stroke="${curveInk(c)}"`
+      + ' stroke-width="2" stroke-dasharray="4 4"/>'
+      + `<path d="${path(xs.filter(b => b >= floor))}" fill="none" stroke="${curveInk(c)}"`
+      + ' stroke-width="2"/>';
+  };
+  const inkOf = q => curveInk(curveFor(m, q));
+  const rungs = groups.flatMap(g => g.rungs);
   const scored = activeQuant(m);
   const isScored = q => scored && q.repo === scored.repo && q.quant === scored.quant;
   const grid = [0, 0.25, 0.5, 0.75, 1].map(v =>
@@ -3537,7 +3585,7 @@ function curveChart(m, c, rungs) {
   const dots = rungs.map(q => {
     const v = keeps(m, q), at = retentionBpw(m, q);
     return `<circle class="rung" cx="${X(at).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="${
-      isScored(q) ? 5 : 4}" fill="${isScored(q) ? 'var(--fg)' : ink}" stroke="var(--panel)"`
+      isScored(q) ? 5 : 4}" fill="${isScored(q) ? 'var(--fg)' : inkOf(q)}" stroke="var(--panel)"`
       + ` stroke-width="2" data-help="${esc(q.quant)} at ${num(at, 2)} bpw keeps`
       + ` ${num(v * 100, 1)}%, out of ${esc(q.repo)}${isScored(q)
         ? '. the rung the table ranks' : ''}"/>`;
@@ -3551,10 +3599,7 @@ function curveChart(m, c, rungs) {
       + ` ${num(keeps(m, scored) * 100, 1)}%</text>` : '';
   return `<svg class="curve" viewBox="0 0 ${B.w} ${B.h}" width="${B.w}" height="${B.h}"`
     + ` role="img" aria-label="retention against bits per weight" font-size="11"`
-    + ' fill="var(--faint)">' + grid
-    + `<path d="${path(xs.filter(b => b <= floor))}" fill="none" stroke="${ink}"`
-    + ' stroke-width="2" stroke-dasharray="4 4"/>'
-    + `<path d="${path(xs.filter(b => b >= floor))}" fill="none" stroke="${ink}" stroke-width="2"/>`
+    + ' fill="var(--faint)">' + grid + groups.map(g => line(g.c)).join('')
     + dots + label + '</svg>';
 }
 
@@ -3573,13 +3618,22 @@ function discountCurve(m) {
   if (!rungs.length) {
     return head + '<p class="faint">no rung here has a bit count to read the curve at.</p>';
   }
-  const c = curveFor(m);
-  const floor = (c.kind === 'measured' ? D.retention.fitted : c).points[0][0];
-  return head + curveChart(m, c, rungs)
-    + `<p class="faint">${curveLabel(c)} ${curveRef(c)}. the filled dot is the rung the`
+  const groups = [];
+  rungs.forEach(q => {
+    const c = curveFor(m, q);
+    const g = groups.find(x => x.c.src === c.src);
+    g ? g.rungs.push(q) : groups.push({c, rungs: [q]});
+  });
+  // the legend: which line is which, in the line's own ink beside words in text ink
+  const legend = groups.map(({c, rungs: rs}) =>
+    `<span style="color:${curveInk(c)}">&#9644;</span> ${curveLabel(c, m)} ${curveRef(c)}`
+    + ` <span class="dim">(${rs.length} rung${rs.length > 1 ? 's' : ''}, nothing measured`
+    + ` under ${num(curveFloor(c), 2)} bpw)</span>`).join('<br>');
+  return head + curveChart(m, groups)
+    + `<p class="faint">${legend}</p><p class="faint">the filled dot is the rung the`
     + ` table ranks, and the keeps column in each ladder below is the same number.`
-    + ` below ${num(floor, 2)} bpw nothing was measured, so the dashed line holds the`
-    + ' last value it knew rather than predicting one. the discount multiplies only'
+    + ' a dashed line holds the last value its curve knew rather than predicting one,'
+    + ' and a sweep is read through its monotone fit. the discount multiplies only'
     + ` the coding and software-agent scores, and only while <b>quant adjusted</b>`
     + ' is on.</p>';
 }
@@ -3617,16 +3671,14 @@ function discountBlock(m, q) {
         : `the table ranks ${esc(scored.quant)}`
           + (scored.repo !== q.repo ? ` out of ${esc(scored.repo)}` : '')
           + ', the best that fits your budget') + '</span>']);
-  // a sweep listed below this line that the discount refused to use needs its
-  // reason on the same row: the rungs being ranked come from more publishers
-  // than any one sweep ran files of, so no measured curve on the model can rank
-  // another publisher's rung without inventing the number
+  // a sweep listed on the quantization tab that the discount did not use needs
+  // its reason on the same row, or it reads as ignored evidence
   const unused = unusedSweeps(m, c);
-  rows.push(['curve', curveLabel(c)
-    + (unused.length ? ` <span class="dim">-- and not the ${unused.length} sweep${
-      unused.length > 1 ? 's' : ''} this model carries below, because each ran one
-       publisher's files against its own base and this ladder ranks rungs from
-       more publishers than that</span>` : '')]);
+  rows.push(['curve', curveLabel(c, m)
+    + (unused.length ? ` <span class="dim">-- and not the ${unused.length} other sweep${
+      unused.length > 1 ? 's' : ''} this model carries on the quantization tab: a sweep
+       answers only for its own repo's files, only where it is marked to discount, and
+       not for a file its publisher has since replaced</span>` : '')]);
   if (c.kind === 'measured' && c.src.ref) rows.push(['source', refMark(c.src.ref)]);
   rows.push(['keeps', m.native_low_bpw ? EXEMPT : !effective
       ? `<span class="dim">nothing, while <b>quant adjusted</b> is off. it would be
@@ -3665,8 +3717,11 @@ const bestFirst = c => c.points
 // share of -- retention is already a share of bf16, a proxy metric is scaled
 // against the worst rung of its own sweep -- and the source cell spans the
 // table off the first row DRAWN, so it is emitted inside the sorted map.
+// a rung its publisher re-uploaded after the sweep ran is still a row, since the
+// number is what was published, and says the file it measured is gone
 const sweepRows = (c, width, text) => bestFirst(c).map(([quant, bpw, v], i) =>
-  `<tr><td>${esc(quant)}</td><td class="n dim">${num(bpw, 2)}</td>`
+  `<tr><td>${esc(quant)}${((c.ref || {}).superseded || []).includes(quant)
+    ? ' <span class="warn">replaced since</span>' : ''}</td><td class="n dim">${num(bpw, 2)}</td>`
   + `<td class="n"><span class="bar" style="--w:${Math.round(width(v))}%">`
   + `<span>${text(v)}</span></span></td>`
   + (i ? '' : `<td rowspan="${c.points.length}">${refMark(c.ref)}</td>`)

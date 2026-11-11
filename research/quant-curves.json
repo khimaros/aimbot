@@ -212,6 +212,68 @@
    {
     "kind": "score",
     "hand_written": true,
+    "discounts": true,
+    "quant_repo": "unsloth/Qwen3.8-27B-GGUF",
+    "metric": "average coding recovery over livecodebench v6, terminal bench 2.1 and deepswe v1.1 against bf16",
+    "points": [
+     [
+      2.2,
+      0.655
+     ],
+     [
+      2.43,
+      0.748
+     ],
+     [
+      2.86,
+      0.873
+     ],
+     [
+      3.47,
+      0.956
+     ],
+     [
+      3.79,
+      0.968
+     ],
+     [
+      4.13,
+      0.949
+     ],
+     [
+      4.77,
+      0.945
+     ],
+     [
+      5.09,
+      0.995
+     ],
+     [
+      16.0,
+      1.0
+     ]
+    ],
+    "quants": [
+     "UD-IQ2_XS",
+     "UD-IQ2_S",
+     "UD-Q2_K_XL",
+     "UD-IQ3_S",
+     "UD-Q3_K_XL",
+     "UD-IQ4_XS",
+     "UD-Q4_K_M",
+     "UD-Q4_K_XL",
+     "BF16"
+    ],
+    "ref": {
+     "source": "unsloth",
+     "url": "https://unsloth.ai/docs/models/qwen3.8",
+     "captured": "2026-11-11",
+     "note": "READ FROM A CHART: the `avg coding recovery` panel of the dynamic v3.1 update of 2026-11-11, the only per-quant numbers the page gives, read to about a third of a point. recovery is each of the three benchmarks' scores over bf16's (88.62 on livecodebench v6, 59.15 on terminal bench 2.1 with mini-swe-agent at 256k, 40.40 on deepswe v1.1 at 256k), averaged, at temperature 1.0, top_p 0.95, top_k 20, preserve_thinking and xhigh effort. it is the publisher's measurement of its own files, and it is the one this file marks `discounts`: the coding and software-agent scores the page multiplies are what it measured. it is not monotonic -- UD-IQ4_XS and UD-Q4_K_M read under UD-Q3_K_XL -- and the agentic panels move more between neighbouring rungs than the coding average does, so the page reads it through its monotone fit and these points stay as published. UD-IQ3_S and UD-Q3_K_XL are the v3 files, which v3.1 left in place; the rest were requantized that day. the same panel runs ISTA's GSQ-RCO rungs and exllama 3, which are not points here because they are other repos' files. bits per weight are the file bytes over 27.78b parameters."
+    }
+   },
+   {
+    "kind": "score",
+    "hand_written": true,
     "quant_repo": "unsloth/Qwen3.8-27B-GGUF",
     "metric": "mean of 14 benchmarks in THINKING mode, six skill categories",
     "points": [
@@ -232,6 +294,9 @@
      "source": "prism-ml/Ternary-Bonsai-2-27B-gguf",
      "url": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf",
      "captured": "2026-09-20",
+     "superseded": [
+      "UD-Q4_K_XL"
+     ],
      "note": "prism benchmarked four builds of Qwen3.8-27B against each other to place their own ternary model, which makes it a sweep of SOMEBODY ELSE'S quants -- the only one here not published by the quantizer. EvalScope + vLLM on an H100, identical decoding and scoring, in thinking mode, 14 benchmarks. FP16 averages 86.32 and UD-Q4_K_XL 85.18, so 0.9868. THE THIRD ARM IS NOT RECORDED AS A POINT: an IQ2_XXS build at 2.8 bpw averaged 72.59, which is 0.8409 and by far the most interesting number here, but the card never says whose IQ2_XXS it is. a retention point whose FILE is unknown cannot be joined to a rung, which is what a point is for. it is kept in prose so the figure is not lost. that arm is also the sharpest published statement of how low-bit builds fail: it holds 88.93 on mmlu-redux while falling to 57.5 on aime26 and 56.4 on livecodebench, so a casual test reads fine and a reasoning chain does not. this sweep is the evidence behind the `native_low_bpw` exemption -- at a LOWER 1.72 bpw the natively-ternary bonsai 2 holds 0.982, against 0.841 for a conventional build at 2.8, which is the difference between weights trained to ternary and weights reduced to it"
     }
    },
@@ -302,6 +367,10 @@
      "source": "quesma",
      "url": "https://quesma.com/blog/qwen38-27b-quantizations-benchmarked/",
      "captured": "2026-09-08",
+     "superseded": [
+      "UD-Q2_K_XL",
+      "Q4_K_M"
+     ],
      "note": "READ FROM A CHART. the article publishes its results as graphs and prose and prints no score for any arm, so these retentions are the midpoints of what it states verbally -- bf16 and Q4_K_M both at about 78% pass, UD-Q2_K_XL at about 70-71%. the FILE SIZES it prints are exact (55 / 17 / 10.7 GB against bf16) and the bits per weight are derived from them. treat the shape as measured and the third decimal as decoration. the same sweep ran GPQA diamond across five arms including UD-IQ1_S at 1.80 bpw, where it collapsed to roughly random guessing -- the only BENCHMARK anybody has published below two bits, and it is NOT in these points, because mixing two benchmarks in one curve is the thing this file's schema forbids. it bounds what the curve below 3.11 bpw can claim rather than filling it in. byteshape has since published kl divergence over the same repo's ladder down to 1.78 bpw, which is the proxy entry below: a different measure, agreeing on the direction."
     }
    },
@@ -484,6 +553,20 @@
      "source": "byteshape",
      "url": "https://byteshape.com/blogs/Qwen3.8-27B/",
      "captured": "2026-09-18",
+     "superseded": [
+      "UD-IQ2_XXS",
+      "UD-IQ2_S",
+      "UD-Q2_K_XL",
+      "UD-IQ4_XS",
+      "UD-Q4_K_M",
+      "UD-Q4_K_XL",
+      "UD-Q5_K_S",
+      "UD-Q5_K_M",
+      "UD-Q5_K_XL",
+      "UD-Q6_K",
+      "UD-Q6_K_M",
+      "UD-Q6_K_L"
+     ],
      "note": "MEASURED BY A COMPETITOR RATHER THAN THE PUBLISHER, which is unusual here and is why the repo it measures is named rather than assumed: every other proxy in this file is a card reporting its own work. twenty-four rungs of unsloth's ladder, and the only evidence anybody has published below two bits for this model other than quesma's GPQA arm -- UD-IQ1_S at 1.78 bpw diverges 0.39, which is 600x the Q8_0 rung and 77x its own UD-Q4_K_XL. the two rungs that are not UD are where the ladder stops being monotonic: Q4_0 at 4.62 bpw diverges more than UD-Q4_K_S below it and more than twice UD-Q4_K_M above it, and Q4_1 the same, which is the dynamic allocation doing its job and is visible only because this sweep ran the plain rungs too. a kl divergence is not comparable to another card's and is shown rather than applied, so this discounts nothing."
     }
    }
@@ -532,6 +615,7 @@
    {
     "kind": "score",
     "hand_written": true,
+    "discounts": true,
     "quant_repo": "unsloth/Qwen3.8-Flash-Next-GGUF",
     "metric": "average recovery over 12 benchmarks against bf16, unweighted",
     "points": [

@@ -5014,6 +5014,54 @@ def a_config_with_no_language_model_claims_no_input():
     eq(lm.get("input"), ["text"], "a language model still takes text")
 
 
+@test
+def the_retention_curve_follows_model_size():
+    """one fitted curve per size, blended on log parameters between them.
+
+    the anchors are the pooled coding and agentic evidence at 3.1 bpw: about 0.77
+    kept near 8b, 0.90 near 32b and 0.96 from 400b up. a model of unknown size
+    reads the middle curve, and nothing ever keeps less with more bits.
+    """
+    bt = load_script("build_tables", os.path.join(RESEARCH, "build-tables"))
+    near = lambda a, b, tol, what: eq(abs(a - b) <= tol, True, "%s: got %.3f want %.3f" % (what, a, b))
+    near(bt.retention(3.1, 8), 0.77, 0.03, "8b at 3.1 bpw")
+    near(bt.retention(3.1, 32), 0.90, 0.02, "32b at 3.1 bpw")
+    near(bt.retention(3.1, 671), 0.96, 0.01, "671b at 3.1 bpw")
+    eq(bt.retention(3.1, None), bt.retention(3.1, 32), "unknown size reads the middle curve")
+    mid = bt.retention(3.1, 100)
+    eq(bt.retention(3.1, 32) < mid < bt.retention(3.1, 400), True,
+       "a 100b model reads between its neighbours: %.3f" % mid)
+    for p in (1, 8, 20, 32, 100, 400, 2000):
+        pts = bt.curve_for(p)
+        eq(all(b[1] >= a[1] for a, b in zip(pts, pts[1:])), True,
+           "%sb: more bits never keep less: %r" % (p, pts))
+        eq(pts[-1], (16.0, 1.0), "%sb: bf16 keeps everything" % p)
+
+
+@test
+def a_latent_with_no_rope_part_is_still_a_latent():
+    """glm-5.3-flash declares `kv_lora_rank: 512` and `qk_rope_head_dim: 0`.
+
+    the rope dimension gated the latent, and zero is false, so the cache was
+    costed as 64 full kv heads of 64 dims on each of its 11 sparse-attention
+    layers -- 44 gib at 256k where the latent is 2.75 -- and every unsloth rung
+    read as not fitting a context the 1.83 bpw rung did.
+    """
+    mod = load_script("fetch_model_facts", os.path.join(RESEARCH, "fetch-model-facts"))
+    glm = mod.attention({"num_hidden_layers": 45, "num_key_value_heads": 64,
+                         "num_attention_heads": 64, "hidden_size": 4096,
+                         "kv_lora_rank": 512, "qk_rope_head_dim": 0,
+                         "linear_attn_config": {"full_attn_layers": list(range(3, 45, 4))}})
+    eq(glm.get("latent"), 512, "the latent is cached whatever the rope part: %r" % glm)
+    eq(glm.get("full_layers"), 11, "and only the sparse-attention layers hold it")
+    ds = mod.attention({"num_hidden_layers": 61, "num_key_value_heads": 128,
+                        "head_dim": 128, "kv_lora_rank": 512, "qk_rope_head_dim": 64})
+    eq(ds.get("latent"), 576, "deepseek's rope part still rides on top")
+    plain = mod.attention({"num_hidden_layers": 36, "num_key_value_heads": 8,
+                           "head_dim": 128})
+    eq("latent" in plain, False, "and plain attention has none")
+
+
 AA_DECISION_CAPTURE = {
     "acme_widget-one-4b": {"name": "Widget One 4B", "slug": "acme_widget-one-4b",
                            "indexScore": 70.1},

@@ -823,16 +823,24 @@ def load_script(name, path):
     return mod
 
 
+@functools.lru_cache(maxsize=None)
+def build_tables():
+    """research/build-tables, loaded once: it owns the retention curves."""
+    return load_script("build_tables", os.path.join(ROOT, "research", "build-tables"))
+
+
 def retention_curve():
     """build-tables' quantization retention curve, shipped rather than restated.
 
     A benchmark measures the model at full precision; a local roster runs a
     quant of it. build-tables scales the three artificial analysis indices by
-    the retention this curve predicts for the quant's bits per weight, and the
-    page offers the same view -- from the same numbers, so the two cannot
-    disagree about what `effective` means.
+    the retention its curve predicts for the quant's bits per weight and the
+    model's size, and the page offers the same view -- from the same numbers, so
+    the two cannot disagree about what `effective` means. each model ships its
+    own blended curve as `fit_curve`; this is the middle one, for a model of no
+    published size.
     """
-    mod = load_script("build_tables", os.path.join(ROOT, "research", "build-tables"))
+    mod = build_tables()
     all_curves = {k: [check_curve(k, c) for c in curves_of(v)]
                   for k, v in (load_json_at(CURVES).get("curves") or {}).items()}
     # only a ratio of benchmark scores can be a retention multiplier. a
@@ -844,10 +852,11 @@ def retention_curve():
     median = median_curve(measured)
     return {
         # what a model with no measurement of its own gets, in order
-        "fitted": {"points": mod.CURVE,
-                   "source": "research/build-tables CURVE, fitted to unsloth's "
-                             "aider polyglot sweep of deepseek v3.1, floored at "
-                             "1.80 bpw by quesma's gpqa arm of qwen3.8 27b at chance",
+        "fitted": {"points": [list(p) for p in mod.curve_for(mod.DEFAULT_SIZE)],
+                   "sizes": {str(k): [list(p) for p in v] for k, v in mod.CURVES.items()},
+                   "source": "research/build-tables CURVES, one per model size, fitted to "
+                             "coding and agentic sweeps from unsloth, 25 papers and the gguf "
+                             "ecosystem and blended on log parameters",
                    "file": "research/build-tables"},
         "median": {"points": median, "of": len(measured),
                    "source": "the median of %d measured curves" % len(measured),
@@ -1617,6 +1626,10 @@ def build_model(repo, model, ctx):
         "gufo": gufo,
         "base": base_block(model, card, ctx["registry_keys"]),
         "native_low_bpw": model.get("native_low_bpw"),
+        # the fitted retention curve for this model's size, computed by the
+        # same function MODELS.md's effective columns use, so the page reads it
+        # rather than blending the size curves a second time in javascript
+        "fit_curve": [list(p) for p in build_tables().curve_for(facts.get("params_total_b"))],
         # why this entry is keyed on a gguf repo: nobody published weights for
         # it in any other form. carried so the page and the checks read the
         # same assertion the registry makes

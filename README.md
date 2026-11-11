@@ -1037,13 +1037,25 @@ of it. `quant adjusted` in the ranking row is on by default, since that is the
 number a local roster is actually asking about; release it and the scores are
 exactly what the source published. on, it
 discounts by the retention `research/build-tables` fits for the chosen quant's
-bits per weight. that curve is imported rather than restated, so the page and
-MODELS.md cannot disagree about what effective means. the curve is unsloth's
-aider polyglot sweep of deepseek v3.1 down to 2.21 bpw, and below that one point
-from quesma: qwen3.8 27b at UD-IQ1_S, 1.80 bpw, scored at chance on gpqa, so at
-most 0.28 kept. it changes the answer: at 128 gib k2 horizon 375b's IQ1_S at
-1.79 bpw falls from ninth to fortieth the moment you ask what you would actually
-get, where the old curve credited it 0.778.
+bits per weight AND the model's size. the curves are imported rather than
+restated -- build-viewer ships each model the curve build-tables computes for
+it -- so the page and MODELS.md cannot disagree about what effective means.
+
+they are fitted to every published sweep of coding and agentic benchmarks that a
+search on 2026-11-11 turned up: unsloth's own documentation, 25 papers, and the
+gguf ecosystem (aider, quesma, byteshape, ISTA, turboderp, kaitchup, red hat,
+intel and others), weight-only quants against a base run in the same harness,
+each model counted once per bit range and the result made non-decreasing in
+bits. size is the largest effect in that data: at 3.1 bpw a model near 8b keeps
+about 0.77, near 32b 0.90 and from 400b up 0.96, and at 2 bpw 0.61, 0.72 and
+0.85. so there are three curves and a model reads the blend of the two either
+side of it on log parameters, so a 19b and a 21b model do not read cliffs
+apart; a model of no published size reads the 32b curve. the curve before this
+was one 671b model's aider sweep, applied to every size, and its arms sat a
+quarter to a third of a bit too low: unsloth's UD-IQ1_M of deepseek v3.1 is 206
+gb, 2.46 bpw, where the curve placed it at 2.21. under two bits the two smaller
+curves still stop at quesma's qwen3.8 27b arm, UD-IQ1_S at 1.80 bpw at chance on
+gpqa, so at most 0.28 kept.
 
 three facets sit outside it. sentiment is people talking rather than a score
 and decode speed goes UP when you quantize, so the penalty does not describe
@@ -1178,22 +1190,24 @@ order buries: unsloth's dynamic UD-Q4_K_S diverges less at 4.42 bpw than the
 plain Q4_0 and Q4_1 rungs above it.
 
 a sweep is evidence about the **files it ran**, against the publisher's own base,
-and it is therefore allowed to rank a model only when it ran every rung that
-model publishes. qwen3.8 flash next has one sweep, ISTA's of its own GSQ-RCO
-rungs, and it reads 99.4% kept at 3.37 bpw where the general fit reads 95.5%
-there and 98.2% at 5.37. discounting one rung of that model by the sweep and the
-next by the fit put the 3.37 rung at 82 and the 5.37 one at 80 in the same
-column, above the row the `best quant` pick had landed on for having the most
-bits: the table ranked fewer bits better, and disagreed with itself about which
-rung it was recommending. so one model, one scale -- the measurement where it
-speaks for every publisher, the common curve otherwise, and the panel says which
-answered and why the sweeps listed below it did not. qwen3.8 27b carries three
-sweeps from three quantizers and publishes rungs from all three, which is the
-case the rule is for: on today's captures it means no model on the roster is
-discounted off a measurement, and the measurements become what the quantization
-tab shows you rather than what the score is made of. a test holds the invariant
-two ways -- no ladder ranks fewer bits higher, and the rung the fit picks is the
-one its own ladder scores highest.
+so it answers for the rungs of the repo it ran and for nothing else, and only
+where `research/quant-curves.json` marks it `discounts`. today that is unsloth's
+own sweeps of its qwen3.8 27b and flash next rungs; ISTA's three-benchmark table,
+byteshape's suite and the third-party runs are shown on the quantization tab and
+multiply nothing. a sweep also stops answering for a rung its publisher has
+since re-uploaded, which the curve's `ref.superseded` lists and the tab marks
+`replaced since`. a sweep is read through its least-squares monotone fit, since
+its dips between neighbouring rungs sit inside its own error bars -- unsloth's
+27b panel reads UD-Q4_K_M under UD-Q3_K_XL -- and the published points are kept
+as published.
+
+so one model can be read on two curves, its publisher's sweep for those rungs
+and the fit for everybody else's, and a rung on one can keep more than a rung
+with more bits on the other. the `best quant` pick therefore ranks rungs on what
+the discount says each keeps and on bits only to break a tie; ranked on bits it
+picked agentionai's AP-Q5_K_M of flash next over unsloth rungs that its own
+column scored higher. tests hold both halves: along any one curve more bits never
+keep less, and the rung the fit picks is the one its ladder scores highest.
 
 the discount is shown in three places rather than inferred from a hover. the
 table has a `keeps` column beside `quant`, on by default: the share of the coding
@@ -1202,7 +1216,8 @@ and software-agent scores the curve says the rung that row reads keeps, dim whil
 tab says the same in a line. the quantization tab draws the curve itself, on a
 log axis of bits per weight, the way `retention` reads it -- dashed below the
 lowest bits anything measured, where it holds a value rather than predicting one
--- with a dot for every rung the model publishes, and each repo's ladder carries
+-- with one line per curve the model's rungs are read on and a dot for every
+rung the model publishes, and each repo's ladder carries
 the same number as a `keeps` column. the curve is a fact about the model, so
 picking a rung on operate redraws none of it; the arithmetic for that one rung
 stays on operate.

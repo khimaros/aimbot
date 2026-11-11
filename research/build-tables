@@ -122,19 +122,64 @@ CARD_BIAS = 1.0
 # below from the ranking the page computes.
 THIRD_PARTY = ("eff_scicode", "eff_terminalbench", "gbench", "lmarena", "swerebench")
 
-# retention vs bits-per-weight, fitted to unsloth's aider polyglot sweep of
-# deepseek v3.1 (671b): bf16 71.6 -> 5bit 70.7 -> 4bit 69.7 -> 3bit 68.4 ->
-# 2bit 65.8 -> 1bit 55.7, with size converted to bpw.
+# retention vs bits-per-weight -- the share of a coding or software-agent score a
+# quant keeps -- one curve per model size, fitted 2026-11-11 to the pooled
+# evidence: unsloth's published sweeps, 25 papers and the gguf ecosystem's own
+# (aider, quesma, byteshape, ISTA, turboderp, kaitchup, red hat, intel), coding
+# and agentic benchmarks only, weight-only quants against a same-harness base,
+# each (size, bpw) cell the median over models of each model's median arm and
+# the cells made non-decreasing by pool-adjacent-violators. bits are file bytes
+# over total parameters, with lookup rows left out as the page reads them.
 #
-# below that sweep's last arm the curve used to hold at 0.778, crediting every
-# one-bit rung three quarters of its score. the one benchmark anybody has run
-# under two bits is quesma's gpqa diamond arm of qwen3.8 27b: UD-IQ1_S at 1.80
-# bpw scored at chance, 25% against the 89.2 the card reports, with the smallest
-# file below it. so (1.80, 0.28) is an UPPER bound from a different benchmark --
-# a code pass rate's chance is zero -- and byteshape's kl divergence over the
-# same ladder agrees on the direction, 3.6x worse at 1.78 bpw than at 2.41
-CURVE = [(1.80, 0.28), (2.21, 0.778), (2.92, 0.919), (3.39, 0.955), (4.72, 0.974),
-         (5.77, 0.987), (16.0, 1.0)]
+# size is the largest effect in the data. at 3.1 bpw a model near 8b keeps
+# about 0.77 (15 models), near 32b 0.90 (9) and from 400b up 0.96 (4); at 2 bpw
+# 0.61, 0.72 and 0.85. a curve fitted to one 671b model, which this was until
+# then, credited every small model with a large one's robustness -- and its arms
+# sat a quarter to a third of a bit too low: unsloth's UD-IQ1_M of deepseek v3.1
+# is 206 gb, 2.46 bpw, not 2.21.
+#
+# the floor under two bits is still quesma's gpqa arm of qwen3.8 27b, UD-IQ1_S at
+# 1.80 bpw at chance, so (1.80, 0.28) is an UPPER bound for the two smaller
+# sizes. the large curve's low end is anchored lower than its own cells, which
+# lean on deepseek v4.1 flash and qwen3.8 flash next: deepseek r1 and v3.1 keep
+# 0.69 to 0.78 between 1.6 and 2.5 bpw, and r1's 1.58-bit arm is the 0.70.
+CURVES = {
+    8: [(1.80, 0.28), (2.00, 0.61), (3.10, 0.77), (4.00, 0.955), (4.90, 0.975),
+        (6.00, 0.995), (16.0, 1.0)],
+    32: [(1.80, 0.28), (2.00, 0.72), (2.35, 0.75), (2.70, 0.87), (3.10, 0.90),
+         (3.85, 0.96), (4.85, 0.99), (6.00, 0.995), (16.0, 1.0)],
+    400: [(1.60, 0.70), (2.00, 0.85), (2.50, 0.93), (3.10, 0.96), (3.60, 0.98),
+          (4.80, 0.99), (16.0, 1.0)],
+}
+# what a model whose parameter count nobody published reads
+DEFAULT_SIZE = 32
+
+
+def interp(points, x):
+    """retention at x, clamped to the first point below it and 1.0 above."""
+    if x <= points[0][0]:
+        return points[0][1]
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        if x0 <= x <= x1:
+            return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+    return 1.0
+
+
+def curve_for(params_b):
+    """the curve for a model of this many billion parameters.
+
+    linear in log(parameters) between the two sizes either side, and clamped
+    outside them, so retention moves with size continuously rather than at a
+    boundary. every curve is non-decreasing in bits, so a blend of two is too.
+    """
+    sizes = sorted(CURVES)
+    p = min(max(params_b or DEFAULT_SIZE, sizes[0]), sizes[-1])
+    hi = next(s for s in sizes if s >= p)
+    lo = max(s for s in sizes if s <= p)
+    t = 0.0 if hi == lo else math.log(p / lo) / math.log(hi / lo)
+    grid = sorted({x for s in (lo, hi) for x, _ in CURVES[s]})
+    return [(x, round((1 - t) * interp(CURVES[lo], x) + t * interp(CURVES[hi], x), 4))
+            for x in grid]
 
 # display names and the natively-low-bpw exemption both come from the registry:
 # `name.short` is the one name for a model across this document, the lexicon and
@@ -164,13 +209,8 @@ def by_gguf_repo():
 
 
 
-def retention(bpw):
-    if bpw <= CURVE[0][0]:
-        return CURVE[0][1]
-    for (x0, y0), (x1, y1) in zip(CURVE, CURVE[1:]):
-        if x0 <= bpw <= x1:
-            return y0 + (y1 - y0) * (bpw - x0) / (x1 - x0)
-    return 1.0
+def retention(bpw, params_b=None):
+    return interp(curve_for(params_b), bpw)
 
 
 def optional(path):
@@ -382,7 +422,7 @@ def load(budget=None, picks=None):
                  "terminalbenchV21": None}
         repo, quant, gib = rung["repo"], rung["quant"], rung["gib"]
         bpw = gib * GIB * 8 / (total * 1e9)
-        ret = 1.0 if m.get("native_low_bpw") else retention(bpw)
+        ret = 1.0 if m.get("native_low_bpw") else retention(bpw, total)
         ids = srcs.get(short, {})
         # an unmeasured component stays None so the composite imputes it; scoring
         # it 0 would read as "measured, and bad"
