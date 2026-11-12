@@ -2770,14 +2770,34 @@ test('a missing coding factor is predicted from the model\'s own coding factors'
   const m = model('qwen3.8 flash next');
   const filled = codingFill(m);
   ok(filled.value !== null, 'it has coding factors to predict from');
-  const own = filled.from.map(k => facetPct(m, k));
-  eq(Math.round(filled.value), Math.round((own.reduce((a, p) => a + p, 0) / own.length + 50) / 2),
-    'halfway between its own coding mean and the median');
+  const boards = {};
+  filled.from.forEach(k => (boards[k.split('.')[0]] ||= []).push(facetPct(m, k)));
+  const means = Object.values(boards).map(ps => ps.reduce((a, p) => a + p, 0) / ps.length);
+  eq(Math.round(filled.value), Math.round((means.reduce((a, p) => a + p, 0) / means.length + 50) / 2),
+    'halfway between the mean of its coding boards and the median');
   ok(filled.from.every(k => facetPct(m, k) !== null) && filled.from.length >= 2,
     'read off the coding factors it was actually measured on: ' + filled.from);
   ok(!filled.from.includes('lmarena.rating'), 'and never off a preference vote');
   const s = score(m);
   ok(s.cover > 0.5 && s.cover < 0.6, 'evidence still reports what was measured, got ' + s.cover);
+  RESET();
+});
+
+// the prediction read only the WEIGHTED coding factors, so qwen3.5-27b, weighted
+// on swe-rebench alone at p91, had the five weighted coding boards it was never
+// run on predicted at 70 off that one percentile -- three quarters of its
+// composite -- while gbench, epoch and eleven language rates had it in the 30s.
+// it ranked ahead of qwen3.8 27b at the same rung, which is measured on nearly
+// everything and beats it on each board both were run on.
+test('a missing coding factor is predicted from every coding board that ran the model', () => {
+  RESET();
+  const old = model('qwen3.5-27b'), next = model('qwen3.8 27b');
+  const from = codingFill(old).from;
+  ok(from.includes('gbench.overall') && from.includes('swerebench.resolved'),
+    'an unweighted coding board informs the prediction: ' + from);
+  ok(from.every(k => scaledFacet(k) && old.facets[k]), 'and only coding facets it carries');
+  ok(scored(next).value > scored(old).value,
+    `qwen3.8 27b ${scored(next).value} ranks above qwen3.5-27b ${scored(old).value}`);
   RESET();
 });
 

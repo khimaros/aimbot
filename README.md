@@ -1113,9 +1113,13 @@ the one exception is a missing CODING factor -- the facets the quant curve
 covers. scored at the median, qwen3.8 flash next read 75 while its own coding
 boards had it in the 80s and 90s, behind a one-bit rung measured everywhere. so
 an unmeasured coding factor is predicted halfway between the median and the
-model's own mean over the coding factors it was measured on. a preference vote
-or a forum still reads as the median, and `evidence` still counts only what was
-measured.
+model's own mean over every coding board it was measured on, weighted or not,
+each board averaged first so eleven language rates count once. read off the
+weighted factors alone, qwen3.5-27b's one swe-rebench percentile, p91, stood in
+for three quarters of its composite while gbench, epoch and its language rates
+had it in the 30s, and it ranked ahead of qwen3.8 27b at the same rung. a
+preference vote or a forum still reads as the median, and `evidence` still
+counts only what was measured.
 
 that fixed the ranking and left a number behind. the prior cuts both ways: it
 stops one good factor carrying a model up, and by the same arithmetic stops one

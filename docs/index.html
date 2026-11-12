@@ -1268,12 +1268,21 @@ const askedFactors = m => Object.entries(W)
 // with the median, and the halfway keeps a model from being carried by
 // predictions of itself. coding is the quant curve's own allowlist, the one set
 // of factors already argued to measure the same thing; a missing preference
-// vote or forum still reads as the median
+// vote or forum still reads as the median.
+//
+// the prediction reads every coding facet the model carries, weighted or not:
+// read off the weighted ones alone, qwen3.5-27b's single swe-rebench p91 stood
+// in for five boards while gbench, epoch and eleven language rates had it in
+// the 30s. each board is averaged first so its eleven language rates are one
+// voice, not eleven
 function codingFill(m) {
-  const from = askedFactors(m).map(([key]) => key)
-    .filter(key => scaledFacet(key) && facetPct(m, key) !== null);
+  const from = Object.keys(m.facets)
+    .filter(key => scaledFacet(key) && relevant(key) && facetPct(m, key) !== null);
   if (!from.length) return {value: null, from};
-  const own = from.reduce((a, key) => a + facetPct(m, key), 0) / from.length;
+  const boards = {};
+  from.forEach(key => (boards[key.split('.')[0]] ||= []).push(facetPct(m, key)));
+  const means = Object.values(boards).map(ps => ps.reduce((a, p) => a + p, 0) / ps.length);
+  const own = means.reduce((a, p) => a + p, 0) / means.length;
   return {value: (own + SHRINK_PRIOR) / 2, from};
 }
 
