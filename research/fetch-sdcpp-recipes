@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+
+"""The generation settings stable-diffusion.cpp recommends per model, from its recipes.
+
+    fetch-sdcpp-recipes             # write data/sdcpp-recipes.json
+
+sd.cpp's server ships one json recipe per supported model under
+`examples/server/recipes/`, each with the model's hub url and a `defaults`
+block: sampler, cfg, steps, and the sigma schedule where the model was
+distilled to one. `examples/server/recipes/defaults.md` says the values were
+reviewed against the publishers' cards and reference code, and that a step
+count above 20 is cut to 20 -- so a recipe's 20 can be a cap rather than the
+card's number, which is a thing for a profile's note to say.
+
+This is what an image profile's `source: sdcpp-recipe` is checked against, the
+way `vendor-card` is checked against the samplers read off a card. Without it
+every sd-server entry either ran sd.cpp's built-in 20 steps at cfg 7, which is
+wrong for a distilled model, or carried hand-written argv with no source.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+import capture
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = "data/sdcpp-recipes.json"
+RAW = "https://raw.githubusercontent.com/leejet/stable-diffusion.cpp/master/"
+DIR = "examples/server/recipes/"
+INDEX = "https://api.github.com/repos/leejet/stable-diffusion.cpp/contents/" + DIR
+HUB = re.compile(r"^https://huggingface\.co/([\w.-]+/[\w.-]+)/?$")
+# the recipe's spelling -> the registry's. width and height are a canvas, not a
+# sampler, and stay out
+FIELDS = {"sampling_method": "sampling_method", "scheduler": "scheduler",
+          "cfg_scale": "cfg_scale", "steps": "steps",
+          "distilled_guidance": "guidance", "flow_shift": "flow_shift",
+          "custom_sigmas": "sigmas"}
+
+
+def get(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    return proc.stdout if proc.returncode == 0 and proc.stdout.strip() else None
+
+
+def recipe_entry(recipe):
+    """{id, repo, values} for one recipe, its defaults in the registry's names."""
+    m = HUB.match(recipe.get("model_url") or "")
+    defaults = recipe.get("defaults") or {}
+    return {"id": recipe.get("id"), "repo": m.group(1) if m else None,
+            "values": {ours: defaults[theirs] for theirs, ours in FIELDS.items()
+                       if theirs in defaults}}
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--max-age", type=int, default=24 * 3600)
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--allow-shrink", action="store_true")
+    args = ap.parse_args()
+
+    index = get(INDEX, "sdcpp-recipes-index", args.max_age, args.refresh)
+    try:
+        names = [e["name"] for e in json.loads(index or "[]") if e["name"].endswith(".json")]
+    except (ValueError, KeyError, TypeError):
+        names = []
+    if not names:
+        sys.exit("!!! could not list %s" % INDEX)
+
+    recipes = {}
+    for name in sorted(names):
+        text = get(RAW + DIR + name, "sdcpp-recipe-" + name, args.max_age, args.refresh)
+        try:
+            entry = recipe_entry(json.loads(text or ""))
+        except ValueError:
+            print("!!! %s does not parse" % name, file=sys.stderr)
+            continue
+        if entry["id"]:
+            recipes[entry.pop("id")] = entry
+
+    # a recipe whose fetch failed keeps what it said last time; upstream
+    # dropping it from the index is the only way it should leave
+    listed = {n[:-len(".json")] for n in names}
+    for rid, entry in (capture.previous(args.out).get("recipes") or {}).items():
+        if rid in listed and rid not in recipes:
+            recipes[rid] = entry
+    payload = {"source": RAW + DIR, "recipes": dict(sorted(recipes.items()))}
+    written, now, before = capture.write(args.out, payload, lambda p: len(p["recipes"]),
+                                         allow_shrink=args.allow_shrink)
+    if not written:
+        sys.exit(capture.refused(args.out, now, before))
+    print("wrote %s: %d recipe(s), %d on the hub" % (
+        args.out, len(recipes), sum(1 for r in recipes.values() if r["repo"])))
+
+
+if __name__ == "__main__":
+    main()

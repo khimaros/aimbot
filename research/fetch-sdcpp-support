@@ -71,6 +71,13 @@ FIND = re.compile(r'\.name\.find\("([^"]+)"\)|\.name\s*==\s*"([^"]+)"')
 # dimension test, which this does not read
 LOOKUP = re.compile(r'tensor_storage_map\.find\("([^"]+)"\)\s*([!=]=)\s*'
                     r'tensor_storage_map\.end\(\)')
+# the same test spelled as a count: `== 0` is an absence, bare or `> 0` a presence
+COUNT = re.compile(r'tensor_storage_map\.count\("([^"]+)"\)\s*(==\s*0)?')
+# a lookup kept in a variable, which only says something once a test reads it
+KEPT = re.compile(r'(?:auto\s+)?(\w+)\s*=\s*tensor_storage_map\.find\("([^"]+)"\);')
+# a dimension measured on a kept lookup, behind a test that it exists: the
+# branch can only fire where that tensor is in the file
+MEASURED = re.compile(r'(\w+)\s*!=\s*tensor_storage_map\.end\(\)\s*&&\s*\1->second')
 OUTCOME = re.compile(r"return\s+(VERSION_\w+)|^\s*(\w+)\s*=\s*true;")
 # how much of the file to read for the tensor table. the metadata comes first
 # and a diffusion gguf's is small, so the first window is almost always enough
@@ -128,10 +135,22 @@ def parse_rules(source):
         found = [a or b for a, b in FIND.findall(line)]
         if found and rule is None:
             rule = {"base": before, "sigs": [], "outer": [], "inner": [],
-                    "dirty": False, "opened": False}
+                    "dirty": False, "opened": False, "kept": {}, "skip": None}
         if rule is None:
             continue
         own = before == rule["base"]
+        kept = KEPT.findall(line)
+        for var, name in kept:
+            rule["kept"].setdefault(var, []).append(name)
+        # minimax h3 measures a VAE tensor to tell P-H3 from h3 video. that is
+        # unreadable, and it is also only reachable where the VAE tensor exists,
+        # so the branch is skipped and every return after it is conditional on
+        # the measured tensors being absent -- exact for a diffusion-only gguf
+        measured = MEASURED.search(line)
+        if measured and measured.group(1) in rule["kept"] and depth > before:
+            rule["skip"] = before
+            rule["outer"] += [(n, False) for n in rule["kept"][measured.group(1)]]
+            line = ""
         # a rule this cannot model EXACTLY is dropped rather than approximated.
         # a dimension test and a lookup kept in a variable are the two shapes:
         # mage flow is both -- its outer condition is qwen image's own
@@ -139,6 +158,8 @@ def parse_rules(source):
         # so flattening it into two alternatives made every flux model match
         # mage flow, since they carry `img_in.weight` too. an AND read as an OR
         # is how a detector table starts claiming models it would never return.
+        # the one exact reading of such a rule is the MEASURED one above, and
+        # under it mage flow's returns need `img_in` absent, so they match none
         #
         # a block that CAPTURES the tensor is the third. three blocks spell
         # their condition with `==` and then do `input_block_weight =
@@ -146,16 +167,21 @@ def parse_rules(source):
         # the tensors the post-loop branches measure. a name tested INSIDE
         # another name's rule is the fourth, since it is a second tensor's rule
         # and this reads one.
-        lookups = LOOKUP.findall(line)
+        lookups = ([(n, op == "!=") for n, op in LOOKUP.findall(line)]
+                   + [(n, not zero) for n, zero in COUNT.findall(line)])
         if ("->second" in line or ".ne[" in line or "= tensor_storage;" in line
-                or line.count("tensor_storage_map.find") != len(lookups)
+                or line.count("tensor_storage_map.find") != len(LOOKUP.findall(line)) + len(kept)
+                or line.count("tensor_storage_map.count") != len(COUNT.findall(line))
                 or (found and not own)):
             rule["dirty"] = True
         if own:
             rule["sigs"] += found
-        rule["outer" if own else "inner"] += [(n, op == "!=") for n, op in lookups]
+        rule["outer" if own else "inner"] += lookups
         hit = OUTCOME.search(line)
-        if hit and not rule["dirty"]:
+        skipped = rule["skip"] is not None and before > rule["skip"]
+        if rule["skip"] is not None and depth <= rule["skip"]:
+            rule["skip"] = None
+        if hit and not rule["dirty"] and not skipped:
             tests = rule["outer"] + rule["inner"]
             # deeper than the rule's own block with no lookup behind it is a
             # branch on a flag (`if (is_unet) { is_xl = true; }`), which says

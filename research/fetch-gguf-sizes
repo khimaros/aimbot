@@ -227,13 +227,17 @@ def split_pinned(agg, pinned):
     registry pins by filename is one holding other models, so every file of a
     tag that gathered several is split, the pinned model's and its neighbours'
     alike: left behind, the neighbours summed into a rung the page offered as
-    the pinned model's. a sidecar tag (`mmproj:`, a drafter's) is not a rung of
-    the ladder and keeps its key.
+    the pinned model's. once one tag shows the repo holds several models, a tag
+    holding one file is split too: unsloth ships h3's text encoder as the only
+    `Q4_K_M` and `Q2_K_M` beside `Q4_K` transformers, and under those tags it was
+    offered as a rung of the diffusion model. a sidecar tag (`mmproj:`, a
+    drafter's) is not a rung of the ladder and keeps its key.
     """
+    stems = {tag: {SHARD.sub(".gguf", p) for p, _ in files} for tag, files in agg.items()}
+    several = any(len(s) > 1 for s in stems.values())
     out = {}
     for tag, files in agg.items():
-        stems = {SHARD.sub(".gguf", p) for p, _ in files}
-        split = len(stems) > 1 and bool(pinned) and ":" not in tag
+        split = several and bool(pinned) and ":" not in tag
         for p, size in files:
             name = SHARD.sub(".gguf", p.rpartition("/")[2])
             out.setdefault(name if split else tag, []).append((p, size))

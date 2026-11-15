@@ -1599,7 +1599,7 @@ ninfer ./NVFP4-NInfer/W4A4/Qwen3.8-27B-Coder390-W4A4-MTP-DFlash2-NInferV2-NOT-FO
 | `GGUF/mtp-Qwen3.8-27B-Coder390-EfficientThink-Q8_0.gguf` | 3,164,006,656 | `50a030e852289eed86065e2e2de57d89241174e99faa2c1c2f06c29c270789ee` |
 | `GGUF/SHA256SUMS` | 1,187 | `7677cef32b796c8c54d18592e8d198a14563a994496c8161b84ab7bdba30d183` |
 
-### `GGUF-NInfer/` (10 files: Q3+Q4+Q2 -Q4MTP (Q4_K MTP head) + Q8+Q6 + Q3/Q4/Q2 Q8MTP (Q8_0 MTP head) packages, all with vision + vision-bf16 (BF16 source, not needed at runtime) + SHA256SUMS)
+### `GGUF-NInfer/` (12 files: Q3+Q4+Q2 -Q4MTP (Q4_K MTP head) + Q8+Q6 + Q3/Q4/Q2 Q8MTP (Q8_0 MTP head) packages, all with vision + vision-bf16 (BF16 source, not needed at runtime) + NInfer BF16-DFlash2 package and conversion sidecar + SHA256SUMS)
 
 | File | Bytes | SHA256 |
 |---|---:|---|
@@ -1611,8 +1611,12 @@ ninfer ./NVFP4-NInfer/W4A4/Qwen3.8-27B-Coder390-W4A4-MTP-DFlash2-NInferV2-NOT-FO
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.ninfer` | 20,125,342,720 | `f88730f1fc8d65d720780da6b305e9c943c016f4660695923d7023eddd6b2fad` |
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q8_0-MTP.ninfer` | 29,361,802,240 | `8ace439259c8ade2b7dacee8aca92df62d7cc93d6c7d40ac026be797bb02a9c5` |
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q6_K-MTP.ninfer` | 23,379,962,880 | `60d7b3f4f79304e1ab1e22c161cdace29e7f8f9b8350755e4eab45e2d5e0d168` |
+| `GGUF-NInfer/Qwen3.8-27B-Coder390-BF16-DFlash2.ninfer` | 57,143,194,112 | `98ac00e1fe302230907003cf568c3e4adbf46a21833bce50f1dfb74b15e964f0` |
+| `GGUF-NInfer/Qwen3.8-27B-Coder390-BF16-DFlash2.ninfer.conversion.json` | 468,653 | `5c43376efd662667d4749d4ad439a54eb2d7339a57dbc250bf5c8e7696b35045` |
 | `GGUF-NInfer/vision-bf16.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
 | `GGUF-NInfer/SHA256SUMS` | 1,088 | `786409f76d95820fd18251d55d35ca8c36526412c0d8581645fdd24a73955d4a` |
+
+The NInfer BF16 package with the official DFlash2 draft is `GGUF-NInfer/Qwen3.8-27B-Coder390-BF16-DFlash2.ninfer` (sidecar `GGUF-NInfer/Qwen3.8-27B-Coder390-BF16-DFlash2.ninfer.conversion.json`). In the DFlash2 draft, attention output and MLP down layers are q8_g32, and the proposal head is q4_g64.
 
 ### imatrix (published in the GGUF-NInfer repo)
 
@@ -3202,7 +3206,7 @@ ninfer ./NVFP4-NInfer/W4A4/Qwen3.8-27B-Coder390-W4A4-MTP-DFlash2-NInferV2-NOT-FO
 | `GGUF/mtp-Qwen3.8-27B-Coder390-EfficientThink-Q8_0.gguf` | 3,164,006,656 | `50a030e852289eed86065e2e2de57d89241174e99faa2c1c2f06c29c270789ee` |
 | `GGUF/SHA256SUMS` | 1,187 | `7677cef32b796c8c54d18592e8d198a14563a994496c8161b84ab7bdba30d183` |
 
-### `GGUF-NInfer/`(10 个文件:Q3+Q4+Q2 -Q4MTP(Q4_K MTP 头) + Q8+Q6 + Q3/Q4/Q2 Q8MTP(Q8_0 MTP 头)包,均含视觉 + vision-bf16(BF16 原始文件,运行时不需要) + SHA256SUMS)
+### `GGUF-NInfer/`(12 个文件:Q3+Q4+Q2 -Q4MTP(Q4_K MTP 头) + Q8+Q6 + Q3/Q4/Q2 Q8MTP(Q8_0 MTP 头)包,均含视觉 + vision-bf16(BF16 原始文件,运行时不需要) + NInfer BF16-DFlash2 包及 conversion sidecar + SHA256SUMS)
 
 | 文件 | 字节 | SHA256 |
 |---|---:|---|
@@ -3214,8 +3218,12 @@ ninfer ./NVFP4-NInfer/W4A4/Qwen3.8-27B-Coder390-W4A4-MTP-DFlash2-NInferV2-NOT-FO
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q4LynnStyle-Q8MTP.ninfer` | 20,125,342,720 | `f88730f1fc8d65d720780da6b305e9c943c016f4660695923d7023eddd6b2fad` |
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q8_0-MTP.ninfer` | 29,361,802,240 | `8ace439259c8ade2b7dacee8aca92df62d7cc93d6c7d40ac026be797bb02a9c5` |
 | `GGUF-NInfer/Qwen3.8-27B-Coder390-EfficientThink-Q6_K-MTP.ninfer` | 23,379,962,880 | `60d7b3f4f79304e1ab1e22c161cdace29e7f8f9b8350755e4eab45e2d5e0d168` |
+| `GGUF-NInfer/Qwen3.8-27B-Coder390-BF16-DFlash2.ninfer` | 57,143,194,112 | `98ac00e1fe302230907003cf568c3e4adbf46a21833bce50f1dfb74b15e964f0` |
+| `GGUF-NInfer/Qwen3.8-27B-Coder390-BF16-DFlash2.ninfer.conversion.json` | 468,653 | `5c43376efd662667d4749d4ad439a54eb2d7339a57dbc250bf5c8e7696b35045` |
 | `GGUF-NInfer/vision-bf16.safetensors` | 921,497,224 | `d7defc90994f7bbc58a8feb8d3c4144895babb434a9be9f47e88ae3646e1df33` |
 | `GGUF-NInfer/SHA256SUMS` | 1,088 | `786409f76d95820fd18251d55d35ca8c36526412c0d8581645fdd24a73955d4a` |
+
+NInfer BF16 包（配官方 DFlash2 草稿）为 `GGUF-NInfer/Qwen3.8-27B-Coder390-BF16-DFlash2.ninfer`（附 `GGUF-NInfer/Qwen3.8-27B-Coder390-BF16-DFlash2.ninfer.conversion.json`）。DFlash2 草稿的 attention output 与 mlp down 层为 q8_g32，proposal head 为 q4_g64。
 
 ### imatrix(发布在 GGUF-NInfer 仓库)
 

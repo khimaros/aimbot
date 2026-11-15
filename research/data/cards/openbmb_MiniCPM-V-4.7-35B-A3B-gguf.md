@@ -39,12 +39,25 @@ weights are byte-identical.
   `[Start thinking] … [End thinking]` trace before answering. Useful when you want to see the
   reasoning steps; note that it multiplies the token count, so set a larger `-n`.
 
+**One-click (macOS / Windows)** — install [Llama](https://llama.app), the desktop app from the llama.cpp team and Hugging Face (`brew install --cask llama-app`, or the Windows installer), then choose **Use this model → Llama** on this page. Llama downloads a build that fits your machine and opens the chat window.
+
+Or from the terminal — `-hf` pulls the model and the matching `mmproj` automatically:
+
+```bash
+llama cli   -hf openbmb/MiniCPM-V-4.7-35B-A3B-gguf:Q4_K_M
+llama serve -hf openbmb/MiniCPM-V-4.7-35B-A3B-gguf:Q4_K_M     # WebUI + OpenAI-compatible API on :9931
+```
+
+> Q4_K_M needs roughly 32 GB of unified memory; use `IQ4_XS` on smaller machines.
+
+`llama-mtmd-cli` and `llama-server` remain available for development; `llama cli` / `llama serve` are the normal entrypoints. To use a local file instead, pick a quant above and pass `-m` with the shared `mmproj`:
+
 ```bash
 # default (thinking disabled, no flag needed)
-llama-cli -m MiniCPM-V-4_7-35B-A3B-Q4_K_M.gguf --mmproj mmproj-model-f16.gguf --image img.jpg -p "Describe."
+llama cli -m MiniCPM-V-4_7-35B-A3B-Q4_K_M.gguf --mmproj mmproj-model-f16.gguf --image img.jpg -p "Describe."
 
 # thinking enabled
-llama-cli -m thinking/MiniCPM-V-4_7-35B-A3B-Q4_K_M-thinking.gguf --mmproj mmproj-model-f16.gguf \
+llama cli -m thinking/MiniCPM-V-4_7-35B-A3B-Q4_K_M-thinking.gguf --mmproj mmproj-model-f16.gguf \
           --image img.jpg -p "Describe." -n 1024
 ```
 

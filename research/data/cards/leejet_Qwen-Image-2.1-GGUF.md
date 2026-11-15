@@ -25,7 +25,7 @@ This model can be used with [`stable-diffusion.cpp`](https://github.com/leejet/s
 
 For setup instructions and usage details, please refer to:
 
-[Qwen-Image-2.1 Documentation](https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/qwen_image_2.1.md)
+[Qwen-Image-2.1 Documentation](https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/models/qwen_image_2.1.md)
 
 ### ComfyUI
 

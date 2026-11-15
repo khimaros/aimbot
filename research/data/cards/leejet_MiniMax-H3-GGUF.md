@@ -27,7 +27,7 @@ This model can be used with [`stable-diffusion.cpp`](https://github.com/leejet/s
 
 For setup instructions and usage details, please refer to:
 
-[MiniMax H3 Documentation](https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/minimax_h3.md)
+[MiniMax H3 Documentation](https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/models/minimax_h3.md)
 
 ### ComfyUI
 

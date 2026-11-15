@@ -3416,6 +3416,18 @@ function tabVendor(m) {
 const SAMPLERS = [['temp', 'temp'], ['top_p', 'top_p'], ['top_k', 'top_k'],
                   ['min_p', 'min_p'], ['presence_penalty', 'presence'],
                   ['repeat_penalty', 'repeat']];
+// a diffusion model's, with the stable-diffusion.cpp flag each one is. a
+// field the profile leaves out is sd.cpp's own default, so it is not passed
+const IMAGE_SAMPLERS = [['steps', 'steps', '--steps'], ['cfg_scale', 'cfg', '--cfg-scale'],
+                        ['guidance', 'guidance', '--guidance'],
+                        ['flow_shift', 'shift', '--flow-shift'],
+                        ['sampling_method', 'sampler', '--sampling-method'],
+                        ['scheduler', 'scheduler', '--scheduler'],
+                        ['sigmas', 'sigmas', '--sigmas']];
+// a sigma list is passed the way `--sigmas` reads one, comma-separated
+const sdValue = v => Array.isArray(v) ? v.join(',') : String(v);
+const imageArgs = p => IMAGE_SAMPLERS.filter(([f]) => p[f] !== undefined)
+  .map(([f, , flag]) => `${flag} ${sdValue(p[f])}`);
 
 // every quant a repo publishes, with what it weighs. it was crammed into the
 // buttons, where twenty-five chips carrying three numbers each is a wall rather
@@ -3843,14 +3855,15 @@ function samplerTable(m, name) {
   const p = m.sampling[name];
   if (!p) return '';
   const d = D.sampling.profiles[name.replace(/^upstream-/, '')] || {};
-  const fields = SAMPLERS.concat([['thinking', 'thinking']]);
+  const fields = imageArgs(p).length ? IMAGE_SAMPLERS
+    : SAMPLERS.concat([['thinking', 'thinking']]);
   return `<h3>${esc(name)} samplers</h3>`
     + (d.summary ? `<p class="faint">${esc(d.summary)}</p>` : '')
     + '<table><thead><tr>'
     + fields.map(([, label]) => `<th class="n">${esc(label)}</th>`).join('')
     + '<th>tuned for</th><th>agrees with</th></tr></thead><tbody><tr>'
     + fields.map(([f]) => `<td class="n">${p[f] === undefined
-      ? '<span class="faint">-</span>' : esc(p[f])}</td>`).join('')
+      ? '<span class="faint">-</span>' : esc(sdValue(p[f]))}</td>`).join('')
     + `<td class="dim">${esc((p.tuned || []).join(' '))}</td>`
     + `<td class="dim">${esc(p.source || '')}</td></tr></tbody></table>`
     + (p.note ? `<p class="faint">${proseHtml(p.note, m)}</p>` : '');
@@ -4400,7 +4413,7 @@ function partition(m, k) {
 // llama.cpp one is. the roles are not decoration: `role: diffusion`, `vae` and
 // `llm` are the three files stable-diffusion.cpp asks for by those names, and
 // kokoro's `role: model-path` is TTS.cpp's own flag.
-function otherRuntime(m, rt, pick) {
+function otherRuntime(m, rt, pick, profile) {
   // the FILE, not the tag: none of these runtimes resolves `repo:Q8_0` the way
   // llama.cpp's `--hf-repo` does, and the two are the same string except where
   // the publisher names its files something else
@@ -4461,7 +4474,8 @@ function otherRuntime(m, rt, pick) {
     return {label: 'stable-diffusion.cpp, three files',
             text: withNotes(part.notes,
               ['sd', '--diffusion-model ' + ref].concat(
-                part.args, missing, ['-p "a photograph of a cat"']))};
+                part.args, missing, imageArgs(m.sampling[profile] || {}),
+                ['-p "a photograph of a cat"']))};
   }
   if (rt.k === 'TTS.cpp') {
     return {label: 'TTS.cpp',
@@ -4578,7 +4592,7 @@ function snippets(m) {
     const verdict = verdictConfig(m, pick);
     if (verdict) out.push(verdict);
   } else {
-    out.push(otherRuntime(m, rt, pick));
+    out.push(otherRuntime(m, rt, pick, profile));
   }
   // a decision model answers no chat turn, so there is no chat client to configure
   if (m.kind === 'decision' || profile === DECISION_PROFILE) return out;

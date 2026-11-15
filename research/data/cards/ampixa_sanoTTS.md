@@ -112,6 +112,35 @@ The "robot" row is the 567,008-parameter model that runs on the ESP32-S3.
 Pip voices: `heart`, `hfc`, `amy-1p8m`, `amy`, `kristin`, `vi`, `id`,
 `amy-1p1m`, `heart-nano`. Pure numpy inference, no torch, no onnxruntime.
 
+## Streaming and the Open TTS Leaderboard
+
+`sanotts` streams: `Synthesizer.synthesize_stream(text)` yields audio chunk by
+chunk, and the chunks join to exactly what `synthesize()` returns, up to
+float32 rounding.
+
+```python
+from sanotts import Synthesizer
+syn = Synthesizer("heart-nano")
+for chunk in syn.synthesize_stream("Hello from a 294k-parameter voice."):
+    ...  # float32 at syn.sample_rate, ready to play
+```
+
+The three English voices were evaluated by the maintainers of the
+[Open TTS Leaderboard](https://huggingface.co/spaces/hf-audio/open_tts_leaderboard)
+on HF Jobs ([PR #53](https://github.com/huggingface/open-tts-leaderboard/pull/53), sanotts 0.5.4).
+Time to first audio is measured on CPU (`cpu-upgrade`, one thread, batch size 1)
+over the 497 CV3-Eval English prompts; RTFx is the main eval's throughput, run
+on one CPU thread. WER is from Qwen3-ASR over Seed-TTS, CV3-Eval and MiniMax English.
+
+| Voice | Params | TTFA p50 | TTFA p95 | RTFx | WER | UTMOS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| heart-nano | 294 k | 2.8 ms | 5.9 ms | 214 | 1.07 % | 2.39 |
+| heart | 2.27 M | 6.4 ms | 9.8 ms | 49 | 0.86 % | 3.30 |
+| amy | 1.46 M | 22.7 ms | 36.3 ms | 15 | 1.12 % | 3.99 |
+
+On that board, larger and newer models score higher on UTMOS than these voices
+do; what sanoTTS brings is the latency, the throughput and the size.
+
 ## How it stacks up
 
 Open small-scale TTS on an honest gate — a diverse 24-sentence set scored
@@ -128,9 +157,11 @@ counts are inference-time and exclude the shared external G2P.
 | _Piper (our teacher)_ | _~15 M_ | _4.71_ | _4.47_ | _3.65_ |
 | _Kokoro_ | _82 M_ | _4.89_ | _4.52_ | _3.69_ |
 
-sanoTTS is the **smallest** model here and the **best on naturalness
-(SCOREQ and UTMOS) among everything up to 15M params** — beating TinyTTS
-while being smaller. On DNSMOS-SIG, TinyTTS edges us by 0.01 — no single
+Among the systems in this table, sanoTTS amy is the **smallest** and scores
+**highest on naturalness (SCOREQ and UTMOS) below Piper** — beating TinyTTS
+while being smaller. This is our own 24-sentence comparison; on the Open TTS
+Leaderboard's larger sets, several small models (for example Paradee-8M and
+PiVo-1.4M) have higher UTMOS than amy. On DNSMOS-SIG, TinyTTS edges us by 0.01 — no single
 metric tells the whole story. It's the only one that runs a full neural
 stack on a $3 MCU. The frontier only pulls ahead at Piper, the ~15M teacher
 we distilled from, and Kokoro (82M, 56× larger) — a gap we don't claim to

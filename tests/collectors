@@ -475,16 +475,43 @@ def a_pinned_file_is_sized_alone_where_its_tag_names_several():
        (5, 9, None), "and so is every other model its tag gathered: %r" % got)
     eq((got.get("jevk5-4b-v0.3-Q4_K_M.gguf"), got.get("Q4_K_M")), (2, None),
        "a tag holding several models is split even where no pin falls in it")
-    eq(got.get("Q6_K"), 2, "shards of one file are still one rung")
+    eq(got.get("M-Q6_K.gguf"), 2, "shards of one file are still one rung, by name in a "
+       "repo of several models: %r" % got)
     eq(sizes_of(tree).get("Q8_0"), 18, "with nothing pinned nothing moves")
     bv = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
     rows, _ = bv.repo_rows({"repos": [{"repo": "fixture/Repo",
                                        "files": {"jevk5-4b-v0.2-Q8_0.gguf": {"quant": "Q8_0"}}}]},
                            {"fixture/Repo": dict(got, **{"jevk5-4b-v0.2-Q4_K_M.gguf": 2})})
     eq(sorted(a.get("file", a["quant"]) for a in rows[0]["available"]),
-       ["M-Q6_K.gguf" if "M-Q6_K.gguf" in got else "Q6_K",
-        "jevk5-4b-v0.2-Q4_K_M.gguf", "jevk5-4b-v0.2-Q8_0.gguf"],
+       ["jevk5-4b-v0.2-Q4_K_M.gguf", "jevk5-4b-v0.2-Q8_0.gguf"],
        "the page offers the pinned model's rungs and none of its neighbours'")
+
+
+@test
+def a_pinned_file_alone_under_its_tag_is_still_keyed_by_name():
+    """unsloth's MiniMax-H3-GGUF ships the qwen3-vl text encoder beside both
+    video checkpoints, and the encoder is the only file under `Q4_K_M`: the
+    transformers are `Q4_K`. keyed by tag it stayed `Q4_K_M` and the page offered
+    an 18 gib text encoder as a rung of the diffusion model. the registry names
+    it by `file:` as the model's `llm` component, which is the statement that it
+    is one file and not a rung, so it is keyed by that name like any other pin.
+    """
+    tree = [
+        {"path": "minimax_h3_fl2va_pruned-Q4_K.gguf", "size": 10},
+        {"path": "minimax_h3_ref2va_pruned-Q4_K.gguf", "size": 10},
+        {"path": "minimax_h3_fl2va_pruned-Q8_0.gguf", "size": 20},
+        {"path": "minimax_h3_ref2va_pruned-Q8_0.gguf", "size": 20},
+        {"path": "qwen3vl_32b_minimax_h3-Q4_K_M.gguf", "size": 17}]
+    got = sizes_of(tree, pinned=["minimax_h3_fl2va_pruned-Q8_0.gguf",
+                                 "qwen3vl_32b_minimax_h3-Q4_K_M.gguf"])
+    eq((got.get("qwen3vl_32b_minimax_h3-Q4_K_M.gguf"), got.get("Q4_K_M")), (17, None),
+       "the encoder is keyed by its name: %r" % got)
+    bv = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    rows, _ = bv.repo_rows({"repos": [{"repo": "fixture/Repo", "files": {
+        "minimax_h3_fl2va_pruned-Q8_0.gguf": {"quant": "Q8_0"}}}]}, {"fixture/Repo": got})
+    eq(sorted(a["file"] for a in rows[0]["available"]),
+       ["minimax_h3_fl2va_pruned-Q4_K.gguf", "minimax_h3_fl2va_pruned-Q8_0.gguf"],
+       "and the ladder is the frames checkpoint's alone")
 
 
 def roster_args(tmp, *repos, **kw):
@@ -672,6 +699,69 @@ def a_sampler_table_is_a_recommendation():
     eq([s["values"] for s in sets], [{"temp": 1.0, "top_p": 1.0}],
        "one set from the table rows")
     eq("|" in sets[0]["label"], False, "no label is a table rule: %r" % sets[0]["label"])
+
+
+H3_IMAGE_RECIPE = {
+    "id": "minimax-h3-image", "model_url": "https://huggingface.co/MiniMaxAI/MiniMax-H3-Image",
+    "defaults": {"sampling_method": "euler", "cfg_scale": 1, "steps": 6,
+                 "width": 1024, "height": 1024,
+                 "custom_sigmas": [1.0, 0.9675, 0.8875, 0.75, 0.5328, 0.232, 0.0]}}
+
+IMAGE_PROFILE_REGISTRY = """version: 1
+models:
+  Fixture/Painter:
+    kind: image
+    name: {short: painter}
+    repos: [{repo: Fixture/Painter-GGUF, role: diffusion}]
+    sampling:
+      image:
+        steps: 6
+        cfg_scale: 1.0
+        sampling_method: %s
+        sigmas: %s
+"""
+
+
+@test
+def an_image_profile_is_checked_against_sdcpps_own_recipe():
+    """llama-tools hand-wrote `--cfg-scale 1.0 --steps 8` for ernie image turbo,
+    with no source, and every other sd-server entry ran sd.cpp's defaults of 20
+    steps at cfg 7 -- wrong for a distilled model. sd.cpp ships a recipe per
+    model with a `defaults` block and the model's hub url, so an image profile
+    can say what it agrees with the way a sampler set does.
+    """
+    sys.path.insert(0, RESEARCH)
+    try:
+        mod = load_script("sdcpp_recipes", os.path.join(RESEARCH, "fetch-sdcpp-recipes"))
+    finally:
+        sys.path.remove(RESEARCH)
+    got = mod.recipe_entry(H3_IMAGE_RECIPE)
+    eq(got["repo"], "MiniMaxAI/MiniMax-H3-Image", "joined on the hub url")
+    eq(got["values"], {"sampling_method": "euler", "cfg_scale": 1, "steps": 6,
+                       "sigmas": [1.0, 0.9675, 0.8875, 0.75, 0.5328, 0.232, 0.0]},
+       "in the registry's field names, and the canvas is not a sampler")
+    eq(mod.recipe_entry(dict(H3_IMAGE_RECIPE, model_url="https://example.com/x"))["repo"],
+       None, "a url off the hub joins nothing")
+
+    rs = load_script("resolve_samplers", os.path.join(ROOT, "scripts", "resolve-samplers"))
+    recipes = [got["values"]]
+    prof = {"steps": 6, "cfg_scale": 1.0, "sampling_method": "euler",
+            "sigmas": "minimax-h3-image"}
+    eq(rs.source_for(prof, {}, {}, recipes), "sdcpp-recipe",
+       "a named preset is not compared against the list it names")
+    eq(rs.source_for(dict(prof, steps=8), {}, {}, recipes), "tuned-here",
+       "a step count the recipe does not give agrees with nothing")
+    eq(rs.source_for(dict(prof, sampling_method="euler_a"), {}, {}, recipes), "tuned-here",
+       "and nor does another sampler")
+
+    rc, findings, _ = validate(IMAGE_PROFILE_REGISTRY % ("euler", "minimax-h3-image"))
+    eq([f for f in findings if "Painter" in f["where"]], [], "the image fields are vocabulary")
+    rc, findings, _ = validate(IMAGE_PROFILE_REGISTRY % ("euler", "[1.0, 0.5, 0.0]"))
+    eq([f for f in findings if "Painter" in f["where"]], [], "and so is a list of sigmas")
+    rc, findings, _ = validate(IMAGE_PROFILE_REGISTRY % ("eulr", "warp-9"))
+    msgs = " ".join(f["error"] for f in findings if "Painter" in f["where"])
+    eq(("eulr" in msgs, "warp-9" in msgs), (True, True),
+       "a sampler or a preset sd.cpp does not have is refused: %r" % msgs)
 
 
 # a family whose flagship's alias ends in a bare surname, and a sibling for it
@@ -7418,6 +7508,74 @@ def a_rule_that_asks_a_second_tensor_is_kept_with_its_condition():
                  sigs, cond)[0], "VERSION_LTXAV", "and ltx-av the one with it")
     eq(mod.match(name("t_block.1.weight"), sigs, cond)[0], None,
        "an unmet condition detects nothing")
+
+
+# minimax h3's rule as upstream writes it: an absence spelled `count(...) == 0`,
+# then a dimension test on a VAE tensor guarding P-H3, with h3 video behind it
+SDCPP_H3 = """
+SDVersion ModelLoader::get_sd_version() const {
+    for (auto& [name, tensor_storage] : tensor_storage_map) {
+        if (tensor_storage.name.find("model.diffusion_model.video_patch_proj.weight") != std::string::npos &&
+            tensor_storage_map.find("model.diffusion_model.condition_proj.weight") != tensor_storage_map.end()) {
+            if (tensor_storage_map.count("model.diffusion_model.audio_patch_proj.weight") == 0) {
+                return VERSION_MINIMAX_H3_IMAGE;
+            }
+            // The connector is shared with H3 video; the single-frame VAE identifies P-H3.
+            auto decoder = tensor_storage_map.find("first_stage_model.decoder.proj_out.weight");
+            if (decoder == tensor_storage_map.end()) {
+                decoder = tensor_storage_map.find("vae.decoder.proj_out.weight");
+            }
+            if (decoder != tensor_storage_map.end() && decoder->second.ne[1] == 768) {
+                return VERSION_P_H3_IMAGE;
+            }
+            return VERSION_MINIMAX_H3;
+        }
+        if (tensor_storage.name.find("model.diffusion_model.transformer_blocks.0.img_mod.1.weight") != std::string::npos) {
+            auto img_in = tensor_storage_map.find("model.diffusion_model.img_in.weight");
+            if (img_in != tensor_storage_map.end() && img_in->second.logical_ne0() == 128) {
+                return VERSION_MAGE_FLOW;
+            }
+            return VERSION_QWEN_IMAGE;
+        }
+    }
+    return VERSION_COUNT;
+}
+"""
+
+
+@test
+def a_dimension_test_only_decides_files_holding_the_tensor_it_measures():
+    """both minimax h3 entries read `no signature` from every gguf of them.
+
+    the rule spells one absence `count(...) == 0`, which the parser did not
+    read, and then measures a VAE tensor to tell P-H3 from h3 video, which it
+    cannot. so the whole rule was dropped, and the registry's sd.cpp claim on
+    both models failed lint the first time a header of either was read. but
+    that measurement can only fire where the decoder tensor EXISTS: a
+    diffusion-only gguf carries none, and for it the return behind the test is
+    exact. so the return is kept on the condition that the measured tensors are
+    absent, and the branch that measures stays unread. mage flow's guard is
+    `img_in`, which every qwen image file carries, so that rule still detects
+    nothing it could get wrong.
+    """
+    sys.path.insert(0, RESEARCH)
+    try:
+        mod = load_script("sdcpp", os.path.join(RESEARCH, "fetch-sdcpp-support"))
+    finally:
+        sys.path.remove(RESEARCH)
+    sigs, cond = mod.parse_rules(SDCPP_H3)
+    video = "model.diffusion_model.video_patch_proj.weight"
+    eq({c["outcome"] for c in cond if c["signature"] == video},
+       {"VERSION_MINIMAX_H3_IMAGE", "VERSION_MINIMAX_H3"},
+       "both h3 returns are read and P-H3's is not: %r" % cond)
+    base = ["video_patch_proj.weight", "condition_proj.weight"]
+    eq(mod.match(base, sigs, cond)[0], "VERSION_MINIMAX_H3_IMAGE", "no audio is the image model")
+    eq(mod.match(base + ["audio_patch_proj.weight"], sigs, cond)[0], "VERSION_MINIMAX_H3",
+       "with audio it is the video model")
+    eq(mod.match(base + ["audio_patch_proj.weight", "vae.decoder.proj_out.weight"],
+                 sigs, cond)[0], None, "and a file holding the measured VAE is not guessed at")
+    eq(mod.match(["transformer_blocks.0.img_mod.1.weight", "img_in.weight"], sigs, cond)[0],
+       None, "mage flow's guard is a tensor every qwen image file has")
 
 
 @test

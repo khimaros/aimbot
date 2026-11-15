@@ -3,12 +3,13 @@ license: apache-2.0
 language:
   - en
   - zh
-library_name: transformers
+library_name: llama.cpp
 pipeline_tag: text-generation
 tags:
   - minicpm
   - minicpm5
   - llama
+  - llama.cpp
   - text-generation
   - long-context
   - tool-calling
@@ -110,6 +111,15 @@ During **post-training**, we proceed in three steps: **SFT**, **RL**, and **OPD*
 ![MiniCPM5-1B RL + OPD Overlong Response Rate Drop](https://raw.githubusercontent.com/OpenBMB/MiniCPM/main/assets/minicpm5/rl_overlong.png)
 
 ## Quickstart
+
+### llama.cpp
+
+**One-click (macOS / Windows)** — install [Llama](https://llama.app), the desktop app from the llama.cpp team and Hugging Face (`brew install --cask llama-app`, or the Windows installer), then choose **Use this model → Llama** on this page. Llama downloads a build that fits your machine and opens the chat window.
+
+```bash
+# downloads Q4_K_M and serves a WebUI + OpenAI-compatible API on :9931
+llama serve -hf openbmb/MiniCPM5-1B-GGUF
+```
 
 ### vLLM
 

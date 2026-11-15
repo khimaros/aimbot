@@ -1310,7 +1310,7 @@ typo looked identical. each profile now carries a `source`:
 
 it is DERIVED, by `scripts/resolve-samplers`, because "where did these numbers
 come from" is unknowable after the fact while "what do they still agree with"
-is not: `quant-card`, `vendor-card`, `generation-config`, or `tuned-here` when
+is not: `quant-card`, `vendor-card`, `sdcpp-recipe` (below), `generation-config`, or `tuned-here` when
 they match nothing published. the quant repo wins where both cards agree, since
 that card describes the weights a consumer actually serves. comparison is on
 the fields BOTH sides name -- a card documenting temp and top_p cannot speak to
@@ -1322,6 +1322,19 @@ published. those 14 are the ones worth having: `models-validate` fails unless
 each carries a `note` saying why, and `make lint` runs `resolve-samplers
 --check`, so a profile claiming `vendor-card` after the card moves under it is
 a build failure rather than a stale assertion.
+
+a diffusion model's profile is `image`, and its fields are stable-diffusion.cpp's
+flags: `steps`, `cfg_scale`, `guidance`, `flow_shift`, `sampling_method`,
+`scheduler`, and `sigmas`, which is one of sd.cpp's named presets or the list
+itself. left out, sd.cpp runs 20 steps at cfg 7, which is the wrong picture from
+a model distilled to a handful of steps at cfg 1. its source is a fifth one,
+`sdcpp-recipe`: sd.cpp ships a recipe per model in `examples/server/recipes`
+with a `defaults` block and the model's hub url, `fetch-sdcpp-recipes` captures
+them, and the profile is checked against the recipe the way a sampler set is
+checked against a card. sd.cpp cuts every recipe's steps to 20, so a card asking
+for more says so in the profile's `note` -- qwen image 2.1's examples run 40.
+the page's `sd` command passes the profile's flags, and its sampler table shows
+these columns in place of the text ones.
 
 ## the sweep
 

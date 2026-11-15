@@ -21,6 +21,7 @@ date is in each file's provenance below.
 | `data/voicearena.json` | 2026-09-04 | voicearena.com speech-to-text, WER sliced by language and noise |
 | `data/gguf-voices.json` | 2026-09-04 | the speaker names each TTS gguf ships, read from its own header |
 | `data/sdcpp-support.json` | 2026-09-04 | stable-diffusion.cpp's tensor-name detector, and which registry image models it fires on |
+| `data/sdcpp-recipes.json` | 2026-11-14 | stable-diffusion.cpp's server recipes: 112 models' sampler, cfg, steps and sigma defaults, joined to the registry by hub url |
 | `data/crispasr.json` | 2026-09-04 | crispasr's own catalog: 85 backends with the repos each was published against, plus the capability bits it generates from `--list-backends-json` |
 | `data/audiocpp.json` | 2026-09-29 | audio.cpp's `model_specs/*.json`: 99 families with every package each downloads -- id, format, precision and the huggingface repo and path it comes from |
 | `data/gufo-support.json` | 2026-09-29 | gufo's per-model guides: the files it loads at pinned revisions, the `gufo serve <kind>` it starts with and the speculative mode its figures were measured under |

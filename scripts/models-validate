@@ -878,8 +878,8 @@ def check_registry(models, sampling, f):
             f.add(repo, "thinking.default %r is not one of thinking.accepts %s"
                   % (think["default"], think.get("accepts") or []))
 
-        # only text models have samplers to name; an image or speech server has
-        # no temperature to set
+        # only text models have to name samplers; an image model's profile is
+        # its steps and guidance, and a speech server has nothing to set
         profiles = m.get("sampling") or {}
         if not profiles and kind == "text":
             f.add(repo, "at least one sampling profile is required")
@@ -920,12 +920,20 @@ def check_registry(models, sampling, f):
                     if not isinstance(val, str) or not val.strip():
                         f.add("%s/%s" % (repo, name), "note must be prose")
                     continue
-                if field == "thinking":
+                if field == "thinking" or spec.get("type") == "enum":
                     levels = spec.get("of") or []
                     if val not in levels:
                         f.add("%s/%s" % (repo, name),
-                              "thinking level %r is not one of %s"
-                              % (val, ", ".join(levels)))
+                              "%s %r is not one of %s" % (field, val, ", ".join(levels)))
+                    continue
+                # a schedule is a preset sd.cpp knows by name or the list itself
+                if spec.get("type") == "sigmas":
+                    listed = isinstance(val, list) and val and all(
+                        isinstance(s, (int, float)) and not isinstance(s, bool) for s in val)
+                    if not listed and val not in (spec.get("presets") or []):
+                        f.add("%s/%s" % (repo, name),
+                              "sigmas %r is neither a list of numbers nor one of %s"
+                              % (val, ", ".join(spec.get("presets") or [])))
                     continue
                 if isinstance(val, bool) or not isinstance(val, (int, float)):
                     f.add("%s/%s" % (repo, name), "%s must be a number, got %r"

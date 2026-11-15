@@ -19,4 +19,4 @@ The license of the quantized files follows the license of the original model:
 
 These files are converted using https://github.com/leejet/stable-diffusion.cpp
 
-Run FLUX using stable-diffusion.cpp with a GPU that has 6GB or even 4GB of VRAM: https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/flux.md
+Run FLUX using stable-diffusion.cpp with a GPU that has 6GB or even 4GB of VRAM: https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/models/flux.md

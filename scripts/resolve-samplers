@@ -17,6 +17,7 @@ from" is unknowable after the fact but "what do they still agree with" is not:
 
   quant-card         matches a set the quant repo's card documents
   vendor-card        matches a set the base repo's card documents
+  sdcpp-recipe       matches stable-diffusion.cpp's recipe for the model
   generation-config  matches the samplers shipped in generation_config.json
   tuned-here         matches nothing published
 
@@ -44,7 +45,10 @@ DATA = os.path.join(HERE, "..", "research", "data")
 SHIPPED = {"temp": "temperature", "top_p": "top_p", "top_k": "top_k",
            "min_p": "min_p", "repeat_penalty": "repetition_penalty",
            "presence_penalty": "presence_penalty"}
-NUMERIC = set(SHIPPED)
+NUMERIC = set(SHIPPED) | {"steps", "cfg_scale", "guidance", "flow_shift"}
+# compared as they are spelled. a sigma preset is a NAME for a list, so it is
+# only compared against another name, and a list against a list
+EXACT = {"sampling_method", "scheduler", "sigmas"}
 
 MODEL_KEY = re.compile(r"^  (\S.*?):\s*$")
 PROFILE_KEY = re.compile(r"^      ([\w.-]+):\s*$")
@@ -67,17 +71,22 @@ def load(path):
 def agrees(profile, values):
     """Do the two sets agree on every field they both name, and is there one?"""
     common = [k for k in values if k in profile and k in NUMERIC]
-    if not common:
+    exact = [k for k in values if k in profile and k in EXACT
+             and isinstance(profile[k], list) == isinstance(values[k], list)]
+    if not common + exact:
         return False
-    return all(abs(float(profile[k]) - float(values[k])) < 1e-9 for k in common)
+    return (all(abs(float(profile[k]) - float(values[k])) < 1e-9 for k in common)
+            and all(profile[k] == values[k] for k in exact))
 
 
-def source_for(profile, card, shipped):
+def source_for(profile, card, shipped, recipes=()):
     """The strongest published source these numbers still match."""
     for key, name in (("quant_samplers", "quant-card"), ("samplers", "vendor-card")):
         for s in card.get(key) or []:
             if agrees(profile, s.get("values") or {}):
                 return name
+    if any(agrees(profile, r) for r in recipes):
+        return "sdcpp-recipe"
     if shipped:
         theirs = {ours: shipped[t] for ours, t in SHIPPED.items() if t in shipped}
         if agrees(profile, theirs):
@@ -85,8 +94,12 @@ def source_for(profile, card, shipped):
     return "tuned-here"
 
 
-def resolve(models, cards, facts):
+def resolve(models, cards, facts, recipes=None):
     """{repo: {profile: source}} for every profile in the registry."""
+    by_repo = {}
+    for r in ((recipes or {}).get("recipes") or {}).values():
+        if r.get("repo"):
+            by_repo.setdefault(r["repo"], []).append(r.get("values") or {})
     out = {}
     for repo, m in (models.get("models") or {}).items():
         card = cards.get(repo) or {}
@@ -94,7 +107,8 @@ def resolve(models, cards, facts):
         for name, prof in (m.get("sampling") or {}).items():
             if not prof:
                 continue
-            out.setdefault(repo, {})[name] = source_for(prof, card, shipped)
+            out.setdefault(repo, {})[name] = source_for(prof, card, shipped,
+                                                        by_repo.get(repo, ()))
     return out
 
 
@@ -145,7 +159,8 @@ def main():
         text = f.read()
     models = yaml.safe_load(text) or {}
     wanted = resolve(models, load(os.path.join(DATA, "model-cards.json")),
-                     load(os.path.join(DATA, "model-facts.json")))
+                     load(os.path.join(DATA, "model-facts.json")),
+                     load(os.path.join(DATA, "sdcpp-recipes.json")))
     lines, changed = rewrite(text.split("\n"), wanted)
 
     counts = {}

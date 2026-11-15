@@ -1009,6 +1009,14 @@ test('the operations section shows the runtimes that load THIS model', () => {
   ok(/^sd /m.test(sd), 'the image fragment invokes sd: ' + sd);
   ok(sd.includes('--diffusion-model') && sd.includes('--vae')
      && sd.includes('--llm'), 'with the diffusion model, the vae and the text encoder');
+  // and at the steps the model was distilled to: sd.cpp's own defaults are 20
+  // steps at cfg 7, which is the wrong picture from a turbo model
+  ok(sd.includes('--steps 9') && sd.includes('--cfg-scale 1')
+     && sd.includes('--sampling-method euler'), 'at the image profile it names: ' + sd);
+  ops = {runtime: null, repo: null, quant: null, profile: null};
+  const h3 = snippets(model('minimax-h3-image')).map(s => s.text).join('\n');
+  ok(h3.includes('--sigmas minimax-h3-image'), 'a named schedule is passed by name: ' + h3);
+  eq(pickedProfile(model('minimax-h3-image')), 'image', 'the image profile is the one picked');
 
   // A VISION MODEL IS SERVED WITHOUT `--mmproj`, and that is the answer rather
   // than an omission. llama.cpp auto-downloads the projector beside weights
