@@ -506,6 +506,17 @@ dev sits mid-table on both arenas and passes 5 of the 15. all three carry a
 third of the generation weight, editing is carried at zero on the two boards
 that rate it, and nothing is averaged into anything.
 
+video generation is scored by the same two sites' text-to-video arenas, at half
+the weight each, matched the same way. lmarena's open-weights flag comes from a
+licence allowlist in its collector, and minimax h3's community licence had to be
+added to it the way krea 2's was. a percentile is a place in the roster's own
+cohort, and a board with one roster model on it ranks nobody, so there the model
+is ranked against the board's own open-weights rows instead. minimax h3 is the
+top open model on both video arenas and reads 90 that way. the quality cell is
+dimmed and its hover says the comparison was the board rather than the roster,
+and the factor tables print the cohort as `6 on board`. a second roster model on
+the board puts it back on the roster's own cohort.
+
 ## using it from a consumer
 
 one entry, trimmed:

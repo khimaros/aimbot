@@ -809,6 +809,7 @@ function can(m) {
   if (ins.includes('audio') && outs.includes('text')) out.add('transcribes');
   if (outs.includes('audio')) out.add('synthesizes');
   if (outs.includes('image')) out.add('draws');
+  if (outs.includes('video')) out.add('animates');
   // a capability and not a shape: what a decision model emits is a probability,
   // which is no modality. `resolve-ids`' BOARD_NEEDS says the same thing about
   // what jevbench measures, and the two have to agree or the derive scores a
@@ -899,7 +900,7 @@ function codingFill(m) {
 }
 
 function score(m) {
-  let num = 0, den = 0, denMax = 0, filled = 0, have = 0, want = 0;
+  let num = 0, den = 0, denMax = 0, filled = 0, have = 0, want = 0, board = [];
   const fill = codingFill(m);
   // two different questions, and both have to pass: `relevant` is whether the
   // VIEW is asking this, `asked` is whether this model could answer it. a
@@ -908,15 +909,20 @@ function score(m) {
   for (const [key, w] of askedFactors(m)) {
     want++; denMax += w;
     const p = facetPct(m, key);
-    if (p !== null) { have++; num += w * p; den += w; }
-    else if (fill.value !== null && scaledFacet(key)) { num += w * fill.value; filled += w; }
+    if (p !== null) {
+      have++; num += w * p; den += w;
+      if ((m.facets[key] || {}).cohort_from === 'board') board.push(key);
+    } else if (fill.value !== null && scaledFacet(key)) { num += w * fill.value; filled += w; }
   }
   // evidence is what was MEASURED: a prediction fills the composite and never
   // the coverage it is judged by
   const cover = denMax ? den / denMax : 0;
   if (!den || cover < COVER_FLOOR) return {value: null, have, want, cover};
   const k = SHRINK_LAMBDA * (denMax - den - filled);
-  return {value: (num + k * SHRINK_PRIOR) / (den + filled + k), have, want, cover};
+  // `board` names the factors ranked against their board's open-weights rows
+  // because too few roster models are on it: a rank, but not against the roster
+  return {value: (num + k * SHRINK_PRIOR) / (den + filled + k), have, want, cover,
+          provisional: board.length > 0, board};
 }
 
 const scored = m => (m._s || (m._s = score(m)));
@@ -993,6 +999,12 @@ const COLUMNS = [
        ? ` title="${num(s.value, 1)}, scored at x${r.toFixed(3)} `
          + `${curveFor(m).kind} retention for ${esc(q.quant)} at ${retentionBpw(m, q)} bpw${floored}"`
        : ` title="${num(s.value, 1)}"`;
+     if (s.provisional) {
+       return `<td class="n faint" title="${num(s.value, 1)}, provisional: too few roster `
+         + `models share ${esc(s.board.join(', '))}, so it is ranked against that `
+         + `board's open-weights rows rather than the roster">`
+         + `<span class="bar" style="--w:${s.value}%"><span>${num(s.value, 0)}</span></span></td>`;
+     }
      return `<td class="n"${title}><span class="bar" style="--w:${s.value}%">`
        + `<span>${num(s.value, 0)}</span></span></td>`;
    }},
@@ -1398,7 +1410,7 @@ const MODALITY_ABOUT = {
   text: ['text'], t2t: ['text'], v2t: ['text'],
   any2t: ['text', 'transcribes'],
   a2t: ['transcribes'], t2a: ['synthesizes'], t2i: ['draws'],
-  t2v: [], t2e: [], decision: ['decides'], diar: [], post: [], mt: [],
+  t2v: ['animates'], t2e: [], decision: ['decides'], diar: [], post: [], mt: [],
 };
 
 // chip ids that were renamed, old -> new, so a share link or a script written

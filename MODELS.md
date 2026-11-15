@@ -4381,19 +4381,19 @@ image generation
 
 | # | model | quant | size (gib) | runs on | evidence | quality |
 |--:|---|---|--:|---|--:|--:|
-| 1 | qwen-image-2.1 | Q8_0 leejet | 7.2 | stable-diffusion.cpp | 100% | **84.7** |
-| 2 | ideogram-4 | Q4_0 leejet | 5.3 | stable-diffusion.cpp | 69% | **80.0** |
-| 3 | flux-2-dev | Q8_0 city96 | 32.6 | stable-diffusion.cpp | 100% | **59.2** |
-| 4 | krea-2-turbo | Q8_0 byteshape | 13.3 | stable-diffusion.cpp | 36% | **51.9** |
-| 5 | z-image-turbo | Q8_0 unsloth | 6.7 | stable-diffusion.cpp | 100% | **47.2** |
-| 6 | ernie-image-turbo | Q8_0 unsloth | 8.1 | stable-diffusion.cpp | 37% | **46.1** |
-| 7 | flux-2-klein-9b | Q8_0 leejet | 9.3 | stable-diffusion.cpp | 69% | **43.9** |
-| 8 | sd3.5-large | Q8_0 city96 | 8.2 | stable-diffusion.cpp | 37% | **37.1** |
-| 9 | flux-1-dev | Q8_0 leejet | 12.0 | stable-diffusion.cpp | 69% | **28.2** |
-| 10 | flux-2-klein-4b | Q8_0 leejet | 4.0 | stable-diffusion.cpp | 69% | **27.3** |
+| 1 | qwen-image-2.1 | Q8_0 leejet | 7.2 | stable-diffusion.cpp | 100% | **81.8** |
+| 2 | ideogram-4 | Q4_0 leejet | 5.3 | stable-diffusion.cpp | 69% | **76.9** |
+| 3 | minimax-h3-image | Q3_K_M Hearthscale | 8.2 | stable-diffusion.cpp | 37% | **67.9** |
+| 4 | flux-2-dev | Q8_0 city96 | 32.6 | stable-diffusion.cpp | 100% | **57.0** |
+| 5 | krea-2-turbo | Q8_0 byteshape | 13.3 | stable-diffusion.cpp | 36% | **51.9** |
+| 6 | z-image-turbo | Q8_0 unsloth | 6.7 | stable-diffusion.cpp | 100% | **45.2** |
+| 7 | ernie-image-turbo | Q8_0 unsloth | 8.1 | stable-diffusion.cpp | 37% | **44.2** |
+| 8 | flux-2-klein-9b | Q8_0 leejet | 9.3 | stable-diffusion.cpp | 69% | **42.0** |
+| 9 | sd3.5-large | Q8_0 city96 | 8.2 | stable-diffusion.cpp | 37% | **36.2** |
+| 10 | flux-1-dev | Q8_0 leejet | 12.0 | stable-diffusion.cpp | 69% | **27.8** |
 | 11 | flux-1-schnell | Q8_0 leejet | 11.9 | stable-diffusion.cpp | 37% | **26.7** |
-| 12 | krea-2-raw | Q8_0 vantagewithai | 12.8 | stable-diffusion.cpp | 5% | **-** |
-| 13 | minimax-h3-image | Q3_K_M Hearthscale | 8.2 | stable-diffusion.cpp | 5% | **-** |
+| 12 | flux-2-klein-4b | Q8_0 leejet | 4.0 | stable-diffusion.cpp | 69% | **26.2** |
+| 13 | krea-2-raw | Q8_0 vantagewithai | 12.8 | stable-diffusion.cpp | 5% | **-** |
 | 14 | ovis-image-7b | Q8_0 leejet | 7.3 | stable-diffusion.cpp | 0% | **-** |
 
 ### text to video
@@ -4403,11 +4403,11 @@ no board this repo collects rates them, so they carry no score
 
 | # | model | quant | size (gib) | runs on | evidence | quality |
 |--:|---|---|--:|---|--:|--:|
-| 1 | ltx-video | Q8_0 city96 | 2.0 | stable-diffusion.cpp | 100% | **54.0** |
-| 2 | hunyuan-video | Q3_K_S city96 | 5.7 | stable-diffusion.cpp | 100% | **53.5** |
-| 3 | wan-2.1-t2v-14b | Q8_0 city96 | 14.8 | stable-diffusion.cpp | 100% | **18.3** |
-| 4 | liveavatar | NVFP4 audio-cpp | 17.0 | audio.cpp | 0% | **-** |
-| 5 | minimax-h3 | Q4_K audio-cpp | 30.2 | audio.cpp | 0% | **-** |
+| 1 | minimax-h3 | Q4_K audio-cpp | 30.2 | audio.cpp | 95% | **90.0** |
+| 2 | hunyuan-video | Q3_K_S city96 | 5.7 | stable-diffusion.cpp | 5% | **-** |
+| 3 | liveavatar | NVFP4 audio-cpp | 17.0 | audio.cpp | 0% | **-** |
+| 4 | ltx-video | Q8_0 city96 | 2.0 | stable-diffusion.cpp | 5% | **-** |
+| 5 | wan-2.1-t2v-14b | Q8_0 city96 | 14.8 | stable-diffusion.cpp | 5% | **-** |
 
 ### text to embeddings
 

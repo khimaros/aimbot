@@ -3301,6 +3301,40 @@ test('the image roster carries lmarena edit ratings where the board has them', (
      'editing and generation are scored separately, not copied');
 });
 
+// the video roster had no factor at all, so minimax h3 carried nothing while both
+// arenas that rate open video generators had it near the top. a video board is
+// asked of a model that outputs video, and nothing else. a percentile needs a
+// cohort: where the roster has one model on a board, it is ranked against the
+// board's own open-weights rows instead, and the score says so
+test('the video roster is measured on the video arenas', () => {
+  RESET();
+  const h3 = model('minimax-h3');
+  ['aa-t2v.elo', 'lmarena-t2v.rating'].forEach(k => {
+    const f = h3.facets[k];
+    ok(f, h3.short + ' carries ' + k);
+    ok(f && f.value > 500 && f.value < 2000, k + ' is elo-shaped');
+  });
+  ok(asked(h3, 'aa-t2v.elo') && asked(h3, 'lmarena-t2v.rating'), 'both are asked of it');
+  const aa = h3.facets['aa-t2v.elo'];
+  eq(aa.cohort_from, 'board', 'alone among the roster on the board, it is ranked against the board');
+  ok(aa.pct > 80, 'the top open model on the board ranks near the top, got ' + aa.pct);
+  ok(!scored(model('qwen3.8 27b')).provisional, 'a roster-ranked score is not provisional');
+  filters.mods = new Set(['t2v']);
+  clearScores();
+  const s = scored(h3);
+  ok(s.value > 80 && s.provisional, 'a score, marked provisional: ' + JSON.stringify(s));
+  const cell = col('score').cell(h3);
+  ok(/faint/.test(cell) && /open-weights rows/.test(cell), 'the cell is dimmed and says why: ' + cell);
+  filters.mods = new Set(DEFAULT_MODALITIES);
+  clearScores();
+  D.models.filter(m => m.facets['lmarena-t2v.rating'] || m.facets['aa-t2v.elo'])
+    .forEach(m => ok(m.modalities.output.includes('video'),
+                     m.short + ' is on a video board and outputs no video'));
+  ok(!asked(model('qwen3.8 27b'), 'aa-t2v.elo'), 'a text model is not asked a video board');
+  eq(model('minimax-h3-image').facets['aa-t2i.elo'].value > 0, true,
+     'and h3 image is on the image board it is listed on');
+});
+
 test('the kv cache follows each model\'s own attention geometry', () => {
   // gemma 4 31b runs a 1024-token window on all but every fifth layer, so its
   // cache at 128k is a fraction of what layers * kv_heads * head_dim implies

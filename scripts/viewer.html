@@ -893,6 +893,15 @@ function drawColumns() {
 // every number carries where it came from. the marker is small on purpose:
 // hover shows the source and, where we hold one, the sentence itself.
 
+// what a facet's percentile was ranked against: the roster models carrying it,
+// or, where too few do, the open-weights rows of the board itself
+const cohortText = f => f.cohort_from === 'board'
+  ? f.cohort + ' open-weights rows on the board, too few roster models carrying it'
+  : f.cohort + ' models carrying it';
+const cohortCell = f => f.cohort_from === 'board'
+  ? `<td class="n faint" title="${cohortText(f)}">${f.cohort} on board</td>`
+  : `<td class="n faint">${f.cohort || ''}</td>`;
+
 function refMark(ref, quote) {
   if (!ref) return '';
   const payload = esc(JSON.stringify({...ref, quote: quote || ref.quote || ''}));
@@ -1394,7 +1403,7 @@ function facetTable(m, keys) {
           ? ` <span class="faint">x${modelRetention(m).toFixed(3)} for the quant</span>` : '')
         + `</td><td class="n">${num(facetValue(m, k), DIGITS[meta.unit] ?? 2)}</td>`
         + `<td class="n"><span class="bar" style="--w:${pct || 0}%"><span>${pct === '' ? '-' : pct}</span></span></td>`
-        + `<td class="n faint">${f.cohort || ''}</td>`
+        + cohortCell(f)
         + `<td>${refMark(f.ref)}</td></tr>`;
     }).join('') + '</tbody></table>';
 }
@@ -1463,7 +1472,7 @@ function tabQuality(m) {
           + `<td class="n">${num(facetValue(m, k), DIGITS[meta.unit] ?? 2)}</td>`
           + `<td class="n"><span class="bar" style="--w:${pct || 0}%"><span>`
           + `${pct === '' ? '-' : pct}</span></span></td>`
-          + `<td class="n faint">${f.cohort || ''}</td>`
+          + cohortCell(f)
           + `<td>${refMark(f.ref)}</td></tr>`;
       }).join('') + '</tbody></table>';
   }).join('')
@@ -1545,7 +1554,7 @@ function proseRef(part, m) {
   // build time. the discounted rank follows under its own name, or hovering a
   // `p99` answers p96 and contradicts the figure it sits on
   if (f.pct != null && f.cohort) {
-    said.push('p' + f.pct + ' of ' + f.cohort + ' models carrying it');
+    said.push('p' + f.pct + ' of ' + cohortText(f));
   }
   const adjusted = effective && scaledFacet(part.key) ? facetPctRaw(owner, part.key) : null;
   if (adjusted !== null) said.push('p' + adjusted + ' quant adjusted');

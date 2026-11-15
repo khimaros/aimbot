@@ -186,6 +186,11 @@ SOURCES = {
                "url": "https://artificialanalysis.ai/image/leaderboard/text-to-image"},
     "lmarena-t2i": {"label": "lmarena text-to-image", "file": "data/lmarena.json",
                     "url": "https://arena.ai/leaderboard/text-to-image"},
+    "aa-t2v": {"label": "artificial analysis text-to-video",
+               "file": "data/artificial-analysis-video.json",
+               "url": "https://artificialanalysis.ai/video/leaderboard/text-to-video"},
+    "lmarena-t2v": {"label": "lmarena text-to-video", "file": "data/lmarena.json",
+                    "url": "https://arena.ai/leaderboard/text-to-video"},
     "lmarena-edit": {"label": "lmarena image editing", "file": "data/lmarena.json",
                      "url": "https://arena.ai/leaderboard/image-edit"},
     "showdown-t2i": {"label": "genai image showdown",
@@ -733,6 +738,40 @@ def verdict_facets(capture, model):
     return out
 
 
+def video_facets(board, lm, ids, lm_open=frozenset()):
+    """The two video arenas, kept apart for the reason the image ones are: two
+    sites, two voter pools, and no basis for averaging what they disagree on.
+
+    Each carries its board's open-weights ratings as `board`, because the roster
+    has one model on either and a percentile needs a cohort. `add_percentiles`
+    falls back to it only where the roster cohort is too small to rank in."""
+    out = {}
+    aa_pop = [r["elo"] for r in board.values()
+              if r.get("openWeightsUrl") and r.get("elo") is not None]
+    lm_pop = [e["rating"] for name, e in lm.items()
+              if name in lm_open and e.get("rating") is not None]
+    row = board.get(ids.get("aa-t2v")) or {}
+    if row.get("elo") is not None:
+        out["aa-t2v.elo"] = {
+            "value": row["elo"], "label": "video arena rating", "unit": "elo",
+            "group": "artificial analysis video", "votes": row.get("appearances"),
+            "board": aa_pop,
+            "ref": ref("aa-t2v", ids.get("aa-t2v"),
+                       "%s appearances, %s to %s" % (row.get("appearances"),
+                                                     row.get("ciLower"),
+                                                     row.get("ciUpper")), row)}
+    entry = lm.get(ids.get("lmarena-t2v")) or {}
+    if entry.get("rating") is not None:
+        out["lmarena-t2v.rating"] = {
+            "value": entry["rating"], "label": "video arena rating (raw)",
+            "unit": "elo", "group": "lmarena video", "votes": entry.get("votes"),
+            "board": lm_pop,
+            "ref": ref("lmarena-t2v", ids.get("lmarena-t2v"),
+                       "rank %s of the board, %s votes"
+                       % (entry.get("rank"), entry.get("votes")), entry)}
+    return out
+
+
 def image_facets(board, lm, ids, lm_edit=None, showdown=None):
     """Five numbers over two questions: three sites rating generated pictures,
     and two rating EDITED ones.
@@ -832,6 +871,8 @@ def build(bt, registry):
 
     lm_images = lm_board("text_to_image-overall-raw")
     lm_edits = lm_board("image_edit-overall-raw")
+    videos, lm_videos = load("artificial-analysis-video"), lm_board("text_to_video-overall-raw")
+    lm_open = {n for n, m in (load("lmarena").get("models") or {}).items() if m.get("openWeights")}
     models = {}
     for repo, m in registry.items():
         ids = m.get("ids") or {}
@@ -845,6 +886,7 @@ def build(bt, registry):
         facets.update(community_facet(sent.get(short) or {}))
         facets.update(speech_facets(speech, arena, voicearena, ids, open_asr))
         facets.update(image_facets(pictures, lm_images, ids, lm_edits, showdown))
+        facets.update(video_facets(videos, lm_videos, ids, lm_open))
         facets.update(jev_facets(jev, ids, jev_revision))
         facets.update(aa_decision_facets(decisions, ids))
         facets.update(livebench_facets(livebench, ids))
@@ -883,15 +925,24 @@ def build(bt, registry):
 
 
 def add_percentiles(models):
-    """Rank each facet within the registry cohort that carries it."""
+    """Rank each facet within the registry cohort that carries it.
+
+    A facet that brought its board's open-weights ratings is ranked against
+    those instead where the registry cohort is too small to rank in: the top
+    open model on a board is worth saying, and `cohort_from` lets the page say
+    the comparison was not the roster's own. The list itself is not shipped."""
     pops = {}
     for rec in models.values():
         for key, f in rec["facets"].items():
             pops.setdefault(key, []).append(f["value"])
     for rec in models.values():
         for key, f in rec["facets"].items():
+            board = f.pop("board", None)
             f["pct"] = percentile(f["value"], pops[key])
             f["cohort"] = len(pops[key])
+            if f["pct"] is None and board:
+                f["pct"] = percentile(f["value"], board)
+                f["cohort"], f["cohort_from"] = len(board), "board"
 
 
 def merge_assessed(new, authored, old):

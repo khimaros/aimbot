@@ -297,6 +297,11 @@ def key_spaces(data=None, listed=False):
                          ("showdown-edit", "image-editing")):
         pictured[source] = open_keys((showdown.get(name) or {}).get("models") or {},
                                      "locallyHostable")
+    # the two video arenas, read the way their image boards are: AA's by the
+    # huggingface url it publishes, lmarena's through its open-weights map
+    moving = {"aa-t2v": open_keys(load("artificial-analysis-video", data, listed),
+                                  "openWeightsUrl", ("openWeightsUrl",)),
+              "lmarena-t2v": lm_open("text_to_video-overall-raw")}
     # nothing scores a diarizer: there is no third-party DER board for the
     # embedders and segmenters, which is why crispasr's own figure is the only
     # number this repo has for them and it is quoted in the model's notes
@@ -305,7 +310,7 @@ def key_spaces(data=None, listed=False):
     decision = {"jev": jev_space((load("jevbench", data, listed) or {}).get("systems") or {}),
                 "aa-decision": aa_decision_space(
                     load("artificial-analysis-decision", data, listed))}
-    return {"text": out, "speech": spoken, "image": pictured,
+    return {"text": out, "speech": spoken, "image": pictured, "video": moving,
             "decision": decision, "diarize": {}}
 
 
@@ -334,6 +339,7 @@ BOARD_NEEDS = {
     "aa-tts": "synthesizes", "tts-arena": "synthesizes",
     "aa-t2i": "draws", "lmarena-t2i": "draws", "lmarena-edit": "draws",
     "showdown-t2i": "draws", "showdown-edit": "draws",
+    "aa-t2v": "animates", "lmarena-t2v": "animates",
     # verdict re-runs jevbench's items on a served gguf, so it measures what the
     # board does. declared so the viewer asks it of models that decide and not
     # of the text models verdict also happened to run
@@ -354,6 +360,8 @@ def can(model):
         out.add("synthesizes")
     if "image" in outs:
         out.add("draws")
+    if "video" in outs:
+        out.add("animates")
     # a capability rather than a shape: what a decision model emits is a
     # probability per option, which is no modality, so `kind` is the only thing
     # that says it. the same table in scripts/roster.js has to agree or the page

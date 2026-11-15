@@ -14,6 +14,7 @@ date is in each file's provenance below.
 | `data/artificial-analysis.json` | 2026-08-17 | artificialanalysis.ai leaderboard |
 | `data/artificial-analysis-speech.json` | 2026-09-04 | artificialanalysis.ai speech-to-text (non-streaming and streaming) and text-to-speech |
 | `data/artificial-analysis-image.json` | 2026-09-04 | artificialanalysis.ai text-to-image arena, one elo per model |
+| `data/artificial-analysis-video.json` | 2026-11-14 | artificialanalysis.ai text-to-video arena, one elo per model |
 | `data/artificial-analysis-decision.json` | 2026-11-09 | artificialanalysis.ai decision index v2: the index and its six evals per decision model |
 | `data/genai-showdown.json` | 2026-09-20 | genai-showdown.specr.net: fifteen generation prompts and twelve editing ones, judged pass or fail against published criteria |
 | `data/tts-arena.json` | 2026-09-04 | tts-agi TTS Arena v2, crowd-sourced blind-vote elo |

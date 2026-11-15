@@ -6,8 +6,8 @@ Artificial analysis has no free API (api/v2 returns 401 without a key), but
 their leaderboard pages are a next.js app that ships the whole dataset inline
 as an RSC flight payload. ./rsc-extract pulls the records out; this shapes them.
 
-Seven boards, one site, one collector. The image and decision leaderboards
-each keep their own file;
+Eight boards, one site, one collector. The image, video and decision
+leaderboards each keep their own file;
 the three speech boards share data/artificial-analysis-speech.json, because a
 speech model is scored on whichever of them measures its modality and a reader
 wants them side by side; and the two text boards share
@@ -36,6 +36,7 @@ UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
 TEXT_OUT = "data/artificial-analysis.json"
 SPEECH_OUT = "data/artificial-analysis-speech.json"
 IMAGE_OUT = "data/artificial-analysis-image.json"
+VIDEO_OUT = "data/artificial-analysis-video.json"
 DECISION_OUT = "data/artificial-analysis-decision.json"
 
 # the leaderboard row no longer carries the model's metadata, and the coding and
@@ -248,6 +249,28 @@ BOARDS = {
             # resolve-ids matches on -- a repo path beats a fuzzy name
             "openWeightsUrl": "openWeightsUrl",
             "pricePer1kImages": "pricePer1kImages",
+            "releaseDate": "releaseDate",
+        },
+    },
+    # the video arena, the same client and the same row shape as the image one,
+    # priced per minute rather than per thousand images
+    "text-to-video": {
+        "url": "https://artificialanalysis.ai/video/leaderboard/text-to-video",
+        "cache": "aa-t2v",
+        "match": '"elo":',
+        "require": "id",
+        "pick": "appearances",
+        "out": VIDEO_OUT,
+        "key": ["name"],
+        "fields": {
+            "name": "name",
+            "creator": "creator.name",
+            "elo": "elo",
+            "ciLower": "ciLower",
+            "ciUpper": "ciUpper",
+            "appearances": "appearances",
+            "openWeightsUrl": "openWeightsUrl",
+            "pricePerMinute": "pricePerMinute",
             "releaseDate": "releaseDate",
         },
     },
