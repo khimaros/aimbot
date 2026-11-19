@@ -233,11 +233,28 @@ const rungBpw = c => c.realBpw && c.bpw
 // first. a rung with no bits figure at all -- a repo with no tensor table and no
 // parameter count -- ranks last rather than inventing a position. a natively
 // low-bpw model pays no discount, so bits alone rank it
+//
+// quality is a property of the TYPE, and which publisher's file of that type to
+// read is the registry's call: repos are listed most preferred first. leejet's
+// Q8_0 of qwen image 2.1 measured 8.643 bpw against unsloth's 8.591, so the fit
+// read leejet however the registry ordered them. each rung is ranked at the best
+// its type reaches in the list, then by registry order, then on its own figures
 const byQuality = (list, m) => {
   const bits = c => (rungBpw(c) ? retentionBpw(m, c) : null) ?? -1;
   const kept = c => m.native_low_bpw || !rungBpw(c) ? 0 : retention(retentionBpw(m, c), m, c);
-  return [...list].sort((a, b) => (kept(b) - kept(a)) || (bits(b) - bits(a))
+  const order = (m.repos || []).map(r => r.repo);
+  const rank = c => order.includes(c.repo) ? order.indexOf(c.repo) : order.length;
+  const best = {};
+  list.forEach(c => {
+    const t = best[c.quant] ||= {kept: -Infinity, bits: -Infinity};
+    t.kept = Math.max(t.kept, kept(c));
+    t.bits = Math.max(t.bits, bits(c));
+  });
+  return [...list].sort((a, b) => (best[b.quant].kept - best[a.quant].kept)
+  || (best[b.quant].bits - best[a.quant].bits)
   || ((a.speculative === false ? 1 : 0) - (b.speculative === false ? 1 : 0))
+  || (rank(a) - rank(b))
+  || (kept(b) - kept(a)) || (bits(b) - bits(a))
   || ((a.gib ?? Infinity) - (b.gib ?? Infinity))
   || String(a.repo).localeCompare(String(b.repo))
   || String(a.quant).localeCompare(String(b.quant)));

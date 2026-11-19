@@ -686,8 +686,8 @@ models:
       short: qwen3.5-27b
       match: qwen\s*-?3\.5[\s-]*27b
     repos:
-    - unsloth/Qwen3.5-27B-GGUF
     - unsloth/Qwen3.5-27B-MTP-GGUF
+    - unsloth/Qwen3.5-27B-GGUF
     runtime:
       arch: qwen35
       mainline: true
@@ -735,11 +735,12 @@ models:
       output:
       - text
     turns:
-      source: unsloth/Qwen3.5-27B-GGUF
-      developer: rejected
-      leading_system_max: 1
-      mid_system: rejected
-      mid_developer: rejected
+      source: unsloth/Qwen3.5-27B-MTP-GGUF
+      developer: as-system
+      leading_system_max: 2
+      mid_system: dropped
+      mid_developer: dropped
+      upstream_differs: [developer, leading_system_max, mid_developer, mid_system]
     thinking:
       knob: enable_thinking
       kind: boolean
@@ -1673,10 +1674,10 @@ models:
         BF16:
           runtime: {arch: clef, mainline: true, since: b11371, merged: '2026-10-03'}
     runtime:
-      arch: qwen35
+      arch: clef
       mainline: true
-      since: b7990
-      merged: '2026-02-10'
+      since: b11371
+      merged: '2026-10-03'
     ids:
       jev: ''
       aa-decision: ''
@@ -3433,7 +3434,7 @@ models:
         {card@nerkyor/Qwen3.8-27B-Coder390-EfficientThink-Opus5.5-GPT6Astra-Grok4.7-DSV4Pro-K3-SFT-RLOO-GGUF-NInfer}
     sampling:
       thinking:
-        source: tuned-here
+        source: quant-card
         temp: 1.0
         top_p: 0.95
         top_k: 20
@@ -3509,7 +3510,7 @@ models:
       - text
     sampling:
       thinking:
-        source: generation-config
+        source: quant-card
         temp: 0.6
         top_p: 0.95
         top_k: 20
@@ -3587,18 +3588,13 @@ models:
       - text
     sampling:
       thinking:
-        source: tuned-here
+        source: vendor-card
         note: >-
-          taken from the SIBLING entry's card rather than this one's. signal 3.8
-          27b states the settings outright -- temperature 0.6, min-p 0.05, top-p
-          0.95, top-k 20 -- and says they apply "on Signal and on the base model
-          alike" {card@agentionai/Signal-3.8-27B}, which is the same fine-tune
-          over the same publisher's recipe.
-          this repo ships no generation_config to read because the weights repo
-          is gated, so nothing can derive it here. the min-p is the part that
-          matters and is why this is not left empty: without it the card says
-          long answers "can run away into repetition on some draws"
-          {card@agentionai/Signal-3.8-27B}
+          the flags of this card's own run command, which are the set signal 3.8
+          27b states outright and says apply "on Signal and on the base model
+          alike" {card@agentionai/Signal-3.8-27B}. the min-p is the part that
+          matters: without it the card says long answers "can run away into
+          repetition on some draws" {card@agentionai/Signal-3.8-27B}
         temp: 0.6
         top_p: 0.95
         top_k: 20
@@ -6059,13 +6055,13 @@ models:
       livebench: ''
     sampling:
       tool-use:
-        source: tuned-here
+        source: quant-card
         temp: 1.0
         top_p: 0.95
         note: the card's "Agentic and tool-use tasks" row {card}
         tuned: [instruct, code, tools]
       thinking:
-        source: tuned-here
+        source: quant-card
         temp: 0.6
         top_p: 0.95
         note: the card's row for reasoning and chat {card}
@@ -6130,7 +6126,7 @@ models:
       livebench: ''
     sampling:
       thinking:
-        source: tuned-here
+        source: generation-config
         note: 'neither ricursive''s card {card} nor a generation_config publishes a sampler,
           and atomicchat''s card says as much. this is the unmodified distribution with a
           light nucleus cut and no penalties, a starting point rather than a recommendation,
@@ -6227,7 +6223,7 @@ models:
       livebench: ''
     sampling:
       thinking:
-        source: vendor-card
+        source: quant-card
         temp: 1.0
         top_p: 0.97
         top_k: 128
@@ -7062,7 +7058,7 @@ models:
       livebench: ''
     sampling:
       thinking:
-        source: vendor-card
+        source: quant-card
         temp: 0.1
         top_k: 50
         repeat_penalty: 1.05
@@ -7111,7 +7107,7 @@ models:
         registry names which one rather than looking for a sidecar that is not there
     sampling:
       instruct:
-        source: vendor-card
+        source: quant-card
         temp: 0.1
         top_k: 50
         repeat_penalty: 1.1
@@ -7170,13 +7166,13 @@ models:
       livebench: ''
     sampling:
       tool-use:
-        source: vendor-card
+        source: quant-card
         temp: 0.1
         top_k: 50
         repeat_penalty: 1.1
         tuned: [instruct, chat, tools]
       thinking:
-        source: vendor-card
+        source: quant-card
         temp: 1.0
         top_p: 0.95
         top_k: 20
@@ -7224,7 +7220,7 @@ models:
       livebench: ''
     sampling:
       thinking:
-        source: vendor-card
+        source: quant-card
         temp: 0.1
         top_p: 1.0
         top_k: 50
@@ -8780,6 +8776,52 @@ models:
       accepts: [none, minimal, low, medium, high, max]
       default: high
       aliases: {xhigh: max}
+  thinkingmachines/Inkling-2-Small:
+    kind: text
+    name:
+      short: inkling 2 small
+      match: inkling[\s-]*2[\s-]*small
+    repos:
+    - unsloth/Inkling-2-Small-GGUF
+    runtime:
+      arch: inkling2
+      mainline: false
+      tracking: https://github.com/ggml-org/llama.cpp/pull/32217
+      note: merged to master on 2026-11-14, an hour after b12397, so no release tag carries it yet
+        and a build of master from after the merge does. unsloth's card warns that a build with only
+        the first inkling "will not load it" {card@unsloth/Inkling-2-Small-GGUF}
+    ids:
+      aa: inkling-2-small
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 1.0
+        top_k: 0
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input: [text, image]
+      output: [text]
+    turns:
+      source: unsloth/Inkling-2-Small-GGUF
+      developer: as-system
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+      upstream_differs: [developer, mid_developer]
+    thinking:
+      knob: reasoning_effort
+      accepts: [none, minimal, low, medium, high, xhigh]
+      default: high
+      aliases: {max: xhigh}
   thinkingmachines/Inkling:
     kind: text
     name:
@@ -9700,6 +9742,77 @@ models:
       leading_system_max: unlimited
       mid_system: reordered
       mid_developer: dropped
+  tencent/Hy4-flash:
+    kind: text
+    name:
+      short: hy4 flash
+      match: hy4[\s-]*flash
+    notes: >-
+      a 220b moe with 12b active, 64b of which is an engram n-gram table read a few rows per
+      token. every publisher ships that table as its own second shard, so it can stay
+      memory-mapped on disk while the rest is resident; the fit still charges for both
+      shards, which overstates what a box needs by the size of that shard.
+    repos:
+    - repo: AngelSlim/Hy4-flash-GGUF
+      files:
+        Q4_K_M:
+          note: 'tencent''s own quant team, converted from an internal export rather than the public
+            checkpoint, so the files carry a multi-token-prediction block the public weights do not
+            have {card@AtomicChat/Hy4-flash-GGUF}'
+        Hy4-flash-SPARK-4Bit.gguf:
+          quant: NVFP4
+          runtime:
+            mainline: false
+            patch: https://huggingface.co/AngelSlim/Hy4-flash-GGUF/blob/main/patch/hy4-flash-spark.patch
+            note: 'the routed experts in NVFP4 and the rest Q8_0, built for dgx spark. it wants
+              tencent''s own patch on a pinned llama.cpp commit, which adds cuda kernels and mtp
+              support beside the architecture {card}'
+        Hy4-flash-SPARK-4Bit-Fast.gguf:
+          quant: NVFP4-FAST
+          runtime:
+            mainline: false
+            patch: https://huggingface.co/AngelSlim/Hy4-flash-GGUF/blob/main/patch/hy4-flash-spark.patch
+            note: the spark build with a little more of it in NVFP4, on the same patch {card}
+    - repo: Xylolabs/Hy4-flash-GGUF
+      files:
+        Q4_K_M:
+          note: 'the only full ladder, eleven rungs from IQ2_M to Q8_0, but quantized from tencent''s fp8 release
+            upcast to bf16 rather than from the bf16 weights; the card says bf16-based files will
+            replace these {card}. its own Q4_K_M measures closer to its Q8_0 than tencent''s does,
+            a comparison made against a reference from the same fp8 source'
+    - AtomicChat/Hy4-flash-GGUF
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    runtime:
+      arch: hy_v4_flash
+      mainline: false
+      tracking: https://github.com/ggml-org/llama.cpp/pull/32517
+      note: every publisher built against the open PR, and stock llama.cpp does not load these files
+        {card@AtomicChat/Hy4-flash-GGUF}
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 0.9
+        top_p: 1.0
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input: [text, image, video]
+      output: [text]
+    turns:
+      source: AngelSlim/Hy4-flash-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: reasoning_effort
+      accepts: [no_think, low, high, max]
+      default: high
   upstage/Solar-Open2-250B:
     kind: text
     # the card documents reasoning_effort="high" for reasoning and "none" for a
@@ -10269,7 +10382,7 @@ models:
       livebench: ''
     sampling:
       thinking:
-        source: generation-config
+        source: quant-card
         temp: 1.0
         top_p: 0.95
         top_k: 64
@@ -10335,7 +10448,7 @@ models:
       livebench: ''
     sampling:
       thinking:
-        source: generation-config
+        source: quant-card
         temp: 1.0
         top_p: 0.95
         top_k: 64

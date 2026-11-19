@@ -28,6 +28,8 @@ tags: [laya, system-one, calibrated-decisions, rlcd, classification, routing, sc
 
 **Multilingual, non-autoregressive System 1 decision model.** Give it a **state** (text, email, ticket, or JSON) and **typed questions**; it returns typed answers with mathematically calibrated probabilities in a single forward pass (~33 ms) across 100+ languages. Trained with reinforcement learning against strictly proper scoring rules (**RLCD**), so reporting honest probabilities is the only way to maximise reward. It never generates text, so there is nothing to parse and nothing to hallucinate.
 
+> **Train your own decision engine at [studio.embedding.in](https://studio.embedding.in).** Studio, from Embedding Space, trains a System 1 decision engine from a description of your company: it writes the questions and the examples, fits and calibrates a vega model, and gives you a signed policy file that runs on your own machine with `vegaml` (also reachable as `laya.Agent(vegaml=True)`). No labelled data is needed to start, and a new workspace gets $10 of free credit.
+
 ## Installation
 
 ```bash

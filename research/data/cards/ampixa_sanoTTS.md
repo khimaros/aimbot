@@ -1,6 +1,6 @@
 ---
 license: gpl-3.0
-language: [en, ne, hi, vi, id, zh]
+language: [en, ne, hi, vi, id, zh, de, fr, es, it, pt, ru, cs, ro, tr, ar, pl]
 pipeline_tag: text-to-speech
 tags: [text-to-speech, tiny, microcontroller, esp32, wasm, piper, distillation]
 library_name: sanotts
@@ -23,11 +23,13 @@ LM386 and a speaker), or live in the browser via WASM.
 | Runs real-time on a $3 microcontroller | ESP32-S3, out a GPIO into an LM386 |
 | Runs in the browser | WebAssembly, no server |
 | Per-voice footprint | **337 KB to 8.7 MB**, zero dependencies (espeak-ng phonemizer included) |
-| Coverage | **11 voices** across **6 languages** — English, Nepali (नेपाली), Hindi (हिन्दी), Vietnamese (Tiếng Việt), Indonesian (Bahasa), Chinese (中文) |
+| Live browser demo | **31 voices** across **17 languages** — English, Nepali (नेपाली), Hindi (हिन्दी), Vietnamese (Tiếng Việt), Indonesian (Bahasa), Chinese (中文), German, French, Spanish, Italian, Portuguese, Russian, Czech, Romanian, Turkish, Arabic, and Polish |
 | License | open source, **GPL-3.0** |
 
 **Live demo:** [tts.ampixa.com/sanoTTS](https://tts.ampixa.com/sanoTTS) —
-every voice synthesizes your text live in the browser, no server, no upload.
+**31 voices across 17 languages**, synthesizing your text live in the browser, no server, no upload.
+
+The count is the live demo's voice-picker inventory, including separate model sizes for the same language. **Polish is currently demo-only:** its weights are not yet hosted in this Hugging Face repository. The repository also retains the older Chinese voice for compatibility; the live picker uses its Chinese Xiaoya replacement.
 
 ## Download
 
@@ -53,11 +55,16 @@ a self-hosted deployment never quietly reaches back to our servers.
 
 ## Samples
 
-Two clips per voice are in this repo's `samples/` folder; one is embedded
-below. "Package here" means this repo carries that voice's weights. The three
-languages without one currently ship only through the
-[browser demo](https://tts.ampixa.com/sanoTTS) and the GitHub repo's
-`web/voices/` — their packages haven't been exported yet.
+Selected samples are embedded below; this is not the full 31-voice demo inventory.
+"Package here" links to a voice's Python/C package when available. Browser
+bundles for Nepali, Hindi, and Chinese are also hosted here under `web/voices/`.
+The older Chinese sample below is retained for compatibility; the live demo
+uses [Chinese Xiaoya](https://huggingface.co/ampixa/sanoTTS/tree/main/web/voices/chinese-xiaoya).
+
+The browser collection additionally includes German, French, Spanish, Italian,
+Portuguese, Russian, Czech, Romanian, Turkish, Arabic, and the experimental
+English Trellis voice. Browse the [browser bundles](https://huggingface.co/ampixa/sanoTTS/tree/main/web/voices)
+and try all 31 voices, including demo-only Polish, in the [live demo](https://tts.ampixa.com/sanoTTS).
 
 | Voice | Language | Params | SCOREQ | Package here | Sample |
 | --- | --- | ---: | :---: | :---: | --- |
@@ -70,9 +77,9 @@ languages without one currently ship only through the
 | heart-nano | English 🇺🇸 | 294 k | 2.29 | [`heartnano/`](https://huggingface.co/ampixa/sanoTTS/tree/main/heartnano) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/english-heart-nano-1.mp3"></audio> |
 | Indonesian | Bahasa | 1.46 M | — | [`id-newstts-1p46m/`](https://huggingface.co/ampixa/sanoTTS/tree/main/id-newstts-1p46m) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/indonesian-1.mp3"></audio> |
 | Vietnamese | Tiếng Việt | 1.46 M | — | [`vi-vais1000-1p46m/`](https://huggingface.co/ampixa/sanoTTS/tree/main/vi-vais1000-1p46m) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/vietnamese-1.mp3"></audio> |
-| Nepali | नेपाली | 1.47 M | — | not exported yet — see `web/voices/nepali/` in the GitHub repo | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/nepali-1.mp3"></audio> |
-| Hindi | हिन्दी | 1.50 M | — | not exported yet — see `web/voices/hindi/` in the GitHub repo | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/hindi-1.mp3"></audio> |
-| Chinese | 中文 | 1.50 M | — | not exported yet — see `web/voices/chinese/` in the GitHub repo | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/chinese-1.mp3"></audio> |
+| Nepali | नेपाली | 1.47 M | — | [browser bundle](https://huggingface.co/ampixa/sanoTTS/tree/main/web/voices/nepali) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/nepali-1.mp3"></audio> |
+| Hindi | हिन्दी | 1.50 M | — | [browser bundle](https://huggingface.co/ampixa/sanoTTS/tree/main/web/voices/hindi) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/hindi-1.mp3"></audio> |
+| Chinese | 中文 | 1.50 M | — | [browser bundle](https://huggingface.co/ampixa/sanoTTS/tree/main/web/voices/chinese) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/chinese-1.mp3"></audio> |
 
 SCOREQ is a no-reference naturalness predictor, higher is better; it is only
 reported for the English voices, which share one 24-sentence eval set. The
@@ -196,7 +203,7 @@ in the GitHub repo for the full recipe.
   silicon figures there are for the `en_us_e12nano` lineage, which is a
   sibling of `heart-nano`, not the same weights.
 - **Browser** — the full stack in WASM, no server. **[▶ Hear and synthesize
-  all 11 voices live](https://tts.ampixa.com/sanoTTS)**; source in
+  all 31 voices across 17 languages live](https://tts.ampixa.com/sanoTTS)**; source in
   [`web/`](https://github.com/Ampixa/sanoTTS/tree/master/web).
 - **Other MCUs** — which chips can run it and how well:
   [`docs/mcu-classes-and-porting.md`](https://github.com/Ampixa/sanoTTS/blob/master/docs/mcu-classes-and-porting.md).

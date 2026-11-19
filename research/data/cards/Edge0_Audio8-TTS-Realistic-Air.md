@@ -34,6 +34,8 @@ tags:
   - voice-cloning
   - zero-shot
   - multilingual
+  - gguf
+  - llama-cpp
 ---
 
 <div align="center">
@@ -44,9 +46,11 @@ tags:
 
 [![Playground](./assets/badges/playground-badge.svg)](https://huggingface.co/spaces/Edge0/Audio8-TTS-Realistic-Air)
 
-[Languages](#supported-languages) · [Quick start](#installation) · [Serving](#high-throughput-serving-sglang-omni) · [Evaluation](#evaluation)
+[Languages](#supported-languages) · [Quick start](#installation) · [Serving](#high-throughput-serving-sglang-omni) · [llama.cpp / GGUF](#native-local-inference-llamacpp) · [Evaluation](#evaluation)
 
 </div>
+
+> **2026-11-16 · llama.cpp / GGUF** — Native local inference, voice cloning and streaming for Realistic Air. Download the shared F32 bundle from [`llama-cpp/`](./llama-cpp/README.md). [Runbook](https://github.com/Edge0-AI/Audio8_TTS/blob/0f8c4fade0cb14e38fbf737d0488553f16a0d658/guides/llama-cpp.md) · [中文](https://github.com/Edge0-AI/Audio8_TTS/blob/0f8c4fade0cb14e38fbf737d0488553f16a0d658/guides/llama-cpp_zh.md).
 
 ---
 
@@ -62,6 +66,7 @@ Try speech generation and voice cloning in the [interactive Playground](https://
 - **Broader multilingual coverage:** 23 languages, including 12 additions to Preview's 11 supported languages.
 - **Compact model:** 601 million main-model parameters, with the audio codec bundled separately.
 - **Flexible generation:** zero-shot voice cloning from a reference recording and transcript, or speech generation without a reference.
+- **Native local deployment:** a llama.cpp integration with one shared F32 bundle, CLI, voice cloning and streaming.
 - **GPU serving:** an SGLang Omni adapter with paged attention, dynamic batching, and an OpenAI-compatible speech API.
 
 ## Supported Languages
@@ -176,6 +181,31 @@ The [SGLang Omni adapter](https://github.com/Edge0-AI/Audio8_TTS/tree/master/sgl
 Use the **0.6B** configuration, `sglang_omni/configs/audio8_tts_0_6b.yaml`, and set the model path to `Edge0/Audio8-TTS-Realistic-Air` or its downloaded snapshot. The adapter supports generation without a reference and zero-shot voice cloning. See the [deployment guide](https://github.com/Edge0-AI/Audio8_TTS#sglang-omni-serving) for compatible dependency versions, installation, server configuration, and API examples.
 
 > **Validation note:** Audio8-TTS-Realistic-Air was tested on an NVIDIA H20 in BF16 for generation with and without a reference through the non-streaming speech API, with Torch compilation and CUDA graphs disabled. These checks validate runtime compatibility; throughput and streaming were not benchmarked.
+
+---
+
+## Native local inference: llama.cpp
+
+The native C++ integration provides local speech generation, reference-audio voice cloning, WAV output, HTTP and incremental streaming without Python, PyTorch or ONNX Runtime at inference time. Use the **Audio8 runtime and patch** linked below to load these model files.
+
+| Entry | Purpose |
+|---|---|
+| [Model folder](./llama-cpp/README.md) | Four F32 payloads (3.76 GB total), runtime manifest, checksums and licenses; shared unchanged across platforms |
+| [English runbook](https://github.com/Edge0-AI/Audio8_TTS/blob/0f8c4fade0cb14e38fbf737d0488553f16a0d658/guides/llama-cpp.md) · [中文运行手册](https://github.com/Edge0-AI/Audio8_TTS/blob/0f8c4fade0cb14e38fbf737d0488553f16a0d658/guides/llama-cpp_zh.md) | Download, build, generate, serve, stream, reproduce and troubleshoot |
+| [Source and converter](https://github.com/Edge0-AI/Audio8_TTS/tree/0f8c4fade0cb14e38fbf737d0488553f16a0d658/llama_cpp) | Fixed upstream patch, file verification and reproducible F32 export |
+
+F32 is the default. The same model files are used with each platform's runtime.
+
+```bash
+hf download Edge0/Audio8-TTS-Realistic-Air \
+  --include "llama-cpp/**" --local-dir model/Audio8-TTS-Realistic-Air
+```
+
+Point the patched runtime's `--audio8-model-dir` at `model/Audio8-TTS-Realistic-Air/llama-cpp`, not at the Transformers root. Keep all four files and the metadata together. Whole-repository downloads for **Transformers/SGLang only** can use `--exclude "llama-cpp/**"` to avoid the extra GGUF download. The existing root checkpoint and Transformers interface are unchanged.
+
+<blockquote>
+<sub><strong>Note:</strong> Use CPU on macOS; Metal is experimental. The Windows build instructions have not yet been tested on a Windows machine.</sub>
+</blockquote>
 
 ---
 

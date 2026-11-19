@@ -118,13 +118,20 @@ def rows_of(text):
 
 
 def metric_column(header):
-    """(index, metric name, direction) for the first column naming a metric."""
+    """(index, metric name, direction) for the first column naming a metric.
+
+    A kl column wins over a perplexity one wherever a table has both: kl is
+    measured against a reference, and xylolabs' hy4 flash card says outright
+    that its raw-text perplexity does not rank the quants.
+    """
+    found = []
     for i, cell in enumerate(header):
         low = cell.lower()
         for key, (name, better) in METRICS.items():
             if re.search(r"\b%s\b" % re.escape(key), low):
-                return i, name, better
-    return None, None, None
+                found.append((i, name, better))
+                break
+    return min(found, key=lambda f: f[1] != "kl divergence", default=(None, None, None))
 
 
 def quant_column(rows):
@@ -286,8 +293,10 @@ def card(repo, max_age, refresh):
     return subprocess.run(cmd, stdout=subprocess.PIPE, text=True).stdout
 
 
+# the page a curve was read from rather than its metric: a card reread that
+# picks another column of the same table replaces the earlier read
 def curve_key(c):
-    return (c.get("kind"), c.get("quant_repo"), c.get("metric"))
+    return (c.get("kind"), c.get("quant_repo"), (c.get("ref") or {}).get("url"))
 
 
 def carry_curves(old, curves):

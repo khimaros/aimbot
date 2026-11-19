@@ -982,6 +982,22 @@ test('a runtime is offered only the repos it can read', () => {
   RESET();
 });
 
+test('a quant two repos both publish is read from the one the registry lists first', () => {
+  RESET();
+  // leejet's Q8_0 of qwen image 2.1 measures 8.643 bpw against unsloth's 8.591,
+  // and the alphabet broke any tie the same way, so the fit read leejet however
+  // the registry ordered them. the order is the preference; the type is quality
+  const m = model('qwen-image-2.1');
+  const pool = rungPool(m);
+  const q8 = pool.filter(c => c.quant === 'Q8_0');
+  eq(q8.length, 2, 'both repos publish a Q8_0');
+  eq(byQuality(q8, m)[0].repo, 'unsloth/Qwen-Image-2.1-GGUF', 'the first-listed repo wins its type');
+  const mixed = pool.filter(c => ['Q8_0', 'Q6_K'].includes(c.quant));
+  eq(byQuality(mixed, m).map(c => c.quant + '@' + c.repo.split('/')[0]).join(' '),
+     'Q8_0@unsloth Q8_0@leejet Q6_K@unsloth Q6_K@leejet',
+     'and a better type still beats a preferred repo');
+});
+
 test('the operations section shows the runtimes that load THIS model', () => {
   RESET();
   // a text model: llama.cpp from the architecture llama.cpp merged, and vllm,
@@ -3037,7 +3053,9 @@ test('the rung the fit picks is the one its own ladder scores highest', () => {
   visible().forEach(m => {
     const q = activeQuant(m), mine = scored(m).value;
     if (!q || mine === null) return;
-    fittingQuants(m).forEach(other => {
+    // another publisher's file of the same type is the registry's call, not a
+    // better rung: qwen3.5's -MTP- build drafts and is read on a different curve
+    fittingQuants(m).filter(other => other.quant !== q.quant).forEach(other => {
       const v = scored(Object.assign(Object.create(m), {_q: other, _s: null})).value;
       if (v !== null && v > mine + 0.05) {
         bad.push(m.short + ' reads ' + q.quant + ' at ' + mine.toFixed(1)
@@ -3708,8 +3726,10 @@ test('the quant ladder is one row per quant that fits', () => {
   const qs = fittingQuants(m);
   ok(qs.length > 1, 'glimmer publishes a ladder');
   eq(qs[0].quant, activeQuant(m).quant, 'it leads with the one the fit picks');
+  // two publishers' files of one type sit together in registry order, which is
+  // the preference, so only a change of type has to step down
   for (let i = 1; i < qs.length; i++) {
-    ok(rungBpw(qs[i]) <= rungBpw(qs[i - 1]), 'best first');
+    ok(qs[i].quant === qs[i - 1].quant || rungBpw(qs[i]) <= rungBpw(qs[i - 1]), 'best first');
   }
   setLadder(false);
 });

@@ -1116,6 +1116,12 @@ def repo_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
         # the tag the registry gives a file whose name carries none: kokoro's
         # `Kokoro_espeak.gguf` is the F32 rung, whisper's `ggml-large-v3-turbo.bin`
         # the F16 one, and nothing in either name says so
+        # matched by basename, which is what the sizer keys a file by: winnow
+        # names its file `gguf/Winnow-12B-Q8_0.gguf` and its ladder matched
+        # nothing. the rung still ships the path, since that is where the file is
+        paths = {k.rpartition("/")[2]: k for k in r["files"] if is_filename(k)}
+        r = dict(r, files={(k.rpartition("/")[2] if is_filename(k) else k): f
+                           for k, f in r["files"].items()})
         tagged = {k: f["quant"] for k, f in r["files"].items() if f.get("quant")}
         # only the rungs that are the SAME MODEL. one repo can hold several:
         # whisper.cpp publishes 33 files over eight checkpoints, and offering
@@ -1206,6 +1212,8 @@ def repo_rows(model, sizes, known_quants=(), voices=None, unnamed=None,
                                                note_data(), model=repo)
             if isinstance(facts.get("runtime"), dict):
                 a["runtime"] = rendered_notes(facts["runtime"], r["repo"], keys)
+            if a.get("file") in paths:
+                a["file"] = paths[a["file"]]
             named.append(a)
         row["available"] = named
         out.append(row)

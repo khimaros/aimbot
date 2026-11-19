@@ -14,6 +14,7 @@ each case gets its own httpcache key under a `test-` prefix and removes it
 afterwards, so a run leaves the real cache untouched.
 """
 
+import contextlib
 import csv
 import http.server
 import importlib.machinery
@@ -488,6 +489,25 @@ def a_pinned_file_is_sized_alone_where_its_tag_names_several():
 
 
 @test
+def a_pinned_file_under_a_folder_joins_the_size_its_basename_is_keyed_by():
+    """winnow ships its gguf under `gguf/`, and the registry names it by path.
+
+    the sizer keys a file by its basename, so `gguf/Winnow-12B-Q8_0.gguf` met
+    `Winnow-12B-Q8_0.gguf` and matched nothing: the ladder on the page was empty,
+    and llama-tools found the same miss when it budgeted the entry.
+    """
+    bv = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    rows, _ = bv.repo_rows({"repos": [{"repo": "fixture/Repo", "files": {
+        "gguf/Model-Q8_0.gguf": {"quant": "Q8_0", "note": "the pinned one"}}}]},
+        {"fixture/Repo": {"Model-Q8_0.gguf": 8 << 30, "Model-NVFP4.gguf": 4 << 30,
+                          "Other-Q8_0.gguf": 9 << 30}})
+    got = {a["file"]: a.get("note") for a in rows[0]["available"]}
+    eq(sorted(got), ["Model-NVFP4.gguf", "gguf/Model-Q8_0.gguf"],
+       "the pinned model's rungs, the pinned one by its path in the repo: %r" % got)
+    eq(bool(got["gguf/Model-Q8_0.gguf"]), True, "and the note lands on its file")
+
+
+@test
 def a_pinned_file_alone_under_its_tag_is_still_keyed_by_name():
     """unsloth's MiniMax-H3-GGUF ships the qwen3-vl text encoder beside both
     video checkpoints, and the encoder is the only file under `Q4_K_M`: the
@@ -541,6 +561,8 @@ def an_imatrix_named_after_a_quant_is_not_that_rung():
     eq(mod.tag_of("imatrix_unsloth.gguf"), "imatrix_unsloth.gguf", "as the others are")
     eq(mod.tag_of("Model-imatrix-Q4_K_M.gguf"), "Q4_K_M",
        "a rung built with an imatrix keeps its tag")
+    eq(mod.tag_of("Hy4-flash.imatrix.gguf"), "imatrix:Hy4-flash.imatrix.gguf",
+       "xylolabs names it after the model, and the viewer drops it by the marker")
 
 
 @test
@@ -764,6 +786,36 @@ def an_image_profile_is_checked_against_sdcpps_own_recipe():
        "a sampler or a preset sd.cpp does not have is refused: %r" % msgs)
 
 
+@test
+def two_models_at_one_estimated_speed_are_both_listed():
+    """inkling 2 small reached the speed table at exactly another row's tokens
+    per second, and the sort fell through to comparing the rows themselves."""
+    mod = load_script("build_tables", os.path.join(RESEARCH, "build-tables"))
+    row = lambda name: {"name": name, "bpw": 4.0,
+                        "d": {"activeParameters": 17, "totalParameters": 594}}
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        mod.table_speed([row("b"), row("a")])
+    eq([l.split(" | ")[0] for l in out.getvalue().splitlines()[2:]], ["| a", "| b"],
+       "a tie is broken by name")
+
+
+@test
+def a_llama_server_command_is_a_recommendation():
+    """unsloth's inkling 2 small card states its samplers only as the flags of
+    its own run command, `--temp 1.0 --top-p 1.0 --top-k 0 --min-p 0.0`, and the
+    profile carrying exactly those numbers resolved as `tuned-here`."""
+    mod = load_script("fetch_model_cards",
+                      os.path.join(RESEARCH, "fetch-model-cards"))
+    sets = mod.sampler_sets(
+        "```bash\n./llama.cpp/llama-server \\\n"
+        "    --jinja -ngl 99 -c 32768 \\\n"
+        "    --temp 1.0 --top-p 1.0 --top-k 0 --min-p 0.0 \\\n"
+        "    --chat-template-kwargs '{\"reasoning_effort\":\"high\"}'\n```\n")
+    eq([s["values"] for s in sets], [{"temp": 1.0, "top_p": 1.0, "top_k": 0.0, "min_p": 0.0}],
+       "one set from the flags, and `-c 32768` is not one of them")
+
+
 # a family whose flagship's alias ends in a bare surname, and a sibling for it
 # to swallow. this is the ling 3.0 flash/tiny shape and the ornith 1.0 35b/9b
 # shape: the sibling is never scored and the flagship is credited twice
@@ -817,6 +869,9 @@ GOOD_QUANTS = ["Q8_0", "Q4_K", "F16", "F32", "BF16", "Q4", "Q8", "Q5", "TQ2",
                "Q2_0", "Q2_K", "Q2_0_G64", "Q4_K_M", "Q3_K_M-mixed",
                "Q2_K_XL-mtp", "IQ4_NL", "UD-Q4_K_XL", "UD-IQ3_XXS", "UD-Q1_0",
                "AD-Q6_K", "AP-Q4_K_XL", "AD-NVFP4_AI2", "MXFP4",
+               # atomic chat's `AD-<ffn_down>-<ffn_up>`: one rung naming two types,
+               # which cut at the first was minicpm-v 4.7's `AD-Q5_K` twice
+               "AD-Q5_K-Q4_K", "AD-IQ2_S-IQ2_XXS",
                # prism's ternary packings. a fork is free to define a type, and
                # these are two of them rather than two labels over mainline
                # ones: PTQ1_0 packs trits densely and PQ2_0 gives each a 2-bit
@@ -1089,11 +1144,11 @@ def the_tensor_reader_says_what_a_quant_really_is():
     eq(plain["bpw"], round(2048 // 32 * 34 * 8 / 2048, 3), "at Q8_0's 8.5 bpw")
 
 
-# the four types mainline added after the table in fetch-gguf-tensors was
-# written, with the block geometry ggml-common.h gives for each:
+# the types mainline added after the table in fetch-gguf-tensors was written,
+# with the block geometry ggml.c gives for each:
 # (number, name, elements per block, bytes per block)
 LATE_TYPES = [(39, "MXFP4", 32, 17), (40, "NVFP4", 64, 36),
-              (41, "Q1_0", 128, 18), (42, "Q2_0", 64, 18)]
+              (41, "Q1_0", 128, 18), (42, "Q2_0", 64, 18), (43, "F8_E4M3", 1, 1)]
 
 
 @test
@@ -1108,7 +1163,8 @@ def a_type_mainline_ships_is_costed_rather_than_counted_at_nothing():
     MXFP4 is on 79 rungs of this roster, because it is what gpt-oss ships. Q2_0
     is 68% of ISTA-DASLab's flash-next speed build, which read as 1.463 bits per
     weight against the 2.40 its card states, and that number is what the
-    retention discount runs on.
+    retention discount runs on. F8_E4M3 is hy4 flash's engram table, 29% of
+    every rung, whose Q8_0 read as 6.05 bits.
     """
     # the collector imports `capture` as a sibling, which only resolves because
     # running it puts its own directory on the path. loading it does not
@@ -8576,7 +8632,7 @@ def a_sweep_names_its_rungs_and_not_the_recipe_they_are_built_from():
     # and in the order the curve wants them, since `sweep_from` sorts by bits
     eq([p[2] for p in points], ["IQ2_S", "Q3_K", "MXFP4"],
        "each point wears the file's own tag: %r" % points)
-    eq(metric, "perplexity", "and the metric is still the ppl column")
+    eq(metric, "kl divergence", "and the metric is the kld column beside the ppl")
 
 
 @test
@@ -8644,6 +8700,36 @@ def a_two_type_rung_in_a_sweep_table_keeps_both_halves():
     points, _, _ = mod.sweep_from(tables[0], 35)
     eq([p[2] for p in points], ["AD-Q5_K-IQ4_XS", "AD-Q5_K-Q4_K", "AD-Q6_K"],
        "each point wears its whole tag: %r" % points)
+
+
+@test
+def a_sweep_table_with_both_reads_the_kl_rather_than_the_perplexity():
+    """xylolabs' hy4 flash table carries PPL ahead of mean KL, and its own card
+    says raw-text perplexity does not rank quants on this model: Q3_K_M reads
+    27.41 against Q8_0's 31.70. the first metric column won, so the curve was
+    drawn from the column the publisher told readers not to use. the KL is
+    measured against a reference, which is the question a quant curve asks.
+    """
+    mod = load_script_with_research("fetch_quant_sweeps", "fetch-quant-sweeps")
+    tables = mod.rows_of("\n".join([
+        "| Quant | Trunk bpw | PPL | Mean KL vs Q8_0 |",
+        "|---|---|---|---|",
+        "| Q8_0 | 8.51 | 31.70 | reference |",
+        "| Q4_K_M | 5.03 | 32.56 | 0.2415 |",
+        "| Q3_K_M | 4.04 | 27.41 | 0.3659 |"]))
+    points, metric, _ = mod.sweep_from(tables[0], 220)
+    eq(metric, "kl divergence", "the kl column is the curve: %r" % points)
+    eq([p[1] for p in points], [0.3659, 0.2415], "the reference row has no point")
+
+    # and the perplexity read of the same card is replaced rather than kept
+    # beside it as though the card had stopped answering
+    card = {"url": "https://huggingface.co/x/M-GGUF"}
+    old = {"x/M": [{"kind": "proxy", "quant_repo": "x/M-GGUF", "metric": "perplexity",
+                    "ref": card}]}
+    fresh = {"x/M": [{"kind": "proxy", "quant_repo": "x/M-GGUF", "metric": "kl divergence",
+                      "ref": card}]}
+    eq([c["metric"] for c in mod.carry_curves(old, fresh)["x/M"]], ["kl divergence"],
+       "one card, one curve")
 
 
 @test

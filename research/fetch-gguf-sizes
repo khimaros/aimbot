@@ -210,6 +210,10 @@ def tag_of(path):
         # rung. every tag that matched before this was already uppercase,
         # so no existing key moves
         tag = m.group(1).upper() if m else SHARD.sub(".gguf", path)
+        # one named after the model (`Hy4-flash.imatrix.gguf`) gets the marker
+        # the leading word would have given it, which is what the readers drop
+        if not m and "imatrix" in path.lower() and not path.lower().startswith("imatrix"):
+            return "imatrix:" + tag
     if "mmproj" in path.lower():
         return "mmproj:" + tag if not tag.startswith("mmproj:") else tag
     marker = sidecar_marker(path)

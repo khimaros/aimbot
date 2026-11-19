@@ -612,7 +612,7 @@ def table_speed(rows, eff_bw=160e9):
             continue
         b = active * 1e9 * r["bpw"] / 8
         out.append((eff_bw / b, r, b))
-    for ts, r, b in sorted(out, reverse=True):
+    for ts, r, b in sorted(out, key=lambda x: (-x[0], x[1]["name"])):
         d = r["d"]
         # dense models read every weight per token; worth marking, it is why they
         # sit at the bottom of this table despite topping the intelligence one

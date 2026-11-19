@@ -218,6 +218,14 @@ The server exposes OpenAI-compatible `/v1/audio/transcriptions`, `/v1/audio/spee
 
 The shared benchmark figures below include results for both Ming-3.0-audio-tiny and Ming-3.0-audio-flash.
 
+### Speech Reasoning (Big Bench Audio)
+
+Ming-3.0-audio-flash achieves **99.8%** on Artificial Analysis's Big Bench Audio benchmark, ranking **#1 overall among all closed-source and open-source models** on the leaderboard shown below.
+
+<p align="center">
+  <img src="assets/Artificial_Analysis_Speech_Reasoning.png" width="100%" alt="Artificial Analysis Speech Reasoning (Big Bench Audio) leaderboard">
+</p>
+
 ### Speech Recognition
 
 <p align="center">

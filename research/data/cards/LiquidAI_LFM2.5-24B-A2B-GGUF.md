@@ -66,3 +66,17 @@ llama-cli -hf LiquidAI/LFM2.5-24B-A2B-GGUF \
     --hf-file LFM2.5-24B-A2B-QAD-Q4_0.gguf \
     --temp 0.1 --top-k 50 --repeat-penalty 1.05
 ```
+
+## QAD Q2_K_L GGUF
+
+[`LFM2.5-24B-A2B-QAD-Q2_K_L.gguf`](https://huggingface.co/LiquidAI/LFM2.5-24B-A2B-GGUF/blob/main/LFM2.5-24B-A2B-QAD-Q2_K_L.gguf)
+is a Quantization-Aware Distillation (QAD) checkpoint for Q2_K_L: most expert weights are Q2_K (some layers Q4_K),
+all other weights including the embeddings are Q8_0, 9.5 GB in total.
+
+Example usage with [llama.cpp](https://github.com/ggml-org/llama.cpp):
+
+```
+llama-cli -hf LiquidAI/LFM2.5-24B-A2B-GGUF \
+    --hf-file LFM2.5-24B-A2B-QAD-Q2_K_L.gguf \
+    --temp 0.1 --top-k 50 --repeat-penalty 1.05
+```

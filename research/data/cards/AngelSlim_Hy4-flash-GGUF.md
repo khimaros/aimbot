@@ -1,0 +1,127 @@
+---
+language:
+- zh
+- en
+base_model:
+- tencent/Hy4-flash
+---
+[中文](./README_CN.md) ｜ English
+
+<p align="center">
+  <img src="https://github.com/Tencent/AngelSlim/blob/main/docs/source/assets/logos/angelslim_logo.png?raw=true" alt="AngelSlim" width="70%">
+</p>
+
+### A more accessible, comprehensive, and efficient toolkit for large model compression.
+
+✒️ [TechnicalReport](https://arxiv.org/abs/2602.21233)   |    📖 [Documentation](https://angelslim.readthedocs.io/)   |   🤗 [Hugging Face](https://huggingface.co/AngelSlim)   |   🤖 [ModelScope](https://modelscope.cn/organization/AngelSlim)  
+
+
+💬 [WeChat](https://github.com/Tencent/AngelSlim/blob/main/docs/source/assets/angel_slim_wechat.png?raw=true) |   🫨 [Discord](https://discord.com/invite/dHVNeuNdFt)  
+
+
+# Hy4-flash GGUF
+
+Five GGUF builds of Hy4-flash: [tencent/Hy4-flash](https://huggingface.co/tencent/Hy4-flash)
+
+| file                             | model size | bpw (overall) | bpw (excl. Engram table) |
+| -------------------------------- | ---------: | ------------: | -----------------------: |
+| `Hy4-flash-Q4_K_M.gguf`          | 156.79 GiB | 6.05          | 5.27                     |
+| `Hy4-flash-SPARK-4Bit.gguf`      | 151.3 GiB  | 5.84          | 4.78                     |
+| `Hy4-flash-SPARK-4Bit-Fast.gguf` | 148.6 GiB  | 5.74          | 4.63                     |
+| `Hy4-flash-Q3_K.gguf`            | 144.70 GiB | 5.58          | 4.62                     |
+| `Hy4-flash-IQ2-AH.gguf`          | 125.73 GiB | 4.85          | 3.60                     |
+
+![Hy4-flash GGUF benchmark results](https://huggingface.co/AngelSlim/Hy4-flash-GGUF/resolve/main/hy4-flash-gguf-benchmark.png)
+
+---
+
+## 1. What these are
+
+`Hy4-flash-Q4_K_M.gguf` — standard 4-bit, the safe default. The routed experts follow llama.cpp's
+Q4_K_M recipe: `gate`/`up` are Q4_K, and `down` gets Q6_K on 19 layers via llama.cpp's fixed rule and
+Q4_K on the other 22. Most non-expert weights are Q8_0. **Use this unless you are memory-constrained.**
+
+`Hy4-flash-SPARK-4Bit.gguf` — the SPARK-4Bit build (NVIDIA's 4-bit floating-point format). **Suited for Spark devices.**
+
+`Hy4-flash-SPARK-4Bit-Fast.gguf` — a variant of the SPARK-4Bit build, 2.7 GiB smaller. **Also suited for Spark devices.**
+
+`Hy4-flash-Q3_K.gguf` — mixed Q3_K/Q4_K experts. The routed-expert `gate`/`up` projections keep
+Q4_K on 19 layers chosen by quantization sensitivity and drop to Q3_K on the other 22; `down` is Q4_K.
+Everything outside the routed experts is the same as Q4_K_M.
+
+`Hy4-flash-IQ2-AH.gguf` — the smallest of the five. The routed-expert `gate`/`up` projections run
+at 2.0625 bpw (IQ2_XXS) and `down` at Q4_K, while most non-expert weights stay in BF16 rather than Q8_0.
+
+**Strata** version coming soon
+
+## 2. SPEED
+
+The test was conducted in real workbuddy scenarios and cases.
+
+**Mac M5 Max 128GB**
+
+| format | Prefill tok/s (4K / 16K / 32K) | Decode tok/s (4K / 16K / 32K) |
+| ------ | ----------------------------: | ----------------------------: |
+| Q4_K_M | 629.8 / 448.1 / 418.6         | 48.13 / 45.18 / 44.15         |
+| Q3_K   | 743.2 / 563.0 / 520.6         | 50.34 / 49.47 / 47.37         |
+
+For code generation, Q3_K reaches up to 70 tok/s.
+
+**RTX Spark 128GB**
+
+| format          | Prefill tok/s (4K / 16K / 32K) | Decode tok/s (4K / 16K / 32K) |
+| --------------- | ----------------------------: | ----------------------------: |
+| SPARK-4Bit-Fast | 799 / 717 / 707               | 31.95 / 33.14 / 33.39         |
+| SPARK-4Bit      | 765 / 686 / 666               | 25.80 / 28.16 / 30.3          |
+
+For code generation, SPARK-4Bit-Fast reaches up to 40 tok/s.
+
+
+## 3. How to use
+
+**General Usage**
+
+The support is in PR [#32517](https://github.com/ggml-org/llama.cpp/pull/32517) and not merged yet, so check out the PR branch:
+
+```sh
+git clone https://github.com/ggml-org/llama.cpp
+cd llama.cpp
+git fetch origin pull/32517/head:hy4-flash
+git checkout hy4-flash
+```
+
+Build:
+```sh
+cmake -B build                # add -DGGML_CUDA=ON for NVIDIA GPUs; Metal is on by default on macOS
+cmake --build build --config Release -j
+```
+
+Chat in the terminal:
+```sh
+./build/bin/llama-cli -m Hy4-flash-Q4_K_M-00001-of-00002.gguf -c 8192 -ngl 99 --jinja
+```
+
+OpenAI-compatible server (http://localhost:8080):
+```sh
+./build/bin/llama-server -m Hy4-flash-Q4_K_M-00001-of-00002.gguf -c 8192 -ngl 99 --jinja --port 8080
+```
+
+Image input, with the mmproj file:
+```sh
+./build/bin/llama-mtmd-cli -m Hy4-flash-Q4_K_M-00001-of-00002.gguf --mmproj mmproj-Hy4-flash-bf16.gguf \
+    --image photo.png -p "Describe this image." -c 8192 -ngl 99 --jinja
+```
+
+
+**Mac M5 Max 128GB**
+
+```
+cd llama.cpp
+git checkout 2cbca389f          
+git apply hy4-flash-mac-minimal.patch
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_METAL=ON && cmake --build build -j
+```
+
+**RTX Spark 128GB**
+
+See [README_SPARK-4Bit.md](https://huggingface.co/AngelSlim/Hy4-flash-GGUF/blob/main/README_SPARK-4Bit.md)

@@ -545,7 +545,10 @@ file in it, a `sampling` profile name, and a `speculative` block it may decline
 -- and which a repo may decline on its behalf, since `draft-mtp` needs a nextn
 head that only the `-MTP-GGUF` build of the same model carries. `repos:` is
 ordered, most preferred first; which rung to run is the consumer's call, and
-this page's is the best quality that fits.
+this page's is the best quality that fits. quality is a property of the TYPE,
+so where two repos publish the same type the page reads the first-listed one:
+leejet's Q8_0 of qwen image 2.1 measures 8.643 bpw against unsloth's 8.591, and
+that difference no longer outranks the registry saying unsloth first.
 
 where a profile deliberately departs from what the vendor documents, the
 vendor's own set is recorded beside it as `upstream-<profile>` rather than

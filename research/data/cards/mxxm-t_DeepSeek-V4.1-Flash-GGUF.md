@@ -4,12 +4,14 @@ base_model:
   - deepseek-ai/DeepSeek-V4.1-Flash-1017
 base_model_relation: quantized
 library_name: gguf
-pipeline_tag: text-generation
+pipeline_tag: image-text-to-text
 tags:
   - gguf
   - deepseek
   - deepseek-v4
   - moe
+  - vision
+  - multimodal
   - mxfp4
   - dspark
   - speculative-decoding
@@ -23,7 +25,7 @@ tags:
 |---|---|
 | **Model version** | **DeepSeek-V4.1-Flash-1017**, released by DeepSeek on 2026-10-17 |
 | Source checkpoint | [deepseek-ai/DeepSeek-V4.1-Flash-1017](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017), commit `1bae0e10` |
-| Previous version | DeepSeek-V4.1-Flash (the first V4.1 release), on the [`v4.1-flash-previous`](https://huggingface.co/mxxm-t/DeepSeek-V4.1-Flash-GGUF/tree/v4.1-flash-previous) branch |
+| Previous version | DeepSeek-V4.1-Flash (the first V4.1 release), on the [`v4.1-flash-previous`](https://huggingface.co/mxxm-t/DeepSeek-V4.1-Flash-1017-GGUF/tree/v4.1-flash-previous) branch |
 
 The file names did not change between versions. The 1017 files carry `general.version = 1017` in the
 GGUF header, the previous files have no `general.version`.
@@ -35,9 +37,12 @@ GGUF header, the previous files have no `general.version`.
 > **[mxxm/mx-llama.cpp](https://hub.docker.com/r/mxxm/mx-llama.cpp)**.
 
 [deepseek-ai/DeepSeek-V4.1-Flash-1017](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017)
-converted to GGUF, plus its DSpark draft stages as a separate sidecar file. These files hold the text
-model only: the vision tower and its projector are not included, and there is no `mmproj`. DeepSeek's
-original model card follows below.
+converted to GGUF, plus its DSpark draft stages as a separate sidecar file and its vision encoder as an
+`mmproj` file, so the model takes image input. DeepSeek's original model card follows below.
+
+> **Image input needs a current mx-llama.cpp build.** Since 2026-11-17 the main files carry the 40
+> image routing-bias tensors (`blk.N.exp_probs_b_vl.bias`). Builds from before DeepSeek-V4.1 image
+> support stop at load with a tensor-count error. Text-only prompts produce the same output as before.
 
 ## Files
 
@@ -45,6 +50,7 @@ original model card follows below.
 |---|---|---|
 | `DeepSeek-V4.1-Flash-MXFP4-00001-of-00012.gguf` .. `-00012-of-00012.gguf` | 375.8 GiB total | main model, routed experts MXFP4 |
 | `DeepSeek-V4.1-Flash-DSpark-MXFP4.gguf` | 7.43 GiB | DSpark draft stages, not a standalone model |
+| `mmproj-DeepSeek-V4.1-Flash-1017-F16.gguf` | 0.90 GiB | vision encoder and projector, F16 |
 
 Shards `00009` and `00011` each hold one Engram table (about 97 GiB together). They are read at random
 during prompt processing and stay on disk rather than in VRAM, so they belong on the fastest storage
@@ -54,9 +60,13 @@ The sidecar holds the three `mtp.*` draft stages, 128 routed experts each with 3
 DSpark heads. It taps the attention input of target layers 37, 38 and 39. It is a draft model for
 speculative decoding against the main file and cannot generate on its own.
 
+The `mmproj` holds the 32-layer vision encoder, the 3x3 patch merger, the projector and the image
+start, end and newline embeddings. Image routing biases live in the main files, because the language
+model's MoE router uses them on image tokens.
+
 ## Running it
 
-The weights occupy roughly 302 GiB once loaded. An example command:
+The weights occupy roughly 288 GiB across ten cards with `-sm layer` and 305 GiB with `-sm tensor -tps 2`. An example command:
 
 ```
 GGML_ENABLE_CUSTOM_AR=1 HSA_FORCE_FINE_GRAIN_PCIE=1 GPU_MAX_HW_QUEUES=8 \
@@ -70,17 +80,24 @@ llama-server -m DeepSeek-V4.1-Flash-MXFP4-00001-of-00012.gguf \
 - `-sm tensor -tps N` also works, for `N` of 1, 2, 4 or 8. On ten MI50 over PCIe `-sm layer` is faster
   for both prompt processing and generation.
 - Chat completions place the reply in `reasoning_content`.
+- For images add `--mmproj mmproj-DeepSeek-V4.1-Flash-1017-F16.gguf` to `llama-server`, or run
+  `llama-mtmd-cli` with the same `-m` and `--mmproj` and pass `--image photo.jpg`. Images are resized
+  to at most 1024 image tokens, as DeepSeek's own preprocessor does.
+- Images together with DSpark at `-c 32768` on ten 32 GB cards need `--no-mmproj-offload`: the
+  drafter, the vision encoder and the image buffers do not fit on the first card together. Image
+  prompt processing then runs the encoder on the CPU, 10 to 20 seconds per image here.
 
 ## Quantization
 
 Routed experts are repacked from the checkpoint's own FP4 to MXFP4, a format change rather than a
 requantization. FP8 block-scaled tensors are dequantized and stored Q8_0. Norms, hyper-connection
-coefficients and the router bias stay F32. The router, markov and confidence weights stay BF16.
+coefficients, the router bias and the image router bias stay F32. The router, markov and confidence weights stay BF16.
 No weights were retrained, fine-tuned or otherwise altered.
 
 Checked against the source checkpoint: every declared tensor is present, FP8 tensors dequantize to the
 source values, the sidecar accounts for all 69 `mtp.*` tensors, and the Engram hash tables reproduce
-the reference `engram.py` derivation.
+the reference `engram.py` derivation. The vision encoder reproduces DeepSeek's `vision.py` image
+embeddings on the shipped example images (per-token cosine 0.99997 or better on identical pixels).
 
 ## License
 
@@ -190,3 +207,4 @@ This repository and the model weights are licensed under the [MIT License](https
 ## Contact
 
 If you have any questions, please raise an issue or contact us at [service@deepseek.com](mailto:service@deepseek.com).
+

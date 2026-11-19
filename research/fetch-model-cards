@@ -250,6 +250,10 @@ def parse_tables(tables, repo, names):
 # a table cell boundary separates a key from its value like `=` does
 SAMPLER_KV = re.compile(r"\b(temperature|temp|top_p|top_k|min_p|presence_penalty|"
                         r"repetition_penalty|repeat_penalty)\b`?\s*[=:|]\s*`?(\d+(?:\.\d+)?)")
+# llama.cpp's own spelling, which is how a quant card's run command states them:
+# unsloth's inkling 2 small says `--temp 1.0 --top-p 1.0` and nothing else
+SAMPLER_FLAG = re.compile(r"--(temp|top-p|top-k|min-p|presence-penalty|repeat-penalty)"
+                          r"[\s=]+(\d+(?:\.\d+)?)")
 SAMPLER_FIELD = {"temperature": "temp", "temp": "temp", "top_p": "top_p",
                  "top_k": "top_k", "min_p": "min_p",
                  "presence_penalty": "presence_penalty",
@@ -332,7 +336,8 @@ def sampler_sets(text):
     for line in (text or "").split("\n"):
         parts = CLAUSE.split(TAG.sub(" ", line))
         for n, part in enumerate(parts):
-            found = SAMPLER_KV.findall(part)
+            flags = [(k.replace("-", "_"), v) for k, v in SAMPLER_FLAG.findall(part)]
+            found = SAMPLER_KV.findall(part) + flags
             if found:
                 # a conjunction starts a NEW recommendation, so the one being
                 # accumulated has to close before it rather than merge with it.
@@ -345,7 +350,10 @@ def sampler_sets(text):
                 if cur and (n or len(found) > 1):
                     flush()
                 if not cur:
-                    label = label_for(part)
+                    # a run command's own line is flags all the way across, and
+                    # reads as a label only where prose sits in front of them
+                    lead = part.split("--")[0].strip(" `\\^")
+                    label = label_for(part) if lead or not flags else "llama.cpp flags"
                 for k, v in found:
                     cur.setdefault(SAMPLER_FIELD[k], float(v))
             elif cur:
