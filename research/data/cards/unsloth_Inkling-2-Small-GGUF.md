@@ -36,12 +36,12 @@ license_link: https://www.apache.org/licenses/LICENSE-2.0
 ## GGUF files
 
 - `UD-*` folders: Unsloth Dynamic quants, imatrix-calibrated (`imatrix_unsloth.gguf_file`).
-- `BF16`: lossless conversion: the original NVFP4 experts kept bit-exact (layers 0-39), every other weight BF16.
-- `UD-Q8_K_XL`: the original NVFP4 experts kept bit-exact (layers 0-39), every other weight 8-bit.
+- `UD-Q8_K_XL`: lossless conversion: the original NVFP4 experts kept bit-exact (layers 0-39), every other weight BF16.
+- `Q8_0`: the original NVFP4 experts kept bit-exact (layers 0-39), every other weight 8-bit.
 - `mmproj-BF16.gguf` / `mmproj-F16.gguf` / `mmproj-F32.gguf`: vision projector, pass with `--mmproj` for image inputs.
 - The chat template is embedded in every GGUF; use `--jinja`.
 
-| Quant | Size (GB) | Mean KLD vs BF16 | 99% KLD | Same top token |
+| Quant | Size (GB) | Mean KLD vs UD-Q8_K_XL | 99% KLD | Same top token |
 |---|---|---|---|---|
 | UD-IQ1_S | 171.7 | 0.0922 | 1.143 | 89.7% |
 | UD-IQ1_M | 178.5 | 0.0829 | 1.041 | 90.2% |
@@ -50,10 +50,10 @@ license_link: https://www.apache.org/licenses/LICENSE-2.0
 | UD-IQ3_XXS | 226.0 | 0.0364 | 0.430 | 93.3% |
 | UD-Q3_K_XL | 285.1 | 0.0176 | 0.209 | 95.3% |
 | UD-Q4_K_XL | 354.2 | 0.0029 | 0.031 | 98.0% |
-| UD-Q8_K_XL | 386.5 | 0.0027 | 0.029 | 98.1% |
-| BF16 | 484.4 | reference | | |
+| Q8_0 | 386.5 | 0.0027 | 0.029 | 98.1% |
+| UD-Q8_K_XL | 484.4 | reference | | |
 
-KLD and top-token agreement are measured against the `BF16` GGUF (the original NVFP4 experts kept as is, every other
+KLD and top-token agreement are measured against the `UD-Q8_K_XL` GGUF (the original NVFP4 experts kept as is, every other
 weight BF16) on 64 x 4096 tokens of wikitext-2, with llama.cpp's default F16 KV cache on both sides.
 
 ## Running
@@ -63,8 +63,17 @@ only support the original Inkling will not load it.
 
 **1. Install llama.cpp with Inkling 2 support**
 
-Follow our [Inkling 2 guide](https://unsloth.ai/docs/models/inkling-2) to set up llama.cpp with Inkling 2 support, or use
-the [Unsloth Desktop](https://unsloth.ai/docs/desktop) app.
+Build llama.cpp from `master` (any commit that includes [ggml-org/llama.cpp#32217](https://github.com/ggml-org/llama.cpp/pull/32217))
+by following our [Inkling 2 guide](https://unsloth.ai/docs/models/inkling-2), or use the [Unsloth Desktop](https://unsloth.ai/docs/desktop) app.
+
+- `UD-IQ1_S`, `UD-IQ1_M`, `UD-IQ2_XXS`, `UD-Q2_K_XL` and `UD-IQ3_XXS` run on llama.cpp `master`.
+- `UD-Q3_K_XL`, `UD-Q4_K_XL`, `Q8_0` and `UD-Q8_K_XL` keep the original NVFP4 experts with their per-expert scales. These
+  need per-expert scale support from [ggml-org/llama.cpp#32657](https://github.com/ggml-org/llama.cpp/pull/32657): use a
+  llama.cpp `master` build that includes it, or Unsloth's prebuilt llama.cpp
+  ([`b12540-mix-c4017f9`](https://github.com/unslothai/llama.cpp/releases/tag/b12540-mix-c4017f9) or newer). Without it, llama.cpp stops with `wrong number of tensors`.
+- Builds made before #32217 (the ggml-org/llama.cpp#32187 layout) need the previous files, kept on the
+  [`ggml-org-32187-layout`](https://huggingface.co/unsloth/Inkling-2-Small-GGUF/tree/ggml-org-32187-layout) branch: add
+  `--revision ggml-org-32187-layout` to the `hf download` command below.
 
 **2. Download a quant and the vision projector**
 

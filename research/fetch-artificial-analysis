@@ -25,6 +25,7 @@ self-reported model card numbers.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -333,8 +334,38 @@ def shape(rec, fields):
     return dict(sorted(out.items()))
 
 
-def extract(board, spec, max_age, refresh):
-    """{key: record} for one board, or None if the page could not be read."""
+def assign_slugs(recs, known):
+    """Each record with a `slug`, where the site stopped putting one on the row.
+
+    the leaderboard row carries `release.slug` and an effort `suffix` now, and
+    the per-variant slug every registry id is written in is only in an
+    encrypted dataset. it is not derivable either -- `Inkling (Xhigh)` was
+    `inkling` and `Gemma 4 12B (Non-reasoning)` was `gemma-4-12b-non-reasoning`
+    -- so a row takes the slug the last capture had under its name (`known`),
+    and a model new since then its release slug, with the suffix where another
+    row already holds the bare one.
+    """
+    taken = {r["slug"] for r in recs if r.get("slug")} | set(known.values())
+    out = []
+    for r in recs:
+        rel = (r.get("release") or {}).get("slug")
+        if not r.get("slug") and rel:
+            slug = known.get(r.get("name"))
+            if not slug:
+                slug = rel if rel not in taken else "%s-%s" % (
+                    rel, re.sub(r"[^a-z0-9]+", "-", (r.get("suffix") or "").lower()).strip("-"))
+            taken.add(slug)
+            r = dict(r, slug=slug.rstrip("-"))
+        out.append(r)
+    return out
+
+
+def extract(board, spec, max_age, refresh, known=None):
+    """{key: record} for one board, or None if the page could not be read.
+
+    `known` is {name: slug} off the last capture, for a row with no slug of its
+    own; see assign_slugs.
+    """
     here = os.path.dirname(os.path.abspath(__file__))
     cmd = [os.path.join(here, "rsc-extract"), spec["url"], "--key", spec["cache"],
            "--match", spec["match"], "--max-age", str(max_age),
@@ -348,10 +379,8 @@ def extract(board, spec, max_age, refresh):
         return None
 
     rows, ranked = {}, {}
-    for line in proc.stdout.splitlines():
-        rec = json.loads(line)
-        if not dig(rec, spec["require"])[0]:
-            continue
+    recs = [r for r in map(json.loads, proc.stdout.splitlines()) if dig(r, spec["require"])[0]]
+    for rec in assign_slugs(recs, known or {}):
         key = next((v for v in (dig(rec, p)[1] for p in spec["key"]) if v), None)
         if not key:
             continue
@@ -412,6 +441,10 @@ def write_text(path, boards, allow_shrink):
     either -- but it catches the next source that goes away entirely.
     """
     old, kept = capture.previous(path), 0
+    # a row an earlier run keyed by its display name, for want of a slug, is the
+    # same model as the fresh row of that name, and not a model the site dropped
+    names = {r.get("name") for rows in boards.values() for r in rows.values()}
+    old = {k: v for k, v in (old or {}).items() if v.get("slug") == k or k not in names}
     payload = dict(old)
     if "models" in boards:
         payload, kept = capture.carry(old, {k: old.get(k) or {} for k in boards["models"]})
@@ -487,10 +520,13 @@ def main():
     # behaviour worth being able to point somewhere else and check
     speech, speech_out, failed = {}, SPEECH_OUT, []
     text, text_out = {}, TEXT_OUT
+    known = {r["name"]: k for k, r in (capture.previous(args.out or TEXT_OUT) or {}).items()
+             if r.get("name") and r.get("slug") == k}
     for board in want:
         spec = dict(BOARDS[board], url=args.url or BOARDS[board]["url"],
                     cache=args.cache_key or BOARDS[board]["cache"])
-        rows = extract(board, spec, args.max_age, args.refresh)
+        rows = extract(board, spec, args.max_age, args.refresh,
+                       known if spec["out"] == TEXT_OUT else None)
         if rows is None:
             failed.append(board)
             continue

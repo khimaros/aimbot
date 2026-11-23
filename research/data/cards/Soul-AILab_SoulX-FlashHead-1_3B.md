@@ -166,7 +166,7 @@ We have opened a WeChat group. Additionally, we represent **SoulApp** and warmly
 ## Component Licenses:
 1. SoulX‑FlashHead‑1.3B transformer DiT weights: Apache‑2.0
 2. VAE_WAN (Wan‑2.1 VAE): Apache‑2.0
-3. VAE_LTX (LTX‑Video‑0.9 VAE): Open‑RAIL‑M
+3. VAE_LTX (LTX‑Video‑0.9 VAE): RAIL‑M
 4. wav2vec2‑base‑960h: Apache‑2.0
 
 Important note:

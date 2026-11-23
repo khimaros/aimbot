@@ -12,25 +12,35 @@ tags:
 - agentionai
 ---
 
-# Qwen3.8-27B · Agention Precision GGUF
+<p align="center">
+  <a href="https://share.fieldworkledger.com/tTkQDHijE_Anj0yv79bsIw"><b>Full results</b></a> &bull; <a href="https://www.agention.ai/"><b>Website</b></a> &bull; <a href="https://marshall.agention.ai"><b>Marshall coding agent</b></a> &bull; <a href="https://huggingface.co/agentionai/Signal-3.8-27B-GGUF"><b>Signal 27B</b></a> &bull; <a href="#work-with-agentionai"><b>Custom quants</b></a>
+</p>
 
-[![View results on Fieldwork Ledger](https://share.fieldworkledger.com/jWO2-ae4HyoC6GIqZucsaA/badge.svg)](https://share.fieldworkledger.com/jWO2-ae4HyoC6GIqZucsaA)
+<h1 align="center">Qwen3.8-27B · Agention Precision GGUF</h1>
 
-**Same size. Same speed. Closer to the model Qwen trained than any other quant**
+<p align="center"><b>Same size. Same speed. Closer to the model Qwen trained.</b> A drop-in GGUF pack for <a href="https://huggingface.co/Qwen/Qwen3.8-27B">Qwen3.8-27B</a>: standard llama.cpp types, no fork, no flags. Vision projector and MTP draft head included.</p>
 
-![Lower KL at the same GiB means more of Qwen left in the file](assets/kld-vs-size.png)
+<p align="center">
+  <a href="https://share.fieldworkledger.com/tTkQDHijE_Anj0yv79bsIw"><img src="https://share.fieldworkledger.com/jWO2-ae4HyoC6GIqZucsaA/badge.svg" alt="View results on Fieldwork Ledger"></a>
+</p>
 
-[Full Results](https://share.fieldworkledger.com/tTkQDHijE_Anj0yv79bsIw) 
+<p align="center">
+  <a href="#start-here"><b>Start here</b></a> · <a href="#running">Running</a> · <a href="#measured">Measured</a> · <a href="#in-real-use">In real use</a> · <a href="#built-with">Built with</a>
+</p>
 
-Agention Precision quants are the highest precision quants of Qwen3.8 27B byte-for-byte. Each file has a non-uniform assignment and low-loss error correction built with a custom encoder.
+<p>
+<img class="dark:hidden" src="./assets/stats-light.svg" width="100%" alt="Drop-in: standard GGUF types for stock llama.cpp, LM Studio and Ollama, no fork, no flags. AP-IQ3_S is 20% closer to BF16 than unsloth's file of the same bytes on held-out text, and 24% closer on the hardest 1% of tokens. Eight sizes from 8.95 to 16.35 GiB for 12, 16 and 24 GB cards, with vision and MTP included. AP-IQ2_S at 8.95 GiB wrote a working page first try in 4 of 5 coding runs; ISTA's file of the same size in 2 of 5.">
+<img class="hidden dark:block" src="./assets/stats-dark.svg" width="100%" alt="Drop-in: standard GGUF types for stock llama.cpp, LM Studio and Ollama, no fork, no flags. AP-IQ3_S is 20% closer to BF16 than unsloth's file of the same bytes on held-out text, and 24% closer on the hardest 1% of tokens. Eight sizes from 8.95 to 16.35 GiB for 12, 16 and 24 GB cards, with vision and MTP included. AP-IQ2_S at 8.95 GiB wrote a working page first try in 4 of 5 coding runs; ISTA's file of the same size in 2 of 5.">
+</p>
 
-This is a drop-in GGUF pack for [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B): standard llama.cpp types, no fork, no flags. Vision projector and MTP draft head included.
+**Every 27B quant gives something up. These give up less.** We measured the leading public GGUFs against the full BF16
+model on one protocol. On held-out and web text, at every size we ship, ours is the closest of them to Qwen's
+next-token distribution. Each file has a non-uniform assignment and low-loss error correction built with a custom
+encoder. Swap cost is zero: VRAM and tokens/sec stay the same, and the file behaves more like the weights Qwen released.
 
-Every 27B quant gives something up. These give up less. We measured the leading public GGUFs against the full BF16 model on one protocol. At every size we ship, ours is the closest to Qwen’s next-token distribution. 
+## Start here
 
-Every quant is tested against three corpora: unseen technical prose, general web text and Wikipedia. 
-
-Swap cost is zero. VRAM and tokens/sec stay the same. The file behaves more like the weights Qwen released.
+**Take `AP-IQ4_XS` if it fits.** Step down only for memory.
 
 | Start here | File | Size | 32k VRAM | Fits | Gain vs leading same-size quant |
 |---|---|---:|---:|---|---|
@@ -39,56 +49,68 @@ Swap cost is zero. VRAM and tokens/sec stay the same. The file behaves more like
 | Default | **`AP-IQ4_XS`** | 13.27 GiB | ~15 GiB | 16 GB | **8% closer** to BF16; hardest 1% of tokens **9% closer** |
 | Need headroom | **`AP-Q3_K_XL`** | 12.24 GiB | ~14 GiB | 16 GB + longer ctx | **19% closer** on unseen technical text, **6%** on web; hardest 1% of tokens **23% closer** |
 | 12 GB, more quality | **`AP-IQ3_S`** | 11.21 GiB | ~13 GiB | 16 GB at 8–16k | **17–20% closer** on unseen technical text than the leading research quants, **5%** on web; hardest 1% of tokens **24% closer** |
-| 12 GB, balanced | **`AP-IQ3_XS`** | 10.70 GiB | ~12.5 GiB | 12 GB at 8–16k | Level with ISTA’s 11.29 GiB `IQ3_S` on unseen technical text at 0.6 GiB less; **49% closer** than the 10.38 GiB AtomicChat quant |
+| 12 GB, balanced | **`AP-IQ3_XS`** | 10.70 GiB | ~12.5 GiB | 12 GB at 8–16k | Level with ISTA's 11.29 GiB `IQ3_S` on unseen technical text at 0.6 GiB less; **49% closer** than the 10.38 GiB AtomicChat quant |
 | 12 GB / multi-model | **`AP-IQ3_XXS`** | 10.00 GiB | ~12 GiB | 12 GB at 8–16k | **26% closer** on unseen technical text, **18%** on web and wikitext-2 than the best ~10 GiB research quant |
 | 12 GB, smallest | **`AP-IQ2_S`** | 8.95 GiB | ~10.9 GiB | 12 GB at 8–16k | **22% closer** on unseen technical text, **14%** on web, **18%** on wikitext-2 than the best same-size research quant |
-| Vision | `mmproj-BF16.gguf` | 0.87 GiB | +0.9 GiB | any tier | Qwen’s own encoder at BF16 |
+| Vision | `mmproj-BF16.gguf` | 0.87 GiB | +0.9 GiB | any tier | Qwen's own encoder at BF16 |
 
 VRAM = weights + q8_0 KV + llama.cpp buffers. Only a quarter of layers use full attention, so 32k context is about 1 GiB at q8_0.
 
-**Take `AP-IQ4_XS` if it fits.** Step down only for memory.
+## Running
 
----
+**Stock llama.cpp, LM Studio or Ollama.** Use the sampling settings from the
+[Qwen3.8-27B model card](https://huggingface.co/Qwen/Qwen3.8-27B). Thinking is on by default. To turn it off per
+request, send `"chat_template_kwargs": {"enable_thinking": false}`.
+
+```bash
+llama-server -hf agentionai/Qwen3.8-27B-AP-GGUF:IQ4_XS \
+  --jinja -ngl 999 -fa on -c 32768 -ctk q8_0 -ctv q8_0
+```
+
+Keep the KV cache at q8_0 or f16. A 4-bit value cache makes long reasoning traces degenerate into repetition on this
+model family.
+
+**LM Studio:** search for `agentionai/Qwen3.8-27B-AP-GGUF` and pick a tier.
+**Ollama:** `ollama run hf.co/agentionai/Qwen3.8-27B-AP-GGUF:IQ4_XS`
+
+<details>
+<summary><b>With vision</b></summary>
+
+```bash
+llama-server -hf agentionai/Qwen3.8-27B-AP-GGUF:IQ4_XS \
+  --mmproj mmproj-BF16.gguf --jinja -ngl 999 -fa on -c 32768 -ctk q8_0 -ctv q8_0
+```
+
+</details>
+
+<details>
+<summary><b>Use it as a coding agent</b> (Marshall)</summary>
+
+Marshall, our open-source terminal coding agent, runs a small team of agents (planner, coder, reviewer) on local or
+hosted models, with every action approval-gated by default.
+
+```bash
+npm install -g @agentionai/marshall-cli && marshall
+```
+
+Inside Marshall, run `/model` and pick your model from the selection menu.
+
+</details>
 
 ## Measured
 
-Fidelity = KL divergence of the next-token distribution vs Qwen3.8-27B BF16. Lower is closer to the original.
+**More of Qwen left in every gigabyte.** Fidelity = KL divergence of the next-token distribution vs Qwen3.8-27B BF16.
+Lower is closer to the original. 60 × 2048 tokens, three corpora, same build, same BF16 logits.
 
-60 × 2048 tokens, three corpora, same build, same BF16 logits:
-
-- **held-out** — 1.85 MB of our own technical prose, never part of any calibration set. It is internal engineering documentation, so it is not published: this column is the one you cannot re-run yourself.
-- **neutral web** — `mixedweb-v1`, 800,789 chars, a seeded FineWeb slice, md5 `51e0045e8cabf37922aa82766a25b7b4`, published with its per-document manifest and builder in [agentionai/quant-fidelity-corpora](https://huggingface.co/datasets/agentionai/quant-fidelity-corpora)
-- **wikitext-2** — the standard `wiki.test.raw`, 1,288,556 chars, md5 `7c0137fc034ddbc56a296bce31b4f7fb` (`llama.cpp/scripts/get-wikitext-2.sh`)
-
-### Reproducing these numbers
-
-The reference is [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) at
-revision `1d4bf0f2` (the weights uploaded 2026-08-13; later commits are README
-only), converted with llama.cpp's own converter — no changes, no fork:
-
-```bash
-python convert_hf_to_gguf.py --outtype bf16 Qwen3.8-27B/ --outfile Qwen3.8-27B-BF16.gguf   # 54,657,733,888 bytes
-```
-
-Then one base of BF16 logits per corpus, and every quant scored against it. The
-KLD code is upstream and unmodified; ours was built at llama.cpp `26bc85e42`:
-
-```bash
-llama-perplexity -m Qwen3.8-27B-BF16.gguf -f mixedweb-v1.txt \
-  --kl-divergence-base base-mixedweb.bin -c 2048 --chunks 60 -ngl 99
-
-llama-perplexity -m Qwen3.8-27B-AP-IQ4_XS.gguf --kl-divergence \
-  --kl-divergence-base base-mixedweb.bin -c 2048 --chunks 60 -ngl 99
-```
-
-`Mean KLD` and `Same top p` in that output are the two numbers in the tables
-above; `99.0% KLD` is the worst-1 % column. Every file on this page — ours,
-Unsloth's, ISTA-DASLab's, AtomicChat's — was measured with those exact commands,
-same build, same base files, same 60 × 2048 tokens.
+<p>
+<img class="dark:hidden" src="./assets/kld-size-light.svg" width="100%" alt="Held-out KL divergence against file size, log scale. Agention Precision: Q4_K_XL 0.0111 at 16.35 GiB, Q4_K_M 0.0146 at 15.33, IQ4_XS 0.0255 at 13.27, Q3_K_XL 0.0339 at 12.24, IQ3_S 0.0492 at 11.21, IQ3_XS 0.0604 at 10.70, IQ3_XXS 0.0832 at 10.00, IQ2_S 0.1239 at 8.95. Unsloth, ISTA-DASLab and AtomicChat files of similar size sit above the AP line.">
+<img class="hidden dark:block" src="./assets/kld-size-dark.svg" width="100%" alt="Held-out KL divergence against file size, log scale. Agention Precision: Q4_K_XL 0.0111 at 16.35 GiB, Q4_K_M 0.0146 at 15.33, IQ4_XS 0.0255 at 13.27, Q3_K_XL 0.0339 at 12.24, IQ3_S 0.0492 at 11.21, IQ3_XS 0.0604 at 10.70, IQ3_XXS 0.0832 at 10.00, IQ2_S 0.1239 at 8.95. Unsloth, ISTA-DASLab and AtomicChat files of similar size sit above the AP line.">
+</p>
 
 ### Head to head with Unsloth, identical bytes
 
-Same tensor types, same file size, same speed, same memory. What differs is how the weights inside each block were chosen — a different calibration and a different encoder.
+Same tensor types, same file size, same speed, same memory. What differs is how the weights inside each block were
+chosen: a different calibration and a different encoder.
 
 | | held-out | neutral web | wikitext-2 | worst 1% tokens (held-out) |
 |---|---|---|---|---|
@@ -107,7 +129,8 @@ Held-out gains: 3.2σ, 3.2σ, 5.7σ, 16σ and 18σ (`Q4_K_XL` / `Q4_K_M` / `IQ4_
 
 Top-1 match with BF16 on held-out text: **92.8%** · **92.2%** · **90.4%** · **90.1%** · **88.6%** · **87.7%** · **85.8%** (`Q4_K_XL` / `Q4_K_M` / `IQ4_XS` / `Q3_K_XL` / `IQ3_S` / `IQ3_XS` / `IQ3_XXS`).
 
-### The field near these sizes
+<details>
+<summary><b>The field near these sizes</b> (all 20 files)</summary>
 
 | file | size | held-out | neutral web | wikitext-2 |
 |---|---:|---|---|---|
@@ -136,44 +159,76 @@ ISTA rows are their `-mtp` builds (draft head included, same as ours).
 
 † `AP-IQ2_S` (2026-09-28) and `AP-IQ3_XXS`, `AP-IQ3_XS`, `AP-IQ3_S` and `AP-Q3_K_XL` (2026-09-29) were rebuilt with an extended calibration set that shares 1.4% of its 12-grams with the held-out corpus. Their held-out figures are therefore measured on the 95% of held-out text with zero overlap. That subset is slightly harder: every file we scored on both reads about 3% higher on it than on the full set (ISTA `GSQ-RCO-IQ2_S` 0.1541 → 0.1584, the previous `AP-IQ2_S` 0.1418 → 0.1460), so comparing it with the other rows' full held-out figures is conservative. The extended calibration moves precision toward technical and code text: against the previous files, held-out KL drops 15–18% while wikitext-2 reads up to 9% higher.
 
-KL is fidelity to Qwen’s predictions, not a task leaderboard. The claim it supports is narrow and checkable: at every size we ship, you are closer to the original than the same-size alternative.
+</details>
 
-**First downstream check.** MMLU-Pro, 70 questions (5 per subject), thinking mode with Qwen’s recommended sampling, one run, same questions for both files:
+<details>
+<summary><b>The three corpora, and reproducing these numbers</b></summary>
+
+- **held-out**: 1.85 MB of our own technical prose, never part of any calibration set. It is internal engineering documentation, so it is not published: this column is the one you cannot re-run yourself.
+- **neutral web**: `mixedweb-v1`, 800,789 chars, a seeded FineWeb slice, md5 `51e0045e8cabf37922aa82766a25b7b4`, published with its per-document manifest and builder in [agentionai/quant-fidelity-corpora](https://huggingface.co/datasets/agentionai/quant-fidelity-corpora)
+- **wikitext-2**: the standard `wiki.test.raw`, 1,288,556 chars, md5 `7c0137fc034ddbc56a296bce31b4f7fb` (`llama.cpp/scripts/get-wikitext-2.sh`)
+
+The reference is [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) at
+revision `1d4bf0f2` (the weights uploaded 2026-08-13; later commits are README
+only), converted with llama.cpp's own converter, with no changes and no fork:
+
+```bash
+python convert_hf_to_gguf.py --outtype bf16 Qwen3.8-27B/ --outfile Qwen3.8-27B-BF16.gguf   # 54,657,733,888 bytes
+```
+
+Then one base of BF16 logits per corpus, and every quant scored against it. The
+KLD code is upstream and unmodified; ours was built at llama.cpp `26bc85e42`:
+
+```bash
+llama-perplexity -m Qwen3.8-27B-BF16.gguf -f mixedweb-v1.txt \
+  --kl-divergence-base base-mixedweb.bin -c 2048 --chunks 60 -ngl 99
+
+llama-perplexity -m Qwen3.8-27B-AP-IQ4_XS.gguf --kl-divergence \
+  --kl-divergence-base base-mixedweb.bin -c 2048 --chunks 60 -ngl 99
+```
+
+`Mean KLD` and `Same top p` in that output are the two numbers in the tables
+above; `99.0% KLD` is the worst-1 % column. Every file on this page (ours,
+Unsloth's, ISTA-DASLab's, AtomicChat's) was measured with those exact commands,
+same build, same base files, same 60 × 2048 tokens.
+
+</details>
+
+KL is fidelity to Qwen's predictions, not a task leaderboard. The claim it supports is narrow and checkable: at every
+size we ship, you are closer to the original than the same-size alternative.
+
+## In real use
+
+**First try, at 9 GiB.** Same prompt, same five seeds for every file, first answer only, no retries and no fixes. Each
+page opened in Chrome and judged by eye.
+
+![Voxel pagoda, first try, at 9 GiB](assets/pagoda-poster.png)
+
+| file | size | working pages | looped (no answer) |
+|---|---|---|---|
+| **`AP-IQ2_S`** | **8.95 GiB** | **4 / 5** | **0** |
+| ISTA-DASLab `GSQ-RCO-IQ2_S` | 8.95 GiB | 2 / 5 | 1 |
+| ByteShape `IQ3_XXS-2.88bpw` | 9.24 GiB | 0 / 5 | 3 |
+
+Five trials per file is a small sample; read it as a sanity check that the lower KL carries over, not as a benchmark.
+
+**MMLU-Pro**, 70 questions (5 per subject), thinking mode with Qwen's recommended sampling, one run, same questions for
+both files:
 
 | file | size | MMLU-Pro |
 |---|---:|---:|
 | **`AP-IQ2_S`** | **8.95 GiB** | **77.1%** |
 | ISTA-DASLab `GSQ-RCO-IQ2_S` | 8.95 GiB | 75.7% |
 
----
-
-## Running
-
-Use the sampling settings from the
-[Qwen3.8-27B model card](https://huggingface.co/Qwen/Qwen3.8-27B). Thinking is on by
-default. To turn it off per request, send
-`"chat_template_kwargs": {"enable_thinking": false}`.
-
-```bash
-llama-server -hf agentionai/Qwen3.8-27B-AP-GGUF:IQ4_XS \
-  --jinja -ngl 999 -fa on -c 32768 -ctk q8_0 -ctv q8_0
-```
-
-Keep the KV cache at q8_0 or f16. A 4-bit value cache makes long reasoning traces
-degenerate into repetition on this model family.
-
-**LM Studio:** search for `agentionai/Qwen3.8-27B-AP-GGUF` and pick a tier.
-**Ollama:** `ollama run hf.co/agentionai/Qwen3.8-27B-AP-GGUF:IQ4_XS`
-
-```bash
-llama-server -hf agentionai/Qwen3.8-27B-AP-GGUF:IQ4_XS \
-  --mmproj mmproj-BF16.gguf --jinja -ngl 999 -fa on -c 32768 -ctk q8_0 -ctv q8_0
-```
-
 ## Built with
 
-The tiers are built and verified with our own Rust tooling agention-infer. Every tier is measured against BF16
-on all three corpora, and shipped only if it beats the same-size alternative.
+**Our own Rust tooling, on public calibration text.** Every tier is measured against BF16 on all three corpora, and
+shipped only if it beats the same-size alternative. More tiers follow as they clear the same bar.
+
+<details>
+<summary>Type maps, calibration and credits</summary>
+
+The tiers are built and verified with our own Rust tooling agention-infer.
 [unsloth](https://huggingface.co/unsloth)'s dynamic type maps underpin `AP-Q4_K_XL`,
 `AP-Q4_K_M`, `AP-IQ4_XS`, `AP-Q3_K_XL` and `AP-IQ3_S`, and we thank them for that work.
 `AP-IQ3_XS` and `AP-IQ3_XXS` sit at sizes no one else ships and use our own per-tensor
@@ -186,37 +241,33 @@ own quants. Since 2026-09-28 `AP-IQ2_S`, and since 2026-09-29 `AP-IQ3_XXS`, `AP-
 
 Calibration is ordinary public text: the [Bartowski](https://huggingface.co/bartowski)
 and [Thireus](https://huggingface.co/Thireus) imatrix corpora, plus a one-third share
-of whole articles from the wikitext-2 **train** split — never the test split, and the
+of whole articles from the wikitext-2 **train** split (never the test split), and the
 12-gram overlap with each of the three evaluation corpora above is 0, 0 and 6
 (section headings and unit conversions). 6,012 documents, 4.67 M characters, md5
 `b8e3269f085f500ab307b0cc977126b0`, 1,200 × 512 tokens through the BF16 model. The
 calibration is not the advantage here; anyone can build on the same text.
 
-### Does it hold up in real use? A one-shot coding test
+</details>
 
-Same prompt, same five seeds for every file, first answer only, no retries and no fixes. Each page opened in Chrome and judged by eye.
+**The model files last changed on 2026-09-29.** If you downloaded after that, there is nothing to download again.
 
-![Voxel pagoda, first try, at 9 GiB](assets/pagoda-poster.png)
+## Work with AgentionAI
 
-| file | size | working pages | looped (no answer) |
-|---|---|---|---|
-| **`AP-IQ2_S`** | **8.95 GiB** | **4 / 5** | **0** |
-| ISTA-DASLab `GSQ-RCO-IQ2_S` | 8.95 GiB | 2 / 5 | 1 |
-| ByteShape `IQ3_XXS-2.88bpw` | 9.24 GiB | 0 / 5 | 3 |
+<p align="center">
+  <b>Want results like these on your own model?</b><br>
+  <sub>We tune and quantize models for your agents and hardware: fewer tokens, less GPU memory, quality measured against the original. Every engagement ends with a full measurement report. These quants are released freely; AgentionAI is a one-person team, and sponsoring funds the next release and the benchmarking behind it.</sub>
+</p>
 
-Five trials per file is a small sample; read it as a sanity check that the lower KL carries over, not as a benchmark.
+<p align="center">
+  <a href="mailto:hello@agention.ai"><img src="./assets/btn-custom.svg" alt="Custom quants and tunes: hello@agention.ai" height="44"></a>&nbsp;&nbsp;
+  <a href="https://github.com/sponsors/agentionai"><img src="./assets/btn-sponsor.svg" alt="Sponsor AgentionAI on GitHub" height="44"></a>&nbsp;&nbsp;
+  <a href="https://x.com/laurent_zw"><img src="./assets/btn-follow.svg" alt="Follow @laurent_zw on X" height="44"></a>
+</p>
 
-More tiers follow as they clear the same bar.
-
+<p align="center"><sub>Or <a href="https://buymeacoffee.com/agentionai">buy me a coffee</a> or some GPU time.</sub></p>
 
 ## Credits and license
 
-Built and tested on AMD Ryzen AI Max (Strix Halo). Hardware supported by AMD
-
-Base model: Qwen/Qwen3.8-27B (Qwen community license 1.0, see LICENSE).
-
-### Support AgentionAI
-
-These quants are released freely. If they save you VRAM or make Qwen more useful, you
-can buy me a coffee or some GPU time and sponsor continued quantization and benchmarking on
-[Buy Me a Coffee](https://buymeacoffee.com/agentionai). AgentionAI is a one-person team and can use your help.
+- **Hardware:** built and tested on AMD Ryzen AI Max (Strix Halo). Hardware supported by AMD.
+- **Base model:** [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B), Apache-2.0.
+- **Type maps:** unsloth (Q4_K_XL to IQ3_S tiers), ISTA-DASLab (IQ2_S tier). **Comparison quants:** unsloth, ISTA-DASLab, AtomicChat, ByteShape.

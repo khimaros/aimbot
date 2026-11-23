@@ -54,7 +54,11 @@ RAW = "https://raw.githubusercontent.com/%s/%s/" % (UPSTREAM, REF)
 # pinned hugging face links. `docs/models/README.md` is a shorter index of the
 # same seven rows and names no repo at all, so it cannot be the join
 INDEX = "README.md"
-SERVER = "docs/SERVER.md"
+SERVER = "docs/server.md"
+# what `gufo model install <id>` downloads, one file per model family, found
+# through the repo's tree because their directories are named for the code
+TREE = "https://api.github.com/repos/%s/git/trees/%s?recursive=1" % (UPSTREAM, REF)
+LOCK = re.compile(r"^src/models/[\w.-]+/models\.lock\.json$")
 
 # a weights cell is a ` · `-separated run of markdown links. /blob/ names one
 # file at one commit, /tree/ names a directory at one commit and a bare repo url
@@ -72,8 +76,8 @@ DOC_LINK = re.compile(r"\[([^\]]+)\]\((docs/models/([\w.-]+?)(?:/README)?\.md)(?
 # variables and local paths, which say nothing a command could use
 SERVE = re.compile(r"gufo serve ([a-z]+)((?:[ \t]+--[a-z-]+(?:[ \t]+\S+)?)*)")
 FLAG = re.compile(r"--([a-z][a-z-]*)")
-# the CLI surface, from the server guide's own list of top-level commands
-SUBCOMMANDS = re.compile(r"^gufo ([a-z]+)$", re.M)
+# the server kinds, from the server guide's table of `gufo serve <kind>` rows
+SUBCOMMANDS = re.compile(r"`gufo serve ([a-z]+)`")
 # the models README's own header, which is prose and not a table
 NOISE = re.compile(r"^(model|---|\|model)", re.I)
 
@@ -88,9 +92,15 @@ def get(url, key, max_age, refresh):
 
 
 def weights(cell):
-    """The hugging face files one index cell names, as {repo, revision, file}."""
+    """The hugging face files one index cell names, as {repo, revision, file}.
+
+    A link to a `LICENSE` is the licence column the readme carries now, and
+    not a file anybody loads.
+    """
     out = []
     for label, repo, rev, path in WEIGHT.findall(cell):
+        if path.rstrip("/").rsplit("/", 1)[-1].upper() == "LICENSE":
+            continue
         w = {"repo": repo}
         if rev:
             w["revision"] = rev
@@ -117,7 +127,7 @@ def index(body):
             continue
         slug = doc.group(4) or doc.group(3)
         got = {"display": doc.group(1),
-               "doc": doc.group(2),
+               "doc": doc.group(2), "anchor": doc.group(4),
                "modes": re.sub(r"\s+", " ", re.sub(r"\*\*", "", cols[1])).strip()}
         w = weights(cols[2])
         if w:
@@ -151,11 +161,71 @@ def serve(model_md):
     return out
 
 
-def shape(models, docs, server):
-    """{meta, models: {slug: record}}."""
+def heading_slug(text):
+    """The anchor github gives a heading: `Qwen-Image-2.1-Turbo` -> qwen-image-21-turbo."""
+    return re.sub(r"\s+", "-", re.sub(r"[^\w\s-]", "", text.strip().lower()))
+
+
+def sections(md):
+    """[(anchor, start, end)] for every heading, end at the next one as deep."""
+    heads = [(len(m.group(1)), heading_slug(m.group(2)), m.start())
+             for m in re.finditer(r"^(#+)\s+(.+)$", md or "", re.M)]
+    out = []
+    for i, (depth, anchor, start) in enumerate(heads):
+        end = next((s for d, _, s in heads[i + 1:] if d <= depth), len(md))
+        out.append((anchor, start, end))
+    return out
+
+
+def own_text(md, anchor, siblings):
+    """The part of a shared guide one row is about: its anchored section, or
+    the whole guide less the sections its sibling rows are anchored to."""
+    spans = sections(md)
+    if anchor:
+        return next((md[s:e] for a, s, e in spans if a == anchor), "")
+    cut = sorted((s, e) for a, s, e in spans if a in siblings)
+    out, at = [], 0
+    for s, e in cut:
+        out.append(md[at:s])
+        at = max(at, e)
+    return "".join(out) + md[at:]
+
+
+def lock_weights(text, locks):
+    """The files of every install id a guide names, out of gufo's lock files."""
+    out = []
+    for iid, parts in sorted((locks or {}).items()):
+        if not re.search(r"(?<![\w.-])%s(?![\w.-])" % re.escape(iid), text or ""):
+            continue
+        for part, spec in sorted(parts.items()):
+            src = (spec or {}).get("source") or {}
+            # `part` is what the file is to gufo: the weights, or a drafter or
+            # projector beside them, which no rung of the ladder is
+            base = {"repo": src.get("hf"), "revision": src.get("revision"),
+                    "label": "%s %s" % (iid, part), "part": part}
+            # a gguf is a file a rung can be; anything else is a checkpoint
+            # snapshot, which is the repo at its revision and not its LICENSE
+            files = [f.get("path") for f in (spec or {}).get("files") or []
+                     if (f.get("path") or "").endswith(".gguf")]
+            # two install ids share their drafter and projector: one entry each
+            seen = {(o["repo"], o["revision"], o.get("file")) for o in out}
+            for w in ([dict(base, file=f) for f in files] or [base]):
+                if w["repo"] and (w["repo"], w["revision"], w.get("file")) not in seen:
+                    out.append(w)
+    return out
+
+
+def shape(models, docs, server, locks=None):
+    """{meta, models: {slug: record}}, weights from the locks where a guide
+    names an install id, which is what `gufo model install` downloads."""
     out = {}
     for slug, rec in sorted(models.items()):
-        got = dict(rec)
+        got = {k: v for k, v in rec.items() if k != "anchor"}
+        siblings = {r["anchor"] for r in models.values()
+                    if r.get("anchor") and r["doc"] == rec["doc"]}
+        w = lock_weights(own_text(docs.get(slug) or "", rec.get("anchor"), siblings), locks)
+        if w:
+            got["weights"] = w
         s = serve(docs.get(slug))
         if s:
             got["serve"] = s
@@ -164,6 +234,27 @@ def shape(models, docs, server):
     return {"meta": {"repo": UPSTREAM, "ref": REF, "source": RAW + INDEX,
                      "subcommands": subs},
             "models": out}
+
+
+def read_locks(max_age, refresh):
+    """{install id: {part: spec}} over every lock file the tree lists."""
+    try:
+        tree = json.loads(get(TREE, "gufo-tree", max_age, refresh) or "{}").get("tree") or []
+    except ValueError:
+        tree = []
+    out = {}
+    for path in sorted(e.get("path") or "" for e in tree):
+        if not LOCK.match(path):
+            continue
+        try:
+            body = json.loads(get(RAW + path, "gufo-lock-" + path.split("/")[2],
+                                  max_age, refresh) or "{}")
+        except ValueError:
+            continue
+        out.update(body.get("models") or {})
+    if not out:
+        print("  no lock file read; weights fall back to the index", file=sys.stderr)
+    return out
 
 
 def merge(before, now, unread, server_read):
@@ -264,8 +355,10 @@ def main():
         else:
             missing.append(slug)
     server = get(RAW + SERVER, "gufo-server", args.max_age, args.refresh)
+    locks = read_locks(args.max_age, args.refresh)
 
-    payload = merge(capture.previous(path), shape(models, docs, server), missing, bool(server))
+    payload = merge(capture.previous(path), shape(models, docs, server, locks),
+                    missing, bool(server))
     if missing:
         print("  %d guide(s) unread: %s" % (len(missing), ", ".join(missing)),
               file=sys.stderr)

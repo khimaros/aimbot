@@ -143,5 +143,7 @@ Then call the OpenAI-compatible endpoint with the sampling settings above. Send
 Use the prebuilt tiers in [agentionai/Signal-3.8-27B-GGUF](https://huggingface.co/agentionai/Signal-3.8-27B-GGUF), which include the vision projector and the multi-token-prediction draft head, or convert this checkpoint with `convert_hf_to_gguf.py`.
 </details>
 
+**Hardware:** built and tested on AMD Ryzen AI Max (Strix Halo). Hardware supported by AMD.
+
 ### Support AgentionAI
 Signal3.8 is released freely. If it saves you compute or makes Qwen more useful, you can sponsor continued tuning, quantization and benchmarking on [GitHub](https://github.com/sponsors/agentionai).

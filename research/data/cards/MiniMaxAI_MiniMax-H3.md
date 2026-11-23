@@ -49,7 +49,9 @@ language:
 # MiniMax H3
 
 ## News
-Offical skills to improve prompt writing: [skills on github](https://github.com/MiniMax-AI/MiniMax-H3/tree/main/skills)
+Offical skills to improve prompt writing: [skills on github](https://github.com/MiniMax-AI/MiniMax-H3/tree/main/skills). 
+
+H3 community list [One page](https://minimaxai-ecosystem.static.hf.space/index.html#/video).
 
 ## Online API
 Use MiniMax\-H3 directly via API\. 
@@ -206,10 +208,10 @@ Download the model. The repository hosts the original checkpoint (`FL2VA/`, `Ref
 
 ```bash
 # Original checkpoint, both task families (SGLang, vLLM):
-hf download MiniMaxAI/MiniMax-H3 --include "model_index.json" "FL2VA/*" "Ref2VA/*" --local-dir MiniMax-H3
+hf download MiniMaxAI/MiniMax-H3 model_index.json "FL2VA/*" "Ref2VA/*" --local-dir MiniMax-H3
 
 # Or a single task family:
-hf download MiniMaxAI/MiniMax-H3 --include "model_index.json" "FL2VA/*" --local-dir MiniMax-H3
+hf download MiniMaxAI/MiniMax-H3 model_index.json "FL2VA/*" --local-dir MiniMax-H3
 ```
 
 diffusers users do not need a manual download: `ModularPipeline.from_pretrained("MiniMaxAI/MiniMax-H3")` fetches exactly the components it needs. See the [diffusers documentation](https://huggingface.co/docs/diffusers/main/en/api/pipelines/minimax_h3) for loading recipes.

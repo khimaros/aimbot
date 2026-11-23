@@ -31,7 +31,7 @@ Five GGUF builds of Hy4-flash: [tencent/Hy4-flash](https://huggingface.co/tencen
 | `Hy4-flash-Q3_K.gguf`            | 144.70 GiB | 5.58          | 4.62                     |
 | `Hy4-flash-IQ2-AH.gguf`          | 125.73 GiB | 4.85          | 3.60                     |
 
-![Hy4-flash GGUF benchmark results](https://huggingface.co/AngelSlim/Hy4-flash-GGUF/resolve/main/hy4-flash-gguf-benchmark.png)
+![Hy4-flash GGUF benchmark results](https://huggingface.co/woodchen7/Benchmark/resolve/main/hy4-flash-gguf-benchmark.png)
 
 ---
 
@@ -115,12 +115,8 @@ Image input, with the mmproj file:
 
 **Mac M5 Max 128GB**
 
-```
-cd llama.cpp
-git checkout 2cbca389f          
-git apply hy4-flash-mac-minimal.patch
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_METAL=ON && cmake --build build -j
-```
+See [README_MAC-Metal.md](https://huggingface.co/AngelSlim/Hy4-flash-GGUF/blob/main/README_MAC-Metal.md)
+
 
 **RTX Spark 128GB**
 

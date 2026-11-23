@@ -349,7 +349,9 @@ function quantChoices(m) {
                    // a package audio.cpp installs, which only it loads, and a
                    // pinned file it does not read
                    package: a.package, enginesOnly: a.engines_only || r.engines_only,
-                   enginesNot: r.engines_not,
+                   // a repo audio.cpp does not read, and a file whose own
+                   // runtime keeps it off a release build
+                   enginesNot: [...(r.engines_not || []), ...(a.engines_not || [])],
                    forkType: a.fork_type, runtime: a.runtime, voices: a.voices,
                    // the words for the tables that print text, and the parts --
                    // references and all -- for the page that links them

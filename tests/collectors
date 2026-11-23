@@ -4907,6 +4907,79 @@ def an_engine_catalog_keeps_what_it_dropped_and_claims_none_of_it():
 
 
 @test
+def unsloths_prebuilt_loads_what_mainline_does_plus_its_pins():
+    """`llama.cpp` was added for any arch the header declared, merged or not.
+
+    so hy4 flash, on an open PR, read as a llama.cpp model, and nothing could
+    say which models only unsloth's prebuilt loads. llama.cpp now means a
+    release build. the prebuilt loads that, plus the arches its feature checks
+    assert, a model pointed at its fork, and a PR it pins. a file's own block
+    cannot claim an arch, because a file's block exists for the case the arch
+    string does not settle: ggml-org's inkling 2 mini is `inkling2_loop` under
+    an entry whose arch is `inkling2`.
+    """
+    bv = load_script("build_viewer", os.path.join(ROOT, "scripts", "build-viewer"))
+    U = "unslothai/llama.cpp"
+    support = {"arches": {"inkling": {"feature": "inkling"},
+                          "gone": {"feature": "gone", "delisted": "2026-11-01"}},
+               "pins": ["ggml-org/llama.cpp#32218", "unslothai/llama.cpp#389"]}
+
+    def engines(rt):
+        return bv.engines_for({"kind": "text", "runtime": rt}, unsloth=support)
+    eq(engines({"arch": "qwen3", "mainline": True}), ["llama.cpp", U, "vllm"],
+       "a mainline arch loads on both builds")
+    eq(engines({"arch": "inkling", "mainline": False}), [U, "vllm"],
+       "an arch the prebuilt asserts loads only there")
+    eq(engines({"arch": "gone", "mainline": False}), ["vllm"],
+       "and one it stopped asserting does not")
+    # `fork:` names the engine, and which release carries the model is the
+    # fork's own PR: inkling 2 mini needs unslothai#389, which b12540 lacks
+    fork = "https://github.com/unslothai/llama.cpp"
+    eq(engines({"arch": "x", "mainline": False, "fork": fork}), ["vllm"],
+       "naming the fork says nothing about which release carries it")
+    eq(engines({"arch": "x", "mainline": False, "fork": fork,
+                "pin": "https://github.com/unslothai/llama.cpp/pull/389"}),
+       [U, "vllm"], "a release that pins the fork's PR loads it")
+    eq(engines({"arch": "x", "mainline": False, "fork": fork,
+                "pin": "https://github.com/unslothai/llama.cpp/pull/999"}),
+       ["vllm"], "and one that does not, does not")
+    # one release's record, the shape a host's probed release is judged by
+    b12540 = {"base": "b12540", "arches": ["inkling"], "pins": ["unslothai/llama.cpp#377"]}
+    eq(bv.unsloth_loads({"arch": "inkling2", "mainline": False, "fork": fork,
+                         "pin": "https://github.com/unslothai/llama.cpp/pull/389"}, b12540),
+       False, "a release record is read as it is: b12540 has no #389")
+    eq(bv.unsloth_loads({"arch": "inkling", "mainline": False}, b12540), True,
+       "and its own arches")
+    eq(engines({"arch": "x", "mainline": False,
+                "tracking": "https://github.com/ggml-org/llama.cpp/pull/32218"}),
+       [U, "vllm"], "and so does one tracking a PR it pins")
+    eq(engines({"arch": "x", "mainline": False,
+                "tracking": "https://github.com/ggml-org/llama.cpp/pull/1"}),
+       ["vllm"], "an open PR nobody pinned loads nowhere")
+    # the prebuilt is its base tag plus pins, so an arch merged after the base
+    # is mainline's alone: under a fork-first host it would fail at load
+    based = dict(support, meta={"base": "b12588"})
+    eq(bv.engines_for({"kind": "text", "runtime": {"arch": "y", "mainline": True,
+                                                   "since": "b12600"}}, unsloth=based),
+       ["llama.cpp", "vllm"], "an arch merged after the fork's base is mainline's alone")
+    eq(bv.engines_for({"kind": "text", "runtime": {"arch": "y", "mainline": True,
+                                                   "since": "b12588"}}, unsloth=based),
+       ["llama.cpp", U, "vllm"], "and one merged at the base is both")
+
+    rows = [{"repo": "r", "available": [
+        {"quant": "A", "runtime": {"mainline": False, "fork": fork,
+                                   "pin": "https://github.com/unslothai/llama.cpp/pull/389"}},
+        {"quant": "B", "runtime": {"mainline": False,
+                                   "tracking": "https://github.com/ggml-org/llama.cpp/pull/32694"}},
+        {"quant": "C", "runtime": {"mainline": False, "arch": "inkling"}},
+        {"quant": "D"}]}]
+    bv.off_mainline(rows, support)
+    eq({a["quant"]: a.get("engines_not") for a in rows[0]["available"]},
+       {"A": ["llama.cpp"], "B": ["llama.cpp", U], "C": ["llama.cpp", U], "D": None},
+       "a file off mainline loads on the prebuilt only through its fork or a pin")
+
+
+@test
 def a_publisher_page_that_failed_keeps_the_repos_it_listed():
     """A failed author page wrote `[]` over the publisher, and `base_model` is
     only readable for a repo this capture holds -- so resolve-base lost every
@@ -5214,6 +5287,29 @@ def a_latent_with_no_rope_part_is_still_a_latent():
     eq("latent" in plain, False, "and plain attention has none")
 
 
+@test
+def windowed_layers_listed_by_id_and_looped_layers_are_both_counted():
+    """every inkling lists its windowed layers as `local_layer_ids`.
+
+    read as all global, inkling 2 small's cache was 48 full layers where 8 are
+    global and 40 hold a 1024-token window, about 6x over at long context. inkling
+    2 mini also runs layers 6-17 three times with a cache per pass, so 24 layers
+    of weights are 48 layers of cache.
+    """
+    mod = load_script("fetch_model_facts", os.path.join(RESEARCH, "fetch-model-facts"))
+    small = mod.attention({"num_hidden_layers": 48, "num_key_value_heads": 8, "head_dim": 128,
+                           "sliding_window_size": 1024,
+                           "local_layer_ids": [i for i in range(48) if i % 6 != 5]})
+    eq((small.get("full_layers"), small.get("other_layers"), small.get("window")),
+       (8, 40, 1024), "the listed layers are windowed: %r" % small)
+    mini = mod.attention({"num_hidden_layers": 24, "num_key_value_heads": 8, "head_dim": 128,
+                          "sliding_window_size": 1024,
+                          "local_layer_ids": [i for i in range(24) if i % 6 != 5],
+                          "loop_config": {"core_start": 6, "core_end": 18, "num_passes": 3}})
+    eq((mini.get("full_layers"), mini.get("other_layers")), (8, 40),
+       "and a looped layer holds a cache per pass: %r" % mini)
+
+
 AA_DECISION_CAPTURE = {
     "acme_widget-one-4b": {"name": "Widget One 4B", "slug": "acme_widget-one-4b",
                            "indexScore": 70.1},
@@ -5321,6 +5417,28 @@ def the_decision_index_keeps_its_index_and_the_six_scores_under_it():
     f = au.aa_decision_facets(got, {"aa-decision": "acme_widget-one-4b"})
     eq(f["aa-decision.index"]["value"], 70.1, "the index is the facet weighted")
     eq(f["aa-decision.when2call"]["value"], 95.5, "and the evals ride beside it")
+
+
+@test
+def a_leaderboard_row_without_a_slug_keeps_the_slug_it_had():
+    """artificial analysis moved the slug off the leaderboard row into `release`.
+
+    keyed by the `name` fallback, 287 rows landed as `Granite 4.0 H 1B` beside
+    their old slugs, 724 slugs were marked delisted, and resolve-ids rewrote four
+    registry ids to display names. the per-variant slug is no longer published
+    in the clear, and it is not derivable: `Inkling (Xhigh)` was `inkling`, bare.
+    so a row takes the slug a row of the same name had, and a model new since
+    then takes its release slug, with its effort suffix where a sibling has it.
+    """
+    mod = load_script("fetch_aa", os.path.join(RESEARCH, "fetch-artificial-analysis"))
+    recs = [{"name": "Inkling (Xhigh)", "suffix": "Xhigh", "release": {"slug": "inkling"}},
+            {"name": "Inkling (High)", "suffix": "High", "release": {"slug": "inkling"}},
+            {"name": "LFM3-1.7B", "suffix": None, "release": {"slug": "lfm3-1-7b"}},
+            {"name": "Detail", "slug": "has-its-own", "release": {"slug": "x"}}]
+    known = {"Inkling (Xhigh)": "inkling"}
+    eq([r.get("slug") for r in mod.assign_slugs(recs, known)],
+       ["inkling", "inkling-high", "lfm3-1-7b", "has-its-own"],
+       "the old slug by name, then the release slug, then release plus effort")
 
 
 @test
@@ -9679,15 +9797,59 @@ def gufos_join_names_what_the_repo_is_here():
     registry does not carry at all.
     """
     mod = gufo_module()
-    rows = mod.index(GUFO_INDEX)
     keys = {"Qwen/Qwen3-ASR-1.7B"}
     pinned = {"unsloth/Qwen3.8-27B-GGUF"}
-    eq(mod.join(rows["qwen3-asr"]["weights"], keys, pinned),
+    eq(mod.join([{"repo": "Qwen/Qwen3-ASR-1.7B"}], keys, pinned),
        [("Qwen/Qwen3-ASR-1.7B", "checkpoint")], "a key is a checkpoint")
-    eq(mod.join(rows["qwen3.8-27b"]["weights"], keys, pinned),
+    eq(mod.join([{"repo": "unsloth/Qwen3.8-27B-GGUF", "file": "a.gguf"}], keys, pinned),
        [("unsloth/Qwen3.8-27B-GGUF", "pinned rungs")], "a pinned repo is rungs")
-    eq(mod.join(rows["qwen3.8-flash-next"]["weights"], keys, pinned), [],
+    eq(mod.join([{"repo": "unsloth/Qwen3.8-Flash-Next-GGUF"}], keys, pinned), [],
        "a repo the roster names nowhere matches nothing")
+
+
+@test
+def gufos_weights_come_from_its_lock_files_through_each_guides_install_ids():
+    """gufo's readme stopped naming weights: its third column is now a licence.
+
+    read as weights, every licence link became a model's file -- qwen-image's
+    `LICENSE` -- and the 27b lost the two unsloth rungs gufo loads, so its
+    gufo chip vanished. what gufo downloads is `src/models/*/models.lock.json`,
+    one entry per install id, and each guide names its ids: `gufo model install
+    qwen27-q4  # or qwen27-q8`, or the `"model": "minimax-h3"` a request sends.
+    a row anchored into a shared guide takes only its own section's ids.
+    """
+    mod = gufo_module()
+    readme = ("| Model | What it does | Weights license |\n| --- | --- | --- |\n"
+              "| [Qwen3.8 27B](docs/models/qwen3.8-27b.md) | Text and images | Apache 2.0 |\n"
+              "| [Qwen-Image-2.1](docs/models/qwen-image-2.1.md) | Images | "
+              "[Qwen Research License](https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE) |\n"
+              "| [Qwen-Image-2.1-Turbo](docs/models/qwen-image-2.1.md#qwen-image-21-turbo) | Fast | "
+              "[Qwen Research License](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo/blob/main/LICENSE) |\n")
+    rows = mod.index(readme)
+    eq(any(r.get("weights") for r in rows.values()), False, "a licence link is not a weights file")
+    docs = {"qwen3.8-27b": "## Files\n\n```sh\ngufo model install qwen27-q4    # or qwen27-q8\n```\n",
+            "qwen-image-2.1": "# Qwen-Image-2.1\n\ngufo model install qwen-image-2.1\n\n"
+                              "## Qwen-Image-2.1-Turbo\n\ngufo model install qwen-image-2.1-turbo\n\n"
+                              "## Performance\n"}
+    docs["qwen-image-21-turbo"] = docs["qwen-image-2.1"]
+
+    def part(hf, path):
+        return {"source": {"hf": hf, "revision": "abc"}, "files": [{"path": path}]}
+    locks = {"qwen27-q4": {"weights": part("unsloth/Qwen3.8-27B-GGUF", "Qwen3.8-27B-UD-Q4_K_XL.gguf"),
+                           "dflash": part("z-lab/Qwen3.8-27B-DFlash2-GGUF", "d.gguf")},
+             "qwen27-q8": {"weights": part("unsloth/Qwen3.8-27B-GGUF", "Qwen3.8-27B-UD-Q8_K_XL.gguf")},
+             "qwen-image-2.1": {"weights": part("Qwen/Qwen-Image-2.1", "model.safetensors")},
+             "qwen-image-2.1-turbo": {"weights": part("Qwen/Qwen-Image-2.1-Turbo", "model.safetensors")}}
+    got = mod.shape(rows, docs, "", locks)["models"]
+    eq(sorted((w["repo"], w.get("file")) for w in got["qwen3.8-27b"]["weights"]),
+       [("unsloth/Qwen3.8-27B-GGUF", "Qwen3.8-27B-UD-Q4_K_XL.gguf"),
+        ("unsloth/Qwen3.8-27B-GGUF", "Qwen3.8-27B-UD-Q8_K_XL.gguf"),
+        ("z-lab/Qwen3.8-27B-DFlash2-GGUF", "d.gguf")],
+       "both install ids' files, the drafter among them")
+    eq([w["repo"] for w in got["qwen-image-21-turbo"]["weights"]], ["Qwen/Qwen-Image-2.1-Turbo"],
+       "an anchored row reads its own section")
+    eq([w["repo"] for w in got["qwen-image-2.1"]["weights"]], ["Qwen/Qwen-Image-2.1"],
+       "and the guide's own row leaves that section to it")
 
 
 @test

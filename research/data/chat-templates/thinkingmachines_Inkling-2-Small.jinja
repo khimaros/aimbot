@@ -66,6 +66,7 @@
         {%- set header.text = header.text ~ message.name -%}
     {%- endif -%}
     {%- set rtok = header.text -%}
+    {%- set rendered -%}
 
     {%- if message.role == "assistant" and message.reasoning_content is defined and message.reasoning_content -%}
         {{- rtok ~ "<|content_thinking|>" ~ message.reasoning_content ~ "<|end_message|>" -}}
@@ -122,6 +123,12 @@
 
     {%- if message.role == "assistant" -%}
         {{- "<|content_model_end_sampling|>" -}}
+    {%- endif -%}
+    {%- endset -%}
+    {%- if message.role == "assistant" -%}
+        {%- generation -%}{{- rendered -}}{%- endgeneration -%}
+    {%- else -%}
+        {{- rendered -}}
     {%- endif -%}
 {%- endfor -%}
 

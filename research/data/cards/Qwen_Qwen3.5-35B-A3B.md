@@ -5,6 +5,7 @@ license_link: https://huggingface.co/Qwen/Qwen3.5-35B-A3B/blob/main/LICENSE
 pipeline_tag: image-text-to-text
 base_model:
 - Qwen/Qwen3.5-35B-A3B-Base
+new_version: Qwen/Qwen3.6-35B-A3B
 ---
 
 # Qwen3.5-35B-A3B

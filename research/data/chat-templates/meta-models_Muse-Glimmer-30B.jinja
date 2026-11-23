@@ -84,6 +84,15 @@
     {%- set rs = reasoning_strength if reasoning_strength is defined and reasoning_strength else 'high' -%}
     {{- 'Reasoning strength: ' + rs + '.' -}}
 {%- endmacro -%}
+{%- macro render_response_format() -%}
+    {#- The engine enforces response_format by sampling; the model never sees it. State it so the
+        model writes the answer the grammar expects. -#}
+    {%- if response_format is defined and response_format -%}
+        {%- if response_format.type == 'json_schema' -%}
+            {{- '\n\nIn your final response to the user\'s latest message the output must adhere to the following json schema: ' + (response_format.json_schema.schema | tojson) -}}
+        {%- endif -%}
+    {%- endif -%}
+{%- endmacro -%}
 {%- macro render_system_meta(tools) -%}
     {%- set rns = namespace(recipients=['"self"'], nslist=[]) -%}
     {%- if tools -%}
@@ -119,6 +128,7 @@
     {%- endif -%}
     {{- '\n\n' -}}
     {{- render_reasoning() -}}
+    {{- render_response_format() -}}
     {%- if tools -%}
         {{- '\n\n' -}}
         {{- render_tool_defs(tools) -}}
@@ -146,6 +156,7 @@
             {{- '\n\n' -}}
             {{- render_reasoning() -}}
         {%- endif -%}
+        {{- render_response_format() -}}
         {%- if tools -%}
             {{- '\n\n' -}}
             {{- render_tool_defs(tools) -}}

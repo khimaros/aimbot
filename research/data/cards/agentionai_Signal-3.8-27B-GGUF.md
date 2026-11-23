@@ -237,5 +237,7 @@ Signal keeps Qwen3.8-27B's image input. The vision encoder and projector are unt
 tune, so the base model's own `mmproj-BF16.gguf` is at
 the repository root, 0.87 GiB. Download it alongside any tier:
 
+**Hardware:** built and tested on AMD Ryzen AI Max (Strix Halo). Hardware supported by AMD.
+
 ### Support AgentionAI
 Signal3.8 is released freely. If it saves you compute or makes Qwen more useful, you can sponsor continued tuning, quantization and benchmarking on [GitHub](https://github.com/sponsors/agentionai).

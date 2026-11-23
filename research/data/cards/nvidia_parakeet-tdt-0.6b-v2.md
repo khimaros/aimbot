@@ -139,6 +139,7 @@ model-index:
       value: 5.95
 metrics:
 - wer
+new_version: nvidia/parakeet-tdt-0.6b-v3
 ---
 
 # **🦜 Parakeet TDT 0.6B V2 (En)**

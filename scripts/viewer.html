@@ -2501,10 +2501,14 @@ function pickedQuant(m) {
     || bestOf(m, inRepo) || inRepo[0] || null;
 }
 
+// a build that serves llama-server's command line: mainline, or a fork the
+// runtime list says is `like` it
+const servesLlama = rt => (rt.like || rt.k) === 'llama.cpp';
+
 // verdict reads a gguf through llama-server, so the decisions profile is offered
 // only under the runtime that has one
 const profileNames = m => Object.keys(m.sampling).concat(
-  m.decides && pickedRuntime(m).k === 'llama.cpp' ? [DECISION_PROFILE] : []);
+  m.decides && servesLlama(pickedRuntime(m)) ? [DECISION_PROFILE] : []);
 
 // a chip the reader pressed, then what the table they came from was asking about
 function pickedProfile(m) {
@@ -2824,14 +2828,16 @@ function otherRuntime(m, rt, pick, profile) {
     const flags = (g.serve || {}).flags || [];
     // the sidecar flag is the guide's own -- `--dflash-model` for the dflash2
     // build, `--mtp-model` for the mtp one -- and the sidecar file is the weight
-    // whose label names the mode. naming the wrong one is a server that starts
-    // with no drafter and quietly runs at a fraction of the figure the guide
-    // quotes, which is the failure this page keeps ruling out one flag at a time
+    // gufo's lock files the flag's part under, or, read off the old index, the
+    // one whose label names the mode. naming the wrong one is a server that
+    // starts with no drafter and quietly runs at a fraction of the figure the
+    // guide quotes, which is the failure this page keeps ruling out one flag at
+    // a time
     const draftFlag = flags.find(f => f !== 'model' && f.endsWith('-model'));
     const mode = (g.serve || {}).speculative;
-    const draft = mode && draftFlag
-      ? (g.weights || []).find(x => x !== w && (x.label || '').toLowerCase()
-                                 .includes(mode.toLowerCase())) : null;
+    const sidecar = x => x.part ? x.part === draftFlag.replace(/-model$/, '')
+      : (x.label || '').toLowerCase().includes(mode.toLowerCase());
+    const draft = mode && draftFlag ? (g.weights || []).find(x => x !== w && sidecar(x)) : null;
     // the path `hf download` reports for the bytes it just fetched, rather than
     // a directory this page picked and a --local-dir that has to agree with it.
     // the weight is a file in some repos and a subdirectory in others -- the
@@ -2876,7 +2882,7 @@ function snippets(m) {
   const rt = pickedRuntime(m), pick = pickedQuant(m), profile = pickedProfile(m);
   const out = [];
   if (!rt.k) return out;
-  if (rt.k === 'llama.cpp') {
+  if (servesLlama(rt)) {
     const read = pick && activeReadout(m, pick.repo);
     out.push({label: SERVER_LABEL[(read || {}).kind] || `llama-server, ${profile || 'no'} samplers`,
               text: llamaServer(m, pick, profile), open: true});

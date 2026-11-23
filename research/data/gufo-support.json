@@ -4,30 +4,32 @@
   "ref": "main",
   "source": "https://raw.githubusercontent.com/gufo-org/gufo/main/README.md",
   "subcommands": [
-   "chat",
-   "prompt",
-   "serve",
-   "transcribe",
-   "video"
+   "asr",
+   "decision",
+   "embedding",
+   "image",
+   "tts"
   ]
  },
  "models": {
   "deepseek-v4-flash": {
    "display": "DeepSeek V4 Flash",
    "doc": "docs/models/deepseek-v4-flash.md",
-   "modes": "AR, DSpark",
+   "modes": "Text",
    "weights": [
     {
      "repo": "antirez/deepseek-v4-gguf",
-     "revision": "1cd7b564460821938add0475a60b942c409295e0",
-     "file": "DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf",
-     "label": "antirez Flash 0731 IQ2XXS"
+     "revision": "e7f04037032990db0346398d249baf9fb9df1ccc",
+     "label": "deepseek4 dspark",
+     "part": "dspark",
+     "file": "DeepSeek-V4-Flash-DSpark-support-0731.gguf"
     },
     {
      "repo": "antirez/deepseek-v4-gguf",
-     "revision": "e7f04037032990db0346398d249baf9fb9df1ccc",
-     "file": "DeepSeek-V4-Flash-DSpark-support-0731.gguf",
-     "label": "DSpark"
+     "revision": "1cd7b564460821938add0475a60b942c409295e0",
+     "label": "deepseek4 weights",
+     "part": "weights",
+     "file": "DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf"
     }
    ],
    "serve": {
@@ -42,12 +44,13 @@
   "embeddinggemma-2": {
    "display": "EmbeddingGemma 2",
    "doc": "docs/models/embeddinggemma-2.md",
-   "modes": "Text and image embeddings",
+   "modes": "Embeddings for text, images, audio and video",
    "weights": [
     {
      "repo": "google/embeddinggemma-2",
      "revision": "914f7f89142e33e77833254d9c9b90c3cef7303b",
-     "label": "BF16"
+     "label": "embeddinggemma-2 weights",
+     "part": "weights"
     }
    ],
    "serve": {
@@ -60,25 +63,26 @@
   "minimax-h3": {
    "display": "MiniMax H3",
    "doc": "docs/models/minimax-h3.md",
-   "modes": "BF16 text to video/audio",
+   "modes": "Video with sound",
    "weights": [
     {
      "repo": "MiniMaxAI/MiniMax-H3",
      "revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
-     "file": "FL2VA",
-     "label": "FL2VA pipeline"
+     "label": "minimax-h3 weights",
+     "part": "weights"
     }
    ]
   },
   "qwen-image-2.1": {
    "display": "Qwen-Image-2.1",
    "doc": "docs/models/qwen-image-2.1.md",
-   "modes": "BF16 image generation and editing",
+   "modes": "Image generation and editing",
    "weights": [
     {
      "repo": "Qwen/Qwen-Image-2.1",
      "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
-     "label": "Complete pipeline"
+     "label": "qwen-image-2.1 weights",
+     "part": "weights"
     }
    ],
    "serve": {
@@ -93,12 +97,13 @@
   "qwen-image-21-turbo": {
    "display": "Qwen-Image-2.1-Turbo",
    "doc": "docs/models/qwen-image-2.1.md",
-   "modes": "BF16 eight-step image generation and editing",
+   "modes": "Eight-step image generation and editing",
    "weights": [
     {
      "repo": "Qwen/Qwen-Image-2.1-Turbo",
      "revision": "fc13ba1986fcb905854dc8de2f52eee395f49b5b",
-     "label": "Complete pipeline"
+     "label": "qwen-image-2.1-turbo weights",
+     "part": "weights"
     }
    ],
    "serve": {
@@ -113,12 +118,13 @@
   "qwen3-asr": {
    "display": "Qwen3-ASR 1.7B",
    "doc": "docs/models/qwen3-asr.md",
-   "modes": "Speech recognition",
+   "modes": "Speech to text",
    "weights": [
     {
      "repo": "Qwen/Qwen3-ASR-1.7B",
      "revision": "7278e1e70fe206f11671096ffdd38061171dd6e5",
-     "label": "BF16"
+     "label": "qwen3-asr weights",
+     "part": "weights"
     }
    ],
    "serve": {
@@ -131,19 +137,13 @@
   "qwen3-tts": {
    "display": "Qwen3-TTS 1.7B",
    "doc": "docs/models/qwen3-tts.md",
-   "modes": "Speech synthesis and voice cloning",
+   "modes": "Text to speech and voice cloning",
    "weights": [
     {
-     "repo": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
-     "label": "CustomVoice"
-    },
-    {
-     "repo": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
-     "label": "VoiceDesign"
-    },
-    {
      "repo": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
-     "label": "Base"
+     "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+     "label": "qwen3-tts weights",
+     "part": "weights"
     }
    ],
    "serve": {
@@ -158,25 +158,35 @@
   "qwen3.8-27b": {
    "display": "Qwen3.8 27B",
    "doc": "docs/models/qwen3.8-27b.md",
-   "modes": "Q4/Q8, images, AR, DFlash2",
+   "modes": "Text and images",
    "weights": [
-    {
-     "repo": "unsloth/Qwen3.8-27B-GGUF",
-     "revision": "4ca720788d1e01f1bff70c033e0d0028fd02e502",
-     "file": "Qwen3.8-27B-UD-Q4_K_XL.gguf",
-     "label": "Q4_K_XL"
-    },
-    {
-     "repo": "unsloth/Qwen3.8-27B-GGUF",
-     "revision": "4ca720788d1e01f1bff70c033e0d0028fd02e502",
-     "file": "Qwen3.8-27B-UD-Q8_K_XL.gguf",
-     "label": "Q8_K_XL"
-    },
     {
      "repo": "z-lab/Qwen3.8-27B-DFlash2-GGUF",
      "revision": "2d9571f8ce46e151f61c6499c99dee6079e1d610",
-     "file": "Qwen3.8-27B-DFlash2-Q4_K_M.gguf",
-     "label": "DFlash2 Q4_K_M"
+     "label": "qwen27-q4 dflash",
+     "part": "dflash",
+     "file": "Qwen3.8-27B-DFlash2-Q4_K_M.gguf"
+    },
+    {
+     "repo": "unsloth/Qwen3.8-27B-GGUF",
+     "revision": "ce331efc48d5722b4b8041f72793e530eae18d9b",
+     "label": "qwen27-q4 mmproj",
+     "part": "mmproj",
+     "file": "mmproj-BF16.gguf"
+    },
+    {
+     "repo": "unsloth/Qwen3.8-27B-GGUF",
+     "revision": "ce331efc48d5722b4b8041f72793e530eae18d9b",
+     "label": "qwen27-q4 weights",
+     "part": "weights",
+     "file": "Qwen3.8-27B-UD-Q4_K_XL.gguf"
+    },
+    {
+     "repo": "unsloth/Qwen3.8-27B-GGUF",
+     "revision": "ce331efc48d5722b4b8041f72793e530eae18d9b",
+     "label": "qwen27-q8 weights",
+     "part": "weights",
+     "file": "Qwen3.8-27B-UD-Q8_K_XL.gguf"
     }
    ],
    "serve": {
@@ -194,19 +204,49 @@
   "qwen3.8-flash-next": {
    "display": "Qwen3.8 Flash-Next",
    "doc": "docs/models/qwen3.8-flash-next.md",
-   "modes": "Q4, images, AR, MTP",
+   "modes": "Text and images",
    "weights": [
     {
      "repo": "unsloth/Qwen3.8-Flash-Next-GGUF",
      "revision": "d96201194f103c906994f283f504209dc8d2a10c",
-     "file": "UD-Q4_K_XL",
-     "label": "Q4_K_XL"
+     "label": "flash-next-q4 mmproj",
+     "part": "mmproj",
+     "file": "mmproj-BF16.gguf"
     },
     {
      "repo": "unsloth/Qwen3.8-Flash-Next-GGUF",
      "revision": "d96201194f103c906994f283f504209dc8d2a10c",
-     "file": "MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf",
-     "label": "MTP Q8_0"
+     "label": "flash-next-q4 mtp",
+     "part": "mtp",
+     "file": "MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf"
+    },
+    {
+     "repo": "unsloth/Qwen3.8-Flash-Next-GGUF",
+     "revision": "d96201194f103c906994f283f504209dc8d2a10c",
+     "label": "flash-next-q4 weights",
+     "part": "weights",
+     "file": "UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf"
+    },
+    {
+     "repo": "unsloth/Qwen3.8-Flash-Next-GGUF",
+     "revision": "d96201194f103c906994f283f504209dc8d2a10c",
+     "label": "flash-next-q4 weights",
+     "part": "weights",
+     "file": "UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00002-of-00004.gguf"
+    },
+    {
+     "repo": "unsloth/Qwen3.8-Flash-Next-GGUF",
+     "revision": "d96201194f103c906994f283f504209dc8d2a10c",
+     "label": "flash-next-q4 weights",
+     "part": "weights",
+     "file": "UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00003-of-00004.gguf"
+    },
+    {
+     "repo": "unsloth/Qwen3.8-Flash-Next-GGUF",
+     "revision": "d96201194f103c906994f283f504209dc8d2a10c",
+     "label": "flash-next-q4 weights",
+     "part": "weights",
+     "file": "UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00004-of-00004.gguf"
     }
    ],
    "serve": {

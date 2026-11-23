@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+
+"""Which architectures unsloth's llama.cpp prebuilt loads, release by release.
+
+    fetch-unsloth-support             # write data/unsloth-support.json
+    fetch-unsloth-support --report     # what the roster carries against it
+
+unslothai/llama.cpp is not a branch of anything. its master is upstream's
+packaging plus a list of pinned pull requests, and the prebuilt it publishes as
+`<base>-mix-<hash>` is the upstream tag `<base>` with every pin merged on top.
+no git ref holds that tree, so what the prebuilt loads cannot be read off a
+clone the way fetch-llama-support reads mainline. each release says it in two
+places of its own:
+
+  llama-prebuilt-sha256.json      a release asset: the upstream tag, the merge
+                                  commit the binaries report, every PR that was
+                                  merged, and the sha256 of every artifact,
+                                  the source tarball a host can verify a build
+                                  of its own against among them
+  scripts/unsloth/feature-checks  at the release's tag, which points at the
+                                  fork's master as it was built: the arches
+                                  and projectors that build is asserted to load
+
+both are read per release rather than off today's master, because a host runs
+the release it installed. a pin added since would claim an arch that host's
+binary lacks, and the merge commit is what tells a host's `--version` apart.
+
+the newest release is also written at the top level, as `meta`, `arches` and
+`pins`: that is the prebuilt the page offers. an arch mainline carries is
+loaded too, from the base tag on, so this capture holds only what the pins add.
+
+a feature with no arch check is a kernel or a server change and claims nothing
+here. what the feature list cannot say is a layout change inside an arch it
+already names: inkling 2 mini declares `inkling2` and needs the looped layers of
+a pin with no check of its own, which is why a file can still say
+`fork: https://github.com/unslothai/llama.cpp` in the registry.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+import capture
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = "data/unsloth-support.json"
+UPSTREAM = "unslothai/llama.cpp"
+CHECKS = ("https://raw.githubusercontent.com/%s/%%s/scripts/unsloth/feature-checks.json"
+          % UPSTREAM)
+# each release lists forty-odd prebuilt assets, so a page of thirty is 3 MB.
+# mixes and plain upstream builds alternate near the top
+RELEASES = "https://api.github.com/repos/%s/releases?per_page=10" % UPSTREAM
+# the manifest plus a sha256 per artifact, so the one file says everything
+MANIFEST = "llama-prebuilt-sha256.json"
+# the merged tree as built, slimmed of files no build reads
+SOURCE_KIND = "exact-source"
+# how many mixes back a host may still be running; older ones stay in the
+# capture once read, since a release asset never changes
+KEEP = 4
+# a published release's assets are immutable, so one read is enough
+IMMUTABLE = 365 * 86400
+MIX = re.compile(r"^(b\d+)-mix-[0-9a-f]+$")
+
+
+def get(url, key, max_age, refresh):
+    cmd = [os.path.join(HERE, "httpcache"), url, "--key", key,
+           "--max-age", str(max_age)]
+    if refresh:
+        cmd.append("--refresh")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    try:
+        return json.loads(proc.stdout) if proc.returncode == 0 else None
+    except ValueError:
+        return None
+
+
+def mixes(listing, keep=KEEP):
+    """[(tag, {asset name: url}, published)] for the newest published mixes."""
+    out = []
+    for r in listing or []:
+        if r.get("draft") or not MIX.match(r.get("tag_name") or ""):
+            continue
+        assets = {a.get("name"): a.get("browser_download_url") for a in r.get("assets") or []}
+        if assets.get(MANIFEST):
+            out.append((r["tag_name"], assets, (r.get("published_at") or "")[:10]))
+    return out[:keep]
+
+
+def arches(checks):
+    """{arch: {feature}} for every feature with an architecture check."""
+    out = {}
+    for name, feat in sorted(((checks or {}).get("features") or {}).items()):
+        for c in feat.get("checks") or []:
+            if c.get("kind") == "arch" and c.get("arch"):
+                out[c["arch"]] = {"feature": name}
+    return out
+
+
+def release(manifest, checks, published, assets=None):
+    """One release's base, merge commit, source tarball, pins and arches, or None."""
+    if not manifest or not manifest.get("upstream_tag") or not checks:
+        return None
+    name, src = next(((n, a) for n, a in sorted((manifest.get("artifacts") or {}).items())
+                      if a.get("kind") == SOURCE_KIND), (None, {}))
+    return {"base": manifest["upstream_tag"], "commit": manifest.get("source_commit"),
+            "published": published,
+            "source_url": (assets or {}).get(name), "source_sha256": src.get("sha256"),
+            "pins": ["%s#%s" % (p["repo"], p["number"])
+                     for p in manifest.get("merged_prs") or [] if p.get("repo")],
+            "arches": sorted(arches(checks))}
+
+
+def shape(read, order, before):
+    """The capture: every release read, kept ones carried, the newest on top."""
+    before = before or {}
+    releases = dict(before.get("releases") or {}, **read)
+    newest = next((t for t in order if t in releases), (before.get("meta") or {}).get("release"))
+    top = releases.get(newest) or {}
+    old = before.get("arches") or {}
+    now = {a: {"feature": (old.get(a) or {}).get("feature")} for a in top.get("arches") or []}
+    kept, _ = capture.carry(old, now or old)
+    return {"meta": {"repo": UPSTREAM, "release": newest, "base": top.get("base"),
+                     "commit": top.get("commit")},
+            "arches": kept, "pins": top.get("pins") or before.get("pins") or [],
+            "releases": releases}
+
+
+def report(payload, registry):
+    """Each captured release, and the roster's models only the newest adds."""
+    have = {a for a, v in (payload.get("arches") or {}).items() if not v.get("delisted")}
+    for tag, r in sorted((payload.get("releases") or {}).items(), reverse=True):
+        print("unsloth: %-22s base %-7s commit %s  %d arch(es), %d pin(s)"
+              % (tag, r.get("base"), (r.get("commit") or "")[:9],
+                 len(r.get("arches") or []), len(r.get("pins") or [])))
+    for repo, m in sorted(registry.items()):
+        rt = m.get("runtime") or {}
+        if rt.get("arch") in have:
+            print("  %-46s %-14s %s" % (repo, rt["arch"],
+                                        "mainline too" if rt.get("mainline") else "prebuilt only"))
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default=OUT)
+    ap.add_argument("--registry",
+                    default=os.path.join(HERE, "..", "registry", "models.yaml"))
+    ap.add_argument("--report", action="store_true",
+                    help="read the capture and the registry and say nothing else")
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--max-age", type=int, default=86400)
+    ap.add_argument("--allow-shrink", action="store_true")
+    args = ap.parse_args()
+
+    path = capture.resolve(args.out)
+    if args.report:
+        if not os.path.exists(path):
+            return "!!! no capture at %s -- run fetch-unsloth-support first" % path
+        import yaml
+        with open(path) as f, open(args.registry) as r:
+            return report(json.load(f), (yaml.safe_load(r) or {}).get("models") or {})
+
+    listing = get(RELEASES, "unsloth-releases", args.max_age, args.refresh)
+    if listing is None:
+        print("  the release list did not arrive; keeping the last capture", file=sys.stderr)
+    found, read = mixes(listing), {}
+    for tag, assets, published in found:
+        rec = release(get(assets[MANIFEST], "unsloth-manifest-" + tag, IMMUTABLE, args.refresh),
+                      get(CHECKS % tag, "unsloth-checks-" + tag, IMMUTABLE, args.refresh),
+                      published, assets)
+        if rec:
+            read[tag] = rec
+        else:
+            print("  %s: manifest or feature checks did not arrive" % tag, file=sys.stderr)
+
+    payload = shape(read, [t for t, _, _ in found], capture.previous(path))
+
+    def count(p):
+        return len(p.get("releases") or {})
+
+    wrote, now, before = capture.write(path, payload, count,
+                                       allow_shrink=args.allow_shrink, label="releases")
+    if not wrote:
+        print(capture.refused(path, now, before, "releases"))
+        return 1
+    print("wrote %d release(s), newest %s with %d arches and %d pins, to %s"
+          % (now, payload["meta"]["release"], len(payload["arches"]),
+             len(payload["pins"]), path))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

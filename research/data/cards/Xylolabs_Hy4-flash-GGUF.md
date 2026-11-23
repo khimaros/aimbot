@@ -27,82 +27,46 @@ tags:
 <h1>Hy4 flash GGUF</h1>
 
 [![Base model](https://img.shields.io/badge/base-tencent%2FHy4--flash-blue)](https://huggingface.co/tencent/Hy4-flash)
-[![Formats](https://img.shields.io/badge/formats-Q8__0%20%2F%20Q6__K%20%2F%20Q5__K__M%20%2F%20Q4__K__M%20%2F%20Q4__K__S%20%2F%20IQ4__XS%20%2F%20Q3__K__M%20%2F%20IQ3__M%20%2F%20IQ3__XXS%20%2F%20Q2__K%20%2F%20IQ2__M-5B2C83)](#files)
+[![Formats](https://img.shields.io/badge/formats-Q8__0%20%2F%20Q6__K%20%2F%20Q5__K__M%20%2F%20Q4__K__M%20%2F%20Q4__K__S%20%2F%20NVFP4%20%2F%20IQ4__XS%20%2F%20Q3__K__M%20%2F%20IQ3__M%20%2F%20IQ3__XXS%20%2F%20IQ2__M%20%2F%20IQ2__XXS-5B2C83)](#files)
 [![License](https://img.shields.io/badge/license-Tencent%20Hy%20License-green)](https://huggingface.co/Xylolabs/Hy4-flash-GGUF/blob/main/LICENSE)
 [![Code](https://img.shields.io/badge/code-llama.cpp%20PR%2032517-black)](https://github.com/ggml-org/llama.cpp/pull/32517)
 
-`gguf` · `llama-cpp` · `quantized` · `hy4-flash` · `moe` · `multimodal`
-
 </div>
 
-[tencent/Hy4-flash](https://huggingface.co/tencent/Hy4-flash) (220B parameters, 12B active) as llama.cpp GGUF quants for CUDA, Metal or CPU, with the Engram tables in their own memory-mapped file. Made by Xylolabs.
-
-- **What is in it:** Q8_0, Q6_K, Q5_K_M, Q4_K_M, Q4_K_S, IQ4_XS, Q3_K_M, IQ3_M, IQ3_XXS, Q2_K and IQ2_M, each as a two-shard gguf-split set (trunk plus the shared Engram shard, 63.36 GB, FP8 E4M3), the vision tower (bf16), the importance matrix and the conversion patch.
-- **Accuracy:** Q4_K_M: mean KL to our Q8_0 reference 0.2415, same top-1 84.3%, no wrong or broken answer on our five-item check (Tencent's Q4_K_M, same build and text: KL 0.2908, 83.4%). Pick a file for your memory with "Which quant fits" below.
-- **Role:** the llama.cpp release of the model. Tencent's own description of the model is reproduced further down, attributed.
+GGUF quants of [tencent/Hy4-flash](https://huggingface.co/tencent/Hy4-flash) (220B parameters, 12B active) for llama.cpp on CUDA, Metal or CPU. The DFly2 speculative-decoding drafter is not included.
 
 ## Files
 
-Each quant is a two-shard `gguf-split` set: `Hy4-flash-<QUANT>-00001-of-00002.gguf` (trunk) and `-00002-of-00002.gguf` (Engram tables, 63.36 GB, FP8 E4M3). Shard 2 is the same file for every quant (sha256 `c3589e8789026f7de689a5bd2258daf018deddcbd903a443713051a6d84351a9`); llama.cpp finds it by name next to shard 1. `mmproj-Hy4-flash-BF16.gguf` (1.04 GB) is the vision tower, converted and untested. `Hy4-flash.imatrix.gguf` is the importance matrix.
+| Quant | Parts | Size |
+|---|---:|---:|
+| Q8_0 | 2 | 228.9 GB |
+| Q6_K | 2 | 193.3 GB |
+| Q5_K_M | 2 | 176.7 GB |
+| Q4_K_M | 2 | 161.2 GB |
+| Q4_K_S | 2 | 155.5 GB |
+| NVFP4 | 2 | 154.9 GB |
+| Q4M-E5 | 2 | 141.4 GB |
+| Q4M-E4 | 2 | 133.5 GB |
+| IQ4_XS-E4 | 2 | 122.6 GB |
+| Q3_K_M-E4 | 2 | 114.2 GB |
+| IQ3_M-E4 | 2 | 108.1 GB |
+| IQ3_XXS-E4 | 2 | 100.5 GB |
+| IQ2_M-E4 | 2 | 91.9 GB |
+| IQ2_XXS-E4 | 2 | 83.1 GB |
+| `mmproj-Hy4-flash-BF16.gguf` (vision) | 1 | 1.0 GB |
+| `mmproj-Hy4-flash-Q8_0.gguf` (vision) | 1 | 0.8 GB |
+| `Hy4-flash.imatrix.gguf` | 1 | 0.8 GB |
 
-| Quant | Shard 1 (trunk) | Trunk bpw | PPL | Mean KL vs Q8_0 | Same top-1 | Answers (5 items) | pp512 tok/s | tg128 tok/s | GPU memory (MiB) |
-|---|---|---|---|---|---|---|---|---|---|
-| Q8_0 | 165.50 GB | 8.51 | 31.70 | reference | reference | not run | not measured | not measured | two GPUs (does not fit one) |
-| Q6_K | 129.89 GB | 6.68 | 30.69 | 0.1689 | 87.6% | 5/5 | 1270 | 72.7 | 124,679 |
-| Q5_K_M | 113.37 GB | 5.83 | 31.58 | 0.1907 | 86.5% | 5/5 | 1516 | 72.8 | 108,921 |
-| Q4_K_M | 97.81 GB | 5.03 | 32.56 | 0.2415 | 84.3% | 5/5 | 1502 | 75.7 | 94,089 |
-| Q4_K_S | 92.19 GB | 4.74 | 33.38 | 0.2464 | 84.1% | 5/5 | 1490 | 72.7 | not measured |
-| IQ4_XS | 86.94 GB | 4.47 | 30.27 | 0.2603 | 84.4% | 5/5 | 1690 | 72.0 | 83,721 |
-| Q3_K_M | 78.58 GB | 4.04 | 27.41 | 0.3659 | 81.7% | 5/5 | 1644 | 70.0 | 75,747 |
-| IQ3_M | 72.49 GB | 3.73 | 37.28 | 0.4485 | 78.4% | 5/5 | 1486 | 67.4 | 69,941 |
-| IQ3_XXS | 64.89 GB | 3.34 | 31.47 | 0.4953 | 77.1% | 5/5 | 1608 | 68.6 | 62,687 |
-| Q2_K | 61.79 GB | 3.18 | 29.48 | 0.6808 | 73.6% | 5/5 | 1539 | 72.4 | 59,735 |
-| IQ2_M | 56.26 GB | 2.89 | 33.49 | 0.6869 | 73.0% | 5/5 | 1566 | 69.6 | 54,461 |
-
-Q8_0 is the reference of the KL and top-1 columns; it does not fit one GPU, so its speed is not measured. Mean KL is over 24×512 tokens of wikitext-2 against Q8_0; the runtime is deterministic. Speed is `llama-bench` pp512 and tg128 at depth 0 on one NVIDIA H200 with both shards warm in the page cache. Answers: five short items (a capital, a product, a Python function, an English-to-Korean sentence, a time difference), greedy, 4,096-token cap.
-
-**Source:** quantized from `tencent/Hy4-flash-FP8` (Tencent's FP8 release, upcast to BF16); KL is measured against our Q8_0 from that source. BF16-based files (from `tencent/Hy4-flash`) replace these as they pass; Q8_0, Q6_K and Q5_K_M first.
-
-### Compared with Tencent's Q4_K_M
-
-| Q4_K_M from | PPL (PR build) | PPL (Tencent's patched build) | Mean KL vs Q8_0 | Same top-1 |
-|---|---|---|---|---|
-| Xylolabs (this repository) | 32.56 | 31.88 | 0.2415 | 84.3% |
-| AngelSlim (Tencent) | 31.92 | 30.84 | 0.2908 | 83.4% |
-
-Same runtime and text; raw-text perplexity does not rank quants on this model, so judge by KL and top-1.
-
-## Which quant fits
-
-Budget the trunk + ~3 GB at 32K context + 8-10 GB for the system; shard 2 is memory-mapped.
-
-| Machine | Memory | Pick | Notes |
-|---|---|---|---|
-| 128 GB | 128 GB (GPU or unified) | Q4_K_M (97.8 GB) or Q4_K_S (92.2 GB) | Q5_K_M (113.4 GB) fits with almost nothing else running; Q6_K (129.9 GB) does not fit. If the trunk will not load on a unified-memory machine, raise the GPU wired-memory limit (`sudo sysctl iogpu.wired_limit_mb=<MB>`). |
-| 96 GB | 96 GB | Q3_K_M (78.6 GB) | IQ4_XS (86.9 GB) leaves too little for context. |
-| 64 GB | 64 GB | none whole | Q2_K (61.8 GB) leaves no room for context. |
-| 141 GB GPU | 141 GB | Q6_K or Q5_K_M | The numbers come from one GPU of this size. |
-
-## Tensor recipe
-
-| Tensor class | Format |
-|---|---|
-| Routed experts `ffn_gate_exps`, `ffn_up_exps`, `ffn_down_exps` (148.6B parameters) | the quant type of the file |
-| Attention (MLA projections, gate, output), shared experts, latent projections, layer-0 dense MLP, token embedding, indexer projections, Engram key/value projections | Q8_0 |
-| Router `ffn_gate_inp`, hyper-connection functions, indexer `proj` and compressor, small Engram weights, norms, biases | F32 |
-| LM head `output.weight` | bf16 |
-| Engram tables `per_layer_token_embd` (63.4B parameters) | FP8 E4M3 |
+Part 2 of each quant is the Engram table: FP8 E4M3, or Q5_0 in `-E5` files and IQ4_NL in `-E4` files (MXFP4 in `IQ2_XXS-E4`). NVFP4 is for NVIDIA Blackwell GPUs, where llama.cpp runs it on the FP4 tensor cores.
 
 ## How to run
 
-llama.cpp support for `hy_v4_flash` is PR [#32517](https://github.com/ggml-org/llama.cpp/pull/32517), commit `0a054d0b0`. The pair also loads in Tencent's patched build (AngelSlim's `hy4-flash-spark.patch`, Metal `hy4-flash-mac-minimal.patch`, on commit `2cbca389f515df455412dafa07e2b1359cc72a6d`).
-
-**CUDA**
+Hy4-flash support is llama.cpp pull request [#32517](https://github.com/ggml-org/llama.cpp/pull/32517) until it is merged. Keep both parts of a quant in one folder and pass part 1:
 
 ```sh
 git clone https://github.com/ggml-org/llama.cpp && cd llama.cpp
 git fetch origin pull/32517/head:hy4-flash && git checkout hy4-flash
-cmake -B build -DGGML_CUDA=ON -DCMAKE_BUILD_TYPE=Release
+cmake -B build -DCMAKE_BUILD_TYPE=Release        # add -DGGML_CUDA=ON for NVIDIA GPUs
 cmake --build build -j --target llama-cli llama-server
 
 ./build/bin/llama-cli -m Hy4-flash-Q4_K_M-00001-of-00002.gguf \
@@ -110,36 +74,81 @@ cmake --build build -j --target llama-cli llama-server
   -ngl 99 --jinja -c 8192
 ```
 
-**Metal**
+The `--override-tensor` and `--load-mode` flags keep the Engram table in system RAM and read only the rows a prompt needs. `llama-server` takes the same flags.
 
-```sh
-git clone https://github.com/ggml-org/llama.cpp && cd llama.cpp
-git checkout 2cbca389f515df455412dafa07e2b1359cc72a6d
-git apply /path/to/AngelSlim/patch/hy4-flash-mac-minimal.patch   # from Tencent's AngelSlim GGUF repository
-cmake -B build -DCMAKE_BUILD_TYPE=Release                         # Metal is on by default
-cmake --build build -j --target llama-cli llama-server
+## Accuracy
 
-./build/bin/llama-cli -m Hy4-flash-Q4_K_M-00001-of-00002.gguf \
-  --override-tensor '^per_layer_token_embd\.weight$=CPU' --load-mode mmap --lazy-mode on \
-  -ngl 99 --jinja -c 8192
-```
+Mean KL divergence and top-1 agreement against the BF16 model, measured with llama.cpp on WikiText-2, chat and held-out text; Answers is a five-question check.
 
-The three flags keep the Engram tables on the host, memory-mapped and paged in on demand. `llama-server` takes the same flags. The Metal route uses Tencent's patched build; we have run it on CUDA only.
+| Quant | Size | WikiText-2 KL | top-1 | Chat KL | top-1 | Held-out KL | top-1 | Answers |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q8_0 / E4M3 | 228.9 GB | 0.1450 | 88.3% | 0.2483 | 87.5% | 0.1051 | 90.3% | 5/5 |
+| Q6_K / E4M3 | 193.3 GB | 0.1458 | 87.9% | 0.2486 | 87.2% | 0.0998 | 90.4% | 5/5 |
+| Q5_K_M / E4M3 | 176.7 GB | 0.1664 | 87.5% | 0.2705 | 86.6% | 0.1127 | 89.5% | 5/5 |
+| AngelSlim Q4_K_M | 168.3 GB | 0.2161 | 85.1% | 0.3335 | 84.8% | 0.1384 | 88.7% |  |
+| Q4_K_M / E4M3 | 161.2 GB | 0.2123 | 85.1% | 0.3205 | 85.3% | 0.1444 | 88.5% | 5/5 |
+| Q4_K_S / E4M3 | 155.5 GB | 0.2202 | 84.9% | 0.3498 | 85.1% | 0.1489 | 88.2% | 5/5 |
+| AngelSlim Q3_K | 155.4 GB | 0.2969 | 82.4% | 0.4543 | 82.2% | 0.2109 | 86.1% |  |
+| NVFP4 / E4M3 | 154.9 GB | 0.2511 | 83.8% | 0.4033 | 83.3% | 0.1724 | 87.3% | 5/5 |
+| Q4_K_M / Q5_0 | 141.4 GB | 0.2235 | 85.0% | 0.3586 | 85.1% | 0.1416 | 88.9% | 5/5 |
+| AngelSlim IQ2_AH | 135.0 GB | 0.7328 | 71.4% | 1.0025 | 73.8% | 0.5515 | 76.6% |  |
+| Q4_K_M / IQ4_NL | 133.5 GB | 0.2333 | 85.0% | 0.3514 | 84.4% | 0.1556 | 88.3% | 5/5 |
+| IQ4_XS / IQ4_NL | 122.6 GB | 0.2362 | 84.4% | 0.3671 | 84.3% | 0.1706 | 87.7% | 5/5 |
+| Q3_K_M / IQ4_NL | 114.2 GB | 0.3393 | 81.0% | 0.5192 | 81.2% | 0.2446 | 84.8% | 5/5 |
+| IQ3_M / IQ4_NL | 108.1 GB | 0.4028 | 79.4% | 0.5664 | 79.8% | 0.3105 | 82.8% | 5/5 |
+| IQ3_XXS / IQ4_NL | 100.5 GB | 0.4698 | 77.3% | 0.6502 | 78.6% | 0.3389 | 81.4% | 5/5 |
+| IQ2_M / IQ4_NL | 91.9 GB | 0.6412 | 73.3% | 0.8604 | 74.9% | 0.4699 | 78.2% | 5/5 |
+| Others 0 | 84.7 GB | 0.8341 | 69.1% | 1.1769 | 72.1% | 0.6315 | 75.0% |  |
+| IQ2_XXS + IQ2_S / MXFP4 | 83.1 GB | 0.8349 | 69.3% | 1.1280 | 72.1% | 0.6276 | 75.1% | 5/5 |
 
-## How these were made
+KL near 0.14 is at the attention-rounding floor of llama.cpp's Hy4-flash support; under investigation.
 
-1. `convert_hf_to_gguf.py` from the PR, with `hy4-flash-release-convert.patch` from this repository: trunk (bf16), Engram shard, `--mmproj`.
-2. `llama-imatrix` on the Q8_0 trunk, 125 chunks of 512 tokens.
-3. `llama-quantize --imatrix Hy4-flash.imatrix.gguf --output-tensor-type bf16 --tensor-type-file tensor_types_base.txt <bf16 trunk> <out> <QUANT>`.
-4. `llama-gguf-split` into the two shards.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://huggingface.co/Xylolabs/Hy4-flash-GGUF/resolve/main/accuracy-by-size-dark.png">
+  <img src="https://huggingface.co/Xylolabs/Hy4-flash-GGUF/resolve/main/accuracy-by-size.png" alt="Hy4-flash-GGUF mean KL divergence">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://huggingface.co/Xylolabs/Hy4-flash-GGUF/resolve/main/top1-by-size-dark.png">
+  <img src="https://huggingface.co/Xylolabs/Hy4-flash-GGUF/resolve/main/top1-by-size.png" alt="Hy4-flash-GGUF top-1 accuracy">
+</picture>
+
+## Which file for your hardware
+
+A file fits when its size plus the KV cache at that context (f16) plus 2 GB for the runtime is under 90% of the memory.
+
+| Hardware | Memory | File | Context |
+|---|---|---|---:|
+| RTX 4090 / RTX 3090 | 24 GB | offload | 32K |
+| RTX 5090 | 32 GB | offload | 32K |
+| RTX 6000 Ada, or 2 x 24 GB | 48 GB | offload | 32K |
+| One H100 | 80 GB | `Hy4-flash-IQ3_XXS-E4` (100.5 GB, 64.9 GB on the GPU) | 128K |
+| RTX PRO 6000 Blackwell (GDDR7) | 96 GB | `Hy4-flash-Q3_K_M-E4` (114.2 GB, 78.6 GB on the GPU) | 128K |
+| DGX Spark | 128 GB unified | `Hy4-flash-IQ3_M-E4` (108.1 GB) | 128K |
+| Mac Studio M5 Max | 128 GB unified | `Hy4-flash-IQ2_M-E4` (91.9 GB) | 64K |
+| One H200 (HBM3e) | 141 GB | `Hy4-flash-Q5_K_M` (176.7 GB, 113.4 GB on the GPU) | 256K |
+| One B200 (about 180 GB usable in a DGX B200) | 192 GB | `Hy4-flash-Q6_K` (193.3 GB, 129.9 GB on the GPU) | 1M |
+| Mac Studio M5 Ultra | 256 GB unified | `Hy4-flash-Q5_K_M` (176.7 GB) | 512K |
+| Mac Studio M5 Ultra | 512 GB unified | `Hy4-flash-Q8_0` (228.9 GB) | 1M |
+| One B300 (HBM3e; usable a little less) | 288 GB | `Hy4-flash-Q8_0` (228.9 GB, 165.5 GB on the GPU) | 1M |
+
+On a GPU with its own memory, the Engram table stays in system RAM.
+
+Offload: keep the expert weights in system RAM with `--n-cpu-moe N` (the experts of the first N layers), for example `llama-server -m FILE --n-cpu-moe 40`; lower N for speed while the model still fits your GPU. Use a smaller file if your RAM is short.
 
 ## License and notices
 
-These files are derived from Tencent's Hy4-flash and are distributed under the Tencent Hy License, Version 1.0 (`LICENSE` in this repository, a copy of the license as released with the source model). **Modified by Xylolabs:** the weights were quantized and converted to GGUF (see "How these were made"; the conversion patch is included as `hy4-flash-release-convert.patch`). All of the source model's notices are retained: `NOTICE` names the source and copyright holder. The license's terms, including its additional terms for large Model-as-a-Service operators, apply to these files and to any use of them. This repository is not affiliated with or endorsed by Tencent.
+These files are under the Tencent Hy License, Version 1.0 (`LICENSE`), including its extra terms for large Model-as-a-Service operators; `NOTICE` names the source model and its copyright holder. Xylolabs is not affiliated with or endorsed by Tencent.
+
+## Updates
+
+- 2026-11-22: NVFP4 replaced by a more accurate file; seven smaller files removed; smaller-Engram files renamed (-E4, -E5).
+- 2026-11-22: Added IQ2_XXS-E4 to IQ4_XS-E4 and NVFP4; accuracy re-measured against a rebuilt BF16 reference.
+- 2026-11-20: First release: Q8_0 to IQ2_M, Q4M-E5, Q4M-E4, the importance matrix and two vision projectors.
 
 ## Tencent's original model description
 
-The text below is reproduced from the README of [tencent/Hy4-flash](https://huggingface.co/tencent/Hy4-flash) (the model introduction, highlights, benchmarks, quickstart and deployment sections), copyright Tencent, under the Tencent Hy License (see above). It describes Tencent's original model, not these files, and its usage instructions (Transformers, vLLM, SGLang) are for Tencent's checkpoints; for the GGUF files use "How to run" above. Changes by Xylolabs: heading levels are one level deeper, and image and link paths point to Tencent's repository instead of copies; the wording is unchanged. Tencent's own README is the authoritative version.
+Below are sections of Tencent's README for [tencent/Hy4-flash](https://huggingface.co/tencent/Hy4-flash) (copyright Tencent, Tencent Hy License); they describe the original checkpoints, so use "How to run" above for these files.
 
 ### Model Introduction
 
@@ -263,7 +272,6 @@ Across training, evaluation, and inference, we aggressively optimized for cost e
 - **Pre-training**: Hy4 flash integrates hybrid attention, LatentMoE, and Engram into its architecture—reducing KV cache size to just **1/24 of Hy3** and **1/6 of Hy4**, with extensive scaling ladder experiments ensuring performance meets expectations.
 - **Post-training**: Self-distillation from Hy4 establishes strong general intelligence, while reinforcement learning cuts average end-to-end output tokens by **50%**.
 - **Evaluation**: We built WorkIndex, an internal benchmark grounded in typical WorkBuddy tasks, and paired it with human evaluation—focusing on **deliverable quality, single-turn output length, and task turnaround time** rather than public benchmark scores detached from everyday work.
-- **Inference**: Combining megakernels, 4-bit quantization, and [DFly2](#dfly2-for-speculative-decoding) pushes decoding speed past **150 tokens/s**, enabling low-cost serving at scale.
 
 #### Task Performance and Cost
 

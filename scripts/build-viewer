@@ -215,6 +215,9 @@ QUANT_EVIDENCE = [
       "epoch.aider_polyglot", "epoch.ale_bench", "epoch.algotune",
       "epoch.cursorbench", "epoch.deepswe", "epoch.frontiercode",
       "epoch.frontierswe", "epoch.gso", "epoch.scicode",
+      # a program reimplemented from its observed behaviour, scored on whether
+      # the rewrite behaves the same: the output is working code
+      "epoch.mirrorcode",
       "epoch.swe_bench_verified", "epoch.terminalbench", "epoch.webdev_arena",
       # livebench's two coding categories: code generation and completion, and
       # javascript/typescript/python written to a spec. the same kind of task the
@@ -269,7 +272,9 @@ QUANT_EVIDENCE = [
       # manual, and the model says whether the build is right and which step is
       # wrong. the answer comes off an image, so a retention curve fitted to a
       # text model's code pass rate says nothing about what a quant costs it
-      "epoch.furniture_assembly"]),
+      "epoch.furniture_assembly",
+      # where a photo was taken, scored by distance from the true location
+      "epoch.geobench"]),
 
     ("tools", False,
      "tool use outside software: booking, banking, desktop control. the loop "
@@ -288,9 +293,15 @@ QUANT_EVIDENCE = [
       # a playthrough is 2-4 hours of human time, so it fails by drifting over a
       # long horizon rather than by getting one answer wrong
       "epoch.ebr_bench",
+      # whole runs of slay the spire, scored by how far up the climb a run gets.
+      # a run is hundreds of card and path choices, so it fails by drift too
+      "epoch.spireclimb", "epoch.spireclimb_sts1_a20_heart", "epoch.spireclimb_sts2_a10",
       "epoch.cl_bench_life", "epoch.exploitbench", "epoch.gbaeval",
       "epoch.gdp_pdf", "epoch.lech_mazur_writing", "epoch.metr_time_horizons",
       "epoch.forecastbench", "epoch.posttrainbench",
+      # the remote labor index: paid freelance projects, judged as finished
+      # deliverables against what the human professional handed in
+      "epoch.rli",
       "epoch.surface_evolver_bench",
       "epoch.vending_bench_2", "epoch.weirdml", "epoch.weirdml_v3", "card.gdpval"]),
 
@@ -1248,15 +1259,70 @@ def listed(catalog):
     return {k: v for k, v in (catalog or {}).items() if not (v or {}).get("delisted")}
 
 
-def engines_for(model, loaded=()):
+UNSLOTH = "unslothai/llama.cpp"
+PR = re.compile(r"github\.com/([^/]+/llama\.cpp)/pull/(\d+)")
+
+
+def build_number(tag):
+    """12588 for `b12588`, so release tags compare as numbers."""
+    m = re.match(r"b(\d+)", tag or "")
+    return int(m.group(1)) if m else 0
+
+
+def unsloth_loads(rt, support, by_arch=True):
+    """Whether one unsloth release loads what one runtime block describes.
+
+    A release is a mainline tag with pinned PRs merged on top, so it loads what
+    mainline did at its base, the arches its feature checks assert, and a model
+    whose `pin:` or `tracking:` PR it merged. `fork:` alone names the engine and
+    not a release: inkling 2 mini needs unslothai#389, which b12540 lacks. A
+    FILE's block is not judged by arch: it exists because the arch string did
+    not settle the question, as ggml-org's `inkling2_loop` files under an
+    `inkling2` entry show.
+
+    `support` is the capture, whose newest release is on top, or one release's
+    own record, which is what a host's probed build is judged by.
+    """
+    support = support or {}
+    base = (support.get("meta") or {}).get("base") or support.get("base")
+    arches = support.get("arches") or {}
+    arches = set(listed(arches)) if isinstance(arches, dict) else set(arches)
+    # mainline from the base tag on: an arch merged after it is not in the tree
+    if rt.get("mainline") and not (base and rt.get("since")
+                                   and build_number(rt["since"]) > build_number(base)):
+        return True
+    if by_arch and rt.get("arch") in arches:
+        return True
+    merged = support.get("pins") or []
+    return any(m and "%s#%s" % m.groups() in merged
+               for m in (PR.search(rt.get(k) or "") for k in ("pin", "tracking")))
+
+
+def off_mainline(rows, support):
+    """Mark each rung a file's own runtime block keeps off a release build."""
+    for row in rows:
+        for a in row.get("available") or []:
+            rt = a.get("runtime") or {}
+            if rt.get("mainline") is False:
+                a["engines_not"] = ["llama.cpp"] + (
+                    [] if unsloth_loads(rt, support, by_arch=False) else [UNSLOTH])
+    return rows
+
+
+def engines_for(model, loaded=(), unsloth=None):
     """Every runtime that can load this model, derived plus written.
 
     `loaded` is what the two catalog joins say, so a runtime never appears here
-    twice from two places.
+    twice from two places. llama.cpp is a release build, so an arch on an
+    unmerged PR is not one of its models; `unsloth` is the prebuilt's capture.
     """
     out = set(model.get("engine") or []) | set(loaded)
-    if (model.get("runtime") or {}).get("arch"):
-        out.add("llama.cpp")
+    rt = model.get("runtime") or {}
+    if rt.get("arch"):
+        if rt.get("mainline"):
+            out.add("llama.cpp")
+        if unsloth_loads(rt, unsloth):
+            out.add(UNSLOTH)
     if model.get("crispasr") or any(r.get("crispasr") for r in rungs.repos(model)):
         out.add("crispasr")
     if model.get("kind", "text") == "text":
@@ -1535,13 +1601,16 @@ def gufo_rungs(gufo, rows):
     gufo loads the bytes its guide measured, so it is an engine for those rungs
     and not for every file of a model it names. a weight is matched to the
     LONGEST tag of its repo that its file stem ends in, so `UD-Q4_K_XL` wins over
-    `Q4_K_XL`; the drafter sidecar is skipped, because `mtp-...-Q8_0.gguf` is a
-    head and not the Q8_0 rung. a guide naming the checkpoint matches nothing.
+    `Q4_K_XL`; a drafter or projector is skipped, because `mtp-...-Q8_0.gguf` is a
+    head and `mmproj-BF16.gguf` is not the BF16 rung. gufo's lock files say which
+    part a file is; a row read off the old index table says it in its label. a
+    guide naming the checkpoint matches nothing.
     """
     mode = ((gufo.get("serve") or {}).get("speculative") or "").lower()
     out = []
     for w in gufo.get("weights") or []:
-        if not w.get("file") or (mode and mode in (w.get("label") or "").lower()):
+        if not w.get("file") or w.get("part", "weights") != "weights" \
+                or (mode and mode in (w.get("label") or "").lower()):
             continue
         stem = re.sub(r"(-\d{5}-of-\d{5})?\.gguf$", "", w["file"])
         tags = {a["quant"] for row in rows if row["repo"] == w.get("repo")
@@ -1610,7 +1679,8 @@ def build_model(repo, model, ctx):
                 row["engines_not"] = ["audio.cpp"]
         rows = merge_rows(rows, ac.pop("rows"))
     lora = adapter(model, ctx["sizes"])
-    rows = with_bpw(built_on(rows, lora), facts.get("params_total_b"))
+    rows = off_mainline(with_bpw(built_on(rows, lora), facts.get("params_total_b")),
+                        ctx["unsloth"])
     gufo = gufo_block(repo, model, ctx["gufo"])
     if gufo:
         gufo["rungs"] = gufo_rungs(gufo, rows)
@@ -1631,7 +1701,7 @@ def build_model(repo, model, ctx):
         "runtime": rendered_notes(model.get("runtime") or {}, repo),
         "engines": engines_for(model, [e for e, block in (("audio.cpp", ac),
                                                           ("gufo", gufo))
-                                       if block]),
+                                       if block], ctx["unsloth"]),
         "crispasr": crispasr_block(model, ctx["backends"]),
         # the two engines whose claim is a catalog join. either can be None, and
         # None means the runtime is not offered rather than that it was skipped
@@ -1751,6 +1821,7 @@ def build():
            "backends": (load_json("crispasr").get("backends") or {}),
            "audiocpp": (load_json("audiocpp").get("families") or {}),
            "gufo": (load_json("gufo-support").get("models") or {}),
+           "unsloth": load_json("unsloth-support"),
            "probes": load_json("template-probes"),
            "usecase": load_json("usecase"), "cards": load_json("model-cards"),
            "known_quants": set(support.get("quants") or []),
@@ -1981,9 +2052,8 @@ def main():
     payload["updated"] = page_day(payload, page, *read_prior(args.out),
                                   datetime.date.today().isoformat())
     data = json.dumps(payload, indent=1, sort_keys=True) + "\n"
-    layouts = layouts_export(
-        load_yaml(os.path.join(ROOT, "registry", "layouts.yaml")),
-        load_yaml(os.path.join(ROOT, "registry", "models.yaml")).get("models") or {})
+    registry = load_yaml(os.path.join(ROOT, "registry", "models.yaml")).get("models") or {}
+    layouts = layouts_export(load_yaml(os.path.join(ROOT, "registry", "layouts.yaml")), registry)
 
     os.makedirs(args.out, exist_ok=True)
     changed = [write(os.path.join(args.out, "data.json"), data, args.check),

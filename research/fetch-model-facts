@@ -346,22 +346,36 @@ def attention(text):
     if not heads or not dim:
         return {}
 
-    window = text.get("sliding_window") or text.get("attention_chunk_size")
+    window = (text.get("sliding_window") or text.get("attention_chunk_size")
+              or text.get("sliding_window_size"))
     types = text.get("layer_types")
+    local = text.get("local_layer_ids")
     interval = text.get("full_attention_interval")
+    is_full = None
     if isinstance(types, list) and types:
-        full = sum(1 for t in types if "sliding" not in str(t) and "linear" not in str(t))
+        is_full = ["sliding" not in str(t) and "linear" not in str(t) for t in types]
+    elif isinstance(local, list) and local:
+        # inkling lists its windowed layers by index instead
+        is_full = [i not in set(local) for i in range(layers)]
     elif linear.get("full_attn_layers"):
-        full = len(linear["full_attn_layers"])
+        is_full = [i in set(linear["full_attn_layers"]) for i in range(layers)]
         # the rest are linear-attention layers: a fixed-size recurrent state
         # rather than a cache that grows with context, so they are not windowed
         window = window or 0
+    # a looped core runs its layers once per pass, and each pass keeps a cache
+    # of its own, so inkling 2 mini's 24 layers of weights are 48 of cache
+    loop = text.get("loop_config") or {}
+    passes = [loop.get("num_passes") or 1
+              if (loop.get("core_start") or 0) <= i < (loop.get("core_end") or 0) else 1
+              for i in range(layers)]
+    if is_full:
+        full = sum(p for p, f in zip(passes, is_full) if f)
     elif interval:
         full = max(1, layers // interval)
     else:
         full = layers
     out = {"kv_heads": heads, "head_dim": dim, "full_layers": full,
-           "other_layers": layers - full}
+           "other_layers": sum(passes) - full}
     if window:
         out["window"] = window
 

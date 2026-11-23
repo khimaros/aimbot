@@ -9,6 +9,7 @@ tags:
 language:
   - de
   - en
+new_version: Aleph-Alpha/Kolibri-1.1
 ---
 
 # Kolibri
@@ -682,14 +683,13 @@ applied a range of curation techniques, including but not limited to:
   of the same 750M-row sample showed no clear performance difference in
   either direction.
 * **Harmful and unsuitable content.** Illegal, harmful, unethical and
-  infringing sources are excluded through the URL-level filtering described
-  above, which also removed known adult and NSFW sites. For English web
-  data, keyword-based filtering additionally removed sexually explicit
-  content. These measures
-  partially address child sexual abuse material (CSAM); no dedicated CSAM
-  detection was applied. Personal data was redacted as described under PII
-  redaction. The training corpus was text-only, so image-based CSAM or
-  non-consensual intimate imagery (NCII) was not ingested.
+  infringing sources were excluded through the URL-level filtering, which
+  also removed known adult and NSFW sites. For English web data,
+  keyword-based filtering additionally removed sexually explicit content.
+  These measures also address child sexual abuse material (CSAM). Personal
+  data was redacted with placeholder tokens. The training corpus was
+  text-only, so image-based CSAM or non-consensual intimate imagery (NCII)
+  was not ingested.
 * **Decontamination.** Documents in our mid-training and long-context
   extension datasets were scored for contamination by n-gram overlap against
   our evaluation suite, and contaminated documents were dropped in full.

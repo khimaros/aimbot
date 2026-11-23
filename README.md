@@ -729,6 +729,18 @@ runtime here loads, rather than a command that cannot work.
 
 **the factor sidebar, the presets and the SCORE follow the modality.** the
 sidebar lists 97 factors over the text roster, 13 over the transcription one, 6
+llama.cpp means a RELEASE build: an architecture on an open PR is not one of
+its models, however the header spells it. `unslothai/llama.cpp` is unsloth's
+prebuilt, which has no git ref of its own -- it is a mainline tag with pinned
+PRs merged on top -- so `fetch-unsloth-support` reads the two files the fork
+builds it from: the architectures its feature checks assert and the PRs it
+pins. it loads what mainline does plus those, and a file whose own `runtime:`
+block points at its fork. selecting it alone and leaving llama.cpp off is
+not the same as asking what only the prebuilt runs, since the filter is
+any-of; the `unslothai/llama.cpp` rows without a `llama.cpp` chip are that
+list -- today the three inklings, inkling 2 mini among them on a loop layout
+no release carries.
+
 over synthesis and 7 over image generation, because a slider that moves nothing
 on screen is not a decision: a word error rate is not a question you can ask of
 a text model, and 60 text benchmarks are not a question you can ask of whisper.

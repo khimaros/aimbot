@@ -6,6 +6,7 @@ license: other
 license_name: "kimi-k3"
 library_name: transformers
 pipeline_tag: image-text-to-text
+new_version: moonshotai/Kimi-K3.1-Pro
 ---
 <div align="center">
   <picture>

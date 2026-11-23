@@ -149,6 +149,11 @@ Choose a checkpoint variant for your inference framework and hardware.
 <td style="border: 0; padding: 0.55em 0.75em;"><a href="https://docs.liquid.ai/deployment/on-device/llama-cpp">llama.cpp</a></td>
 <td style="border: 0; padding: 0.55em 0.75em;">Local inference on CPUs and GPUs, including a realtime speech server.</td>
 </tr>
+<tr style="border: 0;">
+<td style="border: 0; padding: 0.55em 0.75em;">OpenVINO <a href="https://huggingface.co/OpenVINO/LFM3-Omni-2B-int4-ov">INT4</a>, <a href="https://huggingface.co/OpenVINO/LFM3-Omni-2B-int8-ov">INT8</a>, <a href="https://huggingface.co/OpenVINO/LFM3-Omni-2B-fp16-ov">FP16</a></td>
+<td style="border: 0; padding: 0.55em 0.75em;"><a href="https://docs.openvino.ai/2026/index.html">OpenVINO</a></td>
+<td style="border: 0; padding: 0.55em 0.75em;">4-bit, 8-bit and FP16 weights for Intel hardware.</td>
+</tr>
 </tbody>
 </table>
 

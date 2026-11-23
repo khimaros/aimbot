@@ -3760,6 +3760,103 @@ models:
     - repo: unsloth/Qwen3-8B-GGUF
       quant: Q8_0
       role: llm
+  black-forest-labs/flux-3-image-klein:
+    kind: image
+    name:
+      short: flux-3-image-klein
+      match: flux[\s.-]*3[\s-]*(?:image[\s-]*)?klein(?![\s-]*base)
+    notes: >-
+      the distilled klein of the flux 3 generation. sd.cpp's docs/models/flux3.md pairs a
+      flux 3 transformer with the flux 2 vae and qwen3-vl 4b as the text encoder, at 16 steps
+      and cfg 1.0, and takes up to 10 reference images for editing.
+    engine:
+    - stable-diffusion.cpp
+    repos:
+    - repo: unsloth/flux-3-image-klein-GGUF
+      role: diffusion
+    - repo: leejet/flux-3-image-klein-GGUF
+      role: diffusion
+    ids:
+      aa-t2i: FLUX 3 Image Klein
+      lmarena-t2i: ''
+      lmarena-edit: ''
+      showdown-t2i: ''
+      showdown-edit: ''
+    sampling:
+      image:
+        source: sdcpp-recipe
+        steps: 16
+        cfg_scale: 1.0
+        sampling_method: euler
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: unsloth/FLUX.2-VAE
+      file: flux2-vae.safetensors
+      role: vae
+    - repo: Qwen/Qwen3-VL-4B-Instruct-GGUF
+      file: Qwen3VL-4B-Instruct-Q4_K_M.gguf
+      quant: Q4_K_M
+      role: llm
+  briaai/Fibo-2.0-dev:
+    kind: image
+    name:
+      short: fibo-2.0-dev
+      match: fibo[\s-]*2(?:\.0)?(?![\s-]*edit)
+    notes: >-
+      bria's text-to-image model, which sd.cpp reads with the flux 2 vae and qwen3-vl 4b as the
+      text encoder at cfg 5.0. bria publishes safetensors only, so the ggufs here are third-party
+      conversions; editing additionally wants the text encoder's vision projector, which this
+      entry does not carry.
+    engine:
+    - stable-diffusion.cpp
+    repos:
+    - repo: molbal/fibo-2.0-GGUF
+      role: diffusion
+      files:
+        fibo2-dev-Q4_K_M.gguf:
+          quant: Q4_K_M
+        fibo2-dev-Q6_K.gguf:
+          quant: Q6_K
+        fibo2-dev-Q8_0.gguf:
+          quant: Q8_0
+    - repo: realrebelai/Fibo-2.0_GGUFs
+      role: diffusion
+      files:
+        fibo2_dev-Q4_0.gguf:
+          quant: Q4_0
+        fibo2_dev-Q5_0.gguf:
+          quant: Q5_0
+        fibo2_dev-Q8_0.gguf:
+          quant: Q8_0
+    ids:
+      aa-t2i: Fibo 2.0
+      lmarena-t2i: ''
+      lmarena-edit: ''
+      showdown-t2i: ''
+      showdown-edit: ''
+    sampling:
+      image:
+        source: sdcpp-recipe
+        steps: 20
+        cfg_scale: 5.0
+        sampling_method: euler
+    modalities:
+      input:
+      - text
+      output:
+      - image
+    components:
+    - repo: unsloth/FLUX.2-VAE
+      file: flux2-vae.safetensors
+      role: vae
+    - repo: Qwen/Qwen3-VL-4B-Instruct-GGUF
+      file: Qwen3VL-4B-Instruct-Q4_K_M.gguf
+      quant: Q4_K_M
+      role: llm
   black-forest-labs/FLUX.2-dev:
     kind: image
     name:
@@ -6392,6 +6489,54 @@ models:
       knob: reasoning_effort
       accepts: [low, medium, high, xhigh]
       default: xhigh
+  IFM/K2-Horizon-32B:
+    kind: text
+    name:
+      short: k2 horizon 32b
+      match: k2[\s-]*horizon[\s-]*32b
+    notes: >-
+      the dense 32b of the family, on the same `k2-horizon` architecture as the 3.7b and
+      the 375b. ifm's card asks for high reasoning effort on every request and calls the
+      lower levels "not recommended except for research on reasoning" {card}.
+    repos:
+    - IFM/K2-Horizon-32B-GGUF
+    - bartowski/K2-Horizon-32B-GGUF
+    runtime:
+      arch: k2-horizon
+      mainline: true
+      since: b11454
+      merged: '2026-10-06'
+    ids:
+      aa: k2-horizon-32b
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: IFM/K2-Horizon-32B-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+      upstream_differs: [mid_developer, mid_system]
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, high]
+      default: high
   IFM/K2-Horizon-375B-A23B:
     kind: text
     name:
@@ -7158,7 +7303,7 @@ models:
       since: b11938
       merged: '2026-10-27'
     ids:
-      aa: ''
+      aa: lfm3-1-7b
       gbench: ''
       lmarena: ''
       swerebench: ''
@@ -7212,7 +7357,7 @@ models:
       since: b11938
       merged: '2026-10-27'
     ids:
-      aa: ''
+      aa: lfm3-vl-2b
       gbench: ''
       lmarena: ''
       swerebench: ''
@@ -7427,6 +7572,13 @@ models:
       crispasr:
         backend: qwen3-tts-customvoice
     - khimaros/Qwen3-TTS-12Hz-0.6B-CustomVoice-GGUF
+    components:
+    - repo: cstr/qwen3-tts-tokenizer-12hz-GGUF
+      file: qwen3-tts-tokenizer-12hz.gguf
+      role: codec
+      note: cstr's talker "must be used together with the separate tokenizer / codec GGUF", which
+        "should stay at F16" {card@cstr/qwen3-tts-1.7b-base-GGUF}. crispasr reads the codec's keys
+        with defaults, so left off the command it loads one and emits noise rather than refusing
     ids:
       aa-stt: ''
       aa-stt-streaming: ''
@@ -7467,6 +7619,10 @@ models:
       crispasr:
         backend: qwen3-tts
     - khimaros/Qwen3-TTS-12Hz-1.7B-Base-GGUF
+    components:
+    - repo: cstr/qwen3-tts-tokenizer-12hz-GGUF
+      file: qwen3-tts-tokenizer-12hz.gguf
+      role: codec
     ids:
       aa-stt: ''
       aa-stt-streaming: ''
@@ -7499,6 +7655,10 @@ models:
       crispasr:
         backend: qwen3-tts-customvoice
     - khimaros/Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF
+    components:
+    - repo: cstr/qwen3-tts-tokenizer-12hz-GGUF
+      file: qwen3-tts-tokenizer-12hz.gguf
+      role: codec
     ids:
       aa-stt: ''
       aa-stt-streaming: ''
@@ -7526,6 +7686,10 @@ models:
       crispasr:
         backend: qwen3-tts
     - khimaros/Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF
+    components:
+    - repo: cstr/qwen3-tts-tokenizer-12hz-GGUF
+      file: qwen3-tts-tokenizer-12hz.gguf
+      role: codec
     ids:
       aa-stt: ''
       aa-stt-streaming: ''
@@ -8785,14 +8949,13 @@ models:
     - unsloth/Inkling-2-Small-GGUF
     runtime:
       arch: inkling2
-      mainline: false
-      tracking: https://github.com/ggml-org/llama.cpp/pull/32217
-      note: merged to master on 2026-11-14, an hour after b12397, so no release tag carries it yet
-        and a build of master from after the merge does. unsloth's card warns that a build with only
-        the first inkling "will not load it" {card@unsloth/Inkling-2-Small-GGUF}
+      mainline: true
+      since: b12406
+      merged: '2026-11-15'
+      note: unsloth's card warns that a build with only the first inkling "will not load it" {card@unsloth/Inkling-2-Small-GGUF}
     ids:
       aa: inkling-2-small
-      gbench: ''
+      gbench: thinkingmachines/inkling-2-small
       lmarena: ''
       swerebench: ''
       epoch: ''
@@ -8817,6 +8980,97 @@ models:
       mid_system: ok
       mid_developer: ok
       upstream_differs: [developer, mid_developer]
+    thinking:
+      knob: reasoning_effort
+      accepts: [none, minimal, low, medium, high, xhigh]
+      default: high
+      aliases: {max: xhigh}
+  thinkingmachines/Inkling-2-Mini:
+    kind: text
+    name:
+      short: inkling 2 mini
+      match: inkling[\s-]*2[\s-]*mini
+    notes: >-
+      released 2026-11-20, and the first looped model on the roster: 24 layers of weights, the
+      middle 12 run three times, so a token passes through 48 layers and the card {card} counts
+      3.4b active as 5.4b effective. the loop is what no llama.cpp release carries, and the
+      publishers split over how to write it down. unsloth and atomicchat keep the `inkling2`
+      arch and add `loop.*` keys, the layout of PR 32695, which unsloth's own prebuilt pins;
+      ggml-org converted to a separate `inkling2_loop` arch, PR 32694, which that prebuilt
+      does not carry. a file from one side does not load on the other.
+    repos:
+    - repo: unsloth/Inkling-2-Mini-GGUF
+      files:
+        UD-IQ1_S: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        UD-IQ1_M: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        UD-IQ2_XXS: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        UD-Q2_K_XL: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        UD-IQ3_XXS: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        UD-Q3_K_XL: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        UD-IQ4_XS: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        UD-Q4_K_M: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        UD-Q4_K_XL: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        UD-Q8_K_XL:
+          runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}
+          note: '{gib}, the top of the ladder, with KL 0 by construction: the card {card} measures
+            every other rung against this one rather than against the bf16. the files ship beside a
+            `Shard_Rewrite/` of the same tensors in the PR 32694 layout, which the card says is not
+            for general use yet'
+    - repo: AtomicChat/Inkling-2-Mini-GGUF
+      files:
+        AD-IQ1_S: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        AD-IQ1_M: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        Q4_K_M: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        Q5_K_M: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        Q6_K: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+        Q8_0:
+          runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}
+          note: built at the PR's commit 6196d98 {card}, the same commit unsloth's prebuilt pins
+        BF16: {runtime: {mainline: false, fork: 'https://github.com/unslothai/llama.cpp', pin: 'https://github.com/unslothai/llama.cpp/pull/389', tracking: 'https://github.com/ggml-org/llama.cpp/pull/32695'}}
+    - repo: ggml-org/Inkling-2-Mini-GGUF
+      files:
+        IQ4_NL: {runtime: {mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/32694'}}
+        Q8_0:
+          runtime: {mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/32694'}
+          note: the `inkling2_loop` layout, which neither stock llama.cpp nor unsloth's prebuilt
+            loads; the card {card} measures it at 0.0030 KL against the bf16
+        BF16: {runtime: {mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/32694'}}
+    ids:
+      aa: inkling-2-mini
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    runtime:
+      arch: inkling2_loop
+      mainline: false
+      fork: https://github.com/unslothai/llama.cpp
+      pin: https://github.com/unslothai/llama.cpp/pull/389
+      tracking: https://github.com/ggml-org/llama.cpp/pull/32695
+      note: mainline has carried `inkling2` since b12406 and no release loads the loop. unsloth's
+        prebuilt carries it as its own PR, titled "repeating fixes", from b12572-mix-8eebad4 on, and
+        its master branch is the packaging alone, so building the fork's master does not get it
+    speculative:
+      type: draft-dspark
+      n_max: 3
+      note: unsloth ships a 3-layer DSpark drafter converted from the vendor's own block drafter
+        {card@unsloth/Inkling-2-Mini-GGUF}. it taps the looped layers, and inkling 2's drafter is
+        ggml-org PR 32218, open, which unsloth's prebuilt also pins
+    sampling:
+      thinking:
+        source: generation-config
+        temp: 1.0
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input: [text, image]
+      output: [text]
+    turns:
+      source: unsloth/Inkling-2-Mini-GGUF
+      developer: rejected
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: rejected
     thinking:
       knob: reasoning_effort
       accepts: [none, minimal, low, medium, high, xhigh]
@@ -9022,6 +9276,52 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+  inclusionAI/Ling-3.1-flash-1019:
+    kind: text
+    name:
+      short: ling 3.1 flash 1019
+      match: \bling[\s-]*3\.1[\s-]*flash
+    notes: >-
+      the post-trained update of ling 3.1 flash, "560B total parameters, 25B active
+      parameters per token, and a 1M-token context window" {card}. only bartowski's ladder
+      exists, and its card says the files carry mtp layers llama.cpp can draft from
+      {card@bartowski/Ling-3.1-flash-1019-GGUF}.
+    repos:
+    - bartowski/Ling-3.1-flash-1019-GGUF
+    runtime:
+      arch: bailingmoe3
+      mainline: true
+      since: b10470
+      merged: '2026-08-17'
+    ids:
+      aa: ling-3-1-flash-1019
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: vendor-card
+        temp: 1.0
+        top_p: 0.95
+        top_k: 20
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input:
+      - text
+      output:
+      - text
+    turns:
+      source: bartowski/Ling-3.1-flash-1019-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: enable_thinking
+      kind: boolean
+      default: true
   # AtomicChat's AD-* build of this one is left off on purpose: its card calls
   # the repo "an experimental working preview" that needs a private runtime
   # patch, where bartowski's ladder was made with a stock release
@@ -9140,7 +9440,7 @@ models:
     kind: text
     name:
       short: kimi k3
-      match: kimi[\s-]*k3
+      match: kimi[\s-]*k3(?![\s.-]*1\b)
     repos:
     - repo: unsloth/Kimi-K3-GGUF
       files:
@@ -9190,6 +9490,62 @@ models:
     thinking:
       knob: thinking_effort
       gate: enable_thinking
+      gate_default: true
+      accepts: [low, high, max]
+      default: max
+  moonshotai/Kimi-K3.1-Pro:
+    kind: text
+    name:
+      short: kimi k3.1 pro
+      match: kimi[\s-]*k3\.1
+    notes: >-
+      2.8t parameters with 104b active, carried as the reference point kimi k3 is rather than
+      to run. mainline loads it since llama.cpp PR 31779 and reads its images since PR 31980
+      {card@KarLexAI/Kimi-K3.1-Pro-GGUF}. unsloth has published only a preliminary repo so far.
+    repos:
+    - repo: KarLexAI/Kimi-K3.1-Pro-GGUF
+      files:
+        KLX-IQ1_S:
+          quant: IQ1_S
+          note: the smallest rung published, {gib}, in a folder named for karlexai's own recipe;
+            the card says the files use "only standard llama.cpp tensor types" {card}
+        KLX-IQ1_M:
+          quant: IQ1_M
+        KLX-IQ2_XXS:
+          quant: IQ2_XXS
+    runtime:
+      arch: kimi-k31
+      mainline: true
+      since: b12180
+      merged: '2026-11-06'
+    ids:
+      aa: kimi-k3-1-pro
+      gbench: moonshot/kimi-k3.1-pro
+      lmarena: ''
+      swerebench: ''
+      epoch: kimi-k3.1-pro-together
+      livebench: ''
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    turns:
+      source: KarLexAI/Kimi-K3.1-Pro-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: thinking_effort
+      gate: thinking
       gate_default: true
       accepts: [low, high, max]
       default: max
@@ -9813,6 +10169,95 @@ models:
       knob: reasoning_effort
       accepts: [no_think, low, high, max]
       default: high
+  tencent/Hy4:
+    kind: text
+    name:
+      short: hy4
+      match: \bhy4\b(?![\s-]*(?:flash|preview))
+    notes: >-
+      the flagship over hy4 flash: a 770b moe with 49b active and a 1m context {card}. the
+      files declare `hy_v4`, which mainline has carried since hy4 preview, but hy4 adds vision
+      on an imrope text tower that only the open PR 32517 reads, so every publisher built
+      against that PR or a fork of it {card@Xylolabs/Hy4-GGUF} and each rung says so.
+    repos:
+    - repo: Xylolabs/Hy4-GGUF
+      files:
+        IQ2_XXS:
+          runtime:
+            mainline: false
+            tracking: https://github.com/ggml-org/llama.cpp/pull/32517
+            note: 'xylolabs says "Hy4 support is llama.cpp pull request #32517 until it is merged"
+              {card}'
+        IQ3_S:
+          runtime:
+            mainline: false
+            tracking: https://github.com/ggml-org/llama.cpp/pull/32517
+            note: built against PR 32517, as the rest of this ladder {card}
+        Q4_K_M:
+          runtime:
+            mainline: false
+            tracking: https://github.com/ggml-org/llama.cpp/pull/32517
+            note: built against PR 32517, as the rest of this ladder {card}
+        Q6_K:
+          runtime:
+            mainline: false
+            tracking: https://github.com/ggml-org/llama.cpp/pull/32517
+            note: built against PR 32517, as the rest of this ladder {card}
+        Q8_0:
+          runtime:
+            mainline: false
+            tracking: https://github.com/ggml-org/llama.cpp/pull/32517
+            note: built against PR 32517, as the rest of this ladder {card}
+    - repo: AngelSlim/Hy4-GGUF
+      files:
+        IQ2:
+          runtime:
+            mainline: false
+            tracking: https://github.com/ggml-org/llama.cpp/pull/32517
+            note: tencent's quant team builds at the head of PR 32517 {card}
+        Q4_K_M:
+          runtime:
+            mainline: false
+            tracking: https://github.com/ggml-org/llama.cpp/pull/32517
+            note: tencent's quant team builds at the head of PR 32517 {card}
+        Hy4-STQ1_0.gguf:
+          quant: TQ1_0
+          runtime:
+            mainline: false
+            fork: https://github.com/Little0o0/llama.cpp
+            note: tencent's ternary STQ1_0 format, from llama.cpp PR 22836, which only this fork
+              reads {card}
+    ids:
+      aa: tencent-hy4
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    runtime:
+      arch: hy_v4
+      mainline: true
+      since: b10813
+      merged: '2026-09-04'
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 0.9
+        top_p: 1.0
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input: [text, image, video]
+      output: [text]
+    turns:
+      source: Xylolabs/Hy4-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: reasoning_effort
+      accepts: [no_think, high]
+      default: high
   upstage/Solar-Open2-250B:
     kind: text
     # the card documents reasoning_effort="high" for reasoning and "none" for a
@@ -10012,7 +10457,7 @@ models:
     kind: text
     name:
       short: minimax m3
-      match: minimax[\s-]*m3|\bmm3\b
+      match: minimax[\s-]*m3(?!\.1)|\bmm3\b
     repos:
     - repo: unsloth/MiniMax-M3-GGUF
       files:
@@ -10061,6 +10506,49 @@ models:
       leading_system_max: 1
       mid_system: dropped
       mid_developer: dropped
+  MiniMaxAI/MiniMax-M3.1-Flash:
+    kind: text
+    name:
+      short: minimax m3.1 flash
+      match: minimax[\s-]*m3\.1
+    notes: >-
+      the flash follow-up to minimax m3, with five reasoning levels from `low` to `max`
+      {card}. the card repeats m3's "approximately 428B total" where the checkpoint's own
+      index counts about half that. unsloth's card wants a llama.cpp build with m3.1 support "including
+      the `draft-dspark` speculative type" {card@unsloth/MiniMax-M3.1-Flash-GGUF}, and ships
+      the dspark drafter beside the ladder.
+    repos:
+    - unsloth/MiniMax-M3.1-Flash-GGUF
+    runtime:
+      arch: minimax-m3
+      mainline: true
+      since: b10141
+      merged: '2026-07-26'
+    ids:
+      aa: minimax-m3-1-flash
+      gbench: minimax/minimax-m3.1-flash
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.95
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input:
+      - text
+      - image
+      output:
+      - text
+    turns:
+      source: unsloth/MiniMax-M3.1-Flash-GGUF
+      developer: as-system
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
   zai-org/GLM-5.3-Flash:
     kind: text
     name:

@@ -183,7 +183,7 @@ def report_aliases(models, discussions=None):
 # scripts/resolve-runtime; the quant-level one is hand-written, and is the only
 # place `fork`, `branch` and `tracking` are ever set
 RUNTIME_FIELDS = {"arch", "mainline", "since", "merged", "near",
-                  "fork", "branch", "tracking", "patch", "note"}
+                  "fork", "branch", "tracking", "patch", "note", "pin"}
 RELEASE = re.compile(r"^b\d+$")
 
 # the ways a block can answer "so where do I get a build that loads this": a
@@ -223,6 +223,12 @@ def check_runtime(rt, where, f):
                      "mainline true and a fork together say nothing")
     if rt.get("branch") and not rt.get("fork"):
         f.add(where, "runtime.branch names a branch of nothing without a fork:")
+    # which release of the fork carries the model: its own PR, since unsloth
+    # pins inkling 2 mini's loop as unslothai#389 and never as the upstream one
+    if rt.get("pin") and not (rt.get("fork") and str(rt["pin"]).startswith(
+            str(rt["fork"]).rstrip("/") + "/pull/")):
+        f.add(where, "runtime.pin %r must be a pull request of the runtime's own fork %r"
+              % (rt["pin"], rt.get("fork")))
 
 
 # what a `speculative:` block may say, and what a drafter in it may be.
@@ -716,12 +722,14 @@ def check_crispasr(cr, where, f):
 # vocabulary has to cover both. a name not here is a typo: `sd.cpp` and
 # `stable-diffusion.cpp` would filter as two runtimes and neither would hold the
 # models the other has.
-ENGINES = ("llama.cpp", "vllm", "crispasr", "whisper.cpp", "transcribe.cpp",
+ENGINES = ("llama.cpp", "unslothai/llama.cpp", "vllm", "crispasr", "whisper.cpp", "transcribe.cpp",
            "stable-diffusion.cpp", "TTS.cpp", "Breeze-TTS-2.cpp",
            "audio.cpp", "gufo")
 # the engines the registry states some other way, so writing them again is a
 # second place for the same fact to be wrong. the value is where it comes from.
 DERIVED_ENGINES = {"llama.cpp": "runtime.arch, from llama.cpp's own history",
+                   "unslothai/llama.cpp": "runtime.arch, fork or tracking, against "
+                                          "the prebuilt's own feature checks and pins",
                    "crispasr": "a crispasr: block naming a backend",
                    "audio.cpp": "an audiocpp: family, or a model_specs package "
                                 "naming this model's repo",

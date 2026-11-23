@@ -1,7 +1,10 @@
 ---
-license: mit
+license: other
+license_name: mit-and-apache-2.0
+license_link: LICENSE
 library_name: transformers
 base_model: Qwen/Qwen3.5-9B
+base_model_relation: finetune
 pipeline_tag: text-classification
 language:
 - en
@@ -142,3 +145,11 @@ On the public split, elephant-1 narrowly trails mammoth-1 in every area and beat
   note    = {https://labs.baseten.co/articles/mammoth-1-and-elephant-1-frontier-decision-models},
 }
 ```
+
+## License
+
+elephant-1 is fine-tuned by Baseten from [Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B), which is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). Baseten's modifications are released under the MIT License. Use of the model is subject to both licenses; see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+## Attribution
+
+Base model: Qwen3.5-9B, Copyright 2026 Alibaba Cloud, licensed under the Apache License 2.0. Baseten modified the weights by further training. Qwen is a trademark of Alibaba Cloud. This model is not affiliated with or endorsed by Alibaba Cloud.

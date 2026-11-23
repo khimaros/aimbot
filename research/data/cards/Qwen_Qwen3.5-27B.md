@@ -3,6 +3,7 @@ library_name: transformers
 license: apache-2.0
 license_link: https://huggingface.co/Qwen/Qwen3.5-27B/blob/main/LICENSE
 pipeline_tag: image-text-to-text
+new_version: Qwen/Qwen3.6-27B
 ---
 # Qwen3.5-27B
 

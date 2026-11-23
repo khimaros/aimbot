@@ -200,6 +200,8 @@ byte-exact, content-addressed tier builds and validation, `gguf-info` for inspec
 distortion solver behind the Agention Precision recipes. Every tier is measured against Signal's own
 BF16 on a held-out 2026 corpus before it ships.
 
+**Hardware:** built and tested on AMD Ryzen AI Max (Strix Halo). Hardware supported by AMD.
+
 ### Support AgentionAI
 
 Signal is released freely. If it saves you compute or makes Qwen more useful, you can sponsor

@@ -10,6 +10,7 @@ tags:
   - agent
   - coding
   - video
+new_version: MiniMaxAI/MiniMax-M3.1-Flash
 ---
 
 <div align="center">

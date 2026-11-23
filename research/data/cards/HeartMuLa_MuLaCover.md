@@ -15,7 +15,7 @@ tags:
 
 # MuLaCover — Cover Song & Music Remix Generation
 
-> 🎵 **Try HeartMuLa online — no GPU or setup needed:** [heartmula.com](https://heartmula.com)
+> 🎵 **Try HeartMuLa online — no GPU or setup needed:** [heartmula.com](https://heartmula.com/?utm_source=huggingface&utm_medium=model_card&utm_campaign=mulacover_top)
 > Make songs from lyrics, create covers and remixes, and edit any passage of a song in MuLa Studio. Free daily credits.
 
 MuLaCover is a controllable AI cover-song and music-remix model. It transforms
@@ -25,7 +25,7 @@ from melody/chord MIDI. The standalone inference code is maintained in the
 
 [HeartMuLa repository](https://github.com/HeartMuLa/heartlib) ·
 [HeartMuLa paper](https://arxiv.org/abs/2601.10547) ·
-[Try it online](https://heartmula.com)
+[Try it online](https://heartmula.com/?utm_source=huggingface&utm_medium=model_card&utm_campaign=mulacover_try)
 
 > Model weights are publicly available for download. No access request is required.
 

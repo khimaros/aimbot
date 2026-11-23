@@ -13,7 +13,7 @@ tags:
 - art
 ---
 
-> 🎵 **Try HeartMuLa online — no GPU or setup needed:** [heartmula.com](https://heartmula.com)
+> 🎵 **Try HeartMuLa online — no GPU or setup needed:** [heartmula.com](https://heartmula.com/?utm_source=huggingface&utm_medium=model_card&utm_campaign=heartmula_oss_3b_top)
 > Make songs from lyrics, create covers and remixes, and edit any passage of a song in MuLa Studio. Free daily credits.
 
 
@@ -32,7 +32,7 @@ tags:
 
 - **Github Repo:** https://github.com/HeartMuLa/heartlib
 - **Paper:** https://arxiv.org/abs/2601.10547
-- **Website:** https://heartmula.com
+- **Website:** [heartmula.com](https://heartmula.com/?utm_source=huggingface&utm_medium=model_card&utm_campaign=heartmula_oss_3b_website)
 - **Demo:** https://heartmula.github.io/
 - **HeartMuLa-oss-3B:** https://huggingface.co/HeartMuLa/HeartMuLa-oss-3B
 - **HeartCodec-oss:** https://huggingface.co/HeartMuLa/HeartCodec-oss

@@ -4,6 +4,7 @@ license: other
 license_name: modified-mit
 license_link: https://github.com/MiniMax-AI/MiniMax-M2.5/blob/main/LICENSE
 library_name: transformers
+new_version: MiniMaxAI/MiniMax-M2.7
 ---
 
 <div align="center">

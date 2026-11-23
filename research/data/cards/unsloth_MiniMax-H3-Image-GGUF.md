@@ -29,7 +29,7 @@ widget:
   output:
     url: assets/origami.png
 ---
-# Run MiniMax-H3-Image GGUF with [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp)
+# Run MiniMax-H3-Image FP8 or GGUF with [Unsloth Desktop](https://unsloth.ai/docs/models/minimax-h3-image)
 
 These are GGUF quantized versions of the [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) diffusion transformer (DiT), for text-to-image and image editing on GPUs that cannot hold the 66 GB bf16 DiT, on Apple Silicon and on the CPU. <br>
 - **Recommended:** `UD-Q4_K_XL` (13.61 GB): same-seed LPIPS 0.172 vs the bf16 DiT at 1024x1024 (lower is better), 14.8 GiB peak VRAM on an A100. For output closest to bf16 use `Q8_0` (LPIPS 0.083); on tight memory use `UD-Q2_K_XL` (8.68 GB, LPIPS 0.347), which is clearly ahead of the smallest file, `Q2_K` (7.75 GB, LPIPS 0.438).
