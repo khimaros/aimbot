@@ -1497,24 +1497,40 @@ test('llama.cpp means a release build, and unsloth\'s prebuilt is an engine of i
   // an arch only the prebuilt carries: hy4 flash was offered as llama.cpp on an
   // open PR, and a reader asking what unsloth loads that mainline does not had
   // no way to ask
-  const mini = model('inkling 2 mini');
-  ok(mini.engines.includes(U), 'the prebuilt loads inkling 2 mini: ' + mini.engines);
-  ok(!mini.engines.includes('llama.cpp'), 'and no release does');
+  const small = model('inkling small');
+  ok(small.engines.includes(U), 'the prebuilt loads inkling small: ' + small.engines);
+  ok(!small.engines.includes('llama.cpp'), 'and no release does');
   ok(!model('hy4 flash').engines.includes('llama.cpp'), 'an open PR is no release');
   ok(!model('hy4 flash').engines.includes(U), 'nor a pin of the prebuilt');
   const glm = model('glm-5.3-flash');
   ok(glm.engines.includes('llama.cpp') && glm.engines.includes(U),
      'a mainline arch loads on both: ' + glm.engines);
 
-  // a file says what its own layout needs: ggml-org's inkling2_loop files load
-  // on neither build, unsloth's and atomicchat's on the prebuilt
+  // a file says what its own layout needs. inkling 2 mini's `inkling2_loop`
+  // files load on a release, and unsloth's own layout -- `inkling2` with loop
+  // keys -- only on the prebuilt, which reads both
+  const mini = model('inkling 2 mini');
+  ok(mini.engines.includes('llama.cpp') && mini.engines.includes(U),
+     'a release loads inkling 2 mini: ' + mini.engines);
   filters.engines = new Set([U]);
   const pool = rungPool(mini).map(tags);
   ok(pool.includes('unsloth/Inkling-2-Mini-GGUF:UD-Q8_K_XL'), 'unsloth\'s rung is offered');
-  ok(pool.some(t => t.startsWith('AtomicChat/')), 'and atomicchat\'s');
-  ok(!pool.some(t => t.startsWith('ggml-org/')), 'ggml-org\'s is not: ' + pool);
+  ok(pool.includes('AtomicChat/Inkling-2-Mini-GGUF:Q4_K_M'), 'and atomicchat\'s old layout');
+  ok(pool.some(t => t.startsWith('ggml-org/')), 'and ggml-org\'s: ' + pool);
   filters.engines = new Set(['llama.cpp']);
-  eq(rungPool(mini).length, 0, 'and no rung of it is a release build\'s');
+  const release = rungPool(mini).map(tags);
+  ok(release.includes('ggml-org/Inkling-2-Mini-GGUF:Q8_0'), 'ggml-org\'s is a release build\'s');
+  ok(release.includes('AtomicChat/Inkling-2-Mini-GGUF:AD-Q4_K'), 'and atomicchat\'s new layout');
+  ok(!release.some(t => t.startsWith('unsloth/')), 'and unsloth\'s is not: ' + release);
+  ok(!release.includes('AtomicChat/Inkling-2-Mini-GGUF:Q4_K_M'), 'nor atomicchat\'s old layout');
+
+  // the runtime a rung opens on is a release build wherever one loads it
+  filters.engines = new Set();
+  const opens = (repo, quant) => pickedRuntime(
+    {...mini, _q: quantChoices(mini).find(c => c.repo === repo && c.quant === quant)}).k;
+  eq(opens('ggml-org/Inkling-2-Mini-GGUF', 'Q8_0'), 'llama.cpp', 'ggml-org\'s opens on llama.cpp');
+  eq(opens('AtomicChat/Inkling-2-Mini-GGUF', 'AD-Q4_K'), 'llama.cpp', 'and atomicchat\'s new layout');
+  eq(opens('unsloth/Inkling-2-Mini-GGUF', 'UD-Q8_K_XL'), U, 'unsloth\'s on the prebuilt');
 
   // the prebuilt serves llama-server's command line
   filters.engines = new Set([U]);
