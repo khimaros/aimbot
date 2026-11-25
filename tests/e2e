@@ -158,6 +158,30 @@ test('the roster can say what it is MISSING, and does it one way', () => {
   RESET();
 });
 
+test('a model whose every file a selected runtime refuses is not a row of it', () => {
+  RESET();
+  // hy4's header arch is a mainline one, so the model lists llama.cpp, and
+  // every file of it needs an open PR. passing the runtime filter on the
+  // model's list left it a row with no rung, which the vram filter in turn
+  // passed as unmeasured: it ranked second on a box its 204 gib does not fit
+  const hy4 = model('hy4');
+  ok(hy4.engines.includes('llama.cpp'), 'the model lists llama.cpp: ' + hy4.engines);
+  filters.engines = new Set(['llama.cpp']);
+  filters.flags = new Set(['fits']);
+  setHardware({...DEFAULT_HARDWARE, budget: 128});
+  eq(rungPool(hy4).length, 0, 'and no file of it is llama.cpp\'s');
+  const shown_ = visible().map(m => m.short);
+  ok(!shown_.includes('hy4'), 'so it is not a llama.cpp row');
+  ok(shown_.includes('qwen3.8 27b'), 'while a model whose files load stays');
+
+  // and with the filter off it is back, where the vram filter judges its files
+  filters.engines = new Set();
+  ok(!visible().map(m => m.short).includes('hy4'), 'now measured, and over the budget');
+  filters.flags = new Set();
+  ok(visible().map(m => m.short).includes('hy4'), 'and shown once nothing asks it to fit');
+  RESET();
+});
+
 test('the vram filter judges what has a size, and passes what has none', () => {
   RESET();
   filters.mods = new Set(['t2a']);
@@ -2240,10 +2264,12 @@ test('the page opens on the language models a reader could actually run', () => 
   filters.mods = new Set(DEFAULT_MODALITIES);
   eq([...filters.mods].join(','), 'text', 'the page starts on language models');
   eq([...filters.flags].sort().join(','), 'fits', 'with the vram filter pressed');
-  // that fits and that a default runtime loads: an arch on an open PR is no
-  // release build's, so hy4 flash waits for a reader who picks no runtime
+  // that fits and that a default runtime loads a file of: an arch on an open PR
+  // is no release build's, so hy4 flash -- and hy4, whose header arch is a
+  // mainline one -- wait for a reader who picks no runtime
   const got = visible().length;
-  const runs = m => (m.engines || []).some(e => DEFAULT_ENGINES.includes(e));
+  const runs = m => quantChoices(m).length ? rungPool(m).length > 0
+    : (m.engines || []).some(e => DEFAULT_ENGINES.includes(e));
   const want = D.models.filter(m => m.kind === 'text' && fitsBudget(m) && runs(m)).length;
   eq(got, want, 'the default view is every text model that fits and runs, licence aside');
   ok(visible().every(m => m.kind === 'text'), 'nothing but language models by default');
@@ -2977,9 +3003,11 @@ test('a milestone is not offered as a filter', () => {
 // has, and that is a fact about today's captures rather than about the rule.
 test('a short measured curve defers to the fitted one below its range', () => {
   RESET();
+  // and one a default runtime loads, since a sweep discounts the rung a row
+  // reads and a model whose every file waits on a PR reads none
   const m = D.models.find(x => x.kind === 'text' && !x.native_low_bpw
     && new Set(quantChoices(x).map(c => c.repo)).size === 1
-    && quantChoices(x).some(c => rungBpw(c) > 8));
+    && quantChoices(x).some(c => rungBpw(c) > 8) && rungPool(x).length);
   ok(m, 'a model published by one quantizer, which is what a sweep can rank');
   // its lowest arm sits above the fit, because the fallback is capped at that
   // arm: fewer bits never keep more than the sweep measured

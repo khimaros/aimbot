@@ -103,7 +103,7 @@ document follows it.
    deepseek's compressed attention still makes its cache far cheaper than a
    generic reserve assumes -- 12.1gib where a per-head estimate says 21.
 4. **keep qwen3.6 27b only until qwen3.8 27b is proven on this box.** same
-   27.8b dense architecture, same slot, and it now sits 50.5 against the
+   27.8b dense architecture, same slot, and it now sits 50.6 against the
    3.8's 67.2. **take its quant from `unsloth/Qwen3.6-27B-MTP-GGUF`, not
    `unsloth/Qwen3.6-27B-GGUF`** -- the two repos ship identically-named
    files, but the MTP head is inside the weights rather than in a sidecar, so
@@ -173,116 +173,115 @@ verdict.
 | # | model | quant | size (gib) | fits ctx | evidence | quality |
 |--:|---|---|--:|--:|--:|--:|
 | 1 | glm-5.3-flash | UD-IQ3_XXS | 112.1 | 363k | 90% | **80.5** |
-| 2 | hy4 | - | - | - | 38% | **79.5** |
-| 3 | qwen3.8 flash next | UD-Q4_K_XL | 103.7 | 256k | 67% | **79.2** |
-| 4 | mimo v2.6 flash | IQ2_XS | 91.9 | 162k | 79% | **73.5** |
-| 5 | qwen3.8 27b | UD-Q8_K_XL | 29.3 | 256k | 90% | **67.2** |
-| 6 | deepseek v4 flash 0731 | UD-IQ3_XXS | 97.0 | 186k | 86% | **67.0** |
-| 7 | nanbeige4.3 33b | Q8_0 | 32.8 | 409k | 43% | **66.7** |
-| 8 | inkling 2 mini | Q8_0 | 25.8 | 1024k | 43% | **59.5** |
-| 9 | qwen3.5-27b | UD-Q8_K_XL | 33.3 | 256k | 29% | **56.6** |
-| 10 | ling 3.0 flash | AD-Q6_K | 100.1 | 256k | 33% | **52.2** |
-| 11 | minimax m2.7 | UD-IQ3_S | 77.9 | 157k | 81% | **51.3** |
-| 12 | k2 horizon 375b | IQ1_S | 79.1 | 154k | 62% | **50.6** |
-| 13 | qwen3.6 27b | UD-Q8_K_XL | 33.3 | 256k | 76% | **50.5** |
-| 14 | qwen3.5 397b a17b | UD-IQ2_XXS | 107.0 | 256k | 86% | **50.3** |
-| 15 | glm-4.5-air | Q6_K | 92.2 | 128k | 24% | **49.9** |
-| 16 | minimax-m2.5 | UD-Q2_K_XL | 80.0 | 148k | 43% | **49.0** |
-| 17 | muse glimmer | UD-Q8_K_XL | 30.1 | 128k | 86% | **49.0** |
-| 18 | mimo v2.5 | UD-Q2_K_XL | 95.9 | 142k | 71% | **48.3** |
-| 19 | beam 1.0 501b | IQ1_S | 102.1 | 394k | 69% | **46.7** |
-| 20 | nemotron 3.5 super vl | UD-Q6_K_XL | 112.7 | - | 64% | **45.9** |
-| 21 | ling 3.0 flash vl | Q6_K | 102.2 | 128k | 48% | **44.7** |
-| 22 | qwen3.5 122b a10b | UD-Q6_K_XL | 106.0 | 256k | 62% | **43.5** |
-| 23 | step 3.7 flash | UD-Q4_K_S | 106.3 | 205k | 43% | **42.7** |
-| 24 | qwen3.5-9b | UD-Q8_K_XL | 12.3 | 256k | 52% | **42.5** |
-| 25 | k2 horizon mova 36b a4b | Q8_0 | 37.1 | 420k | 62% | **42.4** |
-| 26 | k2 horizon 32b | Q8_0 | 34.4 | 326k | 38% | **42.2** |
-| 27 | qwen3.5-4b | UD-Q8_K_XL | 5.7 | 256k | 21% | **42.0** |
-| 28 | qwen3 coder next | UD-Q8_K_XL | 80.4 | 256k | 57% | **41.9** |
-| 29 | qwen3.5-35b-a3b | UD-Q8_K_XL | 36.4 | 256k | 29% | **40.4** |
-| 30 | k2 horizon 7b | Q8_0 | 8.9 | 512k | 62% | **40.0** |
-| 31 | mistral medium 3.5 | UD-Q4_K_XL | 70.5 | 132k | 71% | **39.9** |
-| 32 | gemma 4 12b | UD-Q8_K_XL | 12.7 | 256k | 36% | **39.7** |
-| 33 | nemotron 3.5 bolt 74b a9b | Q8_0 | 73.4 | - | 40% | **38.7** |
-| 34 | qwen3.6 35b a3b | UD-Q8_K_XL | 36.4 | 256k | 76% | **38.3** |
-| 35 | gemma 4 31b | UD-Q8_K_XL | 32.6 | 256k | 100% | **37.4** |
-| 36 | qwen3.5-2b | UD-Q8_K_XL | 2.7 | 256k | 21% | **36.0** |
-| 37 | laguna s 2.1 | UD-Q6_K_XL | 99.7 | 345k | 24% | **35.1** |
-| 38 | gemma 4 26b a4b | UD-Q8_K_XL | 25.7 | 256k | 90% | **34.2** |
-| 39 | nemotron 3.5 lightning | Q8_0 | 32.6 | 256k | 67% | **33.9** |
-| 40 | laguna xs 2.1 | Q4_K_M | 18.9 | 256k | 24% | **33.7** |
-| 41 | laguna m.1 | Q2_K | 77.7 | 140k | 24% | **32.5** |
-| 42 | nemotron 3 super | UD-Q5_K_XL | 100.2 | 184k | 62% | **32.1** |
-| 43 | ling 3.0 tiny | Q8_0 | 7.8 | 128k | 48% | **31.5** |
-| 44 | lfm3 1.7b | Q8_0 | 1.7 | 256k | 43% | **31.3** |
-| 45 | gemma-4-e2b-it | UD-Q8_K_XL | 4.9 | 128k | 21% | **30.9** |
-| 46 | lfm3-vl 2b | Q8_0 | 1.7 | 125k | 43% | **30.9** |
-| 47 | lfm2.5 2.6b | Q8_0 | 2.7 | 128k | 33% | **29.1** |
-| 48 | granite 4.2 30b | Q8_0 | 29.0 | 128k | 71% | **28.7** |
-| 49 | minicpm5 2b | Q8_0 | 2.5 | 128k | 52% | **27.8** |
-| 50 | gpt-oss-20b | F16 | 12.8 | 128k | 67% | **27.6** |
-| 51 | nanbeige4.1 3b | Q8_0 | 3.9 | 256k | 21% | **27.6** |
-| 52 | qwen3.5-0.8b | Q8_0 | 0.8 | 256k | 21% | **27.6** |
-| 53 | gemma-4-e4b-it | UD-Q8_K_XL | 8.1 | 128k | 67% | **25.4** |
-| 54 | gpt-oss-120b | F16 | 60.9 | 128k | 95% | **24.6** |
-| 55 | ministral 3 3b | Q8_0 | 3.4 | 256k | 48% | **24.6** |
-| 56 | granite 4.2 8b | Q8_0 | 8.7 | 128k | 71% | **24.3** |
-| 57 | granite 4.2 3b | Q8_0 | 3.6 | 128k | 71% | **21.3** |
-| 58 | aescode 32b | Q8_0 | 32.4 | 256k | 5% | **-** |
-| 59 | bonsai 2 27b | Q2_0 | 7.1 | - | 10% | **-** |
-| 60 | bonsai 27b | Q1_0 | 3.5 | 256k | 5% | **-** |
-| 61 | coder390 efficientthink 27b | Q4_K | 16.3 | - | 5% | **-** |
-| 62 | darwin 27b rsi | Q4_K_M | 15.7 | 256k | 5% | **-** |
-| 63 | deepseek v4 flash vision exp | Q2_K_S | 91.8 | 298k | 10% | **-** |
-| 64 | embeddinggemma-2 | Q8_0 | 0.3 | 256k | 5% | **-** |
-| 65 | embeddinggemma-300m | Q8_0 | 0.3 | - | 5% | **-** |
-| 66 | exaone 4.0 1.2b | Q8_0 | 1.3 | 64k | 10% | **-** |
-| 67 | fara 1.5 27b | Q8_0 | 26.7 | 256k | 5% | **-** |
-| 68 | flint 40b a2.5b | Q8_0 | 39.4 | 256k | 0% | **-** |
-| 69 | functiongemma-270m-it | Q8_0 | 0.3 | - | 5% | **-** |
-| 70 | g9v3 3b | Q8_0 | 3.0 | 128k | 17% | **-** |
-| 71 | gemma 3 270m | Q8_0 | 0.3 | - | 5% | **-** |
-| 72 | gemma 4 12b agentic | Q8_0 | 11.8 | 256k | 5% | **-** |
-| 73 | gemma 4 12b coder | Q8_0 | 11.8 | 256k | 5% | **-** |
-| 74 | granite 4.0 h 1b | Q8_0 | 1.4 | 128k | 5% | **-** |
-| 75 | granite 4.1 3b | Q8_0 | 3.4 | 128k | 17% | **-** |
-| 76 | granite switch 4.1 30b | Q8_0 | 31.7 | 128k | 5% | **-** |
-| 77 | granite switch 4.1 8b | Q8_0 | 9.4 | 128k | 5% | **-** |
-| 78 | hy-memory 30b a3b | Q8_0 | 29.8 | 256k | 5% | **-** |
-| 79 | jamba reasoning 3b | Q8_0 | 3.2 | 256k | 5% | **-** |
-| 80 | k2 horizon 3.7b | Q8_0 | 5.0 | 512k | 5% | **-** |
-| 81 | kolibri-1 | Q8_0 | 77.4 | 256k | 5% | **-** |
-| 82 | lfm2.5 24b a2b | Q8_0 | 23.7 | 128k | 10% | **-** |
-| 83 | lfm3-omni 2b | Q8_0 | 1.7 | 125k | 10% | **-** |
-| 84 | mellum2.1 12b | Q8_0 | 12.0 | 128k | 5% | **-** |
-| 85 | mimo v2.6 distill 9b | Q8_0 | 8.9 | 256k | 5% | **-** |
-| 86 | minicpm-ocr 1.0 | Q8_0 | 0.8 | 256k | 5% | **-** |
-| 87 | minicpm-v 4.6 | Q8_0 | 0.8 | 256k | 17% | **-** |
-| 88 | minicpm-v 4.7 35b a3b | Q8_0 | 34.4 | 256k | 10% | **-** |
-| 89 | minicpm5 1b | Q8_0 | 1.1 | 128k | 5% | **-** |
-| 90 | nemotron-3-nano-30b-a3b | UD-Q8_K_XL | 37.7 | 256k | 19% | **-** |
-| 91 | ornith 1.0 35b | UD-Q8_K_XL | 35.6 | 256k | 10% | **-** |
-| 92 | ornith 1.5 122b | UD-Q6_K_XL | 106.4 | 256k | 10% | **-** |
-| 93 | ornith 1.5 35b a3b | UD-Q8_K_XL | 36.2 | 256k | 10% | **-** |
-| 94 | ornith 1.5 9b | Q8_0 | 9.1 | 256k | 10% | **-** |
-| 95 | ornith-1.0-9b | Q8_0 | 8.9 | 256k | 10% | **-** |
-| 96 | phi-4 mini | Q8_0 | 3.8 | 128k | 17% | **-** |
-| 97 | qwen-agentworld 35b a3b | UD-Q8_K_XL | 35.6 | 256k | 5% | **-** |
-| 98 | qwen3 8b | UD-Q8_K_XL | 10.1 | 40k | 5% | **-** |
-| 99 | qwen3-4b-thinking | UD-Q8_K_XL | 4.7 | 256k | 10% | **-** |
-| 100 | qwen3-coder-30b-a3b-instruct | UD-Q8_K_XL | 33.5 | 256k | 14% | **-** |
-| 101 | qwen3-vl-4b | Q8_0 | 4.0 | 256k | 5% | **-** |
-| 102 | qwen3.5-4b-base | Q8_0 | 4.2 | 256k | 0% | **-** |
-| 103 | qwen3.8 flash next abliterated | IQ4_XS | 91.7 | 256k | 5% | **-** |
-| 104 | ripple 65b | Q8_0 | 64.1 | 826k | 10% | **-** |
-| 105 | sensenova u1.5 8b | Q6_K | 7.2 | - | 5% | **-** |
-| 106 | signal 3.8 27b | Q8_0 | 27.1 | 256k | 5% | **-** |
-| 107 | signal 3.8 flash next | AP-IQ4_XS | 84.2 | - | 5% | **-** |
-| 108 | ternary bonsai 27b | Q2_G64 | 7.1 | 256k | 5% | **-** |
-| 109 | ternary bonsai 8b | Q2_0_G64 | 2.1 | 64k | 5% | **-** |
-| 110 | tiny aya global | Q8_0 | 3.3 | - | 10% | **-** |
-| 111 | underdog saluki 27b | IQ2_XXS | 7.8 | - | 10% | **-** |
+| 2 | qwen3.8 flash next | UD-Q4_K_XL | 103.7 | 256k | 67% | **79.2** |
+| 3 | mimo v2.6 flash | IQ2_XS | 91.9 | 162k | 79% | **73.5** |
+| 4 | qwen3.8 27b | UD-Q8_K_XL | 29.3 | 256k | 90% | **67.2** |
+| 5 | deepseek v4 flash 0731 | UD-IQ3_XXS | 97.0 | 186k | 86% | **67.0** |
+| 6 | nanbeige4.3 33b | Q8_0 | 32.8 | 409k | 43% | **66.7** |
+| 7 | inkling 2 mini | Q8_0 | 25.8 | 1024k | 43% | **59.5** |
+| 8 | qwen3.5-27b | UD-Q8_K_XL | 33.3 | 256k | 29% | **56.7** |
+| 9 | ling 3.0 flash | AD-Q6_K | 100.1 | 256k | 33% | **52.2** |
+| 10 | minimax m2.7 | UD-IQ3_S | 77.9 | 157k | 81% | **51.3** |
+| 11 | k2 horizon 375b | IQ1_S | 79.1 | 154k | 62% | **50.6** |
+| 12 | qwen3.6 27b | UD-Q8_K_XL | 33.3 | 256k | 76% | **50.6** |
+| 13 | qwen3.5 397b a17b | UD-IQ2_XXS | 107.0 | 256k | 86% | **50.3** |
+| 14 | glm-4.5-air | Q6_K | 92.2 | 128k | 24% | **49.9** |
+| 15 | minimax-m2.5 | UD-Q2_K_XL | 80.0 | 148k | 43% | **49.1** |
+| 16 | muse glimmer | UD-Q8_K_XL | 30.1 | 128k | 86% | **49.0** |
+| 17 | mimo v2.5 | UD-Q2_K_XL | 95.9 | 142k | 71% | **48.3** |
+| 18 | beam 1.0 501b | IQ1_S | 102.1 | 394k | 69% | **46.7** |
+| 19 | nemotron 3.5 super vl | UD-Q6_K_XL | 112.7 | - | 64% | **45.9** |
+| 20 | ling 3.0 flash vl | Q6_K | 102.2 | 128k | 48% | **44.7** |
+| 21 | qwen3.5 122b a10b | UD-Q6_K_XL | 106.0 | 256k | 62% | **43.6** |
+| 22 | step 3.7 flash | UD-Q4_K_S | 106.3 | 205k | 43% | **42.7** |
+| 23 | qwen3.5-9b | UD-Q8_K_XL | 12.3 | 256k | 52% | **42.5** |
+| 24 | k2 horizon mova 36b a4b | Q8_0 | 37.1 | 420k | 62% | **42.4** |
+| 25 | k2 horizon 32b | Q8_0 | 34.4 | 326k | 38% | **42.2** |
+| 26 | qwen3.5-4b | UD-Q8_K_XL | 5.7 | 256k | 21% | **42.0** |
+| 27 | qwen3 coder next | UD-Q8_K_XL | 80.4 | 256k | 57% | **41.9** |
+| 28 | qwen3.5-35b-a3b | UD-Q8_K_XL | 36.4 | 256k | 29% | **40.4** |
+| 29 | k2 horizon 7b | Q8_0 | 8.9 | 512k | 62% | **40.0** |
+| 30 | mistral medium 3.5 | UD-Q4_K_XL | 70.5 | 132k | 71% | **39.9** |
+| 31 | gemma 4 12b | UD-Q8_K_XL | 12.7 | 256k | 36% | **39.7** |
+| 32 | nemotron 3.5 bolt 74b a9b | Q8_0 | 73.4 | - | 40% | **38.7** |
+| 33 | qwen3.6 35b a3b | UD-Q8_K_XL | 36.4 | 256k | 76% | **38.3** |
+| 34 | gemma 4 31b | UD-Q8_K_XL | 32.6 | 256k | 100% | **37.4** |
+| 35 | qwen3.5-2b | UD-Q8_K_XL | 2.7 | 256k | 21% | **35.9** |
+| 36 | laguna s 2.1 | UD-Q6_K_XL | 99.7 | 345k | 24% | **35.1** |
+| 37 | gemma 4 26b a4b | UD-Q8_K_XL | 25.7 | 256k | 90% | **34.2** |
+| 38 | nemotron 3.5 lightning | Q8_0 | 32.6 | 256k | 67% | **33.9** |
+| 39 | laguna xs 2.1 | Q4_K_M | 18.9 | 256k | 24% | **33.8** |
+| 40 | laguna m.1 | Q2_K | 77.7 | 140k | 24% | **32.6** |
+| 41 | nemotron 3 super | UD-Q5_K_XL | 100.2 | 184k | 62% | **32.1** |
+| 42 | ling 3.0 tiny | Q8_0 | 7.8 | 128k | 48% | **31.5** |
+| 43 | lfm3 1.7b | Q8_0 | 1.7 | 256k | 43% | **31.3** |
+| 44 | gemma-4-e2b-it | UD-Q8_K_XL | 4.9 | 128k | 21% | **30.9** |
+| 45 | lfm3-vl 2b | Q8_0 | 1.7 | 125k | 43% | **30.9** |
+| 46 | lfm2.5 2.6b | Q8_0 | 2.7 | 128k | 33% | **29.1** |
+| 47 | granite 4.2 30b | Q8_0 | 29.0 | 128k | 71% | **28.7** |
+| 48 | minicpm5 2b | Q8_0 | 2.5 | 128k | 52% | **27.8** |
+| 49 | gpt-oss-20b | F16 | 12.8 | 128k | 67% | **27.6** |
+| 50 | nanbeige4.1 3b | Q8_0 | 3.9 | 256k | 21% | **27.6** |
+| 51 | qwen3.5-0.8b | Q8_0 | 0.8 | 256k | 21% | **27.6** |
+| 52 | gemma-4-e4b-it | UD-Q8_K_XL | 8.1 | 128k | 67% | **25.4** |
+| 53 | gpt-oss-120b | F16 | 60.9 | 128k | 95% | **24.6** |
+| 54 | ministral 3 3b | Q8_0 | 3.4 | 256k | 48% | **24.6** |
+| 55 | granite 4.2 8b | Q8_0 | 8.7 | 128k | 71% | **24.3** |
+| 56 | granite 4.2 3b | Q8_0 | 3.6 | 128k | 71% | **21.3** |
+| 57 | aescode 32b | Q8_0 | 32.4 | 256k | 5% | **-** |
+| 58 | bonsai 2 27b | Q2_0 | 7.1 | - | 10% | **-** |
+| 59 | bonsai 27b | Q1_0 | 3.5 | 256k | 5% | **-** |
+| 60 | coder390 efficientthink 27b | Q4_K | 16.3 | - | 5% | **-** |
+| 61 | darwin 27b rsi | Q4_K_M | 15.7 | 256k | 5% | **-** |
+| 62 | deepseek v4 flash vision exp | Q2_K_S | 91.8 | 298k | 10% | **-** |
+| 63 | embeddinggemma-2 | Q8_0 | 0.3 | 256k | 5% | **-** |
+| 64 | embeddinggemma-300m | Q8_0 | 0.3 | - | 5% | **-** |
+| 65 | exaone 4.0 1.2b | Q8_0 | 1.3 | 64k | 10% | **-** |
+| 66 | fara 1.5 27b | Q8_0 | 26.7 | 256k | 5% | **-** |
+| 67 | flint 40b a2.5b | Q8_0 | 39.4 | 256k | 0% | **-** |
+| 68 | functiongemma-270m-it | Q8_0 | 0.3 | - | 5% | **-** |
+| 69 | g9v3 3b | Q8_0 | 3.0 | 128k | 17% | **-** |
+| 70 | gemma 3 270m | Q8_0 | 0.3 | - | 5% | **-** |
+| 71 | gemma 4 12b agentic | Q8_0 | 11.8 | 256k | 5% | **-** |
+| 72 | gemma 4 12b coder | Q8_0 | 11.8 | 256k | 5% | **-** |
+| 73 | granite 4.0 h 1b | Q8_0 | 1.4 | 128k | 5% | **-** |
+| 74 | granite 4.1 3b | Q8_0 | 3.4 | 128k | 17% | **-** |
+| 75 | granite switch 4.1 30b | Q8_0 | 31.7 | 128k | 5% | **-** |
+| 76 | granite switch 4.1 8b | Q8_0 | 9.4 | 128k | 5% | **-** |
+| 77 | hy-memory 30b a3b | Q8_0 | 29.8 | 256k | 5% | **-** |
+| 78 | jamba reasoning 3b | Q8_0 | 3.2 | 256k | 5% | **-** |
+| 79 | k2 horizon 3.7b | Q8_0 | 5.0 | 512k | 5% | **-** |
+| 80 | kolibri-1 | Q8_0 | 77.4 | 256k | 5% | **-** |
+| 81 | lfm2.5 24b a2b | Q8_0 | 23.7 | 128k | 10% | **-** |
+| 82 | lfm3-omni 2b | Q8_0 | 1.7 | 125k | 10% | **-** |
+| 83 | mellum2.1 12b | Q8_0 | 12.0 | 128k | 5% | **-** |
+| 84 | mimo v2.6 distill 9b | Q8_0 | 8.9 | 256k | 5% | **-** |
+| 85 | minicpm-ocr 1.0 | Q8_0 | 0.8 | 256k | 5% | **-** |
+| 86 | minicpm-v 4.6 | Q8_0 | 0.8 | 256k | 17% | **-** |
+| 87 | minicpm-v 4.7 35b a3b | Q8_0 | 34.4 | 256k | 10% | **-** |
+| 88 | minicpm5 1b | Q8_0 | 1.1 | 128k | 5% | **-** |
+| 89 | nemotron-3-nano-30b-a3b | UD-Q8_K_XL | 37.7 | 256k | 19% | **-** |
+| 90 | ornith 1.0 35b | UD-Q8_K_XL | 35.6 | 256k | 10% | **-** |
+| 91 | ornith 1.5 122b | UD-Q6_K_XL | 106.4 | 256k | 10% | **-** |
+| 92 | ornith 1.5 35b a3b | UD-Q8_K_XL | 36.2 | 256k | 10% | **-** |
+| 93 | ornith 1.5 9b | Q8_0 | 9.1 | 256k | 10% | **-** |
+| 94 | ornith-1.0-9b | Q8_0 | 8.9 | 256k | 10% | **-** |
+| 95 | phi-4 mini | Q8_0 | 3.8 | 128k | 17% | **-** |
+| 96 | qwen-agentworld 35b a3b | UD-Q8_K_XL | 35.6 | 256k | 5% | **-** |
+| 97 | qwen3 8b | UD-Q8_K_XL | 10.1 | 40k | 5% | **-** |
+| 98 | qwen3-4b-thinking | UD-Q8_K_XL | 4.7 | 256k | 10% | **-** |
+| 99 | qwen3-coder-30b-a3b-instruct | UD-Q8_K_XL | 33.5 | 256k | 14% | **-** |
+| 100 | qwen3-vl-4b | Q8_0 | 4.0 | 256k | 5% | **-** |
+| 101 | qwen3.5-4b-base | Q8_0 | 4.2 | 256k | 0% | **-** |
+| 102 | qwen3.8 flash next abliterated | IQ4_XS | 91.7 | 256k | 5% | **-** |
+| 103 | ripple 65b | Q8_0 | 64.1 | 826k | 10% | **-** |
+| 104 | sensenova u1.5 8b | Q6_K | 7.2 | - | 5% | **-** |
+| 105 | signal 3.8 27b | Q8_0 | 27.1 | 256k | 5% | **-** |
+| 106 | signal 3.8 flash next | AP-IQ4_XS | 84.2 | - | 5% | **-** |
+| 107 | ternary bonsai 27b | Q2_G64 | 7.1 | 256k | 5% | **-** |
+| 108 | ternary bonsai 8b | Q2_0_G64 | 2.1 | 64k | 5% | **-** |
+| 109 | tiny aya global | Q8_0 | 3.3 | - | 10% | **-** |
+| 110 | underdog saluki 27b | IQ2_XXS | 7.8 | - | 10% | **-** |
 
 <!-- generated by research/build-sections --section prose:the-ranking-read -->
 **read `data` before the score.** it is how many of the nine components were
@@ -605,11 +604,11 @@ so picking one here and picking it on screen give the same answer.
 <!-- generated by research/dashboard-table --table weights -->
 | weighting | top four |
 |---|---|
-| balanced ranking | **glm-5.3-flash 80.5** > hy4 79.5 > qwen3.8 flash next 79.2 > mimo v2.6 flash 73.5 |
-| writing code | **hy4 81.2** > qwen3.8 flash next 77.1 > glm-5.3-flash 73.4 > mimo v2.6 flash 67.6 |
-| agentic and tool use | **glm-5.3-flash 83.2** > hy4 80.8 > qwen3.8 flash next 79.2 > deepseek v4 flash 0731 76.2 |
-| third-party measurement only | **hy4 81.7** > glm-5.3-flash 81.2 > qwen3.8 flash next 79.4 > mimo v2.6 flash 74.9 |
-| artificial analysis v5 | **hy4 96.0** > qwen3.8 flash next 81.0 > glm-5.3-flash 79.0 > mimo v2.6 flash 76.0 |
+| balanced ranking | **glm-5.3-flash 80.5** > qwen3.8 flash next 79.2 > mimo v2.6 flash 73.5 > qwen3.8 27b 67.2 |
+| writing code | **qwen3.8 flash next 77.1** > glm-5.3-flash 73.4 > mimo v2.6 flash 67.6 > qwen3.8 27b 64.9 |
+| agentic and tool use | **glm-5.3-flash 83.2** > qwen3.8 flash next 79.2 > deepseek v4 flash 0731 76.2 > qwen3.8 27b 70.4 |
+| third-party measurement only | **glm-5.3-flash 81.2** > qwen3.8 flash next 79.4 > mimo v2.6 flash 74.9 > nanbeige4.3 33b 67.2 |
+| artificial analysis v5 | **qwen3.8 flash next 81.0** > glm-5.3-flash 79.0 > mimo v2.6 flash 76.0 > nanbeige4.3 33b 64.0 |
 | what people report | **qwen3.8 27b 98.3** > deepseek v4 flash 0731 94.3 > qwen3.5 122b a10b 93.4 > qwen3.6 35b a3b 92.8 |
 
 <!-- generated by research/build-sections --section prose:how-much-the-weighting-decides-the-answer-2 -->
@@ -722,29 +721,28 @@ adjusting them would be extrapolation.
 | model | quality | eff scicode | eff tbench | gbench | arena | swe-reb | sentiment | card | evidence |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | glm-5.3-flash | **80.5** | 49.0 | 80.0 | 0.464 | 1473 | - | 3.1 | 77 | 90% |
-| hy4 | **79.5** | - | - | - | - | - | 3.3 | - | 38% |
 | qwen3.8 flash next | **79.2** | 50.5 | 86.1 | - | - | - | 4.0 | 80 | 67% |
 | mimo v2.6 flash | **73.5** | 47.2 | - | 0.568 | 1452 | - | 0.5 | 79 | 79% |
 | qwen3.8 27b | **67.2** | 46.5 | 79.5 | 0.336 | 1438 | - | 5.3 | 69 | 90% |
-| deepseek v4 flash 0731 | **67.0** | 47.0 | 73.5 | 0.450 | 1436 | 36.0 | 4.9 | 53 | 86% |
+| deepseek v4 flash 0731 | **67.0** | 47.0 | 73.5 | 0.450 | 1436 | 36.0 | 4.9 | 54 | 86% |
 | nanbeige4.3 33b | **66.7** | - | - | - | - | - | - | 72 | 43% |
 | inkling 2 mini | **59.5** | - | - | - | - | - | 0.3 | 58 | 43% |
-| qwen3.5-27b | **56.6** | - | - | - | 1409 | 58.6 | 2.6 | 63 | 29% |
+| qwen3.5-27b | **56.7** | - | - | - | 1409 | 58.6 | 2.6 | 64 | 29% |
 | ling 3.0 flash | **52.2** | 41.7 | 55.1 | - | - | - | 0.7 | 40 | 33% |
 | minimax m2.7 | **51.3** | 46.9 | 51.9 | 0.310 | 1415 | 48.6 | 2.7 | - | 81% |
 | k2 horizon 375b | **50.6** | 32.7 | 54.7 | - | - | - | - | - | 62% |
-| qwen3.6 27b | **50.5** | 42.7 | 60.5 | 0.355 | - | 34.2 | 4.5 | 69 | 76% |
+| qwen3.6 27b | **50.6** | 42.7 | 60.5 | 0.355 | - | 34.2 | 4.5 | 69 | 76% |
 | qwen3.5 397b a17b | **50.3** | 40.1 | 45.9 | 0.235 | 1442 | 53.5 | 2.1 | 72 | 86% |
 | glm-4.5-air | **49.9** | - | - | - | 1373 | 32.6 | 2.7 | - | 24% |
-| minimax-m2.5 | **49.0** | - | - | 0.214 | 1391 | 44.4 | 1.8 | 47 | 43% |
+| minimax-m2.5 | **49.1** | - | - | 0.214 | 1391 | 44.4 | 1.8 | 47 | 43% |
 | muse glimmer | **49.0** | 44.7 | 51.5 | 0.323 | 1425 | - | 2.5 | - | 86% |
 | mimo v2.5 | **48.3** | 40.8 | 59.2 | 0.347 | 1434 | - | 2.0 | - | 71% |
 | beam 1.0 501b | **46.7** | 36.7 | - | 0.199 | - | - | - | 44 | 69% |
 | nemotron 3.5 super vl | **45.9** | 47.5 | - | 0.259 | - | - | 0.7 | - | 64% |
 | ling 3.0 flash vl | **44.7** | 43.9 | 64.0 | - | - | - | - | - | 48% |
-| qwen3.5 122b a10b | **43.5** | 39.5 | 47.3 | - | 1416 | - | 3.8 | 65 | 62% |
+| qwen3.5 122b a10b | **43.6** | 39.5 | 47.3 | - | 1416 | - | 3.8 | 65 | 62% |
 | step 3.7 flash | **42.7** | 43.2 | 38.8 | 0.185 | - | - | 1.6 | - | 43% |
-| qwen3.5-9b | **42.5** | 29.4 | 29.1 | - | - | - | 2.3 | 41 | 52% |
+| qwen3.5-9b | **42.5** | 29.4 | 29.1 | - | - | - | 2.3 | 40 | 52% |
 | k2 horizon mova 36b a4b | **42.4** | 39.9 | 56.3 | - | - | - | 0.2 | - | 62% |
 | k2 horizon 32b | **42.2** | - | - | - | - | - | - | - | 38% |
 | qwen3.5-4b | **42.0** | - | 25.8 | - | - | - | 3.0 | 34 | 21% |
@@ -756,12 +754,12 @@ adjusting them would be extrapolation.
 | nemotron 3.5 bolt 74b a9b | **38.7** | 39.5 | - | - | - | - | 0.3 | 45 | 40% |
 | qwen3.6 35b a3b | **38.3** | 36.4 | 44.8 | 0.218 | - | 29.9 | 4.3 | 60 | 76% |
 | gemma 4 31b | **37.4** | 45.3 | 43.3 | 0.159 | 1453 | 22.3 | 3.7 | 65 | 100% |
-| qwen3.5-2b | **36.0** | - | 3.0 | - | - | - | 0.9 | 20 | 21% |
+| qwen3.5-2b | **35.9** | - | 3.0 | - | - | - | 0.9 | 20 | 21% |
 | laguna s 2.1 | **35.1** | - | - | 0.093 | - | - | 1.4 | 34 | 24% |
 | gemma 4 26b a4b | **34.2** | 39.9 | 38.8 | 0.090 | 1437 | - | 3.2 | 52 | 90% |
 | nemotron 3.5 lightning | **33.9** | 31.9 | 24.3 | - | - | - | 0.9 | 31 | 67% |
-| laguna xs 2.1 | **33.7** | - | - | 0.148 | - | - | 0.7 | 26 | 24% |
-| laguna m.1 | **32.5** | - | - | 0.198 | - | - | - | 29 | 24% |
+| laguna xs 2.1 | **33.8** | - | - | 0.148 | - | - | 0.7 | 26 | 24% |
+| laguna m.1 | **32.6** | - | - | 0.198 | - | - | - | 29 | 24% |
 | nemotron 3 super | **32.1** | 36.0 | 38.3 | - | 1360 | - | 0.8 | 49 | 62% |
 | ling 3.0 tiny | **31.5** | 24.1 | 27.6 | - | - | - | 1.5 | - | 48% |
 | lfm3 1.7b | **31.3** | - | - | - | - | - | 1.9 | 27 | 43% |
@@ -783,7 +781,7 @@ adjusting them would be extrapolation.
 | bonsai 27b | **-** | - | - | - | - | - | 1.9 | - | 5% |
 | coder390 efficientthink 27b | **-** | - | - | - | - | - | - | - | 5% |
 | darwin 27b rsi | **-** | - | - | - | - | - | - | 3 | 5% |
-| deepseek v4 flash vision exp | **-** | - | - | - | - | - | 0.8 | 57 | 10% |
+| deepseek v4 flash vision exp | **-** | - | - | - | - | - | 0.8 | 58 | 10% |
 | embeddinggemma-2 | **-** | - | - | - | - | - | 0.6 | - | 5% |
 | embeddinggemma-300m | **-** | - | - | - | - | - | 0.3 | - | 5% |
 | exaone 4.0 1.2b | **-** | - | - | - | - | - | - | 10 | 10% |
@@ -813,13 +811,13 @@ adjusting them would be extrapolation.
 | nemotron-3-nano-30b-a3b | **-** | - | - | - | 1314 | - | 0.3 | 33 | 19% |
 | ornith 1.0 35b | **-** | - | - | - | - | - | 0.7 | 41 | 10% |
 | ornith 1.5 122b | **-** | - | - | - | - | - | 0.5 | 78 | 10% |
-| ornith 1.5 35b a3b | **-** | - | - | - | - | - | 1.8 | 50 | 10% |
+| ornith 1.5 35b a3b | **-** | - | - | - | - | - | 1.8 | 51 | 10% |
 | ornith 1.5 9b | **-** | - | - | - | - | - | 1.3 | 37 | 10% |
-| ornith-1.0-9b | **-** | - | - | - | - | - | 0.7 | 17 | 10% |
+| ornith-1.0-9b | **-** | - | - | - | - | - | 0.7 | 18 | 10% |
 | phi-4 mini | **-** | - | 0.4 | - | - | - | 0.3 | - | 17% |
 | qwen-agentworld 35b a3b | **-** | - | - | - | - | - | - | - | 5% |
 | qwen3 8b | **-** | - | - | - | - | - | 1.2 | - | 5% |
-| qwen3-4b-thinking | **-** | - | - | - | - | - | - | 23 | 10% |
+| qwen3-4b-thinking | **-** | - | - | - | - | - | - | 22 | 10% |
 | qwen3-coder-30b-a3b-instruct | **-** | - | - | - | - | 22.0 | 1.7 | - | 14% |
 | qwen3-vl-4b | **-** | - | - | - | - | - | 0.3 | - | 5% |
 | qwen3.5-4b-base | **-** | - | - | - | - | - | - | - | 0% |
@@ -866,15 +864,13 @@ two copies of a claim is what this repo exists to remove.
    science / reasoning, vision / ocr. avoid it for competition mathematics,
    c++, boxes that cannot hold a 1-bit rung of a 320b model.
 
-2. **hy4 at ? (? gib)**, 
-
-3. **qwen3.8 flash next at UD-Q4_K_XL (103.7 gib)**, the qwen4 architecture preview, among the highest-measured models here -- bought with a 51b n-gram table that is most of what makes it awkward to serve.
+2. **qwen3.8 flash next at UD-Q4_K_XL (103.7 gib)**, the qwen4 architecture preview, among the highest-measured models here -- bought with a 51b n-gram table that is most of what makes it awkward to serve.
 
    use it for coding, agentic / tool use, science / reasoning, scientific
    code, long context. avoid it for factual recall. on the quant: UD-Q4_K_XL
    at 103.69 gib.
 
-4. **mimo v2.6 flash at IQ2_XS (91.9 gib)**, xiaomi's smaller 2.6 rl checkpoint -- 309b over 15b live, four modalities, and a top-decile gbench place nobody running it locally has confirmed.
+3. **mimo v2.6 flash at IQ2_XS (91.9 gib)**, xiaomi's smaller 2.6 rl checkpoint -- 309b over 15b live, four modalities, and a top-decile gbench place nobody running it locally has confirmed.
 
    use it for agentic / tool use, coding, long context, text, image, video
    and audio in one model. avoid it for a box that cannot hold a 309b moe at
@@ -886,15 +882,22 @@ two copies of a claim is what this repo exists to remove.
    weights, where ggml-org ships MTP
    https://huggingface.co/ggml-org/MiMo-V2.6-Flash-RL-GGUF.
 
-5. **qwen3.8 27b at UD-Q8_K_XL (29.3 gib)**, the strongest dense model in the registry on measured axes, and the current default answer for a single 27b that has to do everything.
+4. **qwen3.8 27b at UD-Q8_K_XL (29.3 gib)**, the strongest dense model in the registry on measured axes, and the current default answer for a single 27b that has to do everything.
 
    use it for coding, agentic / tool use, science / reasoning, scientific
    code, long context.
 
-6. **deepseek v4 flash 0731 at UD-IQ3_XXS (97.0 gib)**, an all-rounder in the top band on science, coding, long context and physics at once, and among the most discussed models here.
+5. **deepseek v4 flash 0731 at UD-IQ3_XXS (97.0 gib)**, an all-rounder in the top band on science, coding, long context and physics at once, and among the most discussed models here.
 
    use it for coding, agentic / tool use, science / reasoning, scientific
    code, physics, planning, long context.
+
+6. **nanbeige4.3 33b at Q8_0 (32.8 gib)**, a dense 33b built for agent work, with a 512k context and a vendor table that puts it first in its size class on most rows.
+
+   use it for agentic coding, long tool-using sessions, with
+   preserve_thinking on, knowledge work in a loop. avoid it for general chat
+   at the agentic sampler set, which the card keeps for tool use, anything
+   that needs images or audio.
 <!-- end generated -->
 
 ### the same judgement, by task
@@ -1101,7 +1104,7 @@ the dissent they usually are: ale bench epoch.ale_bench p10 and frontiermath
 tier 4 epoch.frontiermath_tier_4_v2 p17 against aa4.gpqa p92 and webdev arena
 epoch.webdev_arena p87.
 
-#### 3. qwen3.8 flash next
+#### 2. qwen3.8 flash next
 
 the qwen4 architecture preview, among the highest-measured models here --
 bought with a 51b n-gram table that is most of what makes it awkward to
@@ -1130,7 +1133,7 @@ are about, and it is also why the quant ladder bottoms out high -- its
 mmap on reads the table's rows from the file as tokens need them rather than
 keeping it resident, whichever publisher's file it is.
 
-#### 4. mimo v2.6 flash
+#### 3. mimo v2.6 flash
 
 xiaomi's smaller 2.6 rl checkpoint -- 309b over 15b live, four modalities,
 and a top-decile gbench place nobody running it locally has confirmed.
@@ -1157,7 +1160,7 @@ posting the recipe they served it on. ggml-org converted it the day after the
 weights, and AesSedai and TrevorJS have since published rungs of their own,
 TrevorJS's with a dflash drafter beside it where ggml-org ships mtp.
 
-#### 5. qwen3.8 27b
+#### 4. qwen3.8 27b
 
 the strongest dense model in the registry on measured axes, and the current
 default answer for a single 27b that has to do everything.
@@ -1179,7 +1182,7 @@ silicon reports UD-Q5_K_XL at 16.68 t/s against Q8_0's 12.74, with MTP at 4
 draft tokens under vulkan -- one reporter on one box, so a reason to test the
 lower quant rather than a recommendation to run it.
 
-#### 6. deepseek v4 flash 0731
+#### 5. deepseek v4 flash 0731
 
 an all-rounder in the top band on science, coding, long context and physics
 at once, and among the most discussed models here.
@@ -1203,7 +1206,7 @@ UD-IQ3_XXS is too tight, the community's answer is Rednalreden's dwarfstar, a
 single smaller file that keeps Q8 attention projections, shared experts and
 output layer while dropping the routed experts to IQ2_XXS.
 
-#### 7. nanbeige4.3 33b
+#### 6. nanbeige4.3 33b
 
 a dense 33b built for agent work, with a 512k context and a vendor table that
 puts it first in its size class on most rows.
@@ -1220,7 +1223,7 @@ above the next model in the same table, and that gap is the claim worth
 checking first. the weights are dense, so every parameter is active on every
 token, unlike the a3b class beside it.
 
-#### 9. qwen3.5-27b
+#### 8. qwen3.5-27b
 
 a dense 27b that fixes real bugs and follows instructions:
 swerebench.resolved p91 on swe-rebench and aa4.ifbench p88 on instruction
@@ -1236,7 +1239,7 @@ arena rating sits at lmarena.rating p41 while its task scores are
 top-quartile, which is the usual shape of a model tuned for work rather than
 for being pleasant to talk to.
 
-#### 10. ling 3.0 flash
+#### 9. ling 3.0 flash
 
 a hybrid-reasoning moe that lands in the top third on agentic work and
 science at 5.1b active parameters.
@@ -1256,7 +1259,7 @@ there expecting to watch it fail and it hasn't yet" -- while another finds it
 layer: "Ling 3.0 flash has 43 layers - 42 + MTP, which I currently don't
 support".
 
-#### 11. minimax m2.7
+#### 10. minimax m2.7
 
 the registry's best instruction follower and long-context reader, at the cost
 of the slowest decode in its size class.
@@ -1272,7 +1275,7 @@ busy one, reddit 23 mentions at 100% approval on the small one, and
 hackernews carries no scored sentence at all. speed sits at aa5.speed p25, so
 a long agent loop pays for the quality.
 
-#### 12. k2 horizon 375b
+#### 11. k2 horizon 375b
 
 the k2 horizon flagship, 23b active with a 512k context, published with its
 data and training code.
@@ -1286,7 +1289,7 @@ data and training code.
 aa4.intelligence p78 on v4. the openness of the release is as much the reason
 to carry it as the score.
 
-#### 13. qwen3.6 27b
+#### 12. qwen3.6 27b
 
 among the most-discussed local models in the corpus, and the registry's best
 planner among dense 27b weights.
@@ -1301,7 +1304,7 @@ reddit 206 mentions at 85% approval, and the phrase that keeps coming back is
 daily driver. gbench decision-making gbench.decision p47 is unusual for its
 size. slow decode, aa5.speed p28, is the price.
 
-#### 14. qwen3.5 397b a17b
+#### 13. qwen3.5 397b a17b
 
 the strongest qwen3.5 on nearly every axis, and the one whose weights most
 people cannot fit.
@@ -1316,7 +1319,7 @@ perfect python play over the games gbench ran it on, and swerebench.resolved
 p97. barely discussed anywhere, which is a size problem rather than a quality
 one.
 
-#### 15. glm-4.5-air
+#### 14. glm-4.5-air
 
 a year-old 106b that people still run because it fits, and that every newer
 model on this roster beats.
@@ -1336,7 +1339,7 @@ in the bottom half: livecodebench aa4.livecodebench p81 and agentic
 aa4.terminalbench_hard p57 are the exceptions. neither its card nor unsloth's
 documents a sampler set, which is why its profile reads tuned-here.
 
-#### 16. minimax-m2.5
+#### 15. minimax-m2.5
 
 a deprecated tool-use model that still beats its own successor on the tau2
 suite and on little else.
@@ -1353,7 +1356,7 @@ not lead on is tool use: aa4.tau2 p90 here against p62 there, and not speed
 either at aa5.speed 102 tok/s p50. that is the whole case for reaching back a
 version.
 
-#### 17. muse glimmer
+#### 16. muse glimmer
 
 a long-context reader near the top of the board and a mid-table game player
 overall, with an operational reputation problem.
@@ -1371,7 +1374,7 @@ a quant that does not load rather than a model that cannot think, and reddit
 sitting mixed rather than hostile is what makes the loading reading the
 likelier one.
 
-#### 18. mimo v2.5
+#### 17. mimo v2.5
 
 a coding and physics model with solid rust and c++ play, let down by one-shot
 coding.
@@ -1385,7 +1388,7 @@ coding.
 do not confuse it with mimo v2.5 pro, which is a different model with a
 different swe-rebench score; the tables mismapped exactly that pair once.
 
-#### 19. beam 1.0 501b
+#### 18. beam 1.0 501b
 
 reflection's 501b english-first model, with a 1m-token context and a claim of
 fewer reasoning tokens.
@@ -1399,7 +1402,7 @@ fewer reasoning tokens.
 aa4.intelligence p76 on v4, and gbench rates it. the token-efficiency claim
 is the vendor's and nothing here has measured it.
 
-#### 20. nemotron 3.5 super vl
+#### 19. nemotron 3.5 super vl
 
 nemotron super's 3.5 generation, now with vision: 120b with 12b active, a 1m
 context and a native mtp head.
@@ -1417,7 +1420,7 @@ since measured it too: aa4.intelligence p74 on artificial analysis and
 gbench.overall p53 on gbench, with aa5.speed p99 its standout. ggml-org's
 Q4_0 is the reference conversion and unsloth's ladder reaches well below it.
 
-#### 21. ling 3.0 flash vl
+#### 20. ling 3.0 flash vl
 
 ling 3.0 flash with a vision tower, and the better of the two on every axis
 artificial analysis shares between them except speed.
@@ -1435,7 +1438,7 @@ against p60. what it gives up is aa5.speed p65 against p97. nobody in the
 forum captures has reported running it, so nothing here says how a low rung
 of it sees.
 
-#### 22. qwen3.5 122b a10b
+#### 21. qwen3.5 122b a10b
 
 a well-liked long-context generalist that follows instructions better than it
 codes.
@@ -1450,7 +1453,7 @@ reddit 70 mentions at 94% approval is one of the better reception numbers in
 the registry, and it is the a10b that people actually run rather than the
 397b they cannot.
 
-#### 23. step 3.7 flash
+#### 22. step 3.7 flash
 
 one of the most reliable tool-callers measured here, and a capable planner,
 that cannot write a program in one go.
@@ -1464,7 +1467,7 @@ that cannot write a program in one go.
 aa4.tau2 0.985 p96 with gbench one-shot coding at gbench.oneshot p4 is the
 mirror image of gemma 4 26b. give it tools and steps, not a blank file.
 
-#### 24. qwen3.5-9b
+#### 23. qwen3.5-9b
 
 a small tool-caller: it holds up on tau2 and falls away everywhere else.
 
@@ -1480,7 +1483,7 @@ not as the model that finishes the job. keep the reasoning on for even that:
 "when I used Qwen3.5 9b sans reasoning it performed horrendously across
 almost every task".
 
-#### 25. k2 horizon mova 36b a4b
+#### 24. k2 horizon mova 36b a4b
 
 a 36b moe with mixture-of-values attention and a 512k window, on an
 architecture mainline llama.cpp does not carry.
@@ -1491,7 +1494,7 @@ architecture mainline llama.cpp does not carry.
 - **evidence** runtime k2-horizon, mainline llama.cpp since b11454; 4b active of 36b stored, 100 experts with 8 per token; no forum prose yet
 - **confidence in that evidence** low
 
-#### 27. qwen3.5-4b
+#### 26. qwen3.5-4b
 
 the small model to reach for when the job is tools, and the only one here
 with agentic evidence.
@@ -1512,7 +1515,7 @@ p24 is in the bottom quartile of everything artificial analysis scores, so it
 answers confidently when it should decline. three forums discuss it, which at
 this size is unusual.
 
-#### 28. qwen3 coder next
+#### 27. qwen3 coder next
 
 resolves real merged pull requests well above what its benchmark indices
 predict, on a harness built from commits made after its release.
@@ -1533,7 +1536,7 @@ hallucination score is the worst in the set. the tool calling is what goes
 first at four bits: "Q4 sometimes fails with toolcalls", and an IQ4_NL user
 reports a "tool calling issue" that the IQ4_XS did not have.
 
-#### 29. qwen3.5-35b-a3b
+#### 28. qwen3.5-35b-a3b
 
 a fast a3b instruction-follower that calls tools well and sits in the bottom
 band of the coding boards that ran it.
@@ -1551,7 +1554,7 @@ following instructions, against epoch.scicode p2 on scientific code and
 aa4.itbench_sre p19 on an sre tool loop. it calls tools reliably and writes
 the code around them badly.
 
-#### 30. k2 horizon 7b
+#### 29. k2 horizon 7b
 
 the dense middle of IFM's k2-horizon family, which stock llama.cpp cannot
 load yet.
@@ -1562,7 +1565,7 @@ load yet.
 - **evidence** runtime k2-horizon, mainline llama.cpp since b11454; the gguf header counts about 9b in all against the 7b core the name counts; no forum prose yet
 - **confidence in that evidence** low
 
-#### 31. mistral medium 3.5
+#### 30. mistral medium 3.5
 
 a fast dense 128b that calls tools well and does no science at all.
 
@@ -1576,7 +1579,7 @@ critpt aa4.critpt p18 twice over, from both aa and epoch, is a consistent
 verdict rather than one bad run. perfect javascript play over the games it
 was given.
 
-#### 32. gemma 4 12b
+#### 31. gemma 4 12b
 
 a small multimodal assistant that follows instructions well for its size and
 reasons poorly.
@@ -1590,7 +1593,7 @@ reasons poorly.
 hle aa4.hle p41 and critpt aa4.critpt p18 against aa4.ifbench p84 is the
 honest shape: it does what it is told, it does not work things out.
 
-#### 33. nemotron 3.5 bolt 74b a9b
+#### 32. nemotron 3.5 bolt 74b a9b
 
 nemotron 3.5 super vl cut to 74b with 9b active and shipped by nvidia as a
 native 2-bit gguf.
@@ -1609,7 +1612,7 @@ unsloth ships beside its rungs. artificial analysis has since measured it at
 aa4.intelligence p58, with aa4.critpt p69 on physics the strongest of its
 figures.
 
-#### 34. qwen3.6 35b a3b
+#### 33. qwen3.6 35b a3b
 
 a popular a3b tool-caller that reads well and plans badly.
 
@@ -1624,7 +1627,7 @@ and one of the weakest planners measured: webdev arena epoch.webdev_arena p3
 and tau2 banking aa4.tau_banking p23. gbench has played its dense sibling and
 never this one, so there is no gbench half of that claim to make.
 
-#### 35. gemma 4 31b
+#### 34. gemma 4 31b
 
 the best-received chat model in the registry by arena rating, and a competent
 one-shot coder in python and javascript.
@@ -1639,7 +1642,7 @@ arena lmarena.rating p88 and gbench one-shot gbench.oneshot p54 against
 agentic weakness; also the slowest decode measured here, aa5.speed p5. it
 writes well and does not drive.
 
-#### 36. qwen3.5-2b
+#### 35. qwen3.5-2b
 
 the 2b that does the most things adequately, including seeing.
 
@@ -1659,7 +1662,7 @@ four sampler sets rather than two -- split by task as well as by thinking
 mode -- and this entry carries three of them, because the fourth is a vision
 non-thinking profile the registry has no name for.
 
-#### 37. laguna s 2.1
+#### 36. laguna s 2.1
 
 the middle laguna, and the one the forums actually run, with no benchmark in
 this corpus left to check them against.
@@ -1679,7 +1682,7 @@ with making it "genuinely usable for me: it's now driving both a local agent
 the fix combines qwen template corrections with laguna's own, so use it
 rather than the template the weights ship.
 
-#### 38. gemma 4 26b a4b
+#### 37. gemma 4 26b a4b
 
 a likeable one-shot coder and chat model that falls over as soon as it has to
 hold a tool loop.
@@ -1694,7 +1697,7 @@ aa gbench.agentic p2 with gbench one-shot gbench.oneshot p40 is as clean a
 split as this corpus contains: ask it for a whole answer, not for a sequence
 of steps.
 
-#### 39. nemotron 3.5 lightning
+#### 38. nemotron 3.5 lightning
 
 one of the fastest models in the registry, and it spends all of that speed
 being average.
@@ -1710,7 +1713,7 @@ when volume matters more than the answer; not otherwise. read the low rungs
 before picking one: a forum report finds that "all four IQ2 rungs are the
 same" file published under four different names.
 
-#### 40. laguna xs 2.1
+#### 39. laguna xs 2.1
 
 a fifth of the s's size that beats it on most of the languages both were
 played in, and on javascript most of all.
@@ -1728,7 +1731,7 @@ gbench.agentic p8, one-shot gbench.oneshot p15 -- so it is a language model
 in the literal sense rather than an agent. the vendor publishes the only gguf
 and it has two rungs, q4_k_m and bf16, so there is no ladder to trade down.
 
-#### 41. laguna m.1
+#### 40. laguna m.1
 
 the laguna nobody outside epoch measures, and it sits in the bottom band of
 every board epoch ran.
@@ -1749,7 +1752,7 @@ vendor or first-tier gguf exists -- the single uploader's repo is the only
 one, though it publishes a 28-point perplexity ladder with it, which is the
 richest quant sweep in this document.
 
-#### 42. nemotron 3 super
+#### 41. nemotron 3 super
 
 a physics-leaning 120b that follows instructions well and sits near the
 bottom of gbench's games.
@@ -1766,7 +1769,7 @@ card recommends temp 1.0 across every task including tool calling, and the
 registry runs it colder anyway -- `upstream-tool-use` records what the vendor
 actually said.
 
-#### 43. ling 3.0 tiny
+#### 42. ling 3.0 tiny
 
 1.3b active of 7.9b: honest about what it does not know, near the bottom of
 the board that times it, and weak at nearly everything else.
@@ -1785,7 +1788,7 @@ says to run it with MTP, and it cannot -- the base checkpoints "ship the
 pretraining MTP layer" but "the post-trained release dropped it", so there is
 no head of its own to draft with.
 
-#### 44. lfm3 1.7b
+#### 43. lfm3 1.7b
 
 liquid's 1.73b text model, post-trained for agent harnesses, with a
 256k-token context and reasoning on by default.
@@ -1800,7 +1803,7 @@ no board has scored it, so the only numbers are the vendor's own table. the
 card keeps two sampler sets, a cold general one and a hot one for math, and
 they are different enough to be separate profiles here.
 
-#### 45. gemma-4-e2b-it
+#### 44. gemma-4-e2b-it
 
 an on-device gemma: small enough to run anywhere, weak on nearly every axis
 measured here.
@@ -1811,7 +1814,7 @@ measured here.
 - **evidence** aa4.gpqa p20; card.mmlu p19; aa4.ifbench p38
 - **confidence in that evidence** medium
 
-#### 46. lfm3-vl 2b
+#### 45. lfm3-vl 2b
 
 the LFM3 backbone with a vision tower, reasoning over images and video.
 
@@ -1824,7 +1827,7 @@ the LFM3 backbone with a vision tower, reasoning over images and video.
 the only numbers are the vendor's. a cold temperature with reasoning on is
 the card's own set rather than a house choice.
 
-#### 47. lfm2.5 2.6b
+#### 46. lfm2.5 2.6b
 
 the most-downloaded gguf on this roster, and the one that most reliably says
 it does not know.
@@ -1845,7 +1848,7 @@ distribution rather than quality. liquid's recommended temperature of 0.1 is
 far colder than anything else here and is theirs, not a house choice. it
 ships a DSpark drafter in its own repo, which this entry names.
 
-#### 48. granite 4.2 30b
+#### 47. granite 4.2 30b
 
 knows little and admits it more readily than most here: aa4.omniscience p26
 against aa4.non_hallucination p89.
@@ -1866,7 +1869,7 @@ mode; this roster carries no 4.1 at this size, and shows the generation step
 at 3b instead, where the pair is scored on both sides. artificial analysis is
 the only source that scores it, so one source is all this rests on.
 
-#### 49. minicpm5 2b
+#### 48. minicpm5 2b
 
 the small model with the most evidence behind it, and a drafter of its own.
 
@@ -1887,7 +1890,7 @@ without hunting for it. the card is unusually careful about llama.cpp's
 `min_p` default, and following it matters: the stock 0.05 makes this model
 loop.
 
-#### 50. gpt-oss-20b
+#### 49. gpt-oss-20b
 
 the small gpt-oss: cheap to run, mid-pack on speed, and out of its depth on
 anything agentic.
@@ -1898,7 +1901,7 @@ anything agentic.
 - **evidence** aa5.speed p66; aa4.tau2 p48; swerebench.resolved p3
 - **confidence in that evidence** medium
 
-#### 51. nanbeige4.1 3b
+#### 50. nanbeige4.1 3b
 
 a 3b that answers graduate physics and cannot drive a tool or hold a
 document.
@@ -1919,7 +1922,7 @@ a model trained hard on question answering and not on being useful in a loop.
 no vendor gguf, and the two most-downloaded conversions publish one rung
 each.
 
-#### 52. qwen3.5-0.8b
+#### 51. qwen3.5-0.8b
 
 too small to be a general assistant; its use here is as a speculative drafter
 and a smoke test.
@@ -1933,7 +1936,7 @@ and a smoke test.
 bottom of every axis it carries, which is what an 0.8b model is. it is in the
 registry because a drafter has to come from somewhere.
 
-#### 53. gemma-4-e4b-it
+#### 52. gemma-4-e4b-it
 
 the larger on-device gemma; the same shape as e2b with a little more of
 everything.
@@ -1944,7 +1947,7 @@ everything.
 - **evidence** aa4.ifbench p40; aa4.gpqa p27; aa4.hle p8
 - **confidence in that evidence** medium
 
-#### 54. gpt-oss-120b
+#### 53. gpt-oss-120b
 
 fast, widely run, and beaten on quality by most of what it sits beside -- but
 the best pure language play measured here.
@@ -1959,7 +1962,7 @@ the best pure language play measured here.
 the bottom, and no arena rating at all. it compiles what it is asked for and
 loses the argument about what to ask for.
 
-#### 55. ministral 3 3b
+#### 54. ministral 3 3b
 
 fast, sees images, and measured on more axes than anything else its size.
 
@@ -1979,7 +1982,7 @@ liquid's, which reads as a vendor that knows the model wanders. the most
 downloaded gguf of this name is a third party's build of the REASONING
 variant, which is a different checkpoint.
 
-#### 56. granite 4.2 8b
+#### 55. granite 4.2 8b
 
 the same calibration trade one size down, aa4.non_hallucination p74 against
 aa4.intelligence p31: a cheap way to buy a model that will not make things
@@ -2000,7 +2003,7 @@ general assistant. it is also the model that proved the discovery gap:
 released the same day as the 30b, scored by AA immediately, and invisible to
 every report here until the leaderboard cross-check existed.
 
-#### 57. granite 4.2 3b
+#### 56. granite 4.2 3b
 
 the careful one: aa4.non_hallucination p85 on declining rather than
 inventing, at a real cost in reasoning.
@@ -2020,7 +2023,7 @@ rungs, and the most downloaded conversion of any model this size on the
 roster. the card asks for one sampler set across every task and mode, which
 is rarer than it sounds and means there is no second profile to get wrong.
 
-#### 58. aescode 32b
+#### 57. aescode 32b
 
 a qwen3-vl 32b finetune for one job: infographics, slides and dashboards as
 html and css.
@@ -2036,7 +2039,7 @@ by the authors' rule checks and a visual checklist. nothing measures it as a
 general vision-language model, and the base model's scores do not transfer to
 a checkpoint trained with task-specific rewards.
 
-#### 59. bonsai 2 27b
+#### 58. bonsai 2 27b
 
 the ternary line's second generation, and the first of them to publish a
 benchmark table instead of a claim.
@@ -2061,7 +2064,7 @@ careful -- the card says a stock build takes the Q2_0 file "without any
 warning" and produces garbage, so the failure mode here is silent output
 rather than a refusal to load.
 
-#### 60. bonsai 27b
+#### 59. bonsai 27b
 
 27b-class reasoning in binary weights: an efficiency experiment the two
 forums carrying it disagree about.
@@ -2084,7 +2087,7 @@ quantization-aware training to one bit is what it exists to demonstrate, so
 the bits-per-weight retention curve does not model it and the entry carries
 native_low_bpw.
 
-#### 61. coder390 efficientthink 27b
+#### 60. coder390 efficientthink 27b
 
 qwen3.8-27b retrained to stop reasoning once it has an answer, with the draft
 head inside every gguf.
@@ -2102,7 +2105,7 @@ recipes named after an app plus Q6_K and Q8_0, each in two variants that
 differ only in the precision of the built-in head. the `.ninfer` packages in
 the same repo are for a different runtime and are not what this entry sizes.
 
-#### 62. darwin 27b rsi
+#### 61. darwin 27b rsi
 
 a 27b thinking model trained on its own solutions, measured by its publisher
 on graduate science questions.
@@ -2119,7 +2122,7 @@ no board scores it and nobody else has re-run the comparison. the parent is
 itself a merge family rather than a vendor release, so the base model's
 public scores are a loose prior at best.
 
-#### 63. deepseek v4 flash vision exp
+#### 62. deepseek v4 flash vision exp
 
 deepseek v4 flash with a vision encoder trained in: livebench puts its
 agentic coding well above the 0731 release and its plain coding below it.
@@ -2137,7 +2140,7 @@ the card, whose own text figures are card.terminalbench p85 and card.deepswe
 p58. the vendor calls it experimental, and the only ggufs are llama.cpp's
 reference conversion, three rungs with no imatrix behind the two small ones.
 
-#### 64. embeddinggemma-2
+#### 63. embeddinggemma-2
 
 a multimodal embedding model: text, images, video and audio into one vector
 space, with the text half loadable alone.
@@ -2153,7 +2156,7 @@ level with embeddinggemma-300m on multilingual text and ahead on code. the
 card also says 128-d truncation costs the multimodal half far more than the
 text half.
 
-#### 65. embeddinggemma-300m
+#### 64. embeddinggemma-300m
 
 an embedding model: it emits vectors, not text, and no benchmark in this
 corpus scores it.
@@ -2164,7 +2167,7 @@ corpus scores it.
 - **evidence** modalities text -> embeddings; no facet carried by any source
 - **confidence in that evidence** low
 
-#### 66. exaone 4.0 1.2b
+#### 65. exaone 4.0 1.2b
 
 the best science score under a billion and a half, from the only lg model
 here.
@@ -2187,7 +2190,7 @@ artificial analysis scores it twice, reasoning and not, off one set of
 weights -- the template carries an `enable_thinking` toggle, so the two rows
 are one checkpoint with a knob and the card publishes a sampler set for each.
 
-#### 67. fara 1.5 27b
+#### 66. fara 1.5 27b
 
 a browser agent that sees only screenshots: it is unranked here because the
 three suites it reports are carried by no source in this corpus.
@@ -2208,7 +2211,7 @@ carried here, so the honest comparison is against that base and nothing
 measures the delta. the mmproj sidecar is required, not optional: screenshots
 are the entire input.
 
-#### 68. flint 40b a2.5b
+#### 67. flint 40b a2.5b
 
 a 40b sparse coding-agent model at 2.5b active, cheap to run per token for
 its size.
@@ -2222,7 +2225,7 @@ its size.
 heavily downloaded within days of release, and no board has scored it yet, so
 the case rests on the vendor's own table.
 
-#### 69. functiongemma-270m-it
+#### 68. functiongemma-270m-it
 
 a 270m model tuned for one job: turning a request into a function call.
 
@@ -2241,7 +2244,7 @@ that describes tools its own way should expect prose where a call was wanted.
 the fine-tuning question on its repo is exactly that, how to get a call
 "instead of generating plain text".
 
-#### 70. g9v3 3b
+#### 69. g9v3 3b
 
 near the top of the tiny field on the index, and the most reluctant to make
 things up.
@@ -2261,7 +2264,7 @@ one to hand a shell. no vendor conversion exists and no forum here discusses
 it, so the evidence is artificial analysis and the download count of a third
 party's ladder.
 
-#### 71. gemma 3 270m
+#### 70. gemma 3 270m
 
 270 million parameters, and it knows that it does not know.
 
@@ -2286,7 +2289,7 @@ the embedding table 63 percent of the model and the quantizer leaves it at
 Q8_0 -- so a low rung costs accuracy and saves almost nothing. the UD-IQ
 files are the only ones that genuinely shrink it.
 
-#### 72. gemma 4 12b agentic
+#### 71. gemma 4 12b agentic
 
 the same 12b continued into tool use, carrying one agentic number that its
 own author ran.
@@ -2305,7 +2308,7 @@ since every agentic-task mention it has is neutral or negative. needs --jinja
 for the native tool format and rep_pen 1.1 to avoid a repetition failure, so
 a bad first impression here is usually the client.
 
-#### 73. gemma 4 12b coder
+#### 72. gemma 4 12b coder
 
 a 12b python coder whose only measurement is its own card, and whose author
 has already superseded it.
@@ -2323,7 +2326,7 @@ result. its own author describes v1 as stopping after the first step, so the
 agentic sibling supersedes it for anything multi-step. reception is the
 warmest of the three additions and it is still only 6 mentions.
 
-#### 74. granite 4.0 h 1b
+#### 73. granite 4.0 h 1b
 
 the third point on the granite line, and the one that shows the line is not
 straight.
@@ -2346,7 +2349,7 @@ dense granites beside it do. no sampler guidance on the 4.0 card and none in
 its generation_config, so the numbers here are 4.2's, borrowed within the
 line.
 
-#### 75. granite 4.1 3b
+#### 74. granite 4.1 3b
 
 the previous generation, carried because the step to 4.2 is the clearest one
 this roster can show.
@@ -2367,7 +2370,7 @@ ibm's card for 4.1 publishes no sampler guidance at all, so the numbers here
 are the ones ibm documents for 4.2, borrowed within the line and marked as
 chosen rather than published.
 
-#### 76. granite switch 4.1 30b
+#### 75. granite switch 4.1 30b
 
 the 30b granite switch, with the same embedded adapters as the 8b.
 
@@ -2379,7 +2382,7 @@ the 30b granite switch, with the same embedded adapters as the 8b.
 
 same design and same evidence gap as the 8b.
 
-#### 77. granite switch 4.1 8b
+#### 76. granite switch 4.1 8b
 
 an 8b granite with guardian and decision adapters inside the weights.
 
@@ -2392,7 +2395,7 @@ an 8b granite with guardian and decision adapters inside the weights.
 the value is in not swapping files. no board scores it as a chat model, and
 the card's decision figures are the vendor's run.
 
-#### 78. hy-memory 30b a3b
+#### 77. hy-memory 30b a3b
 
 a 30b mixture of experts trained for one job: writing the memories an agent
 framework stores.
@@ -2408,7 +2411,7 @@ narrowly ahead of claude opus 5, on 20% subsamples with everything but the
 writer held fixed. it runs at temperature 0 with thinking off in the card's
 example.
 
-#### 79. jamba reasoning 3b
+#### 78. jamba reasoning 3b
 
 the best instruction-follower of the small models, on an architecture whose
 cache does not grow.
@@ -2429,7 +2432,7 @@ for the size. bartowski's conversion is downloaded three times more than
 ai21's own. ai21 ships its recommended temperature in generation_config.json
 under a misspelt key, so the file does not actually deliver it.
 
-#### 80. k2 horizon 3.7b
+#### 79. k2 horizon 3.7b
 
 a 3.7b that no board in this corpus scores any more, on an architecture
 nothing can load.
@@ -2451,7 +2454,7 @@ conversions on the hub were made by a converter that cannot read them back.
 so this entry is a measurement rather than an option, and the runtime block
 says so. worth rechecking whenever the issue moves.
 
-#### 81. kolibri-1
+#### 80. kolibri-1
 
 a 78b reasoning model that thinks in german as well as english.
 
@@ -2464,7 +2467,7 @@ a 78b reasoning model that thinks in german as well as english.
 the german reasoning is the reason to carry it, and nothing collected here
 measures german.
 
-#### 82. lfm2.5 24b a2b
+#### 81. lfm2.5 24b a2b
 
 liquid's largest: a 24b mixture of experts with 2b active that always reasons
 before answering.
@@ -2482,7 +2485,7 @@ unusually cold, temperature 0.1 with a repeat penalty, and thinking cannot be
 turned off. the vendor ships a quantization-aware Q4_0 beside the converted
 rungs; unsloth's ladder is labelled a preview.
 
-#### 83. lfm3-omni 2b
+#### 82. lfm3-omni 2b
 
 one 2.2b model that takes text, images, video and audio and answers in text
 or speech, without reasoning.
@@ -2497,7 +2500,7 @@ the projector carries both towers, so it adds more than the vision or audio
 sibling's does. an open llama.cpp issue reports audio glitches on the
 sibling, so voice output is the part to test first.
 
-#### 84. mellum2.1 12b
+#### 83. mellum2.1 12b
 
 jetbrains' 12b coding model, the same architecture as mellum2 with far more
 reinforcement learning.
@@ -2511,7 +2514,7 @@ reinforcement learning.
 2.1 is a post-training release, so the improvement claim is about training
 rather than design, and no board has checked it.
 
-#### 85. mimo v2.6 distill 9b
+#### 84. mimo v2.6 distill 9b
 
 qwen3.5-9b fine-tuned by xiaomi on mimo-generated agentic data, shipped as
 the sft base rather than the rl result.
@@ -2531,7 +2534,7 @@ checkpoint offered as a starting point for agentic rl, which is the frame its
 own card gives, and bartowski converted it because neither the vendor nor
 unsloth has.
 
-#### 86. minicpm-ocr 1.0
+#### 85. minicpm-ocr 1.0
 
 a 1.3b document parser that needs reasoning off under llama.cpp.
 
@@ -2544,7 +2547,7 @@ a 1.3b document parser that needs reasoning off under llama.cpp.
 the vendor's parsing score is the only number, and no board collected here
 measures ocr.
 
-#### 87. minicpm-v 4.6
+#### 86. minicpm-v 4.6
 
 1.3b, takes images and video, and calls tools better than anything else this
 small.
@@ -2565,7 +2568,7 @@ tool-caller to wire into a harness that checks its work, not an assistant to
 ask questions of. the vendor publishes the gguf and ggml-org publishes a
 second, which usually means the vision stack landed upstream.
 
-#### 88. minicpm-v 4.7 35b a3b
+#### 87. minicpm-v 4.7 35b a3b
 
 openbmb's first mixture-of-experts vision model: image and video
 understanding at 3b active.
@@ -2583,7 +2586,7 @@ in its own llama.cpp fork rather than from a stock build. what is
 independently checkable is the quantization: atomic chat publishes kl
 divergence and top-1 agreement for twelve files.
 
-#### 89. minicpm5 1b
+#### 88. minicpm5 1b
 
 a 1b that follows instructions and calls tools, and knows almost nothing.
 
@@ -2601,7 +2604,7 @@ pipeline and the wrong one for a 1b asked a question. aa4.non_hallucination
 p97 says it mostly declines rather than inventing, which makes the knowledge
 gap safe instead of dangerous.
 
-#### 90. nemotron-3-nano-30b-a3b
+#### 89. nemotron-3-nano-30b-a3b
 
 fast and good at contest maths on its own card, and middling to weak on most
 of what a third party measured.
@@ -2619,7 +2622,7 @@ measurement is the story of this entry. the conversions add to it: one tester
 found "the `Q4_K_M`quant wouldn't load", and another that the throughput is
 not what was promised, "the results aren't matching what's advertised".
 
-#### 91. ornith 1.0 35b
+#### 90. ornith 1.0 35b
 
 an agentic-coding model whose only numbers are its own, and whose busier
 forum is evenly split on it.
@@ -2627,7 +2630,7 @@ forum is evenly split on it.
 - **use for** agentic coding, on its own claims
 - **avoid for** anything where the claim needs to be independently checked
 - **runs at** UD-Q8_K_XL, 35.6 gib, 2/9 of the weighted factors measured it
-- **evidence** card.terminalbench 61.8 p51; card.swebench_verified 68.3 p38; hf-discussions 71 mentions at 50% approval; reddit 3 mentions, no polarity either way
+- **evidence** card.terminalbench 61.8 p53; card.swebench_verified 68.3 p36; hf-discussions 71 mentions at 50% approval; reddit 3 mentions, no polarity either way
 - **confidence in that evidence** low
 
 71 huggingface discussion mentions at 50% approval, against three reddit
@@ -2638,7 +2641,7 @@ different and weaker thing. no third-party benchmark carries it either way.
 the one report of it doing work ended there: "got stuck in a few infinite
 loops and ended up discarding it".
 
-#### 92. ornith 1.5 122b
+#### 91. ornith 1.5 122b
 
 the 122b member of the ornith 1.5 family, released with vendor and unsloth
 ggufs on the same day.
@@ -2653,7 +2656,7 @@ released on 2026-10-20, so the evidence is the vendor's own benchmark table
 and nothing else. the card publishes two sampling sets, a general one with a
 presence penalty and a colder one for precise coding, and both are carried.
 
-#### 93. ornith 1.5 35b a3b
+#### 92. ornith 1.5 35b a3b
 
 beats its own 1.0 on all three claims they share, and the first forum report
 of it doing real work says the tool use does not fire.
@@ -2661,12 +2664,12 @@ of it doing real work says the tool use does not fire.
 - **use for** agentic coding, on its own claims, a 35b slot, at 3b active
 - **avoid for** web-grounded or tool-calling work until somebody checks it, anything where the claim needs to be independently checked
 - **runs at** UD-Q8_K_XL, 36.2 gib, 2/9 of the weighted factors measured it
-- **evidence** card.terminalbench 67.5 p54; card.swebench_verified 70.4 p48; card.swebench_pro 58.6 p54; card.deepswe p2; reddit 22 mentions at 60% approval; hf-discussions 98 mentions at 20% approval
+- **evidence** card.terminalbench 67.5 p55; card.swebench_verified 70.4 p50; card.swebench_pro 58.6 p54; card.deepswe p2; reddit 22 mentions at 60% approval; hf-discussions 98 mentions at 20% approval
 - **confidence in that evidence** low
 
 the generational delta is real and consistent: card.swebench_pro 58.6 p54
-against 1.0's 49.4 p26, verified card.swebench_verified 70.4 p48 against 68.3
-p38, terminalbench card.terminalbench 67.5 p54 against 61.8 p51. it also
+against 1.0's 49.4 p26, verified card.swebench_verified 70.4 p50 against 68.3
+p36, terminalbench card.terminalbench 67.5 p55 against 61.8 p53. it also
 publishes the active count 1.0 withheld, so this is the first ornith whose
 speed can be estimated. against that, the most-upvoted thing anyone has said
 about it reports the opposite of the claim -- writes from memory, does not
@@ -2677,7 +2680,7 @@ since turned mixed: "many people complain that it's been benchmaxxed". and
 the Q6 rungs from two publishers "come with the erroneous MTP head", so
 drafting from them is not a test of the model.
 
-#### 94. ornith 1.5 9b
+#### 93. ornith 1.5 9b
 
 a 9b claiming the middle of a registry whose median entry is three times its
 size, and nobody has checked a single number.
@@ -2685,18 +2688,18 @@ size, and nobody has checked a single number.
 - **use for** agentic coding at 9b, trying the family before committing 35
 - **avoid for** anything where the claim needs to be independently checked, work its 35b sibling is reported failing at
 - **runs at** Q8_0, 9.1 gib, 2/9 of the weighted factors measured it
-- **evidence** card.gpqa 85.4 p65; card.swebench_verified 53.4 p23; card.terminalbench 46 p35; card.swebench_pro 46.5 p10; reddit 5 mentions at 100% approval
+- **evidence** card.gpqa 85.4 p63; card.swebench_verified 53.4 p23; card.terminalbench 46 p36; card.swebench_pro 46.5 p10; reddit 5 mentions at 100% approval
 - **confidence in that evidence** low
 
-card.gpqa 85.4 p65 is the outlier, high in the registry from a model a
+card.gpqa 85.4 p63 is the outlier, high in the registry from a model a
 quarter the size of what it is compared against, on the facet
 analyze-self-report finds cards inflate most. the coding claims are the sober
-ones -- card.swebench_pro p10, card.terminalbench p35 -- and those are the
+ones -- card.swebench_pro p10, card.terminalbench p36 -- and those are the
 tasks it is sold for. the forums have only started on it, and what they say
 is about where it sits rather than how well it scores: one user keeps it
 "sometimes for lighter stuff" beside qwen 3.6 35b and 3.8 27b.
 
-#### 95. ornith-1.0-9b
+#### 94. ornith-1.0-9b
 
 the 9b of the same self-improving family, with claims that put it in the
 bottom third of the claimants.
@@ -2704,7 +2707,7 @@ bottom third of the claimants.
 - **use for** small agentic coding experiments
 - **avoid for** production agent loops
 - **runs at** Q8_0, 8.9 gib, 2/9 of the weighted factors measured it
-- **evidence** card.terminalbench 39.6 p26; card.swebench_pro 41.9 p6; hf-discussions 10 mentions at 100% approval
+- **evidence** card.terminalbench 39.6 p28; card.swebench_pro 41.9 p6; hf-discussions 10 mentions at 100% approval
 - **confidence in that evidence** low
 
 nothing third-party has measured it, so its own card is the only benchmark.
@@ -2713,7 +2716,7 @@ heavily quantized 27b because they have "no issues in opencode" on a
 mid-range consumer card, and another finds it "better than
 empero-ai/Qwythos-9B-Claude-Mythos-5-1M".
 
-#### 96. phi-4 mini
+#### 95. phi-4 mini
 
 two years old and still mid-field, which says more about the field than about
 the model.
@@ -2734,7 +2737,7 @@ publishes gguf for the phi-3 line and not this one, so the conversion is
 unsloth's. every sampler on the card is greedy, so this is the only entry
 here whose documented profile is deterministic.
 
-#### 97. qwen-agentworld 35b a3b
+#### 96. qwen-agentworld 35b a3b
 
 a world model for agent environments rather than an assistant: it predicts
 the next environment state, it does not do your task.
@@ -2748,7 +2751,7 @@ the next environment state, it does not do your task.
 no benchmark in this corpus measures what it does, so it is unranked rather
 than bad. the card is the only description of its job.
 
-#### 98. qwen3 8b
+#### 97. qwen3 8b
 
 the dense 8b of the original qwen3, carried as a base rather than as a
 candidate: two generations of same-size successors sit above it on this
@@ -2773,7 +2776,7 @@ successors people are actually running. the parameter count, context and
 architecture are all real captures off the vendor's own config, so what the
 entry cannot say is how good it is, not what it is.
 
-#### 99. qwen3-4b-thinking
+#### 98. qwen3-4b-thinking
 
 the generation the roster is measuring qwen3.5-4b against, and it loses by
 more than the version number suggests.
@@ -2793,7 +2796,7 @@ the bottom band. the card and the shipped generation_config agree exactly on
 samplers, which is rarer than it should be, and the template names no
 thinking knob, so this checkpoint always thinks.
 
-#### 100. qwen3-coder-30b-a3b-instruct
+#### 99. qwen3-coder-30b-a3b-instruct
 
 a small fill-in-the-middle coder: the one model here tuned for autocomplete
 rather than conversation.
@@ -2811,7 +2814,7 @@ repository bugs, the bottom of that board here. that is the expected shape
 for a 30b a3b completion model, and not a reason to avoid it at the job it
 was built for: nothing here measures fim.
 
-#### 101. qwen3-vl-4b
+#### 100. qwen3-vl-4b
 
 vision at 4b with a vendor gguf, and the least honest model in its size
 class.
@@ -2834,7 +2837,7 @@ half. the card splits its sampler guidance by input rather than by mode, and
 the set generation_config ships is the VISION one, so running it for text
 without overriding gets the wrong profile.
 
-#### 102. qwen3.5-4b-base
+#### 101. qwen3.5-4b-base
 
 the qwen3.5 4b pretrain, carried because `Mapika/decider-4b` was fine-tuned
 from it and nothing here scores it.
@@ -2852,7 +2855,7 @@ the entry does: stripping it scored this repo on artificial analysis'
 qwen3 8b is, and it already sat in this registry as mradermacher's separate
 `mmproj` file, which is where the vision tower of it lives.
 
-#### 103. qwen3.8 flash next abliterated
+#### 102. qwen3.8 flash next abliterated
 
 qwen3.8-flash-next with refusals ablated: the same 180b to serve, and no
 measurement of what the edit cost.
@@ -2875,7 +2878,7 @@ than unsloth's rewrite, which is why the turn handling differs from the base
 entry. the rungs from Q4_K_S up are raw byte splits, so the ladder a stock
 llama.cpp can pull tops out at IQ4_XS.
 
-#### 104. ripple 65b
+#### 103. ripple 65b
 
 a dense 65b trained from scratch for agentic coding, whose card puts it level
 with open models ten times its size on terminal-bench.
@@ -2892,7 +2895,7 @@ token, which makes it slower per token than the sparse models it is compared
 against. the vendor ships a dflash2 drafter, but the only gguf of it does not
 yet match the recipe under llama.cpp.
 
-#### 105. sensenova u1.5 8b
+#### 104. sensenova u1.5 8b
 
 an image generator of which this entry carries only the understanding branch.
 
@@ -2906,7 +2909,7 @@ its strengths are generative and those are not what llama.cpp runs. the entry
 exists so the architecture is on the roster, and it is the weakest case in
 this batch: nothing has loaded u1.5 files on support written for u1.
 
-#### 106. signal 3.8 27b
+#### 105. signal 3.8 27b
 
 qwen3.8-27b made terser by self-distillation: it answers in roughly half the
 tokens, and every number saying so is the publisher's own.
@@ -2934,7 +2937,7 @@ from 72% to 94% on structured output, which compounds with the shorter
 answers. self-distillation is also why this is low-risk: no external data and
 no other model's outputs, so the base model's knowledge is what it keeps.
 
-#### 107. signal 3.8 flash next
+#### 106. signal 3.8 flash next
 
 the same terseness fine-tune over qwen3.8-flash-next, and the better
 evidenced of the two: fewer reasoning tokens AND a higher score on the one
@@ -2961,7 +2964,7 @@ sampling profile is taken from the sibling's card, which states the settings
 apply to signal and the base model alike. as with the 27b, no suite in this
 corpus scores it and token efficiency is not a facet any of them carries.
 
-#### 108. ternary bonsai 27b
+#### 107. ternary bonsai 27b
 
 the ternary sibling of bonsai, and the one bonsai with a third-party
 measurement: a reproducible tool-use bench puts it 4 points under an nvfp4
@@ -3005,7 +3008,7 @@ the kind of thing a tool-use score averages away -- 85 of 100 overall with
 one category failing outright. the nvfp4 comparison arm is described as the
 cleaner one on safety, which is the other half of the 4-point gap.
 
-#### 109. ternary bonsai 8b
+#### 108. ternary bonsai 8b
 
 an 8b packed into ternary weights, and whose published accuracy a discussion
 thread says did not reproduce.
@@ -3024,7 +3027,7 @@ replicated, with a user reporting it lagging similar-sized models in lm
 studio. the compression is real and interesting; the accuracy behind it is
 not established here.
 
-#### 110. tiny aya global
+#### 109. tiny aya global
 
 sixty-five languages, an 8k window, and a licence that rules out the obvious
 use.
@@ -3049,7 +3052,7 @@ reader cannot simply pull -- cohere returns 401 for the card and the
 generation_config alike, which is why the sampler profile here is llama.cpp's
 defaults rather than anybody's recommendation.
 
-#### 111. underdog saluki 27b
+#### 110. underdog saluki 27b
 
 qwen3.8-27b squeezed into one small file, with tool calling as the thing its
 publisher protected.
@@ -3384,116 +3387,115 @@ model over a terse correct one.
 | model | composite rank | text elo | votes | webdev elo |
 |---|--:|--:|--:|--:|
 | glm-5.3-flash | 1 | 1473 | 22,971 | - |
-| hy4 | 2 | - | - | - |
-| qwen3.8 flash next | 3 | - | - | - |
-| mimo v2.6 flash | 4 | 1452 | 6,053 | - |
-| qwen3.8 27b | 5 | 1438 | 18,462 | - |
-| deepseek v4 flash 0731 | 6 | 1436 | 51,850 | - |
-| nanbeige4.3 33b | 7 | - | - | - |
-| inkling 2 mini | 8 | - | - | - |
-| qwen3.5-27b | 9 | 1409 | 28,612 | - |
-| ling 3.0 flash | 10 | - | - | - |
-| minimax m2.7 | 11 | 1415 | 79,944 | - |
-| k2 horizon 375b | 12 | - | - | - |
-| qwen3.6 27b | 13 | - | - | - |
-| qwen3.5 397b a17b | 14 | 1442 | 88,660 | - |
-| glm-4.5-air | 15 | 1373 | 30,454 | - |
-| minimax-m2.5 | 16 | 1391 | 42,730 | - |
-| muse glimmer | 17 | 1425 | 3,893 | - |
-| mimo v2.5 | 18 | 1434 | 47,266 | - |
-| beam 1.0 501b | 19 | - | - | - |
-| nemotron 3.5 super vl | 20 | - | - | - |
-| ling 3.0 flash vl | 21 | - | - | - |
-| qwen3.5 122b a10b | 22 | 1416 | 29,651 | - |
-| step 3.7 flash | 23 | - | - | - |
-| qwen3.5-9b | 24 | - | - | - |
-| k2 horizon mova 36b a4b | 25 | - | - | - |
-| k2 horizon 32b | 26 | - | - | - |
-| qwen3.5-4b | 27 | - | - | - |
-| qwen3 coder next | 28 | - | - | - |
-| qwen3.5-35b-a3b | 29 | 1394 | 30,408 | - |
-| k2 horizon 7b | 30 | - | - | - |
-| mistral medium 3.5 | 31 | 1427 | 11,757 | - |
-| gemma 4 12b | 32 | - | - | - |
-| nemotron 3.5 bolt 74b a9b | 33 | - | - | - |
-| qwen3.6 35b a3b | 34 | - | - | - |
-| gemma 4 31b | 35 | 1453 | 6,133 | - |
-| qwen3.5-2b | 36 | - | - | - |
-| laguna s 2.1 | 37 | - | - | - |
-| gemma 4 26b a4b | 38 | 1437 | 6,081 | - |
-| nemotron 3.5 lightning | 39 | - | - | - |
-| laguna xs 2.1 | 40 | - | - | - |
-| laguna m.1 | 41 | - | - | - |
-| nemotron 3 super | 42 | 1360 | 7,859 | - |
-| ling 3.0 tiny | 43 | - | - | - |
-| lfm3 1.7b | 44 | - | - | - |
-| gemma-4-e2b-it | 45 | - | - | - |
-| lfm3-vl 2b | 46 | - | - | - |
-| lfm2.5 2.6b | 47 | - | - | - |
-| granite 4.2 30b | 48 | 1340 | 3,401 | - |
-| minicpm5 2b | 49 | - | - | - |
-| gpt-oss-20b | 50 | 1318 | 10,368 | - |
-| nanbeige4.1 3b | 51 | - | - | - |
-| qwen3.5-0.8b | 52 | - | - | - |
-| gemma-4-e4b-it | 53 | - | - | - |
-| gpt-oss-120b | 54 | 1352 | 30,018 | - |
-| ministral 3 3b | 55 | - | - | - |
-| granite 4.2 8b | 56 | 1288 | 3,237 | - |
-| granite 4.2 3b | 57 | 1290 | 3,247 | - |
-| aescode 32b | 58 | - | - | - |
-| bonsai 2 27b | 59 | - | - | - |
-| bonsai 27b | 60 | - | - | - |
-| coder390 efficientthink 27b | 61 | - | - | - |
-| darwin 27b rsi | 62 | - | - | - |
-| deepseek v4 flash vision exp | 63 | - | - | - |
-| embeddinggemma-2 | 64 | - | - | - |
-| embeddinggemma-300m | 65 | - | - | - |
-| exaone 4.0 1.2b | 66 | - | - | - |
-| fara 1.5 27b | 67 | - | - | - |
-| flint 40b a2.5b | 68 | - | - | - |
-| functiongemma-270m-it | 69 | - | - | - |
-| g9v3 3b | 70 | - | - | - |
-| gemma 3 270m | 71 | - | - | - |
-| gemma 4 12b agentic | 72 | - | - | - |
-| gemma 4 12b coder | 73 | - | - | - |
-| granite 4.0 h 1b | 74 | - | - | - |
-| granite 4.1 3b | 75 | - | - | - |
-| granite switch 4.1 30b | 76 | - | - | - |
-| granite switch 4.1 8b | 77 | - | - | - |
-| hy-memory 30b a3b | 78 | - | - | - |
-| jamba reasoning 3b | 79 | - | - | - |
-| k2 horizon 3.7b | 80 | - | - | - |
-| kolibri-1 | 81 | - | - | - |
-| lfm2.5 24b a2b | 82 | - | - | - |
-| lfm3-omni 2b | 83 | - | - | - |
-| mellum2.1 12b | 84 | - | - | - |
-| mimo v2.6 distill 9b | 85 | - | - | - |
-| minicpm-ocr 1.0 | 86 | - | - | - |
-| minicpm-v 4.6 | 87 | - | - | - |
-| minicpm-v 4.7 35b a3b | 88 | - | - | - |
-| minicpm5 1b | 89 | - | - | - |
-| nemotron-3-nano-30b-a3b | 90 | 1314 | 15,722 | - |
-| ornith 1.0 35b | 91 | - | - | - |
-| ornith 1.5 122b | 92 | - | - | - |
-| ornith 1.5 35b a3b | 93 | - | - | - |
-| ornith 1.5 9b | 94 | - | - | - |
-| ornith-1.0-9b | 95 | - | - | - |
-| phi-4 mini | 96 | - | - | - |
-| qwen-agentworld 35b a3b | 97 | - | - | - |
-| qwen3 8b | 98 | - | - | - |
-| qwen3-4b-thinking | 99 | - | - | - |
-| qwen3-coder-30b-a3b-instruct | 100 | - | - | - |
-| qwen3-vl-4b | 101 | - | - | - |
-| qwen3.5-4b-base | 102 | - | - | - |
-| qwen3.8 flash next abliterated | 103 | - | - | - |
-| ripple 65b | 104 | - | - | - |
-| sensenova u1.5 8b | 105 | - | - | - |
-| signal 3.8 27b | 106 | - | - | - |
-| signal 3.8 flash next | 107 | - | - | - |
-| ternary bonsai 27b | 108 | - | - | - |
-| ternary bonsai 8b | 109 | - | - | - |
-| tiny aya global | 110 | - | - | - |
-| underdog saluki 27b | 111 | - | - | - |
+| qwen3.8 flash next | 2 | - | - | - |
+| mimo v2.6 flash | 3 | 1452 | 6,053 | - |
+| qwen3.8 27b | 4 | 1438 | 18,462 | - |
+| deepseek v4 flash 0731 | 5 | 1436 | 51,850 | - |
+| nanbeige4.3 33b | 6 | - | - | - |
+| inkling 2 mini | 7 | - | - | - |
+| qwen3.5-27b | 8 | 1409 | 28,612 | - |
+| ling 3.0 flash | 9 | - | - | - |
+| minimax m2.7 | 10 | 1415 | 79,944 | - |
+| k2 horizon 375b | 11 | - | - | - |
+| qwen3.6 27b | 12 | - | - | - |
+| qwen3.5 397b a17b | 13 | 1442 | 88,660 | - |
+| glm-4.5-air | 14 | 1373 | 30,454 | - |
+| minimax-m2.5 | 15 | 1391 | 42,730 | - |
+| muse glimmer | 16 | 1425 | 3,893 | - |
+| mimo v2.5 | 17 | 1434 | 47,266 | - |
+| beam 1.0 501b | 18 | - | - | - |
+| nemotron 3.5 super vl | 19 | - | - | - |
+| ling 3.0 flash vl | 20 | - | - | - |
+| qwen3.5 122b a10b | 21 | 1416 | 29,651 | - |
+| step 3.7 flash | 22 | - | - | - |
+| qwen3.5-9b | 23 | - | - | - |
+| k2 horizon mova 36b a4b | 24 | - | - | - |
+| k2 horizon 32b | 25 | - | - | - |
+| qwen3.5-4b | 26 | - | - | - |
+| qwen3 coder next | 27 | - | - | - |
+| qwen3.5-35b-a3b | 28 | 1394 | 30,408 | - |
+| k2 horizon 7b | 29 | - | - | - |
+| mistral medium 3.5 | 30 | 1427 | 11,757 | - |
+| gemma 4 12b | 31 | - | - | - |
+| nemotron 3.5 bolt 74b a9b | 32 | - | - | - |
+| qwen3.6 35b a3b | 33 | - | - | - |
+| gemma 4 31b | 34 | 1453 | 6,133 | - |
+| qwen3.5-2b | 35 | - | - | - |
+| laguna s 2.1 | 36 | - | - | - |
+| gemma 4 26b a4b | 37 | 1437 | 6,081 | - |
+| nemotron 3.5 lightning | 38 | - | - | - |
+| laguna xs 2.1 | 39 | - | - | - |
+| laguna m.1 | 40 | - | - | - |
+| nemotron 3 super | 41 | 1360 | 7,859 | - |
+| ling 3.0 tiny | 42 | - | - | - |
+| lfm3 1.7b | 43 | - | - | - |
+| gemma-4-e2b-it | 44 | - | - | - |
+| lfm3-vl 2b | 45 | - | - | - |
+| lfm2.5 2.6b | 46 | - | - | - |
+| granite 4.2 30b | 47 | 1340 | 3,401 | - |
+| minicpm5 2b | 48 | - | - | - |
+| gpt-oss-20b | 49 | 1318 | 10,368 | - |
+| nanbeige4.1 3b | 50 | - | - | - |
+| qwen3.5-0.8b | 51 | - | - | - |
+| gemma-4-e4b-it | 52 | - | - | - |
+| gpt-oss-120b | 53 | 1352 | 30,018 | - |
+| ministral 3 3b | 54 | - | - | - |
+| granite 4.2 8b | 55 | 1288 | 3,237 | - |
+| granite 4.2 3b | 56 | 1290 | 3,247 | - |
+| aescode 32b | 57 | - | - | - |
+| bonsai 2 27b | 58 | - | - | - |
+| bonsai 27b | 59 | - | - | - |
+| coder390 efficientthink 27b | 60 | - | - | - |
+| darwin 27b rsi | 61 | - | - | - |
+| deepseek v4 flash vision exp | 62 | - | - | - |
+| embeddinggemma-2 | 63 | - | - | - |
+| embeddinggemma-300m | 64 | - | - | - |
+| exaone 4.0 1.2b | 65 | - | - | - |
+| fara 1.5 27b | 66 | - | - | - |
+| flint 40b a2.5b | 67 | - | - | - |
+| functiongemma-270m-it | 68 | - | - | - |
+| g9v3 3b | 69 | - | - | - |
+| gemma 3 270m | 70 | - | - | - |
+| gemma 4 12b agentic | 71 | - | - | - |
+| gemma 4 12b coder | 72 | - | - | - |
+| granite 4.0 h 1b | 73 | - | - | - |
+| granite 4.1 3b | 74 | - | - | - |
+| granite switch 4.1 30b | 75 | - | - | - |
+| granite switch 4.1 8b | 76 | - | - | - |
+| hy-memory 30b a3b | 77 | - | - | - |
+| jamba reasoning 3b | 78 | - | - | - |
+| k2 horizon 3.7b | 79 | - | - | - |
+| kolibri-1 | 80 | - | - | - |
+| lfm2.5 24b a2b | 81 | - | - | - |
+| lfm3-omni 2b | 82 | - | - | - |
+| mellum2.1 12b | 83 | - | - | - |
+| mimo v2.6 distill 9b | 84 | - | - | - |
+| minicpm-ocr 1.0 | 85 | - | - | - |
+| minicpm-v 4.6 | 86 | - | - | - |
+| minicpm-v 4.7 35b a3b | 87 | - | - | - |
+| minicpm5 1b | 88 | - | - | - |
+| nemotron-3-nano-30b-a3b | 89 | 1314 | 15,722 | - |
+| ornith 1.0 35b | 90 | - | - | - |
+| ornith 1.5 122b | 91 | - | - | - |
+| ornith 1.5 35b a3b | 92 | - | - | - |
+| ornith 1.5 9b | 93 | - | - | - |
+| ornith-1.0-9b | 94 | - | - | - |
+| phi-4 mini | 95 | - | - | - |
+| qwen-agentworld 35b a3b | 96 | - | - | - |
+| qwen3 8b | 97 | - | - | - |
+| qwen3-4b-thinking | 98 | - | - | - |
+| qwen3-coder-30b-a3b-instruct | 99 | - | - | - |
+| qwen3-vl-4b | 100 | - | - | - |
+| qwen3.5-4b-base | 101 | - | - | - |
+| qwen3.8 flash next abliterated | 102 | - | - | - |
+| ripple 65b | 103 | - | - | - |
+| sensenova u1.5 8b | 104 | - | - | - |
+| signal 3.8 27b | 105 | - | - | - |
+| signal 3.8 flash next | 106 | - | - | - |
+| ternary bonsai 27b | 107 | - | - | - |
+| ternary bonsai 8b | 108 | - | - | - |
+| tiny aya global | 109 | - | - | - |
+| underdog saluki 27b | 110 | - | - | - |
 
 <!-- generated by research/build-sections --section prose:a-third-opinion-lmarena-and-why-it-is-not-in-the-composite-2 -->
 **it is a component at 0.10, and the reason it is not more is coverage.**
@@ -3767,6 +3769,7 @@ the way a model is supposed to: AA scored it.
 | ripple 65b | Q8_0 | 64.1 | 64.78b / ? | 118,668 | 57 | ricursive's first model, a 65b dense transformer trained from scratch on 12t tokens and post-trained for agentic coding https://huggingface.co/AtomicChat/Ripple-65B-Preview-GGUF. the card scores it 80.5 on terminal-bench 2.1 against models with ten times its parameters, running its own harness wherever a lab published no score, and says the preview has "gone through relatively light posttraining". the architecture starts from olmo 3 and moves to a gemma 3n-like layout: 80 layers, sliding-window attention over 1024 tokens on four of every five and full attention with no positional encoding on the fifth. text in, text out, and it always reasons -- the template has no knob that turns thinking off. ricursive ships a dflash2 drafter as bf16 safetensors only; the one gguf of it, ashbash/Ripple-65B-Preview-DFlash2-GGUF, loads in llama.cpp as a `dflash` drafter, but its card says llama.cpp applies rope to the layer the recipe runs without it and lets the full-attention layer see the whole context, so no drafter is configured here. |
 | flint 40b a2.5b | Q8_0 | 39.4 | 39.79b / ? | 343,901 | 395 | recursive's mixture-of-experts model "for coding agents" https://huggingface.co/unsloth/flint-GGUF, built to "investigate codebases, fix bugs, implement features, and write tests". the template names no thinking knob, so a client has nothing to turn on or off. no board has scored it, and the sampler below is the set the card's own results were run with. |
 | kolibri-1 | Q8_0 | 77.4 | 78.1b / ? | - | - | aleph alpha's reasoning model "with a focus on German and English" https://huggingface.co/Hob-forge/Kolibri-1-GGUF, which is the reason to carry it: it reasons in german rather than translating an english trace. no collected board measures german, so the thing that sets it apart goes unscored here. |
+| kolibri 1.1 | Q8_0 | 74.5 | 75.11b / ? | - | - | kolibri 1 continued from a mid-training checkpoint with sparse attention, a 4:1 mix of sliding-window and sparse layers https://huggingface.co/Aleph-Alpha/Kolibri-1.1-GGUF, which is what makes its files a different model to llama.cpp than kolibri 1's under the same `kolibri1` arch string. |
 | mellum2.1 12b | Q8_0 | 12.0 | 12.15b / 2.5b | 302,340 | 184 | jetbrains' coding model, with the architecture of mellum2 and "almost all of the work for this version went into post-training" https://huggingface.co/JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF. the release below is when mainline learned that architecture, and the drafter support for 2.1 came later, in PR 30612. |
 | k2 horizon 32b | Q8_0 | 34.4 | 34.78b / ? | - | - | the dense 32b of the family, on the same `k2-horizon` architecture as the 3.7b and the 375b. ifm's card asks for high reasoning effort on every request and calls the lower levels "not recommended except for research on reasoning" https://huggingface.co/IFM/K2-Horizon-32B-GGUF. |
 | sensenova u1.5 8b | Q6_K | 7.2 | 17.53b / ? | - | - | built "for more accurate, consistent, reliable, and aesthetically compelling visual creation" https://huggingface.co/mradermacher/SenseNova-U1.5-8B-MoT-i1-GGUF, and image generation is the point of it. this entry does not carry that: llama.cpp took the understanding and text branch only, so these files read images and answer in text. stable-diffusion.cpp's detector knows u1.5 for generation, and no file for it is pinned here. mainline's support was written against u1, and no file listed here has been loaded. |
@@ -4081,16 +4084,16 @@ takes images in, according to its own config
 | 13 | qwen3.8 27b | UD-Q8_K_XL unsloth | 29.3 | gufo, llama.cpp, unslothai/llama.cpp, vllm | 90% | **67.2** |
 | 14 | minimax m3 | UD-IQ1_M unsloth, over the box | 120.4 | llama.cpp, unslothai/llama.cpp, vllm | 100% | **67.1** |
 | 15 | inkling 2 mini | Q8_0 AtomicChat | 25.8 | llama.cpp, unslothai/llama.cpp, vllm | 43% | **59.5** |
-| 16 | qwen3.5-27b | UD-Q8_K_XL unsloth | 33.3 | llama.cpp, unslothai/llama.cpp, vllm | 29% | **56.6** |
+| 16 | qwen3.5-27b | UD-Q8_K_XL unsloth | 33.3 | llama.cpp, unslothai/llama.cpp, vllm | 29% | **56.7** |
 | 17 | inkling | UD-IQ1_S unsloth, over the box | 251.6 | unslothai/llama.cpp, vllm | 90% | **56.4** |
 | 18 | inkling small | UD-Q3_K_XL unsloth | 111.3 | unslothai/llama.cpp, vllm | 76% | **54.8** |
-| 19 | qwen3.6 27b | UD-Q8_K_XL unsloth | 33.3 | llama.cpp, unslothai/llama.cpp, vllm | 76% | **50.5** |
+| 19 | qwen3.6 27b | UD-Q8_K_XL unsloth | 33.3 | llama.cpp, unslothai/llama.cpp, vllm | 76% | **50.6** |
 | 20 | qwen3.5 397b a17b | UD-IQ2_XXS unsloth | 107.0 | llama.cpp, unslothai/llama.cpp, vllm | 86% | **50.3** |
 | 21 | muse glimmer | UD-Q8_K_XL unsloth | 30.1 | llama.cpp, unslothai/llama.cpp, vllm | 86% | **49.0** |
 | 22 | mimo v2.5 | UD-Q2_K_XL unsloth | 95.9 | llama.cpp, unslothai/llama.cpp, vllm | 71% | **48.3** |
 | 23 | nemotron 3.5 super vl | UD-Q6_K_XL unsloth | 112.7 | llama.cpp, unslothai/llama.cpp, vllm | 64% | **45.9** |
 | 24 | ling 3.0 flash vl | Q6_K bartowski | 102.2 | llama.cpp, unslothai/llama.cpp, vllm | 48% | **44.7** |
-| 25 | qwen3.5 122b a10b | UD-Q6_K_XL unsloth | 106.0 | llama.cpp, unslothai/llama.cpp, vllm | 62% | **43.5** |
+| 25 | qwen3.5 122b a10b | UD-Q6_K_XL unsloth | 106.0 | llama.cpp, unslothai/llama.cpp, vllm | 62% | **43.6** |
 | 26 | step 3.7 flash | UD-Q4_K_S unsloth | 106.3 | llama.cpp, unslothai/llama.cpp, vllm | 43% | **42.7** |
 | 27 | qwen3.5-9b | UD-Q8_K_XL unsloth | 12.3 | llama.cpp, unslothai/llama.cpp, vllm | 52% | **42.5** |
 | 28 | qwen3.5-4b | UD-Q8_K_XL unsloth | 5.7 | llama.cpp, unslothai/llama.cpp, vllm | 21% | **42.0** |
@@ -4100,7 +4103,7 @@ takes images in, according to its own config
 | 32 | nemotron 3.5 bolt 74b a9b | Q8_0 unsloth | 73.4 | llama.cpp, unslothai/llama.cpp, vllm | 40% | **38.7** |
 | 33 | qwen3.6 35b a3b | UD-Q8_K_XL unsloth | 36.4 | llama.cpp, unslothai/llama.cpp, vllm | 76% | **38.3** |
 | 34 | gemma 4 31b | UD-Q8_K_XL unsloth | 32.6 | llama.cpp, unslothai/llama.cpp, vllm | 100% | **37.4** |
-| 35 | qwen3.5-2b | UD-Q8_K_XL unsloth | 2.7 | llama.cpp, unslothai/llama.cpp, vllm | 21% | **36.0** |
+| 35 | qwen3.5-2b | UD-Q8_K_XL unsloth | 2.7 | llama.cpp, unslothai/llama.cpp, vllm | 21% | **35.9** |
 | 36 | gemma 4 26b a4b | UD-Q8_K_XL unsloth | 25.7 | llama.cpp, unslothai/llama.cpp, vllm | 90% | **34.2** |
 | 37 | gemma-4-e2b-it | UD-Q8_K_XL unsloth | 4.9 | llama.cpp, unslothai/llama.cpp, vllm | 21% | **30.9** |
 | 38 | lfm3-vl 2b | Q8_0 LiquidAI | 1.7 | llama.cpp, unslothai/llama.cpp, vllm | 43% | **30.9** |
@@ -4702,7 +4705,6 @@ values as indicative.
 | gemma 3 270m | 0.27b / 0.27b | Q8_0 | 0.3 | 8.64 | 5.1 | 0.996 | **5.1** |
 | ministral 3 3b | 3.85b / 3.85b | Q8_0 | 3.4 | 7.59 | 4.8 | 0.996 | **4.8** |
 | tiny aya global | 3.35b / 3.35b | Q8_0 | 3.3 | 8.53 | 4.8 | 0.996 | **4.8** |
-| hy4 | 774.43b / ? | - | - | - | - | 1.000 | **-** |
 | nanbeige4.3 33b | 33.12b / 33.12b | Q8_0 | 32.8 | 8.50 | - | 0.996 | **-** |
 | inkling 2 mini | 26.39b / ? | Q8_0 | 25.8 | 8.41 | - | 0.996 | **-** |
 | k2 horizon 32b | 34.78b / 34.78b | Q8_0 | 34.4 | 8.50 | - | 0.996 | **-** |
@@ -5061,7 +5063,7 @@ on capability with anything above it in the table. it is a 2025 model still
 being recommended in 2026 roundups.
 
 **qwen3.6 35b a3b** is worth flagging in the other direction. its card claims
-swe-bench verified 66.2 p30, close to the 27b's 70.3 p45, but AA measures it
+swe-bench verified 66.2 p29, close to the 27b's 70.3 p47, but AA measures it
 below the 27b on every axis the two share -- terminal-bench 0.449 p53 against
 0.607 p71, tau2-banking 0.093 p23 against 0.167 p50, and scicode 0.366 p24
 against 0.428 p42. gbench has played the 27b and never the 35b, so there is
@@ -5824,6 +5826,7 @@ method rather than a judgement.
 <!-- generated by research/build-sections --section missing -->
 | model | measured by | why it is not ranked |
 |---|---|---|
+| kolibri 1.1 | - | no source measures it, so the composite has nothing to place it on |
 | minimax m3 | aa, epoch, gbench, lmarena, swerebench | no quant of it fits this box |
 | minimax m3.1 flash | aa, gbench | no quant of it fits this box |
 | motif 3 | aa | no quant of it fits this box |
@@ -5839,6 +5842,7 @@ method rather than a judgement.
 | kimi k3.1 pro | aa, epoch, gbench | no quant of it fits this box |
 | ornith 1.5 397b | - | no source measures it, so the composite has nothing to place it on |
 | hy3 | aa, gbench, lmarena | no quant of it fits this box |
+| hy4 | aa | no quant of it fits this box |
 | hy4 flash | - | no source measures it, so the composite has nothing to place it on |
 | inkling | aa, epoch, gbench, lmarena | no quant of it fits this box |
 | inkling 2 small | aa, gbench | no quant of it fits this box |

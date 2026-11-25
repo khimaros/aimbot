@@ -6298,7 +6298,7 @@ models:
     kind: text
     name:
       short: kolibri-1
-      match: \bkolibri[\s-]*1\b
+      match: \bkolibri[\s-]*1\b(?!\.\d)
     notes: >-
       aleph alpha's reasoning model "with a focus on German and English" {card}, which is the
       reason to carry it: it reasons in german rather than translating an english trace. no
@@ -6332,6 +6332,71 @@ models:
       - text
     turns:
       source: Hob-forge/Kolibri-1-GGUF
+      developer: dropped
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: dropped
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [none, minimal, medium]
+      aliases: {low: minimal}
+  Aleph-Alpha/Kolibri-1.1:
+    kind: text
+    name:
+      short: kolibri 1.1
+      match: \bkolibri[\s-]*1\.1\b
+    notes: >-
+      kolibri 1 continued from a mid-training checkpoint with sparse attention, a 4:1 mix of
+      sliding-window and sparse layers {card}, which is what makes its files a different model
+      to llama.cpp than kolibri 1's under the same `kolibri1` arch string.
+    repos:
+    - repo: Aleph-Alpha/Kolibri-1.1-GGUF
+      files:
+        Kolibri-1.1-IQ1_M-GSQ-RCO-1.75bpw.gguf:
+          quant: IQ1_M
+          runtime: {mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/32891'}
+        Kolibri-1.1-IQ2_XXS-GSQ-RCO-2.00bpw.gguf:
+          quant: IQ2_XXS
+          runtime: {mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/32891'}
+        Kolibri-1.1-IQ2_XS-GSQ-RCO-2.25bpw.gguf:
+          quant: IQ2_XS
+          runtime: {mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/32891'}
+        Q3_K_M: {runtime: {mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/32891'}}
+        IQ4_XS: {runtime: {mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/32891'}}
+        Q4_0: {runtime: {mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/32891'}}
+        Q4_K_M:
+          runtime: {mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/32891'}
+          note: aleph alpha says llama.cpp cannot load kolibri 1.1 until the PR merges, and to build
+            from it until then {card}
+        Q5_K_M: {runtime: {mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/32891'}}
+        Q6_K: {runtime: {mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/32891'}}
+        Q8_0: {runtime: {mainline: false, tracking: 'https://github.com/ggml-org/llama.cpp/pull/32891'}}
+    runtime:
+      arch: kolibri1
+      mainline: true
+      since: b11709
+      merged: '2026-10-17'
+    ids:
+      aa: ''
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    sampling:
+      thinking:
+        source: quant-card
+        temp: 1.0
+        top_p: 0.99
+        top_k: 128
+        tuned: [instruct, chat, reason, tools]
+    modalities:
+      input: [text]
+      output: [text]
+    turns:
+      source: Aleph-Alpha/Kolibri-1.1-GGUF
       developer: dropped
       leading_system_max: unlimited
       mid_system: ok

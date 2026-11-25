@@ -1874,6 +1874,19 @@ function haystack(m) {
     (m.repos || []).map(r => r.repo).join(' ')].join(' ').toLowerCase());
 }
 
+// whether a selected runtime serves the model. where the model has files, one of
+// them has to load: hy4 lists llama.cpp off its header arch while every file
+// needs an open PR, and a row with no rung is one the vram filter passes
+// unmeasured. a runtime that reads the checkpoint -- vllm, gufo where its guide
+// names no gguf -- has no file to refuse.
+function runsUnderFilter(m) {
+  const picked = (m.engines || []).filter(e => filters.engines.has(e));
+  const checkpoint = e => e === 'gufo' ? !((m.gufo || {}).rungs || []).length
+    : !(RUNTIMES.find(r => r.k === e) || {gguf: true}).gguf;
+  return picked.length > 0 && (!quantChoices(m).length || picked.some(checkpoint)
+    || rungPool(m).length > 0);
+}
+
 function visible() {
   const q = filters.q.trim().toLowerCase();
   return D.models.filter(m => {
@@ -1884,8 +1897,7 @@ function visible() {
     // no runtime selected means no runtime filter, the way no flags does. a
     // model with an EMPTY engine list is one nothing here loads, so it only
     // appears once the filter is off entirely
-    if (filters.engines.size
-        && !(m.engines || []).some(e => filters.engines.has(e))) return false;
+    if (filters.engines.size && !runsUnderFilter(m)) return false;
     // the same rule for the licence, over the tiers registry/licenses.yaml
     // declares. every model is in exactly one, so this is a pick rather than
     // the engines' any-of -- and selecting none is no licence filter, which is
