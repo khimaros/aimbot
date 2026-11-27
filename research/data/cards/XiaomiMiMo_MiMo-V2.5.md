@@ -268,6 +268,8 @@ You are solely responsible for your use of XiaomiMiMo/MiMo-V2.5 and any outputs,
 
 This notice is an informational reminder only and does not amend the applicable model licence or impose additional licence conditions. The permissions granted under that licence remain unaffected. Nothing in this notice restricts uses permitted by applicable law, including applicable exceptions and limitations.
 
-### Usage enquiries and complaints
+### Usage enquiries, complaints and rights reservations
 
-[mimo-legal@xiaomi.com](mailto:mimo-legal@xiaomi.com). For information on submitting a complaint, please visit the https://mimo.xiaomi.com.
+[mimo-legal@xiaomi.com](mailto:mimo-legal@xiaomi.com) for usage enquiries and complaints. For details, please visit https://mimo.xiaomi.com/.
+You may also use the same address to opt out of having your works used for AI training.
+

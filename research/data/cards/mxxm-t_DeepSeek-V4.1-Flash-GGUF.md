@@ -14,6 +14,7 @@ tags:
   - multimodal
   - mxfp4
   - dspark
+  - dfly2
   - speculative-decoding
   - llama.cpp
   - mx-llama.cpp
@@ -34,11 +35,14 @@ GGUF header, the previous files have no `general.version`.
 > llama.cpp focused on multi-GPU inference: layer pipeline parallelism, tensor parallelism
 > (`-sm tensor`) with a custom AllReduce, and DSpark / MTP speculative decoding. Prebuilt AMD / ROCm
 > and NVIDIA / CUDA images are on Docker Hub at
-> **[mxxm/mx-llama.cpp](https://hub.docker.com/r/mxxm/mx-llama.cpp)**.
+> **[mxxm/mx-llama.cpp](https://hub.docker.com/r/mxxm/mx-llama.cpp)**. The model also runs on
+> **[llmx](https://github.com/mxxm-t/llmx)**.
 
 [deepseek-ai/DeepSeek-V4.1-Flash-1017](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017)
 converted to GGUF, plus its DSpark draft stages as a separate sidecar file and its vision encoder as an
 `mmproj` file, so the model takes image input. DeepSeek's original model card follows below.
+
+A second drafter for these files, DFly2, is in [mxxm-t/DeepSeek-V4.1-Flash-DFly2-GGUF](https://huggingface.co/mxxm-t/DeepSeek-V4.1-Flash-DFly2-GGUF).
 
 > **Image input needs a current mx-llama.cpp build.** Since 2026-11-17 the main files carry the 40
 > image routing-bias tensors (`blk.N.exp_probs_b_vl.bias`). Builds from before DeepSeek-V4.1 image
@@ -63,6 +67,11 @@ speculative decoding against the main file and cannot generate on its own.
 The `mmproj` holds the 32-layer vision encoder, the 3x3 patch merger, the projector and the image
 start, end and newline embeddings. Image routing biases live in the main files, because the language
 model's MoE router uses them on image tokens.
+
+A second drafter, DFly2 ([AngelSlim/DS-V4.1-Flash-DFly2-B6](https://huggingface.co/AngelSlim/DS-V4.1-Flash-DFly2-B6)),
+drafts for these main files beside DSpark. Its Q8_0 and BF16 GGUFs are in
+[mxxm-t/DeepSeek-V4.1-Flash-DFly2-GGUF](https://huggingface.co/mxxm-t/DeepSeek-V4.1-Flash-DFly2-GGUF).
+Runtime support for DFly2 is in progress in mx-llama.cpp and llmx; until it lands, those files cannot be loaded.
 
 ## Running it
 

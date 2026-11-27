@@ -11,15 +11,39 @@ library_name: sanotts
 **Release status: Ready for release.**
 
 ***sano*** (सानो) — Nepali for **"small."** A family of tiny neural
-text-to-speech voices — **294k to 2.27M parameters** — that run with
+text-to-speech voices — **104k to 2.27M parameters** — that run with
 **no cloud and no NPU**: real-time on a ~$3 ESP32-S3 (out a GPIO into an
 LM386 and a speaker), or live in the browser via WASM.
+
+## heart-nano: a whole English TTS in 201 k parameters
+
+`heart-nano` is our smallest English voice: a 104,215-parameter streaming voice
+plus a 96,511-parameter G2P model for words the dictionaries lack, **200,726
+parameters from text to 24 kHz audio**, in NumPy on one CPU thread.
+
+| # | Text | Sample |
+| --- | --- | --- |
+| 1 | Hello! I am heart nano, a whole English voice in about two hundred thousand parameters, small enough to run almost anywhere. | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/english-heart-nano-201k-1.mp3"></audio> |
+| 2 | The old lighthouse keeper climbed the spiral stairs every evening, lit the lamp, and watched the ships slip quietly past the rocks. | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/english-heart-nano-201k-2.mp3"></audio> |
+| 3 | Can you believe the train left at 7:05, two minutes early, with 312 passengers on board? | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/english-heart-nano-201k-3.mp3"></audio> |
+| 4 | Doctor Okonkwo flew from Reykjavik to Ouagadougou on Tuesday, then took the overnight bus to Timbuktu. | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/english-heart-nano-201k-4.mp3"></audio> |
+
+On the [Open TTS Leaderboard](https://huggingface.co/spaces/hf-audio/open_tts_leaderboard?streaming-cpu=)
+it has the fastest time to first audio in the CPU streaming category: **2.1 ms p50 and 2.8 ms p95**,
+with composite WER **0.92 %**, UTMOS **3.88** and RTFx 173. Those numbers are from the maintainers' run of
+sanotts 0.5.7 ([PR #69](https://github.com/huggingface/open-tts-leaderboard/pull/69)). These clips are
+0.5.8, the same voice with the smaller G2P model; see [below](#heart-nano-smaller-sanotts-058) for how they differ.
+
+```bash
+pip install sanotts
+sanotts say "Hello from heart nano." --voice heart-nano -o hello.wav
+```
 
 ![text in → ESP32 → speech out](https://raw.githubusercontent.com/Ampixa/sanoTTS/master/docs/assets/saanotts-mcu-hero.png)
 
 | | |
 | --- | --- |
-| Parameter range | **294,279 – 2,272,145** |
+| Parameter range | **104,215 – 2,272,145** |
 | Runs real-time on a $3 microcontroller | ESP32-S3, out a GPIO into an LM386 |
 | Runs in the browser | WebAssembly, no server |
 | Per-voice footprint | **337 KB to 8.7 MB**, zero dependencies (espeak-ng phonemizer included) |
@@ -37,7 +61,7 @@ Both packages stream their weights from **this repo** by default.
 
 ```python
 import sanotts
-sanotts.synthesize("Hello world", voice="heart")     # downloads heart/ from here
+sanotts.synthesize("Hello world", voice="heart-nano")  # downloads heartnano-f16/ from here
 ```
 
 ```js
@@ -68,13 +92,10 @@ and try all 31 voices, including demo-only Polish, in the [live demo](https://tt
 
 | Voice | Language | Params | SCOREQ | Package here | Sample |
 | --- | --- | ---: | :---: | :---: | --- |
+| heart-nano (streaming) | English 🇺🇸 | 104 k voice, 201 k with its G2P | — | [`heartnano-f16/`](https://huggingface.co/ampixa/sanoTTS/tree/main/heartnano-f16) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/english-heart-nano-201k-1.mp3"></audio> |
 | heart | English 🇺🇸 | 2.27 M | 3.48 | [`heart/`](https://huggingface.co/ampixa/sanoTTS/tree/main/heart) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/english-heart-1.mp3"></audio> |
 | hfc | English 🇺🇸 | 1.83 M | 3.94 | [`hfc-en-1p8m/`](https://huggingface.co/ampixa/sanoTTS/tree/main/hfc-en-1p8m) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/english-hfc-1.mp3"></audio> |
 | amy | English 🇺🇸 | 1.46 M | **4.13** | [`amy-en-1p46m/`](https://huggingface.co/ampixa/sanoTTS/tree/main/amy-en-1p46m) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/english-amy-1.mp3"></audio> |
-| kristin | English 🇺🇸 | 1.40 M | 4.09 | [`kristin-en-1p4m/`](https://huggingface.co/ampixa/sanoTTS/tree/main/kristin-en-1p4m) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/english-kristin-1.mp3"></audio> |
-| amy-small | English 🇺🇸 | 1.08 M | 3.70 | [`amy-en-1p1m/`](https://huggingface.co/ampixa/sanoTTS/tree/main/amy-en-1p1m) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/english-amy-small-1.mp3"></audio> |
-| robot (on-device, int8) | English 🇺🇸 | 567 k | — | not packaged here (int8 MCU format) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/mcu-567k.mp3"></audio> |
-| heart-nano | English 🇺🇸 | 294 k | 2.29 | [`heartnano/`](https://huggingface.co/ampixa/sanoTTS/tree/main/heartnano) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/english-heart-nano-1.mp3"></audio> |
 | Indonesian | Bahasa | 1.46 M | — | [`id-newstts-1p46m/`](https://huggingface.co/ampixa/sanoTTS/tree/main/id-newstts-1p46m) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/indonesian-1.mp3"></audio> |
 | Vietnamese | Tiếng Việt | 1.46 M | — | [`vi-vais1000-1p46m/`](https://huggingface.co/ampixa/sanoTTS/tree/main/vi-vais1000-1p46m) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/vietnamese-1.mp3"></audio> |
 | Nepali | नेपाली | 1.47 M | — | [browser bundle](https://huggingface.co/ampixa/sanoTTS/tree/main/web/voices/nepali) | <audio controls src="https://huggingface.co/ampixa/sanoTTS/resolve/main/samples/nepali-1.mp3"></audio> |
@@ -95,15 +116,15 @@ Kokoro teacher through a frozen Vocos — which is the one that quantizes to
 int8 and runs on a microcontroller. The two are not interchangeable and the
 `sanotts` package picks the right runtime for you.
 
-The `heart` and `heart-nano` scores were re-measured on 2026-09-04; the eval
-set, checkpoint hashes, exact commands and all 24 per-clip scores are in
+The `heart` score was re-measured on 2026-09-04; the eval set, checkpoint
+hashes, exact commands and all 24 per-clip scores are in
 [`evidence/heart-diverse24-remeasure-20260904.json`](https://huggingface.co/ampixa/sanoTTS/blob/main/evidence/heart-diverse24-remeasure-20260904.json).
-They were scored on the float32 reference render. The shipped `heart-nano`
-int8 export tracks that render at 0.981 waveform correlation, and `heart`
-ships as float32 because its int8 export reached only 0.951 against a 0.98
-gate.
+It was scored on the float32 reference render; `heart` ships as float32 because
+its int8 export reached only 0.951 against a 0.98 gate. The same file scores the
+first heart-nano (294 k, SCOREQ 2.29), which a streaming 263 k heart-nano
+replaced on 2026-11-25 and the 104 k heart-nano on 2026-11-26; neither has a
+SCOREQ measurement yet (their UTMOS and WER are below).
 
-The "robot" row is the 567,008-parameter model that runs on the ESP32-S3.
 
 ## Install & use
 
@@ -117,7 +138,7 @@ The "robot" row is the 567,008-parameter model that runs on the ESP32-S3.
 | Browser | nothing | [tts.ampixa.com/sanoTTS](https://tts.ampixa.com/sanoTTS) |
 
 Pip voices: `heart`, `hfc`, `amy-1p8m`, `amy`, `kristin`, `vi`, `id`,
-`amy-1p1m`, `heart-nano`. Pure numpy inference, no torch, no onnxruntime.
+`amy-1p1m`, `heart-nano` (the streaming 104 k voice with a harmonic-plus-noise decoder; since sanotts 0.5.8 its decoder is stored in float16 and the English G2P model is 96 k, so the whole stack is 201 k; `heart-nano-s` is an alias). Pure numpy inference, no torch, no onnxruntime.
 
 ## Streaming and the Open TTS Leaderboard
 
@@ -128,25 +149,102 @@ float32 rounding.
 ```python
 from sanotts import Synthesizer
 syn = Synthesizer("heart-nano")
-for chunk in syn.synthesize_stream("Hello from a 294k-parameter voice."):
+for chunk in syn.synthesize_stream("Hello from a 104k-parameter voice."):
     ...  # float32 at syn.sample_rate, ready to play
 ```
 
 The three English voices were evaluated by the maintainers of the
 [Open TTS Leaderboard](https://huggingface.co/spaces/hf-audio/open_tts_leaderboard)
-on HF Jobs ([PR #53](https://github.com/huggingface/open-tts-leaderboard/pull/53), sanotts 0.5.4).
+on HF Jobs: heart-nano and heart under sanotts 0.5.7
+([PR #69](https://github.com/huggingface/open-tts-leaderboard/pull/69)), amy under 0.5.4
+([PR #53](https://github.com/huggingface/open-tts-leaderboard/pull/53)).
 Time to first audio is measured on CPU (`cpu-upgrade`, one thread, batch size 1)
 over the 497 CV3-Eval English prompts; RTFx is the main eval's throughput, run
 on one CPU thread. WER is from Qwen3-ASR over Seed-TTS, CV3-Eval and MiniMax English.
 
 | Voice | Params | TTFA p50 | TTFA p95 | RTFx | WER | UTMOS |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| heart-nano | 294 k | 2.8 ms | 5.9 ms | 214 | 1.07 % | 2.39 |
-| heart | 2.27 M | 6.4 ms | 9.8 ms | 49 | 0.86 % | 3.30 |
+| **heart-nano** | 104 k | **2.1 ms** | **2.8 ms** | 173 | 0.92 % | 3.88 |
+| heart | 2.27 M | 4.3 ms | 6.3 ms | 131 | 0.91 % | 3.26 |
 | amy | 1.46 M | 22.7 ms | 36.3 ms | 15 | 1.12 % | 3.99 |
 
 On that board, larger and newer models score higher on UTMOS than these voices
-do; what sanoTTS brings is the latency, the throughput and the size.
+do; what sanoTTS brings is the latency, the throughput and the size. Before PR #69
+the heart-nano row was the first, 294 k model (TTFA p50 2.8 ms, p95 5.9 ms, WER 1.16 %,
+UTMOS 2.36). Those WER and UTMOS figures are composites over Seed-TTS, CV3-Eval, MiniMax
+and ZTTS2-mini English.
+
+### heart-nano, smaller (sanotts 0.5.8)
+
+0.5.8 keeps the 104 k voice and shrinks what ships with it. Folder `heartnano-f16/`:
+
+| | 0.5.7 | 0.5.8 |
+| --- | ---: | ---: |
+| Voice parameters | 104,215 | 104,215 |
+| Voice folder | 518 KB (`heartnano-dsp/`) | **187 KB** (`heartnano-f16/`) |
+| English OOV G2P model | 751,551 params, 2.8 MB | **96,511 params, 212 KB** |
+| Voice + G2P model | 855,766 | **200,726** |
+| Wheel | 6.79 MB | **4.17 MB** |
+
+- The decoder's weights are stored in float16 (computed in float32/64 as before),
+  and the folder no longer carries the 0.5.6 neural decoder that 0.5.7 kept only for
+  older installs.
+- The OOV model only runs for words that are in neither pronunciation dictionary nor
+  the table of 618,928 common words precomputed with the 751 k model, which stays in
+  front of it: on CV3-Eval that was 38 of 7,274 words. The 96 k model is distilled from
+  the 751 k one. It affects every English voice, not only heart-nano.
+- Same 200 + 200 held-out Wikipedia sentences as the 0.5.7 selection (plain / with
+  brackets, quotes and digits), rendered through the package, Qwen3-ASR WER and
+  UTMOS22 strong:
+
+| | held-out WER | heldsym WER | held-out UTMOS | heldsym UTMOS |
+| --- | ---: | ---: | ---: | ---: |
+| 0.5.7 | 2.75 % | 6.56 % | 3.86 | 3.92 |
+| 0.5.8 | 3.07 % | 6.56 % | 3.86 | 3.91 |
+
+  The held-out difference is about 8 of 2,450 words. 19 of the 200 sentences transcribe
+  differently, and nearly all of those differences are on rare names and
+  transliterations (Totleigh, Purohiths, Ghanashyam). CV3-Eval was not used for any
+  0.5.8 choice and has not been re-run.
+- TTFA on the same replica as below, three fresh processes each, both versions in the
+  same session: 0.5.8 p50 1.59–1.60 ms, p95 1.85 ms, RTFx 190–192; 0.5.7 p50
+  1.58–1.59 ms, p95 1.84–1.90 ms, RTFx 188–190. No change.
+- Details: [`evidence/heart-nano-201k-20261126.json`](https://huggingface.co/ampixa/sanoTTS/blob/main/evidence/heart-nano-201k-20261126.json).
+
+### heart-nano, streaming (sanotts 0.5.7)
+
+The 0.5.7 `heart-nano` (folder `heartnano-dsp/`; `heart-nano-s` is still accepted
+as an alias) has 104,215 parameters. Its front end is the streaming 263 k model's,
+unchanged: int8 duration and acoustic models (56,981 parameters) that see only
+nearby phonemes, so the first chunk is decoded from the first few words before the
+rest of the text has been converted. Its decoder is new: a 47,234-parameter
+harmonic-plus-noise decoder that runs in NumPy, distilled from the same Kokoro
+af_heart teacher.
+
+On our replica of the leaderboard's TTFA probe (CV3-Eval English, the harness's own
+`Voice` loop, numpy 2.5.4, one BLAS thread pinned to one core of an i5-10400, three
+fresh processes, cold pass each), and on CV3-Eval English WER (Qwen3-ASR,
+leaderboard normaliser) and UTMOS (UTMOS22 strong):
+
+| Voice | TTFA p50 | TTFA p95 | RTFx | CV3 WER | CV3 UTMOS |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| first heart-nano, 294 k (0.5.5) | 1.61–1.66 ms | 2.93–3.00 ms | 228–231 | 1.57 % | 2.37 |
+| heart-nano, 263 k (0.5.6) | 1.32–1.33 ms | 1.59 ms | 230–236 | 1.42 % | 2.52 |
+| **heart-nano, 104 k (0.5.7)** | 1.61–1.67 ms | 1.89–2.01 ms | 182–189 | **1.15 %** | **3.88** |
+
+The 104 k voice sounds much better and transcribes slightly better, and it is
+slower: about 20 % less throughput and 0.3–0.4 ms more at p95 than the 263 k one,
+because the harmonic synthesis costs more than the int8 neural decoder did. The
+decoder checkpoint was selected on 400 held-out Wikipedia sentences (UTMOS 3.86 /
+3.92), never on CV3; CV3 was run once on the frozen voice. Paired bootstrap against
+the 263 k heart-nano on the same 500 CV3 rows: WER −0.27 pp (95% CI −0.50 to
+−0.07), UTMOS +1.36 (95% CI +1.33 to +1.39). Details:
+[`evidence/heart-nano-dsp-20261126.json`](https://huggingface.co/ampixa/sanoTTS/blob/main/evidence/heart-nano-dsp-20261126.json);
+the 263 k release:
+[`evidence/heart-nano-s-20261125.json`](https://huggingface.co/ampixa/sanoTTS/blob/main/evidence/heart-nano-s-20261125.json).
+
+`heartnanos/` (the 263 k voice) and `heartnano-dsp/` stay in this repo: sanotts 0.5.6
+and 0.5.7 still download them under the name heart-nano.
 
 ## How it stacks up
 
@@ -238,7 +336,7 @@ manifest.json                 weights.fp16.bin
 piper-phoneme-config.json     (+ sibilant-injection calibration where applicable)
 ```
 
-**nano** (`heart/`, `heartnano/`) — the mel-100 stack, two blobs plus the
+**nano** (`heart/`, `heartnanos/`, `heartnano-dsp/`, `heartnano-f16/`) — the mel-100 stack, two blobs plus the
 generated offset header:
 
 ```
@@ -248,7 +346,13 @@ model_*.bin        decoder
 nano_q8_meta.h     tensor offsets
 ```
 
-`heartnano/` ships `*_q8.bin` (int8, 345,232 bytes total); `heart/` ships
+`heartnanos/` (the 263 k heart-nano of 0.5.6) ships `*_q8.bin` (int8, 311,440 bytes total, header flag
+`NANO_LOCAL_FEATURES 1`). `heartnano-dsp/` (heart-nano since 0.5.7) holds the same
+`front_q8.bin` plus `dsp_decoder.npz` (the harmonic-plus-noise decoder, float32,
+198,632 bytes, sha256 in `meta.json`); its `model_q8.bin` is the 0.5.6 neural decoder,
+kept only so sanotts <= 0.5.6 can still load the folder. `heartnano-f16/` (heart-nano
+since 0.5.8) holds `front_q8.bin`, the same decoder in float16 (`dsp_decoder.npz`,
+104,164 bytes), `nano_q8_meta.h` and `meta.json`, and no `model_*.bin`. `heart/` ships
 `*_f32.bin` (float32, 9,137,920 bytes) because its int8 export missed the
 fidelity gate. Both layouts are consumed by the `sanotts` Python package and
 the portable C runtime.
@@ -259,7 +363,13 @@ from the `weights.fp16.bin` the Python package reads, which is why the same
 voice appears twice in this repo under two names. It mirrors `web/` in the
 GitHub repo byte for byte and is what `sanotts-web` fetches. The nano voices
 are not duplicated: `web/voices/heart/` and `heart/` hold the same blobs.
+`web/voices/heartnano-dsp/` is the 104 k heart-nano for the browser
+(`heartnano_dsp.js`, float32 decoder); `web/voices/heartnano/` is the first heart-nano
+(294 k), kept for older `sanotts-web` versions. Its
+top-level `heartnano/` folder was removed on 2026-11-25; sanotts <= 0.5.5 still
+downloads it from the GitHub `voices-v2` release, and older revisions of this repo
+keep it.
 
-`samples/` holds the audio clips embedded above (mp3, one or two per voice,
+`samples/` holds the audio clips embedded above (mp3, one to four per voice,
 plus the on-device `mcu-567k.mp3`), and `evidence/` the eval report behind the
 heart scores.

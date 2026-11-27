@@ -39,8 +39,8 @@ model card: **[JetBrains/Mellum2.1-12B-A2.5B-Thinking](https://huggingface.co/Je
 |---|---|---|---|---|---|
 | [`Mellum2.1-12B-A2.5B-Thinking-BF16.gguf`](https://huggingface.co/JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF/blob/main/Mellum2.1-12B-A2.5B-Thinking-BF16.gguf) | `BF16` | 16-bit, no quantization (reference) | 24.3 GB | — | — |
 | [`Mellum2.1-12B-A2.5B-Thinking-Q8_0.gguf`](https://huggingface.co/JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF/blob/main/Mellum2.1-12B-A2.5B-Thinking-Q8_0.gguf) | `Q8_0` | 8-bit, effectively lossless | 12.9 GB | 0.008 | 96.1% |
-| [`Mellum2.1-12B-A2.5B-Thinking-Q6_K.gguf`](https://huggingface.co/JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF/blob/main/Mellum2.1-12B-A2.5B-Thinking-Q6_K.gguf) | `Q6_K` | 6-bit k-quant, very high quality | 10.9 GB | 0.020 | 93.9% |
-| [`Mellum2.1-12B-A2.5B-Thinking-Q4_K_M.gguf`](https://huggingface.co/JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF/blob/main/Mellum2.1-12B-A2.5B-Thinking-Q4_K_M.gguf) | **`Q4_K_M`** | 4-bit k-quant, balanced (recommended) | 8.1 GB | 0.075 | 88.0% |
+| [`Mellum2.1-12B-A2.5B-Thinking-Q6_K.gguf`](https://huggingface.co/JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF/blob/main/Mellum2.1-12B-A2.5B-Thinking-Q6_K.gguf) | **`Q6_K`** | 6-bit k-quant, very high quality (recommended) | 10.9 GB | 0.020 | 93.9% |
+| [`Mellum2.1-12B-A2.5B-Thinking-Q4_K_M.gguf`](https://huggingface.co/JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF/blob/main/Mellum2.1-12B-A2.5B-Thinking-Q4_K_M.gguf) | `Q4_K_M` | 4-bit k-quant, balanced | 8.1 GB | 0.075 | 88.0% |
 | [`Mellum2.1-12B-A2.5B-Thinking-MXFP4_MOE.gguf`](https://huggingface.co/JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF/blob/main/Mellum2.1-12B-A2.5B-Thinking-MXFP4_MOE.gguf) | `MXFP4_MOE` | MXFP4 4-bit on MoE experts, smallest | 7.0 GB | 0.115 | 85.6% |
 
 KL divergence and top-token agreement are measured against the BF16 logits on
@@ -50,30 +50,31 @@ unquantized model.
 ## Download
 
 ```sh
-hf download JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF Mellum2.1-12B-A2.5B-Thinking-Q4_K_M.gguf --local-dir .
+hf download JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF Mellum2.1-12B-A2.5B-Thinking-Q6_K.gguf --local-dir .
 ```
 
 ## Run with llama.cpp
 
+With the `llama` binary from [llama.app](https://llama.app) or any recent
+llama.cpp build:
+
 ```sh
 # Pull and serve in one step (downloads the GGUF automatically; the suffix picks the quantization)
-llama-server -hf JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF:Q4_K_M \
-  --ctx-size 131072 \
-  --temp 0.6 --top-p 0.95 --top-k 20
+llama serve -hf JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF:Q6_K
 
-# Or run a one-off prompt with a local file
-llama-cli -m Mellum2.1-12B-A2.5B-Thinking-Q4_K_M.gguf \
-  --ctx-size 131072 \
-  --temp 0.6 --top-p 0.95 --top-k 20 \
-  -p "Is 1024 a power of 2? Explain your reasoning."
+# Or chat in the terminal
+llama cli -hf JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF:Q6_K
 ```
 
-The server exposes an OpenAI-compatible API on `http://localhost:8080/v1`:
+For Mellum2.1 Thinking, we recommend adding the sampling settings
+`--temp 0.6 --top-p 0.95 --top-k 20` to these commands.
+
+The server exposes an OpenAI-compatible API on `http://localhost:9931/v1`:
 
 ```python
 from openai import OpenAI
 
-client = OpenAI(base_url="http://localhost:8080/v1", api_key="llama.cpp")
+client = OpenAI(base_url="http://localhost:9931/v1", api_key="llama.cpp")
 
 chat_response = client.chat.completions.create(
     model="JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF",
@@ -110,29 +111,23 @@ above; in them the head is quantized with the model, and the standalone head
 file is BF16. These files need llama.cpp build `b11747` (19 October 2026) or
 newer. Older builds, and Ollama, LM Studio, and other runtimes until they ship
 such a build, cannot load them; they keep working with the quantizations in the
-first table, which is also what `-hf …:Q4_K_M` and `ollama run hf.co/…`
+first table, which is also what `-hf …:Q6_K` and `ollama run hf.co/…`
 resolve to. Without `--spec-type draft-mtp` nothing changes: the head is simply
 not used.
 
 ```sh
 # Serve with MTP speculative decoding; llama.cpp also fetches the mtp- draft file from this repository
-llama-server -hf JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF:Q4_K_M \
-  --spec-type draft-mtp --spec-draft-n-max 1 \
-  --ctx-size 131072 \
-  --temp 0.6 --top-p 0.95 --top-k 20
+llama serve -hf JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF:Q6_K \
+  --spec-type draft-mtp --spec-draft-n-max 1
 
 # Local files: any quantization plus the draft file
-llama-server -m Mellum2.1-12B-A2.5B-Thinking-Q4_K_M.gguf \
+llama serve -m Mellum2.1-12B-A2.5B-Thinking-Q6_K.gguf \
   -md mtp-Mellum2.1-12B-A2.5B-Thinking-BF16.gguf \
-  --spec-type draft-mtp --spec-draft-n-max 1 \
-  --ctx-size 131072 \
-  --temp 0.6 --top-p 0.95 --top-k 20
+  --spec-type draft-mtp --spec-draft-n-max 1
 
 # One combined file; the embedded head is the draft
-llama-server -m mtp/Mellum2.1-12B-A2.5B-Thinking-MTP-Q4_K_M.gguf \
-  --spec-type draft-mtp --spec-draft-n-max 1 \
-  --ctx-size 131072 \
-  --temp 0.6 --top-p 0.95 --top-k 20
+llama serve -m mtp/Mellum2.1-12B-A2.5B-Thinking-MTP-Q6_K.gguf \
+  --spec-type draft-mtp --spec-draft-n-max 1
 ```
 
 `--spec-draft-n-max` sets how many tokens the head drafts per step; the head
@@ -148,7 +143,7 @@ and accepted tokens.
 ## Run with Ollama
 
 ```sh
-ollama run hf.co/JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF:Q4_K_M
+ollama run hf.co/JetBrains/Mellum2.1-12B-A2.5B-Thinking-GGUF:Q6_K
 ```
 
 ## License

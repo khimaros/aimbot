@@ -1,0 +1,66 @@
+{#- ERNIE-5.5-Flash-Preview chat format, following encoding_ernie.py (render_chat). The leading <|ERNIE_MASK|> is the BOS token, added by the runtime. -#}
+{%- set ns = namespace(think_off=false, effort="high", first=true, in_tool=false) -%}
+{%- if enable_thinking is defined and (enable_thinking == false or enable_thinking == "false") -%}{%- set ns.think_off = true -%}{%- endif -%}
+{%- if reasoning_effort is defined and reasoning_effort -%}{%- set ns.effort = reasoning_effort -%}{%- endif -%}
+{{- "<|ernie:im_start|>system\n" -}}
+{%- if messages and messages[0].role == "system" -%}
+{{- "<ernie:system_setting>\n" + messages[0].content + "\n</ernie:system_setting>\n" -}}
+{%- endif -%}
+{{- "<ernie:global_setting>" -}}
+{%- if not ns.think_off -%}{{- "\nreasoning_effort=" + ns.effort -}}{%- endif -%}
+{%- if tools -%}{{- "\nparallel_tool_calls=True" -}}{%- endif -%}
+{{- "\n</ernie:global_setting>" -}}
+{%- if tools -%}
+{{- "\n<ernie:tool_list>\n[" -}}
+{%- for t in tools -%}{%- if not loop.first -%}{{- ", " -}}{%- endif -%}{{- t | tojson -}}{%- endfor -%}
+{{- "]\n</ernie:tool_list>" -}}
+{%- endif -%}
+{{- "<|ernie:im_end|>\n" -}}
+{%- for m in messages -%}
+{%- if m.role == "system" and loop.first -%}
+{%- elif m.role == "tool" -%}
+{%- if not ns.in_tool -%}
+{%- if not ns.first -%}{{- "\n" -}}{%- endif -%}
+{{- "<|ernie:im_start|>tool" -}}
+{%- set ns.in_tool = true -%}{%- set ns.first = false -%}
+{%- endif -%}
+{{- "\n<ernie:tool_output>" + m.content + "</ernie:tool_output>" -}}
+{%- if loop.last or messages[loop.index0 + 1].role != "tool" -%}{{- "<|ernie:im_end|>" -}}{%- set ns.in_tool = false -%}{%- endif -%}
+{%- else -%}
+{%- if not ns.first -%}{{- "\n" -}}{%- endif -%}
+{%- set ns.first = false -%}
+{%- if m.role == "assistant" -%}
+{%- set content = m.content if m.content is string else "" -%}
+{%- set reasoning = m.reasoning_content if m.reasoning_content is string else "" -%}
+{%- if not reasoning and "</ernie:think>" in content -%}
+{%- set reasoning = content.split("</ernie:think>")[0].split("<ernie:think>")[-1] -%}
+{%- set content = content.split("</ernie:think>")[-1] -%}
+{%- endif -%}
+{{- "<|ernie:im_start|>assistant\n<ernie:think>" -}}
+{%- if not ns.think_off and reasoning | trim -%}{{- reasoning -}}{%- endif -%}
+{{- "</ernie:think>" + content -}}
+{%- if m.tool_calls -%}
+{{- "<ernie:tool_call>\n" -}}
+{%- for call in m.tool_calls -%}
+{%- set f = call.function if call.function is defined else call -%}
+{{- "<invoke name=\"" + f.name + "\">" -}}
+{%- if f.arguments is mapping -%}
+{%- for k, v in f.arguments | dictsort -%}
+{{- "<parameter name=\"" + k + "\">" + (v if v is string else v | tojson) + "</parameter>" -}}
+{%- endfor -%}
+{%- elif f.arguments is string -%}{{- f.arguments -}}
+{%- endif -%}
+{{- "</invoke>\n" -}}
+{%- endfor -%}
+{{- "</ernie:tool_call>" -}}
+{%- endif -%}
+{{- "<|ernie:im_end|>" -}}
+{%- else -%}
+{{- "<|ernie:im_start|>" + m.role + "\n" + (m.content if m.content is string else "") + "<|ernie:im_end|>" -}}
+{%- endif -%}
+{%- endif -%}
+{%- endfor -%}
+{%- if add_generation_prompt -%}
+{{- "\n<|ernie:im_start|>assistant\n<ernie:think>" -}}
+{%- if ns.think_off -%}{{- "</ernie:think>" -}}{%- endif -%}
+{%- endif -%}

@@ -389,6 +389,24 @@ def a_two_type_ladder_name_is_one_tag():
 
 
 @test
+def a_release_format_over_a_carrier_type_is_one_tag():
+    """xylolabs names ernie 5.5 flash's lossless file `MXFP4-BF16`.
+
+    the routed experts as released and every other tensor BF16. read by its
+    last field it was a `BF16` rung, a 162 gb file at 4.6 bits a weight filed
+    under the type that is 3% of it.
+    """
+    got = sizes_of([
+        {"path": "M-MXFP4-BF16-00001-of-00002.gguf", "size": 30},
+        {"path": "M-MXFP4-BF16-00002-of-00002.gguf", "size": 7},
+        {"path": "M-Q2_K-00001-of-00002.gguf", "size": 20},
+        {"path": "M-Q2_K-00002-of-00002.gguf", "size": 1}])
+    eq(got.get("MXFP4-BF16"), 37, "both halves are the tag: %r" % got)
+    eq("BF16" in got, False, "and the carrier alone is no rung")
+    eq(got.get("Q2_K"), 21, "a one-type name is unchanged")
+
+
+@test
 def a_folder_of_unrelated_files_is_not_one_rung():
     """nerkyor keeps eight builds under `GGUF/`, named for recipes of its own.
 
@@ -878,6 +896,8 @@ GOOD_QUANTS = ["Q8_0", "Q4_K", "F16", "F32", "BF16", "Q4", "Q8", "Q5", "TQ2",
                # atomic chat's `AD-<ffn_down>-<ffn_up>`: one rung naming two types,
                # which cut at the first was minicpm-v 4.7's `AD-Q5_K` twice
                "AD-Q5_K-Q4_K", "AD-IQ2_S-IQ2_XXS",
+               # xylolabs' release format over a carrier type, as fetch-gguf-sizes keys it
+               "MXFP4-BF16",
                # prism's ternary packings. a fork is free to define a type, and
                # these are two of them rather than two labels over mainline
                # ones: PTQ1_0 packs trits densely and PQ2_0 gives each a 2-bit

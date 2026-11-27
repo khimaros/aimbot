@@ -13,10 +13,15 @@ base_model:
 
 ### A more accessible, comprehensive, and efficient toolkit for large model compression.
 
-✒️ [TechnicalReport](https://arxiv.org/abs/2602.21233)   |    📖 [Documentation](https://angelslim.readthedocs.io/)   |   🤗 [Hugging Face](https://huggingface.co/AngelSlim)   |   🤖 [ModelScope](https://modelscope.cn/organization/AngelSlim)  
+<p align="center">
+  ✒️ <a href="https://arxiv.org/abs/2602.21233">TechnicalReport</a>&nbsp;&nbsp;|&nbsp;&nbsp;📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp;&nbsp;|&nbsp;&nbsp;🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp;&nbsp;|&nbsp;&nbsp;🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>
+  <br>
+  💬 <a href="https://github.com/Tencent/AngelSlim/blob/main/docs/source/assets/angel_slim_wechat.png?raw=true">WeChat</a>&nbsp;&nbsp;|&nbsp;&nbsp;🫨 <a href="https://discord.com/invite/dHVNeuNdFt">Discord</a>
+</p>
 
-
-💬 [WeChat](https://github.com/Tencent/AngelSlim/blob/main/docs/source/assets/angel_slim_wechat.png?raw=true) |   🫨 [Discord](https://discord.com/invite/dHVNeuNdFt)  
+<p align="center">
+  <img src="https://huggingface.co/AngelSlim/Hy4-flash-GGUF/resolve/main/angelslim-hy4flash-edge-light.gif" alt="AngelSlim x Hy4-flash: bringing a 224B-parameter MoE model to the devices on your desk" width="100%">
+</p>
 
 
 # Hy4-flash GGUF
@@ -31,7 +36,7 @@ Five GGUF builds of Hy4-flash: [tencent/Hy4-flash](https://huggingface.co/tencen
 | `Hy4-flash-Q3_K.gguf`            | 144.70 GiB | 5.58          | 4.62                     |
 | `Hy4-flash-IQ2-AH.gguf`          | 125.73 GiB | 4.85          | 3.60                     |
 
-![Hy4-flash GGUF benchmark results](https://huggingface.co/woodchen7/Benchmark/resolve/main/hy4-flash-gguf-benchmark.png)
+![Hy4-flash GGUF benchmark results](https://huggingface.co/AngelSlim/Hy4-flash-GGUF/resolve/main/hy4-flash-gguf-benchmark.png)
 
 ---
 
@@ -52,9 +57,12 @@ Everything outside the routed experts is the same as Q4_K_M.
 `Hy4-flash-IQ2-AH.gguf` — the smallest of the five. The routed-expert `gate`/`up` projections run
 at 2.0625 bpw (IQ2_XXS) and `down` at Q4_K, while most non-expert weights stay in BF16 rather than Q8_0.
 
-**Strata** version coming soon
+
+**Strata** support: see PR [#7120](https://github.com/Niko1221/Strata/pull/7120).
 
 ## 2. SPEED
+
+### 2.1 llama.cpp
 
 The test was conducted in real workbuddy scenarios and cases.
 
@@ -76,8 +84,27 @@ For code generation, Q3_K reaches up to 70 tok/s.
 
 For code generation, SPARK-4Bit-Fast reaches up to 40 tok/s.
 
+### 2.2 Strata
+
+**NVIDIA CUDA — 16 GiB VRAM budget**
+
+Full Q4_K_M_MTP_Q8_0 model, 4K input / 512 output tokens, 33,024-token context limit; one run per workload.
+
+| Workload | Decode tok/s (drafting off) | Decode tok/s (DFly Q8_0) |
+| -------- | -------------------------: | -----------------------: |
+| Prose    | 36.8                       | 38.7                     |
+| Code     | 37.5                       | 47.6                     |
+
+**Mac mini M4 Pro 64GB**
+
+IQ2 model, MTP k=2, 8K context: prefill **125–127 tok/s**, decode **17.3 tok/s**
+(256 generated tokens; geometric mean of four prompts' medians).
+
+These results use different test conditions from the llama.cpp results above.
 
 ## 3. How to use
+
+### 3.1 llama.cpp
 
 **General Usage**
 
@@ -121,3 +148,37 @@ See [README_MAC-Metal.md](https://huggingface.co/AngelSlim/Hy4-flash-GGUF/blob/m
 **RTX Spark 128GB**
 
 See [README_SPARK-4Bit.md](https://huggingface.co/AngelSlim/Hy4-flash-GGUF/blob/main/README_SPARK-4Bit.md)
+
+### 3.2 Strata
+
+Support for NVIDIA CUDA and Apple Silicon Metal is in PR
+[#7120](https://github.com/Niko1221/Strata/pull/7120). Check out the PR branch:
+
+```sh
+git clone https://github.com/Niko1221/Strata
+cd Strata
+git fetch origin pull/7120/head:hy4-flash-gguf
+git checkout hy4-flash-gguf
+```
+
+Follow the [CUDA guide](https://github.com/sjl623/Strata/blob/777267388d3d3316fccee91b521c5a6c60e782ef/docs/hy4-flash/README.md)
+or [Metal guide](https://github.com/sjl623/Strata/blob/777267388d3d3316fccee91b521c5a6c60e782ef/docs/hy4-flash/README_MAC-Metal.md)
+to build the engine and install dependencies. Keep both GGUF shards together.
+
+**NVIDIA CUDA** — Q4_K_M_MTP_Q8_0, with CPU expert offload and MTP / DFly support:
+
+```sh
+MODEL=/path/to/Hy4-flash-Q4_K_M_MTP_Q8_0-00001-of-00002.gguf CTX=32768 \
+  ./tools/hy4_flash/launch-hy4-flash.sh --no-tui
+```
+
+**Apple Silicon Metal** — IQ2, with SSD expert streaming and built-in MTP:
+
+```sh
+MODEL=/path/to/Hy4-flash-IQ2_AH-00001-of-00002.gguf \
+  STRATA_BIN="$PWD/build-metal/strata" KV=fp16 CTX=32768 MTP=on DRAFT_TOKENS=2 \
+  ./tools/hy4_flash/launch-hy4-flash.sh --no-tui
+```
+
+The OpenAI-compatible API runs at `http://localhost:8080/v1`.
+For images, place `mmproj-Hy4-flash-bf16.gguf` beside the model and add `--vision on`.

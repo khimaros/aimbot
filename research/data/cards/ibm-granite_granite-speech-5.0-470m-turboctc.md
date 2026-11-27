@@ -128,6 +128,37 @@ the transcript; treat that output as no speech.
 
 </details>
 
+<details>
+<summary><b>Usage with <code>audio.cpp</code> for local inference with word timestamps</b></summary>
+
+[audio.cpp](https://github.com/0xShug0/audio.cpp) runs the model as the `granite5asr` family on
+Metal, CUDA, Vulkan or CPU, with no Python at runtime, and also returns word timestamps.
+Install it on macOS with `homebrew` (tested with 0.9.6; prebuilt Linux and Windows packages are on
+the [releases page](https://github.com/0xShug0/audio.cpp/releases)), then download this repository.
+audio.cpp loads the safetensors checkpoint directly. Do not use the prebuilt GGUF in
+`audio-cpp/audio.cpp-gguf`: it was converted from the earlier English-only release.
+
+```shell
+brew tap 0xShug0/audio-cpp
+brew trust 0xShug0/audio-cpp
+brew install audio-cpp
+hf download ibm-granite/granite-speech-5.0-470m-turboctc --local-dir granite-speech-5.0-470m-turboctc
+```
+
+Sample use (16 kHz mono WAV). No language needs to be set:
+```shell
+audiocpp_cli --task asr --family granite5asr --model granite-speech-5.0-470m-turboctc --audio audio.wav
+```
+
+The output has the transcript on the `text_output=` line and the words on the `word_timestamps=`
+line. Each word carries start and end sample offsets, accurate to the model's 80 ms frame rate, and
+a confidence score. Long audio is split into 30-second chunks by default; see the
+[model page](https://github.com/0xShug0/audio.cpp/blob/main/docs/models/granite5asr.md) for
+voice-activity-based chunking and other options. As with transcribe.cpp, silence or non-speech
+audio returns `<|nospeech|>` as the transcript.
+
+</details>
+
 **Model Architecture:** 
 
 The architecture of granite-speech-5.0-470m-turboctc is unchanged from the original English-only release, apart from the multilingual output vocabulary, and consists of 16 conformer blocks trained with Connectionist Temporal Classification (CTC) with a 16,384 multilingual BPE classification head (see configuration below).

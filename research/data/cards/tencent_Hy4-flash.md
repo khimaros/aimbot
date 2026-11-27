@@ -29,7 +29,7 @@ tags:
 &nbsp;&nbsp;
 [![ModelScope](https://img.shields.io/badge/ModelScope-Tencent%20Hy-624aff)](https://modelscope.cn/models/Tencent-Hunyuan/Hy4-flash)
 &nbsp;&nbsp;
-[![GitCode](https://img.shields.io/badge/GitCode-Tencent%20Hy-red?logoColor=white)](https://ai.gitcode.com/tencent_hunyuan/Hy4-flash)
+[![AtomGit](https://img.shields.io/badge/AtomGit-Tencent%20Hy-red?logoColor=white)](https://ai.gitcode.com/tencent_hunyuan/Hy4-flash)
 
 </div>
 
@@ -223,11 +223,11 @@ In the blind evaluation, **Hy4 flash achieved user satisfaction close to Claude 
 
 ## News
 
-* We release **Hy4 flash**, **Hy4 flash-FP8**, and the pre-trained **Hy4 flash-base** as open-weight models on [Hugging Face](https://huggingface.co/tencent/Hy4-flash), [ModelScope](https://modelscope.cn/models/Tencent-Hunyuan/Hy4-flash), and [GitCode](https://ai.gitcode.com/tencent_hunyuan/Hy4-flash).
+* We release **Hy4 flash**, **Hy4 flash-FP8**, and the pre-trained **Hy4 flash-base** as open-weight models on [Hugging Face](https://huggingface.co/tencent/Hy4-flash), [ModelScope](https://modelscope.cn/models/Tencent-Hunyuan/Hy4-flash), and [AtomGit](https://ai.gitcode.com/tencent_hunyuan/Hy4-flash).
 
 ## Model Links
 
-| Model Name | Description | Hugging Face | ModelScope | GitCode |
+| Model Name | Description | Hugging Face | ModelScope | AtomGit |
 |:---|:---|:---:|:---:|:---:|
 | Hy4 flash | Instruct model | [Model](https://huggingface.co/tencent/Hy4-flash) | [Model](https://modelscope.cn/models/Tencent-Hunyuan/Hy4-flash) | [Model](https://ai.gitcode.com/tencent_hunyuan/Hy4-flash) |
 | Hy4 flash-FP8 | FP8 quantized instruct model | [Model](https://huggingface.co/tencent/Hy4-flash-FP8) | [Model](https://modelscope.cn/models/Tencent-Hunyuan/Hy4-flash-FP8) | [Model](https://ai.gitcode.com/tencent_hunyuan/Hy4-flash-FP8) |

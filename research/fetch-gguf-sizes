@@ -60,8 +60,16 @@ TREE = "https://huggingface.co/api/models/%s/tree/main?recursive=true"
 # atomic chat's `AD-<ffn_down>-<ffn_up>` is one tag with a `-` inside it, and
 # read as a prefixed tag it keys by its second half: `AD-Q4_K-IQ4_XS` and
 # `AD-Q5_K-IQ4_XS` are two rungs and neither is an IQ4_XS.
+#
+# xylolabs' `MXFP4-BF16` is the same shape without the prefix: the experts in
+# the format they were released in and the rest in a carrier type, and read by
+# its last field it was a BF16 rung at 4.6 bits a weight. only a release format
+# leads one, since the general `TYPE-TYPE` also swallows the recipe and model
+# fields before a tag: smalinin's `IQ2_XXS_GU-Q2_K_Down`, audio.cpp's
+# `Support-Q4_K_S-F16`.
 TYPE = r"(?:IQ|Q|BF|F|MXFP|NVFP|TQ)\d[A-Za-z0-9_]*?"
-QUANT = re.compile(r"(?:^|-)(AD-%s-%s|(?:UD-|AD-)?%s)" % (TYPE, TYPE, TYPE) +
+QUANT = re.compile(r"(?:^|-)(AD-%s-%s|(?:MXFP|NVFP)\d+-%s|(?:UD-|AD-)?%s)"
+                   % (TYPE, TYPE, TYPE, TYPE) +
                    r"(?:(?:\.gguf)?-\d{5}-of-\d{5})?\.gguf$", re.I)
 # the same suffix, for a name the tag regex could not read at all. stripping it
 # was reachable only THROUGH a successful tag match, so a pack whose stem names

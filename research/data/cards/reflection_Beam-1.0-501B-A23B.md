@@ -20,7 +20,7 @@ tags:
   <a href="https://github.com/reflection-oss">GitHub</a> |
   <a href="https://reflection.ai/blog">Launch Blog</a> |
   <a href="https://developers.reflection.ai/introduction">Documentation</a> |
-  Technical Report (coming)
+  <a href="https://huggingface.co/papers/2611.26358">Technical Report</a> |
   <br>
   <b>License</b>: <a href="https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/main/LICENSE">Apache 2.0</a> |
   <b>Authors</b>: <a href="https://reflection.ai/">Reflection</a>

@@ -30,14 +30,16 @@ tags: [laya, system-one, calibrated-decisions, rlcd, classification, routing, sc
 
 <p align="center"><img src="https://raw.githubusercontent.com/NandhaKishorM/vegaml/main/assets/vega-valleys.svg" width="900" alt="How it decides: a frozen LLM reads the message once, every answer is a valley, and a particle rolls and settles in one. Where it settles is the answer, with its probability, conformal set, abstain and unbound flags." /></p>
 
-**New in 0.5: laya reads images, audio and video, takes 73k tokens, says when it should not decide, and keeps learning.** All open source under Apache 2.0 (`pip install -U laya`).
+**New in 0.5: laya reads images, audio and video, takes 73k tokens, says when it should not decide, and keeps learning.** laya is open source under Apache 2.0 (`pip install -U laya`); continuous learning comes from `pip install vegaml-learn`, free for noncommercial use only.
 
 - **Text, images, audio and video.** `agent.predict(...)` with `image=`, `audio=` or `video=` gives the same typed answers as for text.
 - **73,728 tokens of context.** Whole contracts, threads and logs in one read.
 - **Abstain and unbound**, explained below.
 - **Physics, not text generation.** Each candidate answer is a valley; the input is a particle that rolls and settles in one. Deterministic, constant cost, nothing generated.
 - **Any LLM as the reader.** One small decision engine on top of a frozen reader, from 0.8B to 27B.
-- **Continuous learning.** `from laya import Learner`: it answers from day one and learns from every answer your team confirms, on your own machine, in seconds on a CPU with no fine-tuning.
+- **Continuous learning** (`pip install vegaml-learn`, noncommercial licence, see the note below). `from laya import Learner`: it answers from day one and learns from every answer your team confirms, on your own machine, in seconds on a CPU with no fine-tuning.
+
+> **Licence.** These weights and the `laya` package are Apache 2.0, free for any use. Continuous learning (`laya.Learner`, `laya.Escalator`, `laya.vllm_teacher`) needs the separate package `vegaml-learn`, which is **free for noncommercial use only** (PolyForm Noncommercial 1.0.0). Using it in a company, a product or a paid service needs a commercial licence: [embedding.in/licence](https://embedding.in/licence), or write to nandakishor@embedding.in.
 
 ### How abstain and unbound work
 

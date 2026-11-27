@@ -114,13 +114,13 @@ The weights (`model.safetensors`) are 9.3 GB; measured on one NVIDIA L40S (48 GB
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install "vllm==0.30.0" "torchcodec==0.17.0" "transformers==5.20.2"
+pip install "vllm==0.30.0" "torchcodec==0.17.0" "transformers==5.20.2" "tokenizers==0.23.3"
 hf download h2oai/h2o-lightning-4b --local-dir h2o-lightning-4b
 ```
 
 (The default build needs a CUDA 13 driver, R580 or later; on an older driver, install the CUDA 12.9 build instead: `pip install "vllm==0.30.0+cu129"
-"torchcodec==0.16.0+cu129" "transformers==5.20.2" --extra-index-url https://wheels.vllm.ai/0.30.0/cu129 --extra-index-url
-https://download.pytorch.org/whl/cu129`.) `transformers==5.20.2` is the tested version; without the pin pip
+"torchcodec==0.16.0+cu129" "transformers==5.20.2" "tokenizers==0.23.3" --extra-index-url https://wheels.vllm.ai/0.30.0/cu129 --extra-index-url
+https://download.pytorch.org/whl/cu129`.) `transformers==5.20.2` and `tokenizers==0.23.3` are the tested versions; without the pins pip
 takes the newest. That is stock vLLM: enough for one-way reading. **Two-way reading
 (recommended) needs our vLLM build** with per-request attention, [h2oai/vllm](https://github.com/h2oai/vllm) at commit
 `b05cc29ab813895947954c268c4ec41ca0da1306`: vLLM 0.30.0 plus 30 changed Python files under `vllm/` (no compiled
@@ -171,8 +171,8 @@ TWO_WAY=0 bash h2o-lightning-4b/serve.sh
 which: [Two-way reading](#two-way-reading-recommended). The two steps behind the command, for a manual start:
 
 **1. Serve the model.** Keep `config.json` as shipped: its `"head_dtype": "float32"` makes vLLM compute the logits in
-fp32. `--tokenizer ./h2o-lightning-4b/tokenizer` keeps the tokenizer the model was trained with (`Qwen2Tokenizer`;
-without it, recent transformers versions load a tokenizer that splits some Devanagari and Arabic text differently, and
+fp32. `--tokenizer ./h2o-lightning-4b/tokenizer` serves the base model's own tokenizer split (see [Tokenizer](#tokenizer);
+without it, some transformers versions load a tokenizer class that splits Thai, Indic and Arabic text differently, and
 the shim refuses to start). Inputs longer than the context are shortened to fit (see [Long inputs](#long-inputs)); they never get an error. The `--limit-mm-per-prompt` / `--mm-processor-kwargs` options set
 the image limits (up to 4 images per request, each scaled to at most 1,638,400 pixels inside vLLM, the cap the shim
 sends with every request); `--mm-processor-cache-gb 0`, `--allowed-media-domains` and the one-way server's
@@ -424,16 +424,29 @@ per request against 32,133.
 
 ### Tokenizer
 
-The model was trained with `Qwen2Tokenizer` (`tokenizer_config.json`). From transformers 5.18, a checkpoint whose
-`config.json` names Qwen3.5 is loaded with `Qwen3_5Tokenizer` instead, which splits some Devanagari and Arabic text
-differently (8 of the 24 probes in `tokenizer_contract.json`). `tokenizer/` holds the same five tokenizer files without
-a `config.json`, so it loads as `Qwen2Tokenizer`; `serve.sh` passes it to vLLM with `--tokenizer`, and at start-up the
-shim checks that vLLM reproduces all 24 probes (otherwise every request is a 503 that names `--tokenizer`, and
-`serve.sh` stops with that reason).
-transformers may log a warning about an "incorrect regex pattern" for this tokenizer; leave `fix_mistral_regex` unset:
-the shipped split is the one the model was trained with.
+The model is served with its base model's own tokenizer split. `tokenizer/` holds Qwen3.5-4B's `tokenizer.json` and
+chat template with `tokenizer_class` TokenizersBackend and no `config.json`, so every transformers version reads the
+file as written (checked from 5.12.1 to 5.20.2: the same token ids as the `tokenizers` library on 19,270 texts).
+`serve.sh` passes it to vLLM with `--tokenizer`, and at start-up the shim checks that vLLM reproduces all 24 probes of
+`tokenizer_contract.json` (otherwise every request is a 503 that names `--tokenizer`, and `serve.sh` stops with that
+reason).
 
-Every result above was read with `Qwen2Tokenizer`, as `serve.sh` serves it.
+Training used an older split for some scripts (`Qwen2Tokenizer`'s pattern, in which a combining mark, as in Thai,
+Devanagari, Bengali, Tamil or Telugu, starts a new piece); it tokenizes text differently (8 of the 24 probes in `tokenizer_contract.json`).
+Read both ways on 1,200 Belebele reading questions in six non-Latin scripts (200 each), the shipped split answered
+80.9 % correctly against 64.6 % with the training split (Tamil 75.5 % against 45.0 %, Telugu 72.5 % against 48.5 %,
+Bengali 83.0 % against 63.0 %, Thai 88.0 % against 74.5 %, Hindi 74.0 % against 63.5 %, Arabic 92.5 % against
+93.0 %), and its calibration error was 0.054 against 0.129. On 600 Belebele questions in Chinese, English, Japanese
+and Korean, 599 answers were the same (one Korean answer moved from right to wrong).
+
+The numbers in [Measured](#measured) were read with the training split, so every text row behind them was tokenized
+both ways. JevBench's 231 public items, the held-out set and the Decision Index vision rows have no text that
+tokenizes differently, nor do 4,571 of the new-domain set's 4,572 requests (the one that does gives the same answer).
+196 of the 140,620 Decision Index 0.3 public text rows do, most of them Arabic sarcasm questions; they were read again
+through this package and scored with the rest. Two-way, the text index and its calibration error are unchanged
+(63.21 and 0.0701; under the Decision Index profile 63.64 and 0.0686, its default column 63.19 and 0.0706). One-way,
+the text index is 60.85 (60.86 with the training split) and the calibration error 0.0801. The one-way row in Measured
+gives the shipped split's value.
 
 ### For benchmark maintainers: JevBench
 
@@ -579,7 +592,7 @@ harness that reads a self-stated `"confidence"` key will find it missing on most
 Run it like this, one request at a time on one GPU:
 
 ```bash
-hf download h2oai/h2o-lightning-4b --revision v1.4.2 --local-dir h2o-lightning-4b
+hf download h2oai/h2o-lightning-4b --revision v1.4.4 --local-dir h2o-lightning-4b
 bash h2o-lightning-4b/serve.sh          # no flags; serves http://127.0.0.1:8741
 ```
 
@@ -659,7 +672,7 @@ fictional.
 
 ## Measured
 
-**This card describes v1.4.2** (`main`; pin `--revision v1.4.2`). Each image is scaled to at most 1,638,400 pixels (see
+**This card describes v1.4.4** (`main`; pin `--revision v1.4.4`). Each image is scaled to at most 1,638,400 pixels (see
 [Image calibration](#image-calibration)); the Decision Index profile is opt-in (see
 [Decision Index profile](#decision-index-profile-profiledi)); under the non-default `SHIM_SELECTOR=headtail` the record
 is fitted to the context per question (see [Long inputs](#long-inputs)); and a request's `kwargs.attention_mode` sets its
@@ -671,17 +684,18 @@ The weights are a fine-tune of Qwen3.5-4B (see
 always on. Text answers use the per-type temperatures in `serve_config.json`; image answers use their own temperature,
 1.0 (see [Image calibration](#image-calibration)). The vLLM build includes a fix for a crash in the Gated DeltaNet
 prefill graphs with 16 or fewer sequences in flight, and `serve.sh` stops with the shim's reason when vLLM's tokenizer is
-not the one the model was trained with (see [Tokenizer](#tokenizer)). Over-long records are BM25-selected to fit and a
+not the shipped one (see [Tokenizer](#tokenizer)). Over-long records are BM25-selected to fit and a
 request never fails for length; inputs that fit are read whole (0 Decision Index 0.3 public text rows and 0 JevBench
 public items exceed the limit; see [Long inputs](#long-inputs)). Older versions: see the repo's tags.
 
 **Results**, against the previous release (v1.4.0), with vLLM 0.30.0 on NVIDIA L40S (48 GB) GPUs, each release through
 its own `serve.sh` with no flags (two-way, one engine of the vLLM build) unless a row says otherwise, every question
-answered. v1.4.2's default was read on 2026-10-26 on v1.4.1's serving (the same answers for text), the Decision Index text
+answered. The v1.4.4 column is v1.4.2's reads with the 196 Decision Index text rows whose tokens differ read again on
+v1.4.4 (see [Tokenizer](#tokenizer)). v1.4.2's default was read on 2026-10-26 on v1.4.1's serving (the same answers for text), the Decision Index text
 rows on 2026-10-28 with the yes/no floor off as shipped, the vision index on 2026-10-28 at v1.4.2's image cap; v1.4.0 on
 2026-10-24.
 
-| | **v1.4.2 default** | v1.4.0 |
+| | **v1.4.4 default** | v1.4.0 |
 |---|---|---|
 | JevBench's 231 public items, JevBench's own CLI: correct | **206 / 231 (89.2 %)** · 48/48 · 72/72 · 86/111 | 206 / 231 |
 | held-out decisions on the Decision Index's skills (2,351 questions, 15 task families): skill (difference not significant) | 81.54 | 81.45 |
@@ -689,7 +703,7 @@ rows on 2026-10-28 with the yes/no floor off as shipped, the vision index on 202
 | six task families that the added training data covers (2,891 questions): skill | **67.99** | 50.08 |
 | Decision Index 0.3 public suite, the kit's own scorer: text index (140,178 rows) / vision index (12,210 rows) | **63.21 / 69.87** | 62.38 / 69.03 |
 | calibration error on the Decision Index text rows (274,729 questions; lower is better) | 0.0701 | **0.0640** |
-| one-way reading (`TWO_WAY=0`): JevBench 231 correct · Decision Index text / vision index · calibration error | 202 / 231 · 60.86 / 67.56 · 0.0801 | not measured |
+| one-way reading (`TWO_WAY=0`): JevBench 231 correct · Decision Index text / vision index · calibration error | 202 / 231 · 60.85 / 67.56 · 0.0801 | not measured |
 | mean input tokens per decision on JevBench's 231 items | 654 | 654 |
 
 The held-out set on the Decision Index's skills is dev slices of the public training data behind the Decision Index's

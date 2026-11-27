@@ -30,7 +30,7 @@ tags:
 &nbsp;&nbsp;
 [![ModelScope](https://img.shields.io/badge/ModelScope-Tencent%20Hy-624aff)](https://modelscope.cn/models/Tencent-Hunyuan/Hy4)
 &nbsp;&nbsp;
-[![GitCode](https://img.shields.io/badge/GitCode-Tencent%20Hy-red?logoColor=white)](https://ai.gitcode.com/tencent_hunyuan/Hy4)
+[![AtomGit](https://img.shields.io/badge/AtomGit-Tencent%20Hy-red?logoColor=white)](https://ai.gitcode.com/tencent_hunyuan/Hy4)
 
 </div>
 
@@ -72,7 +72,7 @@ tags:
 
 ## Model Introduction
 
-**Hy4** is a new-generation Mixture-of-Experts (MoE) flagship model developed by the Tencent Hy Team, supporting text, image, and video understanding. The language backbone comprises 770B total parameters, of which 49B are activated per token. It consists of 78 layers, with a standard dense FFN in the first layer and MoE FFNs in the remaining 77 layers. Each MoE layer contains 256 routed experts and 1 shared expert; every token activates the top-8 routed experts along with the shared expert. In addition to the backbone, a 5-layer DFly2 drafter (3.3B parameters) is built in for speculative decoding.
+**Hy4** is a new-generation Mixture-of-Experts (MoE) flagship model developed by the Tencent Hy Team, supporting text and image understanding. The language backbone comprises 770B total parameters, of which 49B are activated per token. It consists of 78 layers, with a standard dense FFN in the first layer and MoE FFNs in the remaining 77 layers. Each MoE layer contains 256 routed experts and 1 shared expert; every token activates the top-8 routed experts along with the shared expert. In addition to the backbone, a 5-layer DFly2 drafter (3.3B parameters) is built in for speculative decoding.
 
 On the architecture side, inspired by DeepSeek and GLM, the attention module employs Gated [DeepSeek Sparse Attention](https://arxiv.org/abs/2512.02556) (Gated DSA) with [IndexCache](https://arxiv.org/abs/2603.12201) for cross-layer sparse index reuse. The residual pathway uses [iHC (identity Hyper-Connections)](https://zhuanlan.zhihu.com/p/2010852389670908320) to expand inter-layer information flow. A ViT supports dynamic image resolutions, with an adapter converting image and video frame features into visual tokens for the language model to process alongside text tokens. [DFly2](#dfly2-for-speculative-decoding), a parallel drafter, reuses Hy4's KV cache and sparse indices to support long-context speculative decoding at a low, constant cost.
 
@@ -220,11 +220,11 @@ Although Hy4 is one of the strongest open-weight models available today, a notab
 
 ## News
 
-* We open-source **Hy4**, **Hy4-FP8**, and the pre-trained **Hy4 base** model weights on [Hugging Face](https://huggingface.co/tencent/Hy4), [ModelScope](https://modelscope.cn/models/Tencent-Hunyuan/Hy4), and [GitCode](https://ai.gitcode.com/tencent_hunyuan/Hy4).
+* We open-source **Hy4**, **Hy4-FP8**, and the pre-trained **Hy4 base** model weights on [Hugging Face](https://huggingface.co/tencent/Hy4), [ModelScope](https://modelscope.cn/models/Tencent-Hunyuan/Hy4), and [AtomGit](https://ai.gitcode.com/tencent_hunyuan/Hy4).
 
 ## Model Links
 
-| Model Name | Description | Hugging Face | ModelScope | GitCode |
+| Model Name | Description | Hugging Face | ModelScope | AtomGit |
 |:---|:---|:---:|:---:|:---:|
 | Hy4 | Instruct model | [Model](https://huggingface.co/tencent/Hy4) | [Model](https://modelscope.cn/models/Tencent-Hunyuan/Hy4) | [Model](https://ai.gitcode.com/tencent_hunyuan/Hy4) |
 | Hy4-FP8 | FP8 quantized instruct model | [Model](https://huggingface.co/tencent/Hy4-FP8) | [Model](https://modelscope.cn/models/Tencent-Hunyuan/Hy4-FP8) | [Model](https://ai.gitcode.com/tencent_hunyuan/Hy4-FP8) |

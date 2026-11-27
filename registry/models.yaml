@@ -1594,7 +1594,7 @@ models:
       merged: '2026-02-10'
     ids:
       jev: ''
-      aa-decision: cloudflare_clef
+      aa-decision: Clef
     modalities:
       input:
       - text
@@ -1738,7 +1738,7 @@ models:
     - PollardWeights/clef-omni-Pollard
     ids:
       jev: ''
-      aa-decision: cloudflare_clef-omni
+      aa-decision: Clef-Omni
     runtime:
       arch: clef-omni
       mainline: false
@@ -1782,7 +1782,7 @@ models:
     - waseigo/elephant-1-decision-GGUF
     ids:
       jev: ''
-      aa-decision: baseten_elephant-9b
+      aa-decision: Elephant 9B
     runtime:
       arch: qwen35
       mainline: true
@@ -1831,7 +1831,7 @@ models:
     - magnitudedev/mammoth-1-GGUF
     ids:
       jev: ''
-      aa-decision: baseten_mammoth-27b
+      aa-decision: Mammoth 27B
     runtime:
       arch: qwen35
       mainline: true
@@ -4225,6 +4225,56 @@ models:
       knob: enable_thinking
       kind: boolean
       default: true
+  baidu/ERNIE-5.5-Flash-Preview:
+    kind: text
+    name:
+      short: ernie 5.5 flash preview
+      match: ernie[\s-]*5\.5[\s-]*flash
+    notes: >-
+      a 280b moe with 14b active and a 1m context, an intermediate post-training checkpoint of
+      ernie 5.5 flash base {card}. the routed experts ship in MXFP4, quantization-aware trained,
+      and the dspark draft head is in the weights. the only GGUF a llama.cpp build reads is
+      xylolabs', which leaves the draft head out and needs the open PR 31925
+      {card@Xylolabs/ERNIE-5.5-Flash-Preview-GGUF}.
+    repos:
+    - repo: Xylolabs/ERNIE-5.5-Flash-Preview-GGUF
+      files:
+        MXFP4-BF16:
+          note: the routed experts left in MXFP4 as released and the rest BF16, which holds the
+            fp8 values exactly {card}
+    ids:
+      aa: ernie-5-5-flash
+      gbench: ''
+      lmarena: ''
+      swerebench: ''
+      epoch: ''
+      livebench: ''
+    runtime:
+      arch: ernie5_5
+      mainline: false
+      tracking: https://github.com/ggml-org/llama.cpp/pull/31925
+      note: xylolabs built against the open PR and stock llama.cpp has no ERNIE 5.5 code {card@Xylolabs/ERNIE-5.5-Flash-Preview-GGUF}
+    sampling:
+      thinking:
+        source: generation-config
+        temp: 1.0
+        top_p: 0.95
+        tuned: [instruct, chat, reason, code, tools]
+    modalities:
+      input: [text]
+      output: [text]
+    turns:
+      source: Xylolabs/ERNIE-5.5-Flash-Preview-GGUF
+      developer: own
+      leading_system_max: unlimited
+      mid_system: ok
+      mid_developer: ok
+    thinking:
+      knob: reasoning_effort
+      gate: enable_thinking
+      gate_default: true
+      accepts: [low, medium, high]
+      default: high
   baidu/ERNIE-Image-Turbo:
     kind: image
     name:
@@ -6495,6 +6545,7 @@ models:
       leading_system_max: unlimited
       mid_system: rejected
       mid_developer: rejected
+      upstream_differs: [developer]
     thinking:
       knob: reasoning_effort
       accepts: [low, medium, high]
@@ -7011,7 +7062,7 @@ models:
       leading_system_max: 1
       mid_system: rejected
       mid_developer: rejected
-      upstream_differs: [leading_system_max]
+      upstream_differs: [developer, leading_system_max]
   openbmb/MiniCPM-V-4.6:
     kind: text
     name:
@@ -9492,6 +9543,7 @@ models:
       leading_system_max: unlimited
       mid_system: rejected
       mid_developer: rejected
+      upstream_differs: [developer]
   moonshotai/Kimi-K3:
     kind: text
     name:
@@ -10297,7 +10349,7 @@ models:
       merged: '2026-09-04'
     sampling:
       thinking:
-        source: quant-card
+        source: vendor-card
         temp: 0.9
         top_p: 1.0
         tuned: [instruct, chat, reason, code, tools]
