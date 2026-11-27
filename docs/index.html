@@ -1300,10 +1300,64 @@ function codingFill(m) {
     .filter(key => scaledFacet(key) && relevant(key) && facetPct(m, key) !== null);
   if (!from.length) return {value: null, from};
   const boards = {};
-  from.forEach(key => (boards[key.split('.')[0]] ||= []).push(facetPct(m, key)));
+  from.forEach(key => (boards[key.split('.')[0]] ||= []).push(chainPct(m, key)));
   const means = Object.values(boards).map(ps => ps.reduce((a, p) => a + p, 0) / ps.length);
   const own = means.reduce((a, p) => a + p, 0) / means.length;
   return {value: (own + SHRINK_PRIOR) / 2, from};
+}
+
+// a board's versions, oldest first: `successors` pairs each retired version
+// with the one that replaced it. a percentile is a rank inside the cohort a
+// version ran, and a retired version's cohort is older and weaker -- on the
+// models both terminal-bench versions ran, 2.1 read 15.6 points above 4.0 -- so
+// every version reads on the newest one's scale, mapped through the models both
+// ran. fewer bridges than this and the two are left as they are
+const MIN_BRIDGES = 8;
+const nextVersion = key => ((D.config || {}).successors || []).find(p => p[0] === key)?.[1];
+const chainOf = key => {
+  const pairs = (D.config || {}).successors || [];
+  let head = key;
+  for (let prev; (prev = pairs.find(p => p[1] === head)); ) head = prev[0];
+  const out = [head];
+  for (let next; (next = nextVersion(out[out.length - 1])); ) out.push(next);
+  return out;
+};
+
+let bridgeCache = {};
+function bridges(old, now) {
+  const k = old + '>' + now;
+  if (!bridgeCache[k]) {
+    const both = D.models.map(m => [facetPct(m, old), facetPct(m, now)])
+      .filter(([a, b]) => a !== null && b !== null);
+    bridgeCache[k] = both.length < MIN_BRIDGES ? null
+      : {old: both.map(p => p[0]).sort((a, b) => a - b), now: both.map(p => p[1]).sort((a, b) => a - b)};
+  }
+  return bridgeCache[k];
+}
+
+// the model's percentile on `key`, re-read on the newest version's scale by
+// quantile mapping: where it sits among the bridges on the old board is where
+// it is put among them on the new one
+function chainPct(m, key) {
+  let p = facetPct(m, key);
+  for (let k = key, next; p !== null && (next = nextVersion(k)); k = next) {
+    const b = bridges(k, next);
+    if (!b) continue;
+    const q = (b.old.filter(x => x < p).length + 0.5 * b.old.filter(x => x === p).length) / b.old.length;
+    const at = q * (b.now.length - 1), lo = Math.floor(at);
+    p = b.now[lo] + (at - lo) * ((b.now[lo + 1] ?? b.now[lo]) - b.now[lo]);
+  }
+  return p;
+}
+
+// what a version the model was never run on is worth: the mean of the versions
+// it WAS run on, on the same scale. a retired board cannot run a model released
+// after it, and scoring that slot as the median charged every new model for its
+// release date. null where the model carries the key or no other version
+function chainFill(m, key) {
+  if (facetPct(m, key) !== null) return null;
+  const ps = chainOf(key).filter(k => k !== key).map(k => chainPct(m, k)).filter(p => p !== null);
+  return ps.length ? ps.reduce((a, p) => a + p, 0) / ps.length : null;
 }
 
 function score(m) {
@@ -1315,11 +1369,12 @@ function score(m) {
   // coding score for whisper fails the second
   for (const [key, w] of askedFactors(m)) {
     want++; denMax += w;
-    const p = facetPct(m, key);
+    const p = chainPct(m, key), version = chainFill(m, key);
     if (p !== null) {
       have++; num += w * p; den += w;
       if ((m.facets[key] || {}).cohort_from === 'board') board.push(key);
-    } else if (fill.value !== null && scaledFacet(key)) { num += w * fill.value; filled += w; }
+    } else if (version !== null) { num += w * version; filled += w; }
+    else if (fill.value !== null && scaledFacet(key)) { num += w * fill.value; filled += w; }
   }
   // evidence is what was MEASURED: a prediction fills the composite and never
   // the coverage it is judged by
@@ -1336,7 +1391,7 @@ const scored = m => (m._s || (m._s = score(m)));
 // the memo is only valid for the weights, the quant discount and the SHAPE the
 // score was computed under, so every setter that moves one of those drops it.
 // it was four hand-written copies of this loop before the shape joined them.
-const clearScores = () => D.models.forEach(m => { m._s = null; });
+const clearScores = () => { bridgeCache = {}; D.models.forEach(m => { m._s = null; }); };
 
 // --- columns -----------------------------------------------------------------
 //

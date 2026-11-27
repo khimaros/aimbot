@@ -31,14 +31,27 @@ version: 1
 # one terminal eval each. v5's cover less of the roster, which the shrink toward
 # the middle absorbs, and that is the accepted price of leaning on the current
 # measurement. a v6 goes here the same way, above v5.
+#
+# v4 came down from 0.25 to 0.20 when v5 retired scicode: no model released
+# since will ever carry it, so it ranks the older half of the roster and is
+# filled from v5 for the rest (see `successors`). the 0.10 went to knowing what
+# it does not know -- omniscience's non-hallucination, the one eval that rewards
+# declining to answer, at rank 0.21 against terminal-bench 4.0 and 0.18 against
+# scicode over artificial analysis' ~580 models, so it is the least redundant
+# axis the feed carries and was weighted nowhere. gbench gave 0.05 of its 0.15:
+# its new information against AA fell from 27% to 16% at the 2026-11 re-run of
+# analyze-correlations --redundancy. swe-rebench gave 0.05: its newest task
+# window closed 2026-07-24 and it has run none of the models released since.
 weights:
   aa5.terminalbench_v40: 0.20
   aa5.frontiercode: 0.15
-  aa4.scicode: 0.125
-  aa4.terminalbench: 0.125
-  gbench.agentic: 0.15
+  aa4.scicode: 0.10
+  aa4.terminalbench: 0.10
+  aa5.non_hallucination: 0.05
+  aa4.non_hallucination: 0.05
+  gbench.agentic: 0.10
   lmarena.rating: 0.10
-  swerebench.resolved: 0.10
+  swerebench.resolved: 0.05
   # livebench is the sixth text board over the coding, math and reasoning axes the
   # four above already weight, its rows are hosted endpoints rather than one
   # harness run over a checkpoint, and no redundancy analysis of it against the
@@ -111,6 +124,23 @@ weights:
   # the way jevbench does, and verdict stays the only quantized measurement
   aa-decision.index: 1.0
 
+# each retired board version and the one that replaced it. a percentile is a
+# rank inside the cohort a version ran, and a retired version's is older: on the
+# models both ran, the v4 percentile read 6 to 23 points above v5's. so the page
+# reads a retired version on its successor's scale, mapped through the models
+# both ran, and fills a version a model was never run on from the one it was --
+# a model released after v4 was retired is not charged the median for it.
+# `research/analyze-presets` prints the offsets and how closely the two agree
+# (rank 0.70 to 0.98 across these pairs). scicode to frontiercode is the coding
+# slot rather than one eval revised, and is listed because v5 replaced the one
+# with the other at that slot and the two rank the bridging models at 0.84
+successors:
+- [aa4.terminalbench, aa5.terminalbench_v40]
+- [aa4.scicode, aa5.frontiercode]
+- [aa4.omniscience_index, aa5.omniscience_index]
+- [aa4.non_hallucination, aa5.non_hallucination]
+- [aa4.intelligence, aa5.intelligence]
+
 # the named weightings the page offers, each a whole answer to "what is
 # quality" rather than a nudge. `base: true` starts from `weights:` above;
 # `drop_prefixes` removes the facet families it names from that copy.
@@ -120,6 +150,15 @@ weights:
 # from. as a mapping it reached the page alphabetically -- the payload is
 # written with sorted keys -- and MODELS.md's sensitivity table opened on
 # `agentic and tool use` as though that were the house answer.
+#
+# the use-case presets past the first three are built only from boards the
+# roster already carries, each on the facets with the widest coverage of its
+# question. `long documents` stands on one retired board, v5 having dropped the
+# eval, and says so in the title. there is no instruction-following preset for
+# the same reason and a worse result: ifbench was retired before the current
+# models ran it, so weighted alone it ranked at -0.58 against the v5 index and
+# put ten last-generation models on top -- a ranking of release date
+# (research/analyze-presets, 2026-11-27)
 presets:
 - k: default
   title: balanced ranking
@@ -127,20 +166,49 @@ presets:
 - k: coding
   title: writing code
   weights:
-    aa5.frontiercode: 0.25
-    aa4.scicode: 0.15
-    gbench.oneshot: 0.2
-    swerebench.resolved: 0.25
+    aa5.frontiercode: 0.30
+    aa4.scicode: 0.20
+    gbench.oneshot: 0.25
+    swerebench.resolved: 0.10
     card.*: 0.05
-    community.reddit-localllama: 0.1
+    community.reddit-localllama: 0.10
 - k: agentic
   title: agentic and tool use
   weights:
     aa5.terminalbench_v40: 0.25
     aa4.terminalbench: 0.15
+    aa5.automationbench: 0.15
     aa4.tau2: 0.15
-    gbench.agentic: 0.3
-    community.reddit-localllama: 0.15
+    gbench.agentic: 0.25
+    community.reddit-localllama: 0.05
+- k: factual
+  title: factual and careful
+  weights:
+    aa5.omniscience_index: 0.35
+    aa4.omniscience_index: 0.25
+    aa4.gpqa: 0.15
+    aa5.hle_diamond: 0.15
+    epoch.simpleqa_verified: 0.10
+- k: office
+  title: office and knowledge work
+  weights:
+    aa5.gdp_pdf: 0.25
+    aa5.briefcase: 0.25
+    aa5.automationbench: 0.25
+    aa4.gdpval: 0.25
+- k: science
+  title: science and math
+  weights:
+    aa5.hle_diamond: 0.25
+    aa4.hle: 0.15
+    aa4.gpqa: 0.20
+    aa5.critpt_hard: 0.15
+    aa5.terminalbench_science: 0.15
+    epoch.frontiermath_tiers_1_3_v2: 0.10
+- k: longctx
+  title: long documents (retired board)
+  weights:
+    aa4.lcr: 1.0
 - k: measured
   title: third-party measurement only
   base: true

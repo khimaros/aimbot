@@ -801,9 +801,11 @@ of its weights are live.
 
 the ranking is the part worth explaining. **quality is a weighted mean of
 percentiles, and the weights are yours.** the page opens on the composite
-weights in `scripts/build-viewer` -- 0.30 coding, 0.30 agentic, 0.15 gbench, 0.10 arena,
-0.10 swe-rebench, 0.05 community, 0.05 card claims, set by a redundancy
-analysis rather than by taste -- and every one of them is a slider. weight gbench to
+weights in `registry/dashboard.yaml` -- 0.55 artificial analysis coding and
+terminal evals across its v5 and v4 boards, 0.10 its non-hallucination eval,
+0.10 gbench, 0.10 arena, 0.05 swe-rebench, 0.05 community, 0.05 card claims,
+set by a redundancy analysis rather than by taste -- and every one of them is a
+slider. weight gbench to
 zero if games do not persuade you. weight the forums to 1.0 if they do. the
 table re-ranks as you drag. `community` and `card` are one slider over every
 forum and every claim under them, averaged, because the question a reader has is
@@ -820,9 +822,27 @@ half the mentions and less approval.
 the sliders are behind `custom ranking`, because most readers want a stance
 rather than sixty decisions. the stances are a dropdown in the ranking row:
 `balanced` is the composite above, and the others answer one question each --
-writing code, agentic and tool use, third-party measurement only, what people
-report. picking one replaces the weights outright, and moving any slider off a
-stance turns the dropdown to `custom ranking`.
+writing code, agentic and tool use, factual and careful, office and knowledge
+work, science and math, long documents, third-party measurement only, what
+people report. picking one replaces the weights outright, and moving any slider
+off a stance turns the dropdown to `custom ranking`.
+
+**a retired board version reads on its successor's scale.** a percentile is a
+rank inside the cohort a board ran, and when artificial analysis moved from v4
+to v5 the old cohort stayed older: on the models both ran, the v4 percentile
+read 6 to 23 points above v5's. so `successors:` in `registry/dashboard.yaml`
+chains each retired version to its replacement, the page maps the old
+percentile onto the new scale through the models both ran, and a version a
+model was never run on is filled from the one it was -- a model released after
+v4 was retired is not charged the median for it. like the coding prediction, a
+fill moves the composite and never the evidence column.
+
+`research/analyze-presets` is the check on all of it: it ranks the whole text
+roster under every preset and prints how each agrees with the boards people
+trust (the AA indices, epoch's ECI, the arena), which models each puts furthest
+from them, whether scores lean on coverage, and the offsets between board
+versions. run it with `--config` to score a candidate weighting before editing
+the real one.
 
 **how much memory you have.** pick a vram size and a reserve, and the quant
 column, the sizes and the retention behind `effective` all switch to the best

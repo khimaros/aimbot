@@ -457,7 +457,7 @@ test('a speech model is scored on the boards that rank speech', () => {
   // sliders against it would read as missing evidence rather than as a
   // question nobody asked of it
   const text = D.models.find(m => m.kind === 'text' && m.facets['aa4.scicode']);
-  ok(scored(text).want <= 9, text.short + ' is judged on the text weights only,'
+  ok(scored(text).want <= 11, text.short + ' is judged on the text weights only,'
      + ' got want=' + scored(text).want);
   ok(scored(rated[0]).want <= 4, rated[0].short + ' likewise, got want='
      + scored(rated[0]).want);
@@ -2486,17 +2486,18 @@ test('a preset re-sorts the table', () => {
 });
 
 // the weighted mean over the factors present, before shrinkage: what the
-// composite used to be, and what the cases below measure the shrinkage against
+// composite used to be, and what the cases below measure the shrinkage against.
+// each percentile on its newest board version's scale, as score() reads it
 const rawScore = m => {
-  const only = Object.keys(W).filter(k => W[k] && asked(m, k)
+  const only = Object.keys(W).filter(k => W[k] && relevant(k) && asked(m, k)
     && facetPct(m, k) !== null);
-  return only.reduce((a, k) => a + W[k] * facetPct(m, k), 0)
+  return only.reduce((a, k) => a + W[k] * chainPct(m, k), 0)
     / only.reduce((a, k) => a + W[k], 0);
 };
 const coveredWeight = m => Object.keys(W)
-  .filter(k => W[k] && asked(m, k) && facetPct(m, k) !== null)
+  .filter(k => W[k] && relevant(k) && asked(m, k) && facetPct(m, k) !== null)
   .reduce((a, k) => a + W[k], 0);
-const askedWeight = m => Object.keys(W).filter(k => W[k] && asked(m, k))
+const askedWeight = m => Object.keys(W).filter(k => W[k] && relevant(k) && asked(m, k))
   .reduce((a, k) => a + W[k], 0);
 
 test('a missing factor is shrunk toward the middle, never scored zero', () => {
@@ -2506,15 +2507,23 @@ test('a missing factor is shrunk toward the middle, never scored zero', () => {
   ok(s.have < s.want, 'this model is measured by only some of the factors');
   ok(s.value > 0, 'and still scores on the ones it has');
   const fill = codingFill(m);
-  const coding = Object.keys(W).filter(k => W[k] && asked(m, k) && scaledFacet(k)
-    && facetPct(m, k) === null).reduce((a, k) => a + W[k], 0);
-  const filled = fill.value === null ? 0 : coding;
+  const missing = Object.keys(W).filter(k => W[k] && relevant(k) && asked(m, k)
+    && facetPct(m, k) === null);
+  // a missing version of a board reads the version the model was run on; a
+  // missing coding factor otherwise reads the model's own coding boards
+  const versioned = missing.filter(k => chainFill(m, k) !== null);
+  const coding = fill.value === null ? [] : missing.filter(k => chainFill(m, k) === null
+    && scaledFacet(k));
+  const sum = (ks, f) => ks.reduce((a, k) => a + W[k] * f(k), 0);
+  const filled = sum(versioned, () => 1) + sum(coding, () => 1);
   const k = SHRINK_LAMBDA * (askedWeight(m) - coveredWeight(m) - filled);
   near(s.value,
-       (rawScore(m) * coveredWeight(m) + filled * (fill.value || 0) + k * SHRINK_PRIOR)
+       (rawScore(m) * coveredWeight(m) + sum(versioned, x => chainFill(m, x))
+         + sum(coding, () => fill.value) + k * SHRINK_PRIOR)
          / (coveredWeight(m) + filled + k),
-       1e-9, 'the composite is the mean over present factors, a missing coding'
-         + ' factor predicted from its own, and the rest shrunk toward the middle');
+       1e-9, 'the composite is the mean over present factors, a missing version'
+         + ' read from the one it ran, a missing coding factor predicted from its'
+         + ' own, and the rest shrunk toward the middle');
 });
 
 // renormalizing over present factors redistributes the missing weight onto
@@ -2598,8 +2607,9 @@ test('a score the prior would decide is not printed at all', () => {
   // "unmeasured" of a model somebody did measure is the error this avoids
   const detail = tabOverview(m);
   ok(!detail.includes('unmeasured'), 'the detail does not call it unmeasured');
-  ok(detail.includes('5% of the weight'),
-     'it says how much was measured and that it was not enough');
+  const share = Math.round(100 * coveredWeight(m) / askedWeight(m)) + '% of the weight';
+  ok(detail.includes(share), 'it says how much was measured (' + share
+     + ') and that it was not enough');
 });
 
 test('a thin score cannot outrank the model that beat it on every shared factor',
@@ -2892,7 +2902,7 @@ test('a missing coding factor is predicted from the model\'s own coding factors'
   const filled = codingFill(m);
   ok(filled.value !== null, 'it has coding factors to predict from');
   const boards = {};
-  filled.from.forEach(k => (boards[k.split('.')[0]] ||= []).push(facetPct(m, k)));
+  filled.from.forEach(k => (boards[k.split('.')[0]] ||= []).push(chainPct(m, k)));
   const means = Object.values(boards).map(ps => ps.reduce((a, p) => a + p, 0) / ps.length);
   eq(Math.round(filled.value), Math.round((means.reduce((a, p) => a + p, 0) / means.length + 50) / 2),
     'halfway between the mean of its coding boards and the median');
@@ -2921,6 +2931,50 @@ test('a missing coding factor is predicted from every coding board that ran the 
   ok(from.every(k => scaledFacet(k) && old.facets[k]), 'and only coding facets it carries');
   ok(scored(next).value > scored(old).value,
     `qwen3.8 27b ${scored(next).value} ranks above qwen3.5-27b ${scored(old).value}`);
+  RESET();
+});
+
+// a percentile is a rank inside the cohort that board ran, and an old version's
+// cohort is older and weaker: on the 42 models both terminal-bench versions ran,
+// 2.1 read 15.6 points higher than 4.0, so a model only the old board ran was
+// carried up by its neighbours' age. the old version now reads on its
+// successor's scale, mapped through the models both ran.
+test('an old board version reads on its successor\'s scale', () => {
+  RESET();
+  const [old, now] = ['aa4.terminalbench', 'aa5.terminalbench_v40'];
+  ok((D.config.successors || []).some(p => p[0] === old && p[1] === now),
+    'the config names the version chain');
+  const both = D.models.filter(m => facetPct(m, old) !== null && facetPct(m, now) !== null);
+  ok(both.length >= 8, 'enough models ran both to map one onto the other: ' + both.length);
+  const mean = xs => xs.reduce((a, x) => a + x, 0) / xs.length;
+  ok(mean(both.map(m => facetPct(m, old) - facetPct(m, now))) > 8,
+    'the raw percentiles sit apart, which is the bias');
+  const off = mean(both.map(m => chainPct(m, old) - facetPct(m, now)));
+  ok(Math.abs(off) < 3, 'and mapped they do not: ' + off.toFixed(1));
+  const byOld = both.slice().sort((a, b) => facetPct(a, old) - facetPct(b, old));
+  ok(byOld.every((m, i) => !i || chainPct(byOld[i - 1], old) <= chainPct(m, old)),
+    'the mapping keeps the old board\'s order');
+  eq(chainPct(both[0], now), facetPct(both[0], now), 'the newest version is its own scale');
+  RESET();
+});
+
+// a model released after a board was retired could never have been run on it,
+// and scoring that slot as the median charged every new model for its own
+// release date. the slot is filled from the version that DID run it, and like
+// any prediction it fills the composite and never the evidence.
+test('a model the current board ran is not charged for the retired one', () => {
+  RESET();
+  const [old, now] = ['aa4.terminalbench', 'aa5.terminalbench_v40'];
+  const m = D.models.find(x => x.kind === 'text' && !x.facets[old] && x.facets[now]
+                               && scored(x).value !== null);
+  ok(m, 'some text model carries only the current version');
+  eq(chainFill(m, old), chainPct(m, now), 'the retired slot reads the current version');
+  eq(chainFill(m, now), null, 'and a slot it carries is not a fill');
+  const s = score(m);
+  const measured = askedFactors(m).filter(([k]) => facetPct(m, k) !== null)
+    .reduce((a, [, w]) => a + w, 0);
+  const asked = askedFactors(m).reduce((a, [, w]) => a + w, 0);
+  eq(s.cover.toFixed(6), (measured / asked).toFixed(6), 'evidence counts what was measured');
   RESET();
 });
 

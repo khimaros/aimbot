@@ -510,6 +510,9 @@ CONFIG = os.path.join(ROOT, "registry", "dashboard.yaml")
 # error here rather than a puzzle there
 CONFIG_BLOCKS = ("weights", "presets", "hardware", "caps", "floors", "filters",
                  "columns", "speed", "runtimes")
+# blocks a config may leave out: a roster with no retired board version has no
+# chain to declare, and the page reads an absent one as empty
+OPTIONAL_BLOCKS = ("successors",)
 
 
 def dashboard_config(path=CONFIG, tiers=()):
@@ -1862,7 +1865,8 @@ def build():
         # the rest of the dashboard's defaults, shipped whole. the page used to
         # hold these as `const DEFAULT_*` and there was no way for anything
         # else to read them
-        "config": {k: cfg[k] for k in CONFIG_BLOCKS if k != "weights"},
+        "config": {**{k: cfg[k] for k in CONFIG_BLOCKS if k != "weights"},
+                   **{k: cfg.get(k) or [] for k in OPTIONAL_BLOCKS}},
         "groups": [{"name": n, "about": a} for n, a in GROUPS],
         "facet_meta": meta,
         # what each source MEASURES, shipped rather than restated in javascript:

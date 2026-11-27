@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+
+"""Does each preset order the roster the way the boards people trust do?
+
+The composite is a judgement over percentiles, and nothing checked its output
+against the boards it is built from: a weighting that put a model first that
+no single board puts in its top ten would have shipped as the house answer.
+This boots the page the way research/dashboard-table does, ranks the WHOLE text
+roster -- no fit filter, raw rather than quant-adjusted, since the question is
+the weighting and not the box -- under every preset, and prints:
+
+    agreement   spearman of each preset against each reference board, over
+                the models both rank, with n beside it
+    outliers    the models a preset ranks furthest from the reference median
+    coverage    whether the score leans on how much evidence a model has,
+                which is what the shrink toward the middle is supposed to stop
+    versions    for models a board's old and new version BOTH ran, how far
+                apart the two percentiles sit: a cohort of older models makes
+                an old-version percentile read higher than the same model
+                earns on the current board
+
+    ./analyze-presets                          # the shipped dashboard.yaml
+    ./analyze-presets --config other.yaml      # a candidate, without a rebuild
+    ./analyze-presets --json
+
+The references are deliberately the boards rather than the facets the presets
+weight, so a preset agreeing with a board it is half made of is expected and
+says little; the interesting rows are the boards it does NOT weight (epoch's
+ECI, the AA indices) and the outliers.
+"""
+
+import argparse
+import importlib.machinery
+import json
+import os
+import statistics
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+PROBE = os.path.join(HERE, ".presets.js")
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+import pageboot  # noqa: E402
+
+# facet keys read raw off each model as a reference board. ECI is not a facet
+# and is joined in python from data/epoch.json
+REFERENCES = {"aa5.intelligence": "aa v5 index", "aa4.intelligence": "aa v4 index",
+              "lmarena.rating": "arena", "gbench.overall": "gbench",
+              "swerebench.resolved": "swe-rebench", "livebench.score": "livebench"}
+# a board and the one that replaced it, for the version check
+SUCCESSORS = [("aa4.terminalbench", "aa5.terminalbench_v40"),
+              ("aa4.scicode", "aa5.frontiercode"),
+              ("aa4.omniscience_index", "aa5.omniscience_index"),
+              ("aa4.non_hallucination", "aa5.non_hallucination"),
+              ("aa4.intelligence", "aa5.intelligence")]
+MIN_N = 8
+
+EMIT = """
+const CANDIDATE = %s, REFS = %s, PAIRS = %s;
+setTimeout(() => {
+  if (!D) { console.error('the page never booted'); process.exit(1); }
+  if (CANDIDATE) { D.weights = CANDIDATE.weights; applyConfig({...D.config, presets: CANDIDATE.presets}); }
+  filters.mods = new Set(['text']);
+  filters.flags = new Set();
+  filters.licenses = new Set();
+  filters.engines = new Set();
+  effective = false;
+  pctCache = null;
+  const roster = visible();
+  const presets = {};
+  Object.keys(PRESETS).forEach(name => {
+    if (name === 'clear') return;
+    W = PRESETS[name].w();
+    clearScores();
+    presets[name] = {title: PRESETS[name].t, scores: Object.fromEntries(roster.map(m =>
+      [m.repo, {score: scored(m).value, cover: scored(m).cover}]))};
+  });
+  const facts = Object.fromEntries(roster.map(m => [m.repo, {
+    short: m.short, epoch: (m.ids || {}).epoch || null,
+    refs: Object.fromEntries(REFS.filter(k => m.facets[k]).map(k => [k, facetValue(m, k)])),
+    pcts: Object.fromEntries(PAIRS.flat().filter(k => m.facets[k])
+      .map(k => [k, facetPctRaw(m, k)])),
+  }]));
+  process.stdout.write(JSON.stringify({presets, facts}), () => process.exit(0));
+}, 0);
+"""
+
+
+def load(name, path):
+    return importlib.machinery.SourceFileLoader(name, path).load_module()
+
+
+def candidate(path):
+    """The weights and presets of another dashboard.yaml, or None for the shipped one."""
+    if not path:
+        return None
+    import yaml
+    cfg = yaml.safe_load(open(path))
+    return {"weights": cfg["weights"], "presets": cfg["presets"]}
+
+
+def boot(config):
+    body = EMIT % (json.dumps(candidate(config)), json.dumps(list(REFERENCES)),
+                   json.dumps(SUCCESSORS))
+    r = pageboot.run(body, PROBE, capture=True)
+    if r.returncode:
+        sys.exit("!!! the page probe failed")
+    return json.loads(r.stdout)
+
+
+def references(facts):
+    """{reference label: {repo: value}}, ECI joined from epoch's capture."""
+    out = {label: {} for label in REFERENCES.values()}
+    for repo, f in facts.items():
+        for k, v in f["refs"].items():
+            out[REFERENCES[k]][repo] = v
+    corr = load("analyze_correlations", os.path.join(HERE, "analyze-correlations"))
+    eci = corr.epoch_eci(json.load(open(os.path.join(HERE, "data", "epoch.json"))))
+    out["epoch eci"] = {repo: eci[f["epoch"]] for repo, f in facts.items()
+                        if f["epoch"] in eci}
+    return out, corr.spearman
+
+
+def ordered(scores):
+    return [r for r, s in sorted(scores.items(), key=lambda kv: -kv[1])]
+
+
+def agreement(presets, refs, spearman):
+    """{preset: {reference: (rho, n)}} over the models both rank."""
+    out = {}
+    for name, p in presets.items():
+        mine = {r: s["score"] for r, s in p["scores"].items() if s["score"] is not None}
+        row = {}
+        for label, ref in refs.items():
+            both = sorted(set(mine) & set(ref))
+            row[label] = ((spearman([mine[r] for r in both], [ref[r] for r in both]), len(both))
+                          if len(both) >= MIN_N else (None, len(both)))
+        out[name] = row
+    return out
+
+
+def percentile_ranks(values):
+    """{repo: 0..100}, the same half-ties plotting position the page uses."""
+    vs = list(values.values())
+    return {r: 100 * (sum(x < v for x in vs) + 0.5 * sum(x == v for x in vs)) / len(vs)
+            for r, v in values.items()}
+
+
+def outliers(presets, refs, facts, top=6):
+    """Per preset, the models whose rank sits furthest from the boards' median
+    percentile, among models at least two boards rank."""
+    board_pct = {label: percentile_ranks(ref) for label, ref in refs.items() if len(ref) >= MIN_N}
+    out = {}
+    for name, p in presets.items():
+        mine = percentile_ranks({r: s["score"] for r, s in p["scores"].items()
+                                 if s["score"] is not None})
+        rows = []
+        for repo, pct in mine.items():
+            others = [b[repo] for b in board_pct.values() if repo in b]
+            if len(others) >= 2:
+                med = statistics.median(others)
+                rows.append((pct - med, facts[repo]["short"], round(pct), round(med), len(others)))
+        rows.sort(key=lambda r: -abs(r[0]))
+        out[name] = rows[:top]
+    return out
+
+
+def coverage(presets, spearman):
+    """{preset: (rho of score against cover, n, mean cover of the top ten)}."""
+    out = {}
+    for name, p in presets.items():
+        s = [(v["score"], v["cover"]) for v in p["scores"].values() if v["score"] is not None]
+        top = sorted(s, key=lambda x: -x[0])[:10]
+        out[name] = (spearman([x[0] for x in s], [x[1] for x in s]) if len(s) >= MIN_N else None,
+                     len(s), sum(x[1] for x in top) / len(top) if top else None)
+    return out
+
+
+def versions(facts, spearman):
+    """For each old/new pair: n bridging, spearman between the two over them,
+    mean (old pct - new pct), and how many carry only the old or only the new."""
+    out = []
+    for old, new in SUCCESSORS:
+        both = [f["pcts"] for f in facts.values() if f["pcts"].get(old) is not None
+                and f["pcts"].get(new) is not None]
+        rho = spearman([p[old] for p in both], [p[new] for p in both]) \
+            if len(both) >= MIN_N else None
+        only_old = sum(1 for f in facts.values() if old in f["pcts"] and new not in f["pcts"])
+        only_new = sum(1 for f in facts.values() if new in f["pcts"] and old not in f["pcts"])
+        out.append((old, new, len(both), rho,
+                    statistics.mean(p[old] - p[new] for p in both) if both else None,
+                    only_old, only_new))
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--config", help="a dashboard.yaml to score instead of the shipped weights")
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args()
+
+    got = boot(args.config)
+    presets, facts = got["presets"], got["facts"]
+    refs, spearman = references(facts)
+    report = {"agreement": agreement(presets, refs, spearman),
+              "outliers": outliers(presets, refs, facts),
+              "coverage": coverage(presets, spearman),
+              "versions": versions(facts, spearman),
+              "top": {n: [facts[r]["short"] for r in ordered(
+                  {r: s["score"] for r, s in p["scores"].items() if s["score"] is not None})[:10]]
+                  for n, p in presets.items()}}
+    if args.json:
+        print(json.dumps(report, indent=1))
+        return
+
+    labels = list(refs)
+    print("agreement (spearman, n) of each preset with each reference board")
+    print("  %-10s" % "" + "".join("%15s" % l for l in labels))
+    for name, row in report["agreement"].items():
+        print("  %-10s" % name + "".join(
+            "%15s" % ("-" if rho is None else "%+.2f n=%d" % (rho, n))
+            for rho, n in (row[l] for l in labels)))
+    print("\nscore against evidence: rho(score, cover), n, mean cover of the top ten")
+    for name, (rho, n, top) in report["coverage"].items():
+        print("  %-10s %s  n=%d  top10 cover %.2f" % (name, "-" if rho is None else "%+.2f" % rho, n, top or 0))
+    print("\nold and new versions of a board: bridging models, their spearman, "
+          "mean old-minus-new percentile")
+    for old, new, n, rho, d, oo, on in report["versions"]:
+        print("  %-24s -> %-24s n=%-3d rho %s  %s  only old %d, only new %d"
+              % (old, new, n, "-" if rho is None else "%+.2f" % rho,
+                 "-" if d is None else "%+.1f" % d, oo, on))
+    print("\nfurthest from the boards (preset pct, board median pct, boards)")
+    for name, rows in report["outliers"].items():
+        print("  %s: %s" % (name, "; ".join("%s %d vs %d (%d)" % (s, p, m, k)
+                                            for _, s, p, m, k in rows)))
+    print("\ntop ten")
+    for name, top in report["top"].items():
+        print("  %-10s %s" % (name, ", ".join(top)))
+
+
+if __name__ == "__main__":
+    main()
